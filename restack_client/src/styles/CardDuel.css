@@ -1,5 +1,8 @@
 .card-duel-container {
-    background: #111 url('/assets/graphics/card_duel/card_game_background.png') center/cover no-repeat !important;
+    background-color: #111 !important;
+    background-position: center !important;
+    background-size: cover !important;
+    background-repeat: no-repeat !important;
     padding: 20px;
     color: #fff !important;
     font-family: 'Outfit', sans-serif;
