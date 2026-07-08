@@ -1,0 +1,782 @@
+import React from 'react'
+import { INTERVALS, INTERVAL_DISPLAY_NAMES } from '../utils/shared-constants';
+import {storeMeta, getMeta} from '../utils/session-handler';
+import { CrewManager } from '../utils/crew-manager'
+import { Redirect} from "react-router-dom";
+import MonsterBattle from './sub-views/MonsterBattle';
+
+
+// import useScript from '../hooks/useScript.js'
+
+// const useScriptCustom = (file) => {
+//     const script = document.createElement('script');
+
+//     script.src = file;
+//     script.type = 'type/javascript';
+//     // script.async = true;
+//     script.onload = () => {
+//         // this.scriptLoaded();
+//     }
+
+//     document.body.appendChild(script);
+// }
+
+const clone = (val) => {
+    return JSON.parse(JSON.stringify(val))
+}
+
+class CrewManagerPage extends React.Component{
+    // The available speed intervals (should match combat-manager.js)
+    intervals = INTERVALS;
+    intervalDisplayNames = INTERVAL_DISPLAY_NAMES;
+  constructor(props){
+      super(props)
+      this.monsterBattleComponentRef = React.createRef()
+        // Temporary crew manager used by the Combat Simulator to avoid mutating the global crew
+        this.tempCrewManager = null;
+        // Ref for scrolling to the enemy selection section
+        this.enemySectionRef = React.createRef();
+        this.crewSelectorRef = React.createRef();
+    this.state = {
+        monster: null,
+        minions: null,
+        // dungeon: null,
+        user: null,
+        options: [],
+        selectedCrew: [],
+        selectedCrewMember: null,
+        navToLanding: false,
+        crewSlots: [null, null, null, null],
+        advancedUser: false,
+        crewSelected: false,
+        shiftDown: false,
+        ctrlDown: false,
+        // Simulator-only: per-fighter target level (keyed by fighter type) and gear option
+        fighterLevels: {},
+        outfitWithEquipment: true,
+        // Enemy selection
+        selectedMonsterKey: 'mummy',
+        selectedMinionKeys: ['skeleton', 'skeleton', 'skeleton', null],
+        selectedEnemyForInfo: null,
+    }
+  }
+  timer = null;
+
+  componentDidMount(){
+        const meta = getMeta();
+        // meta.crew[0].specialActions.pop();
+        // meta.crew[0].specialActions.pop();
+        // meta.crew[0].specialActions.pop();
+        storeMeta(meta);
+
+        // Restore combat speed from meta if present
+        if (meta && meta.combatSpeed && this.props.combatManager) {
+            if (typeof this.props.combatManager.updateAllFightIntervals === 'function') {
+                this.props.combatManager.updateAllFightIntervals(meta.combatSpeed);
+            } else {
+                this.props.combatManager.FIGHT_INTERVAL = meta.combatSpeed;
+            }
+            this.forceUpdate();
+        }
+
+        this.props.inventoryManager.initializeItems()
+        let options = this.props.crewManager.adventurers;
+        // Create a temporary CrewManager instance for the simulator so we don't mutate the global crew state
+        this.tempCrewManager = new CrewManager();
+        // initialize with a deep-cloned options array to avoid sharing references
+        this.tempCrewManager.initializeCrew(clone(options));
+    // let wizard = this.tempCrewManager.crew.find(e=>e.type==='wizard')
+    // let wizclone = clone(wizard);
+
+    // Example for new structure:
+    // let action = {
+    //   type: 'spell',
+    //   name: 'Magic Missile',
+    //   iconUrl: '/static/media/magic_missile.png',
+    //   subtype: 'magic missile',
+    //   count: 1,
+    //   startDate,
+    //   endDate,
+    //   available: false,
+    //   notified: false,
+    // }
+
+    // Ref wiring will be done after MonsterBattle is mounted in componentDidUpdate
+    // After MonsterBattle is mounted, wire up the ref to Wizard AI synchronously
+    this.wireMonsterBattleRefToWizardAI();
+    // this.props.crewManager.beginSpecialAction(wizard, action)
+    // wizard.specialActions.push(action)
+
+    let selectedCrew = [];
+    // selectedCrew.push(options[0])
+    // selectedCrew.push(options[1])
+    // selectedCrew.push(options[2])
+
+    selectedCrew.push(this.tempCrewManager.crew.find(e=>e.type==='wizard'))
+    // selectedCrew.push(this.tempCrewManager.crew.find(e=>e.type==='soldier'))
+    // selectedCrew.push(this.props.crewManager.crew.find(e=>e.type==='rogue'))
+    selectedCrew.push(this.tempCrewManager.crew.find(e=>e.type==='barbarian'))
+    selectedCrew.push(this.tempCrewManager.crew.find(e=>e.type==='monk'))
+
+    // useScript('../assets/particles/particles.js')
+
+    // useScriptCustom('../assets/particles/particles.js')
+
+
+    this.initializeListeners();
+
+    // Restore default enemy selection from meta if saved
+    const savedDefaults = getMeta()?.simulatorDefaults;
+    const enemyState = savedDefaults
+        ? { selectedMonsterKey: savedDefaults.selectedMonsterKey ?? 'mummy', selectedMinionKeys: savedDefaults.selectedMinionKeys ?? ['skeleton', 'skeleton', 'skeleton', null] }
+        : {};
+
+    // Restore saved crew roster if present; otherwise fall back to the hardcoded defaults above
+    if (savedDefaults?.selectedCrewTypes && Array.isArray(savedDefaults.selectedCrewTypes)) {
+        const restoredCrew = savedDefaults.selectedCrewTypes
+            .map(type => this.tempCrewManager.crew.find(m => m.type === type))
+            .filter(Boolean);
+        if (restoredCrew.length > 0) selectedCrew = restoredCrew;
+    }
+
+    this.setState({
+        options,
+        selectedCrew,
+        selectedCrewMember: selectedCrew[0],
+        ...(savedDefaults?.fighterLevels ? { fighterLevels: savedDefaults.fighterLevels } : {}),
+        ...enemyState,
+    })
+    }
+
+    componentDidUpdate(prevProps, prevState) {
+        // Only wire the ref if crewSelected just became true and MonsterBattle is mounted
+        if (!prevState.crewSelected && this.state.crewSelected) {
+            this.wireMonsterBattleRefToWizardAI();
+        }
+    }
+
+    wireMonsterBattleRefToWizardAI = () => {
+        if (
+            this.monsterBattleComponentRef.current &&
+            this.props.combatManager &&
+            this.props.combatManager.fighterAI &&
+            this.props.combatManager.fighterAI.roster &&
+            this.props.combatManager.fighterAI.roster.wizard
+        ) {
+            this.props.combatManager.fighterAI.roster.wizard.monsterBattleRef = this.monsterBattleComponentRef.current;
+        }
+  }
+//   useScript('../assets/fullYear.js')
+
+
+  pickRandom = (array) => {
+    let index = Math.floor(Math.random() * array.length)
+    return array[index]
+  }
+  initializeListeners = () => {
+    window.addEventListener('keydown', this.combatKeyDownHandler);
+    window.addEventListener('keyup', this.combatKeyUpListener)
+    window.addEventListener('beforeunload', this.componentCleanup);
+  }
+  componentCleanup = () => {
+        // Add logs for crew, monsters, and listeners
+        // Clear any timers/intervals on this instance
+        if (this.timer) {
+            clearTimeout(this.timer);
+            this.timer = null;
+        }
+        if (this._intervals && Array.isArray(this._intervals)) {
+            this._intervals.forEach(i => { try { clearInterval(i); } catch(e){} });
+            this._intervals = [];
+        }
+        if (this._timers && Array.isArray(this._timers)) {
+            this._timers.forEach(t => { try { clearTimeout(t); } catch(e){} });
+            this._timers = [];
+        }
+        window.removeEventListener('keydown', this.combatKeyDownHandler)
+        window.removeEventListener('keyup', this.combatKeyUpListener)
+        window.removeEventListener('beforeunload', this.componentCleanup); 
+  }
+  getDungeonDetails = async () => {
+    // const user = getMeta();
+  }
+  singleClick = (crewMember) => {
+    this.setState({
+        selectedCrewMember: crewMember
+    })
+  }
+  exitSimulator = () => {
+    this.componentCleanup();
+    this.props.navToLanding();
+    // const history = useHistory();
+    // history.push('/landing')
+  }
+  selectCrewMember = (event, crewMember) => {
+    clearTimeout(this.timer);
+    if (event.detail === 1) {
+        this.timer = setTimeout(this.singleClick(crewMember), 200)
+    } else if (event.detail === 2) {
+        let crew = this.state.selectedCrew;
+        if(crew.length === 3 && !this.state.advancedUser) return
+        if(!crew.includes(crewMember)) crew.push(crewMember)
+        this.setState({
+            selectedCrew: crew
+        })
+    }
+    this.setState({
+        selectedCrewMember: crewMember
+    })
+
+  }
+  addMember = (index) => {
+    let member = this.state.selectedCrewMember
+    let crew = this.state.selectedCrew;
+    if(!crew.includes(member)) crew.push(member)
+    this.setState({
+        selectedCrew: crew
+    })
+  }
+  setMonster = (monsterKey, minionKeys) => {
+    const useMonsterKey = monsterKey || this.state.selectedMonsterKey || 'mummy';
+    const useMinionKeys = minionKeys || this.state.selectedMinionKeys || [];
+    let monster = this.props.monsterManager.getMonster(useMonsterKey);
+    if(!monster) monster = this.props.monsterManager.getRandomMonster();
+    let monsterName = this.pickRandom(monster.monster_names)
+    monster.name = monsterName
+    monster.inventory = [];
+
+    let minions = [];
+    useMinionKeys.forEach((key, i) => {
+        if (!key) return;
+        const minion = this.props.monsterManager.getMonster(key);
+        if (!minion) return;
+        minion.id = minion.id + i + 700;
+        minion.name = this.pickRandom(minion.monster_names);
+        minion.inventory = [];
+        minions.push(minion);
+    });
+
+    this.setState({ monster, minions });
+  }
+
+  updateCombatSpeed = (newInterval) => {
+    if (this.props.combatManager) {
+        if (typeof this.props.combatManager.updateAllFightIntervals === 'function') {
+            this.props.combatManager.updateAllFightIntervals(newInterval);
+        } else {
+            this.props.combatManager.FIGHT_INTERVAL = newInterval;
+        }
+        // Persist to meta
+        const meta = getMeta();
+        meta.combatSpeed = newInterval;
+        storeMeta(meta);
+        this.forceUpdate();
+    }
+  }
+
+  // ── Enemy selection helpers ────────────────────────────────────────────────
+
+  scrollToEnemySection = () => {
+    if (this.enemySectionRef.current) {
+        this.enemySectionRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
+
+  saveDefaultEnemy = () => {
+    const meta = getMeta();
+    meta.simulatorDefaults = {
+        selectedMonsterKey: this.state.selectedMonsterKey,
+        selectedMinionKeys: this.state.selectedMinionKeys,
+        selectedCrewTypes: this.state.selectedCrew.filter(Boolean).map(m => m.type),
+        fighterLevels: this.state.fighterLevels,
+    };
+    storeMeta(meta);
+    this.setState({ defaultEnemySaved: true });
+    setTimeout(() => this.setState({ defaultEnemySaved: false }), 1500);
+  }
+
+  selectEnemyForInfo = (monsterKey) => {
+    this.setState({ selectedEnemyForInfo: monsterKey });
+  }
+
+  setSelectedMonsterSlot = (monsterKey) => {
+    this.setState({ selectedMonsterKey: monsterKey });
+  }
+
+  setSelectedMinionSlot = (index, monsterKey) => {
+    const keys = this.state.selectedMinionKeys.slice();
+    keys[index] = monsterKey;
+    this.setState({ selectedMinionKeys: keys });
+  }
+
+  removeEnemySlot = (slotType, index) => {
+    if (slotType === 'monster') {
+        this.setState({ selectedMonsterKey: null });
+    } else {
+        const keys = this.state.selectedMinionKeys.slice();
+        keys[index] = null;
+        this.setState({ selectedMinionKeys: keys });
+    }
+  }
+
+  addEnemyFromRoster = (monsterKey) => {
+    // Fill main monster slot first, then minion slots in order
+    if (!this.state.selectedMonsterKey) {
+        this.setState({ selectedMonsterKey: monsterKey });
+        return;
+    }
+    const keys = this.state.selectedMinionKeys.slice();
+    const emptyIndex = keys.findIndex(k => !k);
+    if (emptyIndex !== -1) {
+        keys[emptyIndex] = monsterKey;
+        this.setState({ selectedMinionKeys: keys });
+    }
+  }
+
+  // ── Simulator-only level & gear helpers ────────────────────────────────────
+
+  /**
+   * Returns the target level for a given fighter type.
+   * Defaults to 3 if not explicitly set.
+   */
+  getSimLevel = (type) => {
+      const { fighterLevels } = this.state;
+      return (typeof fighterLevels[type] === 'number') ? fighterLevels[type] : 3;
+  }
+
+  setSimLevel = (type, delta) => {
+      const current = this.getSimLevel(type);
+      const next = Math.max(1, Math.min(20, current + delta));
+      this.setState(prev => ({
+          fighterLevels: { ...prev.fighterLevels, [type]: next }
+      }));
+  }
+
+  /**
+   * Apply level-up bonuses (up to targetLevel) and optionally equip a weapon,
+   * on a cloned crew member that is already in tempCrewManager.
+   * Tier: levels 1-9 → tier 1, 10-19 → tier 2, 20+ → tier 3.
+   */
+  applySimulatorPrep = (member) => {
+      const targetLevel = this.getSimLevel(member.type);
+      const currentLevel = typeof member.level === 'number' ? member.level : 0;
+
+      // Apply level-up bonuses for each level from current+1 up to targetLevel
+      for (let i = currentLevel; i < targetLevel; i++) {
+          try { this.tempCrewManager.levelUp(member); } catch(e) {}
+      }
+
+      // Optionally equip a weapon based on tier
+      if (this.state.outfitWithEquipment) {
+          const tier = targetLevel >= 20 ? 3 : targetLevel >= 10 ? 2 : 1;
+          try {
+              const allWeapons = this.props.inventoryManager.weapons;
+              const tierWeapons = Object.values(allWeapons).filter(w => w && w.tier === tier);
+              if (tierWeapons.length > 0) {
+                  const weapon = clone(tierWeapons[Math.floor(Math.random() * tierWeapons.length)]);
+                  weapon.equippedBy = member.id;
+                  member.inventory = member.inventory || [];
+                  // Replace any existing weapon slot; keep other items
+                  member.inventory = member.inventory.filter(i => !i || i.type !== 'weapon');
+                  member.inventory.push(weapon);
+              }
+          } catch(e) { console.warn('applySimulatorPrep: gear assignment failed', e); }
+      }
+  }
+
+  submit = async () => {
+      // Apply simulator level + gear to each selected crew member before combat starts
+      if (this.tempCrewManager) {
+          this.state.selectedCrew.forEach(member => {
+              if (member) this.applySimulatorPrep(member);
+          });
+      }
+      this.setMonster()
+      this.setState({
+          crewSelected: true
+      })
+  }
+clear = () => {
+        // Clear only the simulator-local crew selection and temp manager; do not mutate global meta or the app's crewManager
+        if (this.tempCrewManager) this.tempCrewManager.crew = [];
+        this.setState({ selectedCrew: [] })
+}
+removeMember = (index) => {
+    const crew = this.state.selectedCrew.slice();
+    crew.splice(index, 1);
+    this.setState({ selectedCrew: crew });
+}
+goBack = () => {
+    this.setState({
+        navToLanding: true
+    })
+}
+useConsumableFromInventory = (item) => {
+    let foundItem = this.props.inventoryManager.inventory.find(e=> e.name === item.name),
+    foundIndex = this.props.inventoryManager.inventory.findIndex(e=> e.name === item.name);
+    foundItem.animation = 'consumed';
+    this.forceUpdate();
+    setTimeout(()=>{
+        foundItem.animation = '';
+        this.props.inventoryManager.removeItemByIndex(foundIndex)
+    }, 500)
+}
+combatKeyDownHandler = (event) => {
+    let key = event.key, code = event.code;
+    if(code === 'Space'){
+        if(this.monsterBattleComponentRef.current) this.monsterBattleComponentRef.current.manualFire();
+    }
+    switch(key){
+        // =/+ key: increase speed (decrease interval)
+        case '=':
+        case '+': {
+            const current = this.props.combatManager?.FIGHT_INTERVAL;
+            const idx = INTERVALS.indexOf(current);
+            if (idx < INTERVALS.length - 1) {
+                this.updateCombatSpeed(INTERVALS[idx + 1]);
+            }
+            break;
+        }
+        // - key: decrease speed (increase interval)
+        case '-': {
+            const current = this.props.combatManager?.FIGHT_INTERVAL;
+            const idx = INTERVALS.indexOf(current);
+            if (idx > 0) {
+                this.updateCombatSpeed(INTERVALS[idx - 1]);
+            }
+            break;
+        }
+        case 'd':
+            // ...existing code...
+            debugger
+        break;
+        case 'p':
+            let paused = !this.state.paused;
+            this.props.combatManager.pauseCombat(paused)
+            this.setState({
+                paused
+            })
+        break;
+        case 'q':
+            if(this.monsterBattleComponentRef.current) this.monsterBattleComponentRef.current.selectSpecial();
+        break;
+        case 'w':
+            if(this.monsterBattleComponentRef.current) this.monsterBattleComponentRef.current.selectConsumableSpecial();
+        break;
+        case 'Tab':
+            try { console.debug('[CombatSimulator] Tab pressed, shiftDown=', this.state.shiftDown, 'ctrlDown=', this.state.ctrlDown); } catch(e) {}
+            event.preventDefault();
+            if(this.state.shiftDown){
+                if(this.monsterBattleComponentRef.current) this.monsterBattleComponentRef.current.tabToRetarget();
+            } else if(this.state.ctrlDown){
+                // ...existing code...
+            } else {
+                if(this.monsterBattleComponentRef.current) this.monsterBattleComponentRef.current.tabToFighter();
+            }
+        break;
+        case 'Control':
+            event.preventDefault();
+            this.setState({ ctrlDown: true })
+        break;
+        case 'Shift':
+            event.preventDefault();
+            this.setState({ shiftDown: true })
+        break;
+        case 'ArrowUp':
+            if(this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('up');
+        break;
+        case 'ArrowDown':
+            if(this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('down');
+        break;
+        case 'ArrowLeft':
+            if(this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('left');
+        break;
+        case 'ArrowRight':
+            if(this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('right');
+        break;
+        default:
+            // nuttin
+        break;
+    }
+}
+combatKeyUpListener = (event) => {
+    let key = event.key;
+    switch(key){
+        case 'Shift':
+            this.setState({
+                shiftDown: false
+            })
+        break;
+        case 'Control':
+            this.setState({
+                ctrlDown: false
+            })
+        break;
+        case 'q':
+            if(this.state.specialDown){
+                // cycle specials
+                // ...existing code...
+            }
+            this.setState({
+                specialDown: false
+            })
+        break;
+        default:
+        break;
+    }
+}
+  render(){
+    const formatMonsterType = (type) => type ? type.replace(/_/g, ' ') : '';
+    return (
+    <div className="page-container">
+        {/* ...existing code... */}
+        {!this.state.crewSelected && <div className="crew-manager">
+            { this.state.navToLanding && <Redirect to='/'/> }
+            <div className="content-container">
+                <div className="button-row-top">
+                    <button onClick={() => this.submit()}>Back</button>
+                </div>
+                <div className="title">
+                    Choose your crew
+                    <button className="enemy-section-scroll-btn" onClick={this.scrollToEnemySection} title="Jump to enemy selection">
+                        Enemies ↓
+                    </button>
+                </div>
+                <div className="crew-selector" ref={this.crewSelectorRef}>
+                    <div className="crew-options">
+                        {this.state.options.map((e,i)=> {
+                            return <div className='portrait' key={i}
+                            style={{backgroundImage: "url(" + e.portrait + ")"}}
+                            onClick={(event) => this.selectCrewMember(event, e)}
+                            ></div>
+                            }
+                        )}
+                    </div>
+                    <div className="member-panel">
+                        {this.state.selectedCrewMember && <div className='giant-portrait' 
+                        style={{backgroundImage: "url(" + this.state.selectedCrewMember.portrait + ")"}}>
+                            <div className="name">{this.state.selectedCrewMember.name}</div>
+                        </div>}
+                        {this.state.selectedCrewMember && <div className="details-pane">
+                            <div className="description">
+                                {this.state.selectedCrewMember.description}
+                            </div>
+                        </div>}
+                        {this.state.selectedCrewMember && <div className="stats-pane">
+                            <div className="stat">Strength: {this.state.selectedCrewMember.stats.str}</div>
+                            <div className="stat">Dexterity: {this.state.selectedCrewMember.stats.dex}</div>
+                            <div className="stat">Intelligence: {this.state.selectedCrewMember.stats.int}</div>
+                            {/* Vitality removed */}
+                            <div className="stat">Fortitude: {this.state.selectedCrewMember.stats.fort}</div>
+                        </div>}
+                        {this.state.selectedCrewMember && <div className="abilities-pane">
+                            <div className="attacks">Attacks: &nbsp;
+                                {this.state.selectedCrewMember.attacks.map((e,i)=> {
+                                    const name = typeof e === 'object' && e !== null ? e.name : e;
+                                    return <div key={i}>{ name }{i !== this.state.selectedCrewMember.attacks.length-1 ?  ',' : ''} &nbsp; </div>
+                                })}
+                            </div>
+                            <div className="specials">Specials: &nbsp;
+                                {this.state.selectedCrewMember.specials.map((e,i)=> {
+                                    const name = typeof e === 'object' && e !== null ? e.name : e;
+                                    return <div key={i}>{ name }{i !== this.state.selectedCrewMember.specials.length-1 ?  ',' : ''} &nbsp; </div>
+                                })}
+                            </div>
+                            <div className="passives">Passives: &nbsp;
+                                {this.state.selectedCrewMember.passives.map((e,i)=> {
+                                    const name = typeof e === 'object' && e !== null ? e.name : e;
+                                    return <div key={i}>{ name }{i !== this.state.selectedCrewMember.passives.length-1 ?  ',' : ''} &nbsp; </div>
+                                })}
+                            </div>
+                            <div className="weaknesses">Weaknesses: &nbsp;
+                                {this.state.selectedCrewMember.weaknesses.map((e,i)=> {
+                                    const name = typeof e === 'object' && e !== null ? e.name : e;
+                                    return <div key={i}>{ name }{i !== this.state.selectedCrewMember.weaknesses.length-1 ?  ',' : ''} &nbsp; </div>
+                                })}
+                            </div>
+                        </div>}
+                    </div>
+                    <div className="crew-tray">
+                        {this.state.crewSlots.map((slot, i)=>{
+                    return  <div key={i} className={`selected-crew-portrait-container ${i === 3 && !this.state.advancedUser ? 'closed' : ''}`}>
+
+                                {(i === 3 && !this.state.advancedUser) === false && <div className={`add-button ${!this.state.selectedCrewMember ? 'disabled' : ''}`} onClick={()=>this.addMember(i)}>&oplus;</div>}
+
+                                {this.state.selectedCrew[i] && <div
+                                    className="portrait"
+                                    style={{backgroundImage: "url(" + this.state.selectedCrew[i].portrait + ")"}}
+                                    title="Double-click to remove"
+                                    onDoubleClick={() => this.removeMember(i)}
+                                ></div>}
+
+                                {this.state.selectedCrew[i] && <div className="sim-level-control" style={{display:'flex', alignItems:'center', justifyContent:'center', gap:'4px', marginTop:'4px'}}>
+                                    <button style={{padding:'0 5px', fontSize:'11px', lineHeight:'16px'}}
+                                        onClick={() => this.setSimLevel(this.state.selectedCrew[i].type, -1)}>−</button>
+                                    <span style={{fontSize:'11px', minWidth:'52px', textAlign:'center', color:'#ccc'}}>
+                                        Lv {this.getSimLevel(this.state.selectedCrew[i].type)}
+                                    </span>
+                                    <button style={{padding:'0 5px', fontSize:'11px', lineHeight:'16px'}}
+                                        onClick={() => this.setSimLevel(this.state.selectedCrew[i].type, 1)}>+</button>
+                                </div>}
+                            </div>
+                        })}
+                        <div className="sim-gear-option" style={{marginTop:'10px', display:'flex', alignItems:'center', gap:'6px', color:'#ccc', fontSize:'12px'}}>
+                            <input
+                                id="outfit-equipment-cb"
+                                type="checkbox"
+                                checked={this.state.outfitWithEquipment}
+                                onChange={e => this.setState({ outfitWithEquipment: e.target.checked })}
+                            />
+                            <label htmlFor="outfit-equipment-cb">Outfit with equipment</label>
+                        </div>
+                    </div>
+                </div>
+
+                {/* ── Enemy Selection Section ── */}
+                <div className="enemy-selection-section" ref={this.enemySectionRef}>
+                    <div className="enemy-section-title">
+                        Choose your enemies
+                        <button
+                            className={`save-default-enemy-btn${this.state.defaultEnemySaved ? ' saved' : ''}`}
+                            onClick={this.saveDefaultEnemy}
+                            title="Save current enemy selection as default"
+                        >
+                            {this.state.defaultEnemySaved ? '✓ Saved' : 'Save as default'}
+                        </button>
+                    </div>
+
+                    {/* Main monster + 4 minion slots */}
+                    <div className="enemy-slots-row">
+                        {/* Main monster slot */}
+                        <div className="enemy-slot-group">
+                            <div className="enemy-slot-label">Monster</div>
+                            <div
+                                className={`enemy-slot ${!this.state.selectedMonsterKey ? 'empty' : ''}`}
+                                title={this.state.selectedMonsterKey ? 'Double-click to remove' : 'Select from roster below'}
+                                onDoubleClick={() => this.removeEnemySlot('monster', 0)}
+                                onClick={() => {
+                                    if (this.state.selectedMonsterKey) {
+                                        const m = this.props.monsterManager.getMonster(this.state.selectedMonsterKey);
+                                        this.setState({ selectedEnemyForInfo: m });
+                                    }
+                                }}
+                            >
+                                {this.state.selectedMonsterKey && (() => {
+                                    const m = this.props.monsterManager.getMonster(this.state.selectedMonsterKey);
+                                    return m ? <div className="enemy-slot-portrait" style={{backgroundImage: `url(${m.portrait})`}}></div> : null;
+                                })()}
+                                {!this.state.selectedMonsterKey && <span className="enemy-slot-placeholder">＋</span>}
+                            </div>
+                            {this.state.selectedMonsterKey && (() => {
+                                const m = this.props.monsterManager.getMonster(this.state.selectedMonsterKey);
+                                return m ? <div className="enemy-slot-name">{formatMonsterType(m.type)}</div> : null;
+                            })()}
+                        </div>
+
+                        {/* 4 minion slots */}
+                        {[0,1,2,3].map(i => {
+                            const key = this.state.selectedMinionKeys[i];
+                            const m = key ? this.props.monsterManager.getMonster(key) : null;
+                            return (
+                                <div className="enemy-slot-group" key={i}>
+                                    <div className="enemy-slot-label">Minion {i+1}</div>
+                                    <div
+                                        className={`enemy-slot ${!key ? 'empty' : ''}`}
+                                        title={key ? 'Double-click to remove' : 'Select from roster below'}
+                                        onDoubleClick={() => this.removeEnemySlot('minion', i)}
+                                        onClick={() => { if (m) this.setState({ selectedEnemyForInfo: m }); }}
+                                    >
+                                        {m && <div className="enemy-slot-portrait" style={{backgroundImage: `url(${m.portrait})`}}></div>}
+                                        {!key && <span className="enemy-slot-placeholder">＋</span>}
+                                    </div>
+                                    {m && <div className="enemy-slot-name">{formatMonsterType(m.type)}</div>}
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* Info panel for selected enemy */}
+                    {this.state.selectedEnemyForInfo && (
+                        <div className="enemy-info-panel">
+                            <div className="enemy-info-portrait" style={{backgroundImage: `url(${this.state.selectedEnemyForInfo.portrait})`}}></div>
+                            <div className="enemy-info-details">
+                                <div className="enemy-info-type">{formatMonsterType(this.state.selectedEnemyForInfo.type)}</div>
+                                <div className="enemy-info-stat">HP: {this.state.selectedEnemyForInfo.stats?.hp} | ATK: {this.state.selectedEnemyForInfo.stats?.atk} | DEF: {this.state.selectedEnemyForInfo.stats?.def}</div>
+                                <div className="enemy-info-stat">Level: {this.state.selectedEnemyForInfo.level}</div>
+                                {this.state.selectedEnemyForInfo.specials?.length > 0 && (
+                                    <div className="enemy-info-stat">Specials: {this.state.selectedEnemyForInfo.specials.join(', ')}</div>
+                                )}
+                                {this.state.selectedEnemyForInfo.weaknesses?.length > 0 && (
+                                    <div className="enemy-info-stat">Weaknesses: {this.state.selectedEnemyForInfo.weaknesses.join(', ')}</div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Monster roster */}
+                    <div className="monster-roster-label">Monster Roster — double-click to add to slot</div>
+                    <div className="monster-roster">
+                        {Object.values(this.props.monsterManager.monsters).map((m, i) => (
+                            <div
+                                key={i}
+                                className="monster-roster-portrait"
+                                style={{backgroundImage: `url(${m.portrait})`}}
+                                title={formatMonsterType(m.type)}
+                                onClick={() => this.setState({ selectedEnemyForInfo: m })}
+                                onDoubleClick={() => {
+                                    // Double-click: fill main monster slot first, then minions
+                                    if (!this.state.selectedMonsterKey) {
+                                        this.setState({ selectedMonsterKey: m.key });
+                                    } else {
+                                        const keys = this.state.selectedMinionKeys.slice();
+                                        const emptyIndex = keys.findIndex(k => !k);
+                                        if (emptyIndex !== -1) {
+                                            keys[emptyIndex] = m.key;
+                                            this.setState({ selectedMinionKeys: keys });
+                                        }
+                                    }
+                                }}
+                            >
+                                <div className="monster-roster-name">{formatMonsterType(m.type)}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="button-row-bottom-left">
+                    <button onClick={() => this.clear()}>Clear</button>
+                </div>
+                <div className="button-row">
+                    <button onClick={() => this.submit()}>Submit</button>
+                </div>
+            </div>
+        </div>}
+
+
+        {this.state.crewSelected && <div>   
+            <MonsterBattle
+                isSimulation={true}
+                exitSimulator={this.exitSimulator}
+                ref={this.monsterBattleComponentRef}
+                overlayManager={this.props.overlayManager}
+                combatManager={this.props.combatManager || null}
+                inventoryManager={this.props.inventoryManager}
+                animationManager={this.props.animationManager}
+                crewManager={this.tempCrewManager || this.props.crewManager || null}
+                crew={JSON.parse(JSON.stringify(this.state.selectedCrew)) || null}
+                monster={this.state.monster ? JSON.parse(JSON.stringify(this.state.monster)) : null}
+                minions={this.state.minions ? JSON.parse(JSON.stringify(this.state.minions)) : null}
+                battleOver={this.battleOver || null}
+                paused={this.state.paused || null}
+                setNarrativeSequence={this.props.setNarrativeSequence || null}
+                useConsumableFromInventory={this.useConsumableFromInventory || null}
+                intervals={INTERVALS}
+                intervalDisplayNames={INTERVAL_DISPLAY_NAMES}
+            ></MonsterBattle> 
+        </div>}
+    </div>
+    )
+  }
+}
+
+export default CrewManagerPage;

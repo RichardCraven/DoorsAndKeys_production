@@ -1,0 +1,923 @@
+.camp-modal {
+  .modal-dialog {
+    max-width: 620px;
+    width: calc(100% - 32px);
+  }
+
+  .modal-content {
+    background: linear-gradient(180deg, #1b1b1b 0%, #161616 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #fff;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    min-height: 560px;
+  }
+
+  .camp-modal-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.3;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  .modal-header {
+    position: relative;
+    z-index: 2;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .modal-title {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #e8d98a;
+  }
+
+  .btn-close {
+    display: none !important;
+  }
+
+  .camp-close {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 18px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: color 0.15s, background 0.15s;
+
+    &:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+  }
+
+  .modal-body {
+    position: relative;
+    z-index: 2;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    overflow: visible;
+  }
+
+  // ── Crew portrait row ────────────────────────────────────────────
+  .camp-crew-row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+  }
+
+  .camp-crew-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    /* Override tile background to match right-panel crew tiles */
+    .tile.crew-tile {
+      background-color: lightgrey !important;
+    }
+  }
+
+  .camp-crew-name {
+    font-size: 10px;
+    color: #aaa;
+    text-align: center;
+    text-transform: capitalize;
+    letter-spacing: 0.3px;
+    max-width: 108px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // ── Action buttons ───────────────────────────────────────────────
+  .camp-actions-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .camp-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: flex-start;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    border-radius: 6px;
+    padding: 13px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    text-align: left;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    &:active {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+
+  .camp-btn-icon {
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  // ── Bottom icon tiles ────────────────────────────────────────────
+  .camp-bottom-tiles {
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    justify-content: center;
+  }
+
+  .camp-bottom-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 110px;
+    padding: 14px 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.09);
+      border-color: rgba(255, 255, 255, 0.16);
+    }
+  }
+
+  .camp-bottom-tile-icon {
+    font-size: 34px;
+    width: 54px;
+    height: 54px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+
+  .camp-bottom-tile-label {
+    font-size: 11px;
+    color: #aaa;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+}
+
+// ─── Food Prep Overlay ───────────────────────────────────────────────────────
+
+.food-prep-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(20, 14, 8, 0.97);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow-y: auto;
+  border-radius: 8px;
+}
+
+.spells-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: rgba(10, 12, 18, 0.97);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow-y: auto;
+  border-radius: 8px;
+}
+
+.camp-map-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  background: radial-gradient(circle at 16% 12%, rgba(34, 56, 80, 0.92), rgba(8, 12, 20, 0.98));
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  overflow: hidden;
+  border-radius: 8px;
+}
+
+.camp-map-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'back title'
+    'back subtitle';
+  align-items: center;
+  gap: 2px 14px;
+  margin-bottom: 14px;
+}
+
+.camp-map-back {
+  grid-area: back;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #d6dee9;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 13px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+  }
+}
+
+.camp-map-title {
+  grid-area: title;
+  font-size: 17px;
+  font-weight: 700;
+  color: #9bc7ff;
+  letter-spacing: 0.5px;
+}
+
+.camp-map-subtitle {
+  grid-area: subtitle;
+  font-size: 12px;
+  color: #9fb0c6;
+}
+
+.camp-map-scene-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 300px;
+  border-radius: 10px;
+  border: 1px solid rgba(190, 220, 255, 0.18);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0)),
+    repeating-linear-gradient(
+      -30deg,
+      rgba(130, 168, 214, 0.05) 0,
+      rgba(130, 168, 214, 0.05) 2px,
+      transparent 2px,
+      transparent 10px
+    );
+  overflow: hidden;
+}
+
+.camp-map-scene {
+  position: absolute;
+  inset: 0;
+  perspective: 1000px;
+  perspective-origin: 50% 32%;
+  transform-style: preserve-3d;
+  animation: towerSceneFloat 6.5s ease-in-out infinite;
+}
+
+.tower-floor-slab {
+  --slab-w: 208px;
+  --slab-top-h: 94px;
+  --slab-thickness: 18px;
+
+  position: absolute;
+  left: 50%;
+  top: 30px;
+  margin-left: calc(var(--slab-w) * -0.5);
+  width: var(--slab-w);
+  height: calc(var(--slab-top-h) + var(--slab-thickness) + 16px);
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transform-style: preserve-3d;
+  transition: transform 750ms cubic-bezier(0.16, 1, 0.3, 1), opacity 1000ms cubic-bezier(0.16, 1, 0.3, 1), filter 240ms ease;
+  padding: 0;
+  opacity: 1;
+  transform: translate3d(0, var(--tower-offset, 0px), 0);
+
+  &:hover {
+    filter: brightness(1.08);
+    transform: translate3d(0, var(--tower-offset, 0px), 0) scale(1.045);
+
+    .slab-shadow {
+      opacity: 0.9;
+      filter: blur(12px);
+    }
+  }
+
+  &:focus-visible {
+    outline: 2px solid #7fc4ff;
+    outline-offset: 2px;
+  }
+
+  &.active {
+    filter: drop-shadow(0 0 12px rgba(126, 210, 255, 0.45));
+  }
+}
+
+.slab-face {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+.slab-shadow {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--slab-top-h) + 10px);
+  width: calc(var(--slab-w) * 0.72);
+  height: 22px;
+  transform: translateX(-50%) skewX(-44deg);
+  transform-origin: center;
+  background: linear-gradient(180deg, rgba(6, 10, 18, 0.28), rgba(6, 10, 18, 0.02));
+  filter: blur(10px);
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.slab-top {
+  width: 100%;
+  height: var(--slab-top-h);
+  top: 0;
+  left: 0;
+  clip-path: polygon(50% 0.2%, 99.6% 50%, 50% 99.8%, 0.4% 50%);
+  background: linear-gradient(145deg, #cfd9e6, #8fa1b9);
+  border: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 8px 16px rgba(12, 20, 34, 0.14);
+}
+
+.slab-grid {
+  width: 100%;
+  height: var(--slab-top-h);
+  top: 0;
+  left: 0;
+  clip-path: polygon(50% 0.2%, 99.6% 50%, 50% 99.8%, 0.4% 50%);
+  z-index: 2;
+  opacity: 0;
+  transform: scale(0.985);
+  transition: opacity 280ms ease, transform 280ms ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cg stroke='%231e344c' stroke-opacity='0.55' stroke-width='0.95' fill='none'%3E%3Cline x1='66.667' y1='16.667' x2='16.667' y2='66.667'/%3E%3Cline x1='83.333' y1='33.333' x2='33.333' y2='83.333'/%3E%3Cline x1='33.333' y1='16.667' x2='83.333' y2='66.667'/%3E%3Cline x1='16.667' y1='33.333' x2='66.667' y2='83.333'/%3E%3C/g%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.slab-board-highlight {
+  width: 100%;
+  height: var(--slab-top-h);
+  top: 0;
+  left: 0;
+  clip-path: polygon(50% 0.2%, 99.6% 50%, 50% 99.8%, 0.4% 50%);
+  z-index: 3;
+  opacity: 0;
+  transform: scale(0.988);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.slab-left {
+  width: 50%;
+  height: calc((var(--slab-top-h) * 0.5) + var(--slab-thickness));
+  left: 0;
+  top: calc(var(--slab-top-h) * 0.5);
+  /* Keep the top and bottom edges parallel for a true cuboid side face. */
+  clip-path: polygon(0 0, 100% 72%, 100% 100%, 0 28%);
+  background: linear-gradient(180deg, #627892, #3d4f67);
+  border-left: 1px solid rgba(20, 30, 42, 0.45);
+}
+
+.slab-right {
+  width: 50%;
+  height: calc((var(--slab-top-h) * 0.5) + var(--slab-thickness));
+  right: 0;
+  top: calc(var(--slab-top-h) * 0.5);
+  /* Mirror of slab-left with the same vertical offset to keep symmetry. */
+  clip-path: polygon(0 72%, 100% 0, 100% 28%, 0 100%);
+  background: linear-gradient(180deg, #4f647f, #324359);
+  border-right: 1px solid rgba(16, 22, 32, 0.52);
+}
+
+.tower-floor-slab.active .slab-top {
+  background: linear-gradient(145deg, #fff6c4, #d8b86a);
+  animation: towerFloorGlow 2.8s ease-in-out infinite;
+}
+
+.tower-floor-slab.active .slab-left {
+  background: linear-gradient(180deg, #8f6d2f, #654b1e);
+}
+
+.tower-floor-slab.active .slab-right {
+  background: linear-gradient(180deg, #7d5e28, #5a431b);
+}
+
+.tower-floor-slab.active .slab-shadow {
+  background: linear-gradient(180deg, rgba(44, 28, 4, 0.26), rgba(44, 28, 4, 0.03));
+}
+
+.slab-label {
+  position: absolute;
+  top: 44px;
+  left: -44px;
+  transform: none;
+  font-size: 12px;
+  font-weight: 700;
+  color: #132238;
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 2px 8px;
+  letter-spacing: 0.35px;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.slab-active-badge {
+  position: absolute;
+  top: 42px;
+  right: -72px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #ffe7a6;
+  background: rgba(20, 16, 6, 0.75);
+  border: 1px solid rgba(255, 214, 124, 0.55);
+  border-radius: 999px;
+  padding: 2px 6px;
+  pointer-events: none;
+  z-index: 3;
+}
+
+@media (max-width: 640px) {
+  .slab-shadow {
+    top: calc(var(--slab-top-h) + 8px);
+    height: 18px;
+  }
+
+  .tower-floor-slab {
+    --slab-w: 176px;
+    --slab-top-h: 82px;
+    --slab-thickness: 14px;
+  }
+}
+
+@keyframes towerFloorReveal {
+  0% {
+    opacity: 0;
+    transform: translate3d(24px, calc(var(--tower-offset, 0px) + 26px), 0) scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, var(--tower-offset, 0px), 0) scale(1);
+  }
+}
+
+@keyframes towerFloorGlow {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2), 0 0 0 rgba(255, 214, 124, 0);
+  }
+  50% {
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28), 0 0 18px rgba(255, 214, 124, 0.18);
+  }
+}
+
+.camp-map-scene.zoomed {
+  perspective: 1200px;
+  perspective-origin: 50% 40%;
+}
+
+.camp-map-scene.zoomed .tower-floor-slab {
+  transition: transform 750ms cubic-bezier(0.16, 1, 0.3, 1), opacity 1000ms cubic-bezier(0.16, 1, 0.3, 1), filter 240ms ease;
+}
+
+.camp-map-scene.zoomed .tower-floor-slab.faded {
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, var(--tower-offset, 0px), 0) scale(0.94);
+}
+
+.camp-map-scene.pre-zoom .tower-floor-slab.faded {
+  opacity: 0;
+  transition-delay: 0ms, var(--fade-out-delay, 0ms), 0ms;
+}
+
+.camp-map-scene.pre-unzoom .tower-floor-slab.faded {
+  opacity: 0;
+}
+
+.camp-map-scene.pre-zoom .tower-floor-slab.pending-zoom {
+  opacity: 1;
+}
+
+.camp-map-scene.reveal-others .tower-floor-slab:not(.zooming-out):not(.zoomed-in) {
+  transition-delay: 0ms, var(--fade-in-delay, 0ms), 0ms;
+}
+
+.tower-floor-slab.zoomed-in {
+  transform: translate3d(0, calc(var(--tower-offset, 0px) + var(--tower-zoom-shift, 0px)), 0) scale(1.62) rotateX(-5deg);
+  z-index: 1000 !important;
+}
+
+.tower-floor-slab.zoomed-in .slab-grid {
+  opacity: 1;
+  transform: scale(1);
+  transition-delay: 760ms;
+}
+
+.tower-floor-slab.zoomed-in.show-board-highlight .slab-board-highlight {
+  opacity: 1;
+  transform: scale(1);
+  transition-delay: 0ms;
+}
+
+.slab-player-dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 5;
+  pointer-events: none;
+  animation: slabDotPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes slabDotPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.7);
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(0, 0, 0, 0);
+    transform: translate(-50%, -50%) scale(1.35);
+  }
+}
+
+.tower-floor-slab.zooming-out {
+  z-index: 1000 !important;
+}
+
+.tower-floor-slab.faded {
+  opacity: 0.15;
+}
+
+@keyframes towerSceneFloat {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@media (max-width: 640px) {
+  .tower-floor-slab {
+    --slab-w: 150px;
+    --slab-h: 68px;
+    --slab-depth: 18px;
+    top: 42px;
+  }
+
+  .slab-label {
+    font-size: 11px;
+  }
+}
+
+.spells-overlay-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'back title'
+    'back subtitle';
+  align-items: center;
+  gap: 2px 14px;
+  margin-bottom: 14px;
+}
+
+.spells-overlay-back {
+  grid-area: back;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #ccc;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 13px;
+
+  &:hover {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+  }
+}
+
+.spells-overlay-title {
+  grid-area: title;
+  font-size: 17px;
+  font-weight: 700;
+  color: #8bc5ff;
+  letter-spacing: 0.5px;
+}
+
+.spells-overlay-subtitle {
+  grid-area: subtitle;
+  font-size: 12px;
+  color: #97a4b3;
+}
+
+.spells-user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.spells-user-block {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.spells-user-portrait-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.spells-user-name {
+  font-size: 12px;
+  color: #dfe8f1;
+  font-weight: 700;
+  text-align: center;
+}
+
+.spells-user-class {
+  font-size: 10px;
+  color: #8ea1b3;
+  text-transform: capitalize;
+}
+
+.spells-tiles-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.spells-empty {
+  font-size: 12px;
+  color: #8896a5;
+  padding-top: 4px;
+}
+
+.spell-tile {
+  width: 160px;
+  min-height: 144px;
+  border-radius: 8px;
+  padding: 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spell-tile.ready {
+  border-color: rgba(121, 216, 146, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(121, 216, 146, 0.25);
+}
+
+.spell-tile.preparing {
+  border-color: rgba(247, 206, 104, 0.8);
+  box-shadow: inset 0 0 0 1px rgba(247, 206, 104, 0.25);
+}
+
+.spell-tile-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-color: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.12);
+}
+
+.spell-tile-name {
+  font-size: 12px;
+  color: #e6eff8;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.spell-tile-description {
+  font-size: 11px;
+  color: #9caab8;
+  line-height: 1.35;
+}
+
+.spell-tile-status {
+  margin-top: auto;
+  font-size: 11px;
+  color: #8bc5ff;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.food-prep-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.food-prep-back {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #ccc;
+  border-radius: 6px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  &:hover { background: rgba(255,255,255,0.15); color: #fff; }
+}
+
+.food-prep-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #f5c77e;
+  letter-spacing: 0.5px;
+}
+
+.food-prep-supply {
+  font-size: 13px;
+  color: #aaa;
+}
+
+.recipe-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.recipe-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 14px 12px;
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.2s;
+
+  &:hover { border-color: rgba(245,199,126,0.5); }
+
+  &.unaffordable { opacity: 0.45; }
+
+  &.cooking {
+    border-color: #f5c77e;
+    background: rgba(245,199,126,0.07);
+  }
+}
+
+.recipe-card-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.recipe-card-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #f5c77e;
+  text-align: center;
+}
+
+.recipe-card-description {
+  font-size: 11px;
+  color: #888;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.recipe-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #ccc;
+  font-weight: 600;
+
+  .recipe-cost { color: #e07070; }
+  .recipe-arrow { color: #777; }
+  .recipe-yield { color: #78c878; }
+}
+
+.recipe-card-duration {
+  font-size: 12px;
+  color: #999;
+}
+
+.recipe-card-btn {
+  margin-top: 4px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  cursor: pointer;
+  user-select: none;
+  width: 100%;
+
+  &.start-btn {
+    background: #a0522d;
+    color: #fff;
+    &:hover { background: #c0622d; }
+  }
+
+  &.disabled {
+    background: rgba(255,255,255,0.05);
+    color: #666;
+    cursor: not-allowed;
+  }
+
+  &.cooking-badge {
+    background: rgba(245,199,126,0.15);
+    color: #f5c77e;
+    cursor: default;
+  }
+}
+
+// ─── Food Complete Modal ──────────────────────────────────────────────────────
+
+.food-complete-modal {
+  .food-complete-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 24px 20px;
+    text-align: center;
+  }
+
+  .food-complete-icon {
+    font-size: 52px;
+    line-height: 1;
+  }
+
+  .food-complete-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: #f5c77e;
+    margin: 0;
+  }
+
+  .food-complete-text {
+    font-size: 14px;
+    color: #ccc;
+  }
+
+  .food-complete-note {
+    font-size: 12px;
+    color: #777;
+    margin: 0;
+  }
+}

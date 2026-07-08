@@ -1,0 +1,79 @@
+/* Minimal styling for Quests modal */
+.quests-modal {
+  /* Widen the dialog wrapper so the content box can grow to fit 3 × 220px panels */
+  .modal-dialog {
+    max-width: 760px;
+    width: calc(100% - 32px);
+  }
+
+  .modal-content {
+    background: linear-gradient(180deg, #1b1b1b 0%, #161616 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: #fff;
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .modal-header {
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    padding: 8px 12px;
+    .modal-title {
+      font-size: 20px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .quests-close {
+      color: #fff;
+      opacity: 0.9;
+      cursor: pointer;
+      &:hover { opacity: 1; }
+    }
+  }
+
+  /* CoreUI adds a default close button (.btn-close). Hide it for this modal so only
+     our custom .quests-close button is visible. */
+  .btn-close {
+    display: none !important;
+  }
+
+  .quests-grid {
+    margin-top: 12px;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .quest-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 14px;
+    min-height: 160px;
+    width: 220px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border: 1px solid rgba(255,255,255,0.03);
+    border-radius: 6px;
+    color: #f6f6f6;
+  }
+
+  .quest-panel .icon {
+    width: 64px;
+    height: 64px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+
+  @media (max-width: 720px) {
+    .modal-dialog { max-width: 98%; width: 98%; }
+    .quests-grid { flex-direction: column; align-items: center; gap: 8px; }
+    .modal-content { width: 100%; }
+  }
+}
+
+/* When quests is opened on top of the camp popup, raise it above camp's backdrop */
+.quests-above-camp {
+  z-index: 1100 !important;
+}

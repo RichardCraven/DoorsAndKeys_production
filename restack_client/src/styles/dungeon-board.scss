@@ -1,0 +1,1483 @@
+.dungeon-container{
+    align-items: center;
+    // align-items: flex-start;
+    position: relative;
+    justify-content: center;
+    display: flex;
+    height: 100%;
+    width: 100%;
+
+    filter: none;
+    transform: none;
+    transition: all 1.5s ease-in-out;
+    &.wrecked{
+        filter: invert(0.5) saturate(35.5);
+        transform: perspective(350px) translateX(-3px) translateZ(-23px) 
+        scaleX(0.8) scaleY(0.7) skewX(8deg) skewY(35deg) rotate(360deg);
+        // rotate(40deg)
+    }
+
+    .modal-body{
+        justify-content: flex-start;
+    }
+    .tile.inventory-tile{
+        margin: 5px;
+        background-color: transparent;
+        border: 1px solid white !important;
+        
+        &:hover{
+            background-color: rgba(151, 176, 208, 0.2) !important;
+        }
+        &.active{
+            background-color: transparent !important;
+            border-color: #f9b115 !important;
+        }
+    }
+
+    /* Dev console styles — moved to root scope so other pages can use them */
+}
+
+/* Dev console — shared across DungeonPage and MapmakerPage */
+.dev-console {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: white;
+    border-top: 1px solid #ddd;
+    z-index: 3000;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.12);
+}
+.dev-console-inner {
+    display: flex;
+    max-height: 220px;
+    height: 180px;
+}
+.dev-console-left, .dev-console-right {
+    flex: 1 1 50%;
+    padding: 12px;
+    overflow: auto;
+}
+.dev-console-divider {
+    width: 1px;
+    background: #e6e6e6;
+}
+.dev-console-input {
+    width: 100%;
+    border: none;
+    outline: none;
+    font-size: 14px;
+    padding: 6px 8px;
+    box-sizing: border-box;
+}
+.dev-console-typed {
+    margin-top: 8px;
+    color: #333;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
+.dev-console-output {
+    font-family: monospace;
+    color: #111;
+    white-space: pre-wrap;
+}
+.dev-console-line { margin-bottom: 4px; }
+
+// Resume remaining .dungeon-container child rules
+.dungeon-container {
+    .tile.inventory-tile.equipment{
+        // height: 55px;
+        // width: 55px;
+        &.empty{
+            background-color: transparent;
+        }
+    }
+    .center-board-wrapper{
+        position: relative;
+        &.show-map-marker-cursor{
+            cursor: crosshair;
+        }
+        .message-container{
+            position: absolute;
+            // border: 1px solid yellow;
+            height: 50px;
+            width: 100%;
+            top: -52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        .respawn-message-container{
+            position: absolute;
+            // border: 1px solid yellow;
+            height: 50px;
+            width: 150px;
+            // border: 1px solid yellow;
+            top: -52px;
+            left: -29px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            color: white;
+            .hourglass-icon{
+                height: 20px;
+                width: 20px;
+                background-size: 100% 100%;
+                margin-right: 7px;
+            }
+        }
+    }
+    .right-side-panel{
+        overflow: visible;
+        height: 100%;
+        padding-top: 25px;
+        // border: 1px solid transparent;
+        border-left: 1px solid lightgrey;
+        z-index: 3;
+        width: 200px;
+        // min-width: 0px;
+        min-width: 200px;
+        transition: all 1s;
+    overflow: visible;
+        right: -211px;
+        &.expanded{
+            right: 0;
+            border-left: 1px solid lightgrey;
+        }
+        position: absolute;
+        .icon-container{
+            position: fixed;
+            bottom: 10px;
+            color: white;
+            right: 10px;
+            cursor: pointer;
+            .expand-icon{
+                transition: all 1s;
+                &.expanded{
+                    transform: rotateZ(-180deg);
+                }
+            }
+        }
+        .crew-container {
+            .crew-actions{
+                color: white;
+                text-align: left;
+                cursor: pointer;
+                padding: 8px;
+                svg{
+                    margin-right: 7px;
+                }
+                
+            }
+            /* Ensure crew tiles render as a horizontal row on the right-side panel too */
+            .quicklook-panel {
+                margin: 6px 4px 2px 4px;
+                padding: 8px 10px;
+                background: rgba(255,255,255,0.04);
+                border: 1px solid rgba(255,255,255,0.08);
+                border-radius: 5px;
+                color: #e0e0e0;
+                font-size: 11px;
+                .ql-row {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 3px 0;
+                    border-bottom: 1px solid rgba(255,255,255,0.05);
+                    &:last-child { border-bottom: none; }
+                }
+                .ql-label {
+                    opacity: 0.75;
+                    letter-spacing: 0.3px;
+                }
+                .ql-value {
+                    font-weight: 700;
+                    color: #f9b115;
+                }
+            }
+            .crew-tile-container{
+                display: flex;
+                flex-wrap: wrap;
+                .sub-container{
+                    position: relative;
+                    .hover-message{
+                        color: white;
+                        position: absolute;
+                        font-size: 9px;
+                        top: -7px;
+                        left: 5px;
+                    }
+                    .tile.crew-tile{
+                        margin: 5px;
+                        background-color: lightgrey;
+                        &:hover{
+                            background-color: rgb(151, 176, 208) !important;
+                        }
+                        &.active{
+                            background-color: #f9b115 !important;
+                        }
+                    }
+                }
+            }
+        }
+        .actions-tray{
+            color: white;
+            overflow: hidden;
+            transition: all 1s;
+            height: 0px;
+            min-height: 0px;
+            border: 1px solid #bbbbb84d;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            // padding-left: 21px;
+            &.expanded{
+                min-height: 50px;
+            }
+            .crew-action-item{
+                color: white;
+                cursor: pointer;
+                &:hover{
+                    color: #f9b115;
+                }
+            }
+        }
+
+        /* Ensure crew action rows have visible height so placeholders can be measured/drawn */
+        .crew-actions-tray {
+            .action-row {
+                position: relative;
+                min-height: 28px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                height: 100%;
+                width: 100%;
+                justify-content: center;
+            }
+            .camp-label {
+                display: flex;
+                position: relative;
+                line-height: 20px;
+                padding: 4px 6px;
+                height: 100%;
+                width: 100%;
+                align-items: center;
+            }
+            .progress-overlay.debug-placeholder{
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                box-sizing: border-box;
+                display: block;
+                z-index: 2;
+                pointer-events: none; /* allow clicks to pass through */
+            }
+            /* CSS animation for smooth progress fill (fallback to canvas) */
+            .progress-overlay.camp-anim{
+                position: absolute;
+                top: 0;
+                left: 0;
+                background-color: rgba(249,177,21,0.45);
+                width: 0%;
+                transition: none;
+                animation-name: campProgress;
+                animation-timing-function: linear;
+                animation-fill-mode: forwards;
+                height: 100%;
+                z-index: 1;
+                pointer-events: none;
+            }
+            /* Non-animated static class used when JS controls width. Provides background and a subtle width transition. */
+            .progress-overlay.camp-static{
+                background-color: rgba(249,177,21,0.45);
+                /* start at zero width; JS will set inline width */
+                width: 0%;
+                height: 100%;
+                transition: width 0.6s linear;
+            }
+            @keyframes campProgress{
+                from { width: 0%; }
+                to { width: 100%; }
+            }
+        }
+        /* When crew-container is placed on the right panel, reuse the left-panel styling
+           but render crew tiles horizontally with optional horizontal scrolling. */
+        .crew-container{
+            right: 0;
+            top: 29px;
+            transition: all 0.3s;
+            
+            .title{
+                color: white;
+                position: sticky;
+                top: 0px;
+                background: transparent;
+                z-index: 100;
+                height: 32px;
+                line-height: 32px;
+                margin-bottom: 8px;
+            }
+            .death-tracker{
+                width: 100%;
+                height: 40px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 8px;
+                position: relative;
+                /* entrance animation when tracker appears */
+                animation: deathTrackerFade 320ms ease-out;
+
+                /* Wrapper for each skull */
+                .death-skull-wrapper{
+                    position: relative;
+                    display: inline-block;
+                    outline: none;
+                    transform-origin: center center;
+                    animation: deathSkullPop 360ms cubic-bezier(.2,.8,.2,1);
+                }
+
+                /* The skull icon itself */
+                .death-skull{
+                    width: 32px;
+                    height: 32px;
+                    background-size: contain;
+                    background-repeat: no-repeat;
+                    background-position: center center;
+                    opacity: 0.95;
+                    filter: invert(1);
+                    /* slight drop shadow for contrast */
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.45);
+                    padding: 0;
+                }
+
+                .hover-message{
+                    color: white;
+                    position: absolute;
+                    font-size: 9px;
+                    top: -7px;
+                    left: 5px;
+                }
+
+                .tile.crew-tile{
+                    margin: 2px;
+                    background-color: lightgrey;
+                    &:hover{
+                        background-color: rgb(151, 176, 208) !important;
+                    }
+                    &.active{
+                        background-color: #f9b115 !important;
+                    }
+                }
+            }
+        }
+
+        
+        
+    }
+    .minimap-container{
+        // height: 155px;
+        // width: 198px;
+        display: flex;
+        flex-direction: column;
+        width: 180px;
+        .map-wrapper{
+            height: 155px;
+            width: 198px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            position: relative;
+            /* space below map-wrapper for the backside indicator */
+            margin-bottom: 6px;
+            .level-indicator{
+                position: absolute;
+                border: 1px solid #2a2929;
+                width: 4px;
+                height: 100%;
+                left: 6px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+    
+                .floor-level{
+                    border: 1px solid rgb(111, 111, 110);
+                    height: 29px;
+                    width: 100%;
+                    &.active{
+                        border: 1px solid #adad93;
+                        background-color: #adad93;
+                    }
+                }
+            }
+            .minimap-tile{
+                border: 1px solid #212121;
+                position: relative;
+                height: 50px;
+                width: 50px;
+                background: black;
+                transition: transform 1s;
+                &.backside{
+                    background: #2c384af2;
+                    /* When active and backside, emphasize with a subtle dashed border */
+                    &.active{
+                        border: 2px dashed rgba(255,255,255,0.08);
+                        box-shadow: inset 0 0 6px rgba(0,0,0,0.45);
+                    }
+                    /* Small badge that indicates the backside state */
+                /* entrance keyframes */
+                @keyframes deathTrackerFade{
+                    from { opacity: 0; transform: translateY(-6px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                @keyframes deathSkullPop{
+                    0% { transform: scale(0.6); opacity: 0; }
+                    60% { transform: scale(1.08); opacity: 1; }
+                    100% { transform: scale(1); }
+                }
+                    .backside-badge{
+                        position: absolute;
+                        top: 4px;
+                        right: 4px;
+                        height: 14px;
+                        width: 14px;
+                        border-radius: 50%;
+                        background: rgba(0,0,0,0.6);
+                        color: #fff;
+                        font-size: 10px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        border: 1px solid rgba(255,255,255,0.12);
+                        z-index: 5;
+                        pointer-events: none;
+                    }
+                }
+                &:hover{
+                    cursor: pointer;
+                    border: 1px solid rgba(253, 224, 224, 0.523);
+                }
+                &.active{
+                    border: 1px solid rgba(138, 2, 2, 0.523);
+                    &:hover{
+                        border: 1px solid rgba(189, 3, 3, 0.623);
+                    }
+                }
+                &.zoomed{
+                    // background: black;
+                    z-index: 1;
+                    transform: scale(2.5);
+                }
+                &.zoomed.topLeft{
+                    transform: scale(2.5) translate(40%, 40%);
+                }
+                &.zoomed.topMid{
+                    transform: scale(2.5) translate(0%, 40%);
+                }
+                &.zoomed.topRight{
+                    transform: scale(2.5) translate(-40%, 40%);
+                }
+                &.zoomed.midLeft{
+                    transform: scale(2.5) translate(40%, 0%);
+                }
+                &.zoomed.midRight{
+                    transform: scale(2.5) translate(-40%, 0%);
+                }
+                &.zoomed.botLeft{
+                    transform: scale(2.5) translate(40%, -40%);
+                }
+                &.zoomed.botMid{
+                    transform: scale(2.5) translate(0%, -40%);
+                }
+                &.zoomed.botRight{
+                    transform: scale(2.5) translate(-40%, -40%);
+                }
+                .player-position-indicator{
+                    height: 2px;
+                    width: 2px;
+                    border-radius: 2px;
+                    background-color: white;
+                    position: absolute;
+                    z-index: 3;
+                    // top: 50%;
+                    // left: 50%;
+                }
+                // ── Breadcrumb trail ─────────────────────────────────
+                .breadcrumb-trail-svg {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    pointer-events: none;
+                    z-index: 2;
+                    overflow: visible;
+                    .bc-fresh {
+                        fill: none;
+                        stroke: rgba(180, 180, 180, 0.75);
+                        stroke-width: 0.8;
+                        stroke-linecap: round;
+                        stroke-linejoin: round;
+                    }
+                    .bc-dim {
+                        fill: none;
+                        stroke: rgba(90, 90, 90, 0.45);
+                        stroke-width: 0.8;
+                        stroke-linecap: round;
+                        stroke-linejoin: round;
+                    }
+                }
+                .minimap-indicator{
+                    height: 2px;
+                    width: 2px;
+                    border-radius: 2px;
+                    position: absolute;
+                    &.enemy{
+                        background-color: red;
+                    }
+                    &.stairs{
+                        background-color: rgb(0, 174, 255);
+                    }
+                    &.gate{
+                        width: 4px;
+                        height: 4px;
+                        border-radius: 0px;
+                        background-color: rgb(223, 202, 117);
+                        transform: rotate3d(55, 28, -59, 79deg);
+                    }
+                }
+            }
+        }
+        .backside-indicator{
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            text-transform: lowercase;
+            pointer-events: none;
+            margin: 6px;
+            padding-left: 4px;
+            width: 100%;
+        }
+        .tray-wrapper{
+            width: 100%;
+            height: 0px;
+            transition: all 1s;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            align-items: flex-start;
+            justify-content: flex-start;
+            &.expanded{
+                height: 190px;
+            }
+            &.double-expanded{
+                height: 500px;
+            }
+            .clear-all-markers{
+                font-size: 12px;
+                min-height: 24px;
+            }
+            button{
+                width: 100px;
+                margin: 10px;
+                cursor: pointer;
+                // &:hover{
+                //     background-color: antiquewhite;
+                // }
+            }
+            .mark-map-tray{
+                width: 100%;
+                height: 0%;
+                transition: all 1s;
+                overflow: hidden;
+                padding: 0px 10px;
+                display: flex;
+                align-items: flex-start;
+                flex-direction: column;
+                // background-color: white;
+                &.expanded{
+                    height: 190px;
+                }
+                select{
+                    margin-bottom: 10px;
+                }
+                input{
+                    max-width: 115px;;
+                    margin-bottom: 10px;
+                }
+                .place-marker-button{
+                    margin-bottom: 10px;
+                }
+            }
+        }
+    }
+    .left-side-panel{
+        height: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        border-right: 1px solid lightgrey;
+        z-index: 3;
+        width: 200px;
+        // min-width: 0px;
+        transition: all 1s;
+        position: absolute;
+        left: -202px;
+        &.expanded{
+            left: 0;
+            border-right: 1px solid lightgrey;
+        }
+        
+        .crew-container{
+            // position: absolute;
+            right: -200px;
+            top: 29px;
+            transition: all 1s;
+            // height: 106px;
+            .title{
+                color: white;
+                position: sticky;
+                top: 0px;
+                background: black;
+                z-index: 100;
+                height: 40px;
+                line-height: 40px;
+                margin-bottom: 10px;
+            }
+            .crew-tile-container{
+                width: 170px;
+                display: flex;
+                flex-wrap: wrap;
+                .sub-container{
+                    position: relative;
+                    .hover-message{
+                        color: white;
+                        position: absolute;
+                        font-size: 9px;
+                        top: -7px;
+                        left: 5px;
+                    }
+                    .tile.crew-tile{
+                        margin: 5px;
+                        // border: 2px solid yellow !important;
+                        background-color: lightgrey;
+                        &:hover{
+                            background-color: rgb(151, 176, 208) !important;
+                        }
+                        &.active{
+                            background-color: #f9b115 !important;
+                        }
+                    }
+                }
+            }
+        }
+        .crew-info-section{
+            // border: 1px solid white;
+            height: auto;
+            width: 100%;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding-top: 50px;
+            .stat-line{
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                box-sizing: border-box;
+                padding: 0px 25px;
+                span.stat-value{
+                    margin-left: 10px;
+                    font-size: 12px;
+                }
+                /* ensure numeric values align vertically in the left crew info */
+                span.stat-value{
+                    display: inline-block;
+                    min-width: 36px;
+                    text-align: right;
+                }
+            }
+            .portrait-wrapper{
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                .portrait{
+                    height: 100px;
+                    width: 100px;
+                    // background-color: white;
+                    background-size: 100% 100%;
+                }
+                .status-container{
+                    height: 100px;
+                    width: 50px;
+                    position: absolute;
+                    left: 5px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: flex-start;
+                    padding-top: 35px;
+                }
+                .cooldowns-container{
+                    height: 100px;
+                    width: 50px;
+                    position: absolute;
+                    right: 5px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    .special-action-wrapper{
+                        height: 30px;
+                        width: 30px;
+                        position: relative;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        .special-action-icon{
+                            height: 25px;
+                            width: 25px;
+                            border: 1px solid #ffffff33;
+                            background-color: black;
+                            border-radius: 25px;
+                            // background-size: 100% 100%;
+                            z-index: 10;
+                            position: relative;
+                            background-size: 22px 22px;
+                            background-repeat: no-repeat;
+                            background-position: center;
+                        }
+                        .underlay{
+                            top: 0;
+                            position: absolute;
+                            z-index: 0;
+                            height: 28px;
+                            width: 28px;
+                            border-radius: 50%;
+                            background-color: white;
+                        }
+                        .progress-overlay{
+                            box-sizing: border-box;
+                            top: 0;
+                            left: 0;
+                            height: 100%;
+                            width: 50%;
+                            position: absolute;
+                            z-index: 5;
+                            background-color: black;
+                        }
+                        .right,.left{
+                            box-sizing: border-box;
+                            top: 0;
+                            left: 0;
+                            height: 100%;
+                            width: 50%;
+                            position: absolute;
+                            border: 3px solid gray;
+                            border-radius: 28px 0px 0px 28px;
+                            transform-origin: right;
+                        }
+                        /* left/right pseudo elements intentionally no-op (kept for future tweaks) */
+                    }
+                    .progress {
+                        width: 200px;
+                        height: 200px;
+                        font-size: 30px;
+                        color: #fff;
+                        border-radius: 50%;
+                        overflow: hidden;
+                        position: relative;
+                        background: #07070c;
+                        text-align: center;
+                        line-height: 200px;
+                        margin: 20px;
+                        box-shadow: 2px 2px 2px 2px white;
+                    }
+                    .progress::after {
+                        content: "";
+                    }
+                }
+            }
+            
+            .name-line{
+                text-decoration-line: underline;
+            }
+            .experience-line-container{
+                height: 5px;
+                width: 100%;
+                align-self: flex-start;
+                padding: 0px 25px;
+                box-sizing: border-box;
+                .experience-line{
+                    height: 100%;
+                    background: #f9b115e3;
+                    transition: width 300ms ease; /* match HP bar transition */
+                }
+            }
+            .hp-line-container{
+                height: 6px;
+                width: 100%;
+                align-self: flex-start;
+                padding: 0px 25px;
+                box-sizing: border-box;
+                margin-bottom: 8px;
+                background: rgba(255,255,255,0.08);
+                .hp-line{
+                    height: 100%;
+                    background: #2eb85c; /* requested HP color */
+                    transition: width 300ms ease;
+                }
+            }
+            .actions-tray{
+                color: white;
+                // height: 0px;
+                overflow: hidden;
+                transition: all 1s;
+                border: 1px solid #bbbbb84d;
+                width: calc(100% - 40px);
+                padding: 0px 20px;
+                height: 0px;
+                min-height: 0px;
+                position: relative;
+                &.expanded{
+                    height: auto;
+                    min-height: 50px;
+                    overflow: visible;
+                }
+                &.double-expanded{
+                    height: auto;
+                    min-height: 50px;
+                    overflow: visible;
+                }
+                .actions-container{
+                    height: auto;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: flex-start;
+                    justify-content: center;
+                    padding-bottom: 8px;
+                    .action-wrapper{
+                        position: relative;
+                        width: 100%;
+                        .info-icon{
+                            position: absolute;
+                            // top: 11px;
+                            // right: 7px;
+                            top: 5px;
+                            right: -10px;
+                            height: 25px;
+                            width: 25px;
+                            background-size: 100% 100%;
+                            cursor: pointer;
+                            filter: invert(0.8);
+                            &:hover{
+                                filter: invert(0);
+                            }
+                        }
+                        .action-hover-wrapper{
+                            display: flex;
+                            flex-direction: row;
+                            justify-content: flex-start;
+                            cursor: pointer;
+                            padding: 5px 10px;
+                            position: relative;
+                            &:hover{
+                                background-color: rgba(143, 143, 135, 0.488);
+                            }
+                            .progress-overlay{
+                                position: absolute;
+                                top: 0;
+                                left: 0;
+                                height: 100%;
+                                width: 100%;
+                                // background-color: #f9b11554;
+                                border: 1px solid transparent;
+                            }
+
+                            /* debug helper: visually highlight debug placeholders */
+                            .progress-overlay.debug-placeholder{
+                                box-shadow: 0 0 0 2px rgba(249,177,21,0.6) inset;
+                                border: 1px dashed rgba(249,177,21,0.9);
+                            }
+                            .action-icon{
+                                height: 28px;
+                                width: 28px;
+                                color: white;
+                                background-size: 100% 100%;
+                                margin-right: 10px;
+                            }
+                        }
+                        /* Ritual action icon is dark by default — invert so it shows on a dark bg */
+                        &.action-wrapper--ritual .action-hover-wrapper .action-icon{
+                            filter: invert(1);
+                        }
+                        .action-sub-menu{
+                            max-height: 0;
+                            min-height: 0;
+                            width: 100%;
+                            overflow: hidden;
+                            transition: max-height 0.35s cubic-bezier(0.4, 0.0, 0.2, 1);
+                            display: flex;
+                            flex-direction: column;
+                            align-items: flex-start;
+                            padding-left: 10px;
+                            justify-content: center;
+                            .max-reached{
+                                color: rgb(97, 57, 57);
+                            }
+                            &.expanded{
+                                max-height: 1000px;
+                                min-height: 60px;
+                                overflow: visible;
+                            }
+                            .action-subtype{
+                                cursor: pointer;
+                                user-select: none;
+                                display: flex;
+                                align-items: center;
+                                justify-content: space-between;
+                                width: 100%;
+                                padding-right: 10px;
+                                .numeral{
+                                    height: 10px;
+                                    width: 10px;
+                                    background-size: 100% 100%;
+                                    margin-right: 30px;
+                                    margin-top: 3px;
+                                    &.yellow-filter{
+                                        filter: sepia(100%) hue-rotate(360deg) saturate(400%)
+                                    }
+                                }
+                                &.in-progress{
+                                    color: #f9b115e3;
+                                    pointer-events: none;
+                                    &:hover{
+                                        color: #f9b115;
+                                    }
+                                }
+                                &.max-reached{
+                                    color: white;
+                                    pointer-events: none;
+                                }
+                                &:hover{
+                                    color: #f9b115;
+                                }
+                                &.disabled{
+                                    cursor:default;
+                                    color: #4f4d4d;
+                                    pointer-events: none;
+                                    &:hover{
+                                        color: #4f4d4d;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .equipment-panel{
+                width: 100%;
+                margin-top: 15px;
+                display: flex;
+                flex-direction: column;
+                /* ensure crew-body copy inside equipment-panel takes visible space */
+                .crew-body{
+                    width: 210px;
+                    height: 350px;
+                    background-size: contain;
+                    background-repeat: no-repeat;
+                    background-position: center;
+                    margin-top: 8px;
+                    flex: 0 0 auto;
+                    position: relative;
+                    margin-top: -16px;
+                }
+                /* body silhouette image — mirrors inventory-modal behaviour */
+                .crew-body .crew-body-image {
+                    position: absolute;
+                    inset: 0;
+                    background-size: 130%;
+                    background-repeat: no-repeat;
+                    background-position: center;
+                    opacity: 0.5;
+                    z-index: 0;
+                    pointer-events: none;
+                }
+                .crew-body .equip-slot {
+                    z-index: 1;
+                }
+                /* read-only slot wrapper — blocks clicks, shows name on hover */
+                .crew-body .ep-slot-wrapper {
+                    pointer-events: auto;
+                    cursor: default;
+                    * {
+                        pointer-events: none;
+                    }
+                    &:hover .ep-slot-name {
+                        opacity: 1;
+                    }
+                }
+                .crew-body .ep-slot-name {
+                    position: absolute;
+                    bottom: calc(100% + 4px);
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: rgba(0, 0, 0, 0.82);
+                    color: #e8e8e8;
+                    font-size: 10px;
+                    white-space: nowrap;
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                    pointer-events: none;
+                    opacity: 0;
+                    transition: opacity 0.15s ease;
+                    z-index: 10;
+                }
+                /* replicate equip-slot styling from inventory-modal so slots show in left panel */
+                .equip-slot{
+                    position: absolute;
+                    width: 55px;
+                    height: 55px;
+                    border: 1px solid black;
+                    background: transparent;
+                    box-sizing: border-box;
+                    border-radius: 4px;
+                    pointer-events: auto;
+                }
+                .crew-body .slot-chest{
+                    left: 50%;
+                    top: 32%;
+                    transform: translate(-50%, -50%);
+                }
+                .crew-body .slot-right{
+                    right: 12%;
+                    top: 59%;
+                    transform: translate(0, -50%);
+                }
+                .crew-body .slot-left{
+                    left: 12%;
+                    top: 59%;
+                    transform: translate(0, -50%);
+                }
+                .crew-body .slot-head{
+                    left: 50%;
+                    top: 16%;
+                    transform: translate(-50%, -50%);
+                }
+                .crew-body .slot-boots{
+                    left: 50%;
+                    top: 82%;
+                    transform: translate(-50%, -50%);
+                }
+                .crew-body .slot-ancillary-left{
+                    left: 8%;
+                    top: 24%;
+                    transform: translate(0, -50%);
+                }
+                .crew-body .slot-ancillary-right{
+                    right: 8%;
+                    top: 24%;
+                    transform: translate(0, -50%);
+                }
+                /* bottom-left slot mirrored from inventory modal */
+                    .crew-body .slot-pet{
+                        left: 2%;
+                        bottom: 8%;
+                        transform: translate(0, 0);
+                    }
+                    .crew-body .equip-slot.slot-pet .pet-overlay{
+                        position: absolute;
+                        right: -8px;
+                        bottom: -8px;
+                        width: 20px;
+                        height: 20px;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        background: rgba(0,0,0,0.6);
+                        color: #fff;
+                        font-size: 12px;
+                        border-radius: 50%;
+                        pointer-events: none;
+                        z-index: 40;
+                    }
+                .equipment-line{
+                    display: flex;
+                    align-items: center;
+                    flex-direction: row;
+                    justify-content: space-between;
+                    padding: 0 25px;
+                    margin-bottom: 18px;
+                    .equipment-icon{
+                        position: relative;
+                        // height: 54px;
+                        // width: 54px;
+                        border: 1px solid #2d2c2c;
+                        .equipment-name{
+                            position: absolute;
+                            height: 12px;
+                            width: 100%;
+                            top: -15px;
+                            white-space: nowrap;
+                            font-size: 10px;
+                            line-height: 12px;
+                        }
+                    }
+                }
+            }
+            .description-panel{
+                height: 145px;
+                width: calc(100% - 20px);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                padding: 0px 10px;
+                text-align: left;
+                white-space: pre-wrap;
+            }
+        }
+        .icon-container{
+            color: white;
+            cursor: pointer;
+        }
+        .icon-container.menu{
+            width: 100%;
+            display: flex;
+            align-items: center;
+            padding-left: 50px;
+            margin: 5px;
+            svg{
+                margin-right: 10px;
+            }
+        }
+        /* When a menu button is placed inside the crew container on the right panel,
+           it should flow with the document (not be fixed to the viewport). */
+        
+        .icon-container.expand-collapse-button{
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            cursor: pointer;
+            z-index: 9999; /* ensure collapse/expand button sits above any panel content */
+            .expand-icon{
+                transition: all 1s;
+                &.expanded{
+                    // color: black;
+                    transform: rotateZ(-180deg);
+                }
+            }
+        }
+    }
+}
+.dark-mask{
+    height: 100vh;
+    width: 100vw;
+    position: absolute;
+    background-color: black;
+    opacity: 0.5;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Make inventory tile styles available outside of .dungeon-container
+   (inventory popup/modal is rendered outside that scope). */
+.tile.inventory-tile{
+    margin: 5px;
+    background-color: lightgrey;
+
+    &:hover{
+        background-color: rgb(151, 176, 208) !important;
+    }
+    &.active{
+        background-color: #f9b115 !important;
+    }
+}
+
+.tile.inventory-tile.equipment{
+    background-color: white;
+    margin: 0;
+    &.empty{
+        background-color: transparent;
+    }
+}
+/* Modal style for in-session preparation completion */
+.prep-complete-modal .modal-content{
+    border: 2px solid #add8e6; /* light blue */
+    box-shadow: 0 0 12px rgba(173,216,230,0.6);
+}
+.info-panel{
+    color: white;
+    position: absolute;
+    top: 12px;
+    right: 76px;
+
+
+}
+.overlay-board{
+    position: absolute;
+    z-index: 10;
+    display: flex !important;
+    flex-flow: row wrap !important;
+    align-content: flex-end !important;
+    box-sizing: content-box;
+    // pointer-events: none;
+}
+
+.floating-player{
+    will-change: transform;
+    /* transition will be set inline to match JS-configured duration */
+    transition: none;
+    pointer-events: none;
+}
+.board{
+    // border: 1px solid black;
+    display: flex !important;
+    flex-flow: row wrap !important;
+    align-content: flex-end !important;
+    box-sizing: content-box;
+}
+// .monster-battle-board{
+//     border: 3px solid rgb(185, 15, 15);
+//     width: 66%;
+//     height: 500px;
+//     display: flex;
+//     flex-direction: row;
+//     justify-content: space-between;
+//     .mb-col{
+//         width: 200px;
+//         height: 100%;
+//     }
+//     .left-col{
+//         border-right: 1px solid yellow;
+//     }
+//     .right-col{
+//         border-left: 1px solid orange;
+
+//     }
+// }
+
+#myCanvas{
+    height: 1504px; 
+    width: 1504px;
+    position: absolute;
+    z-index: -1;
+}
+.pyramid-level{
+    border: 1px solid grey;
+    background-color: whitesmoke;
+    height: 250px;
+    width: 80px;
+    position: fixed;
+    left: 144px;
+    display: flex;
+    flex-direction: column;
+}
+.pyramid-top,.pyramid-mid,.pyramid-bot{
+    height: 150px;
+    width: 100%;
+    border-top: 1px solid lightgrey;
+    border-bottom: 1px solid lightgrey;
+}
+.pyramid-top.active,.pyramid-mid.active,.pyramid-bot.active{
+    background-color: slategray;
+}
+.message-panel{
+    position: absolute;
+    color: white;
+    top: 15px;
+}
+
+/* ─── Ritual Encounter Modal ──────────────────────────────────────── */
+.ritual-encounter-modal .modal-content {
+    background: #0e1520;
+    border: 2px solid #7b4fcf;
+    box-shadow: 0 0 24px rgba(123, 79, 207, 0.5);
+    max-width: 680px;
+    width: 96vw;
+}
+.ritual-encounter-zone {
+    color: #e8deff;
+    padding: 4px 2px;
+}
+.ritual-encounter-header {
+    text-align: center;
+    margin-bottom: 16px;
+}
+.ritual-encounter-title {
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #c8a8ff;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+}
+.ritual-encounter-subtitle {
+    font-size: 12px;
+    color: #9980cc;
+    line-height: 1.5;
+    max-width: 480px;
+    margin: 0 auto;
+}
+.ritual-magic-users {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 14px;
+}
+.ritual-magic-user-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    transition: border-color 0.2s;
+    &.selected {
+        border-color: #7b4fcf;
+        background: rgba(123, 79, 207, 0.12);
+    }
+}
+.ritual-magic-user-name {
+    font-size: 10px;
+    color: #b8a0e8;
+    margin-top: 4px;
+    text-align: center;
+}
+.ritual-cards {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+.ritual-card {
+    background: #131c2e;
+    border: 1px solid #3d2e60;
+    border-radius: 6px;
+    padding: 12px 10px;
+    width: 175px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    &.known {
+        border-color: #7b4fcf;
+        box-shadow: 0 0 8px rgba(123, 79, 207, 0.35);
+    }
+    &.unknown {
+        opacity: 0.55;
+    }
+}
+.ritual-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.ritual-card-icon {
+    width: 28px;
+    height: 28px;
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    flex-shrink: 0;
+}
+.ritual-card-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #d4b8ff;
+    line-height: 1.3;
+}
+.ritual-card-flavor {
+    font-size: 10px;
+    font-style: italic;
+    color: #8870aa;
+    line-height: 1.4;
+}
+.ritual-card-description {
+    font-size: 10px;
+    color: #b0a0cc;
+    line-height: 1.45;
+    flex: 1;
+}
+.ritual-card-footer {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 4px;
+}
+.ritual-card-prep-time {
+    font-size: 10px;
+    color: #7b6fa0;
+}
+.ritual-card-btn {
+    font-size: 11px;
+    text-align: center;
+    padding: 5px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    &.learn-btn {
+        background: #7b4fcf;
+        color: #fff;
+        &:hover { background: #9b6fef; }
+    }
+    &.known-badge {
+        background: #1e3a1e;
+        color: #6fcf97;
+        cursor: default;
+    }
+    &.preparing {
+        background: #2a2040;
+        color: #9980cc;
+        cursor: default;
+        font-style: italic;
+    }
+}
+
+/* ─── Ritual Complete Modal ───────────────────────────────────────── */
+.ritual-complete-modal .modal-content {
+    border: 2px solid #c8a8ff;
+    box-shadow: 0 0 18px rgba(200, 168, 255, 0.5);
+    background: #0e1520;
+}
+.ritual-complete-zone {
+    text-align: center;
+    padding: 8px 4px;
+    color: #e8deff;
+}
+.ritual-complete-icon {
+    font-size: 36px;
+    margin-bottom: 8px;
+}
+.ritual-complete-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: #c8a8ff;
+    letter-spacing: 1px;
+    margin: 0 0 10px;
+}
+.ritual-complete-text {
+    font-size: 13px;
+    color: #b0a0cc;
+    margin-bottom: 6px;
+    line-height: 1.5;
+}
+.ritual-complete-note {
+    font-size: 11px;
+    color: #6a5a8a;
+    font-style: italic;
+    margin-top: 8px;
+}

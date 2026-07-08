@@ -1,0 +1,737 @@
+// import '@coreui/coreui/dist/css/coreui.min.css'
+$apex-level-zIndex: 5; // interaction layer
+$top-level-zIndex: 4; // 9 panel miniboard overlay
+$mid-level-zIndex: 3; // doublewide canvas container
+$bot-level-zIndex: 2; // doubletall containers
+*{
+    backface-visibility:hidden;
+    -ms-overflow-style: none;
+    &::-webkit-scrollbar{
+        display: none;
+    }
+    box-sizing: content-box;
+}
+.modal-body{
+    justify-content: center;
+    align-items: center;
+    display: flex;
+}
+.form-select{
+    width: fit-content;
+    cursor: pointer;
+    :focus{
+        box-shadow: none;
+    }
+}
+.plane-preview{
+    display: flex;
+    flex-flow: row wrap;
+    align-content: center;
+    justify-content: center;
+    position: relative;
+    &:hover{
+        cursor: pointer;
+    }
+    .micro-board{
+        border: 1px solid black;
+    }
+    background-color: white;
+}
+.board-view-container{
+    height: 100%;
+    // width: 100%;
+    display: flex;
+    // overflow: hidden;
+}
+.left-palette.boards-palette{
+    background-color: transparent;
+    padding-left: 8px;
+    border-right: 1px solid black;
+}
+.right-palette{
+    border-left: 1px solid black;
+}
+.palette{
+    .previews-container{
+        background-color: black;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        .plane-previews-container{
+            border: 1px solid transparent;
+            &:hover{
+                border: 1px solid lightyellow;
+            }
+        }
+        .board-preview-wrapper{
+            position: relative;
+            .folder-color-line{
+                position: absolute;
+                left: -2px;
+                height: 100%;
+                width: 2px;
+                // background-color: aqua;
+                left: -10px;
+                width: 10px;
+            }
+            .map-preview{
+                width: 100%;
+                display: flex;
+                flex-flow: row wrap;
+                align-content: flex-end;
+            }
+        }
+        .dungeon-preview{}
+        .map-title{
+            // background-color: ghostwhite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: black;
+            color: white;
+            &.selected{
+                background-color: turquoise;
+            }
+            &.hovered{
+                background-color: rgb(168, 231, 231);
+            }
+            .validity-indicator{
+                background-color: red;
+                height: 10px;
+                width: 10px;
+                border-radius: 10px;
+                display: inline-block;
+                // margin-left: -20px;
+                position: absolute;
+                right: 5%;
+                &.valid{
+                    background-color: green;
+                }
+            }
+        }
+    }
+}
+.mapmaker-container{
+    svg.expand-icon{
+        transition: all 0.3s;
+        &.expanded{
+            transform: rotate(90deg);
+        }
+    }
+    .column-wrapper{
+        align-items: center;
+        position: relative;
+        justify-content: center;
+        display: flex;
+        height: 100%;
+        flex-direction: column;
+        .inputs-container{
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding-bottom: 5px;
+            input{
+                padding-left: 10px;
+                outline: none;
+            }
+            .left-menus,.right-menus{
+                width: 200px;
+                // border: 1px solid white;
+                border-radius: 3px;
+                height: 100%;
+                // .btn-group-vertical>.btn, .btn-group>.btn{
+                //     background-color: red;
+                // }
+                color: white;
+            }
+            .board-options-buttons-container{
+                position: relative;
+                z-index: 10;
+                .btn-group{
+                    width: 100%;
+                }
+                .dropdown-menu {
+                    z-index: 50;
+                }
+            }
+            .title{
+                color: white;
+                width: 220px;
+            }
+        }
+        .row-wrapper{
+            position: relative;
+            justify-content: center;
+            display: flex;
+            height: 100%;
+            min-height: 660px;
+            flex-direction: row;
+        }
+    }
+}
+button{
+    transition: all 0.35s;
+    outline: none;
+}
+ul.dropdown-menu.show{
+    padding: 0;
+    // li{
+    //     height: 40px;
+    // }
+    a{
+        height: 40px;
+        line-height: 40px;
+        padding: 0;
+        padding-left: 13px;
+        width: inherit;
+        cursor: pointer;
+    }
+}
+.dungeon-selector{
+    ul{
+        width: 168px;
+    }
+}
+.view-selector{
+    ul{
+        width: 140px;
+    }
+}
+.dungeon-actions-selector{
+    ul{
+        width: 164px;
+    }
+}
+// .btn-grp
+.dropdown-item{
+    // width: 164px;
+    height: 40px;
+    line-height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 13px;
+}
+.palette-options-pane{
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: flex-start;
+    overflow: hidden;
+    // transition: all 2.5s;
+    .palette-option-expandable-container{
+        max-height: 0px;
+        transition: all 0.5s;
+        overflow: scroll;
+        width: 100%;
+        &.expanded{
+            max-height: 500px;
+        }
+        .palette-option-subcontainer{
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            flex-direction: row;
+            transition: background-color 0.15s;
+            
+            &.sub-hovered{
+                background-color: rgba(0, 0, 0, 0.08);
+            }
+            &.sub-selected{
+                background-color: rgba(0, 120, 220, 0.15);
+                box-shadow: inset 3px 0 0 #007bff;
+            }
+            &.sub-hovered.sub-selected{
+                background-color: rgba(0, 120, 220, 0.25);
+            }
+            
+            .text-container{
+                // width: 64%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex: auto;
+            }
+        }
+    }
+    .palette-option-container{
+        cursor: pointer;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        flex-direction: row;
+        .text-container{
+            width: 64%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity:0;
+            transition: all 0.5s;
+            
+            &.hovered{
+                opacity:1
+            }
+            &.pinned{
+                opacity:1
+            }
+        }
+    }
+}
+.board-previews-container{
+    padding-top: 0px;
+    .boards-folder-headline{
+        height: 38px;
+        width: 100%;
+        line-height: 38px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-start;
+        cursor: pointer;
+        position: relative;
+        border-bottom: 1px solid slategray;
+        background-color: white;
+        &.subfolder-headline{
+            justify-content: flex-end;
+        }
+    }
+    .subfolder-wrapper{
+        position: relative;
+        // display: flex;
+        align-items: center;
+        height: 38px;
+        border-bottom: 1px solid slategrey;
+        cursor: pointer;
+        height: fit-content;
+    }
+    .folder-color-line{
+        position: absolute;
+        left: -2px;
+        height: 100%;
+        width: 2px;
+        left: -10px;
+        width: 10px;
+        &.thin-outside{
+            left: -10px !important;
+                width: 10px !important;
+                background-color: black !important;
+                border-bottom: 1px solid aqua;
+                border-left: 3px solid aqua;
+        }
+    }
+    .icon-container{
+        width: 40px;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        
+    }
+    .folder-headline-text{
+        flex: auto;
+        max-width: calc(100% - 60px);
+    }
+    .subfolder-headline-text{
+        flex: auto;
+        max-width: calc(100% - 60px);
+    }
+    .deepfolder-headline-text{
+        flex: auto;
+        max-width: calc(100% - 80px);
+    }
+}
+.mapmaker-container{
+    // padding-top: 35px;
+    .view-toggle-button{
+        position: absolute;
+        right: 0px;
+        top: 50px;
+        background-color: white;
+        border: none;
+        height: 30px;
+        width: 100px;
+        outline: none;
+        font-size: 11px;
+        &:hover{
+            background-color: lightblue
+        }
+        &:active{
+            background-color: rgb(138, 209, 233)
+        }
+        &.selected{
+            background-color: lightgreen
+        }
+    }
+    .view-board-button{
+        right: 220px;
+    }
+    .view-plane-button{
+        right: 110px;
+    }
+    .view-dungeon-button{
+        right: 0px;
+    }
+    .toast-pane{
+        background-color: transparent;
+        position: absolute;
+        
+        height: 100%;
+        width: 100%;
+        .relative-container{
+            height: 100%;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            .toast-message{
+                height: 40px;
+                line-height: 40px;
+                background-color: white;
+                width: 100px;
+                border-radius: 5px;
+                z-index: 1;
+            }
+        }
+    }
+    .palette{
+        // overflow: scroll;
+        overflow: scroll;
+        position: relative;
+        .color-line-blocker{
+            position: absolute;
+            left: -2px;
+            height: 100%;
+            width: 2px;
+            background-color: black;
+            left: -10px;
+            width: 10px;
+        }
+        .previews-container{
+            // padding-top: 117px;
+            // background-color: white;
+            background-color: black;
+
+            // height: calc(100vh - 160px) !important;
+
+
+
+            // !!!!
+            // overflow: scroll;
+            // this needs to be dynamic I think
+            
+            backface-visibility:hidden;
+            -webkit-backface-visibility:hidden; /* Chrome and Safari */
+            -moz-backface-visibility:hidden; /* Firefox */
+            transition: all 0.75s;
+        }
+        .boards-title, .planes-title{
+            position: sticky;
+            height: 40px;
+            line-height: 40px;
+            // width: 135px;
+            top: 0px;
+            cursor: pointer;
+            z-index: 2;
+            background-color: white;
+        }
+        .board-options-buttons-container, .planes-options-buttons-container{
+            // border: 1px solid red;
+            position: sticky;
+            top: 40px;
+            z-index: 200;
+            // width: 135px;
+            height: 38px;
+
+            // border: 1px solid black;
+            &.disabled{
+                // border: 1px solid lightgrey;
+                background-color: lightgrey;
+                border-bottom: 1px solid grey;
+            }
+            .btn-group{
+                width: 100%;
+                // border: 2px solid yellow;
+                .btn.disabled{
+                    background-color: lightgrey;
+                    color: grey;
+                    border: 1px solid lightgrey;        
+                }
+            }
+            .dropdown-toggle{
+                border-radius: 0px;
+            }
+
+            .dropdown-menu,
+            .dropdown-menu.show{
+                z-index: 5000 !important;
+            }
+        }
+
+        .previews-container .map-preview .tile .portrait{
+            z-index: 1 !important;
+        }
+    }
+    .center-board-container{
+        position: relative;
+        
+    }
+}
+.mini-boards-container{
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-flow: row wrap;
+    align-content: center;
+    justify-content: center;
+    .mini-board{
+        border: 1px solid black;
+        position: relative;
+    }
+    .empty-planes-container, .empty-boards-container{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .plane-name{
+        position: absolute;
+        top: 0;
+        left: 0;
+        background-color: black;
+        color: white;
+        z-index: 1;
+        border: 1px solid lightgrey;
+    }
+}
+
+.lightblueOnHover:hover{
+    background-color: lightblue !important;
+    outline: none;
+}
+.compatibility-matrix-container{
+    .adjacency-filter-header{
+        color: black;
+        width: 100%;
+        display: inline-block;
+        border-bottom: 1px solid lightseagreen;
+        background-color: paleturquoise;
+        cursor: pointer;
+        &:hover{
+            background-color: lightseagreen;
+            color: black;
+        }
+    }
+}
+
+
+//  DUNGEON VIEW
+
+.dungeon-info{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 0;
+    height: 40px;
+    .dungeon-name{
+        position: relative;
+        .dungeon-validity-indicator{
+            position: absolute;
+            height: 8px;
+            width: 8px;
+            border-radius: 8px;
+            top: calc(50% - 4px);
+            left: 8px;
+            &.valid{
+                background-color: lightgreen;
+            }
+            &.invalid{
+                background-color: red;
+            }
+        }
+        select{
+            padding-left: 22px;
+        }
+    }
+    .level-buttons-container{
+        display: flex;
+        min-width: 300px;
+        justify-content: space-around;
+        margin: 0px 20px;
+        flex-direction: row;
+        min-height: 50%;
+        align-items: center;
+        .icon-container{
+            cursor: pointer;
+            display: flex;
+            &:hover{
+                color: rgb(37, 192, 179);
+            }
+            .add-level-up-icon{
+                margin-left: -4px;
+                margin-top: -2px;
+            }
+            .add-level-down-icon{
+                margin-left: -4px;
+                margin-top: -3px;
+            }
+        }
+        .double-icon-container{
+            display: flex;
+        }
+    }
+}
+.dungeon-planes-container{
+    height: calc(100% - 40px);
+    width: 100%;
+
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    // ^ ??
+
+    overflow: scroll;
+
+    .empty-dungeons-container{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+    }
+    
+    .loaded-dungeon-wrapper{
+        height: 100%;
+        display: flex;
+        flex: auto;
+        flex-direction: column;
+        justify-content: center;
+        justify-content: flex-start;
+        align-items: center;
+        background: rgb(215, 213, 213);
+        overflow: scroll;
+        .level-wrapper{
+            display: flex;
+            flex-direction: row;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            .level-info{
+                display: flex;
+                justify-content: space-around;
+                align-items: center;
+                min-width: 80px;
+                padding: 0px 4px;
+                .level-valid-indicator{
+                    height: 8px;
+                    width: 8px;
+                    border-radius: 8px;
+                    background-color: grey;
+                    &.valid{
+                        background-color: #0ec30e;
+                    }
+                    &.invalid{
+                        background-color: red;
+                    }
+                }
+            }
+            canvas.doublewide-canvas{
+                position: absolute;
+                z-index: $mid-level-zIndex;
+                pointer-events: none;
+            }
+            .plane-board-displays-wrapper{
+                display: flex;
+                position: relative;
+                // horizontal-connecting-canvas-wrapper
+                .horizontal-connecting-canvas-wrapper{
+                    position: absolute;
+                    top: 0;
+                    z-index: $mid-level-zIndex;
+                    pointer-events: none;
+                }
+                .plane-board-display{
+                    min-height: 250px;
+                    min-width: 250px;
+                    border: 1px solid slategrey;
+                    background-color: white;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    position: relative;
+                    .canvas-overlay-container{
+                        position: absolute;
+                        top: 0;
+                        left: 0;
+                        z-index: $top-level-zIndex;
+                        display: flex;
+                        pointer-events: none;
+                        
+                        // background-color: red;
+                        canvas{
+                            pointer-events: none;
+                            // border: 1px solid red;
+                            // position: absolute;
+                            // z-index: 2;
+                        }
+                    }
+                    .interaction-layer{
+                        z-index: $apex-level-zIndex;
+                        height: 100%;
+                        width: 100%;
+                        opacity: 0.25;
+                        position: absolute;
+                        display: flex;
+                            flex-wrap: wrap;
+                        &.active{
+                            background-color: lightyellow;
+                        }
+                        .interaction-section{
+                            &:hover{
+                                background-color: green;
+                            }
+                        }
+                    }
+                }
+            }
+            
+        }
+    }
+}
+.view-state-radio-group{
+    label{
+        border-width: 2px;
+        // color: yellow;
+    }
+    label:hover{
+
+        border: 2px solid white !important;
+        color: white !important;
+    }
+    .btn-check:checked+.btn{
+        border-color: #9da5b1 !important;
+        color: rgba(44, 56, 74, 0.95) !important;
+        background-color: #97b0db;
+    }
+}
+.front-upwards-connecting-canvas-wrapper{
+    // border: 2px solid blueviolet;
+    position: absolute;
+    height: 200%;
+    width: 50%;
+    top: -100%;
+    z-index: $bot-level-zIndex;
+    pointer-events: none;
+}
+.back-upwards-connecting-canvas-wrapper{
+    // border: 2px solid blueviolet;
+    position: absolute;
+    height: 200%;
+    width: 50%;
+    top: -100%;
+    left: 50%;
+    z-index: $bot-level-zIndex;
+    pointer-events: none;
+}

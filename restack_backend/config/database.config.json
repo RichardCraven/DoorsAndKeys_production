@@ -1,0 +1,10 @@
+{
+    "APP_PORT": "8085",
+
+    "MONGO_DB_NAME": "doors_db",
+    "MONGO_HOST": "localhost",
+    "MONGO_PORT": "27017",
+    "MONGO_USER": "richard",
+    "MONGO_PASSWORD":"pass123",
+    "MONGO_AUTH_DB_NAME":"doors_db"
+}
