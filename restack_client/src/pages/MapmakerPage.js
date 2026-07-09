@@ -613,6 +613,21 @@ class MapMakerPage extends React.Component {
         delete dungeonData._id;
         delete dungeonData.id;
         const formatted = this.props.mapMaker.formatDungeon(dungeonData);
+        // Run the same full validation that loadDungeon() does so valid is correct
+        let dungeonValid = true;
+        for (let key in formatted.levels) {
+          const level = formatted.levels[key];
+          if (level.front) {
+            level.front = this.validatePlane(level.front);
+            if (!level.front.valid) dungeonValid = false;
+          }
+          if (level.back) {
+            level.back = this.validatePlane(level.back);
+            if (!level.back.valid) dungeonValid = false;
+          }
+        }
+        const hasSpawnPoints = this.dungeonHasSpawnPoint(formatted);
+        formatted.valid = dungeonValid && hasSpawnPoints;
         this.setState({
           loadedDungeon: formatted,
           dungeonHasUnsavedChanges: true,
@@ -3078,7 +3093,7 @@ class MapMakerPage extends React.Component {
         levels: this.state.loadedDungeon.levels,
         pocket_planes: this.state.loadedDungeon.pocket_planes,
         descriptions: 'new dungeon description',
-        valid: false
+        valid: this.state.loadedDungeon.valid === true
       }
       const newDungeonRes = await addDungeonRequest(newDungeonPayload);
       let loadedDungeon = this.state.loadedDungeon
