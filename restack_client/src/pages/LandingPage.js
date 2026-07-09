@@ -3,8 +3,26 @@ import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
 import {getMeta, storeMeta} from '../utils/session-handler';
 import { loadAllDungeonsRequest } from '../utils/api-handler';
+import { FEATURE_FLAGS } from '../utils/feature-flags';
+import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 
 export default function LandingPage(props) {
+  useEffect(() => {
+    if (FEATURE_FLAGS.landingRedux) {
+      const styleId = 'landing-redux-injected-styles';
+      let styleEl = document.getElementById(styleId);
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        styleEl.textContent = LANDING_REDUX_CSS;
+        document.head.appendChild(styleEl);
+      }
+      return () => {
+        const el = document.getElementById(styleId);
+        if (el) el.remove();
+      };
+    }
+  }, []);
   const [navToUserProfile, setNavUserProfile] = useState(false);
   const [navToCombatSimulator, setNavToCombatSimulator] = useState(false);
   const [navToCrew, setNavCrew] = useState(false);
@@ -201,6 +219,174 @@ export default function LandingPage(props) {
     meta.selectedDungeonTemplateName = dungeon.name;
     storeMeta(meta);
     setShowDungeonPicker(false);
+  }
+
+  const handleLogout = () => {
+    sessionStorage.clear();
+    history.push('/login');
+    window.location.reload();
+  };
+
+  const username = sessionStorage.getItem('username') || 'Adventurer';
+
+  if (FEATURE_FLAGS.landingRedux) {
+    return (
+      <div className="redux-landing-container">
+        { navToIntro && <Redirect to='/intro'/>}
+        { navToUserProfile && <Redirect to='/userProfilePage'/> }
+        { navToCrew && <Redirect to='/crewManager'/> }
+        { navToPortal && <Redirect to='/mapmaker'/> }
+        { navToDungeon && <Redirect to='/dungeon'/> }
+        { navToUsermanager && <Redirect to='/usermanager'/> }
+        { navToCombatSimulator && <Redirect to='/combatSimulator'/> }
+        { navToSandbox && <Redirect to='/sandbox'/> }
+
+        <header className="landing-header">
+          <div className="header-logo">
+            <span className="logo-title">Dream Tower</span>
+            <span className="logo-subtitle">Dungeon Crawler & Strategy</span>
+          </div>
+          <div className="header-user">
+            <div className="user-info">
+              Welcome, <span>{username}</span>
+            </div>
+            <button className="btn-logout" onClick={handleLogout}>
+              🚪 Logout
+            </button>
+          </div>
+        </header>
+
+        <main className="landing-main-grid">
+          <div className="hero-column">
+            <div className="hero-card">
+              <div>
+                <h2 className="hero-title">Dungeon Descent</h2>
+                <p className="hero-desc">
+                  Descend into the dark chambers, navigate dangerous corridors, unlock secure gates, and engage in tactical combat against formidable monsters.
+                </p>
+
+                {showWarning && (
+                  <div className="warning-box">
+                    ⚠️ Cannot enter dungeon without a crew. Recruit members first!
+                  </div>
+                )}
+              </div>
+
+              <div className="action-row">
+                {/* Select Dungeon Dropdown */}
+                <div className="dungeon-selector-group" ref={dungeonPickerRef}>
+                  <span className="selector-label">Target Dungeon</span>
+                  <div
+                    className={`custom-select-trigger ${selectedDungeonTemplateId ? 'selected' : ''}`}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (!showDungeonPicker) {
+                        refreshValidDungeons();
+                      }
+                      setShowDungeonPicker((s) => !s);
+                    }}
+                  >
+                    <span>{getMeta()?.selectedDungeonTemplateName || 'Select a Dungeon...'}</span>
+                    <span>▼</span>
+                  </div>
+
+                  {showDungeonPicker && (
+                    <div className="custom-select-menu">
+                      {validDungeons.map((d) => (
+                        <div
+                          key={d.id}
+                          className={`menu-item ${selectedDungeonTemplateId === d.id ? 'active' : ''}`}
+                          onClick={() => selectDungeonTemplate(d)}
+                        >
+                          🏰 {d.name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Play Button */}
+                <button
+                  className={`btn-play ${showWarning ? 'disabled' : ''}`}
+                  onMouseEnter={checkForCrew}
+                  onMouseLeave={() => setShowWarning(false)}
+                  onClick={enterClicked}
+                  type="button"
+                >⚔️ Enter Dungeon</button>
+
+                {/* Skip Intro */}
+                <label className="skip-intro-label">
+                  <input
+                    type="checkbox"
+                    checked={skipIntro}
+                    onChange={(e) => toggleSkipIntro(e.target.checked)}
+                  />
+                  <span>Skip cinematic introduction</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="menu-column">
+            {/* Crew Card */}
+            <div className="menu-card" onClick={() => setNavCrew(true)}>
+              <div className="card-top">
+                <span className="card-title">Crew Manager</span>
+                <span className="card-desc">Recruit and manage your heroes, view statistics, and assemble your party.</span>
+              </div>
+              <span className="card-arrow">Manage →</span>
+            </div>
+
+            {/* Profile Card */}
+            <div className="menu-card" onClick={() => setNavUserProfile(true)}>
+              <div className="card-top">
+                <span className="card-title">Profile</span>
+                <span className="card-desc">Review your accomplishments, collection progress, and player credentials.</span>
+              </div>
+              <span className="card-arrow">View →</span>
+            </div>
+
+            {/* Admin Cards */}
+            {isAdmin && (
+              <>
+                <div className="menu-card" onClick={() => setNavMapmaker(true)}>
+                  <div className="card-top">
+                    <span className="card-title">Dungeon Builder</span>
+                    <span className="card-desc">Construct new maps, design boards, design custom planes, and orchestrate campaigns.</span>
+                  </div>
+                  <span className="card-arrow">Build →</span>
+                </div>
+
+                <div className="menu-card" onClick={() => setNavUsermanager(true)}>
+                  <div className="card-top">
+                    <span className="card-title">User Manager</span>
+                    <span className="card-desc">Administer player accounts, permissions, and session records.</span>
+                  </div>
+                  <span className="card-arrow">Administer →</span>
+                </div>
+
+                <div className="menu-card" onClick={() => setNavToCombatSimulator(true)}>
+                  <div className="card-top">
+                    <span className="card-title">Combat Simulator</span>
+                    <span className="card-desc">Simulate battle scenarios, adjust speed constants, and balance combatant parameters.</span>
+                  </div>
+                  <span className="card-arrow">Simulate →</span>
+                </div>
+
+                <div className="menu-card" onClick={() => setNavToSandbox(true)}>
+                  <div className="card-top">
+                    <span className="card-title">Sandbox</span>
+                    <span className="card-desc">Test prototype mechanics, procedural features, and mock API inputs.</span>
+                  </div>
+                  <span className="card-arrow">Test →</span>
+                </div>
+              </>
+            )}
+          </div>
+        </main>
+      </div>
+    );
   }
 
   return (

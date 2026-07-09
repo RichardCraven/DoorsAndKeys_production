@@ -2,11 +2,36 @@ import React, {useState, useEffect} from 'react'
 import { useSpring, animated } from 'react-spring'
 
 import {registerRequest} from '../utils/api-handler';
-// import {storeSessionData} from '../utils/session-handler';
+import { FEATURE_FLAGS } from '../utils/feature-flags';
+import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 
 export default function LoginPage(props) {
   
   const [paneToggle, setPane] = useState(null)
+  
+  useEffect(() => {
+    if (FEATURE_FLAGS.landingRedux) {
+      const styleId = 'landing-redux-injected-styles';
+      let styleEl = document.getElementById(styleId);
+      if (!styleEl) {
+        styleEl = document.createElement('style');
+        styleEl.id = styleId;
+        styleEl.textContent = LANDING_REDUX_CSS;
+        document.head.appendChild(styleEl);
+      }
+      return () => {
+        const el = document.getElementById(styleId);
+        if (el) el.remove();
+      };
+    }
+  }, []);
+
+  useEffect(() => {
+    if (FEATURE_FLAGS.landingRedux && paneToggle === null) {
+      setPane('login');
+    }
+  }, [paneToggle]);
+
   const [registerName, setRegName] = useState('')
   const [registerPass1, setRegPass1] = useState('')
   const [registerPass2, setRegPass2] = useState('')
@@ -184,6 +209,133 @@ export default function LoginPage(props) {
     },1500)
 
   }
+  if (FEATURE_FLAGS.landingRedux) {
+    return (
+      <div className="redux-login-container">
+        <div className="login-card">
+          <div className="title-glowing">
+            Dream Tower
+          </div>
+
+          {paneToggle !== 'confirmation' && (
+            <div className="tabs">
+              <button
+                className={`tab ${paneToggle === 'login' ? 'active' : ''}`}
+                onClick={() => setPane('login')}
+                type="button"
+              >
+                Login
+              </button>
+              <button
+                className={`tab ${paneToggle === 'register' ? 'active' : ''}`}
+                onClick={() => setPane('register')}
+                type="button"
+              >
+                Register
+              </button>
+            </div>
+          )}
+
+          {invalidCredentials && (
+            <div className="error-banner">
+              ⚠️ Invalid credentials. Please try again.
+            </div>
+          )}
+
+          {paneToggle === 'login' && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleClick('login');
+              }}
+              style={{ width: '100%' }}
+            >
+              <div className="form-inputs">
+                <div className="input-wrapper">
+                  <span className="input-icon">👤</span>
+                  <input
+                    value={loginName}
+                    autoComplete="username"
+                    type="text"
+                    placeholder="Enter name"
+                    onChange={(e) => handleChange(e, 'login-name')}
+                  />
+                </div>
+                <div className="input-wrapper">
+                  <span className="input-icon">🔑</span>
+                  <input
+                    value={loginPass}
+                    autoComplete="current-password"
+                    type="password"
+                    placeholder="Enter password"
+                    onChange={(e) => handleChange(e, 'login-password')}
+                  />
+                </div>
+              </div>
+              <button className="btn-submit" type="submit">Enter Dungeon</button>
+            </form>
+          )}
+
+          {paneToggle === 'register' && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleClick('register');
+              }}
+              style={{ width: '100%' }}
+            >
+              <div className="form-inputs">
+                <div className="input-wrapper">
+                  <span className="input-icon">👤</span>
+                  <input
+                    value={registerName}
+                    autoComplete="username"
+                    type="text"
+                    placeholder="Choose name"
+                    onChange={(e) => handleChange(e, 'register-name')}
+                  />
+                </div>
+                <div className="input-wrapper">
+                  <span className="input-icon">🔑</span>
+                  <input
+                    value={registerPass1}
+                    autoComplete="new-password"
+                    type="password"
+                    placeholder="Choose password"
+                    onChange={(e) => handleChange(e, 'register-password1')}
+                  />
+                </div>
+                <div className="input-wrapper">
+                  <span className="input-icon">🔒</span>
+                  <input
+                    value={registerPass2}
+                    autoComplete="new-password"
+                    type="password"
+                    placeholder="Repeat password"
+                    onChange={(e) => handleChange(e, 'register-password2')}
+                  />
+                </div>
+              </div>
+              <button className="btn-submit" type="submit">Register Account</button>
+            </form>
+          )}
+
+          {paneToggle === 'confirmation' && (
+            <div style={{ textAlign: 'center', padding: '20px 0' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '15px' }}>🎉</div>
+              <h4 style={{ color: '#e5b54f', fontFamily: 'Cinzel', marginBottom: '10px' }}>
+                Account Created!
+              </h4>
+              <p style={{ color: '#a8a29e', fontSize: '0.9rem' }}>
+                Preparing your descent...
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div>
@@ -194,6 +346,7 @@ export default function LoginPage(props) {
                 position: 'absolute',
                 top: '40%'
               }}
+              className="doors-and-keys-title"
             >Doors and Keys</div>
           }
           <div className="inputs-container-row">

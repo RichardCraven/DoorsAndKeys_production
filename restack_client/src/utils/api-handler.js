@@ -53,15 +53,23 @@ const deleteUserRequest = (userId) => {
     })
 }
 
-const updateUserRequest = (userId, metadata, username) => {
-  const payload = { metadata: JSON.stringify(metadata) };
+const updateUserRequest = (userId, metadata, username, isAdmin) => {
+  const payload = {};
+  if (metadata !== undefined) {
+    payload.metadata = JSON.stringify(metadata);
+  }
   if (username !== undefined) {
     payload.username = username;
+  }
+  if (isAdmin !== undefined) {
+    payload.isAdmin = isAdmin;
   }
   return axios.put(API_BASE + "/api/users/"+userId, payload)
     .then(res=>{
       if(res.status === 200){
-        res.data.metadata = metadata
+        if (metadata !== undefined) {
+          res.data.metadata = metadata;
+        }
         return(res)
       }
     })

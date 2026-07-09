@@ -4179,7 +4179,25 @@ class MapMakerPage extends React.Component {
 
                 let allPortals = [];
                 if (this.state.loadedDungeon) {
-                  allPortals = this.props.mapMaker.getAllPortalsInDungeon(this.state.loadedDungeon);
+                  // Create a temporary clone of the loadedDungeon where the currently active board's tiles are replaced
+                  // with the live editor state from this.state.tiles. This ensures newly placed portals on the same board
+                  // are visible for linking before the board is saved.
+                  const tempDungeon = clone(this.state.loadedDungeon);
+                  if (this.state.loadedBoard) {
+                    tempDungeon.levels.forEach((level) => {
+                      ['front', 'back'].forEach((orientation) => {
+                        const plane = level[orientation];
+                        if (plane && Array.isArray(plane.miniboards)) {
+                          plane.miniboards.forEach((mb) => {
+                            if (mb && this.state.loadedBoard && (mb.id === this.state.loadedBoard.id || String(mb.id) === String(this.state.loadedBoard.id))) {
+                              mb.tiles = this.state.tiles;
+                            }
+                          });
+                        }
+                      });
+                    });
+                  }
+                  allPortals = this.props.mapMaker.getAllPortalsInDungeon(tempDungeon);
                 } else {
                   allPortals = this.state.tiles
                     .filter(t => {

@@ -7918,24 +7918,22 @@ export function CombatManagerRedux() {
 
         // ── SUMMON SKULLS ────────────────────────────────────────────────────────────
         if (abilityId === 'summon_skulls') {
-            const adjacentCandidates = [
-                { x: unit.coordinates.x - 1, y: unit.coordinates.y },
-                { x: unit.coordinates.x + 1, y: unit.coordinates.y },
-                { x: unit.coordinates.x,     y: unit.coordinates.y - 1 },
-                { x: unit.coordinates.x,     y: unit.coordinates.y + 1 },
-                { x: unit.coordinates.x - 1, y: unit.coordinates.y - 1 },
-                { x: unit.coordinates.x + 1, y: unit.coordinates.y + 1 },
-            ].filter(t => t.x >= 0 && t.x <= MAX_DEPTH && t.y >= 0 && t.y < MAX_LANES && !this.isTileOccupied(t.x, t.y));
+            const cornerCandidates = [
+                { x: 0, y: 0 },
+                { x: 0, y: MAX_LANES - 1 },
+                { x: MAX_DEPTH, y: 0 },
+                { x: MAX_DEPTH, y: MAX_LANES - 1 }
+            ].filter(t => !this.isTileOccupied(t.x, t.y));
 
-            const maxSkulls = Math.min(2, adjacentCandidates.length);
+            const maxSkulls = Math.min(2, cornerCandidates.length);
             if (maxSkulls === 0) {
-                this.appendCombatLog(`${this.getCombatantLogName(unit)} tried to summon skulls, but no free tiles are adjacent.`);
+                this.appendCombatLog(`${this.getCombatantLogName(unit)} tried to summon skulls, but no corner tiles are free.`);
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
                 return;
             }
 
             const count = 1 + Math.floor(Math.random() * maxSkulls); // 1 or 2
-            const shuffled = adjacentCandidates.sort(() => Math.random() - 0.5).slice(0, count);
+            const shuffled = cornerCandidates.sort(() => Math.random() - 0.5).slice(0, count);
 
             shuffled.forEach((tile, idx) => {
                 const skullId = `flaming_skull_${Date.now()}_${idx}`;

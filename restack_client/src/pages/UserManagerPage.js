@@ -1,6 +1,6 @@
 import React from 'react'
 import '../styles/user-manager-page.scss'
-import {loadAllUsersRequest, deleteUserRequest} from '../utils/api-handler';
+import {loadAllUsersRequest, deleteUserRequest, updateUserRequest} from '../utils/api-handler';
 
 class UserManagerPage extends React.Component {
   constructor(props){
@@ -20,6 +20,17 @@ class UserManagerPage extends React.Component {
     if(c){
       await deleteUserRequest(user._id || user.id)
       const final = await loadAllUsersRequest()
+      this.setState({ users: Array.isArray(final?.data) ? final.data : [] })
+    }
+  }
+
+  toggleAdmin = async (user) => {
+    const nextStatus = !user.isAdmin;
+    const actionText = nextStatus ? 'promote to Admin' : 'demote to Player';
+    const c = window.confirm(`Are you sure you want to ${actionText} user "${user.username}"?`);
+    if(c){
+      await updateUserRequest(user._id || user.id, undefined, undefined, nextStatus);
+      const final = await loadAllUsersRequest();
       this.setState({ users: Array.isArray(final?.data) ? final.data : [] })
     }
   }
@@ -69,6 +80,13 @@ class UserManagerPage extends React.Component {
                       <td className="meta-cell">{user.metadata ? 'Active' : 'N/A'}</td>
                       <td className="meta-cell">{user.metadata ? 'Active' : 'N/A'}</td>
                       <td className="actions-cell">
+                        <button 
+                          className={`toggle-admin-btn ${user.isAdmin ? 'revoke-admin' : 'make-admin'}`}
+                          onClick={() => this.toggleAdmin(user)}
+                          title={user.isAdmin ? "Revoke Admin Status" : "Grant Admin Status"}
+                        >
+                          {user.isAdmin ? 'Revoke Admin' : 'Make Admin'}
+                        </button>
                         <button 
                           className="delete-btn" 
                           onClick={() => this.deleteUser(user)}
