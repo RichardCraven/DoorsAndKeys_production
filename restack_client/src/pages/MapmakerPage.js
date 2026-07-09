@@ -578,15 +578,53 @@ class MapMakerPage extends React.Component {
 
     this.closeClearUniqueDungeonInstancesModal();
   }
+  dungeonImportInputRef = React.createRef();
+
   downloadDungeon = () => {
     const dungeon = this.state.loadedDungeon;
-    const zip = new JSZip();
-    let string = JSON.stringify(dungeon)
-    zip.file(`${dungeon.name}.dungeon.json`, string)
-    zip.generateAsync({ type: 'blob' })
-      .then((content) => {
-        saveAs(content, `${dungeon.name}`.zip);
-      });
+    if (!dungeon) return;
+    // Export a clean copy (without DB _id) so it re-imports as a brand new dungeon
+    const exportData = JSON.parse(JSON.stringify(dungeon));
+    delete exportData._id;
+    delete exportData.id;
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    saveAs(blob, `${dungeon.name || 'dungeon'}-export.json`);
+  }
+
+  importDungeon = () => {
+    if (this.dungeonImportInputRef.current) {
+      this.dungeonImportInputRef.current.value = '';
+      this.dungeonImportInputRef.current.click();
+    }
+  }
+
+  handleImportDungeonFile = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const dungeonData = JSON.parse(e.target.result);
+        if (!dungeonData || !dungeonData.levels) {
+          alert('Invalid dungeon file: missing required structure.');
+          return;
+        }
+        // Strip any leftover IDs so this saves as a new dungeon entry
+        delete dungeonData._id;
+        delete dungeonData.id;
+        const formatted = this.props.mapMaker.formatDungeon(dungeonData);
+        this.setState({
+          loadedDungeon: formatted,
+          dungeonHasUnsavedChanges: true,
+        }, () => {
+          this.setLoadedDungeonDropdownValue('Dungeon Selector');
+        });
+        this.toast(`Imported "${dungeonData.name || 'dungeon'}" — click Save (💾) to write to this database.`);
+      } catch (err) {
+        alert('Could not parse dungeon file. Make sure it is a valid .json export.');
+      }
+    };
+    reader.readAsText(file);
   }
   renameDungeon = () => {
     console.log('rename ndungeon');
@@ -3976,6 +4014,14 @@ class MapMakerPage extends React.Component {
   render() {
     return (
       <div className="mapmaker-container">
+        {/* Hidden file input for dungeon JSON import */}
+        <input
+          ref={this.dungeonImportInputRef}
+          type="file"
+          accept=".json"
+          style={{ display: 'none' }}
+          onChange={this.handleImportDungeonFile}
+        />
         {this.state.toastMessage && <div className="toast-pane">
           <div className="relative-container">
             <div className="toast-message">
@@ -4695,6 +4741,7 @@ class MapMakerPage extends React.Component {
                 generatingDungeon={this.state.generatingDungeon}
 
                 downloadDungeon={this.downloadDungeon}
+                importDungeon={this.importDungeon}
                 renameDungeon={this.renameDungeon}
                 deleteDungeon={this.deleteDungeon}
                 addNewDungeon={this.addNewDungeon}

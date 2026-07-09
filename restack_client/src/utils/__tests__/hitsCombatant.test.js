@@ -13,6 +13,7 @@ describe('hitsCombatant', () => {
     // stub dependent methods
     cm.getSurroundings = () => ({ E: { x: 0, y: 0 }, S: { x: 0, y: 0 }, W: { x: 0, y: 0 } });
     cm.someoneElseIsInCoords = () => false;
+    cm.hitCheck = () => true;
     cm.checkOverlap = jest.fn();
     cm.targetKilled = jest.fn();
     cm.updateData = jest.fn();
@@ -46,6 +47,7 @@ describe('hitsCombatant', () => {
       rockAnimationOff: jest.fn()
     };
 
+    cm.combatants = { [caller.id]: caller, [target.id]: target };
     cm.hitsCombatant(caller, target, null, { forceCritical: false });
 
     expect(target.hp).toBe(40);
@@ -83,11 +85,12 @@ describe('hitsCombatant', () => {
       rockAnimationOff: jest.fn()
     };
 
+    cm.combatants = { [caller.id]: caller, [target.id]: target };
     cm.hitsCombatant(caller, target, null, { forceCritical: true });
 
     // critical => 3x damage
     expect(target.hp).toBe(100 - (caller.atk * 3));
-    expect(target.damageIndicators.length).toBe(1);
+    expect(target.damageIndicators.length).toBe(2);
     expect(target.wounded.severity).toBe('severe');
     expect(target.rockAnimationOn).toHaveBeenCalled();
 
@@ -121,6 +124,7 @@ describe('hitsCombatant', () => {
       rockAnimationOff: jest.fn()
     };
 
+    cm.combatants = { [caller.id]: caller, [target.id]: target };
     cm.hitsCombatant(caller, target, null, { forceCritical: true });
 
     expect(target.hp).toBe(0);

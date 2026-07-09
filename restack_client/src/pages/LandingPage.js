@@ -1,27 +1,25 @@
-import React, {useState, useEffect, useRef} from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
-import {getMeta, storeMeta} from '../utils/session-handler';
+import { getMeta, storeMeta } from '../utils/session-handler';
 import { loadAllDungeonsRequest } from '../utils/api-handler';
-import { FEATURE_FLAGS } from '../utils/feature-flags';
+
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 
 export default function LandingPage(props) {
   useEffect(() => {
-    if (FEATURE_FLAGS.landingRedux) {
-      const styleId = 'landing-redux-injected-styles';
-      let styleEl = document.getElementById(styleId);
-      if (!styleEl) {
-        styleEl = document.createElement('style');
-        styleEl.id = styleId;
-        styleEl.textContent = LANDING_REDUX_CSS;
-        document.head.appendChild(styleEl);
-      }
-      return () => {
-        const el = document.getElementById(styleId);
-        if (el) el.remove();
-      };
+    const styleId = 'landing-redux-injected-styles';
+    let styleEl = document.getElementById(styleId);
+    if (!styleEl) {
+      styleEl = document.createElement('style');
+      styleEl.id = styleId;
+      styleEl.textContent = LANDING_REDUX_CSS;
+      document.head.appendChild(styleEl);
     }
+    return () => {
+      const el = document.getElementById(styleId);
+      if (el) el.remove();
+    };
   }, []);
   const [navToUserProfile, setNavUserProfile] = useState(false);
   const [navToCombatSimulator, setNavToCombatSimulator] = useState(false);
@@ -36,7 +34,7 @@ export default function LandingPage(props) {
   const [showDungeonPicker, setShowDungeonPicker] = useState(false)
   const [selectedDungeonTemplateId, setSelectedDungeonTemplateId] = useState(null)
   const [skipIntro, setSkipIntro] = useState(() => {
-    try { return !!(getMeta() || {}).skipIntro; } catch(e) { return false; }
+    try { return !!(getMeta() || {}).skipIntro; } catch (e) { return false; }
   })
 
   const [navToIntro, setNavToIntro] = useState(false)
@@ -127,20 +125,20 @@ export default function LandingPage(props) {
     }
   };
 
-  useEffect(()=> {
+  useEffect(() => {
     let mounted = true;
     history.push({
       pathname: '/landing'
     })
-    if(mounted){
-      if(JSON.parse(sessionStorage.getItem('isAdmin'))){
+    if (mounted) {
+      if (JSON.parse(sessionStorage.getItem('isAdmin'))) {
         setIsAdmin(true)
       }
     }
     return () => {
       mounted = false;
     }
-  },[history])
+  }, [history])
 
   useEffect(() => {
     refreshValidDungeons();
@@ -160,7 +158,7 @@ export default function LandingPage(props) {
 
   const checkForCrew = () => {
     const meta = getMeta();
-    if(!meta || !meta.crew || meta.crew.length === 0){
+    if (!meta || !meta.crew || meta.crew.length === 0) {
       setShowWarning(true)
     }
   }
@@ -171,16 +169,16 @@ export default function LandingPage(props) {
       const meta = getMeta() || {};
       meta.skipIntro = checked;
       storeMeta(meta);
-    } catch(e) {}
+    } catch (e) { }
   }
 
   const enterClicked = () => {
     const meta = getMeta();
-    if(!meta || !meta.crew || meta.crew.length === 0){
+    if (!meta || !meta.crew || meta.crew.length === 0) {
       setShowWarning(true)
       return
     }
-    if(meta.dungeonId){
+    if (meta.dungeonId) {
       setNavDungeon(true)
       return
     }
@@ -227,28 +225,27 @@ export default function LandingPage(props) {
     window.location.reload();
   };
 
-  const username = sessionStorage.getItem('username') || 'Adventurer';
+  const username = sessionStorage.getItem('userName') || sessionStorage.getItem('username') || 'Adventurer';
 
-  if (FEATURE_FLAGS.landingRedux) {
-    return (
+  return (
       <div className="redux-landing-container">
-        { navToIntro && <Redirect to='/intro'/>}
-        { navToUserProfile && <Redirect to='/userProfilePage'/> }
-        { navToCrew && <Redirect to='/crewManager'/> }
-        { navToPortal && <Redirect to='/mapmaker'/> }
-        { navToDungeon && <Redirect to='/dungeon'/> }
-        { navToUsermanager && <Redirect to='/usermanager'/> }
-        { navToCombatSimulator && <Redirect to='/combatSimulator'/> }
-        { navToSandbox && <Redirect to='/sandbox'/> }
+        {navToIntro && <Redirect to='/intro' />}
+        {navToUserProfile && <Redirect to='/userProfilePage' />}
+        {navToCrew && <Redirect to='/crewManager' />}
+        {navToPortal && <Redirect to='/mapmaker' />}
+        {navToDungeon && <Redirect to='/dungeon' />}
+        {navToUsermanager && <Redirect to='/usermanager' />}
+        {navToCombatSimulator && <Redirect to='/combatSimulator' />}
+        {navToSandbox && <Redirect to='/sandbox' />}
 
         <header className="landing-header">
           <div className="header-logo">
             <span className="logo-title">Dream Tower</span>
-            <span className="logo-subtitle">Dungeon Crawler & Strategy</span>
+            <span className="logo-subtitle">Descend into the unreal</span>
           </div>
           <div className="header-user">
             <div className="user-info">
-              Welcome, <span>{username}</span>
+              Welcome <span>{username}</span>
             </div>
             <button className="btn-logout" onClick={handleLogout}>
               🚪 Logout
@@ -259,18 +256,7 @@ export default function LandingPage(props) {
         <main className="landing-main-grid">
           <div className="hero-column">
             <div className="hero-card">
-              <div>
-                <h2 className="hero-title">Dungeon Descent</h2>
-                <p className="hero-desc">
-                  Descend into the dark chambers, navigate dangerous corridors, unlock secure gates, and engage in tactical combat against formidable monsters.
-                </p>
-
-                {showWarning && (
-                  <div className="warning-box">
-                    ⚠️ Cannot enter dungeon without a crew. Recruit members first!
-                  </div>
-                )}
-              </div>
+              <div />
 
               <div className="action-row">
                 {/* Select Dungeon Dropdown */}
@@ -324,6 +310,12 @@ export default function LandingPage(props) {
                   />
                   <span>Skip cinematic introduction</span>
                 </label>
+
+                {showWarning && (
+                  <div className="warning-box" style={{ marginTop: '10px' }}>
+                    ⚠️ Cannot enter dungeon without a crew. Recruit members first!
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -347,6 +339,15 @@ export default function LandingPage(props) {
               <span className="card-arrow">View →</span>
             </div>
 
+            {/* Combat Simulator Card */}
+            <div className="menu-card" onClick={() => setNavToCombatSimulator(true)}>
+              <div className="card-top">
+                <span className="card-title">Combat Simulator</span>
+                <span className="card-desc">Simulate battle scenarios, adjust speed constants, and balance combatant parameters.</span>
+              </div>
+              <span className="card-arrow">Simulate →</span>
+            </div>
+
             {/* Admin Cards */}
             {isAdmin && (
               <>
@@ -366,14 +367,6 @@ export default function LandingPage(props) {
                   <span className="card-arrow">Administer →</span>
                 </div>
 
-                <div className="menu-card" onClick={() => setNavToCombatSimulator(true)}>
-                  <div className="card-top">
-                    <span className="card-title">Combat Simulator</span>
-                    <span className="card-desc">Simulate battle scenarios, adjust speed constants, and balance combatant parameters.</span>
-                  </div>
-                  <span className="card-arrow">Simulate →</span>
-                </div>
-
                 <div className="menu-card" onClick={() => setNavToSandbox(true)}>
                   <div className="card-top">
                     <span className="card-title">Sandbox</span>
@@ -387,88 +380,4 @@ export default function LandingPage(props) {
         </main>
       </div>
     );
-  }
-
-  return (
-       <div className="landing-pane pane">
-          { navToIntro && <Redirect to='/intro'/>}
-          { navToUserProfile && <Redirect to='/userProfilePage'/> }
-          { navToCrew && <Redirect to='/crewManager'/> }
-          { navToPortal && <Redirect to='/mapmaker'/> }
-          { navToDungeon && <Redirect to='/dungeon'/> }
-          { navToUsermanager && <Redirect to='/usermanager'/> }
-          { navToCombatSimulator && <Redirect to='/combatSimulator'/> }
-          { navToSandbox && <Redirect to='/sandbox'/> }
-          <div className="landing-buttons-container">
-            {/* Skip intro checkbox - positioned absolutely to float 20px above the container, left-aligned */}
-            <label style={{
-              position: 'absolute',
-              bottom: 'calc(100% + 20px)',
-              left: '0',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              color: '#333333',
-              fontSize: '14px',
-              cursor: 'pointer',
-              userSelect: 'none',
-              letterSpacing: '0.5px',
-              fontWeight: '500'
-            }}>
-              <input
-                type="checkbox"
-                checked={skipIntro}
-                onChange={(e) => toggleSkipIntro(e.target.checked)}
-                style={{ accentColor: '#d4a844', width: '16px', height: '16px', cursor: 'pointer' }}
-              />
-              <span>Skip intro</span>
-            </label>
-            {showWarning && <span className="warning" style={{pointerEvents: 'none'}}>Cannot enter dungeon without a crew</span>}
-            <div
-              className={`landing-button enter-dungeon ${showWarning ? 'disabled' : ''}`}
-              onMouseEnter={() => checkForCrew()}
-              onMouseLeave={() => setShowWarning(false)}
-              ref={dungeonPickerRef}
-            >
-              <div className="enter-main" onClick={() => enterClicked()}>Enter</div>
-              <button
-                className={`enter-dungeon-picker-toggle ${selectedDungeonTemplateId ? 'selected' : ''}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!showDungeonPicker) {
-                    refreshValidDungeons();
-                  }
-                  setShowDungeonPicker((s) => !s);
-                }}
-                title="Choose specific dungeon"
-              >
-                ▾
-              </button>
-              {showDungeonPicker && (
-                <div className="enter-dungeon-picker-menu" onClick={(e) => e.stopPropagation()}>
-                  <div className={`picker-item ${!selectedDungeonTemplateId ? 'active' : ''}`} onClick={() => selectDungeonTemplate(null)}>
-                    Random Valid Dungeon
-                  </div>
-                  {validDungeons.map((d) => (
-                    <div
-                      key={d.id}
-                      className={`picker-item ${selectedDungeonTemplateId === d.id ? 'active' : ''}`}
-                      onClick={() => selectDungeonTemplate(d)}
-                    >
-                      {d.name}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="landing-button shop"  onClick={() => setNavCrew(true)} >Crew</div>
-            <div className="landing-button user-data" onClick={() => setNavUserProfile(true)}>Profile</div>
-            { isAdmin && <div className="landing-button map-maker" onClick={() => setNavMapmaker(true)}>Dungeon Builder</div>}
-            { isAdmin && <div className="landing-button user-manager" onClick={() => setNavUsermanager(true)}>User Manager</div>}
-            { isAdmin && <div className="landing-button combat-simulator" onClick={() => setNavToCombatSimulator(true)}>Combat Simulator</div>}
-            { isAdmin && <div className="landing-button landing-button-last sandbox" onClick={() => setNavToSandbox(true)}>Sandbox</div>}
-          </div>
-       </div>
-  )
 }

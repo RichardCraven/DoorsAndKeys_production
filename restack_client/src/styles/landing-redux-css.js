@@ -222,7 +222,7 @@ export const LANDING_REDUX_CSS = `
   align-items: center;
   width: 100%;
   max-width: 1200px;
-  margin: 0 auto 30px auto;
+  margin: 30px auto 30px auto;
   border-bottom: 1px solid rgba(212, 168, 68, 0.15);
   padding-bottom: 20px;
 }
@@ -329,7 +329,8 @@ export const LANDING_REDUX_CSS = `
   position: relative;
   box-sizing: border-box;
   height: 100%;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 20px;
 }
 
 .redux-landing-container .hero-card::before {

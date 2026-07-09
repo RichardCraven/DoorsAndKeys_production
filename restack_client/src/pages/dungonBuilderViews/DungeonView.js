@@ -436,7 +436,8 @@ class DungeonView extends React.Component {
                                         <CDropdownMenu>
                                             <CDropdownItem onClick={() => this.props.renameDungeon()}>Rename Dungeon</CDropdownItem>
                                             <CDropdownItem onClick={() => this.props.deleteDungeon()}>Delete Dungeon</CDropdownItem>
-                                            <CDropdownItem onClick={() => this.props.downloadDungeon()}>Download Dungeon</CDropdownItem>
+                                            <CDropdownItem onClick={() => this.props.downloadDungeon()}>⬇ Export as JSON</CDropdownItem>
+                                            <CDropdownItem onClick={() => this.props.importDungeon()}>⬆ Import from JSON</CDropdownItem>
                                         </CDropdownMenu>
                                     </CDropdown>
                                 </div>

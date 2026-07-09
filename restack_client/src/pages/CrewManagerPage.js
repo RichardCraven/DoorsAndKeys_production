@@ -481,7 +481,7 @@ goBack = () => {
                         {this.state.selectedCrewMember.skills ? (
                             <div className="specials">Skills: &nbsp;
                                 {this.state.selectedCrewMember.skills.map((e, i) => {
-                                    const name = typeof e === 'object' && e !== null ? e.name : e;
+                                    const name = (typeof e === 'object' && e !== null ? e.name : String(e || '')).replace(/_/g, ' ');
                                     return <div key={i}>{name}{i !== this.state.selectedCrewMember.skills.length - 1 ? ',' : ''} &nbsp; </div>
                                 })}
                             </div>
@@ -489,13 +489,13 @@ goBack = () => {
                             <>
                                 <div className="attacks">Attacks: &nbsp;
                                     {(this.state.selectedCrewMember.attacks || []).map((e,i)=> {
-                                        const name = typeof e === 'object' && e !== null ? e.name : e;
+                                        const name = (typeof e === 'object' && e !== null ? e.name : String(e || '')).replace(/_/g, ' ');
                                         return <div key={i}>{ name }{i !== this.state.selectedCrewMember.attacks.length-1 ?  ',' : ''} &nbsp; </div>
                                     })}
                                 </div>
                                 <div className="specials">Specials: &nbsp;
                                     {(this.state.selectedCrewMember.specials || []).map((e,i)=> {
-                                        const name = typeof e === 'object' && e !== null ? e.name : e;
+                                        const name = (typeof e === 'object' && e !== null ? e.name : String(e || '')).replace(/_/g, ' ');
                                         return <div key={i}>{ name }{i !== this.state.selectedCrewMember.specials.length-1 ?  ',' : ''} &nbsp; </div>
                                     })}
                                 </div>
@@ -503,7 +503,7 @@ goBack = () => {
                         )}
                         <div className="passives">Passives: &nbsp;
                             {(this.state.selectedCrewMember.passives || []).map((e,i)=> {
-                                const name = typeof e === 'object' && e !== null ? e.name : e;
+                                const name = (typeof e === 'object' && e !== null ? e.name : String(e || '')).replace(/_/g, ' ');
                                 return <div key={i}>{ name }{i !== this.state.selectedCrewMember.passives.length-1 ?  ',' : ''} &nbsp; </div>
                             })}
                         </div>
