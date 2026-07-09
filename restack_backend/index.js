@@ -9,8 +9,26 @@ const app = express();
 // const {authenticate} = require('./modules/auth-module.js');
 const cors = require("cors");
 const corsOptions = {
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:3000"
-  };
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+    
+    // Allow localhost, vercel preview deployments, and dreamtower.world
+    const allowedPatterns = [
+      /^http:\/\/localhost:\d+$/,
+      /dreamtower\.world$/,
+      /vercel\.app$/
+    ];
+    
+    const isAllowed = allowedPatterns.some(pattern => pattern.test(origin)) || 
+                      origin === process.env.CLIENT_ORIGIN;
+                      
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  }
+};
 
 var fs = require("fs");
 
