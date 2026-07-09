@@ -23,6 +23,19 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
   <title>DreamTower</title>
+  <style>
+    /* Prevent Flash of Unstyled Content (FOUC) */
+    html, body {
+      background-color: #0d0c0b; /* Initial dark canvas to prevent white flash */
+    }
+    #root {
+      opacity: 0;
+      transition: opacity 0.18s ease-in-out;
+    }
+    #root.loaded {
+      opacity: 1;
+    }
+  </style>
 </head>
 
 <body>

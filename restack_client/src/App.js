@@ -50,6 +50,10 @@ useEffect(() => {
   } else {
     setLoggedIn(false)
   }
+  const root = document.getElementById('root');
+  if (root) {
+    root.classList.add('loaded');
+  }
 }, [])
 useEffect(()=>{
 }, [allUsers])
