@@ -642,14 +642,12 @@ class MapMakerPage extends React.Component {
     reader.readAsText(file);
   }
   renameDungeon = () => {
-    console.log('rename ndungeon');
     this.setState({
       showModal: true,
       modalType: 'rename dungeon'
     })
   }
   renameBoard = () => {
-    console.log('in rename board, state.loadedBoard.name', this.state.loadedBoard?.name);
     this.setState({
       showModal: true,
       modalType: 'rename board'
@@ -1387,10 +1385,8 @@ class MapMakerPage extends React.Component {
     let tsize = 0;
     if (h < w) {
       tsize = h;
-      // console.log('min is height', h);
     } else {
       tsize = w;
-      // console.log('min is width', w);
     }
     this.setState({
       tileSize: tsize,
@@ -1399,11 +1395,8 @@ class MapMakerPage extends React.Component {
   }
 
   handleClick = (tile) => {
-    console.log('tile clicked: ', tile);
     if (tile.type === 'palette-tile') {
-      console.log('palette tile clicked');
       if (this.state.optionClickedIdx === tile.id) {
-        console.log('option already open');
         this.setState({
           optionClickedIdx: null,
           pinnedOption: null
@@ -1416,13 +1409,9 @@ class MapMakerPage extends React.Component {
       }
 
     } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'lore-tablet-tile') {
-      console.log('MONSTER/GATE/KEY/TIER/JEWEL/RUNE/TREASURE/SHRINE/LORETABLET TILE');
       this.setState({
         pinnedOption: tile
       })
-      setTimeout(() => {
-        console.log('pinnedoption: ', this.state.pinnedOption);
-      }, 500)
     } else if (tile.type === 'passage-tool-tile') {
       this.setState({
         pinnedOption: tile
@@ -1473,7 +1462,6 @@ class MapMakerPage extends React.Component {
         monster = Object.values(this.props.monsterManager.monsters)[this.state.pinnedOption.id];
       };
       if (this.state.pinnedOption && this.state.pinnedOption.type === 'gate-tile') {
-        console.log('id: ', this.state.pinnedOption.id);
         gate = GATES[this.state.pinnedOption.id];
       };
       if (this.state.pinnedOption && this.state.pinnedOption.type === 'key-tile') {
@@ -1506,24 +1494,18 @@ class MapMakerPage extends React.Component {
         loreTabletOption = this.props.mapMaker.loreTabletOptions[this.state.pinnedOption.id];
       };
       if (monster) {
-        console.log('monster get here, monster: ', monster);
         let arr = [...this.state.tiles];
         arr[tile.id].contains = { type: 'monster', subtype: monster.key }
         arr[tile.id].image = monster.portrait
-        console.log('arr[tile.id]:', arr[tile.id]);
-        console.log('tiles now ', arr);
         this.setState({
           tiles: arr,
           hoveredTileIdx: null
         })
         return
       } else if (gate) {
-        console.log('gate get here');
         let arr = [...this.state.tiles];
         arr[tile.id].contains = { type: 'gate', subtype: gate.key }
         arr[tile.id].image = images[gate.key]
-        console.log('arr[tile.id]:', arr[tile.id]);
-        console.log('tiles now ', arr);
         this.setState({
           tiles: arr,
           hoveredTileIdx: null
@@ -3082,7 +3064,6 @@ class MapMakerPage extends React.Component {
   writeDungeon = async () => {
     console.log('loaded dungeon', this.state.loadedDungeon);
     if (this.state.loadedDungeon && this.state.loadedDungeon.id) {
-      console.log('existing dungeon, update');
       await updateDungeonRequest(this.state.loadedDungeon.id, this.state.loadedDungeon);
       setEditorPreference('loadedDungeon', this.state.loadedDungeon)
       this.loadAllDungeons()
@@ -3098,7 +3079,6 @@ class MapMakerPage extends React.Component {
       const newDungeonRes = await addDungeonRequest(newDungeonPayload);
       let loadedDungeon = this.state.loadedDungeon
       loadedDungeon.id = newDungeonRes.data._id;
-      console.log('about to format');
       this.setState({
         loadedDungeon: this.props.mapMaker.formatDungeon(loadedDungeon)
         // miniboards: this.state.loadedDungeon.miniboards
@@ -3107,22 +3087,16 @@ class MapMakerPage extends React.Component {
       this.loadAllDungeons();
     }
     this.setState({ dungeonHasUnsavedChanges: false });
-    // this update user block NEEDS to be abstracted. you can search 'update user' to find all instances of it
-    console.warn('this update user block NEEDS to be abstracted. you can search "update user" to find all instances of it')
-    console.log('HELLO??? MCFLY???????');
     // update user
     const userId = sessionStorage.getItem('userId');
     setEditorPreference('loadedDungeon', this.state.loadedDungeon);
     const meta = getMeta();
-    console.log('about to update user with meta ', meta);
     if (userId) updateUserRequest(userId, meta)
     storeMeta(meta);
   }
   validatePlane = (plane) => {
-    console.log('validating plane: ', plane);
     plane.miniboards.forEach((b, i) => {
       b.processed = this.props.mapMaker.filterMapAdjacency(b, i, plane.miniboards);
-      // console.log('b.processed: ', b.processed);  
       if (!b.processed) return;
 
       if (i === 0) {
@@ -3170,12 +3144,10 @@ class MapMakerPage extends React.Component {
       }
     })
     if (plane.miniboards.some(e => !e.valid)) plane.valid = false
-    console.log('validated plane:', plane)
     return plane
   }
   loadPlane = (incomingPlane) => {
     let plane = this.validatePlane(incomingPlane)
-    console.log('loaded plane: ', plane);
     this.setState({
       loadedPlane: plane,
       selectedThingTitle: `Plane: ${plane.name}`,
@@ -3189,23 +3161,16 @@ class MapMakerPage extends React.Component {
     storeMeta(meta);
   }
   loadDungeon = async (id) => {
-    console.log('load dungein: ', id);
     const val = await loadDungeonRequest(id)
     let e = val.data[0];
-    console.log('e: ', e);
     let dungeon = JSON.parse(e.content), dungeonValid = true;
-    console.log('dungeon before formatting:  ', dungeon);
-    // debugger
     dungeon = this.props.mapMaker.formatDungeon(dungeon);
-    console.log('dungeon after formattingL: ', dungeon);
     for (let key in dungeon.levels) {
       let level = dungeon.levels[key]
-      console.log('corncob level: ', dungeon.levels[key])
       if (level.front) {
         level.front = this.validatePlane(level.front)
         if (!level.front.valid) {
           dungeonValid = false;
-          console.log('level not valid!')
         }
       }
       if (level.back) {
@@ -3215,7 +3180,6 @@ class MapMakerPage extends React.Component {
     }
     const hasSpawnPoints = this.dungeonHasSpawnPoint(dungeon);
     dungeon.valid = dungeonValid && hasSpawnPoints;
-    console.log('about to format 3');
     this.setState({
       loadedDungeon: this.props.mapMaker.formatDungeon(dungeon),
       selectedThingTitle: this.state.selectedView === 'dungeon' ? `Dungeon: ${dungeon.name}` : this.state.selectedThingTitle
