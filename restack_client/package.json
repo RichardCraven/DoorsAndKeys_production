@@ -2,6 +2,9 @@
   "name": "restack_client",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "@coreui/coreui": "^4.2.4",
     "@coreui/icons": "^2.1.0",
