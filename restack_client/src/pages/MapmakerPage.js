@@ -613,21 +613,40 @@ class MapMakerPage extends React.Component {
         delete dungeonData._id;
         delete dungeonData.id;
         const formatted = this.props.mapMaker.formatDungeon(dungeonData);
+
+        console.groupCollapsed("[MapmakerPage] Dungeon Import Diagnostics");
+        console.log("Raw Imported Dungeon JSON Data:", dungeonData);
+        console.log("Initially formatted dungeon:", formatted);
+
         // Run the same full validation that loadDungeon() does so valid is correct
         let dungeonValid = true;
         for (let key in formatted.levels) {
           const level = formatted.levels[key];
+          console.log(`Checking Level: Key = ${key}, Level ID = ${level?.id}`);
           if (level.front) {
+            console.log("  - Validating Front plane...");
             level.front = this.validatePlane(level.front);
+            console.log("  - Front plane validation result:", level.front.valid);
             if (!level.front.valid) dungeonValid = false;
+          } else {
+            console.log("  - No Front plane present.");
           }
           if (level.back) {
+            console.log("  - Validating Back plane...");
             level.back = this.validatePlane(level.back);
+            console.log("  - Back plane validation result:", level.back.valid);
             if (!level.back.valid) dungeonValid = false;
+          } else {
+            console.log("  - No Back plane present.");
           }
         }
         const hasSpawnPoints = this.dungeonHasSpawnPoint(formatted);
+        console.log(`Adjacency check outcome (dungeonValid): ${dungeonValid}`);
+        console.log(`Spawn point check outcome (hasSpawnPoints): ${hasSpawnPoints}`);
         formatted.valid = dungeonValid && hasSpawnPoints;
+        console.log("Final Computed Dungeon Validity set to:", formatted.valid);
+        console.groupEnd();
+
         this.setState({
           loadedDungeon: formatted,
           dungeonHasUnsavedChanges: true,
@@ -636,6 +655,7 @@ class MapMakerPage extends React.Component {
         });
         this.toast(`Imported "${dungeonData.name || 'dungeon'}" — click Save (💾) to write to this database.`);
       } catch (err) {
+        console.error("Dungeon import failed:", err);
         alert('Could not parse dungeon file. Make sure it is a valid .json export.');
       }
     };
@@ -3062,26 +3082,52 @@ class MapMakerPage extends React.Component {
     }
   }
   writeDungeon = async () => {
-    console.log('loaded dungeon', this.state.loadedDungeon);
-    if (this.state.loadedDungeon && this.state.loadedDungeon.id) {
-      await updateDungeonRequest(this.state.loadedDungeon.id, this.state.loadedDungeon);
-      setEditorPreference('loadedDungeon', this.state.loadedDungeon)
+    console.log('loaded dungeon before validation/save', this.state.loadedDungeon);
+    if (!this.state.loadedDungeon) return;
+
+    // Validate the dungeon structure, plane adjacencies, and spawn points before saving
+    let validatedDungeon = { ...this.state.loadedDungeon };
+    let dungeonValid = true;
+    for (let key in validatedDungeon.levels) {
+      const level = validatedDungeon.levels[key];
+      if (level.front) {
+        level.front = this.validatePlane(level.front);
+        if (!level.front.valid) dungeonValid = false;
+      }
+      if (level.back) {
+        level.back = this.validatePlane(level.back);
+        if (!level.back.valid) dungeonValid = false;
+      }
+    }
+    const hasSpawnPoints = this.dungeonHasSpawnPoint(validatedDungeon);
+    validatedDungeon.valid = dungeonValid && hasSpawnPoints;
+
+    console.log(`[writeDungeon] Validation output: dungeonValid = ${dungeonValid}, hasSpawn = ${hasSpawnPoints}, final valid = ${validatedDungeon.valid}`);
+
+    if (validatedDungeon.id) {
+      console.log('existing dungeon, update');
+      await updateDungeonRequest(validatedDungeon.id, validatedDungeon);
+      this.setState({ loadedDungeon: validatedDungeon });
+      setEditorPreference('loadedDungeon', validatedDungeon)
       this.loadAllDungeons()
       this.flashLeftReadout('Dungeon Saved')
     } else {
       let newDungeonPayload = {
-        name: this.state.loadedDungeon.name,
-        levels: this.state.loadedDungeon.levels,
-        pocket_planes: this.state.loadedDungeon.pocket_planes,
+        name: validatedDungeon.name,
+        levels: validatedDungeon.levels,
+        pocket_planes: validatedDungeon.pocket_planes,
         descriptions: 'new dungeon description',
-        valid: this.state.loadedDungeon.valid === true
+        valid: validatedDungeon.valid === true
       }
       const newDungeonRes = await addDungeonRequest(newDungeonPayload);
-      let loadedDungeon = this.state.loadedDungeon
+      let loadedDungeon = { ...validatedDungeon };
       loadedDungeon.id = newDungeonRes.data._id;
+      console.log('about to format saved new dungeon');
+      const formatted = this.props.mapMaker.formatDungeon(loadedDungeon);
+      // Ensure we keep the computed valid flag since formatDungeon doesn't run validatePlane
+      formatted.valid = validatedDungeon.valid;
       this.setState({
-        loadedDungeon: this.props.mapMaker.formatDungeon(loadedDungeon)
-        // miniboards: this.state.loadedDungeon.miniboards
+        loadedDungeon: formatted
       })
       this.flashLeftReadout('Dungeon Saved')
       this.loadAllDungeons();
@@ -3095,56 +3141,110 @@ class MapMakerPage extends React.Component {
     storeMeta(meta);
   }
   validatePlane = (plane) => {
+    console.groupCollapsed(`[validatePlane] Validating plane "${plane.name || 'Unnamed'}"`);
+    console.log("Plane miniboards:", plane.miniboards);
+    
+    let planeValid = true;
     plane.miniboards.forEach((b, i) => {
       b.processed = this.props.mapMaker.filterMapAdjacency(b, i, plane.miniboards);
-      if (!b.processed) return;
+      if (!b.processed) {
+        console.warn(`Miniboard at index ${i} has no processed adjacency information.`);
+        b.valid = false;
+        planeValid = false;
+        return;
+      }
+
+      let check = false;
+      const getMbId = (idx) => plane.miniboards[idx]?.id;
 
       if (i === 0) {
-        b.valid = b.processed.right.includes(plane.miniboards[1].id) &&
-          b.processed.bot.includes(plane.miniboards[3].id)
+        const rightOk = b.processed.right.includes(getMbId(1));
+        const botOk = b.processed.bot.includes(getMbId(3));
+        check = rightOk && botOk;
+        if (!check) {
+          console.warn(`Miniboard 0 check failed. rightOk: ${rightOk} (needs mb 1: ${getMbId(1)}), botOk: ${botOk} (needs mb 3: ${getMbId(3)})`);
+        }
       }
       if (i === 1) {
-
-        b.valid = b.processed.left.includes(plane.miniboards[0].id) &&
-          b.processed.right.includes(plane.miniboards[2].id) &&
-          b.processed.bot.includes(plane.miniboards[4].id)
+        const leftOk = b.processed.left.includes(getMbId(0));
+        const rightOk = b.processed.right.includes(getMbId(2));
+        const botOk = b.processed.bot.includes(getMbId(4));
+        check = leftOk && rightOk && botOk;
+        if (!check) {
+          console.warn(`Miniboard 1 check failed. leftOk: ${leftOk} (needs mb 0: ${getMbId(0)}), rightOk: ${rightOk} (needs mb 2: ${getMbId(2)}), botOk: ${botOk} (needs mb 4: ${getMbId(4)})`);
+        }
       }
       if (i === 2) {
-        b.valid = b.processed.left.includes(plane.miniboards[1].id) &&
-          b.processed.bot.includes(plane.miniboards[5].id)
+        const leftOk = b.processed.left.includes(getMbId(1));
+        const botOk = b.processed.bot.includes(getMbId(5));
+        check = leftOk && botOk;
+        if (!check) {
+          console.warn(`Miniboard 2 check failed. leftOk: ${leftOk} (needs mb 1: ${getMbId(1)}), botOk: ${botOk} (needs mb 5: ${getMbId(5)})`);
+        }
       }
       if (i === 3) {
-        b.valid = b.processed.top.includes(plane.miniboards[0].id) &&
-          b.processed.right.includes(plane.miniboards[4].id) &&
-          b.processed.bot.includes(plane.miniboards[6].id)
+        const topOk = b.processed.top.includes(getMbId(0));
+        const rightOk = b.processed.right.includes(getMbId(4));
+        const botOk = b.processed.bot.includes(getMbId(6));
+        check = topOk && rightOk && botOk;
+        if (!check) {
+          console.warn(`Miniboard 3 check failed. topOk: ${topOk} (needs mb 0: ${getMbId(0)}), rightOk: ${rightOk} (needs mb 4: ${getMbId(4)}), botOk: ${botOk} (needs mb 6: ${getMbId(6)})`);
+        }
       }
       if (i === 4) {
-        b.valid = b.processed.left.includes(plane.miniboards[3].id) &&
-          b.processed.bot.includes(plane.miniboards[7].id) &&
-          b.processed.top.includes(plane.miniboards[1].id) &&
-          b.processed.right.includes(plane.miniboards[5].id)
+        const leftOk = b.processed.left.includes(getMbId(3));
+        const botOk = b.processed.bot.includes(getMbId(7));
+        const topOk = b.processed.top.includes(getMbId(1));
+        const rightOk = b.processed.right.includes(getMbId(5));
+        check = leftOk && botOk && topOk && rightOk;
+        if (!check) {
+          console.warn(`Miniboard 4 check failed. leftOk: ${leftOk} (needs mb 3: ${getMbId(3)}), botOk: ${botOk} (needs mb 7: ${getMbId(7)}), topOk: ${topOk} (needs mb 1: ${getMbId(1)}), rightOk: ${rightOk} (needs mb 5: ${getMbId(5)})`);
+        }
       }
       if (i === 5) {
-        b.valid = b.processed.left.includes(plane.miniboards[4].id) &&
-          b.processed.bot.includes(plane.miniboards[8].id)
+        const leftOk = b.processed.left.includes(getMbId(4));
+        const botOk = b.processed.bot.includes(getMbId(8));
+        check = leftOk && botOk;
+        if (!check) {
+          console.warn(`Miniboard 5 check failed. leftOk: ${leftOk} (needs mb 4: ${getMbId(4)}), botOk: ${botOk} (needs mb 8: ${getMbId(8)})`);
+        }
       }
       if (i === 6) {
-        b.valid = b.processed.top.includes(plane.miniboards[3].id) &&
-          b.processed.right.includes(plane.miniboards[7].id)
-
+        const topOk = b.processed.top.includes(getMbId(3));
+        const rightOk = b.processed.right.includes(getMbId(7));
+        check = topOk && rightOk;
+        if (!check) {
+          console.warn(`Miniboard 6 check failed. topOk: ${topOk} (needs mb 3: ${getMbId(3)}), rightOk: ${rightOk} (needs mb 7: ${getMbId(7)})`);
+        }
       }
       if (i === 7) {
-        b.valid = b.processed.top.includes(plane.miniboards[4].id) &&
-          b.processed.left.includes(plane.miniboards[6].id) &&
-          b.processed.right.includes(plane.miniboards[8].id)
+        const topOk = b.processed.top.includes(getMbId(4));
+        const leftOk = b.processed.left.includes(getMbId(6));
+        const rightOk = b.processed.right.includes(getMbId(8));
+        check = topOk && leftOk && rightOk;
+        if (!check) {
+          console.warn(`Miniboard 7 check failed. topOk: ${topOk} (needs mb 4: ${getMbId(4)}), leftOk: ${leftOk} (needs mb 6: ${getMbId(6)}), rightOk: ${rightOk} (needs mb 8: ${getMbId(8)})`);
+        }
       }
       if (i === 8) {
-        b.valid = b.processed.top.includes(plane.miniboards[5].id) &&
-          b.processed.left.includes(plane.miniboards[7].id)
+        const topOk = b.processed.top.includes(getMbId(5));
+        const leftOk = b.processed.left.includes(getMbId(7));
+        check = topOk && leftOk;
+        if (!check) {
+          console.warn(`Miniboard 8 check failed. topOk: ${topOk} (needs mb 5: ${getMbId(5)}), leftOk: ${leftOk} (needs mb 7: ${getMbId(7)})`);
+        }
       }
-    })
-    if (plane.miniboards.some(e => !e.valid)) plane.valid = false
-    return plane
+
+      b.valid = check;
+      if (!check) {
+        planeValid = false;
+      }
+    });
+
+    plane.valid = planeValid;
+    console.log(`Validated plane "${plane.name || 'Unnamed'}". Result: ${plane.valid}`);
+    console.groupEnd();
+    return plane;
   }
   loadPlane = (incomingPlane) => {
     let plane = this.validatePlane(incomingPlane)
