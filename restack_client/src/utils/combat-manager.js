@@ -32,7 +32,7 @@ const clone = (val) => {
 }
 
 const formatCombatText = (value) => String(value || '')
-    .replaceAll('_', ' ')
+    .replace(/_/g, ' ')
     .trim()
     .split(' ')
     .filter(Boolean)
