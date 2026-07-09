@@ -38,9 +38,15 @@ export function OverlayManager(){
         // const duration = animationTypes[animation.type]?.duration * 1000;
         // const modifiedDuration = duration + 500;
         animation.locked = true;
-        animation.subjectType = this.overlays[animation.id].data.type
         
-        
+        if (!this.overlays[animation.id]) {
+            this.overlays[animation.id] = {
+                id: animation.id,
+                animations: {},
+                data: { type: 'unknown' }
+            };
+        }
+        animation.subjectType = this.overlays[animation.id].data?.type || 'unknown';
         
         // FIRST PUSH NEW ANIMATION
         const animationMatrix = this.overlays[animation.id].animations;

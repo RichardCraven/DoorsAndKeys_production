@@ -7,71 +7,89 @@ class UserManagerPage extends React.Component {
     super(props)
     this.state = {
       users: [],
-      color: '#008f68',
     };
-  // ...existing code...
   }
+
   async componentDidMount(){
-  // ...existing code...
-    const response  = await loadAllUsersRequest()
-  // ...existing code...
-    this.setState((state, props) => {
-      return  {users: response.data}
-    })
+    const response = await loadAllUsersRequest()
+    this.setState({ users: Array.isArray(response?.data) ? response.data : [] })
   }
-  componentDidUpdate(){
-  // ...existing code...
-    
-  }
+
   deleteUser = async (user) => {
-  // ...existing code...
     const c = window.confirm("Are you sure you want to delete this user?")
     if(c){
-      await deleteUserRequest(user.id)
-  // ...existing code...
-      const final  = await loadAllUsersRequest()
-      this.setState((state, props) => {
-        return  {users: final.data}
-      })
+      await deleteUserRequest(user._id || user.id)
+      const final = await loadAllUsersRequest()
+      this.setState({ users: Array.isArray(final?.data) ? final.data : [] })
     }
   }
-  // useEffect(()=> {
-  //   let mounted = true;
-  //   history.push({
-  //     pathname: '/landing'
-  //   })
-  //   if(mounted){
-  //     if(JSON.parse(sessionStorage.getItem('isAdmin'))){
-  //       setIsAdmin(true)
-  //     }
 
-  //   }
-  //   return () => {
-  //     mounted = false;
-  //   }
-  // },[history])
+  handleBack = () => {
+    if (this.props.navToLanding) {
+      this.props.navToLanding();
+    } else if (this.props.history) {
+      this.props.history.push('/landing');
+    } else {
+      window.location.href = '/landing';
+    }
+  };
 
-  render(){
-    return <div className="user-manager-board">
-        <div className="table">
-          <div className="row">
-            <div className="username-header">Username</div>
-            <div className="isadmin-header">Is Admin</div>
-            <div className="world-header">World</div>
-            <div className="crew-header">Crew</div>
+  render() {
+    return (
+      <div className="user-manager-page">
+        <div className="user-manager-card">
+          <div className="user-manager-header">
+            <h2>User Manager</h2>
+            <button className="back-btn" onClick={this.handleBack}>
+              ← Back to Menu
+            </button>
           </div>
-          <hr/>
-          {this.state.users.map((user, i) => {
-            return <div key={i} className="row">
-                      <div className="data-node username-header">{user.username}</div>
-                      <div className="data-node isadmin-header">{user.isAdmin ? 'true' : 'false'}</div>
-                      <div className="data-node world-header">{user.metadata ? 'dig for data' : 'N/A'}</div>
-                      <div className="data-node crew-header">{user.metadata ? 'dig for data' : 'N/A'}</div>
-                      <button onClick={() => {this.deleteUser(user)}}>X</button>
-                  </div>
-          })}
+          
+          <div className="user-table-container">
+            <table className="user-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Role</th>
+                  <th>World</th>
+                  <th>Crew</th>
+                  <th className="actions-col">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {this.state.users && this.state.users.length > 0 ? (
+                  this.state.users.map((user, i) => (
+                    <tr key={i}>
+                      <td className="username-cell">{user.username}</td>
+                      <td>
+                        <span className={`role-badge ${user.isAdmin ? 'admin' : 'player'}`}>
+                          {user.isAdmin ? 'Admin' : 'Player'}
+                        </span>
+                      </td>
+                      <td className="meta-cell">{user.metadata ? 'Active' : 'N/A'}</td>
+                      <td className="meta-cell">{user.metadata ? 'Active' : 'N/A'}</td>
+                      <td className="actions-cell">
+                        <button 
+                          className="delete-btn" 
+                          onClick={() => this.deleteUser(user)}
+                          title="Delete User"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="5" className="empty-table">No users found</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
+    );
   }
 }
 

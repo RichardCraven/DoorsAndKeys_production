@@ -21,6 +21,7 @@ const CanvasFireball = ({ center, radius = 1.8, numParticles = 50, color = 'red'
 
         // initialize particles inside the circle
         const particles = [];
+        const emberPalette = ['#fff1a8', '#ffd36b', '#ff9d2b', '#ff5a1f', '#d9230f'];
         for (let i = 0; i < numParticles; i++) {
             // random point inside circle
             const angle = Math.random() * Math.PI * 2;
@@ -30,20 +31,61 @@ const CanvasFireball = ({ center, radius = 1.8, numParticles = 50, color = 'red'
             const speed = 0.15 + Math.random() * 0.6; // px per ms-ish
             const vx = (Math.random() - 0.5) * speed * 2;
             const vy = (Math.random() - 0.5) * speed * 2;
-            particles.push({ x, y, vx, vy, size: 4 + Math.random() * 4 });
+            particles.push({
+                x,
+                y,
+                vx,
+                vy,
+                size: 3 + Math.random() * 5,
+                heat: Math.random(),
+                color: emberPalette[Math.floor(Math.random() * emberPalette.length)]
+            });
         }
 
         function draw(now) {
             context.clearRect(0, 0, canvas.width, canvas.height);
+            const flicker = 0.88 + Math.sin(now * 0.016) * 0.12;
 
-            // draw hollow outline circle
+            // Soft outer glow with a transparent edge for a blurrier, hotter silhouette.
+            const glowGradient = context.createRadialGradient(cx, cy, r * 0.2, cx, cy, r * 1.5);
+            glowGradient.addColorStop(0, 'rgba(255, 250, 210, 0.95)');
+            glowGradient.addColorStop(0.35, 'rgba(255, 180, 48, 0.7)');
+            glowGradient.addColorStop(0.7, 'rgba(255, 74, 0, 0.34)');
+            glowGradient.addColorStop(1, 'rgba(255, 32, 0, 0)');
+            context.beginPath();
+            context.arc(cx, cy, r * 1.45, 0, Math.PI * 2);
+            context.fillStyle = glowGradient;
+            context.globalAlpha = 0.7 * flicker;
+            context.fill();
+
+            // Fiery shell with feathered edges (instead of a hard circular boundary)
+            const shellGradient = context.createRadialGradient(cx, cy, r * 0.08, cx, cy, r);
+            shellGradient.addColorStop(0, 'rgba(255, 255, 210, 0.98)');
+            shellGradient.addColorStop(0.45, 'rgba(255, 179, 46, 0.85)');
+            shellGradient.addColorStop(0.78, 'rgba(255, 90, 18, 0.55)');
+            shellGradient.addColorStop(1, 'rgba(255, 20, 0, 0.03)');
             context.beginPath();
             context.arc(cx, cy, r, 0, Math.PI * 2);
-            context.lineWidth = 6;
-            context.strokeStyle = color || 'red';
-            context.globalAlpha = 1;
-            context.shadowColor = color || 'red';
-            context.shadowBlur = 18;
+            context.fillStyle = shellGradient;
+            context.globalAlpha = 0.95;
+            context.fill();
+
+            // Bright molten core for stronger heat impression.
+            const coreGradient = context.createRadialGradient(cx, cy, 0, cx, cy, r * 0.42);
+            coreGradient.addColorStop(0, 'rgba(255, 255, 235, 1)');
+            coreGradient.addColorStop(0.55, 'rgba(255, 228, 134, 0.95)');
+            coreGradient.addColorStop(1, 'rgba(255, 130, 32, 0)');
+            context.beginPath();
+            context.arc(cx, cy, r * 0.5, 0, Math.PI * 2);
+            context.fillStyle = coreGradient;
+            context.globalAlpha = 0.9;
+            context.fill();
+
+            context.lineWidth = 3.5;
+            context.strokeStyle = color || '#ff5a1f';
+            context.globalAlpha = 0.85;
+            context.shadowColor = '#ff5a1f';
+            context.shadowBlur = 26;
             context.stroke();
             context.shadowBlur = 0;
 
@@ -72,15 +114,18 @@ const CanvasFireball = ({ center, radius = 1.8, numParticles = 50, color = 'red'
                     p.vy *= 0.85;
                 }
 
+                const pulse = 0.82 + Math.sin(now * 0.02 + p.heat * 9) * 0.18;
                 context.beginPath();
-                context.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-                context.fillStyle = 'orange';
-                context.globalAlpha = 0.95;
-                context.shadowColor = 'orange';
-                context.shadowBlur = 12;
+                context.arc(p.x, p.y, p.size * pulse, 0, Math.PI * 2);
+                context.fillStyle = p.color;
+                context.globalAlpha = 0.6 + p.heat * 0.35;
+                context.shadowColor = p.color;
+                context.shadowBlur = 10 + p.heat * 16;
                 context.fill();
                 context.shadowBlur = 0;
             }
+
+            context.globalAlpha = 1;
         }
 
         function animate() {

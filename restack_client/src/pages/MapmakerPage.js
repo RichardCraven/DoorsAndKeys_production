@@ -2,7 +2,7 @@ import React from 'react'
 import '@coreui/coreui/dist/css/coreui.min.css'
 import '../styles/dungeon-board.scss'
 import '../styles/map-maker.scss'
-import {storeMeta, getMeta, setEditorPreference} from '../utils/session-handler'
+import { storeMeta, getMeta, setEditorPreference } from '../utils/session-handler'
 import BoardView from './dungonBuilderViews/BoardView'
 import BoardsPanel from './dungonBuilderViews/BoardsPanel'
 import PlanesPanel from './dungonBuilderViews/PlanesPanel'
@@ -10,23 +10,20 @@ import PlaneView from './dungonBuilderViews/PlaneView'
 import DungeonView from './dungonBuilderViews/DungeonView'
 import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
-import { CFormCheck, CButtonGroup, CModal, CButton, CModalHeader, CModalTitle, CModalBody, CModalFooter} from '@coreui/react';
+import { CFormCheck, CButtonGroup, CModal, CButton, CModalHeader, CModalTitle, CModalBody, CModalFooter } from '@coreui/react';
 import arrowDown from '../assets/graphics/arrow_down.png'
 import arrowUp from '../assets/graphics/arrow_up.png'
 import arrowDownInvalid from '../assets/graphics/arrow_down_invalid.png'
 import arrowUpInvalid from '../assets/graphics/arrow_up_invalid.png'
-import spawnPoint from '../assets/graphics/location.png'
 import door from '../assets/icons//portals/closed_door_browner.png'
-
-import { CDropdown, CDropdownToggle, CDropdownMenu, CDropdownItem} from '@coreui/react';
 
 // import  CIcon  from '@coreui/icons-react'
 // import { cilList, cilCaretRight, cilCaretBottom, cilGlobeAlt } from '@coreui/icons';
 import {
-  addBoardRequest, 
-  loadAllBoardsRequest, 
-  updateBoardRequest, 
-  deleteBoardRequest, 
+  addBoardRequest,
+  loadAllBoardsRequest,
+  updateBoardRequest,
+  deleteBoardRequest,
   loadAllDungeonsRequest,
   loadDungeonRequest,
   loadAllPlanesRequest,
@@ -38,36 +35,41 @@ import {
   updateDungeonRequest,
   updateUserRequest
 } from '../utils/api-handler';
-
 import * as images from '../utils/images'
 import BoardsPalette from './dungonBuilderViews/BoardsPalette'
+import { generateRandomDungeon } from '../utils/dungeon-generator'
+
+const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__';
+const GENERATE_DUNGEON_VALUE = '__generate_dungeon__';
+const UNIQUE_DUNGEON_INSTANCE_NAME_REGEX = /.+_.+_[^_]{4}$/i;
 
 const GATES = [
-  { key: 'archway',              requires: '' },
-  { key: 'minor_gate',           requires: 'minor_key' },
-  { key: 'major_gate',           requires: 'major_key' },
-  { key: 'treasury_gate',        requires: 'treasury_key' },
-  { key: 'imperial_gate',        requires: 'imperial_key' },
-  { key: 'necrotic_gate',        requires: 'necrotic_key' },
+  { key: 'archway', requires: '' },
+  { key: 'minor_gate', requires: 'minor_key' },
+  { key: 'major_gate', requires: 'major_key' },
+  { key: 'treasury_gate', requires: 'treasury_key' },
+  { key: 'imperial_gate', requires: 'imperial_key' },
+  { key: 'necrotic_gate', requires: 'necrotic_key' },
   { key: 'master_necrotic_gate', requires: 'necrotic_master_key' },
-  { key: 'dimensional_gate',     requires: 'dimensional_key' },
-  { key: 'cyan_gate',            requires: 'cyan_key' },
-  { key: 'violet_gate',          requires: 'violet_key' },
-  { key: 'rubicund_gate',        requires: 'rubicund_key' },
+  { key: 'dimensional_gate', requires: 'dimensional_key' },
+  { key: 'cyan_gate', requires: 'cyan_key' },
+  { key: 'violet_gate', requires: 'violet_key' },
+  { key: 'rubicund_gate', requires: 'rubicund_key' },
 ]
 
 const KEYS = [
-  { key: 'minor_key',          name: 'minor key' },
-  { key: 'major_key',          name: 'major key' },
-  { key: 'treasury_key',       name: 'treasury key' },
-  { key: 'lockbox_key',        name: 'lockbox key' },
-  { key: 'necrotic_key',       name: 'necrotic key' },
-  { key: 'necrotic_master_key',name: 'necrotic master key' },
-  { key: 'violet_key',         name: 'violet key' },
-  { key: 'rubicund_key',       name: 'rubicund key' },
-  { key: 'cyan_key',           name: 'cyan key' },
-  { key: 'imperial_key',       name: 'imperial key' },
-  { key: 'dimensional_key',    name: 'dimensional key' },
+  { key: 'minor_key', name: 'minor key' },
+  { key: 'major_key', name: 'major key' },
+  { key: 'treasury_key', name: 'treasury key' },
+  { key: 'lockbox_key', name: 'lockbox key' },
+  { key: 'cryptic_key', name: 'cryptic key' },
+  { key: 'necrotic_key', name: 'necrotic key' },
+  { key: 'necrotic_master_key', name: 'necrotic master key' },
+  { key: 'violet_key', name: 'violet key' },
+  { key: 'rubicund_key', name: 'rubicund key' },
+  { key: 'cyan_key', name: 'cyan key' },
+  { key: 'imperial_key', name: 'imperial key' },
+  { key: 'dimensional_key', name: 'dimensional key' },
 ]
 
 const clone = (thing) => {
@@ -83,43 +85,43 @@ const clone = (thing) => {
 // }
 
 class MapMakerPage extends React.Component {
-    componentDidUpdate(prevProps, prevState) {
-      // Auto-scroll dev console output to bottom when new output is added
-      if (
-        this.state.devConsoleOpen &&
-        this.devConsoleOutputRef &&
-        this.devConsoleOutputRef.current &&
-        prevState.devConsoleOutput !== this.state.devConsoleOutput
-      ) {
-        const outputDiv = this.devConsoleOutputRef.current;
-        outputDiv.scrollTop = outputDiv.scrollHeight;
-      }
+  componentDidUpdate(prevProps, prevState) {
+    // Auto-scroll dev console output to bottom when new output is added
+    if (
+      this.state.devConsoleOpen &&
+      this.devConsoleOutputRef &&
+      this.devConsoleOutputRef.current &&
+      prevState.devConsoleOutput !== this.state.devConsoleOutput
+    ) {
+      const outputDiv = this.devConsoleOutputRef.current;
+      outputDiv.scrollTop = outputDiv.scrollHeight;
+    }
 
-      // Keep dungeon overlay data in sync with the latest loaded dungeon shape.
-      const overlayRelevantChange =
-        prevState.loadedDungeon !== this.state.loadedDungeon ||
-        prevState.dungeonOverlayOn !== this.state.dungeonOverlayOn;
+    // Keep dungeon overlay data in sync with the latest loaded dungeon shape.
+    const overlayRelevantChange =
+      prevState.loadedDungeon !== this.state.loadedDungeon ||
+      prevState.dungeonOverlayOn !== this.state.dungeonOverlayOn;
 
-      if (overlayRelevantChange) {
-        const nextOverlayData =
-          this.state.dungeonOverlayOn && this.state.loadedDungeon
-            ? this.props.mapMaker.markPassages(this.state.loadedDungeon)
-            : null;
+    if (overlayRelevantChange) {
+      const nextOverlayData =
+        this.state.dungeonOverlayOn && this.state.loadedDungeon
+          ? this.props.mapMaker.markPassages(this.state.loadedDungeon)
+          : null;
 
-        if (this.state.overlayData !== nextOverlayData) {
-          this.setState({ overlayData: nextOverlayData });
-        }
+      if (this.state.overlayData !== nextOverlayData) {
+        this.setState({ overlayData: nextOverlayData });
       }
     }
-  constructor(props){
+  }
+  constructor(props) {
     super(props)
     let viewStateFromPrefs,
-    dungeonOverlayOnFromPrefs,
-    meta = getMeta();
-    if(meta?.preferences?.editor?.selectedView){
+      dungeonOverlayOnFromPrefs,
+      meta = getMeta();
+    if (meta?.preferences?.editor?.selectedView) {
       viewStateFromPrefs = meta.preferences.editor.selectedView
     }
-    if(meta?.preferences?.editor?.dungeonOverlayOn !== undefined){
+    if (meta?.preferences?.editor?.dungeonOverlayOn !== undefined) {
       dungeonOverlayOnFromPrefs = meta.preferences.editor.dungeonOverlayOn
     }
 
@@ -129,16 +131,28 @@ class MapMakerPage extends React.Component {
       loadedDungeon: null,
       tileSize: 0,
       boardSize: 0,
-      boards : [],
+      boards: [],
       planes: [],
       dungeons: [],
       miniboards: [],
       hoveredTileIdx: null,
+      previousHoveredTileIdx: null,
+      hoveredTileFootprint: null,
       hoveredPaletteTileIdx: null,
       optionClickedIdx: null,
       pinnedOption: null,
       mouseDown: false,
+      // Inscription placement state
+      inscriptionDragStartId: null,
+      showInscriptionModal: false,
+      inscriptionPendingTileId: null,
+      inscriptionPendingSide: null,      // 'top'|'bottom'|'left'|'right'
+      inscriptionWallPicker: null,       // { tileId } — shows compass picker on that tile
+      inscriptionTextInput: '',
       toastMessage: '',
+      // Portal configuration state
+      showPortalModal: false,
+      portalModalTile: null,
       // mapView: true,
       selectedView: viewStateFromPrefs ? viewStateFromPrefs : 'plane',
       hoveredSection: null,
@@ -167,17 +181,24 @@ class MapMakerPage extends React.Component {
       showModal: false,
       modalType: 'rename dungeon',
       inputValue: '',
-      dungeonNameInput : React.createRef(),
-      planeNameInput : React.createRef(),
-      boardNameInput : React.createRef(),
+      dungeonNameInput: React.createRef(),
+      planeNameInput: React.createRef(),
+      boardNameInput: React.createRef(),
+      showClearUniqueDungeonInstancesModal: false,
+      contextMenu: { visible: false, x: 0, y: 0, tileId: null },
+      zoomLevelId: null,
+      zoomMiniboardIndex: null,
+      zoomOrientation: null,
+      clearUniqueDungeonInstances: [],
+      clearUniqueDungeonInstancesLoading: false,
 
       // mainViewSelectVal : React.createRef(),
-      dungeonSelectVal : React.createRef(),
+      dungeonSelectVal: React.createRef(),
 
       cachedOriginal: null,
       cachedincoming: null,
       boardsFolders: [],
-      boardsFoldersExpanded : {},
+      boardsFoldersExpanded: {},
       planesFolders: [],
       planesFoldersExpanded: {},
       visible: false,
@@ -186,8 +207,12 @@ class MapMakerPage extends React.Component {
       overlayData: null,
       loadingData: true,
       planeSyncInProgress: false,
+      dungeonHasUnsavedChanges: false,
+      planeHasUnsavedChanges: false,
+      generatingDungeon: false,
       imagesMatrix: {},
       selectedThingTitle: '',
+      leftReadoutFlashMessage: null,
       showPlanesNames: false,
       showCoordinates: this.props.showCoordinates ?? false,
       // Dev console
@@ -198,78 +223,72 @@ class MapMakerPage extends React.Component {
     this.devConsoleInputRef = React.createRef();
     this.devConsoleOutputRef = React.createRef();
   }
-  
 
-  componentDidMount(){
+
+  componentDidMount() {
     const that = this;
-    let images = {};
-    function checkIfAllImagesHaveLoaded(){
-      if(
-        images.arrowUpImg &&
-        images.arrowUpImgInvalid &&
-        images.arrowDownImg &&
-        images.arrowDownImgInvalid &&
-        images.doorImg &&
-        images.spawnPointImg
-      ){
-        that.setState({imagesMatrix : images})
+    let loadedImages = {};
+    function checkIfAllImagesHaveLoaded() {
+      if (
+        loadedImages.arrowUpImg &&
+        loadedImages.arrowUpImgInvalid &&
+        loadedImages.arrowDownImg &&
+        loadedImages.arrowDownImgInvalid &&
+        loadedImages.doorImg &&
+        loadedImages.spawnPointImg
+      ) {
+        that.setState({ imagesMatrix: loadedImages })
       }
     }
-    
+
     let arrowUpImg = new Image()
     arrowUpImg.src = arrowUp
-    arrowUpImg.onload = function(){
-        images['arrowUpImg'] = arrowUpImg;
-        checkIfAllImagesHaveLoaded()
+    arrowUpImg.onload = function () {
+      loadedImages['arrowUpImg'] = arrowUpImg;
+      checkIfAllImagesHaveLoaded()
     }
     let arrowDownImg = new Image()
     arrowDownImg.src = arrowDown
-    arrowDownImg.onload = function(){
-        images['arrowDownImg'] = arrowDownImg
-        checkIfAllImagesHaveLoaded()
+    arrowDownImg.onload = function () {
+      loadedImages['arrowDownImg'] = arrowDownImg
+      checkIfAllImagesHaveLoaded()
     }
     let arrowUpImgInvalid = new Image()
     arrowUpImgInvalid.src = arrowUpInvalid
-    arrowUpImgInvalid.onload = function(){
-        images['arrowUpImgInvalid'] = arrowUpImgInvalid
-        checkIfAllImagesHaveLoaded()
+    arrowUpImgInvalid.onload = function () {
+      loadedImages['arrowUpImgInvalid'] = arrowUpImgInvalid
+      checkIfAllImagesHaveLoaded()
     }
     let arrowDownImgInvalid = new Image()
     arrowDownImgInvalid.src = arrowDownInvalid
-    arrowDownImgInvalid.onload = function(){
-        images['arrowDownImgInvalid'] = arrowDownImgInvalid;
-        checkIfAllImagesHaveLoaded()
+    arrowDownImgInvalid.onload = function () {
+      loadedImages['arrowDownImgInvalid'] = arrowDownImgInvalid;
+      checkIfAllImagesHaveLoaded()
     }
     let doorImg = new Image()
     doorImg.src = door
-    doorImg.onload = function(){
-        images['doorImg'] = doorImg;
-        checkIfAllImagesHaveLoaded()
+    doorImg.onload = function () {
+      loadedImages['doorImg'] = doorImg;
+      checkIfAllImagesHaveLoaded()
     }
     let spawnPointImg = new Image()
-    spawnPointImg.src = spawnPoint
-    spawnPointImg.onload = function(){
-        images['spawnPointImg'] = spawnPointImg;
-        checkIfAllImagesHaveLoaded()
+    spawnPointImg.src = images['spawn_point']
+    spawnPointImg.onload = function () {
+      loadedImages['spawnPointImg'] = spawnPointImg;
+      checkIfAllImagesHaveLoaded()
     }
-    
+
 
     let tileSize = this.getTileSize(),
-        boardSize = tileSize*15;
+      boardSize = tileSize * 15;
     this.initializeListeners();
-    if(this.props.mapMaker){
+    if (this.props.mapMaker) {
       this.props.mapMaker.initializeTiles();
     }
     let arr = []
-    for(let i = 0; i < 9; i++){
+    for (let i = 0; i < 9; i++) {
       arr.push([])
     }
-    this.loadAllBoards();
-    this.loadAllPlanes();
-    this.loadAllDungeons();
-    // const meta = getMeta()
-    // console.log('meta:', meta);  
-    
     this.setState((state, props) => {
       return {
         tileSize,
@@ -278,11 +297,32 @@ class MapMakerPage extends React.Component {
         // miniboards: arr
       }
     })
+    Promise.all([
+      this.loadAllBoards(),
+      this.loadAllPlanes(),
+      this.loadAllDungeons()
+    ]).then(() => {
+      this.restoreEditorSelection();
+    }).catch(err => {
+      console.error("Error loading editor selection:", err);
+    });
     this.nameFilterClicked();
     // Mapmaker-local keyboard shortcuts
     this._mapmakerKeyHandler = (e) => {
       const targetTag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
       const isEditable = targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select' || (e.target && e.target.isContentEditable);
+
+      if ((e.key === 's' || e.key === 'S') && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (this.state.selectedView === 'board') {
+          this.writeBoard();
+        } else if (this.state.selectedView === 'plane') {
+          this.writePlane();
+        } else if (this.state.selectedView === 'dungeon') {
+          this.saveDungeonLevel();
+        }
+        return;
+      }
 
       if (e.key === ' ' && e.shiftKey) {
         this.setState(prev => ({ devConsoleOpen: !prev.devConsoleOpen }), () => {
@@ -306,15 +346,19 @@ class MapMakerPage extends React.Component {
     if (this._mapmakerKeyHandler) {
       document.removeEventListener('keydown', this._mapmakerKeyHandler);
     }
+    if (this.leftReadoutFlashTimer) {
+      clearTimeout(this.leftReadoutFlashTimer);
+      this.leftReadoutFlashTimer = null;
+    }
   }
-  getTileSize(){
-    const h = Math.floor((window.innerHeight/17));
-    const w = Math.floor((window.innerWidth/17));
+  getTileSize() {
+    const h = Math.floor((window.innerHeight / 17));
+    const w = Math.floor((window.innerWidth / 17));
     let tsize = 0;
-    if(h < w){
-        tsize = h;
-      } else {
-        tsize = w;
+    if (h < w) {
+      tsize = h;
+    } else {
+      tsize = w;
     }
     return tsize;
   }
@@ -347,7 +391,7 @@ class MapMakerPage extends React.Component {
           devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, ...commands],
           devConsoleInput: ''
         }), this.scrollDevConsoleToBottom);
-        try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch(_) {}
+        try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (_) { }
         e.preventDefault();
         return;
       }
@@ -356,7 +400,7 @@ class MapMakerPage extends React.Component {
         devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Unknown command: ${raw}`],
         devConsoleInput: ''
       }), this.scrollDevConsoleToBottom);
-      try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch(_) {}
+      try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (_) { }
       e.preventDefault();
 
     } else if (e.key === 'Escape') {
@@ -371,10 +415,10 @@ class MapMakerPage extends React.Component {
     // console.log('this.setState', this.setState);
     let d = new Date()
     let n = d.getTime();
-    let rand = n.toString().slice(9,13);
+    let rand = n.toString().slice(9, 13);
     const dungeon = {
       name: `dungeon${rand}`,
-      levels : [
+      levels: [
         {
           id: 0,
           front: null,
@@ -382,10 +426,10 @@ class MapMakerPage extends React.Component {
           valid: false
         }
       ],
-      pocket_planes : [
-        {firmament: null},
-        {sheol: null},
-        {hyperspace: null}
+      pocket_planes: [
+        { firmament: null },
+        { sheol: null },
+        { hyperspace: null }
       ]
     }
     console.log('uhhh, this is ', this);
@@ -395,6 +439,40 @@ class MapMakerPage extends React.Component {
       loadedDungeon: dungeon
     })
   }
+  generateDungeon = () => {
+    // Reset the dropdown to default while generating
+    this.setLoadedDungeonDropdownValue('Dungeon Selector');
+    this.setState({
+      generatingDungeon: true,
+      loadedDungeon: null,
+      dungeonOverlayOn: false,
+      overlayData: null,
+    });
+
+    // Defer generation to allow the spinner to render
+    setTimeout(() => {
+      try {
+        const rawDungeon = generateRandomDungeon();
+        const formatted = this.props.mapMaker.formatDungeon(rawDungeon);
+        console.log('[DungeonGenerator] Generated dungeon:', formatted);
+
+        this.setState({
+          loadedDungeon: formatted,
+          generatingDungeon: false,
+          dungeonHasUnsavedChanges: true,
+          selectedThingTitle: this.state.selectedView === 'dungeon'
+            ? `Dungeon: ${formatted.name}`
+            : this.state.selectedThingTitle,
+        });
+        this.setLoadedDungeonDropdownValue(formatted.name);
+        this.flashLeftReadout('Dungeon Generated');
+      } catch (err) {
+        console.error('[DungeonGenerator] Error generating dungeon:', err);
+        this.setState({ generatingDungeon: false });
+        this.flashLeftReadout('Error generating dungeon');
+      }
+    }, 80);
+  }
   deleteDungeon = async () => {
     // deleteActiveDungeon
     const dungeon = this.state.loadedDungeon;
@@ -402,7 +480,7 @@ class MapMakerPage extends React.Component {
     console.log(dungeon.id);
     await deleteDungeonRequest(dungeon.id)
     console.log(`dungeon ${dungeon.id} deleted`);
-    this.setState({loadedDungeon: null})
+    this.setState({ loadedDungeon: null })
     this.loadAllDungeons();
     this.setLoadedDungeonDropdownValue('Dungeon Selector');
 
@@ -411,20 +489,104 @@ class MapMakerPage extends React.Component {
     setEditorPreference('loadedDungeon', null);
     const meta = getMeta();
     console.log('about to update user with meta ', meta);
-    if(userId) updateUserRequest(userId, meta)
+    if (userId) updateUserRequest(userId, meta)
     storeMeta(meta);
 
 
+  }
+  getUniqueDungeonInstances = (dungeons = []) => {
+    return (Array.isArray(dungeons) ? dungeons : [])
+      .filter((dungeon) => UNIQUE_DUNGEON_INSTANCE_NAME_REGEX.test(`${dungeon?.name || ''}`))
+      .sort((a, b) => `${a?.name || ''}`.localeCompare(`${b?.name || ''}`, undefined, { sensitivity: 'base' }));
+  }
+  openClearUniqueDungeonInstancesModal = async () => {
+    const currentLoadedDungeonName = this.state.loadedDungeon?.name || 'Dungeon Selector';
+    this.setLoadedDungeonDropdownValue(currentLoadedDungeonName);
+    this.setState({
+      showClearUniqueDungeonInstancesModal: true,
+      clearUniqueDungeonInstancesLoading: true,
+      clearUniqueDungeonInstances: []
+    });
+
+    try {
+      const val = await loadAllDungeonsRequest();
+      const dungeons = [];
+      (val?.data || []).forEach((entry) => {
+        if (!entry?.content) return;
+        try {
+          const dungeon = JSON.parse(entry.content);
+          dungeon.id = entry._id;
+          dungeons.push(dungeon);
+        } catch (e) { }
+      });
+      const uniqueDungeonInstances = this.getUniqueDungeonInstances(dungeons);
+      this.setState({
+        clearUniqueDungeonInstances: uniqueDungeonInstances,
+        clearUniqueDungeonInstancesLoading: false
+      });
+    } catch (e) {
+      this.setState({
+        clearUniqueDungeonInstances: [],
+        clearUniqueDungeonInstancesLoading: false
+      });
+    }
+  }
+  closeClearUniqueDungeonInstancesModal = () => {
+    this.setState({
+      showClearUniqueDungeonInstancesModal: false,
+      clearUniqueDungeonInstances: [],
+      clearUniqueDungeonInstancesLoading: false
+    });
+    this.setLoadedDungeonDropdownValue(this.state.loadedDungeon?.name || 'Dungeon Selector');
+  }
+  confirmClearUniqueDungeonInstances = async () => {
+    const uniqueDungeonInstances = Array.isArray(this.state.clearUniqueDungeonInstances)
+      ? this.state.clearUniqueDungeonInstances
+      : [];
+    if (uniqueDungeonInstances.length === 0) {
+      this.closeClearUniqueDungeonInstancesModal();
+      return;
+    }
+
+    const uniqueDungeonIds = uniqueDungeonInstances
+      .map((dungeon) => dungeon?.id)
+      .filter(Boolean);
+
+    const currentlyLoadedDungeonId = this.state.loadedDungeon?.id || null;
+    const currentlyLoadedDungeonWillBeDeleted = currentlyLoadedDungeonId
+      ? uniqueDungeonIds.includes(currentlyLoadedDungeonId)
+      : false;
+
+    await Promise.all(uniqueDungeonIds.map((id) => deleteDungeonRequest(id)));
+
+    if (currentlyLoadedDungeonWillBeDeleted) {
+      setEditorPreference('loadedDungeon', null);
+      const userId = sessionStorage.getItem('userId');
+      const meta = getMeta();
+      if (userId) updateUserRequest(userId, meta);
+      storeMeta(meta);
+    }
+
+    await this.loadAllDungeons();
+
+    if (currentlyLoadedDungeonWillBeDeleted) {
+      this.setState({
+        loadedDungeon: null,
+        selectedThingTitle: this.state.selectedView === 'dungeon' ? '' : this.state.selectedThingTitle
+      });
+    }
+
+    this.closeClearUniqueDungeonInstancesModal();
   }
   downloadDungeon = () => {
     const dungeon = this.state.loadedDungeon;
     const zip = new JSZip();
     let string = JSON.stringify(dungeon)
     zip.file(`${dungeon.name}.dungeon.json`, string)
-    zip.generateAsync({type:'blob'})
-    .then((content) => {
+    zip.generateAsync({ type: 'blob' })
+      .then((content) => {
         saveAs(content, `${dungeon.name}`.zip);
-    });
+      });
   }
   renameDungeon = () => {
     console.log('rename ndungeon');
@@ -453,76 +615,741 @@ class MapMakerPage extends React.Component {
     window.addEventListener('resize', this.handleResize.bind(this));
   }
 
-  handleHover = (id, type) => {
-    if(this.state.mouseDown && this.state.pinnedOption && this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]){
-      let tile = this.props.mapMaker.tiles[id];
-      let pinned = null;
-      if(this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]){
-        pinned = this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]
+  getDeleteResultForTile = (tile) => {
+    const hasPassageBorders = tile && tile.borders && ['top', 'right', 'bottom', 'left'].some(side => {
+      const borderValue = tile.borders[side];
+      return typeof borderValue === 'string' && borderValue.indexOf('2px solid') !== -1;
+    });
+
+    if (tile?.contains?.type === 'item' && hasPassageBorders) {
+      return {
+        ...tile,
+        image: null,
+        color: null,
+        contains: { type: 'passage', subtype: null }
+      };
+    }
+
+    return {
+      ...tile,
+      image: null,
+      color: null,
+      contains: { type: 'empty_space', subtype: null },
+      borders: null
+    };
+  }
+
+  getVendorGroupTileIds = (tiles, tileId) => {
+    const tile = tiles?.[tileId];
+    const contains = tile?.contains;
+    if (!contains || contains.type !== 'vendor') return [];
+
+    if (contains.vendorGroupId) {
+      const groupTileIds = [];
+      tiles.forEach((entry, idx) => {
+        if (entry?.contains?.type === 'vendor' && entry.contains.vendorGroupId === contains.vendorGroupId) {
+          groupTileIds.push(idx);
+        }
+      });
+      if (groupTileIds.length > 0) return groupTileIds;
+    }
+
+    const anchorId = (contains.vendorAnchorId !== null && contains.vendorAnchorId !== undefined)
+      ? contains.vendorAnchorId
+      : tileId;
+    return this.getVendorFootprintTileIds(anchorId) || [tileId];
+  }
+
+  deleteTileWithVendorSupport = (tiles, tileId) => {
+    const tile = tiles?.[tileId];
+    if (tile?.contains?.type !== 'vendor') {
+      tiles[tileId] = this.getDeleteResultForTile(tile);
+      return tiles;
+    }
+
+    const vendorTileIds = this.getVendorGroupTileIds(tiles, tileId);
+    vendorTileIds.forEach((id) => {
+      tiles[id] = this.getDeleteResultForTile(tiles[id]);
+    });
+    return tiles;
+  }
+
+  isParentPaletteOption = (optionType) => {
+    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors'].includes(optionType);
+  }
+
+  getVendorFootprintTileIds = (anchorTileId) => {
+    if (anchorTileId === null || anchorTileId === undefined) return null;
+    const row = Math.floor(anchorTileId / 15);
+    const col = anchorTileId % 15;
+    if (row > 13 || col > 13) return null;
+    return [anchorTileId, anchorTileId + 1, anchorTileId + 15, anchorTileId + 16];
+  }
+
+  getContainsType = (contains) => {
+    if (!contains) return null;
+    if (typeof contains === 'object') return contains.type || null;
+    if (typeof contains === 'string') return contains;
+    return null;
+  }
+
+  canPlaceVendorFootprint = (tiles, anchorTileId) => {
+    const footprint = this.getVendorFootprintTileIds(anchorTileId);
+    if (!footprint) return false;
+    return footprint.every((tileId) => {
+      const tile = tiles[tileId];
+      if (!tile) return false;
+      const type = this.getContainsType(tile.contains);
+      return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage' || type === 'vendor';
+    });
+  }
+
+  placeVendorFootprint = (tiles, anchorTileId, vendorKey) => {
+    const footprint = this.getVendorFootprintTileIds(anchorTileId);
+    if (!footprint) return tiles;
+    const vendorGroupId = `vendor_${vendorKey}_${anchorTileId}`;
+    const vendorCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
+
+    // Copy the original borders for all 4 tiles in the footprint to preserve the outer boundaries
+    const originalBorders = footprint.map(tileId => tiles[tileId]?.borders ? { ...tiles[tileId].borders } : null);
+
+    footprint.forEach((tileId, idx) => {
+      const orig = originalBorders[idx];
+      let newBorders = null;
+
+      if (orig) {
+        newBorders = {};
+        if (idx === 0) { // anchor (top left)
+          if (orig.top) newBorders.top = orig.top;
+          if (orig.left) newBorders.left = orig.left;
+        } else if (idx === 1) { // top_right
+          if (orig.top) newBorders.top = orig.top;
+          if (orig.right) newBorders.right = orig.right;
+        } else if (idx === 2) { // bottom_left
+          if (orig.bottom) newBorders.bottom = orig.bottom;
+          if (orig.left) newBorders.left = orig.left;
+        } else if (idx === 3) { // bottom_right
+          if (orig.bottom) newBorders.bottom = orig.bottom;
+          if (orig.right) newBorders.right = orig.right;
+        }
+        // If there are no outer borders preserved, set to null
+        if (Object.keys(newBorders).length === 0) {
+          newBorders = null;
+        }
       }
-      if(pinned && pinned.optionType === 'void'){
+
+      tiles[tileId].contains = {
+        type: 'vendor',
+        subtype: vendorKey,
+        vendorGroupId,
+        vendorAnchorId: anchorTileId,
+        vendorCell: vendorCells[idx] || 'anchor'
+      };
+      tiles[tileId].image = vendorKey;
+      tiles[tileId].color = null;
+      tiles[tileId].borders = newBorders;
+    });
+    return tiles;
+  }
+
+  getDefaultPassageBorders = (tile) => {
+    return tile?.borders ? { ...tile.borders } : {
+      top: '2px solid black',
+      bottom: '2px solid black',
+      left: '2px solid black',
+      right: '2px solid black'
+    };
+  }
+
+  breakPassageWall = (tiles, fromTileId, toTileId) => {
+    if (fromTileId === null || fromTileId === undefined || toTileId === null || toTileId === undefined || fromTileId === toTileId) {
+      return tiles;
+    }
+
+    const delta = toTileId - fromTileId;
+    let fromSide = null;
+    let toSide = null;
+
+    if (delta === 1) {
+      fromSide = 'right';
+      toSide = 'left';
+    } else if (delta === -1) {
+      fromSide = 'left';
+      toSide = 'right';
+    } else if (delta === 15) {
+      fromSide = 'bottom';
+      toSide = 'top';
+    } else if (delta === -15) {
+      fromSide = 'top';
+      toSide = 'bottom';
+    } else {
+      return tiles;
+    }
+
+    const nextTiles = [...tiles];
+    const sourceTile = nextTiles[fromTileId];
+    const targetTile = nextTiles[toTileId];
+    let modified = false;
+
+    if (sourceTile && (sourceTile.contains?.type === 'passage' || sourceTile.contains?.type === 'obscured_space')) {
+      const currentBorder = sourceTile.borders?.[fromSide];
+      const isGold = currentBorder && String(currentBorder).includes('#d4a844');
+      if (!isGold) {
+        nextTiles[fromTileId] = {
+          ...sourceTile,
+          borders: {
+            ...this.getDefaultPassageBorders(sourceTile),
+            [fromSide]: '2px solid transparent'
+          }
+        };
+        modified = true;
+      }
+    }
+
+    if (targetTile && (targetTile.contains?.type === 'passage' || targetTile.contains?.type === 'obscured_space')) {
+      const currentBorder = targetTile.borders?.[toSide];
+      const isGold = currentBorder && String(currentBorder).includes('#d4a844');
+      if (!isGold) {
+        nextTiles[toTileId] = {
+          ...targetTile,
+          borders: {
+            ...this.getDefaultPassageBorders(targetTile),
+            [toSide]: '2px solid transparent'
+          }
+        };
+        modified = true;
+      }
+    }
+
+    return modified ? nextTiles : tiles;
+  }
+
+  handleHover = (id, type) => {
+    const pinnedPaletteTile = this.state.pinnedOption && this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]
+      ? this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]
+      : null;
+    const pinnedPassageTool = this.state.pinnedOption?.type === 'passage-tool-tile'
+      ? this.props.mapMaker.passageOptions?.[this.state.pinnedOption.id]
+      : null;
+    if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool)) {
+      let tile = this.props.mapMaker.tiles[id];
+      let pinned = pinnedPaletteTile;
+      if (pinnedPassageTool?.key === 'wall_breaker') {
+        const arr = this.breakPassageWall([...this.state.tiles], this.state.hoveredTileIdx, tile.id);
+        this.setState({
+          tiles: arr,
+          hoveredTileIdx: tile.id
+        })
+        return;
+      }
+      if (pinned && pinned.optionType === 'passage') {
+        let arr = [...this.state.tiles]
+        let prevTileIdx = this.state.hoveredTileIdx;
+        let connectedTop = false, connectedBot = false, connectedLeft = false, connectedRight = false;
+        let isAdjacent = false;
+        if (prevTileIdx !== null && prevTileIdx !== tile.id) {
+          let prevTile = arr[prevTileIdx];
+          if (prevTile && this.getContainsType(prevTile.contains) === 'passage') {
+            if (tile.id === prevTileIdx - 15) { connectedBot = true; isAdjacent = true; } // moved up
+            if (tile.id === prevTileIdx + 15) { connectedTop = true; isAdjacent = true; } // moved down
+            if (tile.id === prevTileIdx - 1) { connectedRight = true; isAdjacent = true; } // moved left
+            if (tile.id === prevTileIdx + 1) { connectedLeft = true; isAdjacent = true; } // moved right
+            if (isAdjacent) {
+              let pb = prevTile.borders ? { ...prevTile.borders } : { top: '2px solid black', bottom: '2px solid black', left: '2px solid black', right: '2px solid black' };
+              if (connectedBot) pb.top = '2px solid transparent';
+              if (connectedTop) pb.bottom = '2px solid transparent';
+              if (connectedRight) pb.left = '2px solid transparent';
+              if (connectedLeft) pb.right = '2px solid transparent';
+              arr[prevTileIdx] = { ...prevTile, borders: pb };
+            }
+          }
+        }
+        let newBorders = { top: '2px solid black', bottom: '2px solid black', left: '2px solid black', right: '2px solid black' };
+        if (this.getContainsType(arr[tile.id].contains) === 'passage') {
+          newBorders = arr[tile.id].borders ? { ...arr[tile.id].borders } : newBorders;
+        }
+        if (connectedBot) newBorders.bottom = '2px solid transparent';
+        if (connectedTop) newBorders.top = '2px solid transparent';
+        if (connectedRight) newBorders.right = '2px solid transparent';
+        if (connectedLeft) newBorders.left = '2px solid transparent';
+
+        arr[tile.id].image = null;
+        arr[tile.id].color = null;
+        arr[tile.id].contains = { type: 'passage', subtype: null };
+        arr[tile.id].borders = newBorders;
+
+        this.setState({
+          hoveredTileIdx: tile.id,
+          tiles: arr
+        })
+      } else if (pinned && pinned.optionType === 'empty space') {
+        let arr = [...this.state.tiles]
+        arr[tile.id].image = null;
+        arr[tile.id].color = null;
+        arr[tile.id].contains = { type: 'empty_space', subtype: null }
+        arr[tile.id].borders = null;
+        this.setState({
+          hoveredTileIdx: tile.id,
+          tiles: arr
+        })
+      } else if (pinned && pinned.optionType === 'obscured space') {
+        let arr = [...this.state.tiles]
+        const preservedBorders = arr[tile.id].borders ? { ...arr[tile.id].borders } : null;
+        arr[tile.id].image = null;
+        arr[tile.id].color = '#a8a8a8';
+        arr[tile.id].contains = { type: 'obscured_space', subtype: null }
+        arr[tile.id].borders = preservedBorders;
+        this.setState({
+          hoveredTileIdx: tile.id,
+          tiles: arr
+        })
+      } else if (pinned && pinned.optionType === 'void') {
         let arr = [...this.state.tiles]
         arr[tile.id].image = null;
         arr[tile.id].color = 'black';
         arr[tile.id].contains = { type: 'void', subtype: null }
+        arr[tile.id].borders = null;
         this.setState({
           hoveredTileIdx: null,
           tiles: arr
         })
-      } 
-      if(pinned && pinned.optionType === 'delete'){
+      } else if (pinned && pinned.optionType === 'inscription') {
+        // Inscription hover: do nothing (inscription is placed via click/drag, not hover-paint)
+        this.setState({ hoveredTileIdx: tile.id })
+        return;
+      }
+      if (pinned && pinned.optionType === 'delete') {
         let arr = [...this.state.tiles];
-        arr[tile.id].image = null;
-        arr[tile.id].color = null;
-        arr[tile.id].contains = null;
+        arr = this.deleteTileWithVendorSupport(arr, tile.id);
         this.setState({
           tiles: arr,
           hoveredTileIdx: null
         })
 
-      } 
-    }else{
-      if(type === 'palette-tile'){
+      }
+    } else {
+      if (type === 'palette-tile') {
         this.setState({
-          hoveredPaletteTileIdx: id
+          hoveredPaletteTileIdx: id,
+          hoveredTileFootprint: null
         })
       } else {
+        const pinnedIsVendor = this.state.pinnedOption && this.state.pinnedOption.type === 'vendor-tile';
+        const vendorFootprint = pinnedIsVendor ? this.getVendorFootprintTileIds(id) : null;
         this.setState({
-          hoveredTileIdx: id
+          previousHoveredTileIdx: this.state.hoveredTileIdx !== id ? this.state.hoveredTileIdx : this.state.previousHoveredTileIdx,
+          hoveredTileIdx: id,
+          hoveredTileFootprint: vendorFootprint
         })
       }
     }
   }
-  
+
   mouseDownHandler = () => {
-    this.setState({mouseDown: true})
+    this.setState({ mouseDown: true, inscriptionDragStartId: this.state.hoveredTileIdx });
   }
-  mouseUpHandler = () => {
-    this.setState({mouseDown: false})
+  mouseUpHandler = (e) => {
+    const prevMouseDown = this.state.mouseDown;
+    this.setState({ mouseDown: false });
+
+    // If inscription tool is pinned and we just released, check if we can place one
+    const pinnedOption = this.state.pinnedOption;
+    const pinnedTile = pinnedOption && this.props.mapMaker.paletteTiles[pinnedOption.id];
+    if (prevMouseDown && pinnedTile && pinnedTile.optionType === 'inscription') {
+      const startId = this.state.inscriptionDragStartId;
+      const endId = this.state.hoveredTileIdx;
+      if (startId !== null && endId !== null && startId !== endId) {
+        // Find a wall (void) tile between start and end
+        const delta = endId - startId;
+        let wallId = null;
+        if (Math.abs(delta) === 2) {
+          wallId = startId + delta / 2;
+        } else if (Math.abs(delta) === 30) {
+          wallId = startId + delta / 2;
+        }
+        if (wallId !== null) {
+          const tiles = this.state.tiles;
+          const wallTile = tiles[wallId];
+          const wallContainsType = wallTile ? this.getContainsType(wallTile.contains) : null;
+          if (wallContainsType === 'void' || wallContainsType === null || wallContainsType === undefined) {
+            this.showInscriptionWallPicker(wallId);
+          }
+        }
+      }
+      this.setState({ inscriptionDragStartId: null });
+    }
   }
-  
-  handleResize() {
-    const h = Math.floor((window.innerHeight/17));
-    const w = Math.floor((window.innerWidth/17));
-    let tsize = 0;
-    if(h < w){
-        tsize = h;
-        // console.log('min is height', h);
+
+  handleInscriptionTextChange = (e) => {
+    this.setState({ inscriptionTextInput: e.target.value });
+  }
+
+  // Step 1: user clicked a tile with inscription tool — show compass picker
+  showInscriptionWallPicker = (tileId) => {
+    this.setState({ inscriptionWallPicker: { tileId } });
+  }
+
+  // Step 2: user picked a side (top/bottom/left/right) — open the text modal
+  selectInscriptionSide = (side) => {
+    const tileId = this.state.inscriptionWallPicker?.tileId;
+    if (tileId === null || tileId === undefined) return;
+    const tile = this.state.tiles[tileId];
+    const existing = tile?.inscriptions?.[side] || '';
+    this.setState({
+      inscriptionWallPicker: null,
+      showInscriptionModal: true,
+      inscriptionPendingTileId: tileId,
+      inscriptionPendingSide: side,
+      inscriptionTextInput: existing,
+    });
+  }
+
+  confirmInscription = () => {
+    const tileId = this.state.inscriptionPendingTileId;
+    const side = this.state.inscriptionPendingSide;
+    const text = this.state.inscriptionTextInput;
+    if (tileId !== null && tileId !== undefined && side) {
+      let arr = [...this.state.tiles];
+      const t = { ...arr[tileId] };
+      // Store inscriptions as a map: tile.inscriptions = { top: '...', left: '...', etc. }
+      t.inscriptions = { ...(t.inscriptions || {}), [side]: text };
+      // Add a visual marker border highlight so the inscribed wall shows in the mapmaker
+      const borderColor = text ? '3px solid #d4a844' : (t.borders?.[side] || '1px solid transparent');
+      t.borders = {
+        top: 'none', bottom: 'none', left: 'none', right: 'none',
+        ...(t.borders || {}),
+        [side]: borderColor
+      };
+      arr[tileId] = t;
+      this.setState({
+        tiles: arr,
+        showInscriptionModal: false,
+        inscriptionPendingTileId: null,
+        inscriptionPendingSide: null,
+        inscriptionTextInput: ''
+      });
+    }
+  }
+
+  cancelInscription = () => {
+    this.setState({
+      showInscriptionModal: false,
+      inscriptionWallPicker: null,
+      inscriptionPendingTileId: null,
+      inscriptionPendingSide: null,
+      inscriptionTextInput: ''
+    });
+  }
+
+  closePortalModal = () => {
+    this.setState({
+      showPortalModal: false,
+      portalModalTile: null
+    });
+  }
+
+  breakPortalLink = (tile, currentLvlId, currentOrientation, currentMiniboardIdx) => {
+    const portal = tile.contains;
+    if (!portal || !portal.targetPortalId) return;
+
+    const dungeon = this.state.loadedDungeon ? clone(this.state.loadedDungeon) : null;
+    const loadedBoard = this.state.loadedBoard ? clone(this.state.loadedBoard) : null;
+    let targetTile = null;
+
+    if (dungeon && Array.isArray(dungeon.levels)) {
+      dungeon.levels.forEach((level) => {
+        ['front', 'back'].forEach((orientation) => {
+          const plane = level[orientation];
+          if (plane && Array.isArray(plane.miniboards)) {
+            plane.miniboards.forEach((mb) => {
+              if (mb && Array.isArray(mb.tiles)) {
+                mb.tiles.forEach((t) => {
+                  if (t.contains && t.contains.portalId === portal.targetPortalId) {
+                    targetTile = t;
+                    t.contains = {
+                      ...t.contains,
+                      targetPortalId: null,
+                      targetLevelId: null,
+                      targetOrientation: null,
+                      targetMiniboardIndex: null,
+                      targetCoordinates: null
+                    };
+                  }
+                });
+              }
+            });
+          }
+        });
+      });
+
+      // ALSO UPDATE PORTAL A INSIDE DUNGEON LEVELS
+      if (currentLvlId !== null && currentOrientation !== null && currentMiniboardIdx !== null) {
+        const currentLvl = dungeon.levels.find(l => l.id === currentLvlId);
+        const currentPlane = currentLvl && currentLvl[currentOrientation];
+        const currentMb = currentPlane && currentPlane.miniboards[currentMiniboardIdx];
+        const currentTileObj = currentMb && currentMb.tiles[tile.id];
+        if (currentTileObj) {
+          currentTileObj.contains = {
+            ...currentTileObj.contains,
+            targetPortalId: null,
+            targetLevelId: null,
+            targetOrientation: null,
+            targetMiniboardIndex: null,
+            targetCoordinates: null
+          };
+        }
+      }
     } else {
-        tsize = w;
-        // console.log('min is width', w);
+      this.state.tiles.forEach((t) => {
+        if (t.contains && t.contains.portalId === portal.targetPortalId) {
+          targetTile = t;
+          t.contains = {
+            ...t.contains,
+            targetPortalId: null,
+            targetLevelId: null,
+            targetOrientation: null,
+            targetMiniboardIndex: null,
+            targetCoordinates: null
+          };
+        }
+      });
+    }
+
+    const nextTiles = [...this.state.tiles];
+    const updatedPortalContains = {
+      ...portal,
+      targetPortalId: null,
+      targetLevelId: null,
+      targetOrientation: null,
+      targetMiniboardIndex: null,
+      targetCoordinates: null
+    };
+    nextTiles[tile.id] = {
+      ...nextTiles[tile.id],
+      contains: updatedPortalContains
+    };
+
+    if (targetTile && (!dungeon || (targetTile.level === currentLvlId && targetTile.orientation === currentOrientation && targetTile.miniboardIndex === currentMiniboardIdx))) {
+      nextTiles[targetTile.id] = {
+        ...nextTiles[targetTile.id],
+        contains: targetTile.contains
+      };
+    }
+
+    if (dungeon && loadedBoard) {
+      const currentMbTile = loadedBoard.tiles[tile.id];
+      if (currentMbTile) {
+        currentMbTile.contains = updatedPortalContains;
+      }
+    }
+
+    this.setState({
+      loadedDungeon: dungeon,
+      loadedBoard: loadedBoard,
+      tiles: nextTiles,
+      dungeonHasUnsavedChanges: true,
+      boardHasUnsavedChanges: true,
+      portalModalTile: nextTiles[tile.id]
+    });
+    this.toast('Link broken successfully.');
+  }
+
+  linkPortals = (tile, currentLvlId, currentOrientation, currentMiniboardIdx, target) => {
+    const portalA = tile.contains;
+    const portalAId = portalA.portalId || `portal_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+    const portalBId = target.portalId || `portal_${Date.now()}_${Math.floor(Math.random() * 10001)}`;
+
+    const dungeon = this.state.loadedDungeon ? clone(this.state.loadedDungeon) : null;
+    const loadedBoard = this.state.loadedBoard ? clone(this.state.loadedBoard) : null;
+    let targetTileObj = null;
+
+    if (target.targetPortalId) {
+      if (dungeon && Array.isArray(dungeon.levels)) {
+        dungeon.levels.forEach((level) => {
+          ['front', 'back'].forEach((orientation) => {
+            const plane = level[orientation];
+            if (plane && Array.isArray(plane.miniboards)) {
+              plane.miniboards.forEach((mb) => {
+                if (mb && Array.isArray(mb.tiles)) {
+                  mb.tiles.forEach((t) => {
+                    if (t.contains && t.contains.portalId === target.targetPortalId) {
+                      t.contains = {
+                        ...t.contains,
+                        targetPortalId: null,
+                        targetLevelId: null,
+                        targetOrientation: null,
+                        targetMiniboardIndex: null,
+                        targetCoordinates: null
+                      };
+                    }
+                  });
+                }
+              });
+            }
+          });
+        });
+      } else {
+        this.state.tiles.forEach((t) => {
+          if (t.contains && t.contains.portalId === target.targetPortalId) {
+            t.contains = {
+              ...t.contains,
+              targetPortalId: null,
+              targetLevelId: null,
+              targetOrientation: null,
+              targetMiniboardIndex: null,
+              targetCoordinates: null
+            };
+          }
+        });
+      }
+    }
+
+    if (portalA.targetPortalId) {
+      if (dungeon && Array.isArray(dungeon.levels)) {
+        dungeon.levels.forEach((level) => {
+          ['front', 'back'].forEach((orientation) => {
+            const plane = level[orientation];
+            if (plane && Array.isArray(plane.miniboards)) {
+              plane.miniboards.forEach((mb) => {
+                if (mb && Array.isArray(mb.tiles)) {
+                  mb.tiles.forEach((t) => {
+                    if (t.contains && t.contains.portalId === portalA.targetPortalId) {
+                      t.contains = {
+                        ...t.contains,
+                        targetPortalId: null,
+                        targetLevelId: null,
+                        targetOrientation: null,
+                        targetMiniboardIndex: null,
+                        targetCoordinates: null
+                      };
+                    }
+                  });
+                }
+              });
+            }
+          });
+        });
+      } else {
+        this.state.tiles.forEach((t) => {
+          if (t.contains && t.contains.portalId === portalA.targetPortalId) {
+            t.contains = {
+              ...t.contains,
+              targetPortalId: null,
+              targetLevelId: null,
+              targetOrientation: null,
+              targetMiniboardIndex: null,
+              targetCoordinates: null
+            };
+          }
+        });
+      }
+    }
+
+    const updatedPortalAContains = {
+      ...portalA,
+      portalId: portalAId,
+      targetPortalId: portalBId,
+      targetLevelId: target.levelId,
+      targetOrientation: target.orientation,
+      targetMiniboardIndex: target.miniboardIndex,
+      targetCoordinates: target.coordinates
+    };
+
+    if (dungeon && Array.isArray(dungeon.levels)) {
+      const targetLvl = dungeon.levels.find(l => l.id === target.levelId);
+      const targetPlane = targetLvl && targetLvl[target.orientation];
+      const targetMb = targetPlane && targetPlane.miniboards[target.miniboardIndex];
+      targetTileObj = targetMb && targetMb.tiles[target.tileId];
+      if (targetTileObj) {
+        targetTileObj.contains = {
+          ...targetTileObj.contains,
+          portalId: portalBId,
+          targetPortalId: portalAId,
+          targetLevelId: currentLvlId,
+          targetOrientation: currentOrientation,
+          targetMiniboardIndex: currentMiniboardIdx,
+          targetCoordinates: tile.coordinates
+        };
+      }
+
+      // ALSO UPDATE PORTAL A INSIDE DUNGEON LEVELS
+      if (currentLvlId !== null && currentOrientation !== null && currentMiniboardIdx !== null) {
+        const currentLvl = dungeon.levels.find(l => l.id === currentLvlId);
+        const currentPlane = currentLvl && currentLvl[currentOrientation];
+        const currentMb = currentPlane && currentPlane.miniboards[currentMiniboardIdx];
+        const currentTileObj = currentMb && currentMb.tiles[tile.id];
+        if (currentTileObj) {
+          currentTileObj.contains = updatedPortalAContains;
+        }
+      }
+    } else {
+      targetTileObj = this.state.tiles[target.tileId];
+      if (targetTileObj) {
+        targetTileObj.contains = {
+          ...targetTileObj.contains,
+          portalId: portalBId,
+          targetPortalId: portalAId,
+          targetLevelId: null,
+          targetOrientation: null,
+          targetMiniboardIndex: null,
+          targetCoordinates: tile.coordinates
+        };
+      }
+    }
+
+    const nextTiles = [...this.state.tiles];
+    nextTiles[tile.id] = {
+      ...nextTiles[tile.id],
+      contains: updatedPortalAContains
+    };
+
+    if (targetTileObj && (!dungeon || (target.levelId === currentLvlId && target.orientation === currentOrientation && target.miniboardIndex === currentMiniboardIdx))) {
+      nextTiles[target.tileId] = {
+        ...nextTiles[target.tileId],
+        contains: targetTileObj.contains
+      };
+    }
+
+    if (dungeon && loadedBoard) {
+      const currentMbTile = loadedBoard.tiles[tile.id];
+      if (currentMbTile) {
+        currentMbTile.contains = updatedPortalAContains;
+      }
+    }
+
+    this.setState({
+      loadedDungeon: dungeon,
+      loadedBoard: loadedBoard,
+      tiles: nextTiles,
+      dungeonHasUnsavedChanges: true,
+      boardHasUnsavedChanges: true,
+      portalModalTile: nextTiles[tile.id]
+    });
+    this.toast('Portals linked successfully!');
+  }
+
+  handleResize() {
+    const h = Math.floor((window.innerHeight / 17));
+    const w = Math.floor((window.innerWidth / 17));
+    let tsize = 0;
+    if (h < w) {
+      tsize = h;
+      // console.log('min is height', h);
+    } else {
+      tsize = w;
+      // console.log('min is width', w);
     }
     this.setState({
       tileSize: tsize,
-      boardSize: tsize*15
+      boardSize: tsize * 15
     })
   }
-  
+
   handleClick = (tile) => {
     console.log('tile clicked: ', tile);
-    if(tile.type === 'palette-tile'){
+    if (tile.type === 'palette-tile') {
       console.log('palette tile clicked');
-      if(this.state.optionClickedIdx === tile.id){
+      if (this.state.optionClickedIdx === tile.id) {
         console.log('option already open');
         this.setState({
           optionClickedIdx: null,
@@ -534,31 +1361,98 @@ class MapMakerPage extends React.Component {
           pinnedOption: tile
         })
       }
-      
-    } else if(tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile'){
-      console.log('MONSTER/GATE/KEY/TIER TILE');
+
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'lore-tablet-tile') {
+      console.log('MONSTER/GATE/KEY/TIER/JEWEL/RUNE/TREASURE/SHRINE/LORETABLET TILE');
       this.setState({
         pinnedOption: tile
       })
-      setTimeout(()=>{
+      setTimeout(() => {
         console.log('pinnedoption: ', this.state.pinnedOption);
-      },500)
-    } else if(tile.type === 'board-tile'){
-      let pinned = null, monster, gate, key, tierOption;
-      if(this.state.pinnedOption && this.state.pinnedOption.type === 'monster-tile'){
+      }, 500)
+    } else if (tile.type === 'passage-tool-tile') {
+      this.setState({
+        pinnedOption: tile
+      })
+    } else if (tile.type === 'board-tile') {
+      const containsType = this.getContainsType(tile.contains);
+      if (containsType === 'dungeon_portal' || containsType === 'dungeon portal') {
+        const pinnedOption = this.state.pinnedOption;
+        const pinnedPaletteTile = pinnedOption && this.props.mapMaker.paletteTiles[pinnedOption.id];
+        if (pinnedPaletteTile && pinnedPaletteTile.optionType === 'delete') {
+          // Allow delete to fall through
+        } else {
+          // Ensure portal has a unique portalId
+          if (!tile.contains.portalId) {
+            tile.contains.portalId = `portal_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+            const nextTiles = [...this.state.tiles];
+            nextTiles[tile.id] = {
+              ...nextTiles[tile.id],
+              contains: {
+                ...nextTiles[tile.id].contains,
+                portalId: tile.contains.portalId
+              }
+            };
+            if (this.state.loadedDungeon && this.state.loadedBoard) {
+              const currentMbTile = this.state.loadedBoard.tiles[tile.id];
+              if (currentMbTile) {
+                currentMbTile.contains = nextTiles[tile.id].contains;
+              }
+            }
+            this.setState({
+              tiles: nextTiles,
+              dungeonHasUnsavedChanges: true,
+              boardHasUnsavedChanges: true,
+              showPortalModal: true,
+              portalModalTile: nextTiles[tile.id]
+            });
+          } else {
+            this.setState({
+              showPortalModal: true,
+              portalModalTile: tile
+            });
+          }
+          return;
+        }
+      }
+      let pinned = null, monster, gate, key, tierOption, jewelOption, runeOption, treasureOption, vendorOption, passageToolOption;
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'monster-tile') {
         monster = Object.values(this.props.monsterManager.monsters)[this.state.pinnedOption.id];
       };
-      if(this.state.pinnedOption && this.state.pinnedOption.type === 'gate-tile'){
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'gate-tile') {
         console.log('id: ', this.state.pinnedOption.id);
         gate = GATES[this.state.pinnedOption.id];
       };
-      if(this.state.pinnedOption && this.state.pinnedOption.type === 'key-tile'){
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'key-tile') {
         key = KEYS[this.state.pinnedOption.id];
       };
-      if(this.state.pinnedOption && this.state.pinnedOption.type === 'tier-tile'){
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'tier-tile') {
         tierOption = this.props.mapMaker.tierOptions[this.state.pinnedOption.id];
       };
-      if(monster){
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'jewel-tile') {
+        jewelOption = this.props.mapMaker.jewelOptions[this.state.pinnedOption.id];
+      };
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'rune-tile') {
+        runeOption = this.props.mapMaker.runeOptions[this.state.pinnedOption.id];
+      };
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'treasure-tile') {
+        treasureOption = this.props.mapMaker.treasureOptions[this.state.pinnedOption.id];
+      };
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'vendor-tile') {
+        vendorOption = this.props.mapMaker.vendorOptions[this.state.pinnedOption.id];
+      };
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'passage-tool-tile') {
+        passageToolOption = this.props.mapMaker.passageOptions[this.state.pinnedOption.id];
+      };
+      // Shrine and lore_tablet: resolve sub-item when a specific variant is pinned
+      let shrineOption = null, loreTabletOption = null;
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'shrine-tile') {
+        shrineOption = this.props.mapMaker.shrineOptions[this.state.pinnedOption.id];
+      };
+      if (this.state.pinnedOption && this.state.pinnedOption.type === 'lore-tablet-tile') {
+        loreTabletOption = this.props.mapMaker.loreTabletOptions[this.state.pinnedOption.id];
+      };
+      if (monster) {
         console.log('monster get here, monster: ', monster);
         let arr = [...this.state.tiles];
         arr[tile.id].contains = { type: 'monster', subtype: monster.key }
@@ -570,7 +1464,7 @@ class MapMakerPage extends React.Component {
           hoveredTileIdx: null
         })
         return
-      } else if(gate){
+      } else if (gate) {
         console.log('gate get here');
         let arr = [...this.state.tiles];
         arr[tile.id].contains = { type: 'gate', subtype: gate.key }
@@ -582,7 +1476,7 @@ class MapMakerPage extends React.Component {
           hoveredTileIdx: null
         })
         return
-      } else if(key){
+      } else if (key) {
         let arr = [...this.state.tiles];
         arr[tile.id].contains = { type: 'item', subtype: key.key }
         arr[tile.id].image = images[key.key]
@@ -591,7 +1485,7 @@ class MapMakerPage extends React.Component {
           hoveredTileIdx: null
         })
         return
-      } else if(tierOption){
+      } else if (tierOption) {
         let arr = [...this.state.tiles];
         arr[tile.id].contains = { type: tierOption.key, subtype: null }
         arr[tile.id].image = images[tierOption.image]
@@ -600,41 +1494,151 @@ class MapMakerPage extends React.Component {
           hoveredTileIdx: null
         })
         return
-      } else if(this.state.pinnedOption && this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]){ 
+      } else if (jewelOption) {
+        let arr = [...this.state.tiles];
+        arr[tile.id].contains = { type: 'item', subtype: jewelOption.key }
+        arr[tile.id].image = images[jewelOption.image]
+        this.setState({
+          tiles: arr,
+          hoveredTileIdx: null
+        })
+        return
+      } else if (runeOption) {
+        let arr = [...this.state.tiles];
+        arr[tile.id].contains = { type: 'item', subtype: runeOption.key }
+        arr[tile.id].image = images[runeOption.image]
+        this.setState({
+          tiles: arr,
+          hoveredTileIdx: null
+        })
+        return
+      } else if (treasureOption) {
+        let arr = [...this.state.tiles];
+        arr[tile.id].contains = { type: 'item', subtype: treasureOption.key }
+        arr[tile.id].image = images[treasureOption.image]
+        this.setState({
+          tiles: arr,
+          hoveredTileIdx: null
+        })
+        return
+      } else if (vendorOption) {
+        let arr = [...this.state.tiles];
+        if (!this.canPlaceVendorFootprint(arr, tile.id)) {
+          this.toast('Vendors require a 2x2 empty space.');
+          return;
+        }
+        arr = this.placeVendorFootprint(arr, tile.id, vendorOption.key);
+        this.setState({
+          tiles: arr,
+          hoveredTileIdx: null
+        })
+        return
+      } else if (passageToolOption) {
+        if (passageToolOption.key === 'wall_breaker') {
+          if (this.state.previousHoveredTileIdx !== null && this.state.previousHoveredTileIdx !== undefined) {
+            const arr = this.breakPassageWall([...this.state.tiles], this.state.previousHoveredTileIdx, tile.id);
+            this.setState({
+              tiles: arr,
+              hoveredTileIdx: tile.id
+            });
+          }
+        }
+        return
+      } else if (shrineOption) {
+        let arr = [...this.state.tiles];
+        arr[tile.id].contains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
+        arr[tile.id].color = shrineOption.color;
+        arr[tile.id].image = null;
+        this.setState({ tiles: arr, hoveredTileIdx: null });
+        return;
+      } else if (loreTabletOption) {
+        let arr = [...this.state.tiles];
+        arr[tile.id].contains = { type: 'lore_tablet', subtype: loreTabletOption.domain, key: loreTabletOption.key };
+        arr[tile.id].color = loreTabletOption.color;
+        arr[tile.id].image = null;
+        this.setState({ tiles: arr, hoveredTileIdx: null });
+        return;
+      } else if (this.state.pinnedOption && this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]) {
         pinned = this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]
       }
       console.log('pinned: ', pinned);
       console.log('this.props.mapMaker.paletteTiles', this.props.mapMaker.paletteTiles);
-      if(pinned && pinned.optionType === 'void'){
+      if (pinned && pinned.optionType === 'passage') {
+        let arr = [...this.state.tiles];
+        if (this.getContainsType(arr[tile.id].contains) === 'passage') {
+          this.setState({
+            hoveredTileIdx: tile.id
+          });
+        } else {
+          arr[tile.id].image = null;
+          arr[tile.id].color = null
+          arr[tile.id].contains = { type: 'passage', subtype: null }
+          arr[tile.id].borders = { top: '2px solid black', bottom: '2px solid black', left: '2px solid black', right: '2px solid black' };
+          this.setState({
+            tiles: arr,
+            hoveredTileIdx: tile.id
+          })
+        }
+      } else if (pinned && pinned.optionType === 'empty space') {
+        let arr = [...this.state.tiles];
+        arr[tile.id].image = null;
+        arr[tile.id].color = null
+        arr[tile.id].contains = { type: 'empty_space', subtype: null }
+        arr[tile.id].borders = null;
+        this.setState({
+          tiles: arr,
+          hoveredTileIdx: tile.id
+        })
+      } else if (pinned && pinned.optionType === 'obscured space') {
+        let arr = [...this.state.tiles];
+        const preservedBorders = arr[tile.id].borders ? { ...arr[tile.id].borders } : null;
+        arr[tile.id].image = null;
+        arr[tile.id].color = '#a8a8a8'
+        arr[tile.id].contains = { type: 'obscured_space', subtype: null }
+        arr[tile.id].borders = preservedBorders;
+        this.setState({
+          tiles: arr,
+          hoveredTileIdx: tile.id
+        })
+      } else if (pinned && pinned.optionType === 'inscription') {
+        // Inscription: click any tile to show the wall-side picker
+        this.showInscriptionWallPicker(tile.id);
+        return;
+      } else if (pinned && pinned.optionType === 'void') {
         let arr = [...this.state.tiles];
         arr[tile.id].image = null;
         arr[tile.id].color = 'black'
         arr[tile.id].contains = { type: 'void', subtype: null }
+        arr[tile.id].borders = null;
         this.setState({
           tiles: arr,
           hoveredTileIdx: null
         })
-      } else if(pinned && pinned.optionType === 'voidfill'){
+      } else if (pinned && pinned.optionType === 'voidfill') {
         let arr = [...this.state.tiles];
-        arr.forEach(e=>{
-          e.image = null;
-          e.color = 'black'
-          e.contains = { type: 'void', subtype: null }
+        arr.forEach(e => {
+          const containsType = this.getContainsType(e.contains);
+          if (!containsType || containsType === 'empty_space') {
+            e.image = null;
+            e.color = 'black'
+            e.contains = { type: 'void', subtype: null }
+            e.borders = null;
+          }
         })
         this.setState({
           tiles: arr,
           hoveredTileIdx: null
         })
-      } else if(pinned && pinned.optionType === 'delete'){
+      } else if (pinned && pinned.optionType === 'delete') {
         let arr = [...this.state.tiles];
-        arr[tile.id].image = null;
-        arr[tile.id].color = null;
-        arr[tile.id].contains = null;
+        arr = this.deleteTileWithVendorSupport(arr, tile.id);
         this.setState({
           tiles: arr,
           hoveredTileIdx: null
         })
-      } else if(pinned){
+      } else if (pinned && this.isParentPaletteOption(pinned.optionType)) {
+        return
+      } else if (pinned) {
         let arr = [...this.state.tiles];
         // Store new contains shape for placed tiles. Prefer canonical shapes:
         // - Keys should be stored as items with subtype (e.g. {type: 'item', subtype: 'minor_key'})
@@ -643,7 +1647,7 @@ class MapMakerPage extends React.Component {
         const normalizedType = String(rawType).replace(/\s+/g, '_');
         let containsObj = { type: normalizedType, subtype: pinned.image };
         if (String(normalizedType).indexOf('key') !== -1 || String(pinned.image).indexOf('key') !== -1) {
-          containsObj = { type: 'item', subtype: String(pinned.image || normalizedType).replace(/\s+/g,'_') };
+          containsObj = { type: 'item', subtype: String(pinned.image || normalizedType).replace(/\s+/g, '_') };
         }
         arr[tile.id].contains = containsObj;
         arr[tile.id].image = pinned.image
@@ -656,8 +1660,11 @@ class MapMakerPage extends React.Component {
     }
   }
   setHover = (id) => {
+    const pinnedIsVendor = this.state.pinnedOption && this.state.pinnedOption.type === 'vendor-tile';
+    const vendorFootprint = (id !== null && id !== undefined && pinnedIsVendor) ? this.getVendorFootprintTileIds(id) : null;
     this.setState({
-      hoveredTileIdx: id
+      hoveredTileIdx: id,
+      hoveredTileFootprint: vendorFootprint
     })
   }
   setPaletteHover = (id) => {
@@ -665,7 +1672,7 @@ class MapMakerPage extends React.Component {
       hoveredPaletteTileIdx: id
     })
   }
-  toast(msg){
+  toast(msg) {
     this.setState({
       toastMessage: msg
     })
@@ -676,22 +1683,55 @@ class MapMakerPage extends React.Component {
     }, 2000)
   }
 
+  flashLeftReadout = (msg, duration = 2000) => {
+    if (this.leftReadoutFlashTimer) {
+      clearTimeout(this.leftReadoutFlashTimer);
+    }
+    this.setState({ leftReadoutFlashMessage: msg });
+    this.leftReadoutFlashTimer = setTimeout(() => {
+      this.setState({ leftReadoutFlashMessage: null });
+      this.leftReadoutFlashTimer = null;
+    }, duration);
+  }
+
+  dungeonHasSpawnPoint = (dungeon) => {
+    const levels = Array.isArray(dungeon?.levels) ? dungeon.levels : [];
+    for (const level of levels) {
+      const planes = [level?.front, level?.back];
+      for (const plane of planes) {
+        const miniboards = Array.isArray(plane?.miniboards) ? plane.miniboards : [];
+        for (const miniboard of miniboards) {
+          const tiles = Array.isArray(miniboard?.tiles) ? miniboard.tiles : [];
+          for (const tile of tiles) {
+            if (tile?.image === 'spawn_point') return true;
+            const containsType = typeof tile?.contains === 'object' ? tile?.contains?.type : tile?.contains;
+            const containsSubtype = typeof tile?.contains === 'object' ? tile?.contains?.subtype : null;
+            if (containsType === 'spawn_point') return true;
+            if (containsSubtype === 'spawn_point') return true;
+            if (containsType === 'spawn' && containsSubtype === 'spawn_point') return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   setViewState = (state) => {
     let title = '';
     const currentOverlayOn = !!this.state.dungeonOverlayOn;
-    switch(state){
+    switch (state) {
       case 'plane':
         // console.log('plane...');
-        if(this.state.loadedPlane) title = `Plane: ${this.state.loadedPlane.name}`
-      break;
+        if (this.state.loadedPlane) title = `Plane: ${this.state.loadedPlane.name}`
+        break;
       case 'board':
-        if(this.state.loadedBoard) title = `Board: ${this.state.loadedBoard.name}`
-      break;
+        if (this.state.loadedBoard) title = `Board: ${this.state.loadedBoard.name}`
+        break;
       case 'dungeon':
-        if(this.state.loadedDungeon) title = `Dungeon: ${this.state.loadedDungeon.name}`
-      break;
+        if (this.state.loadedDungeon) title = `Dungeon: ${this.state.loadedDungeon.name}`
+        break;
       default:
-      break;
+        break;
     }
     const overlayData = currentOverlayOn && this.state.loadedDungeon
       ? this.props.mapMaker.markPassages(this.state.loadedDungeon)
@@ -704,26 +1744,44 @@ class MapMakerPage extends React.Component {
       selectedThingTitle: title
     })
 
+    if (state === 'dungeon' && this.state.loadedDungeon?.name) {
+      this.setLoadedDungeonDropdownValue(this.state.loadedDungeon.name);
+    }
+
     // update user
     const userId = sessionStorage.getItem('userId');
     setEditorPreference('selectedView', state);
     setEditorPreference('dungeonOverlayOn', currentOverlayOn);
     const meta = getMeta();
     console.log('about to update user with meta ', meta);
-    if(userId) updateUserRequest(userId, meta)
+    if (userId) updateUserRequest(userId, meta)
     storeMeta(meta);
   }
 
-  expandCollapseBoardFolders= (folderTitle) => {
+  expandCollapseBoardFolders = (folderTitle) => {
     const matrix = { ...this.state.boardsFoldersExpanded };
     matrix[folderTitle] = !matrix[folderTitle];
-    this.setState(() => { return {boardsFoldersExpanded: matrix}})
+    this.setState(() => { return { boardsFoldersExpanded: matrix } })
+
+    // Persist only folder UI expansion state.
+    setEditorPreference('boardsFoldersExpanded', matrix);
+    const userId = sessionStorage.getItem('userId');
+    const meta = getMeta();
+    if (userId) updateUserRequest(userId, meta)
+    storeMeta(meta);
   }
 
   expandCollapsePlaneFolders = (folderTitle) => {
     const matrix = { ...this.state.planesFoldersExpanded };
     matrix[folderTitle] = !matrix[folderTitle];
     this.setState(() => { return { planesFoldersExpanded: matrix } })
+
+    // Persist only folder UI expansion state.
+    setEditorPreference('planesFoldersExpanded', matrix);
+    const userId = sessionStorage.getItem('userId');
+    const meta = getMeta();
+    if (userId) updateUserRequest(userId, meta)
+    storeMeta(meta);
   }
 
   // Board CRUD methods
@@ -732,32 +1790,32 @@ class MapMakerPage extends React.Component {
     // let planesToUpdate = [];
     // let miniboards;
 
-    const config = this.props.mapMaker.getMapConfiguration(this.state.tiles)    
+    const config = this.props.mapMaker.getMapConfiguration(this.state.tiles)
     // state.loadBoard is currently set to the new incoming board
     let planesToUpdate = this.planesContainingBoard(this.state.loadedBoard)
-    
-    if(this.state.loadedBoard && this.state.loadedBoard.id){
+
+    if (this.state.loadedBoard && this.state.loadedBoard.id) {
       console.log('state.loadedboard" ', this.state.loadedBoard);
 
       // if(this.state.planes.length > 0){
       //   this.state.planes.forEach((d) => {
       //     let planeHasMatchingBoard = false;
       //     d.miniboards.forEach((b, index) => {
-            
-            // if(b.id === this.state.loadedBoard.id){
-            //   planeHasMatchingBoard = true;
-            //   console.log('found a plane with matching board: ', d);
-            //   miniboards = d.miniboards;
-            //   miniboards[index] = this.state.loadedBoard;
-            //   miniboards[index].name = this.state.loadedBoard.name;
-            //   miniboards[index].tiles = this.state.tiles;
-            //   miniboards[index].config = config;
-            // } 
+
+      // if(b.id === this.state.loadedBoard.id){
+      //   planeHasMatchingBoard = true;
+      //   console.log('found a plane with matching board: ', d);
+      //   miniboards = d.miniboards;
+      //   miniboards[index] = this.state.loadedBoard;
+      //   miniboards[index].name = this.state.loadedBoard.name;
+      //   miniboards[index].tiles = this.state.tiles;
+      //   miniboards[index].config = config;
+      // } 
       //     })
       //     // console.log('d.id:', d.id)
       //     d.valid = this.props.mapMaker.isValidPlane(miniboards)
       //     if(planeHasMatchingBoard) planesToUpdate.push(d)
-          
+
       //   })
       // }
       let obj = {
@@ -765,7 +1823,7 @@ class MapMakerPage extends React.Component {
         tiles: clone(this.state.tiles),
         config: clone(config)
       }
-      
+
       await updateBoardRequest(this.state.loadedBoard.id, obj);
       this.updateBoardInPanel({ ...obj, id: this.state.loadedBoard.id });
       console.log('individual board API request resolved, planestoUpdate: ', planesToUpdate);
@@ -773,13 +1831,13 @@ class MapMakerPage extends React.Component {
       // this.loadAllBoards();
       // ^ this is only needed to update board to board BoardsPanel. instead, just directly add it!
 
-      
 
-      this.toast('Board Saved')
+
+      this.flashLeftReadout('Board Saved')
     } else {
-      
+
       console.log('CLONE PATH, RENAME SHOULD NOT GET HERE');
-      
+
       const newBoard = {
         name: clone(this.state.loadedBoard.name),
         tiles: clone(this.state.tiles),
@@ -795,13 +1853,13 @@ class MapMakerPage extends React.Component {
 
       this.loadBoard(newBoard)
 
-      this.toast('Board Saved')
+      this.flashLeftReadout('Board Saved')
     }
-    if(planesToUpdate && planesToUpdate.length > 1){
+    if (planesToUpdate && planesToUpdate.length > 1) {
       console.log('multiple planes to update, figure this out');
       debugger
-      
-    } else if (planesToUpdate && planesToUpdate.length === 1){
+
+    } else if (planesToUpdate && planesToUpdate.length === 1) {
       const newBoard = {
         name: clone(this.state.loadedBoard.name),
         tiles: clone(this.state.tiles),
@@ -812,11 +1870,11 @@ class MapMakerPage extends React.Component {
       console.log('there is a plane to update', planesToUpdate[0]);
       let plane = clone(planesToUpdate[0]);
       console.log('planeId: ', plane.id);
-      if(!newBoard.id){
+      if (!newBoard.id) {
         console.log('wtf how is this possible');
         debugger
       }
-      let index = plane.miniboards.findIndex(b=> b.id === newBoard.id);
+      let index = plane.miniboards.findIndex(b => b.id === newBoard.id);
       plane.miniboards[index] = newBoard;
       const obj = {
         name: plane.name,
@@ -830,6 +1888,9 @@ class MapMakerPage extends React.Component {
       // Fetch all dungeons fresh from DB so we don't rely on potentially stale state
       const allDungeonsRes = await loadAllDungeonsRequest();
       const freshDungeons = (allDungeonsRes.data || []).map(e => {
+        if (this.state.loadedDungeon && e._id === this.state.loadedDungeon.id) {
+          return clone(this.state.loadedDungeon);
+        }
         const d = JSON.parse(e.content);
         d.id = e._id;
         return d;
@@ -887,9 +1948,9 @@ class MapMakerPage extends React.Component {
         this.loadAllDungeons();
       }
 
-      setTimeout(()=>{
-        console.log('updated plane ref: ', this.state.planes.find(p=>p.id === plane.id));
-        this.loadPlane(this.state.planes.find(p=>p.id === plane.id))
+      setTimeout(() => {
+        console.log('updated plane ref: ', this.state.planes.find(p => p.id === plane.id));
+        this.loadPlane(this.state.planes.find(p => p.id === plane.id))
       })
 
       // let boardMatch;
@@ -918,10 +1979,10 @@ class MapMakerPage extends React.Component {
       //     }
       //   })
       // }
-      
+
       // if(boardMatch){
       //   console.log('this level is in currently loaded dungeon!!!! boarMatch: ', boardMatch);
-        
+
       //   const dungeon = this.state.loadedDungeon;
       //   const level = dungeon.levels.find(l => l.id === boardMatch.levelId)
       //   if(boardMatch.orientation === 'front'){
@@ -945,50 +2006,206 @@ class MapMakerPage extends React.Component {
     console.log('updating board with id: ', boardId);
   }
 
-  loadBoard = (board) => {
-    console.log('load board: ', board);
-    if(!board || !board.id){
-      if(this.state.selectedView !== 'board'){
+  loadBoard = (board, usePassedTiles = false) => {
+    console.log('load board: ', board, 'usePassedTiles:', usePassedTiles);
+    if (!board || !board.id) {
+      if (this.state.selectedView !== 'board') {
         this.setViewState('board')
       }
       this.clearLoadedBoard();
       this.setState({ selectedThingTitle: 'Board' });
       return;
     }
+
+    // When usePassedTiles is true (e.g. zooming into a generated/in-memory board),
+    // skip the saved-boards lookup and use the board data we already have.
+    if (usePassedTiles) {
+      if (this.state.selectedView !== 'board') {
+        this.setViewState('board')
+      }
+      this.setState({
+        loadedBoard: clone(board),
+        tiles: clone(board.tiles),
+        selectedThingTitle: `Board: ${board.name}`
+      })
+      return;
+    }
+
     const boardRef = this.findBoardRefInFolders(board.id)
     console.log('found board ref: ', boardRef);
-    if(!boardRef){
-      if(this.state.selectedView !== 'board'){
+    if (!boardRef) {
+      if (this.state.selectedView !== 'board') {
         this.setViewState('board')
       }
       this.clearLoadedBoard();
       this.setState({ selectedThingTitle: 'Board' });
       return;
     }
-    if(this.state.selectedView !== 'board'){
+    if (this.state.selectedView !== 'board') {
       this.setViewState('board')
-    } 
+    }
     this.setState({
       loadedBoard: boardRef,
       tiles: boardRef.tiles,
       selectedThingTitle: `Board: ${board.name}`
     })
+
+    // Persist only selected board identity. Never persist tile/content edits here.
+    setEditorPreference('loadedBoardId', boardRef.id || null);
+    const userId = sessionStorage.getItem('userId');
+    const meta = getMeta();
+    if (userId) updateUserRequest(userId, meta)
+    storeMeta(meta);
   }
   zoomIntoBoard = (levelId, miniboardIndex, frontOrBack) => {
     console.log('zoom into ', levelId, miniboardIndex, frontOrBack);
-    const level = this.state.loadedDungeon.levels.find(e=>e.id === levelId)
-    const miniboard = frontOrBack === 'front' ? level.front.miniboards[miniboardIndex] : level.back.miniboards[miniboardIndex]
-    console.log('level:', level, 'miniboard:', miniboard);
-    if(level && miniboard){
-      this.loadBoard(miniboard)
-      // console.log('setting videw state');
-      // this.setViewState('board')
-      // // this.set
-      // this.setState({
-      //   loadedBoard: miniboard,
-      //   tiles: miniboard.tiles
-      // })
+    const level = this.state.loadedDungeon.levels.find(e => e.id === levelId)
+    const plane = frontOrBack === 'front' ? level?.front : level?.back;
+    const miniboard = plane?.miniboards[miniboardIndex]
+    console.log('level:', level, 'plane:', plane, 'miniboard:', miniboard);
+    if (level && miniboard) {
+      this.setState({
+        zoomLevelId: levelId,
+        zoomMiniboardIndex: miniboardIndex,
+        zoomOrientation: frontOrBack
+      });
+      if (plane) {
+        this.loadPlane(plane);
+      }
+      this.loadBoard(miniboard, true)
     }
+  }
+
+  handleContextMenu = (e, tileId) => {
+    e.preventDefault();
+    this.setState({
+      contextMenu: {
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        tileId: tileId
+      }
+    });
+  }
+
+  resolveDungeonContext = (boardId) => {
+    const dungeon = this.state.loadedDungeon;
+    if (dungeon && dungeon.levels && boardId) {
+      for (const level of dungeon.levels) {
+        for (const orient of ['front', 'back']) {
+          const plane = level[orient];
+          if (plane && Array.isArray(plane.miniboards)) {
+            const mbIndex = plane.miniboards.findIndex(mb => mb && mb.id === boardId);
+            if (mbIndex !== -1) {
+              return {
+                levelId: level.id,
+                orientation: orient,
+                boardIndex: mbIndex
+              };
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback to zoom state
+    const levelId = this.state.zoomLevelId;
+    const orientation = this.state.zoomOrientation;
+    const boardIndex = this.state.zoomMiniboardIndex;
+    if (levelId !== null && levelId !== undefined && orientation && boardIndex !== null && boardIndex !== undefined) {
+      return { levelId, orientation, boardIndex };
+    }
+
+    return null;
+  }
+
+  handleGetCoordinates = () => {
+    const tileId = this.state.contextMenu?.tileId;
+    if (tileId === null || tileId === undefined) return;
+
+    const x = tileId % 15;
+    const y = Math.floor(tileId / 15);
+    const boardId = this.state.loadedBoard?.id;
+    const context = this.resolveDungeonContext(boardId);
+
+    if (!context) {
+      this.toast('Cannot get dungeon coordinates - please open the board from within a dungeon first.');
+      this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+      return;
+    }
+
+    const coordStr = `level:${context.levelId},orientation:${context.orientation},board:${context.boardIndex},x:${x},y:${y}`;
+    navigator.clipboard.writeText(coordStr)
+      .then(() => {
+        this.toast(`Copied to clipboard: ${coordStr}`);
+      })
+      .catch((err) => {
+        console.error('Clipboard write failed:', err);
+        this.toast(`Coordinates: ${coordStr}`);
+      });
+
+    console.log(`[Dungeon Coordinates] ${coordStr}`);
+    this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+  }
+
+  handleStoreCoordinates = () => {
+    const tileId = this.state.contextMenu?.tileId;
+    if (tileId === null || tileId === undefined) return;
+
+    const x = tileId % 15;
+    const y = Math.floor(tileId / 15);
+    const boardId = this.state.loadedBoard?.id;
+    const context = this.resolveDungeonContext(boardId);
+
+    if (!context) {
+      this.toast('Cannot store dungeon coordinates - please open the board from within a dungeon first.');
+      this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+      return;
+    }
+
+    const dungeonName = this.state.loadedDungeon?.name || 'Unnamed Dungeon';
+    const dungeonId = this.state.loadedDungeon?.id || 'unknown';
+    const label = `${dungeonName} - Level ${context.levelId} (${context.orientation}) - Board ${context.boardIndex} @ (${x}, ${y})`;
+
+    const coordObj = {
+      id: `${dungeonId}_L${context.levelId}_${context.orientation}_B${context.boardIndex}_X${x}_Y${y}_${Date.now()}`,
+      dungeonId,
+      dungeonName,
+      levelId: context.levelId,
+      orientation: context.orientation,
+      boardIndex: context.boardIndex,
+      x,
+      y,
+      label
+    };
+
+    const meta = getMeta() || {};
+    meta.storedCoordinates = meta.storedCoordinates || [];
+
+    const duplicateIdx = meta.storedCoordinates.findIndex(c =>
+      c.dungeonId === dungeonId &&
+      c.levelId === context.levelId &&
+      c.orientation === context.orientation &&
+      c.boardIndex === context.boardIndex &&
+      c.x === x &&
+      c.y === y
+    );
+
+    if (duplicateIdx !== -1) {
+      meta.storedCoordinates[duplicateIdx] = coordObj;
+    } else {
+      meta.storedCoordinates.push(coordObj);
+    }
+
+    storeMeta(meta);
+
+    const userId = sessionStorage.getItem('userId');
+    if (userId) {
+      updateUserRequest(userId, meta).catch(() => { });
+    }
+
+    this.toast(`Stored coordinates under storedCoordinates`);
+    this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
   }
   // zoomInToBoard = (board) => {
   //   console.log('LOADING BOARD!')
@@ -1003,20 +2220,20 @@ class MapMakerPage extends React.Component {
   findBoardRefInFolders = (boardId) => {
     const boardFolders = this.state.boardsFolders;
     let found = null;
-    boardFolders.forEach(f=>{
-      let localFound = f.contents.find(b=>b.id === boardId)
-      if(localFound) found = localFound;
-      f.subfolders.forEach(fsub=>{
-        let localFound = fsub.contents.find(b=>b.id === boardId)
-        if(localFound) found = localFound;
-        fsub.deepfolders.forEach(fdeep=>{
-          let localFound = fdeep.contents.find(b=>b.id === boardId)
-          if(localFound) found = localFound;
+    boardFolders.forEach(f => {
+      let localFound = f.contents.find(b => b.id === boardId)
+      if (localFound) found = localFound;
+      f.subfolders.forEach(fsub => {
+        let localFound = fsub.contents.find(b => b.id === boardId)
+        if (localFound) found = localFound;
+        fsub.deepfolders.forEach(fdeep => {
+          let localFound = fdeep.contents.find(b => b.id === boardId)
+          if (localFound) found = localFound;
         })
       })
     })
-    let localFound = this.state.boards.find(b=>b.id === boardId)
-    if(localFound) found = localFound;
+    let localFound = this.state.boards.find(b => b.id === boardId)
+    if (localFound) found = localFound;
 
     // console.log('board folders: ', boardFolders);
     // console.log('top level', this.state.boards);
@@ -1029,42 +2246,42 @@ class MapMakerPage extends React.Component {
     console.log('update board in panel: ', board);
     const loadedBoard = this.state.loadedBoard;
     const boards = this.state.boards,
-    boardsFolders = this.state.boardsFolders;
+      boardsFolders = this.state.boardsFolders;
     console.log('boardsFolders: ', boardsFolders);
 
-    let b = boards.find(e=>e.id === loadedBoard.id),
-    b_main, b_sub, b_deep, boardFound; 
-    if(b) b = loadedBoard;
+    let b = boards.find(e => e.id === loadedBoard.id),
+      b_main, b_sub, b_deep, boardFound;
+    if (b) b = loadedBoard;
     // const clone = (obj) => {
     //   return JSON.parse(JSON.stringify(obj))
     // }
-    this.state.boardsFolders.forEach(folder=>{
-      let found = folder.contents.find(x=>x.id === loadedBoard.id)
-      if(found){
-        folder.contents = folder.contents.filter(r=>r!==found)
+    this.state.boardsFolders.forEach(folder => {
+      let found = folder.contents.find(x => x.id === loadedBoard.id)
+      if (found) {
+        folder.contents = folder.contents.filter(r => r !== found)
         boardFound = found;
       }
 
       // if(folder.subfolders){
-        folder.subfolders.forEach(subfolder=>{
-          let found2 = subfolder.contents.find(x=>x.id === loadedBoard.id)
-          if(found2){
-            subfolder.contents = subfolder.contents.filter(r=>r!==found2)
-            boardFound = found2;
-          }
+      folder.subfolders.forEach(subfolder => {
+        let found2 = subfolder.contents.find(x => x.id === loadedBoard.id)
+        if (found2) {
+          subfolder.contents = subfolder.contents.filter(r => r !== found2)
+          boardFound = found2;
+        }
 
-          // if(subfolder.deepfolders){
-            subfolder.deepfolders.forEach(deepfolder=>{
-              let found3 = deepfolder.contents.find(x=>x.id === loadedBoard.id)
-              if(found3){
-                deepfolder.contents = deepfolder.contents.filter(r=>r!==found3)
-                boardFound = found3;
-              }
-            })
-          // }
+        // if(subfolder.deepfolders){
+        subfolder.deepfolders.forEach(deepfolder => {
+          let found3 = deepfolder.contents.find(x => x.id === loadedBoard.id)
+          if (found3) {
+            deepfolder.contents = deepfolder.contents.filter(r => r !== found3)
+            boardFound = found3;
+          }
         })
+        // }
+      })
       // }
-      if(!boardFound){
+      if (!boardFound) {
         console.log('this flow is from the rename of a brand new board');
         return
       }
@@ -1103,7 +2320,7 @@ class MapMakerPage extends React.Component {
   }
   isInSameFolder = (firstName, secondName) => {
     console.log('firstname, secondName', firstName, secondName);
-    if(!firstName) return false;
+    if (!firstName) return false;
     let title = firstName.split('_')[0],
       subfolder = firstName.split('_').length > 2 ? firstName.split('_')[1] : null,
       deepfolder = subfolder && firstName.split('_').length > 3 ? firstName.split('_')[2] : null
@@ -1112,9 +2329,9 @@ class MapMakerPage extends React.Component {
       subfolder2 = secondName.split('_').length > 2 ? secondName.split('_')[1] : null,
       deepfolder2 = subfolder2 && secondName.split('_').length > 3 ? secondName.split('_')[2] : null
 
-    if(deepfolder) return deepfolder === deepfolder2
-    if(subfolder) return subfolder === subfolder2
-    if(title) return title === title2
+    if (deepfolder) return deepfolder === deepfolder2
+    if (subfolder) return subfolder === subfolder2
+    if (title) return title === title2
     return false
     // const boardsFolders = this.state.boardsFolders;
     // let title_first = first.name.split('_')[0],
@@ -1148,25 +2365,25 @@ class MapMakerPage extends React.Component {
   }
   insertNewBoardIntoPanel = (board) => {
     const boards = this.state.boards,
-    boardsFolders = this.state.boardsFolders;
+      boardsFolders = this.state.boardsFolders;
     // boardsFoldersExpanded = this.state.boardsFoldersExpanded;
-    
-    console.log('in insertNewBoardIntoPanel board: ', board, 'boards', boards, 'boardsFolders', boardsFolders);
-    
 
-    if(board.name && board.name.includes('_')){
+    console.log('in insertNewBoardIntoPanel board: ', board, 'boards', boards, 'boardsFolders', boardsFolders);
+
+
+    if (board.name && board.name.includes('_')) {
       let title = board.name.split('_')[0],
-      subtitle = board.name.split('_').length > 2 ? board.name.split('_')[1] : null,
-      deeptitle = subtitle && board.name.split('_').length > 3 ? board.name.split('_')[2] : null,
-      folderExists = boardsFolders.map(e=>e.title).includes(title),
-      existingSubfolder = boardsFolders.find(e=>e.title === title)?.subfolders.find(e=>e.title === subtitle),
-      existingDeepfolder = boardsFolders.find(e=>e.title === title)?.subfolders.find(e=>e.title === subtitle)?.deepfolders.find(e=>e.title === deeptitle)
+        subtitle = board.name.split('_').length > 2 ? board.name.split('_')[1] : null,
+        deeptitle = subtitle && board.name.split('_').length > 3 ? board.name.split('_')[2] : null,
+        folderExists = boardsFolders.map(e => e.title).includes(title),
+        existingSubfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle),
+        existingDeepfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle)?.deepfolders.find(e => e.title === deeptitle)
 
       console.log('board title', title);
       console.log('board subtitle: ', subtitle);
       console.log('board deeptitle: ', deeptitle);
 
-      if(!folderExists){
+      if (!folderExists) {
         boardsFolders.push({
           title,
           contents: [],
@@ -1174,28 +2391,28 @@ class MapMakerPage extends React.Component {
           expanded: false
         })
       }
-      if(!existingSubfolder && subtitle){
-        boardsFolders.find(e=>e.title === title).subfolders.push({
+      if (!existingSubfolder && subtitle) {
+        boardsFolders.find(e => e.title === title).subfolders.push({
           title: subtitle,
           contents: [],
           deepfolders: []
         })
       }
-      if(!existingDeepfolder && deeptitle){
-        boardsFolders.find(e=>e.title === title).subfolders.find(e=>e.title === subtitle).deepfolders.push({
+      if (!existingDeepfolder && deeptitle) {
+        boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).deepfolders.push({
           title: deeptitle,
           contents: []
         })
       }
 
-      if(!subtitle){
-        boardsFolders.find(e=>e.title === title).contents.push(board)
+      if (!subtitle) {
+        boardsFolders.find(e => e.title === title).contents.push(board)
       }
-      if(subtitle && !deeptitle){
-        boardsFolders.find(e=>e.title === title).subfolders.find(e=>e.title === subtitle).contents.push(board)
+      if (subtitle && !deeptitle) {
+        boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).contents.push(board)
       }
-      if(deeptitle){
-        boardsFolders.find(e=>e.title === title).subfolders.find(e=>e.title === subtitle).deepfolders.find(e=>e.title === deeptitle).contents.push(board)
+      if (deeptitle) {
+        boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).deepfolders.find(e => e.title === deeptitle).contents.push(board)
       }
     } else {
       boards.push(board)
@@ -1209,36 +2426,36 @@ class MapMakerPage extends React.Component {
     })
   }
   updateBoardInPanel = (updatedBoard) => {
-    if(!updatedBoard || !updatedBoard.id) return;
+    if (!updatedBoard || !updatedBoard.id) return;
 
     const boards = clone(this.state.boards || []).map((board) => {
-      if(!board) return board;
+      if (!board) return board;
       return board.id === updatedBoard.id ? clone(updatedBoard) : board;
     });
 
     const boardsFolders = clone(this.state.boardsFolders || []);
     boardsFolders.forEach((folder) => {
-      if(Array.isArray(folder.contents)){
+      if (Array.isArray(folder.contents)) {
         folder.contents = folder.contents.map((board) => {
-          if(!board) return board;
+          if (!board) return board;
           return board.id === updatedBoard.id ? clone(updatedBoard) : board;
         });
       }
 
-      if(Array.isArray(folder.subfolders)){
+      if (Array.isArray(folder.subfolders)) {
         folder.subfolders.forEach((subfolder) => {
-          if(Array.isArray(subfolder.contents)){
+          if (Array.isArray(subfolder.contents)) {
             subfolder.contents = subfolder.contents.map((board) => {
-              if(!board) return board;
+              if (!board) return board;
               return board.id === updatedBoard.id ? clone(updatedBoard) : board;
             });
           }
 
-          if(Array.isArray(subfolder.deepfolders)){
+          if (Array.isArray(subfolder.deepfolders)) {
             subfolder.deepfolders.forEach((deepfolder) => {
-              if(Array.isArray(deepfolder.contents)){
+              if (Array.isArray(deepfolder.contents)) {
                 deepfolder.contents = deepfolder.contents.map((board) => {
-                  if(!board) return board;
+                  if (!board) return board;
                   return board.id === updatedBoard.id ? clone(updatedBoard) : board;
                 });
               }
@@ -1262,25 +2479,25 @@ class MapMakerPage extends React.Component {
   }
   removeBoardFromPanel = (board) => {
     let boards = this.state.boards,
-    boardsFolders = this.state.boardsFolders;
+      boardsFolders = this.state.boardsFolders;
 
-    if(board.name && board.name.includes('_')){
+    if (board.name && board.name.includes('_')) {
       let title = board.name.split('_')[0],
-      subtitle = board.name.split('_').length > 2 ? board.name.split('_')[1] : null,
-      deeptitle = subtitle && board.name.split('_').length > 3 ? board.name.split('_')[2] : null,
-      existingSubfolder = boardsFolders.find(e=>e.title === title)?.subfolders.find(e=>e.title === subtitle),
-      existingDeepfolder = boardsFolders.find(e=>e.title === title)?.subfolders.find(e=>e.title === subtitle)?.deepfolders.find(e=>e.title === deeptitle)
+        subtitle = board.name.split('_').length > 2 ? board.name.split('_')[1] : null,
+        deeptitle = subtitle && board.name.split('_').length > 3 ? board.name.split('_')[2] : null,
+        existingSubfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle),
+        existingDeepfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle)?.deepfolders.find(e => e.title === deeptitle)
 
-      if(existingDeepfolder){
+      if (existingDeepfolder) {
         // let found = existingDeepfolder.contents.find(e=>e.name === board.name)
-        existingDeepfolder.contents = existingDeepfolder.contents.filter(e=> e.name !== board.name)
+        existingDeepfolder.contents = existingDeepfolder.contents.filter(e => e.name !== board.name)
       }
-      if(existingSubfolder){
+      if (existingSubfolder) {
         // let found = existingSubfolder.contents.find(e=>e.name === board.name)
-        existingSubfolder.contents = existingSubfolder.contents.filter(e=> e.name !== board.name)
+        existingSubfolder.contents = existingSubfolder.contents.filter(e => e.name !== board.name)
       }
     } else {
-      boards = boards.filter(e=> e.name !== board.name)
+      boards = boards.filter(e => e.name !== board.name)
     }
 
     this.setState(() => {
@@ -1293,20 +2510,21 @@ class MapMakerPage extends React.Component {
   loadAllBoards = async () => {
     const val = await loadAllBoardsRequest();
     const boards = [],
-    boardsFolders = [],
-    boardsFoldersExpanded = {};
-    val.data.forEach((e)=>{
+      boardsFolders = [],
+      boardsFoldersExpanded = {};
+    const meta = getMeta();
+    val.data.forEach((e) => {
       let board = JSON.parse(e.content)
       board.id = e._id;
-      if(board.name && board.name.includes('_')){
+      if (board.name && board.name.includes('_')) {
         let title = board.name.split('_')[0],
-        subtitle = board.name.split('_').length > 2 ? board.name.split('_')[1] : null,
-        deeptitle = subtitle && board.name.split('_').length > 3 ? board.name.split('_')[2] : null,
-        folderExists = boardsFolders.map(e=>e.title).includes(title),
-        existingSubfolder = boardsFolders.find(e=>e.title === title)?.subfolders.find(e=>e.title === subtitle),
-        existingDeepfolder = boardsFolders.find(e=>e.title === title)?.subfolders.find(e=>e.title === subtitle)?.deepfolders.find(e=>e.title === deeptitle)
+          subtitle = board.name.split('_').length > 2 ? board.name.split('_')[1] : null,
+          deeptitle = subtitle && board.name.split('_').length > 3 ? board.name.split('_')[2] : null,
+          folderExists = boardsFolders.map(e => e.title).includes(title),
+          existingSubfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle),
+          existingDeepfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle)?.deepfolders.find(e => e.title === deeptitle)
 
-        if(!folderExists){
+        if (!folderExists) {
           boardsFolders.push({
             title,
             contents: [],
@@ -1314,40 +2532,50 @@ class MapMakerPage extends React.Component {
             expanded: false
           })
         }
-        if(!existingSubfolder && subtitle){
-          boardsFolders.find(e=>e.title === title).subfolders.push({
+        if (!existingSubfolder && subtitle) {
+          boardsFolders.find(e => e.title === title).subfolders.push({
             title: subtitle,
             contents: [],
             deepfolders: []
           })
         }
-        if(!existingDeepfolder && deeptitle){
-          boardsFolders.find(e=>e.title === title).subfolders.find(e=>e.title === subtitle).deepfolders.push({
+        if (!existingDeepfolder && deeptitle) {
+          boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).deepfolders.push({
             title: deeptitle,
             contents: []
           })
         }
 
-        if(!subtitle){
-          boardsFolders.find(e=>e.title === title).contents.push(board)
+        if (!subtitle) {
+          boardsFolders.find(e => e.title === title).contents.push(board)
         }
-        if(subtitle && !deeptitle){
-          boardsFolders.find(e=>e.title === title).subfolders.find(e=>e.title === subtitle).contents.push(board)
+        if (subtitle && !deeptitle) {
+          boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).contents.push(board)
         }
-        if(deeptitle){
-          boardsFolders.find(e=>e.title === title).subfolders.find(e=>e.title === subtitle).deepfolders.find(e=>e.title === deeptitle).contents.push(board)
+        if (deeptitle) {
+          boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).deepfolders.find(e => e.title === deeptitle).contents.push(board)
         }
       } else {
         boards.push(board)
       }
     })
-    boardsFolders.map(e=>e.title).forEach(t=>boardsFoldersExpanded[t] = false)
-    boardsFolders.forEach((f)=>{
-      f.subfolders.forEach((s)=>{
+    boardsFolders.map(e => e.title).forEach(t => boardsFoldersExpanded[t] = false)
+    boardsFolders.forEach((f) => {
+      f.subfolders.forEach((s) => {
         const title = `${f.title}_${s.title}`
         boardsFoldersExpanded[title] = false;
       })
     })
+
+    const persistedExpanded = meta?.preferences?.editor?.boardsFoldersExpanded;
+    if (persistedExpanded && typeof persistedExpanded === 'object') {
+      Object.keys(boardsFoldersExpanded).forEach((folderKey) => {
+        if (typeof persistedExpanded[folderKey] === 'boolean') {
+          boardsFoldersExpanded[folderKey] = persistedExpanded[folderKey];
+        }
+      })
+    }
+
     return new Promise((resolve) => {
       this.setState(() => {
         return {
@@ -1364,10 +2592,11 @@ class MapMakerPage extends React.Component {
             sessionStorage.removeItem('devConsoleHandoff');
             if (handoff.consoleOpen) {
               this.setState({ devConsoleOpen: true }, () => {
-                try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch(_) {}
+                try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (_) { }
               });
             }
             if (handoff.boardId) {
+              this._handoffActive = true;
               setTimeout(() => {
                 const boardRef = this.findBoardRefInFolders(handoff.boardId);
                 if (boardRef) {
@@ -1379,58 +2608,59 @@ class MapMakerPage extends React.Component {
               }, 0);
             }
           }
-        } catch(_) {}
+        } catch (_) { }
+
         resolve();
       })
     })
   }
 
   addNewBoard = async () => {
-    if(this.state.loadedBoard){
+    if (this.state.loadedBoard) {
       await this.clearLoadedBoard();
     }
-    
+
     let d = new Date()
     let n = d.getTime();
-    let rand = n.toString().slice(9,13);
+    let rand = n.toString().slice(9, 13);
 
     let newBoard = {
-        name: `board${rand}`,
-        config: [[],[],[],[]],
-        tiles: []
+      name: `board${rand}`,
+      config: [[], [], [], []],
+      tiles: []
     }
     console.log('new board: ', newBoard);
     this.setState({
       loadedBoard: newBoard
     })
-    setTimeout(()=>{
+    setTimeout(() => {
       console.log('1about to fire loaded board, this.state.loadedBoard:', clone(this.state.loadedBoard));
       this.renameBoard();
     })
-    setTimeout(()=>{
+    setTimeout(() => {
       console.log('2about to fire loaded board, this.state.loadedBoard:', clone(this.state.loadedBoard));
       // this.renameBoard();
-    },100)
-    setTimeout(()=>{
+    }, 100)
+    setTimeout(() => {
       console.log('3about to fire loaded board, this.state.loadedBoard:', clone(this.state.loadedBoard));
       // this.renameBoard();
-    },1000)
+    }, 1000)
   }
 
   cloneBoard = () => {
     let d = new Date()
     let n = d.getTime();
-    let rand = n.toString().slice(9,13)
+    let rand = n.toString().slice(9, 13)
 
     let newBoard = {
-        name: `board${rand}`,
-        config: [[],[],[],[]],
-        tiles: []
+      name: `board${rand}`,
+      config: [[], [], [], []],
+      tiles: []
     }
     this.setState({
       loadedBoard: newBoard
     })
-    setTimeout(()=>{
+    setTimeout(() => {
       this.renameBoard();
     })
   }
@@ -1440,29 +2670,29 @@ class MapMakerPage extends React.Component {
     console.log('loadedBoard.id', loadedBoard.id);
 
     // return new Promise(resolve => {
-      
+
     // })
 
-    this.state.boardsFolders.forEach((folder)=>{
-      let f = folder.contents.find(b=>b.id === loadedBoard.id)
-      if(f) foundBoard = f;
+    this.state.boardsFolders.forEach((folder) => {
+      let f = folder.contents.find(b => b.id === loadedBoard.id)
+      if (f) foundBoard = f;
       folder.subfolders.forEach((subfolder) => {
-        let s = subfolder.contents.find(b=>b.id === loadedBoard.id)
-        if(s) foundBoard = s;
-        subfolder.deepfolders.forEach((deepfolder)=>{
-          deepfolder.contents.forEach(e=>{
+        let s = subfolder.contents.find(b => b.id === loadedBoard.id)
+        if (s) foundBoard = s;
+        subfolder.deepfolders.forEach((deepfolder) => {
+          deepfolder.contents.forEach(e => {
             // console.log('deep board.id', e.id, 'vs ', loadedBoard.id);
             // if(e.id === loadedBoard.id) foundbo
           })
-          let d = deepfolder.contents.find(b=>b.id === loadedBoard.id)
-          if(d) foundBoard = d;
+          let d = deepfolder.contents.find(b => b.id === loadedBoard.id)
+          if (d) foundBoard = d;
         })
       })
     })
-    let topLevelFound = this.state.boards.find(b=>b.id === loadedBoard.id)
-    if(topLevelFound) foundBoard = topLevelFound;
+    let topLevelFound = this.state.boards.find(b => b.id === loadedBoard.id)
+    if (topLevelFound) foundBoard = topLevelFound;
     console.log('foundBoard: ', foundBoard);
-    if(foundBoard){
+    if (foundBoard) {
       foundBoard.tiles = JSON.parse(JSON.stringify(loadedBoard.tiles))
       foundBoard = JSON.parse(JSON.stringify(loadedBoard))
     }
@@ -1470,47 +2700,55 @@ class MapMakerPage extends React.Component {
   clearLoadedBoard = async () => {
     console.log('clearing loaded board');
     return new Promise(resolve => {
-      if(this.state.loadedBoard) this.freezeSelectedPanelBoardBeforeClearing()
-      
-        let arr = [...this.state.tiles]
-        for(let t of arr){
-          t.image = null;
-          t.contains = null;
-          t.color = null
-        }
-        this.setState({
-          loadedBoard: null,
-          tiles: arr,
-          // miniboards
-        })
-        console.log('should have cleared thre board');
-        setTimeout(()=>{
-          console.log('resolving promise');
-          resolve()
-        })
+      if (this.state.loadedBoard) this.freezeSelectedPanelBoardBeforeClearing()
+
+      let arr = [...this.state.tiles]
+      for (let t of arr) {
+        t.image = null;
+        t.contains = { type: 'empty_space', subtype: null };
+        t.color = null
+      }
+      this.setState({
+        loadedBoard: null,
+        tiles: arr,
+        // miniboards
+      })
+
+      // Clear persisted selected board identity when board is unloaded.
+      setEditorPreference('loadedBoardId', null);
+      const userId = sessionStorage.getItem('userId');
+      const meta = getMeta();
+      if (userId) updateUserRequest(userId, meta)
+      storeMeta(meta);
+
+      console.log('should have cleared thre board');
+      setTimeout(() => {
+        console.log('resolving promise');
+        resolve()
+      })
     })
-    
-    
+
+
     // let miniboards = []
     // for(let i = 0; i < 9; i++){
-      //   miniboards.push([])
-      // }
-      
-      
-    
+    //   miniboards.push([])
+    // }
+
+
+
   }
   deleteBoard = async (boardId) => {
-    if(this.state.loadedBoard){
+    if (this.state.loadedBoard) {
       console.log('THIS FLOW SHOULD ONLY BE USED IF YOU WANT TO DELETE THE CURRENT LOADED BOARD, NOT FOR ITERATIVE METHOD');
-      
+
       let board = this.state.loadedBoard;
       this.removeBoardFromPanel(board)
       let planesToUpdate = this.planesContainingBoard(this.state.loadedBoard)
       await deleteBoardRequest(board.id);
       await this.clearLoadedBoard();
       this.toast('Board Deleted')
-      
-      if(planesToUpdate && planesToUpdate.lensgth > 1){
+
+      if (planesToUpdate && planesToUpdate.lensgth > 1) {
         console.log('multiple planes to update, figure this out');
         debugger
         // const payload = planesToUpdate.map(p=> {
@@ -1522,18 +2760,18 @@ class MapMakerPage extends React.Component {
         //     id: p.id
         //   }
         // })
-        
-      } else if (planesToUpdate && planesToUpdate.length === 1){
+
+      } else if (planesToUpdate && planesToUpdate.length === 1) {
         console.log('there is a plane to update', planesToUpdate[0]);
         let plane = planesToUpdate[0],
-        index = plane.miniboards.findIndex(b => {
-          return b.id === boardId
-        });
+          index = plane.miniboards.findIndex(b => {
+            return b.id === boardId
+          });
         // planeId = plane.id;
         console.log('index to update', index);
         console.log('plane to update: ', plane);
         let newPlane = clone(plane)
-        newPlane.miniboards[index] = {processed: undefined};
+        newPlane.miniboards[index] = { processed: undefined };
         console.log('now newPlane is ', newPlane);
         const obj = {
           name: newPlane.name,
@@ -1548,64 +2786,64 @@ class MapMakerPage extends React.Component {
   }
   planesContainingBoard = (board) => {
     let planesToUpdate = [];
-    if(!board.id) return planesToUpdate;
-    if(this.state.planes.length > 0){
+    if (!board.id) return planesToUpdate;
+    if (this.state.planes.length > 0) {
       this.state.planes.forEach((plane) => {
         let planeHasMatchingBoard = false;
         plane.miniboards.forEach((b, index) => {
-          
-          if(b.id === board.id){
+
+          if (b.id === board.id) {
             planeHasMatchingBoard = true;
             // miniboards = d.miniboards;
             // miniboards[index] = board;
             // miniboards[index].name = board.name;
             // miniboards[index].tiles = this.state.tiles;
             // miniboards[index].config = config;
-          } 
+          }
         })
         // d.valid = this.props.mapMaker.isValidPlane(miniboards)
-        if(planeHasMatchingBoard) planesToUpdate.push(plane)
+        if (planeHasMatchingBoard) planesToUpdate.push(plane)
       })
     }
     return planesToUpdate;
   }
-  
+
   dungeonsContainingPlane = (plane) => {
-    if(!plane || !plane.id) return [];
+    if (!plane || !plane.id) return [];
     return (this.state.dungeons || []).filter((dungeon) => {
-      if(!dungeon || !Array.isArray(dungeon.levels)) return false;
+      if (!dungeon || !Array.isArray(dungeon.levels)) return false;
       return dungeon.levels.some((level) => {
-        if(!level) return false;
+        if (!level) return false;
         return (level.front && level.front.id === plane.id) || (level.back && level.back.id === plane.id);
       });
     });
   }
 
   removePlaneFromDungeonObject = (dungeon, planeId) => {
-    if(!dungeon || !planeId) return { changed: false, dungeon };
+    if (!dungeon || !planeId) return { changed: false, dungeon };
     let changed = false;
     const nextDungeon = clone(dungeon);
 
-    if(Array.isArray(nextDungeon.levels)){
+    if (Array.isArray(nextDungeon.levels)) {
       nextDungeon.levels.forEach((level) => {
-        if(!level) return;
-        if(level.front && level.front.id === planeId){
+        if (!level) return;
+        if (level.front && level.front.id === planeId) {
           level.front = null;
           changed = true;
         }
-        if(level.back && level.back.id === planeId){
+        if (level.back && level.back.id === planeId) {
           level.back = null;
           changed = true;
         }
       })
     }
 
-    if(Array.isArray(nextDungeon.pocket_planes)){
+    if (Array.isArray(nextDungeon.pocket_planes)) {
       nextDungeon.pocket_planes.forEach((entry) => {
-        if(!entry || typeof entry !== 'object') return;
+        if (!entry || typeof entry !== 'object') return;
         Object.keys(entry).forEach((key) => {
           const val = entry[key];
-          if(val && typeof val === 'object' && val.id === planeId){
+          if (val && typeof val === 'object' && val.id === planeId) {
             entry[key] = null;
             changed = true;
           }
@@ -1617,13 +2855,13 @@ class MapMakerPage extends React.Component {
   }
 
   removePlaneReferencesFromAllDungeons = async (planeId) => {
-    if(!planeId) return 0;
+    if (!planeId) return 0;
     const res = await loadAllDungeonsRequest();
-    if(!res || !Array.isArray(res.data)) return 0;
+    if (!res || !Array.isArray(res.data)) return 0;
     let updateCount = 0;
 
-    for(const row of res.data){
-      if(!row || !row.content || !row._id) continue;
+    for (const row of res.data) {
+      if (!row || !row.content || !row._id) continue;
       let parsed;
       try {
         parsed = JSON.parse(row.content);
@@ -1631,7 +2869,7 @@ class MapMakerPage extends React.Component {
         continue;
       }
       const { changed, dungeon } = this.removePlaneFromDungeonObject(parsed, planeId);
-      if(!changed) continue;
+      if (!changed) continue;
       await updateDungeonRequest(row._id, dungeon);
       updateCount += 1;
     }
@@ -1669,7 +2907,7 @@ class MapMakerPage extends React.Component {
   //   // update user
   //   const meta = JSON.parse(sessionStorage.getItem('metadata'))
   //   const userId = sessionStorage.getItem('userId');
-    
+
   //   // NEED TO ABSTRACT THIS INTO A USER SERVICE
   //   if(meta.preferences && meta.preferences.editor){
   //     meta.preferences.editor['loadedDungeon'] = this.state.loadedDungeon
@@ -1684,8 +2922,8 @@ class MapMakerPage extends React.Component {
   //   storeMeta(meta);
   // }
   writePlane = async () => {
-    if(this.state.selectedView !== 'plane') return
-    if(this.state.loadedPlane && this.state.loadedPlane.id){
+    if (this.state.selectedView !== 'plane') return
+    if (this.state.loadedPlane && this.state.loadedPlane.id) {
       this.setState({ planeSyncInProgress: true });
       try {
         let obj = {
@@ -1714,14 +2952,14 @@ class MapMakerPage extends React.Component {
           : [];
 
         const planeSnapshotMatches = (snapshot) => {
-          if(!snapshot) return false;
+          if (!snapshot) return false;
           // Primary match is by canonical plane id only.
-          if(snapshot.id && snapshot.id === updatedPlane.id) return true;
+          if (snapshot.id && snapshot.id === updatedPlane.id) return true;
 
           // Legacy fallback for snapshots missing id: require exact name and board layout ids.
-          if(!snapshot.id && snapshot.name === updatedPlane.name && Array.isArray(snapshot.miniboards)){
+          if (!snapshot.id && snapshot.name === updatedPlane.name && Array.isArray(snapshot.miniboards)) {
             const snapshotBoardIds = snapshot.miniboards.map((mb) => mb && mb.id);
-            if(snapshotBoardIds.length !== updatedBoardIds.length) return false;
+            if (snapshotBoardIds.length !== updatedBoardIds.length) return false;
             return snapshotBoardIds.every((id, idx) => id === updatedBoardIds[idx]);
           }
           return false;
@@ -1730,41 +2968,42 @@ class MapMakerPage extends React.Component {
         const updatedDungeonIds = [];
         let updatedLoadedDungeon = null;
 
-        for(const dungeon of freshDungeons){
-          if(!Array.isArray(dungeon.levels)) continue;
+        for (const dungeon of freshDungeons) {
+          if (!Array.isArray(dungeon.levels)) continue;
           let changed = false;
 
           dungeon.levels.forEach((level) => {
-            if(!level) return;
-            if(planeSnapshotMatches(level.front)){
+            if (!level) return;
+            if (planeSnapshotMatches(level.front)) {
               level.front = clone(updatedPlane);
               changed = true;
             }
-            if(planeSnapshotMatches(level.back)){
+            if (planeSnapshotMatches(level.back)) {
               level.back = clone(updatedPlane);
               changed = true;
             }
           });
 
-          if(!changed) continue;
+          if (!changed) continue;
           await updateDungeonRequest(dungeon.id, dungeon);
           updatedDungeonIds.push(dungeon.id);
-          if(this.state.loadedDungeon && this.state.loadedDungeon.id === dungeon.id){
+          if (this.state.loadedDungeon && this.state.loadedDungeon.id === dungeon.id) {
             updatedLoadedDungeon = clone(dungeon);
           }
         }
 
         await this.loadAllPlanes();
-        if(updatedDungeonIds.length > 0){
+        if (updatedDungeonIds.length > 0) {
           await this.loadAllDungeons();
         }
 
-        if(updatedLoadedDungeon){
+        if (updatedLoadedDungeon) {
           await new Promise(resolve => this.setState({ loadedDungeon: updatedLoadedDungeon }, resolve));
           setEditorPreference('loadedDungeon', updatedLoadedDungeon);
         }
 
-        this.toast('Plane Saved')
+        this.flashLeftReadout('Plane Saved');
+        this.setState({ planeHasUnsavedChanges: false });
       } finally {
         this.setState({ planeSyncInProgress: false });
       }
@@ -1782,18 +3021,19 @@ class MapMakerPage extends React.Component {
         loadedPlane: lp,
         // miniboards: this.state.loadedPlane.miniboards
       })
-      this.toast('Plane Saved')
-      this.loadAllPlanes(); 
+      this.flashLeftReadout('Plane Saved');
+      this.setState({ planeHasUnsavedChanges: false });
+      this.loadAllPlanes();
     }
   }
   writeDungeon = async () => {
     console.log('loaded dungeon', this.state.loadedDungeon);
-    if(this.state.loadedDungeon && this.state.loadedDungeon.id){
+    if (this.state.loadedDungeon && this.state.loadedDungeon.id) {
       console.log('existing dungeon, update');
       await updateDungeonRequest(this.state.loadedDungeon.id, this.state.loadedDungeon);
       setEditorPreference('loadedDungeon', this.state.loadedDungeon)
       this.loadAllDungeons()
-      this.toast('Dungeon Saved')
+      this.flashLeftReadout('Dungeon Saved')
     } else {
       let newDungeonPayload = {
         name: this.state.loadedDungeon.name,
@@ -1810,9 +3050,10 @@ class MapMakerPage extends React.Component {
         loadedDungeon: this.props.mapMaker.formatDungeon(loadedDungeon)
         // miniboards: this.state.loadedDungeon.miniboards
       })
-      this.toast('Dungeon Saved')
-      this.loadAllDungeons(); 
+      this.flashLeftReadout('Dungeon Saved')
+      this.loadAllDungeons();
     }
+    this.setState({ dungeonHasUnsavedChanges: false });
     // this update user block NEEDS to be abstracted. you can search 'update user' to find all instances of it
     console.warn('this update user block NEEDS to be abstracted. you can search "update user" to find all instances of it')
     console.log('HELLO??? MCFLY???????');
@@ -1821,61 +3062,61 @@ class MapMakerPage extends React.Component {
     setEditorPreference('loadedDungeon', this.state.loadedDungeon);
     const meta = getMeta();
     console.log('about to update user with meta ', meta);
-    if(userId) updateUserRequest(userId, meta)
+    if (userId) updateUserRequest(userId, meta)
     storeMeta(meta);
   }
   validatePlane = (plane) => {
     console.log('validating plane: ', plane);
-    plane.miniboards.forEach((b, i)=>{
+    plane.miniboards.forEach((b, i) => {
       b.processed = this.props.mapMaker.filterMapAdjacency(b, i, plane.miniboards);
       // console.log('b.processed: ', b.processed);  
-      if(!b.processed) return;
+      if (!b.processed) return;
 
-      if(i === 0){
+      if (i === 0) {
         b.valid = b.processed.right.includes(plane.miniboards[1].id) &&
-                  b.processed.bot.includes(plane.miniboards[3].id)
+          b.processed.bot.includes(plane.miniboards[3].id)
       }
-      if(i === 1){
-       
-          b.valid = b.processed.left.includes(plane.miniboards[0].id) &&
+      if (i === 1) {
+
+        b.valid = b.processed.left.includes(plane.miniboards[0].id) &&
           b.processed.right.includes(plane.miniboards[2].id) &&
           b.processed.bot.includes(plane.miniboards[4].id)
       }
-      if(i === 2){
-          b.valid = b.processed.left.includes(plane.miniboards[1].id) &&
+      if (i === 2) {
+        b.valid = b.processed.left.includes(plane.miniboards[1].id) &&
           b.processed.bot.includes(plane.miniboards[5].id)
       }
-      if(i === 3){
-          b.valid = b.processed.top.includes(plane.miniboards[0].id) &&
+      if (i === 3) {
+        b.valid = b.processed.top.includes(plane.miniboards[0].id) &&
           b.processed.right.includes(plane.miniboards[4].id) &&
           b.processed.bot.includes(plane.miniboards[6].id)
       }
-      if(i === 4){
-         b.valid = b.processed.left.includes(plane.miniboards[3].id) &&
-        b.processed.bot.includes(plane.miniboards[7].id) &&
-        b.processed.top.includes(plane.miniboards[1].id) &&
-        b.processed.right.includes(plane.miniboards[5].id)
+      if (i === 4) {
+        b.valid = b.processed.left.includes(plane.miniboards[3].id) &&
+          b.processed.bot.includes(plane.miniboards[7].id) &&
+          b.processed.top.includes(plane.miniboards[1].id) &&
+          b.processed.right.includes(plane.miniboards[5].id)
       }
-      if(i === 5){
-          b.valid = b.processed.left.includes(plane.miniboards[4].id) &&
+      if (i === 5) {
+        b.valid = b.processed.left.includes(plane.miniboards[4].id) &&
           b.processed.bot.includes(plane.miniboards[8].id)
       }
-      if(i === 6){
-          b.valid = b.processed.top.includes(plane.miniboards[3].id) &&
+      if (i === 6) {
+        b.valid = b.processed.top.includes(plane.miniboards[3].id) &&
           b.processed.right.includes(plane.miniboards[7].id)
-        
+
       }
-      if(i === 7){
-          b.valid = b.processed.top.includes(plane.miniboards[4].id) &&
+      if (i === 7) {
+        b.valid = b.processed.top.includes(plane.miniboards[4].id) &&
           b.processed.left.includes(plane.miniboards[6].id) &&
           b.processed.right.includes(plane.miniboards[8].id)
       }
-      if(i === 8){
+      if (i === 8) {
         b.valid = b.processed.top.includes(plane.miniboards[5].id) &&
-        b.processed.left.includes(plane.miniboards[7].id)
+          b.processed.left.includes(plane.miniboards[7].id)
       }
     })
-    if(plane.miniboards.some(e=>!e.valid)) plane.valid = false
+    if (plane.miniboards.some(e => !e.valid)) plane.valid = false
     console.log('validated plane:', plane)
     return plane
   }
@@ -1884,9 +3125,15 @@ class MapMakerPage extends React.Component {
     console.log('loaded plane: ', plane);
     this.setState({
       loadedPlane: plane,
-      selectedThingTitle: `Plane: ${plane.name}`
-      // miniboards: plane.miniboards
+      selectedThingTitle: `Plane: ${plane.name}`,
+      // miniboards: plane.miniboards,
+      planeHasUnsavedChanges: false,
     })
+    setEditorPreference('loadedPlaneId', plane.id || null);
+    const userId = sessionStorage.getItem('userId');
+    const meta = getMeta();
+    if (userId) updateUserRequest(userId, meta);
+    storeMeta(meta);
   }
   loadDungeon = async (id) => {
     console.log('load dungein: ', id);
@@ -1898,31 +3145,34 @@ class MapMakerPage extends React.Component {
     // debugger
     dungeon = this.props.mapMaker.formatDungeon(dungeon);
     console.log('dungeon after formattingL: ', dungeon);
-    for(let key in dungeon.levels){
+    for (let key in dungeon.levels) {
       let level = dungeon.levels[key]
       console.log('corncob level: ', dungeon.levels[key])
-      if(level.front){
+      if (level.front) {
         level.front = this.validatePlane(level.front)
-        if(!level.front.valid){
+        if (!level.front.valid) {
           dungeonValid = false;
           console.log('level not valid!')
         }
       }
-      if(level.back){
+      if (level.back) {
         level.back = this.validatePlane(level.back)
-        if(!level.back.valid) dungeonValid = false;
+        if (!level.back.valid) dungeonValid = false;
       }
     }
-    dungeon.valid = dungeonValid;
+    const hasSpawnPoints = this.dungeonHasSpawnPoint(dungeon);
+    dungeon.valid = dungeonValid && hasSpawnPoints;
     console.log('about to format 3');
     this.setState({
-      loadedDungeon: this.props.mapMaker.formatDungeon(dungeon)
+      loadedDungeon: this.props.mapMaker.formatDungeon(dungeon),
+      selectedThingTitle: this.state.selectedView === 'dungeon' ? `Dungeon: ${dungeon.name}` : this.state.selectedThingTitle
     })
+    this.setLoadedDungeonDropdownValue(dungeon.name)
   }
   loadAllDungeons = async () => {
     const val = await loadAllDungeonsRequest()
     let dungeons = [];
-    val.data.forEach((e)=>{
+    val.data.forEach((e) => {
       let dungeon = JSON.parse(e.content)
       // console.log('raw dungeon content ', JSON.parse(e.content));
       dungeon.id = e._id;
@@ -1939,114 +3189,237 @@ class MapMakerPage extends React.Component {
     //   this.writePlane()
     // })
 
-    const meta = getMeta()
-    this.setState({
+    return new Promise((resolve) => {
+      this.setState({
         dungeons,
         loadingData: false
-    })
-    if(meta?.preferences?.editor?.loadedDungeon){
-      let dungeon = meta.preferences.editor.loadedDungeon;
-      const loadedDungeon = dungeons.find(d=>d.id === dungeon.id);
-      this.setLoadedDungeonDropdownValue(dungeon.name)
-      
-      // If overlay was previously on, compute overlayData for the loaded dungeon
-      let overlayData = null;
-      if(this.state.dungeonOverlayOn && loadedDungeon){
-        overlayData = this.props.mapMaker.markPassages(loadedDungeon);
-      }
-      
-      this.setState({
-        loadedDungeon: loadedDungeon,
-        overlayData
-      })
-    }
+      }, resolve);
+    });
   }
   setLoadedDungeonDropdownValue = (name) => {
     let b = this.state.dungeonSelectVal;
-    if(b && b.current && b.current.value !== name){ 
+    if (b && b.current && b.current.value !== name) {
       b.current.value = name;
       this.setState({
-        dungeonSelectVal : b
+        dungeonSelectVal: b
       })
     }
   }
+
+  parsePlaneLevelLabel = (label) => {
+    const raw = `${label ?? ''}`.trim();
+    if (!/^-?\d+$/.test(raw)) return null;
+    return Number(raw);
+  }
+
+  comparePlaneFolderLabels = (a, b) => {
+    const aNum = this.parsePlaneLevelLabel(a?.title ?? a);
+    const bNum = this.parsePlaneLevelLabel(b?.title ?? b);
+
+    if (aNum !== null && bNum !== null) return bNum - aNum; // 2,1,0,-1,-2
+    if (aNum !== null) return -1; // numeric first
+    if (bNum !== null) return 1;  // text at bottom
+    return `${a?.title ?? a}`.localeCompare(`${b?.title ?? b}`, undefined, { sensitivity: 'base' });
+  }
+
+  sortPlaneFolderHierarchy = (folders) => {
+    if (!Array.isArray(folders)) return;
+    folders.sort((a, b) => this.comparePlaneFolderLabels(a, b));
+    folders.forEach((folder) => {
+      if (Array.isArray(folder.subfolders)) {
+        folder.subfolders.sort((a, b) => this.comparePlaneFolderLabels(a, b));
+        folder.subfolders.forEach((subfolder) => {
+          if (Array.isArray(subfolder.deepfolders)) {
+            subfolder.deepfolders.sort((a, b) => this.comparePlaneFolderLabels(a, b));
+          }
+        });
+      }
+    });
+  }
+
   loadAllPlanes = async () => {
     const val = await loadAllPlanesRequest()
     let planes = [];
     const planesFolders = [];
     const planesFoldersExpanded = {};
-    val.data.forEach((e)=>{
-      if(!e.content) return
+    val.data.forEach((e) => {
+      if (!e.content) return
       let plane = JSON.parse(e.content)
       plane.id = e._id;
       planes.push(plane)
 
-      if(plane.name && plane.name.includes('_')){
+      if (plane.name && plane.name.includes('_')) {
         let title = plane.name.split('_')[0],
-        subtitle = plane.name.split('_').length > 2 ? plane.name.split('_')[1] : null,
-        deeptitle = subtitle && plane.name.split('_').length > 3 ? plane.name.split('_')[2] : null,
-        folderExists = planesFolders.map(f=>f.title).includes(title),
-        existingSubfolder = planesFolders.find(f=>f.title === title)?.subfolders.find(s=>s.title === subtitle),
-        existingDeepfolder = planesFolders.find(f=>f.title === title)?.subfolders.find(s=>s.title === subtitle)?.deepfolders.find(d=>d.title === deeptitle)
+          subtitle = plane.name.split('_').length > 2 ? plane.name.split('_')[1] : null,
+          deeptitle = subtitle && plane.name.split('_').length > 3 ? plane.name.split('_')[2] : null,
+          folderExists = planesFolders.map(f => f.title).includes(title),
+          existingSubfolder = planesFolders.find(f => f.title === title)?.subfolders.find(s => s.title === subtitle),
+          existingDeepfolder = planesFolders.find(f => f.title === title)?.subfolders.find(s => s.title === subtitle)?.deepfolders.find(d => d.title === deeptitle)
 
-        if(!folderExists){
+        if (!folderExists) {
           planesFolders.push({
             title,
             contents: [],
             subfolders: []
           })
         }
-        if(!existingSubfolder && subtitle){
-          planesFolders.find(f=>f.title === title).subfolders.push({
+        if (!existingSubfolder && subtitle) {
+          planesFolders.find(f => f.title === title).subfolders.push({
             title: subtitle,
             contents: [],
             deepfolders: []
           })
         }
-        if(!existingDeepfolder && deeptitle){
-          planesFolders.find(f=>f.title === title).subfolders.find(s=>s.title === subtitle).deepfolders.push({
+        if (!existingDeepfolder && deeptitle) {
+          planesFolders.find(f => f.title === title).subfolders.find(s => s.title === subtitle).deepfolders.push({
             title: deeptitle,
             contents: []
           })
         }
 
-        if(!subtitle){
-          planesFolders.find(f=>f.title === title).contents.push(plane)
+        if (!subtitle) {
+          planesFolders.find(f => f.title === title).contents.push(plane)
         }
-        if(subtitle && !deeptitle){
-          planesFolders.find(f=>f.title === title).subfolders.find(s=>s.title === subtitle).contents.push(plane)
+        if (subtitle && !deeptitle) {
+          planesFolders.find(f => f.title === title).subfolders.find(s => s.title === subtitle).contents.push(plane)
         }
-        if(deeptitle){
-          planesFolders.find(f=>f.title === title).subfolders.find(s=>s.title === subtitle).deepfolders.find(d=>d.title === deeptitle).contents.push(plane)
+        if (deeptitle) {
+          planesFolders.find(f => f.title === title).subfolders.find(s => s.title === subtitle).deepfolders.find(d => d.title === deeptitle).contents.push(plane)
         }
       }
     })
-    planesFolders.map(f=>f.title).forEach(t=>planesFoldersExpanded[t] = false)
-    planesFolders.forEach((f)=>{
-      f.subfolders.forEach((s)=>{
+    this.sortPlaneFolderHierarchy(planesFolders);
+    planesFolders.map(f => f.title).forEach(t => planesFoldersExpanded[t] = false)
+    planesFolders.forEach((f) => {
+      f.subfolders.forEach((s) => {
         planesFoldersExpanded[`${f.title}_${s.title}`] = false;
-        s.deepfolders.forEach((d)=>{
+        s.deepfolders.forEach((d) => {
           planesFoldersExpanded[`${f.title}_${s.title}_${d.title}`] = false;
         })
       })
     })
-    this.setState(() => {
-      return {
-        planes,
-        planesFolders,
-        planesFoldersExpanded
-      }
+
+    const meta = getMeta();
+    const persistedExpanded = meta?.preferences?.editor?.planesFoldersExpanded;
+    if (persistedExpanded && typeof persistedExpanded === 'object') {
+      Object.keys(planesFoldersExpanded).forEach((folderKey) => {
+        if (typeof persistedExpanded[folderKey] === 'boolean') {
+          planesFoldersExpanded[folderKey] = persistedExpanded[folderKey];
+        }
+      })
+    }
+    return new Promise((resolve) => {
+      this.setState(() => {
+        return {
+          planes,
+          planesFolders,
+          planesFoldersExpanded
+        }
+      }, resolve)
     })
+  }
+  restoreEditorSelection = () => {
+    if (this._handoffActive) {
+      return;
+    }
+    const meta = getMeta();
+    const selectedView = meta?.preferences?.editor?.selectedView || 'plane';
+    const loadedDungeonPref = meta?.preferences?.editor?.loadedDungeon;
+    const loadedPlaneId = meta?.preferences?.editor?.loadedPlaneId;
+    const loadedBoardId = meta?.preferences?.editor?.loadedBoardId;
+
+    if (loadedDungeonPref && loadedDungeonPref.id) {
+      const dungeon = this.state.dungeons.find(d => d.id === loadedDungeonPref.id);
+      if (dungeon) {
+        // Compute overlayData if overlay is on
+        let overlayData = null;
+        if (this.state.dungeonOverlayOn) {
+          overlayData = this.props.mapMaker.markPassages(dungeon);
+        }
+
+        this.setState({
+          loadedDungeon: dungeon,
+          overlayData,
+          selectedThingTitle: selectedView === 'dungeon' ? `Dungeon: ${dungeon.name}` : this.state.selectedThingTitle
+        });
+        this.setLoadedDungeonDropdownValue(dungeon.name);
+
+        // Check if the loadedBoardId is part of this dungeon
+        if (loadedBoardId) {
+          const context = this.resolveDungeonContext(loadedBoardId);
+          if (context) {
+            this.setState({
+              zoomLevelId: context.levelId,
+              zoomMiniboardIndex: context.miniboardIndex,
+              zoomOrientation: context.orientation,
+              loadedPlane: context.plane,
+              loadedBoard: context.miniboard,
+              tiles: context.miniboard.tiles,
+              selectedThingTitle: selectedView === 'board' ? `Board: ${context.miniboard.name}` : (selectedView === 'plane' ? `Plane: ${context.plane.name}` : `Dungeon: ${dungeon.name}`)
+            });
+            // Update preferences
+            setEditorPreference('loadedPlaneId', context.plane.id || null);
+            setEditorPreference('loadedBoardId', context.miniboard.id || null);
+            return;
+          }
+        }
+
+        // If not a dungeon board, check if loadedPlaneId is part of this dungeon
+        if (loadedPlaneId) {
+          let foundPlane = null;
+          let foundLevelId = null;
+          let foundOrient = null;
+          for (const level of dungeon.levels) {
+            if (level.front && level.front.id === loadedPlaneId) {
+              foundPlane = level.front;
+              foundLevelId = level.id;
+              foundOrient = 'front';
+              break;
+            }
+            if (level.back && level.back.id === loadedPlaneId) {
+              foundPlane = level.back;
+              foundLevelId = level.id;
+              foundOrient = 'back';
+              break;
+            }
+          }
+          if (foundPlane) {
+            this.setState({
+              loadedPlane: foundPlane,
+              zoomLevelId: foundLevelId,
+              zoomOrientation: foundOrient,
+              selectedThingTitle: selectedView === 'plane' ? `Plane: ${foundPlane.name}` : this.state.selectedThingTitle
+            });
+            return;
+          }
+        }
+      }
+    }
+
+    // Restore standalone selections if not restored within dungeon context
+    if (loadedPlaneId) {
+      const plane = this.state.planes.find(p => p.id === loadedPlaneId);
+      if (plane) {
+        this.loadPlane(plane);
+      }
+    }
+
+    if (loadedBoardId) {
+      const board = this.findBoardRefInFolders(loadedBoardId);
+      if (board) {
+        this.loadBoard(board);
+      }
+    }
   }
   addNewPlane = async () => {
     let d = new Date()
     let n = d.getTime();
-    let rand = n.toString().slice(9,13)
+    let rand = n.toString().slice(9, 13)
     let newPlane = {
-        name: `plane${rand}`,
-        miniboards: [[],[],[],[],[],[],[],[],[]],
-        spawnPoints: null,
-        valid: false
+      name: `plane${rand}`,
+      miniboards: [[], [], [], [], [], [], [], [], []],
+      spawnPoints: null,
+      valid: false
     }
     this.setState({
       // miniboards: [],
@@ -2055,15 +3428,23 @@ class MapMakerPage extends React.Component {
     this.renamePlane();
   }
   deletePlane = async () => {
-    if(this.state.loadedPlane){
+    if (this.state.loadedPlane) {
       const deletedPlaneId = this.state.loadedPlane.id;
-      if(!deletedPlaneId) return;
+      if (!deletedPlaneId) {
+        this.setState({
+          loadedPlane: null,
+          planeHasUnsavedChanges: false
+        })
+        setEditorPreference('loadedPlaneId', null);
+        return;
+      }
       await deletePlaneRequest(deletedPlaneId);
       const updatedDungeonCount = await this.removePlaneReferencesFromAllDungeons(deletedPlaneId);
       this.clearLoadedPlane();
-      await this.loadAllPlanes(); 
+      await this.loadAllPlanes();
       await this.loadAllDungeons();
-      if(updatedDungeonCount > 0){
+      setEditorPreference('loadedPlaneId', null);
+      if (updatedDungeonCount > 0) {
         this.toast(`Plane Deleted (${updatedDungeonCount} dungeon${updatedDungeonCount === 1 ? '' : 's'} updated)`)
       } else {
         this.toast('Plane Deleted')
@@ -2072,11 +3453,11 @@ class MapMakerPage extends React.Component {
   }
   clearLoadedPlane = () => {
     let miniboards = []
-    for(let i = 0; i < 9; i++){
+    for (let i = 0; i < 9; i++) {
       miniboards.push([])
     }
     let planes = Array.from(this.state.planes)
-    let loaded = planes.find(e=> e.id === this.state.loadedPlane.id)
+    let loaded = planes.find(e => e.id === this.state.loadedPlane.id)
     loaded.miniboards = miniboards
     this.setState({
       loadedPlane: loaded,
@@ -2087,7 +3468,7 @@ class MapMakerPage extends React.Component {
   resetLoadedPlane = () => {
     const plane = this.state.loadedPlane;
     let miniboards = [];
-    plane.miniboards.forEach((miniboard)=>{
+    plane.miniboards.forEach((miniboard) => {
       miniboards.push(miniboard)
     })
     this.setState({
@@ -2095,7 +3476,7 @@ class MapMakerPage extends React.Component {
     })
   }
   adjacencyFilterClicked = () => {
-    if(this.state.adjacencyFilterSet){
+    if (this.state.adjacencyFilterSet) {
       this.setState((state) => {
         return {
           compatibilityMatrix: {
@@ -2120,16 +3501,16 @@ class MapMakerPage extends React.Component {
   }
   nameFilterClicked = () => {
     let boards;
-    if(!this.state.nameFilterOn){
-    // ^ this is opposite because the sort would happen before the state change toggle
-    // alternatively this could have been put inside a setTimeout, but I'd prefer to have 
-    // only one setState in this function
-      boards = this.state.boards.sort(function(a,b){
+    if (!this.state.nameFilterOn) {
+      // ^ this is opposite because the sort would happen before the state change toggle
+      // alternatively this could have been put inside a setTimeout, but I'd prefer to have 
+      // only one setState in this function
+      boards = this.state.boards.sort(function (a, b) {
         return a.name > b.name ? 1 : -1
       })
     } else {
       // filter by id
-      boards = this.state.boards.sort(function(a,b){
+      boards = this.state.boards.sort(function (a, b) {
         return a.id > b.id ? 1 : -1
       })
     }
@@ -2151,7 +3532,7 @@ class MapMakerPage extends React.Component {
     })
   }
   adjacencyHover = (idx) => {
-    if(this.state.adjacencyFilterOn && this.state.adjacencyFilterSet === false){
+    if (this.state.adjacencyFilterOn && this.state.adjacencyFilterSet === false) {
       this.setState({
         adjacencyHoverIdx: idx
       })
@@ -2162,31 +3543,31 @@ class MapMakerPage extends React.Component {
     this.setState({
       compatibilityMatrix: matrix
     })
-    setTimeout(()=> {
+    setTimeout(() => {
       this.filterByAdjacency();
     })
   }
   filterByAdjacency = () => {
     let left, right, top, bot;
-    if(this.state.compatibilityMatrix.left.length > 0){
+    if (this.state.compatibilityMatrix.left.length > 0) {
       left = [];
       this.state.compatibilityMatrix.left.forEach((id) => {
         left.push(this.state.boards.find(e => e.id === id))
       })
     }
-    if(this.state.compatibilityMatrix.right.length > 0){
+    if (this.state.compatibilityMatrix.right.length > 0) {
       right = [];
       this.state.compatibilityMatrix.right.forEach((id) => {
         right.push(this.state.boards.find(e => e.id === id))
       })
     }
-    if(this.state.compatibilityMatrix.top.length > 0){
+    if (this.state.compatibilityMatrix.top.length > 0) {
       top = [];
       this.state.compatibilityMatrix.top.forEach((id) => {
         top.push(this.state.boards.find(e => e.id === id))
       })
     }
-    if(this.state.compatibilityMatrix.bot.length > 0){
+    if (this.state.compatibilityMatrix.bot.length > 0) {
       bot = [];
       this.state.compatibilityMatrix.bot.forEach((id) => {
         bot.push(this.state.boards.find(e => e.id === id))
@@ -2211,52 +3592,56 @@ class MapMakerPage extends React.Component {
     })
   }
   viewSelectorChange = (val) => {
-    switch(val.target.id){
+    switch (val.target.id) {
       case 'board-view':
         this.setViewState('board')
-      break;
+        break;
       case 'plane-view':
         this.setViewState('plane')
-      break;
+        break;
       case 'dungeon-view':
         this.setViewState('dungeon')
-      break;
+        break;
       default:
         break;
     }
   }
   collapseFilterHeader = (header) => {
-    switch(header){
+    switch (header) {
       case 'left':
         this.setState(state => ({
-          compatibilityMatrix: {...state.compatibilityMatrix,
+          compatibilityMatrix: {
+            ...state.compatibilityMatrix,
             showLeft: !state.compatibilityMatrix.showLeft
           }
         }))
-      break;
+        break;
       case 'right':
         this.setState(state => ({
-          compatibilityMatrix: {...state.compatibilityMatrix,
+          compatibilityMatrix: {
+            ...state.compatibilityMatrix,
             showRight: !state.compatibilityMatrix.showRight
           }
         }))
-      break;
+        break;
       case 'top':
         this.setState(state => ({
-          compatibilityMatrix: {...state.compatibilityMatrix,
+          compatibilityMatrix: {
+            ...state.compatibilityMatrix,
             showTop: !state.compatibilityMatrix.showTop
           }
         }))
-      break;
+        break;
       case 'bot':
         this.setState(state => ({
-          compatibilityMatrix: {...state.compatibilityMatrix,
+          compatibilityMatrix: {
+            ...state.compatibilityMatrix,
             showBot: !state.compatibilityMatrix.showBot
           }
         }))
-      break;
+        break;
       default:
-      break;
+        break;
     }
   }
 
@@ -2269,18 +3654,18 @@ class MapMakerPage extends React.Component {
     })
   }
   onDragOver = (event, i) => {
-    if(this.state.hoveredSection !== i){
+    if (this.state.hoveredSection !== i) {
       this.setState({
         hoveredSection: i
       })
     }
-      event.preventDefault();
+    event.preventDefault();
   }
 
   onDrop = (event, index) => {
     let minis = this.state.loadedPlane.miniboards
     minis[index] = [];
-    if(this.state.draggedBoardOrigin !== null){
+    if (this.state.draggedBoardOrigin !== null) {
       minis[this.state.draggedBoardOrigin] = []
     }
     // const loadedPlane = this.state.loadedPlane;
@@ -2288,19 +3673,20 @@ class MapMakerPage extends React.Component {
     // this.setState({
     //   loadedPlane
     // })
-    
+
     // setTimeout(()=>{
-      const loadedPlane = this.state.loadedPlane;
-      let sections = loadedPlane.miniboards
-      if(this.state.draggedBoard){
-        sections[index] = this.state.draggedBoard
-      }
-      loadedPlane.miniboards = sections;
-      this.setState({
-        draggedBoard: null,
-        hoveredSection: null,
-        loadedPlane
-      })
+    const loadedPlane = this.state.loadedPlane;
+    let sections = loadedPlane.miniboards
+    if (this.state.draggedBoard) {
+      sections[index] = this.state.draggedBoard
+    }
+    loadedPlane.miniboards = sections;
+    this.setState({
+      draggedBoard: null,
+      hoveredSection: null,
+      loadedPlane,
+      planeHasUnsavedChanges: true,
+    })
     // })
   }
 
@@ -2312,84 +3698,93 @@ class MapMakerPage extends React.Component {
   }
   onDragOverDungeon = (event, levelIndex, frontOrBack) => {
     const val = `${levelIndex}_${frontOrBack}`;
-    if(this.state.hoveredDungeonSection !== val){
+    if (this.state.hoveredDungeonSection !== val) {
       this.setState({
         hoveredDungeonSection: val
       })
     }
-      event.preventDefault();
+    event.preventDefault();
   }
 
   onDropDungeon = (levelIndex, frontOrBack) => {
     const dungeon = clone(this.state.loadedDungeon);
-    if(!dungeon || !Array.isArray(dungeon.levels) || !dungeon.levels[levelIndex]) return;
+    if (!dungeon || !Array.isArray(dungeon.levels) || !dungeon.levels[levelIndex]) return;
     dungeon.levels[levelIndex][frontOrBack] = clone(this.state.draggedPlane);
-    setTimeout(()=>{
+    setTimeout(() => {
       this.setState({
         loadedDungeon: this.props.mapMaker.formatDungeon(dungeon),
         draggedPlane: null,
-        hoveredDungeonSection: null
+        hoveredDungeonSection: null,
+        dungeonHasUnsavedChanges: true,
       })
     })
   }
 
   saveDungeonLevel = () => {
+    if (this.state.loadedDungeon && !this.state.loadedDungeon.id) {
+      // Unsaved generated dungeon — prompt for a name before saving
+      this.setState({
+        showModal: true,
+        modalType: 'name dungeon',
+      });
+      return;
+    }
     this.writeDungeon()
   }
   clearDungeonLevel = (levelId) => {
     let dungeon = this.state.loadedDungeon;
-    let level = dungeon.levels.find(l=>l.id === levelId)
-    if(level.front === null && level.back === null){
+    let level = dungeon.levels.find(l => l.id === levelId)
+    if (level.front === null && level.back === null) {
       // clear upper level
-      if(levelId > 0){
-        if(!!dungeon.levels.find(l=>l.id === levelId+1)){
+      if (levelId > 0) {
+        if (!!dungeon.levels.find(l => l.id === levelId + 1)) {
           alert('CANT DELETE THIS LEVEL BECAUSE THERE IS ONE ABOVE IT')
           return
         } else {
-          dungeon.levels = dungeon.levels.filter(e=>e.id!==levelId)
+          dungeon.levels = dungeon.levels.filter(e => e.id !== levelId)
         }
 
       }
       //clear lower level
-      if(levelId < 0){
-        if(!!dungeon.levels.find(l=>l.id === levelId-1)){
+      if (levelId < 0) {
+        if (!!dungeon.levels.find(l => l.id === levelId - 1)) {
           alert('CANT DELETE THIS LEVEL BECAUSE THERE IS ONE BELOW IT')
           return
         } else {
-          dungeon.levels = dungeon.levels.filter(e=>e.id!==levelId)
+          dungeon.levels = dungeon.levels.filter(e => e.id !== levelId)
         }
       }
       this.setState({
-        loadedDungeon : this.props.mapMaker.formatDungeon(dungeon)
+        loadedDungeon: this.props.mapMaker.formatDungeon(dungeon)
       })
     } else {
       level.front = null;
       level.back = null;
       this.setState({
-        loadedDungeon : this.props.mapMaker.formatDungeon(dungeon)
+        loadedDungeon: this.props.mapMaker.formatDungeon(dungeon)
       })
     }
   }
   addDungeonLevelUp = () => {
-    if(!this.state.loadedDungeon) return;
+    if (!this.state.loadedDungeon) return;
     let dungeon = clone(this.state.loadedDungeon);
     // const levels = dungeon.levels
-    const upperLevels = dungeon.levels.filter(l=>l.id > 0).sort((a,b) => a.id - b.id)
+    const upperLevels = dungeon.levels.filter(l => l.id > 0).sort((a, b) => a.id - b.id)
     // lowerLevels = dungeon.levels.filter(l=>l.id < 0).sort((a,b) => a.id - b.id)
     let newLevel;
-    if(upperLevels.length === 0){
+    if (upperLevels.length === 0) {
       newLevel = {
         id: 1,
         front: null,
         back: null
       }
-      
+
     }
-    else{
-      let lastLevel = upperLevels[upperLevels.length-1],
-      lastId = lastLevel.id;
+    else {
+      let lastLevel = upperLevels[upperLevels.length - 1],
+        lastId = lastLevel.id;
       newLevel = {
-        id: lastId+1,
+        id: lastId + 1,
         front: null,
         back: null
       }
@@ -2400,25 +3795,25 @@ class MapMakerPage extends React.Component {
     })
   }
   addDungeonLevelDown = () => {
-    if(!this.state.loadedDungeon) return;
+    if (!this.state.loadedDungeon) return;
     let dungeon = clone(this.state.loadedDungeon);
     // const levels = dungeon.levels
     // const upperLevels = dungeon.levels.filter(l=>l.id > 0).sort((a,b) => a.id - b.id),
-    let lowerLevels = dungeon.levels.filter(l=>l.id < 0).sort((a,b) => a.id - b.id)
+    let lowerLevels = dungeon.levels.filter(l => l.id < 0).sort((a, b) => a.id - b.id)
     let newLevel;
-    if(lowerLevels.length === 0){
+    if (lowerLevels.length === 0) {
       newLevel = {
         id: -1,
         front: null,
         back: null
       }
-      
+
     }
-    else{
+    else {
       let lastLevel = lowerLevels[0],
-      lastId = lastLevel.id
+        lastId = lastLevel.id
       newLevel = {
-        id: lastId-1,
+        id: lastId - 1,
         front: null,
         back: null
       }
@@ -2430,21 +3825,21 @@ class MapMakerPage extends React.Component {
   }
   toggleDungeonLevelOverlay = () => {
     let e = this.state.dungeonOverlayOn,
-    overlayData = null;
-    if(!e === true){
-      overlayData= this.props.mapMaker.markPassages(this.state.loadedDungeon);
+      overlayData = null;
+    if (!e === true) {
+      overlayData = this.props.mapMaker.markPassages(this.state.loadedDungeon);
     }
     const newOverlayState = !e;
     this.setState({
       dungeonOverlayOn: newOverlayState,
       overlayData
     })
-    
+
     // Persist overlay preference
     setEditorPreference('dungeonOverlayOn', newOverlayState);
     const meta = getMeta();
     const userId = sessionStorage.getItem('userId');
-    if(userId){
+    if (userId) {
       updateUserRequest(userId, meta);
     }
     storeMeta(meta);
@@ -2467,7 +3862,7 @@ class MapMakerPage extends React.Component {
 
   modalSaveChanges = () => {
     let type = this.state.modalType.split(' ')[1]
-    switch(type){
+    switch (type) {
       case 'dungeon':
         const dungeon = this.state.loadedDungeon;
         dungeon.name = this.state.dungeonNameInput.current.value
@@ -2475,10 +3870,10 @@ class MapMakerPage extends React.Component {
           loadedDungeon: this.props.mapMaker.formatDungeon(dungeon),
           showModal: false
         })
-        setTimeout(()=>{
+        setTimeout(() => {
           this.writeDungeon()
         })
-      break;
+        break;
       case 'plane':
         const plane = this.state.loadedPlane;
         plane.name = this.state.planeNameInput.current.value
@@ -2486,13 +3881,13 @@ class MapMakerPage extends React.Component {
           loadedPlane: plane,
           showModal: false
         })
-        setTimeout(()=>{
+        setTimeout(() => {
           this.writePlane()
         })
-      break;
+        break;
       case 'board':
         let board = this.state.loadedBoard;
-        if(!board){
+        if (!board) {
           console.log('no loaded board, investigate');
           debugger
         }
@@ -2509,47 +3904,60 @@ class MapMakerPage extends React.Component {
             this.loadBoard(renamedBoard);
           }
         })
-      break;
+        break;
       default:
 
-      break;
+        break;
     }
   }
 
   dungeonSelectOnChange = (e) => {
     let dungeon;
     const userId = sessionStorage.getItem('userId')
-    if(e.target && e.target.value && e.target.value !== 'Dungeon Selector'){
-      dungeon = this.state.dungeons.find(x=>x.name === e.target.value)
+    if (e.target && e.target.value === CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE) {
+      this.openClearUniqueDungeonInstancesModal();
+      return;
+    }
+    if (e.target && e.target.value === GENERATE_DUNGEON_VALUE) {
+      this.generateDungeon();
+      return;
+    }
+    if (e.target && e.target.value && e.target.value !== 'Dungeon Selector') {
+      dungeon = this.state.dungeons.find(x => x.name === e.target.value)
       this.setState({
         dungeonOverlayOn: false,
-        overlayData: null
+        overlayData: null,
+        dungeonHasUnsavedChanges: false,
       })
       this.loadDungeon(dungeon.id)
     } else {
       this.setState({
-        loadedDungeon: null
+        loadedDungeon: null,
+        selectedThingTitle: this.state.selectedView === 'dungeon' ? '' : this.state.selectedThingTitle
       })
+      setEditorPreference('loadedPlaneId', null);
+      setEditorPreference('loadedBoardId', null);
     }
-    
+
     setEditorPreference('loadedDungeon', dungeon || null);
     const meta = getMeta();
-    if(userId) updateUserRequest(userId, meta)
+    if (userId) updateUserRequest(userId, meta)
     storeMeta(meta);
   }
   viewSelectOnChange = (e) => {
-    switch(e.target.value){
-      case 'Board View': 
+    switch (e.target.value) {
+      case 'Board View':
         this.setViewState('board');
-      break;
-      case 'Plane View': 
+        break;
+      case 'Plane View':
         this.setViewState('plane')
-      break;
-      case 'Dungeon View': 
+        break;
+      case 'Dungeon View':
         this.setViewState('dungeon')
-      break;
-      default: 
-      break;    }
+        break;
+      default:
+        break;
+    }
   }
 
   closeModal = () => {
@@ -2565,7 +3973,7 @@ class MapMakerPage extends React.Component {
     })
   }
 
-  render (){
+  render() {
     return (
       <div className="mapmaker-container">
         {this.state.toastMessage && <div className="toast-pane">
@@ -2576,9 +3984,324 @@ class MapMakerPage extends React.Component {
           </div>
         </div>}
 
+        {this.state.contextMenu && this.state.contextMenu.visible && (
+          <div
+            className="context-menu-backdrop"
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: 'transparent' }}
+            onClick={() => this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } })}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+            }}
+          >
+            <div
+              className="custom-context-menu"
+              style={{
+                position: 'absolute',
+                top: this.state.contextMenu.y,
+                left: this.state.contextMenu.x,
+                backgroundColor: '#1c1c1e',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: '8px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+                padding: '6px 0',
+                zIndex: 10000,
+                minWidth: '150px',
+                display: 'flex',
+                flexDirection: 'column',
+                backdropFilter: 'blur(10px)'
+              }}
+            >
+              <button
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '10px 16px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  transition: 'background-color 0.2s',
+                  outline: 'none',
+                  fontFamily: 'inherit'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                onClick={this.handleGetCoordinates}
+              >
+                Get Coordinates
+              </button>
+              <button
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '10px 16px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  transition: 'background-color 0.2s',
+                  outline: 'none',
+                  fontFamily: 'inherit'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                onClick={this.handleStoreCoordinates}
+              >
+                Store Coordinates
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Inscription Wall-Picker — compass overlay on the clicked tile */}
+        {this.state.inscriptionWallPicker && (() => {
+          const tileId = this.state.inscriptionWallPicker.tileId;
+          const tileSize = this.state.tileSize || 30;
+          const col = tileId % 15;
+          const row = Math.floor(tileId / 15);
+          // Calculate pixel position relative to the board grid container
+          // The board grid is a flex-wrap grid; we compute top/left from row/col
+          const pickerSize = tileSize * 3;
+          const left = col * tileSize - tileSize;
+          const top = row * tileSize - tileSize;
+          const btnStyle = (active) => ({
+            width: tileSize + 'px', height: tileSize + 'px',
+            background: active ? 'rgba(212,168,68,0.92)' : 'rgba(30,20,5,0.85)',
+            border: '1px solid #d4a844',
+            color: '#fff', fontSize: Math.max(10, tileSize * 0.4) + 'px',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: '3px', transition: 'background 0.15s'
+          });
+          const cancelBtnStyle = {
+            ...btnStyle(false),
+            background: 'rgba(80,20,20,0.85)', fontSize: Math.max(8, tileSize * 0.3) + 'px'
+          };
+          const tile = this.state.tiles[tileId] || {};
+          const ins = tile.inscriptions || {};
+          return (
+            <div style={{
+              position: 'absolute',
+              left: left + 'px',
+              top: top + 'px',
+              width: pickerSize + 'px',
+              height: pickerSize + 'px',
+              display: 'grid',
+              gridTemplateColumns: `repeat(3, ${tileSize}px)`,
+              gridTemplateRows: `repeat(3, ${tileSize}px)`,
+              zIndex: 500,
+              pointerEvents: 'all'
+            }}>
+              {/* Row 1: empty, Top, empty */}
+              <div />
+              <div style={btnStyle(!!ins.top)} onClick={() => this.selectInscriptionSide('top')} title={ins.top ? '✍ ' + ins.top : 'Inscribe north wall'}>↑</div>
+              <div />
+              {/* Row 2: Left, Cancel-X, Right */}
+              <div style={btnStyle(!!ins.left)} onClick={() => this.selectInscriptionSide('left')} title={ins.left ? '✍ ' + ins.left : 'Inscribe west wall'}>←</div>
+              <div style={cancelBtnStyle} onClick={this.cancelInscription} title="Cancel">✕</div>
+              <div style={btnStyle(!!ins.right)} onClick={() => this.selectInscriptionSide('right')} title={ins.right ? '✍ ' + ins.right : 'Inscribe east wall'}>→</div>
+              {/* Row 3: empty, Bottom, empty */}
+              <div />
+              <div style={btnStyle(!!ins.bottom)} onClick={() => this.selectInscriptionSide('bottom')} title={ins.bottom ? '✍ ' + ins.bottom : 'Inscribe south wall'}>↓</div>
+              <div />
+            </div>
+          );
+        })()}
+
+        {/* Inscription Text Modal */}
+        {this.state.showInscriptionModal && (
+          <CModal alignment="center" backdrop="static" visible={this.state.showInscriptionModal} onClose={this.cancelInscription}>
+            <CModalHeader>
+              <CModalTitle><span role="img" aria-label="Writing Hand">✍</span> Wall Inscription</CModalTitle>
+            </CModalHeader>
+            <CModalBody>
+              <p style={{ color: '#888', fontSize: '13px', marginBottom: '10px' }}>
+                Enter the text that will be carved into this wall. Players will read it when they walk up to it in the dungeon.
+              </p>
+              <textarea
+                className="dungeonname-input"
+                rows={4}
+                style={{ width: '100%', resize: 'vertical', fontFamily: 'serif', fontSize: '14px' }}
+                value={this.state.inscriptionTextInput}
+                onChange={this.handleInscriptionTextChange}
+                placeholder="e.g. 'Beware the shadow that walks in three...' "
+                autoFocus
+              />
+            </CModalBody>
+            <CModalFooter>
+              <CButton color="secondary" onClick={this.cancelInscription}>Cancel</CButton>
+              <CButton color="warning" onClick={this.confirmInscription}>Carve Inscription</CButton>
+            </CModalFooter>
+          </CModal>
+        )}
+
+        {this.state.showPortalModal && (
+          <CModal alignment="center" backdrop="static" size="lg" visible={this.state.showPortalModal} onClose={this.closePortalModal}>
+            <CModalHeader>
+              <CModalTitle><span role="img" aria-label="Cyclone">🌀</span> Dungeon Portal Configurator</CModalTitle>
+            </CModalHeader>
+            <CModalBody>
+              {(() => {
+                const tile = this.state.portalModalTile;
+                if (!tile) return null;
+                const portal = tile.contains || {};
+
+                let currentLvlId = null;
+                let currentOrientation = null;
+                let currentMiniboardIdx = null;
+                if (this.state.loadedDungeon && this.state.loadedBoard) {
+                  this.state.loadedDungeon.levels.forEach((level) => {
+                    ['front', 'back'].forEach((orientation) => {
+                      const plane = level[orientation];
+                      if (plane && Array.isArray(plane.miniboards)) {
+                        plane.miniboards.forEach((mb, mbIndex) => {
+                          if (mb === this.state.loadedBoard || (mb && this.state.loadedBoard && mb.id && this.state.loadedBoard.id && String(mb.id) === String(this.state.loadedBoard.id))) {
+                            currentLvlId = level.id;
+                            currentOrientation = orientation;
+                            currentMiniboardIdx = mbIndex;
+                          }
+                        });
+                      }
+                    });
+                  });
+                }
+
+                const locStr = currentLvlId !== null
+                  ? `Lvl ${currentLvlId} (${currentOrientation === 'front' ? 'Front' : 'Back'}) Board ${currentMiniboardIdx + 1} at [${tile.coordinates}]`
+                  : `Board Tile at [${tile.coordinates}]`;
+
+                const isLinked = !!portal.targetPortalId;
+                const linkLocStr = portal.targetCoordinates
+                  ? (portal.targetLevelId !== null && portal.targetLevelId !== undefined
+                    ? `Lvl ${portal.targetLevelId} (${portal.targetOrientation === 'front' ? 'Front' : 'Back'}) Board ${portal.targetMiniboardIndex + 1} at [${portal.targetCoordinates}]`
+                    : `Board Tile at [${portal.targetCoordinates}]`)
+                  : 'N/A';
+
+                let allPortals = [];
+                if (this.state.loadedDungeon) {
+                  allPortals = this.props.mapMaker.getAllPortalsInDungeon(this.state.loadedDungeon);
+                } else {
+                  allPortals = this.state.tiles
+                    .filter(t => {
+                      const containsType = this.getContainsType(t.contains);
+                      return containsType === 'dungeon_portal' || containsType === 'dungeon portal';
+                    })
+                    .map(t => ({
+                      tileId: t.id,
+                      coordinates: t.coordinates,
+                      miniboardIndex: null,
+                      orientation: null,
+                      levelId: null,
+                      portalId: t.contains.portalId || null,
+                      targetPortalId: t.contains.targetPortalId || null,
+                      portalName: t.contains.portalName || `Board Tile at [${t.coordinates}]`
+                    }));
+                }
+
+                const otherPortals = allPortals.filter(p => {
+                  if (p.portalId && portal.portalId && p.portalId === portal.portalId) {
+                    return false;
+                  }
+                  const isSameBoard = (currentLvlId !== null)
+                    ? (p.levelId === currentLvlId && p.orientation === currentOrientation && p.miniboardIndex === currentMiniboardIdx)
+                    : (p.levelId === null && p.orientation === null && p.miniboardIndex === null);
+                  const isSameTile = p.tileId === tile.id;
+                  return !(isSameBoard && isSameTile);
+                });
+
+                return (
+                  <div>
+                    <div className="mb-3">
+                      <strong>Current Portal:</strong> <span className="badge bg-secondary" style={{ color: '#495057', backgroundColor: '#e9ecef', padding: '6px 10px', marginLeft: '5px' }}>{locStr}</span>
+                    </div>
+
+                    <div className="mb-4 p-3 border rounded bg-light" style={{ padding: '15px', border: '1px solid #dee2e6', borderRadius: '4px', backgroundColor: '#f8f9fa', marginBottom: '20px' }}>
+                      <strong>Status:</strong>{' '}
+                      {isLinked ? (
+                        <span>
+                          <span className="text-success font-weight-bold" style={{ color: '#198754', fontWeight: 'bold' }}><span role="img" aria-label="Green circle">🟢</span> Linked</span> to portal at:{' '}
+                          <span className="badge bg-success" style={{ color: '#fff', backgroundColor: '#198754', padding: '6px 10px', marginLeft: '5px' }}>{linkLocStr}</span>
+                          <CButton color="danger" size="sm" className="ms-3" style={{ marginLeft: '15px' }} onClick={() => this.breakPortalLink(tile, currentLvlId, currentOrientation, currentMiniboardIdx)}>
+                            Break Link
+                          </CButton>
+                        </span>
+                      ) : (
+                        <span className="text-danger font-weight-bold" style={{ color: '#dc3545', fontWeight: 'bold' }}><span role="img" aria-label="Red circle">🔴</span> Unlinked</span>
+                      )}
+                    </div>
+
+                    <h5>Available Portals for Linking:</h5>
+                    {otherPortals.length === 0 ? (
+                      <div className="text-muted italic" style={{ fontStyle: 'italic', color: '#6c757d' }}>No other dungeon portals found. Add more portals to the map first!</div>
+                    ) : (
+                      <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid #dee2e6', borderRadius: '4px' }}>
+                        <table className="table table-striped table-hover align-middle" style={{ width: '100%', marginBottom: 0 }}>
+                          <thead style={{ backgroundColor: '#f8f9fa' }}>
+                            <tr>
+                              <th style={{ padding: '10px' }}>Location</th>
+                              <th style={{ padding: '10px' }}>Status</th>
+                              <th style={{ padding: '10px' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {otherPortals.map((p, idx) => {
+                              const pLoc = p.levelId !== null
+                                ? `Lvl ${p.levelId} (${p.orientation === 'front' ? 'Front' : 'Back'}) Board ${p.miniboardIndex + 1} at [${p.coordinates}]`
+                                : `Board Tile at [${p.coordinates}]`;
+                              const pLinked = !!p.targetPortalId;
+                              let linkedToPortalName = '';
+                              if (pLinked) {
+                                const targetPortal = allPortals.find(x => x.portalId === p.targetPortalId);
+                                if (targetPortal) {
+                                  linkedToPortalName = targetPortal.levelId !== null
+                                    ? `Lvl ${targetPortal.levelId} (${targetPortal.orientation === 'front' ? 'Front' : 'Back'}) Board ${targetPortal.miniboardIndex + 1} at [${targetPortal.coordinates}]`
+                                    : `Board Tile at [${targetPortal.coordinates}]`;
+                                } else {
+                                  linkedToPortalName = 'Unknown Portal';
+                                }
+                              }
+                              return (
+                                <tr key={idx}>
+                                  <td style={{ padding: '10px' }}>{pLoc}</td>
+                                  <td style={{ padding: '10px' }}>
+                                    {pLinked ? (
+                                      <span>
+                                        <span className="text-warning" style={{ color: '#ffc107', fontWeight: 'bold' }}><span role="img" aria-label="Warning sign">⚠️</span> Linked</span>
+                                        <div style={{ fontSize: '0.82em', color: '#6c757d', marginTop: '2px' }}>
+                                          to {linkedToPortalName}
+                                        </div>
+                                      </span>
+                                    ) : (
+                                      <span className="text-success" style={{ color: '#198754' }}>Unlinked</span>
+                                    )}
+                                  </td>
+                                  <td style={{ padding: '10px' }}>
+                                    <CButton color="primary" size="sm" onClick={() => this.linkPortals(tile, currentLvlId, currentOrientation, currentMiniboardIdx, p)}>
+                                      Link to This
+                                    </CButton>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </CModalBody>
+            <CModalFooter>
+              <CButton color="secondary" onClick={this.closePortalModal}>
+                Close
+              </CButton>
+            </CModalFooter>
+          </CModal>
+        )}
+
         <CModal alignment="center" backdrop="static" visible={this.state.showModal} onClose={
           () => this.closeModal()
-          }>
+        }>
           <CModalHeader>
             {this.state.modalType === 'name dungeon' && <CModalTitle>Name this dungeon</CModalTitle>}
             {this.state.modalType === 'rename dungeon' && <CModalTitle>Rename this dungeon</CModalTitle>}
@@ -2588,9 +4311,9 @@ class MapMakerPage extends React.Component {
             {this.state.modalType === 'rename board' && <CModalTitle>Rename this board</CModalTitle>}
           </CModalHeader>
           <CModalBody>
-            {(this.state.modalType === 'name dungeon' || this.state.modalType === 'rename dungeon') && <input ref={this.state.dungeonNameInput} className="dungeonname-input"  type="text" defaultValue={this.state.loadedDungeon?.name || ''} placeholder={this.state.loadedDungeon?.name || ''}/>}
-            {(this.state.modalType === 'name plane' || this.state.modalType === 'rename plane') && <input ref={this.state.planeNameInput} className="dungeonname-input"  type="text" defaultValue={this.state.loadedPlane?.name || ''} placeholder={this.state.loadedPlane?.name || ''}/>}
-            {(this.state.modalType === 'name board' || this.state.modalType === 'rename board') && <input ref={this.state.boardNameInput} className="dungeonname-input"  type="text" defaultValue={this.state.loadedBoard?.name || ''} placeholder={this.state.loadedBoard?.name || ''}/>}
+            {(this.state.modalType === 'name dungeon' || this.state.modalType === 'rename dungeon') && <input ref={this.state.dungeonNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedDungeon?.name || ''} placeholder={this.state.loadedDungeon?.name || ''} />}
+            {(this.state.modalType === 'name plane' || this.state.modalType === 'rename plane') && <input ref={this.state.planeNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedPlane?.name || ''} placeholder={this.state.loadedPlane?.name || ''} />}
+            {(this.state.modalType === 'name board' || this.state.modalType === 'rename board') && <input ref={this.state.boardNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedBoard?.name || ''} placeholder={this.state.loadedBoard?.name || ''} />}
             LOADED BOARD.NAME: {this.state.loadedBoard?.name}
           </CModalBody>
           <CModalFooter>
@@ -2600,10 +4323,59 @@ class MapMakerPage extends React.Component {
             <CButton color="primary" onClick={() => this.modalSaveChanges()}>Save changes</CButton>
           </CModalFooter>
         </CModal>
+        <CModal
+          alignment="center"
+          backdrop="static"
+          visible={this.state.showClearUniqueDungeonInstancesModal}
+          onClose={() => this.closeClearUniqueDungeonInstancesModal()}
+          className="clear-unique-instances-modal"
+        >
+          <CModalHeader className="clear-unique-instances-modal__header">
+            <CModalTitle>Clear All Unique Instances</CModalTitle>
+            <button
+              type="button"
+              className="clear-unique-instances-modal__close"
+              aria-label="Close clear all unique instances popup"
+              onClick={() => this.closeClearUniqueDungeonInstancesModal()}
+            >
+              ×
+            </button>
+          </CModalHeader>
+          <CModalBody className="clear-unique-instances-modal__body">
+            <div className="main-content">
+              This will delete all individual instances of all dungeons. This is can not be undone. Proceed?
+            </div>
+            <div className="affected-instances-section">
+              <div className="affected-instances-title">Affected Instances</div>
+              <div className="affected-instances-list">
+                {this.state.clearUniqueDungeonInstancesLoading && (
+                  <div className="affected-instances-empty">Loading affected instances...</div>
+                )}
+                {!this.state.clearUniqueDungeonInstancesLoading && this.state.clearUniqueDungeonInstances.length === 0 && (
+                  <div className="affected-instances-empty">No unique dungeon instances found.</div>
+                )}
+                {!this.state.clearUniqueDungeonInstancesLoading && this.state.clearUniqueDungeonInstances.map((dungeon) => (
+                  <div key={dungeon.id} className="affected-instance-row">
+                    <div className="affected-instance-name">{dungeon.name}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="clear-unique-instances-actions">
+              <CButton
+                color="danger"
+                disabled={this.state.clearUniqueDungeonInstancesLoading || this.state.clearUniqueDungeonInstances.length === 0}
+                onClick={() => this.confirmClearUniqueDungeonInstances()}
+              >
+                Confirm
+              </CButton>
+            </div>
+          </CModalBody>
+        </CModal>
         <div className="column-wrapper">
           <div className="inputs-container">
             <div className="left-text-readout title">
-              {this.state.selectedThingTitle}
+              {this.state.leftReadoutFlashMessage || this.state.selectedThingTitle}
             </div>
 
             <CButtonGroup className='view-state-radio-group' role="group" aria-label="Basic checkbox toggle button group" >
@@ -2638,11 +4410,6 @@ class MapMakerPage extends React.Component {
                 onChange={this.viewSelectorChange}
               />
             </CButtonGroup>
-
-            <div className="right-text-readout title">
-              
-            </div>
-
             <div className="right-menus">
             </div>
           </div>
@@ -2660,21 +4427,22 @@ class MapMakerPage extends React.Component {
               pinnedOption={this.state.pinnedOption}
               hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
               hoveredTileIdx={this.state.hoveredTileIdx}
+              hoveredTileFootprint={this.state.hoveredTileFootprint}
               hoveredTileId={this.state.hoveredTileIdx}
               optionClickedIdx={this.state.optionClickedIdx}
               selectedView={this.state.selectedView}
               showCoordinates={this.state.showCoordinates}
               mapMaker={this.props.mapMaker}
 
-              setViewState = {this.setViewState}
-              addNewBoard = {this.addNewBoard}
-              cloneBoard = {this.cloneBoard}
-              clearLoadedBoard= {this.clearLoadedBoard}
-              writeBoard = {this.writeBoard}
-              deleteBoard = {this.deleteBoard}
-              renameBoard = {this.renameBoard}
-              adjacencyFilterClicked = {this.adjacencyFilterClicked}
-              nameFilterClicked = {this.nameFilterClicked}
+              setViewState={this.setViewState}
+              addNewBoard={this.addNewBoard}
+              cloneBoard={this.cloneBoard}
+              clearLoadedBoard={this.clearLoadedBoard}
+              writeBoard={this.writeBoard}
+              deleteBoard={this.deleteBoard}
+              renameBoard={this.renameBoard}
+              adjacencyFilterClicked={this.adjacencyFilterClicked}
+              nameFilterClicked={this.nameFilterClicked}
               expandCollapseBoardFolders={this.expandCollapseBoardFolders}
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
@@ -2701,21 +4469,22 @@ class MapMakerPage extends React.Component {
               pinnedOption={this.state.pinnedOption}
               hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
               hoveredTileIdx={this.state.hoveredTileIdx}
+              hoveredTileFootprint={this.state.hoveredTileFootprint}
               hoveredTileId={this.state.hoveredTileIdx}
               optionClickedIdx={this.state.optionClickedIdx}
               selectedView={this.state.selectedView}
               showCoordinates={this.state.showCoordinates}
               mapMaker={this.props.mapMaker}
 
-              setViewState = {this.setViewState}
-              addNewBoard = {this.addNewBoard}
-              cloneBoard = {this.cloneBoard}
-              clearLoadedBoard= {this.clearLoadedBoard}
-              writeBoard = {this.writeBoard}
-              deleteBoard = {this.deleteBoard}
-              renameBoard = {this.renameBoard}
-              adjacencyFilterClicked = {this.adjacencyFilterClicked}
-              nameFilterClicked = {this.nameFilterClicked}
+              setViewState={this.setViewState}
+              addNewBoard={this.addNewBoard}
+              cloneBoard={this.cloneBoard}
+              clearLoadedBoard={this.clearLoadedBoard}
+              writeBoard={this.writeBoard}
+              deleteBoard={this.deleteBoard}
+              renameBoard={this.renameBoard}
+              adjacencyFilterClicked={this.adjacencyFilterClicked}
+              nameFilterClicked={this.nameFilterClicked}
               expandCollapseBoardFolders={this.expandCollapseBoardFolders}
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
@@ -2726,6 +4495,7 @@ class MapMakerPage extends React.Component {
               monsterManager={this.props.monsterManager}
               gates={GATES}
               keys={KEYS}
+              handleContextMenu={this.handleContextMenu}
             ></BoardView>}
 
             {this.state.selectedView === 'board' && <BoardsPalette
@@ -2746,15 +4516,15 @@ class MapMakerPage extends React.Component {
               showCoordinates={this.state.showCoordinates}
               mapMaker={this.props.mapMaker}
 
-              setViewState = {this.setViewState}
-              addNewBoard = {this.addNewBoard}
-              cloneBoard = {this.cloneBoard}
-              clearLoadedBoard= {this.clearLoadedBoard}
-              writeBoard = {this.writeBoard}
-              deleteBoard = {this.deleteBoard}
-              renameBoard = {this.renameBoard}
-              adjacencyFilterClicked = {this.adjacencyFilterClicked}
-              nameFilterClicked = {this.nameFilterClicked}
+              setViewState={this.setViewState}
+              addNewBoard={this.addNewBoard}
+              cloneBoard={this.cloneBoard}
+              clearLoadedBoard={this.clearLoadedBoard}
+              writeBoard={this.writeBoard}
+              deleteBoard={this.deleteBoard}
+              renameBoard={this.renameBoard}
+              adjacencyFilterClicked={this.adjacencyFilterClicked}
+              nameFilterClicked={this.nameFilterClicked}
               expandCollapseBoardFolders={this.expandCollapseBoardFolders}
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
@@ -2774,6 +4544,7 @@ class MapMakerPage extends React.Component {
               boardSize={this.state.boardSize}
               boardsFolders={this.state.boardsFolders}
               boardsFoldersExpanded={this.state.boardsFoldersExpanded}
+              planeHasUnsavedChanges={this.state.planeHasUnsavedChanges}
               boards={this.state.boards}
               tiles={this.state.tiles}
               compatibilityMatrix={this.state.compatibilityMatrix}
@@ -2789,11 +4560,11 @@ class MapMakerPage extends React.Component {
               planes={this.state.planes}
               planesFolders={this.state.planesFolders}
               planesFoldersExpanded={this.state.planesFoldersExpanded}
-              miniboards={this.state.loadedPlane?.miniboards || [[],[],[],[],[],[],[],[],[]]}
+              miniboards={this.state.loadedPlane?.miniboards || [[], [], [], [], [], [], [], [], []]}
               adjacencyHoverIdx={this.state.adjacencyHoverIdx}
               hoveredSection={this.state.hoveredSection}
-              adjacencyHover = {this.adjacencyHover}
-              adjacencyFilter = {this.adacencyFilter}
+              adjacencyHover={this.adjacencyHover}
+              adjacencyFilter={this.adacencyFilter}
               loadPlane={this.loadPlane}
               writePlane={this.writePlane}
               clearLoadedPlane={this.clearLoadedPlane}
@@ -2805,16 +4576,16 @@ class MapMakerPage extends React.Component {
               onDragStart={this.onDragStart}
               onDrop={this.onDrop}
               resetLoadedPlane={this.resetLoadedPlane}
-//            plane specific ^
+              //            plane specific ^
 
 
-              setViewState = {this.setViewState}
-              clearLoadedBoard= {this.clearLoadedBoard}
-              writeBoard = {this.writeBoard}
-              deleteBoard = {this.deleteBoard}
-              renameBoard = {this.renameBoard}
-              adjacencyFilterClicked = {this.adjacencyFilterClicked}
-              nameFilterClicked = {this.nameFilterClicked}
+              setViewState={this.setViewState}
+              clearLoadedBoard={this.clearLoadedBoard}
+              writeBoard={this.writeBoard}
+              deleteBoard={this.deleteBoard}
+              renameBoard={this.renameBoard}
+              adjacencyFilterClicked={this.adjacencyFilterClicked}
+              nameFilterClicked={this.nameFilterClicked}
               expandCollapseBoardFolders={this.expandCollapseBoardFolders}
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
@@ -2823,188 +4594,190 @@ class MapMakerPage extends React.Component {
               setPaletteHover={this.setPaletteHover}
               loadBoard={this.loadBoard}
               showPlanesNames={this.state.showPlanesNames}
-//            board specific ^              
+            //            board specific ^              
             ></PlaneView>}
 
-            {this.state.selectedView === 'dungeon' && 
-            <DungeonView
-              tileSize={this.state.tileSize}
-              boardSize={this.state.boardSize}
-              boardsFolders={this.state.boardsFolders}
-              boardsFoldersExpanded={this.state.boardsFoldersExpanded}
-              boards={this.state.boards}
-              dungeons={this.state.dungeons}
-              tiles={this.state.tiles}
-              compatibilityMatrix={this.state.compatibilityMatrix}
-              hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
-              hoveredTileIdx={this.state.hoveredTileIdx}
-              hoveredTileId={this.state.hoveredTileIdx}
-              optionClickedIdx={this.state.optionClickedIdx}
-              selectedView={this.state.selectedView}
-              showCoordinates={this.state.showCoordinates}
-              mapMaker={this.props.mapMaker}
+            {this.state.selectedView === 'dungeon' &&
+              <DungeonView
+                tileSize={this.state.tileSize}
+                boardSize={this.state.boardSize}
+                boardsFolders={this.state.boardsFolders}
+                boardsFoldersExpanded={this.state.boardsFoldersExpanded}
+                dungeonHasUnsavedChanges={this.state.dungeonHasUnsavedChanges}
+                boards={this.state.boards}
+                dungeons={this.state.dungeons}
+                tiles={this.state.tiles}
+                compatibilityMatrix={this.state.compatibilityMatrix}
+                hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
+                hoveredTileIdx={this.state.hoveredTileIdx}
+                hoveredTileId={this.state.hoveredTileIdx}
+                optionClickedIdx={this.state.optionClickedIdx}
+                selectedView={this.state.selectedView}
+                showCoordinates={this.state.showCoordinates}
+                mapMaker={this.props.mapMaker}
 
-              loadedPlane={this.state.loadedPlane}
-              planes={this.state.planes}
-              planesFolders={this.state.planesFolders}
-              planesFoldersExpanded={this.state.planesFoldersExpanded}
-              miniboards={this.state.loadedPlane?.miniboards || [[],[],[],[],[],[],[],[],[]]}
-              adjacencyHoverIdx={this.state.adjacencyHoverIdx}
-              hoveredSection={this.state.hoveredSection}
-              adjacencyHover = {this.adjacencyHover}
-              adjacencyFilter = {this.adacencyFilter}
-              loadPlane={this.loadPlane}
-              writePlane={this.writePlane}
-              clearLoadedPlane={this.clearLoadedPlane}
-              renamePlane={this.renamePlane}
-              deletePlane={this.deletePlane}
-              addNewPlane={this.addNewPlane}
-              onDragOver={this.onDragOver}
-              // filterDungeonsClicked={this.filterDungeonsClicked}
-              onDragStart={this.onDragStart}
-              onDrop={this.onDrop}
-              resetLoadedPlane={this.resetLoadedPlane}
-//            plane specific ^
+                loadedPlane={this.state.loadedPlane}
+                planes={this.state.planes}
+                planesFolders={this.state.planesFolders}
+                planesFoldersExpanded={this.state.planesFoldersExpanded}
+                miniboards={this.state.loadedPlane?.miniboards || [[], [], [], [], [], [], [], [], []]}
+                adjacencyHoverIdx={this.state.adjacencyHoverIdx}
+                hoveredSection={this.state.hoveredSection}
+                adjacencyHover={this.adjacencyHover}
+                adjacencyFilter={this.adacencyFilter}
+                loadPlane={this.loadPlane}
+                writePlane={this.writePlane}
+                clearLoadedPlane={this.clearLoadedPlane}
+                renamePlane={this.renamePlane}
+                deletePlane={this.deletePlane}
+                addNewPlane={this.addNewPlane}
+                onDragOver={this.onDragOver}
+                // filterDungeonsClicked={this.filterDungeonsClicked}
+                onDragStart={this.onDragStart}
+                onDrop={this.onDrop}
+                resetLoadedPlane={this.resetLoadedPlane}
+                //            plane specific ^
 
 
-              setViewState = {this.setViewState}
-              clearLoadedBoard= {this.clearLoadedBoard}
-              writeBoard = {this.writeBoard}
-              deleteBoard = {this.deleteBoard}
-              renameBoard = {this.renameBoard}
-              adjacencyFilterClicked = {this.adjacencyFilterClicked}
-              nameFilterClicked = {this.nameFilterClicked}
-              expandCollapseBoardFolders={this.expandCollapseBoardFolders}
-              collapseFilterHeader={this.collapseFilterHeader}
-              setHover={this.setHover}
-              handleClick={this.handleClick}
-              handleHover={this.handleHover}
-              setPaletteHover={this.setPaletteHover}
-              loadBoard={this.loadBoard}
-//            board specific ^              
+                setViewState={this.setViewState}
+                clearLoadedBoard={this.clearLoadedBoard}
+                writeBoard={this.writeBoard}
+                deleteBoard={this.deleteBoard}
+                renameBoard={this.renameBoard}
+                adjacencyFilterClicked={this.adjacencyFilterClicked}
+                nameFilterClicked={this.nameFilterClicked}
+                expandCollapseBoardFolders={this.expandCollapseBoardFolders}
+                collapseFilterHeader={this.collapseFilterHeader}
+                setHover={this.setHover}
+                handleClick={this.handleClick}
+                handleHover={this.handleHover}
+                setPaletteHover={this.setPaletteHover}
+                loadBoard={this.loadBoard}
+                //            board specific ^              
 
-              loadedDungeon={this.state.loadedDungeon}
-              hoveredDungeonSection={this.state.hoveredDungeonSection}
-              onDragOverDungeon={this.onDragOverDungeon}
-              onDropDungeon={this.onDropDungeon}
-              onDragStartDungeon={this.onDragStartDungeon}
-              saveDungeonLevel={this.saveDungeonLevel}
-              toggleDungeonLevelOverlay={this.toggleDungeonLevelOverlay}
-              clearDungeonLevel={this.clearDungeonLevel}
-              addDungeonLevelUp={this.addDungeonLevelUp}
-              addDungeonLevelDown={this.addDungeonLevelDown}
-              clearFrontPlanePreview={this.clearFrontPlanePreview}
-              clearBackPlanePreview={this.clearBackPlanePreview}
-              activeDungeonLevel={this.state.activeDungeonLevel}
-              dungeonOverlayOn={this.state.dungeonOverlayOn}
-              overlayData={this.state.overlayData}
-              loadingData={this.state.loadingData}
-              planeSyncInProgress={this.state.planeSyncInProgress}
-              dungeonSelectOnChange={this.dungeonSelectOnChange}
-              dungeonSelectVal={this.state.dungeonSelectVal}
+                loadedDungeon={this.state.loadedDungeon}
+                hoveredDungeonSection={this.state.hoveredDungeonSection}
+                onDragOverDungeon={this.onDragOverDungeon}
+                onDropDungeon={this.onDropDungeon}
+                onDragStartDungeon={this.onDragStartDungeon}
+                saveDungeonLevel={this.saveDungeonLevel}
+                toggleDungeonLevelOverlay={this.toggleDungeonLevelOverlay}
+                clearDungeonLevel={this.clearDungeonLevel}
+                addDungeonLevelUp={this.addDungeonLevelUp}
+                addDungeonLevelDown={this.addDungeonLevelDown}
+                clearFrontPlanePreview={this.clearFrontPlanePreview}
+                clearBackPlanePreview={this.clearBackPlanePreview}
+                activeDungeonLevel={this.state.activeDungeonLevel}
+                dungeonOverlayOn={this.state.dungeonOverlayOn}
+                overlayData={this.state.overlayData}
+                loadingData={this.state.loadingData}
+                planeSyncInProgress={this.state.planeSyncInProgress}
+                dungeonSelectOnChange={this.dungeonSelectOnChange}
+                dungeonSelectVal={this.state.dungeonSelectVal}
+                generatingDungeon={this.state.generatingDungeon}
 
-              downloadDungeon={this.downloadDungeon}
-              renameDungeon={this.renameDungeon}
-              deleteDungeon={this.deleteDungeon}
-              addNewDungeon={this.addNewDungeon}
+                downloadDungeon={this.downloadDungeon}
+                renameDungeon={this.renameDungeon}
+                deleteDungeon={this.deleteDungeon}
+                addNewDungeon={this.addNewDungeon}
 
-              imagesMatrix={this.state.imagesMatrix}
-              zoomIntoBoard={this.zoomIntoBoard}
+                imagesMatrix={this.state.imagesMatrix}
+                zoomIntoBoard={this.zoomIntoBoard}
               ></DungeonView>}
 
-          {(this.state.selectedView === 'plane' || 
-           this.state.selectedView === 'dungeon') 
-          && <PlanesPanel
-              tileSize={this.state.tileSize}
-              boardSize={this.state.boardSize}
-              boardsFolders={this.state.boardsFolders}
-              boardsFoldersExpanded={this.state.boardsFoldersExpanded}
-              boards={this.state.boards}
-              tiles={this.state.tiles}
-              compatibilityMatrix={this.state.compatibilityMatrix}
-              hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
-              hoveredTileIdx={this.state.hoveredTileIdx}
-              hoveredTileId={this.state.hoveredTileIdx}
-              optionClickedIdx={this.state.optionClickedIdx}
-              selectedView={this.state.selectedView}
-              showCoordinates={this.props.showCoordinates}
-              mapMaker={this.props.mapMaker}
+            {(this.state.selectedView === 'plane' ||
+              this.state.selectedView === 'dungeon')
+              && <PlanesPanel
+                tileSize={this.state.tileSize}
+                boardSize={this.state.boardSize}
+                boardsFolders={this.state.boardsFolders}
+                boardsFoldersExpanded={this.state.boardsFoldersExpanded}
+                boards={this.state.boards}
+                tiles={this.state.tiles}
+                compatibilityMatrix={this.state.compatibilityMatrix}
+                hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
+                hoveredTileIdx={this.state.hoveredTileIdx}
+                hoveredTileId={this.state.hoveredTileIdx}
+                optionClickedIdx={this.state.optionClickedIdx}
+                selectedView={this.state.selectedView}
+                showCoordinates={this.props.showCoordinates}
+                mapMaker={this.props.mapMaker}
 
-              loadedPlane={this.state.loadedPlane}
-              planes={this.state.planes}
-              miniboards={this.state.loadedPlane?.miniboards || [[],[],[],[],[],[],[],[],[]]}
-              adjacencyHoverIdx={this.state.adjacencyHoverIdx}
-              hoveredSection={this.state.hoveredSection}
-              adjacencyHover = {this.adjacencyHover}
-              adjacencyFilter = {this.adacencyFilter}
-              loadPlane={this.loadPlane}
-              writePlane={this.writePlane}
-              clearLoadedPlane={this.clearLoadedPlane}
-              renamePlane={this.renamePlane}
-              deletePlane={this.deletePlane}
-              addNewPlane={this.addNewPlane}
-              onDragOver={this.onDragOver}
-              // filterDungeonsClicked={this.filterDungeonsClicked}
-              onDragStart={this.onDragStart}
-              onDrop={this.onDrop}
-              resetLoadedPlane={this.resetLoadedPlane}
-//            plane specific ^
+                loadedPlane={this.state.loadedPlane}
+                planes={this.state.planes}
+                miniboards={this.state.loadedPlane?.miniboards || [[], [], [], [], [], [], [], [], []]}
+                adjacencyHoverIdx={this.state.adjacencyHoverIdx}
+                hoveredSection={this.state.hoveredSection}
+                adjacencyHover={this.adjacencyHover}
+                adjacencyFilter={this.adacencyFilter}
+                loadPlane={this.loadPlane}
+                writePlane={this.writePlane}
+                clearLoadedPlane={this.clearLoadedPlane}
+                renamePlane={this.renamePlane}
+                deletePlane={this.deletePlane}
+                addNewPlane={this.addNewPlane}
+                onDragOver={this.onDragOver}
+                // filterDungeonsClicked={this.filterDungeonsClicked}
+                onDragStart={this.onDragStart}
+                onDrop={this.onDrop}
+                resetLoadedPlane={this.resetLoadedPlane}
+                //            plane specific ^
 
 
-              setViewState = {this.setViewState}
-              clearLoadedBoard= {this.clearLoadedBoard}
-              writeBoard = {this.writeBoard}
-              deleteBoard = {this.deleteBoard}
-              renameBoard = {this.renameBoard}
-              adjacencyFilterClicked = {this.adjacencyFilterClicked}
-              nameFilterClicked = {this.nameFilterClicked}
-              expandCollapseBoardFolders={this.expandCollapseBoardFolders}
-              collapseFilterHeader={this.collapseFilterHeader}
-              setHover={this.setHover}
-              handleClick={this.handleClick}
-              handleHover={this.handleHover}
-              setPaletteHover={this.setPaletteHover}
-              loadBoard={this.loadBoard}
-//            board specific ^   
-              imagesMatrix={this.state.imagesMatrix}
-              zoomIntoBoard={this.zoomIntoBoard}
-              onDragOverDungeon={this.onDragOverDungeon}
-              onDropDungeon={this.onDropDungeon}
-              onDragStartDungeon={this.onDragStartDungeon}
+                setViewState={this.setViewState}
+                clearLoadedBoard={this.clearLoadedBoard}
+                writeBoard={this.writeBoard}
+                deleteBoard={this.deleteBoard}
+                renameBoard={this.renameBoard}
+                adjacencyFilterClicked={this.adjacencyFilterClicked}
+                nameFilterClicked={this.nameFilterClicked}
+                expandCollapseBoardFolders={this.expandCollapseBoardFolders}
+                collapseFilterHeader={this.collapseFilterHeader}
+                setHover={this.setHover}
+                handleClick={this.handleClick}
+                handleHover={this.handleHover}
+                setPaletteHover={this.setPaletteHover}
+                loadBoard={this.loadBoard}
+                //            board specific ^   
+                imagesMatrix={this.state.imagesMatrix}
+                zoomIntoBoard={this.zoomIntoBoard}
+                onDragOverDungeon={this.onDragOverDungeon}
+                onDropDungeon={this.onDropDungeon}
+                onDragStartDungeon={this.onDragStartDungeon}
 
-              toggleShowPlaneNames={this.toggleShowPlaneNames}
-              expandCollapsePlaneFolders={this.expandCollapsePlaneFolders}
-            ></PlanesPanel>}
+                toggleShowPlaneNames={this.toggleShowPlaneNames}
+                expandCollapsePlaneFolders={this.expandCollapsePlaneFolders}
+              ></PlanesPanel>}
 
           </div>
         </div>
 
-      {/* Dev console panel — toggle with Shift+Space */}
-      {this.state.devConsoleOpen && (
-        <div className="dev-console">
-          <div className="dev-console-inner">
-            <div className="dev-console-left">
-              <input
-                ref={this.devConsoleInputRef}
-                className="dev-console-input"
-                value={this.state.devConsoleInput}
-                onChange={this.handleDevConsoleInputChange}
-                onKeyDown={this.handleDevConsoleKeyDown}
-                placeholder="type command..."
-              />
-              <div className="dev-console-typed">{this.state.devConsoleInput}</div>
-            </div>
-            <div className="dev-console-divider" />
-            <div className="dev-console-right">
-              <div className="dev-console-output" ref={this.devConsoleOutputRef}>
-                {this.state.devConsoleOutput.map((line, idx) => (
-                  <div key={idx} className="dev-console-line">{line}</div>
-                ))}
+        {/* Dev console panel — toggle with Shift+Space */}
+        {this.state.devConsoleOpen && (
+          <div className="dev-console">
+            <div className="dev-console-inner">
+              <div className="dev-console-left">
+                <input
+                  ref={this.devConsoleInputRef}
+                  className="dev-console-input"
+                  value={this.state.devConsoleInput}
+                  onChange={this.handleDevConsoleInputChange}
+                  onKeyDown={this.handleDevConsoleKeyDown}
+                  placeholder="type command..."
+                />
+                <div className="dev-console-typed">{this.state.devConsoleInput}</div>
+              </div>
+              <div className="dev-console-divider" />
+              <div className="dev-console-right">
+                <div className="dev-console-output" ref={this.devConsoleOutputRef}>
+                  {this.state.devConsoleOutput.map((line, idx) => (
+                    <div key={idx} className="dev-console-line">{line}</div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </div>
     )
 

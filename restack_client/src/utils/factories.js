@@ -1,4 +1,5 @@
 export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
+    const SPEED_STAT_MULTIPLIER = 3;
     const {
         acquireTarget, 
         chooseAttackType,
@@ -15,7 +16,6 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         handleOverlap,
         // goToDestination,
         processMove,
-        targetInRange,
         getSelectedFighter,
         onEraTransition,
         targetKilled,
@@ -62,9 +62,26 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         initialFacing = 'left';
     }
 
-    const rawAttacks = Array.isArray(fighter.attacks) ? fighter.attacks : [];
+    let rawAttacks = [];
+    let rawSpecials = [];
+    const BASIC_ATTACK_KEYS = [
+        'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 
+        'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
+        'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
+        'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile', 
+        'vampiric_bite', 'induce_madness', 'lightning', 'bite', 'gore'
+    ];
+
+    if (Array.isArray(fighter.skills)) {
+        rawAttacks = fighter.skills.filter(s => BASIC_ATTACK_KEYS.includes(s));
+        rawSpecials = fighter.skills.filter(s => !BASIC_ATTACK_KEYS.includes(s));
+    } else {
+        rawAttacks = Array.isArray(fighter.attacks) ? fighter.attacks : [];
+        rawSpecials = Array.isArray(fighter.specials) ? fighter.specials : [];
+    }
+
     let formattedAttacks = (typeof callbacks.formatAttacks === 'function')
-        ? callbacks.formatAttacks(rawAttacks)
+        ? callbacks.formatAttacks(rawAttacks, fighter)
         : rawAttacks;
 
     // Persisted Soldier records may contain duplicate sword swings from older data.
@@ -82,15 +99,14 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         portrait: fighter.portrait,
         portraitFilter: fighter.portraitFilter || null,
         level: fighter.level,
+        tier: fighter.tier,
         FIGHT_INTERVAL: FIGHT_INTERVAL,
     // Use incoming current hp if provided (persisted from DungeonPage), otherwise default to stats.hp
     hp: (typeof fighter.hp === 'number') ? fighter.hp : fighter.stats.hp,
     // starting_hp represents the max HP for the fighter (may be provided or fall back to stats.hp)
     starting_hp: (typeof fighter.starting_hp === 'number') ? fighter.starting_hp : fighter.stats.hp,
-        // Minions start with 0 energy so they must earn a full pool before their
-        // special abilities (e.g. bifurcate) can fire. Monsters and fighters start
-        // with a full pool so their openers are immediately available.
-        energy: fighter.isMinion ? 0 : 100,
+        // All units start at 0 energy.
+        energy: 0,
         tempo: 1,
         turnCycleCount: 0,
         turnCycleStarted: false,
@@ -129,20 +145,42 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         invisible_eras: 0,
         petrified: false,
         petrified_eras: 0,
+        defBroken: false,
+        defBroken_eras: 0,
+        _defBrokenOriginalDef: null,
+        psionicBurn: false,
+        psionicBurn_eras: 0,
 
         // -- New Regeneration Properties --
         regenerating: false,
         regenerating_eras: 0,
         regeneration_percent: 0,
+
+        // -- Mentality Debuff Properties --
+        asleep: false,
+        asleep_eras: 0,
+        feared: false,
+        feared_eras: 0,
+        ensnared: false,
+        ensnared_eras: 0,
+        betrayed: false,
+        betrayed_eras: 0,
+        crimsonSight: false,
+        crimsonSight_eras: 0,
+        twinFingerStun: false,
+        twinFingerStun_eras: 0,
     // Ensure attacks are always full objects, not just strings.
     attacks: formattedAttacks,
-    specials: (typeof formatSpecials === 'function') ? formatSpecials(fighter.specials || []) : (fighter.specials || []),
+    specials: (typeof formatSpecials === 'function') ? formatSpecials(rawSpecials, fighter) : rawSpecials,
         specialActions: fighter.specialActions, // Now uses flat structure: type, name, iconUrl, subtype, etc.
+        globalSkills: fighter.globalSkills,
+        skills: fighter.skills,
         targettedBy: [],
         passives: Array.isArray(fighter.passives) ? [...fighter.passives] : [],
         reassembleUsed: !!fighter.reassembleUsed,
         hasReassembled: !!fighter.hasReassembled,
         combatPaused: false,
+        buffs: Array.isArray(fighter.buffs) ? [...fighter.buffs] : [],
         readout: {action:'', result: ''},
         // readout: '',
         hasOverlap: false,
@@ -152,6 +190,9 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         action_queue: [],
         turnSkips: 0,
         isOnManualMoveCooldown: false,
+        manualCommandCooldownStartedAt: 0,
+        manualCommandCooldownUntil: 0,
+        manualCommandCooldownMs: 4000,
         manualCount: 0,
         timeAhead: null,
         damageIndicators: [], // Will store objects: { id, value, source }
@@ -164,10 +205,10 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         targetAcquired: null,
     // Use dex when available, otherwise fall back to speed (monsters) or 1.
     // Use explicit numeric checks to avoid treating 0/undefined incorrectly.
-    movesPerTurnCycle: ( ((typeof fighter.stats.dex === 'number' && fighter.stats.dex > 0) ? fighter.stats.dex : ((typeof fighter.stats.speed === 'number' && fighter.stats.speed > 0) ? fighter.stats.speed : 1)) ) * 2,
+    movesPerTurnCycle: ( ((typeof fighter.stats.dex === 'number' && fighter.stats.dex > 0) ? fighter.stats.dex : ((typeof fighter.stats.speed === 'number' && fighter.stats.speed > 0) ? fighter.stats.speed : 1)) * SPEED_STAT_MULTIPLIER ) * 2,
         movesLeft: 0,
     // Compute moveCooldown from dex (fighters) or speed (monsters). Default to 1 to avoid NaN.
-    moveCooldown: 1 / ( ((typeof fighter.stats.dex === 'number' && fighter.stats.dex > 0) ? fighter.stats.dex : ((typeof fighter.stats.speed === 'number' && fighter.stats.speed > 0) ? fighter.stats.speed : 1)) ) * 5000, // Higher dex/speed = lower cooldown
+    moveCooldown: 1 / ( (((typeof fighter.stats.dex === 'number' && fighter.stats.dex > 0) ? fighter.stats.dex : ((typeof fighter.stats.speed === 'number' && fighter.stats.speed > 0) ? fighter.stats.speed : 1)) * SPEED_STAT_MULTIPLIER) ) * 5000, // Higher dex/speed = lower cooldown
         eras: [
             {
                 moved: false,
@@ -198,7 +239,8 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         color: fighter.color,
         facing: initialFacing, // persistent facing property
         attack: function(){
-            if (this.invisible || this.petrified) return;
+            if (this.invisible || this.petrified || this.asleep) return;
+            if (this.manualCommandCooldownUntil && Date.now() < this.manualCommandCooldownUntil) return;
             const target = getCombatant(this.targetId);
             if(!target) return;
             if(!target){
@@ -217,7 +259,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
             initiateAttack(this);
         },
         manualAttack: function(){
-            if (this.invisible || this.petrified) return;
+            if (this.invisible || this.petrified || this.asleep) return;
             this.manualMovesCurrent-= 2
             initiateAttack(this, true);
         },
@@ -244,10 +286,12 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
             this.active = false;
             this.attacking = this.attackingReverse = false;
             this.tempo = 1;
+            clearInterval(this.interval);
             this.turnCycle();
         },
         move: function(){
             //only ever triggered from turn cycle AI method
+            if (this.manualCommandCooldownUntil && Date.now() < this.manualCommandCooldownUntil) return;
             // AI moves should also consume one manual move point so the
             // manual-moves UI reflects AI actions.
             try {
@@ -259,6 +303,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
             processMove(this);
         },
         retargetToCloserEnemyIfNeeded: function(){
+            if (this.disableCloserRetarget) return;
             if (!(this.isMonster || this.isMinion) || this.behaviorSequence !== 'brawler') return;
             if (typeof getAllCombatants !== 'function') return;
 
@@ -318,7 +363,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                 ? startCount
                 : (!this._inRestartTurnCycle && typeof this.turnCycleCount === 'number' ? this.turnCycleCount : 0);
             // Use dex when present (crew), otherwise fall back to speed (monsters). Default to 1.
-            const effectiveStat = (this.stats && (typeof this.stats.dex === 'number') && this.stats.dex > 0) ? this.stats.dex : ((this.stats && (typeof this.stats.speed === 'number') && this.stats.speed > 0) ? this.stats.speed : 1);
+            const effectiveStat = (((this.stats && (typeof this.stats.dex === 'number') && this.stats.dex > 0) ? this.stats.dex : ((this.stats && (typeof this.stats.speed === 'number') && this.stats.speed > 0) ? this.stats.speed : 1)) * SPEED_STAT_MULTIPLIER);
             let factor = (1 / effectiveStat * 25)
             let increment = (1 / factor)
             if(this.hasOverlap) handleOverlap(this)
@@ -327,6 +372,21 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
             
             this.interval = setInterval(()=>{
                 if(this.combatPaused || this.dead || this.locked || isCombatOver()) return
+
+                // Passive energy regen should continue even while manual command
+                // cooldown is active so resource flow remains uninterrupted.
+                if (!this.dead && !this.combatPaused) {
+                    const speed = (this.stats && typeof this.stats.speed === 'number' && this.stats.speed > 0)
+                        ? this.stats.speed
+                        : 1;
+                    const regenPerTick = speed * 0.1;
+                    this.energy = Math.min(100, (this.energy || 0) + regenPerTick);
+                }
+
+                if (this.manualCommandCooldownUntil && Date.now() < this.manualCommandCooldownUntil) {
+                    broadcastDataUpdate(this)
+                    return
+                }
                 if(this.isOnManualMoveCooldown){
                     if(this.tempo > 100) this.tempo = 100;
                     broadcastDataUpdate(this)
@@ -353,8 +413,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                 count += increment;
                 this.turnCycleCount = count;
                 if(this.frozen){
-                    debugger
-                    this.tempo = Math.floor((count/100)*100);
+                    this.tempo = Math.min(100, count);
                     if(count >= 100){
                         this.frozenPoints--
                         if(this.frozenPoints <= 0){
@@ -369,27 +428,8 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                     broadcastDataUpdate()
                     return
                 }
-                this.tempo = Math.floor((count/100)*100);
+                this.tempo = Math.min(100, count);
                 if(this.tempo < 1) return;
-
-                // ── Passive energy regen ───────────────────────────────────
-                // Ticks every FIGHT_INTERVAL ms. Regen rate is derived from
-                // stats.speed so faster combatants fill their bar quicker.
-                // A combatant with speed=10 at the default 40ms interval will
-                // reach 100 energy in roughly 20 seconds (matching ~one full
-                // turn-cycle duration). Minions start at 0 so this is their
-                // only path to triggering energy-gated abilities.
-                if (!this.dead && !this.combatPaused) {
-                    const speed = (this.stats && typeof this.stats.speed === 'number' && this.stats.speed > 0)
-                        ? this.stats.speed
-                        : 1;
-                    // regenPerTick = speed * 0.02  →  speed-10 unit at 40ms ticks ≈ 20s to fill
-                    // beholder_minion gets 3x regen for testing so they can reach 100 energy to bifurcate
-                    const regenMult = (this.type === 'beholder_minion') ? 3 : 1;
-                    const regenPerTick = speed * 0.02 * regenMult;
-                    this.energy = Math.min(100, (this.energy || 0) + regenPerTick);
-                }
-                // ─────────────────────────────────────────────────────────
 
                 if(isCombatOver() || this.dead){
                     clearInterval(this.interval)
@@ -436,6 +476,62 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                 if (eraIndex !== this._lastEraIndex) {
                     this._lastEraIndex = eraIndex;
 
+                    const hasShadowArmor = this.specials && this.specials.some(s => s.id === 'shadow_armor' || s.name === 'Shadow Armor');
+                    if (hasShadowArmor) {
+                        const hasDebuff = this.feared || this.poison || this.stunned || this.silenced || this.slowed || this.weakened || this.petrified || this.frozen || this.ensnared || this.asleep;
+                        if (hasDebuff && Math.random() < 0.35) {
+                            this.feared = false;
+                            this.feared_eras = 0;
+                            if (this._fearOriginalAtk != null) { this.atk = this._fearOriginalAtk; delete this._fearOriginalAtk; }
+                            if (this._fearOriginalDef != null) { this.def = this._fearOriginalDef; delete this._fearOriginalDef; }
+
+                            this.poison = false;
+                            this.poisonRounds = 0;
+                            this.poison_eras = 0;
+
+                            this.stunned = false;
+                            this.stunned_eras = 0;
+
+                            this.silenced = false;
+                            this.silenced_eras = 0;
+
+                            this.slowed = false;
+                            this.slowed_eras = 0;
+                            if (this._slowOriginalSpeed != null) {
+                                if (this.stats) this.stats.speed = this._slowOriginalSpeed;
+                                this.movesPerTurnCycle = this._slowOriginalSpeed * 2;
+                                this.moveCooldown = (1 / this._slowOriginalSpeed) * 5000;
+                                delete this._slowOriginalSpeed;
+                            }
+
+                            this.weakened = false;
+                            this.weakened_eras = 0;
+                            if (this._weakOriginalAtk != null) {
+                                this.atk = this._weakOriginalAtk;
+                                delete this._weakOriginalAtk;
+                            }
+
+                            this.petrified = false;
+                            this.petrified_eras = 0;
+
+                            this.frozen = false;
+                            this.frozen_eras = 0;
+
+                            this.ensnared = false;
+                            this.ensnared_eras = 0;
+
+                            this.asleep = false;
+                            this.asleep_eras = 0;
+
+                            if (callbacks.appendCombatLog) {
+                                callbacks.appendCombatLog(`${this.name}'s Shadow Armor dispels all debuffs!`);
+                            }
+
+                            this.damageIndicators = this.damageIndicators || [];
+                            this.damageIndicators.push({ id: Date.now() + Math.random(), value: 'DISPEL!', isCrit: true, source: 'Shadow Armor' });
+                        }
+                    }
+
                     if (typeof onEraTransition === 'function') {
                         onEraTransition(this);
                     }
@@ -466,6 +562,102 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                         if (this.petrified_eras <= 0) {
                             this.petrified = false;
                             this.petrified_eras = 0;
+                            if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
+                        }
+                    }
+
+                    if (this.defBroken && this.defBroken_eras > 0) {
+                        this.defBroken_eras--;
+                        if (this.defBroken_eras <= 0) {
+                            if (this._defBrokenOriginalDef != null) {
+                                this.stats.def = this._defBrokenOriginalDef;
+                                this.def = this._defBrokenOriginalDef;
+                            }
+                            this.defBroken = false;
+                            this.defBroken_eras = 0;
+                            this._defBrokenOriginalDef = null;
+                            if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
+                        }
+                    }
+
+                    if (this.psionicBurn && this.psionicBurn_eras > 0) {
+                        this.psionicBurn_eras--;
+                        if (this.psionicBurn_eras <= 0) {
+                            this.psionicBurn = false;
+                            this.psionicBurn_eras = 0;
+                            if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
+                        }
+                    }
+
+                    // -- Sleep effect: tick down and clear --
+                    if (this.asleep && this.asleep_eras > 0) {
+                        this.asleep_eras--;
+                        if (this.asleep_eras <= 0) {
+                            this.asleep = false;
+                            this.asleep_eras = 0;
+                            if (!this.targetId) acquireTarget(this);
+                            if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
+                        }
+                    }
+
+                    // -- Ensnared effect: tick down and clear --
+                    if (this.ensnared && this.ensnared_eras > 0) {
+                        this.ensnared_eras--;
+                        if (this.ensnared_eras <= 0) {
+                            this.ensnared = false;
+                            this.ensnared_eras = 0;
+                            if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
+                        }
+                    }
+
+                    // -- Betrayal effect: tick down and restore allegiance --
+                    if (this.betrayed && this.betrayed_eras > 0) {
+                        this.betrayed_eras--;
+                        if (this.betrayed_eras <= 0) {
+                            // Restore original allegiance flags
+                            if (this._betrayalOriginalIsMonster != null) {
+                                this.isMonster = this._betrayalOriginalIsMonster;
+                                delete this._betrayalOriginalIsMonster;
+                            }
+                            if (this._betrayalOriginalIsMinion != null) {
+                                this.isMinion = this._betrayalOriginalIsMinion;
+                                delete this._betrayalOriginalIsMinion;
+                            }
+                            this.targetId = null;
+                            this.pendingAttack = null;
+                            this.betrayed = false;
+                            this.betrayed_eras = 0;
+                            acquireTarget(this);
+                            if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
+                        }
+                    }
+
+                    // -- Crimson Sight effect: tick down and restore DEF --
+                    if (this.crimsonSight && this.crimsonSight_eras > 0) {
+                        this.crimsonSight_eras--;
+                        if (this.crimsonSight_eras <= 0) {
+                            if (this._crimsonSightOriginalDef != null) {
+                                if (this.stats) this.stats.def = this._crimsonSightOriginalDef;
+                                this.def = this._crimsonSightOriginalDef;
+                                delete this._crimsonSightOriginalDef;
+                            }
+                            this.crimsonSight = false;
+                            this.crimsonSight_eras = 0;
+                            if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
+                        }
+                    }
+
+                    // -- Twin Finger Stun effect: tick down and restore ATK --
+                    if (this.twinFingerStun && this.twinFingerStun_eras > 0) {
+                        this.twinFingerStun_eras--;
+                        if (this.twinFingerStun_eras <= 0) {
+                            if (this._twinFingerOriginalAtk != null) {
+                                this.atk = this._twinFingerOriginalAtk;
+                                delete this._twinFingerOriginalAtk;
+                            }
+                            this.twinFingerStun = false;
+                            this.twinFingerStun_eras = 0;
+                            // Note: stun is cleared separately via its own era countdown
                             if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
                         }
                     }
@@ -524,10 +716,32 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                         }
                         if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
                     }
+
+                    // -- Troll custom regenerate effect --
+                    if (this.regenerating && typeof this.trollRegenRoundsLeft === 'number' && this.trollRegenRoundsLeft > 0 && !this.dead) {
+                        const healAmount = 5;
+                        this.hp = Math.min(this.starting_hp, this.hp + healAmount);
+                        const indicatorId = Date.now() + Math.random();
+                        const indicatorRecipient = getIndicatorRecipient(this);
+                        indicatorRecipient.damageIndicators.push({ 
+                            id: indicatorId, 
+                            value: `+${healAmount}`, 
+                            source: 'Regen', 
+                            type: 'heal',
+                            timestamp: Date.now()
+                        });
+                        this.trollRegenRoundsLeft--;
+                        if (this.trollRegenRoundsLeft <= 0) {
+                            this.regenerating = false;
+                            this.trollRegenRoundsLeft = 0;
+                        }
+                        if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
+                    }
                 }
 
                 const eraMove = () => {
-                    if(this.stunned || this.petrified) return; // petrified/stunned cannot move or attack
+                    if(this.stunned || this.petrified || this.asleep) return; // cannot move or attack
+                    if(this.ensnared) return; // ensnared: cannot move (attack is handled in processMove)
                     if(!era.moved && !this.onMoveCooldown){
                         this.retargetToCloserEnemyIfNeeded();
                         era.moved = true;
@@ -538,7 +752,16 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                 // eraAttack removed — attack logic is now embedded in each AI's processMove
                 switch(eraIndex){
                     case 0: 
-                        if(!this.targetId) acquireTarget(this);
+                        {
+                            const currentTarget = this.targetId ? getCombatant(this.targetId) : null;
+                            const targetInvalid = !currentTarget || currentTarget.dead || currentTarget.isVCT;
+                            // restartTurnCycle can leave a live targetId but a null pendingAttack.
+                            // Reacquire at the start of each cycle when targeting/attack state is invalid.
+                            if (targetInvalid || !this.pendingAttack) {
+                                if (targetInvalid) this.targetId = null;
+                                acquireTarget(this);
+                            }
+                        }
                         eraMove();
                     break;
                     case 1: 
@@ -594,6 +817,35 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                     if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
                 }
             }
+            // Stat Buffs ticking
+            if (Array.isArray(this.buffs) && this.buffs.length > 0) {
+                const activeBuffs = [];
+                this.buffs.forEach(buff => {
+                    buff.rounds--;
+                    if (buff.rounds <= 0) {
+                        const statName = buff.stat;
+                        const originalValue = buff.originalValue;
+                        if (statName === 'atk') {
+                            this.atk = originalValue;
+                        } else if (statName === 'def') {
+                            this.def = originalValue;
+                            if (this.stats) this.stats.def = originalValue;
+                        } else if (statName === 'speed') {
+                            if (this.stats) this.stats.speed = originalValue;
+                            this.movesPerTurnCycle = originalValue * 2;
+                            this.moveCooldown = (1 / originalValue) * 5000;
+                        } else if (statName === 'magic_dmg') {
+                            this.magic_dmg = originalValue;
+                        } else if (statName === 'dodge') {
+                            this.dodge = originalValue;
+                        }
+                    } else {
+                        activeBuffs.push(buff);
+                    }
+                });
+                this.buffs = activeBuffs;
+                if (typeof broadcastDataUpdate === 'function' && !isCombatOver()) broadcastDataUpdate(this);
+            }
             // ─────────────────────────────────────────────────────────────
 
             this._inRestartTurnCycle = false;
@@ -601,6 +853,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         },
         waitForAttack: function(){
             // this.aiming = true;
+            const pollInterval = Math.max(1, this.FIGHT_INTERVAL || 1);
             const waitInterval = setInterval(()=>{
                 if(this.type === 'djinn'){
                     console.log('in WAIT block');
@@ -613,7 +866,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                     this.attack(target)
                     clearInterval(waitInterval)
                 }
-            }, 500)
+            }, pollInterval)
         },
         rockAnimationOn : function(){
             this.rocked = true;

@@ -3,9 +3,8 @@ import '@coreui/coreui/dist/css/coreui.min.css'
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 import Tile from '../../components/tile'
-// import { CDropdown, CDropdownToggle, CDropdownMenu, CDropdownItem, CCollapse} from '@coreui/react';
-// import  CIcon  from '@coreui/icons-react'
-// import { cilCaretRight } from '@coreui/icons';
+import CIcon from '@coreui/icons-react'
+import { cilSave, cilPencil, cilTrash, cilPlus } from '@coreui/icons';
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 
@@ -50,8 +49,22 @@ class PlaneView extends React.Component {
     render (){
         return (
             <div className="board-view-container">
-                <div className="center-board-container">
-                    <div 
+                <div className="center-board-container" style={{flexDirection: 'column'}}>
+                    <div className="level-buttons-container plane-action-buttons">
+                        <div className="icon-container" title="Save Plane" onClick={() => this.props.writePlane && this.props.writePlane()}>
+                            <CIcon icon={cilSave} size="lg" style={this.props.planeHasUnsavedChanges ? {color: 'gold'} : {}}/>
+                        </div>
+                        <div className="icon-container" title="Rename Plane" onClick={() => this.props.loadedPlane && this.props.renamePlane && this.props.renamePlane()}>
+                            <CIcon icon={cilPencil} size="lg"/>
+                        </div>
+                        <div className="icon-container" title="Delete Plane" onClick={() => this.props.loadedPlane && this.props.deletePlane && this.props.deletePlane()}>
+                            <CIcon icon={cilTrash} size="lg"/>
+                        </div>
+                        <div className="icon-container" title="New Plane" onClick={() => this.props.addNewPlane && this.props.addNewPlane()}>
+                            <CIcon icon={cilPlus} size="lg"/>
+                        </div>
+                    </div>
+                    <div
                     onMouseLeave={() => {return this.props.setHover(null)}}
                     className="board map-board" 
                     style={{
@@ -90,9 +103,10 @@ class PlaneView extends React.Component {
                                             id={i}
                                             // boardIndex={boardIndex}
                                             tileSize={((this.props.tileSize*15)/3-2)/15}
+                                            contains={tile.contains}
                                             image={tile.image ? tile.image : null}
                                             imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                            color={tile.color ? tile.color : 'white'}
+                                            color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
                                             coordinates={tile.coordinates}
                                             index={tile.id}
                                             showCoordinates={false}

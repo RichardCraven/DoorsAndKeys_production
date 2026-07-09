@@ -60,8 +60,6 @@ export function keyCleanup(dungeon) {
 
     if (replacedCount > 0) {
         console.log(`cache-cleanup.keyCleanup: replaced ${replacedCount} master key tile(s) with treasury key`);
-    } else {
-        console.log('cache-cleanup.keyCleanup: no master key tiles found — nothing replaced');
     }
 
     return replacedCount;
@@ -160,8 +158,6 @@ export function itemCleanup(dungeon, crew) {
 
     if (replacedCount > 0) {
         console.log(`cache-cleanup.itemCleanup: replaced ${replacedCount} deprecated shield item(s)`);
-    } else {
-        console.log('cache-cleanup.itemCleanup: no deprecated shield items found — nothing replaced');
     }
 
     return replacedCount;
@@ -258,7 +254,7 @@ export function resolveMonsterPools(dungeon, monsters) {
 
     Object.keys(monsters).forEach(monsterKey => {
         const monster = monsters[monsterKey];
-        if (!monster || typeof monster.tier !== 'number') return;
+        if (!monster || typeof monster.tier !== 'number' || monster.isMinion || monster.isSummoned) return;
         const poolKey = `tier_${monster.tier}_monster`;
         if (pools[poolKey]) {
             pools[poolKey].push(monsterKey);

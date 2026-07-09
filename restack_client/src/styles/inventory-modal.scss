@@ -111,7 +111,7 @@
     border-top: 1px solid rgba(255,255,255,0.06);
     align-items: center;
     overflow-x: auto;
-    height: 120px; /* fixed strip height */
+    height: 100px; /* fixed strip height */
     box-sizing: border-box;
 }
 .inventory-descriptor-panel{
@@ -218,21 +218,35 @@
     justify-content: center;
     position: relative;
 }
+.inventory-popup .inventory-strip .tile.inventory-tile,
+.inventory-modal .inventory-strip .tile.inventory-tile{
+    background-color: transparent;
+}
+.inventory-popup .inventory-strip .tile.inventory-tile:hover,
+.inventory-modal .inventory-strip .tile.inventory-tile:hover{
+    background-color: rgba(151, 176, 208, 0.18) !important;
+}
+.inventory-popup .inventory-strip .tile.inventory-tile.active,
+.inventory-modal .inventory-strip .tile.inventory-tile.active{
+    background-color: rgba(249, 177, 21, 0.28) !important;
+}
 .inventory-popup .inventory-strip .strip-item .stack-count-badge,
 .inventory-modal .inventory-strip .strip-item .stack-count-badge{
     position: absolute;
-    top: 18px;
-    right: 0px;
-    background: rgba(0,0,0,0.7);
+    top: 6px;
+    left: 8px;
+    background: rgba(0,0,0,0.35);
     color: white;
-    min-width: 20px;
-    height: 20px;
-    border-radius: 10px;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 700;
+    line-height: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.9);
     z-index: 30;
 }
 .inventory-popup .crew-panel,
@@ -298,11 +312,20 @@
     position: absolute;
     width: 55px;
     height: 55px;
-    border: 1px solid black;
-    background: transparent;
+    border: 2px solid rgba(205, 202, 202, 0.68);
+    background: rgba(255,255,255,0.05);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.45) inset;
     box-sizing: border-box;
     border-radius: 4px;
     pointer-events: auto;
+
+    .tile {
+        background-color: transparent !important;
+        border: none !important;
+        margin: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+    }
 }
 /* chest slot centered on upper torso */
 .inventory-popup .crew-body .slot-chest,
@@ -340,8 +363,9 @@
     transform: translate(0, -50%);
     width: 55px;
     height: 55px;
-    border: 1px solid black;
-    background: transparent;
+    border: 2px solid rgba(205, 202, 202, 0.68);
+    background: rgba(255,255,255,0.05);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.45) inset;
     box-sizing: border-box;
     border-radius: 4px;
     pointer-events: auto;
@@ -354,8 +378,9 @@
     transform: translate(0, -50%);
     width: 55px;
     height: 55px;
-    border: 1px solid black;
-    background: transparent;
+    border: 2px solid rgba(205, 202, 202, 0.68);
+    background: rgba(255,255,255,0.05);
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.45) inset;
     box-sizing: border-box;
     border-radius: 4px;
     pointer-events: auto;
@@ -387,6 +412,7 @@
     background-repeat: no-repeat;
     background-position: center;
     opacity: 0.5;
+    filter: invert(1) brightness(1.05) contrast(1.12);
     z-index: 0;
     pointer-events: none;
 }
@@ -403,6 +429,7 @@
     left: 22px;
     width: 54px;
     z-index: 40;
+    pointer-events: none;
 }
 .inventory-popup .inventory-strip .sub-container .hover-message,
 .inventory-modal .inventory-strip .sub-container .hover-message{
@@ -412,6 +439,7 @@
     display: flex;
     justify-content: center;
     white-space: nowrap;
+    pointer-events: none;
 }
 
 /* Percent modifier shown next to stat values (we use percent-points like +30%) */
@@ -443,4 +471,209 @@
     display: inline-block;
     min-width: 36px;
     text-align: right;
+}
+
+/* Expanded Inventory Layout */
+.inventory-body-container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    
+    &.expanded {
+        flex-direction: row;
+        gap: 24px;
+        align-items: stretch;
+        height: 800px;
+        
+        .inventory-main-column {
+            flex: 0 0 460px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            
+            // In expanded mode the left column shows only the selected crew member.
+            // Center them fully within the available space.
+            .crew-panels {
+                min-height: unset;
+                max-height: unset;
+                justify-content: center;    // center the single panel horizontally
+                align-items: flex-start;    // avoid vertical center overflow clipping
+                padding-top: 16px;
+                gap: 0;
+            }
+
+            .crew-panel {
+                // stretch the panel to give the body diagram plenty of room
+                min-width: unset;
+                width: 100%;
+                max-width: 340px;
+                align-items: center;
+            }
+        }
+    }
+}
+
+.inventory-expanded-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    padding-left: 24px;
+    box-sizing: border-box;
+    height: 100%;
+    overflow: hidden;
+    
+    .expanded-panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+        
+        .expanded-panel-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.9);
+        }
+    }
+    
+    .expanded-categories-container {
+        flex: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        padding-right: 8px;
+        
+        /* Scrollbar styles for premium look */
+        &::-webkit-scrollbar {
+            width: 6px;
+        }
+        &::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 3px;
+        }
+        &::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 3px;
+            &:hover {
+                background: rgba(255, 255, 255, 0.3);
+            }
+        }
+    }
+    
+    .expanded-category-section {
+        display: flex;
+        flex-direction: column;
+        
+        .category-header {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: rgba(255, 255, 255, 0.4);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 4px;
+        }
+        
+        .category-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+    }
+}
+
+.empty-inventory-slot {
+    width: 55px;
+    height: 55px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 4px;
+    box-sizing: border-box;
+    transition: background 0.2s;
+    
+    &:hover {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+}
+
+/* Toggle Expand Button styles */
+.inventory-toggle-expand-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    color: rgba(255, 255, 255, 0.7);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    
+    &:hover {
+        background: rgba(255, 255, 255, 0.18);
+        border-color: rgba(255, 255, 255, 0.35);
+        color: white;
+        transform: scale(1.05);
+    }
+    
+    &:active {
+        transform: scale(0.95);
+    }
+}
+
+/* Position expand button in the strip */
+.inventory-strip-wrapper {
+    position: relative;
+    width: 100%;
+    
+    .inventory-toggle-expand-btn {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        z-index: 50;
+    }
+}
+
+.expanded-item-slot-wrapper {
+    width: 55px;
+    height: 55px;
+    position: relative;
+    
+    .tile {
+        width: 100% !important;
+        height: 100% !important;
+        background-color: transparent !important;
+        border: none !important;
+        margin: 0 !important;
+    }
+}
+
+.inventory-modal {
+    &.expanded .modal-dialog {
+        max-width: 1200px !important;
+    }
+    
+    .stack-count-badge {
+        position: absolute;
+        top: 6px;
+        left: 8px;
+        background: rgba(0, 0, 0, 0.35);
+        color: white;
+        min-width: 16px;
+        height: 16px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+        z-index: 30;
+        pointer-events: none;
+    }
 }

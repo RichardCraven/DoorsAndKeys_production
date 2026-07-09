@@ -12,11 +12,55 @@ const SHOW_TILE_BORDERS = false;
 const SHOW_COMBAT_BORDER_COLORS = true; // eslint-disable-line no-unused-vars
 const SHOW_INTERACTION_PANE=true // eslint-disable-line no-unused-vars
 
+const getActiveEffects = (combatant, combatManager) => {
+    const list = [];
+    if (!combatant) return list;
+    const liveUnit = combatManager?.getCombatant?.(combatant.id) || combatant;
+    if (liveUnit.dead || (typeof liveUnit.hp === 'number' && liveUnit.hp <= 0)) {
+        return [];
+    }
+
+    if (liveUnit.frozen) list.push({ key: 'frozen', icon: images.frozen, border: '#00bfff' });
+    if (liveUnit.stunned && !liveUnit.feared) list.push({ key: 'stunned', icon: images.stunned || images.whiteskull || images.induce_fear, border: '#f5c842' });
+    if (liveUnit.feared) list.push({ key: 'fear', icon: images.fear || images.induce_fear, border: '#8e2de2' });
+    if (liveUnit.bleed) list.push({ key: 'bleed', icon: images.bleeding, border: '#e05555' });
+    if (liveUnit.poison) list.push({ key: 'poison', icon: images.poison, border: '#7affa0' });
+    if (liveUnit.shieldWallActive) list.push({ key: 'shield_wall', icon: images.shield_wall, border: '#90c4ff' });
+    if (liveUnit.defensiveStanceActive || liveUnit.defensiveStance) list.push({ key: 'defensive_stance', icon: images.soldier_defensive_stance, border: '#cccccc' });
+    if (liveUnit.berserkerActive) list.push({ key: 'berserker', icon: images.barbarian_berserker, border: '#ff4444' });
+    if (liveUnit.weaknessRevealed) list.push({ key: 'weakness', icon: images.weakness_doubled, border: '#cc44ff' });
+    if (liveUnit.marked) list.push({ key: 'marked', icon: images.ranger_mark, border: '#ffaa00' });
+    if (liveUnit.ensnared) list.push({ key: 'ensnared', icon: images.ranger_ensnare, border: '#00ff00' });
+    if (liveUnit.astralBeingActive) list.push({ key: 'astral_being', icon: images.monk_astral_being, border: '#21e6c1' });
+    if (liveUnit.thirdEyeActive) list.push({ key: 'third_eye', icon: images.monk_third_eye, border: '#21e6c1' });
+    
+    const normalizeName = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+    const hexDebuff = Array.isArray(liveUnit.activeDebuffs) ? liveUnit.activeDebuffs.find(d => d && normalizeName(d.name) === 'hexed') : null;
+    if (hexDebuff || liveUnit.hexed) {
+        list.push({ key: 'hexed', icon: images.hex, border: '#cc44ff' });
+    }
+    const polymorphDebuff = Array.isArray(liveUnit.activeDebuffs) ? liveUnit.activeDebuffs.find(d => d && normalizeName(d.name) === 'polymorphed') : null;
+    if (polymorphDebuff || liveUnit.polymorphed) {
+        list.push({ key: 'polymorphed', icon: images.polymorph, border: '#22c55e' });
+    }
+
+    return list;
+};
 
 export default function FightersCombatGrid(props) {
+    const getLiveCombatant = (id) => (props.combatManager && typeof props.combatManager.getCombatant === 'function') ? props.combatManager.getCombatant(id) : null;
+
     // Delay removal of fighter portrait after death for death animation
     const [showDeathAnimation, setShowDeathAnimation] = React.useState({});
     const [fullyDead, setFullyDead] = React.useState({});
+    const formatDamageIndicatorValue = (value) => {
+        if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+        if (typeof value === 'string') {
+            const numericValue = Number(value);
+            if (value.trim() !== '' && Number.isFinite(numericValue)) return Math.round(numericValue);
+        }
+        return value;
+    };
 
     React.useEffect(() => {
         props.crew.forEach(fighter => {
@@ -41,14 +85,12 @@ export default function FightersCombatGrid(props) {
     const portraitWrapperRefs = React.useRef({});
     const fighterWrapperRefs = React.useRef({});
     const [weaponPositions, setWeaponPositions] = React.useState({});
-    const [actionBarPositions, setActionBarPositions] = React.useState({});
-    const [animatingHits, setAnimatingHits] = React.useState({});
     const prevAttackingRef = React.useRef({});
+    const [consumableFlashes, setConsumableFlashes] = React.useState({});
+    const prevConsumableFlashRef = React.useRef({});
 
-    // Compute weapon positions based on the rendered portrait positions. Use layout effect to read DOM
     React.useLayoutEffect(() => {
         const newWeaponPos = {};
-        const newActionBarPos = {};
         props.crew.forEach(fighter => {
             const details = props.getFighterDetails(fighter);
             if (!details || details.dead || !details.pendingAttack) return;
@@ -88,17 +130,9 @@ export default function FightersCombatGrid(props) {
                     top = portraitOffsetTop;
                 }
                 newWeaponPos[fighter.id] = { left: `${Math.round(left)}px`, top: `${Math.round(top)}px` };
-
-                // Compute action-bar left anchored to the portrait's tile so it matches
-                // the grid-based calculation in `getActionBarLeftValForFighter`.
-                const rangeWidth = props.combatManager.getRangeWidthVal(details) || 0;
-                const offset = (details?.facing === 'left') ? (-(rangeWidth * 100)) : 100;
-                const barLeft = portraitOffsetLeft + offset;
-                newActionBarPos[fighter.id] = { left: `${Math.round(barLeft)}px` };
             }
         });
         setWeaponPositions(newWeaponPos);
-        setActionBarPositions(newActionBarPos);
         // Recompute when battle data changes, overlays change, or crew list changes
     }, [props.crew, props.battleData, props.animationOverlays, props.selectedFighter]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -114,41 +148,48 @@ export default function FightersCombatGrid(props) {
         props.crew.forEach(fighter => {
             const details = props.getFighterDetails(fighter);
             if (!details) return;
-            const prev = !!prevAttackingRef.current[fighter.id];
             const now = !!details.attacking;
-            if (!prev && now) {
-                // attacking went from false -> true: start visual animation
-                setAnimatingHits(prevState => ({ ...prevState, [fighter.id]: true }));
-                // Clear the hit class after 1s since the CSS animation was removed
-                // (the onAnimationEnd handler is no longer reliable for this class).
-                setTimeout(() => {
-                    setAnimatingHits(prevState => ({ ...prevState, [fighter.id]: false }));
-                }, 1000);
-            }
             // update prev ref for next tick
             prevAttackingRef.current[fighter.id] = now;
             // If attacking has ended, clear prev flag so next attack can trigger
             if (!now) {
                 prevAttackingRef.current[fighter.id] = false;
             }
+
+            // Consumable flash: show item icon for 1.5s when consumableFlash timestamp changes
+            const flashTs = details.consumableFlash?.timestamp;
+            const prevFlashTs = prevConsumableFlashRef.current[fighter.id];
+            if (flashTs && flashTs !== prevFlashTs) {
+                prevConsumableFlashRef.current[fighter.id] = flashTs;
+                setConsumableFlashes(prev => ({ ...prev, [fighter.id]: details.consumableFlash.iconKey }));
+                setTimeout(() => {
+                    setConsumableFlashes(prev => ({ ...prev, [fighter.id]: null }));
+                }, 1500);
+            }
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [props.battleData, props.crew]);
     return (
-        <div className="mb-col fighter-pane">
-            <div className="fighter-content">
+        <div className="mb-col fighter-pane" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+            <div className="fighter-content" style={{ width: '100%', height: '100%' }}>
                 {activeCrew.map((fighter) => {
-                    const isTeleporting = props.teleportingFighterId === fighter.id;
+                const isTeleporting = props.teleportingFighterId === fighter.id;
                     // Always use the facing at the moment of death for the death animation
                     const details = props.getFighterDetails(fighter);
                     // only mark reversed when explicitly facing left; support up/down classes separately
                     const facingClass = details?.facing === 'left' ? 'reversed' : '';
                     const verticalFacingClass = details?.facing === 'up' ? 'facing-up' : (details?.facing === 'down' ? 'facing-down' : '');
+
                     const xPos = props.battleData[fighter.id]?.coordinates.x * 100 + (SHOW_TILE_BORDERS ? props.battleData[fighter.id]?.coordinates.x * 2 : 0);
                     const yPos = props.battleData[fighter.id]?.coordinates.y * TILE_SIZE + (SHOW_TILE_BORDERS ? props.battleData[fighter.id]?.coordinates.y * 2 : 0);
                     return  <div key={fighter.id}  className={`lane-wrapper ${isTeleporting ? ' teleporting' : ''}`}
                                 style={{ 
                                     height: `${TILE_SIZE}px`,
+                                    position: 'absolute',
+                                    top: '0px',
+                                    left: '0px',
+                                    width: '100%',
+                                    pointerEvents: 'none'
                                 }}>
                                 <div 
                                 ref={el => { fighterWrapperRefs.current[fighter.id] = el }}
@@ -159,9 +200,49 @@ export default function FightersCombatGrid(props) {
                                         transform: `translate(${xPos}px, ${yPos}px)`,
                                         transition: isTeleporting ? 'none' : `transform ${FIGHTER_MOVE_TRANSITION_MS}ms`,
                                         zIndex: 300,
+                                        pointerEvents: 'auto'
                                     }}
                                     ref={el => { portraitWrapperRefs.current[fighter.id] = el }}
                                     >
+                                        {/* Effect Icons Overlay */}
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '-6px',
+                                            right: '-6px',
+                                            display: 'flex',
+                                            gap: '2px',
+                                            zIndex: 350,
+                                            pointerEvents: 'none'
+                                        }}>
+                                            {getActiveEffects(fighter, props.combatManager).map((eff) => (
+                                                <div
+                                                    key={eff.key}
+                                                    className="effect-icon-active"
+                                                    style={{
+                                                        width: '20px',
+                                                        height: '20px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: '#111',
+                                                        border: `2px solid ${eff.border}`,
+                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                                                        position: 'relative'
+                                                    }}
+                                                >
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: 0,
+                                                        left: 0,
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        borderRadius: '50%',
+                                                        backgroundImage: `url(${eff.icon?.default || eff.icon})`,
+                                                        backgroundSize: 'contain',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundPosition: 'center'
+                                                    }} />
+                                                </div>
+                                            ))}
+                                        </div>
                                         <div 
                                         className={
                                             [
@@ -175,31 +256,43 @@ export default function FightersCombatGrid(props) {
                                                 details?.rocked ? 'rocked' : '',
                                                 fighter.isLeader ? 'leader-portrait' : '',
                                                 details?.dead ? 'dead fighterDeadAnimation' : '',
-                                                (props.selectedFighter?.targetId === fighter.id || props.selectedMonster?.targetId === fighter.id) && !details?.dead ? 'targetted' : '',
                                                 details?.active ? 'active' : '',
                                                 facingClass,
                                                 verticalFacingClass,
                                                 details?.locked ? 'locked' : '',
                                                 details?.chargingUpActive ? 'charging-up' : '',
-                                                details?.berserkerActive && details?.feared ? 'berserk-feared' : '',
-                                                details?.berserkerActive && !details?.feared ? 'berserk-active' : '',
+                                                details?.berserkerActive && details?.feared && !details?.stunned ? 'berserk-feared' : '',
+                                                details?.berserkerActive && (!details?.feared || details?.stunned) ? 'berserk-active' : '',
                                                 !details?.berserkerActive && details?.feared ? 'feared' : '',
-                                                props.combatManager.getCombatant(fighter.id)?.shieldWallActive ? 'shield-wall-active' : '',
+                                                getLiveCombatant(fighter.id)?.shieldWallActive ? 'shield-wall-active' : '',
                                                 details?.stunned ? 'stunned' : '',
                                                 details?.drained ? 'drained' : '',
                                                 details?.regenerating ? 'regenerating' : '',
+                                                details?.healPulse ? 'heal-pulse' : '',
+                                                details?.dispelPulse ? 'dispel-pulse' : '',
                                                 details?.bleed ? 'bleeding' : '',
+                                                details?.frozen ? 'frozen' : '',
+                                                // ── Redux AI visual states ───────────────────────
+                                                getLiveCombatant(fighter.id)?.astralBeingActive ? 'astral-being' : '',
+                                                getLiveCombatant(fighter.id)?.astralProjectionActive ? 'astral-projection-active' : '',
                                             ].filter(Boolean).join(' ')
                                         }
                                         style={{
                                             backgroundImage: `url(${fighter.portrait})`,
-                                            backgroundSize: (details?.berserkerActive && details?.feared) ? '100% 100%' : undefined,
+                                            backgroundSize: (details?.berserkerActive && details?.feared && !details?.stunned) ? '100% 100%' : undefined,
+                                            // Astral Being: portrait becomes translucent with cyan glow
+                                            opacity: getLiveCombatant(fighter.id)?.astralBeingActive ? 0.55 : 1,
                                             filter: [
                                                 details?.chargingUpActive ? "url('#ripple-effect')" : null,
-                                                `saturate(${((details?.hp / fighter.stats.hp) * 100) / 2}) sepia(${props.portraitHoveredId === fighter.id ? '2' : '0'})`,
-                                                (details?.berserkerActive && details?.feared) ? 'brightness(1.18)' : ''
+                                                `sepia(${props.portraitHoveredId === fighter.id ? '2' : '0'})`,
+                                                details?.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : '',
+                                                (details?.berserkerActive && details?.feared && !details?.stunned) ? 'brightness(1.18)' : ''
                                             ].filter(Boolean).join(' '),
                                             zIndex: 300,
+                                            // CSS transition for astral projection slide
+                                            transition: getLiveCombatant(fighter.id)?.astralProjectionActive
+                                                ? 'opacity 0.4s ease-in-out'
+                                                : undefined,
                                             }} 
                                         onClick={() => props.fighterPortraitClicked(fighter.id)}
                                         onMouseEnter={() => props.portraitHovered(fighter.id)} 
@@ -219,6 +312,40 @@ export default function FightersCombatGrid(props) {
                                         }}
                                         >
                                         </div>
+                                        {/* Ensnare Visual Overlay – green vine corners matching Sandbox */}
+                                        {(() => {
+                                            const liveFighter = props.combatManager?.getCombatant?.(fighter.id) || fighter;
+                                            if (!liveFighter?.ensnared || details?.dead) return null;
+                                            return (
+                                                <div style={{
+                                                    boxSizing: 'border-box',
+                                                    position: 'absolute',
+                                                    top: 0, left: 0, width: '100px', height: '100px',
+                                                    border: '3px solid #8bc34a',
+                                                    borderRadius: '6px',
+                                                    boxShadow: '0 0 18px rgba(139, 195, 74, 0.9), inset 0 0 10px rgba(139, 195, 74, 0.4)',
+                                                    pointerEvents: 'none',
+                                                    zIndex: 13
+                                                }}>
+                                                    {[
+                                                        { left: 0, top: 0, borderRadius: '0 0 100% 0' },
+                                                        { right: 0, top: 0, borderRadius: '0 0 0 100%' },
+                                                        { left: 0, bottom: 0, borderRadius: '0 100% 0 0' },
+                                                        { right: 0, bottom: 0, borderRadius: '100% 0 0 0' }
+                                                    ].map((pos, i) => (
+                                                        <div key={i} style={{
+                                                            position: 'absolute',
+                                                            ...pos,
+                                                            width: '18px', height: '18px',
+                                                            border: '3.5px solid #558b2f',
+                                                            boxShadow: '0 0 8px rgba(85,139,47,0.8)',
+                                                            animation: `ensnarePulse 0.8s ease-in-out infinite ${i * 0.2}s`,
+                                                            boxSizing: 'border-box'
+                                                        }} />
+                                                    ))}
+                                                </div>
+                                            );
+                                        })()}
                                         {props.animationOverlays[fighter.id] && props.getAllOverlaysById(fighter.id).map((overlay, i) => {
                                             const overlayData = {
                                                 ...overlay.data,
@@ -226,47 +353,22 @@ export default function FightersCombatGrid(props) {
                                             };
                                             return <Overlay key={i} animationType={overlay.type} data={overlayData} />;
                                         })}
-                                        <div className={`portrait-overlay${details?.drained ? ' drained' : ''}`} >
+                                        <div className={`portrait-overlay${details?.drained ? ' drained' : ''}${details?.frozen ? ' frozen' : ''}`} >
                                             <div className="damage-indicator-container">
                                                 {props.getFighterDetails(fighter)?.damageIndicators.map((e,i)=>{
-                                                    const isStatDebuff = !e.isCrit && !e.isMiss && typeof e.value === 'string';
+                                                    const isStatDebuff = !e.isCrit && !e.isMiss && typeof e.value === 'string' && isNaN(e.value);
                                                     return <div key={e.id || i} className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${e.isCrit ? ' crit' : ''}${e.isMiss ? ' miss' : ''}`}>
-                                                        {e.value}
+                                                        {formatDamageIndicatorValue(e.value)}
                                                     </div>
                                                 })}
                                             </div>
-                                            {/* Only show circular progress for the manually selected fighter */}
-                                            {props.selectedFighter?.id === fighter.id && !fighter.dead && (
-                                                <div className={`circular-progress selected`} style={{
-                                                    background: `conic-gradient(${props.getManualMovementArcColor(props.getFighterDetails(fighter))} ${props.getManualMovementArc(props.getFighterDetails(fighter))}deg, black 0deg)`,
-                                                }}  data-inner-circle-color="lightgrey" data-percentage={(() => {
-                                                    const fd = props.getFighterDetails(fighter) || {};
-                                                    // Prefer new movementPoints fields, fall back to manualMoves for compatibility
-                                                    const current = (typeof fd.movementPointsCurrent === 'number') ? fd.movementPointsCurrent : fd.manualMovesCurrent || 0;
-                                                    const total = (typeof fd.movementPointsMax === 'number') ? fd.movementPointsMax : fd.manualMovesTotal || 1;
-                                                    const pct = total ? Math.round((current) / total * 100) : 0;
-                                                    return pct;
-                                                })()} data-progress-color="crimson" data-bg-color="black">
-                                                    <div className="inner-circle"></div>
-                                                </div>
-                                            )}
                                         </div>
-                                        <div className="hp-bar">
-                                        {!props.getFighterDetails(fighter)?.dead && <div className="red-fill" 
-                                            style={{width: `${(props.getFighterDetails(fighter)?.hp / fighter.stats.hp) * 100}%`}}
-                                            ></div>}
-                                        </div>
-                                        <div className="energy-bar">
-                                            {!props.getFighterDetails(fighter)?.dead && <div className="yellow-fill" style={{width: `calc(${props.getFighterDetails(fighter)?.energy}%)`}}></div>}
-                                        </div>
-                                        <div className="tempo-bar">
-                                            {!props.getFighterDetails(fighter)?.dead &&  <div className="tempo-indicator" style={{left: `calc(${props.getFighterDetails(fighter)?.tempo}% - 4px)`}}></div>}
 
                                         {/* Target indicator: tiny portrait of whoever this fighter is targeting */}
                                         {(() => {
-                                            const liveFighter = props.combatManager.getCombatant(fighter.id);
+                                            const liveFighter = getLiveCombatant(fighter.id);
                                             const targetId = liveFighter?.targetId;
-                                            const target = targetId ? props.combatManager.getCombatant(targetId) : null;
+                                            const target = targetId ? getLiveCombatant(targetId) : null;
                                             return target?.portrait && !target?.invisible && !details?.dead ? (
                                                 <div className="monster-target-indicator" style={{ zIndex: 310, position: 'absolute' }}>
                                                     <div
@@ -276,62 +378,74 @@ export default function FightersCombatGrid(props) {
                                                 </div>
                                             ) : null;
                                         })()}
-                                        </div>
-                                    { props.getFighterDetails(fighter) && props.getFighterDetails(fighter).pendingAttack && props.getFighterDetails(fighter).attacking && !props.getFighterDetails(fighter).dead && (() => {
-                                        const details = props.getFighterDetails(fighter);
-                                        const isMonk = fighter.type === 'monk';
-                                        if (!isMonk) return null;
-                                        const isBasicPunch = details.pendingAttack.range === 'close' && details.pendingAttack.name !== 'dragon punch';
-                                        const icon = isBasicPunch ? images.fist_punch : props.battleData[fighter.id].pendingAttack.icon;
 
-                                        // position weapon using measured portrait positions when available
-                                        const measured = weaponPositions[fighter.id];
-                                        const weaponStyle = measured ? { ...measured, backgroundImage: `url(${icon})`, opacity: 1 } : (() => {
-                                            // fallback to original coordinate math if measurement not ready
-                                            const tileW = 100;
-                                            const weaponW = 90;
-                                            if (details?.facing === 'right') return { left: `${details?.coordinates.x * tileW + tileW - weaponW}px`, opacity: 1, backgroundImage: `url(${icon})` };
-                                            if (details?.facing === 'left') return { left: `${details?.coordinates.x * tileW}px`, opacity: 1, backgroundImage: `url(${icon})` };
-                                            if (details?.facing === 'up') return { left: `${details?.coordinates.x * tileW + (tileW / 2) - (weaponW / 2)}px`, top: `-40px`, opacity: 1, backgroundImage: `url(${icon})`, transform: 'rotate(-90deg)' };
-                                            if (details?.facing === 'down') return { left: `${details?.coordinates.x * tileW + (tileW / 2) - (weaponW / 2)}px`, top: `110px`, opacity: 1, backgroundImage: `url(${icon})`, transform: 'rotate(90deg)' };
-                                            // Default: center
-                                            const left = `${details?.coordinates.x * tileW + (tileW / 2) - (weaponW / 2)}px`;
-                                            const top = `50px`;
-                                            return { left, top, opacity: 1, backgroundImage: `url(${icon})` };
-                                        })();
-
-                                        return (
-                                            <div className={`weapon-wrapper ${details?.facing === 'left' ? 'reversed' : ''} ${verticalFacingClass} ${details?.aiming ? 'aiming' : ''} medium`} style={weaponStyle}>
+                                        {/* Consumable flash indicator: top-left slot, shows item icon for 1.5s */}
+                                        {consumableFlashes[fighter.id] && !details?.dead && (
+                                            <div className="fighter-consumable-indicator" style={{ zIndex: 310, position: 'absolute' }}>
+                                                <div
+                                                    className="fighter-consumable-portrait"
+                                                    style={{ backgroundImage: `url(${images[consumableFlashes[fighter.id]]})` }}
+                                                />
                                             </div>
-                                        );
-                                    })()}
-                                    <div className={`action-bar-wrapper ${verticalFacingClass === 'facing-up' ? 'pointing-up' : (verticalFacingClass === 'facing-down' ? 'pointing-down' : '')}`} 
-                                        style={{
-                                        zIndex: 1001,
-                                        height: '100%',
-                                        width: !!props.getFighterDetails(fighter)?.pendingAttack ? `${props.combatManager.getRangeWidthVal(props.getFighterDetails(fighter)) * 100}px` : '0px',
-                                        // Prefer measured DOM position for pixel-perfect alignment; fall back to grid math
-                                        left: props.getFighterDetails(fighter)?.pendingAttack ? (actionBarPositions[fighter.id]?.left || `${props.getActionBarLeftValForFighter(props.getFighterDetails(fighter)?.id)}px`) : 0
-                                    }}
-                                    >
-                                        <div className={`
-                                        action-bar 
-                                        ${(animatingHits[fighter.id]) ? (props.getFighterDetails(fighter)?.facing === 'right' ? 'fighterHitsAnimation' : 'fighterHitsAnimation_RtoL') : ''}
-                                        ${(props.getFighterDetails(fighter)?.healing) ? 'fighterHealsAnimation' : ''}
-                                        `}
-                                        onAnimationEnd={e => {
-                                            // Clear heals animation flag when the FighterHits keyframe completes.
-                                            // (Hit animation classes no longer have CSS animations so they are
-                                            //  cleared via the setTimeout in the useEffect below instead.)
-                                            if (e && e.animationName && e.animationName.includes('FighterHits')) {
-                                                setAnimatingHits(prev => ({ ...prev, [fighter.id]: false }));
-                                            }
-                                        }}></div>
-                                    </div>
+                                        )}
+
+                                        {!props.getFighterDetails(fighter)?.dead && (
+                                            <div className="indicators-wrapper" style={{ zIndex: 310, position: 'absolute', bottom: 0, left: 0, width: '100%', display: 'flex', flexDirection: 'column-reverse', pointerEvents: 'none' }}>
+                                                <div className="hp-bar" style={{ position: 'relative', height: '4px' }}>
+                                                    <div className="red-fill" style={{width: `${(props.getFighterDetails(fighter)?.hp / fighter.stats.hp) * 100}%`}}></div>
+                                                </div>
+                                                {props.combatManager && props.combatManager.round !== undefined ? (
+                                                    <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative' }}>
+                                                        <div className="white-fill" style={{ height: '100%', backgroundColor: '#ffffff', width: `${(props.getFighterDetails(fighter)?.endurance / props.getFighterDetails(fighter)?.maxEndurance) * 100}%` }}></div>
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <div className="energy-bar" style={{ position: 'relative', height: '4px' }}>
+                                                            <div className="yellow-fill" style={{width: `calc(${props.getFighterDetails(fighter)?.energy}%)`}}></div>
+                                                        </div>
+                                                        <div className="tempo-bar" style={{ position: 'relative', height: '4px' }}>
+                                                            <div className="tempo-indicator" style={{left: `calc(${props.getFighterDetails(fighter)?.tempo}% - 4px)`}}></div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+
+
                                 </div>
                             </div>
                         </div>
                     })}
+                {/* ── Rift Portal tile overlay ──────────────────────────────────────── */}
+                {(() => {
+                    // Find any crew Summoner with an active rift portal
+                    const summoner = props.crew.find(f => f.type === 'summoner');
+                    if (!summoner) return null;
+                    const liveSummoner = getLiveCombatant(summoner.id);
+                    if (!liveSummoner?.riftPortalActive || !liveSummoner?.riftPortalPos) return null;
+                    const { x, y } = liveSummoner.riftPortalPos; // {x, y} tile coords
+                    const portalLeft = x * TILE_SIZE + (SHOW_TILE_BORDERS ? x * 2 : 0);
+                    const portalTop  = y * TILE_SIZE + (SHOW_TILE_BORDERS ? y * 2 : 0);
+                    const roundsLeft = liveSummoner.riftPortalRoundsLeft ?? 3;
+                    return (
+                        <div
+                            className="rift-portal-tile"
+                            style={{
+                                position: 'absolute',
+                                left: portalLeft + 'px',
+                                top: portalTop + 'px',
+                                width: TILE_SIZE + 'px',
+                                height: TILE_SIZE + 'px',
+                                zIndex: 350,
+                                pointerEvents: 'none',
+                            }}
+                        >
+                            <div className="rift-portal-inner">
+                                <div className="rift-portal-rounds">{roundsLeft}</div>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
         </div>
     )

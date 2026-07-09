@@ -32,9 +32,11 @@ class DungeonView extends React.Component {
             nextProps.dungeons !== this.props.dungeons ||
             nextProps.loadingData !== this.props.loadingData ||
             nextProps.planeSyncInProgress !== this.props.planeSyncInProgress ||
+            nextProps.generatingDungeon !== this.props.generatingDungeon ||
             nextProps.tileSize !== this.props.tileSize ||
             nextProps.boardSize !== this.props.boardSize ||
-            nextProps.imagesMatrix !== this.props.imagesMatrix
+            nextProps.imagesMatrix !== this.props.imagesMatrix ||
+            nextProps.dungeonHasUnsavedChanges !== this.props.dungeonHasUnsavedChanges
         );
     }
     onClickHandler = event => {
@@ -66,6 +68,26 @@ class DungeonView extends React.Component {
     countImages = (passagesArray) => {
         let imageTypes = ['way_up', 'way_down']
         return passagesArray.filter(p=>imageTypes.includes((typeof p.contains === 'object' && p.contains !== null) ? p.contains.type : p.contains)).length
+    }
+    getPassageType = (passage) => {
+        const contains = passage?.contains;
+        const containsType = (typeof contains === 'object' && contains !== null)
+            ? contains.type
+            : contains;
+        const containsSubtype = (typeof contains === 'object' && contains !== null)
+            ? contains.subtype
+            : null;
+        const imageType = passage?.image;
+
+        const canonical = ['way_up', 'way_down', 'door', 'spawn_point'];
+        if (canonical.includes(containsType)) return containsType;
+        if (canonical.includes(containsSubtype)) return containsSubtype;
+        if (canonical.includes(imageType)) return imageType;
+
+        if (containsType === 'spawn' && (containsSubtype === 'spawn_point' || imageType === 'spawn_point')) {
+            return 'spawn_point';
+        }
+        return containsType || containsSubtype || imageType || null;
     }
     // drawPlane: single-canvas replacement for the 9 per-board canvases.
     // Draws all passage overlays for an entire plane (front or back) in one RAF loop.
@@ -103,7 +125,7 @@ class DungeonView extends React.Component {
             const py = originY + unit * p.coordinates[1] + unit / 2;
 
             const isConnected = levelData.connected.some(c => c.locationCode === p.locationCode);
-            const pType = (typeof p.contains === 'object' && p.contains !== null) ? p.contains.type : p.contains;
+            const pType = this.getPassageType(p);
 
             if (pType === 'door' && isConnected) {
                 const dx = originX + unit * p.coordinates[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
@@ -126,28 +148,10 @@ class DungeonView extends React.Component {
                 ctx.drawImage(this.props.imagesMatrix[imageKey], dx, dy, size, size);
 
             } else if (pType === 'spawn_point') {
-                // cx/cy = center of this tile in the full-plane canvas
-                const cx = originX + unit * p.coordinates[0] + unit * 0.5;
-                const cy = originY + unit * p.coordinates[1] + unit * 0.5;
-
-                if (frameCount === 3) {
-                    console.log('[spawn_point] boardIndex:', boardIndex, 'coords:', p.coordinates, 'unit:', unit.toFixed(2), 'cx:', cx.toFixed(1), 'cy:', cy.toFixed(1), 'canvasW:', ctx.canvas.width, 'canvasH:', ctx.canvas.height);
-                }
-
-                // DIAGNOSTIC: big red pulsing dot
-                const pulse = 0.5 + 0.5 * Math.sin(frameCount * 0.1);
-                const radius = 14 + pulse * 8; // 14–22px, unmissable
-
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius, 0, 2 * Math.PI);
-                ctx.fillStyle = `rgba(255, 0, 0, ${0.7 + pulse * 0.3})`;
-                ctx.fill();
-
-                ctx.beginPath();
-                ctx.arc(cx, cy, radius + 4, 0, 2 * Math.PI);
-                ctx.strokeStyle = `rgba(255, 80, 80, ${0.5 + pulse * 0.4})`;
-                ctx.lineWidth = 3;
-                ctx.stroke();
+                const dx = originX + unit * p.coordinates[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
+                const dy = originY + unit * p.coordinates[1];
+                const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
+                ctx.drawImage(this.props.imagesMatrix['spawnPointImg'], dx, dy, size, size);
 
             } else {
                 // Generic pulsing dot (door unconnected, or unknown type)
@@ -157,6 +161,69 @@ class DungeonView extends React.Component {
                 ctx.fill();
             }
         });
+    }
+
+    drawPortalConnections = (ctx, frameCount) => {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+        if (!this.props.loadedDungeon || !this.props.overlayData) return;
+
+        const allPortals = this.props.mapMaker.getAllPortalsInDungeon(this.props.loadedDungeon);
+        const canvasRect = ctx.canvas.getBoundingClientRect();
+
+        ctx.save();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#a855f7'; // vibrant purple
+        ctx.shadowColor = '#ec4899'; // glowing pink
+        ctx.shadowBlur = 8;
+        ctx.lineJoin = 'round';
+        ctx.setLineDash([6, 6]);
+        ctx.lineDashOffset = -frameCount * 0.5;
+
+        const drawnPairs = new Set();
+
+        allPortals.forEach((p) => {
+            if (!p.portalId || !p.targetPortalId) return;
+
+            const pairKey = [p.portalId, p.targetPortalId].sort().join('-');
+            if (drawnPairs.has(pairKey)) return;
+
+            const elA = document.querySelector(`[data-portal-id="${p.portalId}"]`);
+            const elB = document.querySelector(`[data-portal-id="${p.targetPortalId}"]`);
+
+            if (elA && elB) {
+                const rectA = elA.getBoundingClientRect();
+                const rectB = elB.getBoundingClientRect();
+
+                const x1 = rectA.left - canvasRect.left + rectA.width / 2;
+                const y1 = rectA.top - canvasRect.top + rectA.height / 2;
+                const x2 = rectB.left - canvasRect.left + rectB.width / 2;
+                const y2 = rectB.top - canvasRect.top + rectB.height / 2;
+
+                ctx.beginPath();
+                ctx.moveTo(x1, y1);
+
+                const mx = (x1 + x2) / 2;
+                const my = (y1 + y2) / 2;
+                const dx = x2 - x1;
+                const dy = y2 - y1;
+
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const offset = Math.min(60, dist * 0.25);
+                const px = -dy / (dist || 1);
+                const py = dx / (dist || 1);
+
+                const cx = mx + px * offset;
+                const cy = my + py * offset;
+
+                ctx.quadraticCurveTo(cx, cy, x2, y2);
+                ctx.stroke();
+
+                drawnPairs.add(pairKey);
+            }
+        });
+
+        ctx.restore();
     }
 
     draw = (ctx, frameCount, data) => {
@@ -195,7 +262,7 @@ class DungeonView extends React.Component {
                     let x = unit*p.coordinates[0] + unit/2
                     let y = unit*p.coordinates[1] + unit/2
                     let isConnected = levelData.connected.some(x => x.locationCode === p.locationCode)
-                    const pType = (typeof p.contains === 'object' && p.contains !== null) ? p.contains.type : p.contains;
+                    const pType = this.getPassageType(p);
                     if(pType === 'door' && isConnected){
                         let x = unit*p.coordinates[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
                         let y = unit*p.coordinates[1]
@@ -236,40 +303,11 @@ class DungeonView extends React.Component {
                         // ctx.drawImage(this.props.imagesMatrix[imageKey], 120, 120, size, size);
                         ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
                     } else if(pType === 'spawn_point'){
-                        // Center the icon on the tile position
-                        const iconSize = 16;
-                        const cx = unit * p.coordinates[0] + unit * 0.5;
-                        const cy = unit * p.coordinates[1] + unit * 0.5;
-                        const ix = cx - iconSize / 2;
-                        const iy = cy - iconSize / 2;
-
-                        // Outer pulsing ring (slow breathe, distinct teal color)
-                        const ringPulse = 0.5 + 0.5 * Math.sin(frameCount * 0.05);
-                        const ringRadius = unit * 0.45 + ringPulse * unit * 0.15;
-                        ctx.beginPath();
-                        ctx.arc(cx, cy, ringRadius, 0, 2 * Math.PI);
-                        ctx.strokeStyle = `rgba(0, 230, 200, ${0.3 + ringPulse * 0.5})`;
-                        ctx.lineWidth = 1.5;
-                        ctx.stroke();
-
-                        // Inner filled circle (solid teal)
-                        ctx.beginPath();
-                        ctx.arc(cx, cy, unit * 0.18, 0, 2 * Math.PI);
-                        ctx.fillStyle = 'rgba(0, 200, 180, 0.75)';
-                        ctx.fill();
-
-                        // Icon image centered on the tile
+                        let x = unit*p.coordinates[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
+                        let y = unit*p.coordinates[1]
+                        let size = 20 + Math.sin(frameCount * 0.04)**2 * 5
                         const imageKey = 'spawnPointImg';
-                        if (this.props.imagesMatrix && this.props.imagesMatrix[imageKey]) {
-                            ctx.drawImage(this.props.imagesMatrix[imageKey], ix, iy, iconSize, iconSize);
-                        }
-
-                        // "SPAWN" label below the icon
-                        ctx.font = `bold ${Math.max(5, unit * 0.28)}px sans-serif`;
-                        ctx.fillStyle = 'rgba(0, 240, 210, 0.95)';
-                        ctx.textAlign = 'center';
-                        ctx.fillText('SPAWN', cx, cy + iconSize * 0.65 + unit * 0.3);
-                        ctx.textAlign = 'left'; // reset
+                        ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
                     } else {
                         ctx.beginPath()
                         let minVal = 3.5;
@@ -367,35 +405,22 @@ class DungeonView extends React.Component {
                 <div className="center-board-container">
                     <div 
                     onMouseLeave={() => {return this.props.setHover(null)}}
-                    className="board map-board" 
+                    className="board map-board dungeon-map-board" 
                     style={{
                         width: this.props.boardSize+'px', height: this.props.boardSize+ 'px',
                         backgroundColor: 'white'
                     }}
                     >
                         <div className="dungeon-info">
-                            <div className="dungeon-name">
-                                { this.props.loadedDungeon && <div className={`dungeon-validity-indicator ${this.props.loadedDungeon.valid ? 'valid' : 'invalid'}`}></div>}
-                                <CFormSelect 
-                                aria-label="Dungeon Selector"
-                                ref={this.props.dungeonSelectVal}
-                                options={
-                                    ['Dungeon Selector'].concat(this.props.dungeons.map((e, i)=>{
-                                    return { label: e.name, value: e.name}
-                                    }))
-                                }
-                                onChange={this.props.dungeonSelectOnChange}
-                                />
-                            </div>
                             { <div className="level-buttons-container">
-                                <div className="icon-container" onClick={() => this.props.addDungeonLevelUp()}>
-                                    <CIcon icon={cilLibraryAdd} size="lg"/> <CIcon className="add-level-up-icon" icon={cilLevelUp} size="lg"/>
-                                </div>
                                 <div className="icon-container" onClick={() =>  this.props.saveDungeonLevel()}>
-                                    <CIcon icon={cilSave} size="lg"/>
+                                    <CIcon icon={cilSave} size="lg" style={this.props.dungeonHasUnsavedChanges ? {color: 'gold'} : {}}/>
                                 </div>
                                 <div className="icon-container" onClick={() => this.props.toggleDungeonLevelOverlay()}>
                                     <CIcon icon={cilQrCode} size="lg"/>
+                                </div>
+                                <div className="icon-container" onClick={() => this.props.addDungeonLevelUp()}>
+                                    <CIcon icon={cilLibraryAdd} size="lg"/> <CIcon className="add-level-up-icon" icon={cilLevelUp} size="lg"/>
                                 </div>
                                 <div className="icon-container" onClick={() => this.props.addDungeonLevelDown()}>
                                     <CIcon icon={cilLibraryAdd} size="lg"/> <CIcon className="add-level-down-icon" icon={cilLevelDown} size="lg"/>
@@ -416,6 +441,22 @@ class DungeonView extends React.Component {
                                     </CDropdown>
                                 </div>
                             </div>}
+                            <div className="dungeon-name">
+                                { this.props.loadedDungeon && <div className={`dungeon-validity-indicator ${this.props.loadedDungeon.valid ? 'valid' : 'invalid'}`}></div>}
+                                <CFormSelect 
+                                aria-label="Dungeon Selector"
+                                ref={this.props.dungeonSelectVal}
+                                    options={[
+                                        { label: 'Dungeon Selector', value: 'Dungeon Selector' },
+                                        ...((Array.isArray(this.props.dungeons) ? this.props.dungeons : []).map((e) => {
+                                            return { label: e.name, value: e.name };
+                                        })),
+                                        { label: 'Clear All Unique Instances', value: '__clear_unique_dungeon_instances__' },
+                                        { label: '✦ Generate Dungeon', value: '__generate_dungeon__' }
+                                    ]}
+                                onChange={this.props.dungeonSelectOnChange}
+                                />
+                            </div>
                         </div>
                         <div className="dungeon-planes-container">
                             {this.props.loadedDungeon && !this.props.loadingData && !this.props.planeSyncInProgress && <div className="loaded-dungeon-wrapper"
@@ -423,7 +464,8 @@ class DungeonView extends React.Component {
                                 justifyContent: this.props.loadedDungeon.levels.length > 2 ? 'flex-start' : 'center'
                             }}
                             >
-                                { this.props.loadedDungeon.levels.sort((a,b) => b.id - a.id).map((level,levelIndex)=>{
+                                <div className="dungeon-levels-container" style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    { this.props.loadedDungeon.levels.sort((a,b) => b.id - a.id).map((level,levelIndex)=>{
                                      return <div key={levelIndex} className="level-wrapper">
                                         <div className="level-info">
                                             <div className={`level-valid-indicator ${level.valid ? 'valid' : ''} ${level.valid === false ? 'invalid' : ''}`}></div>
@@ -485,6 +527,41 @@ class DungeonView extends React.Component {
                                                                 ></div>
                                                         })}
                                                     </div>
+                                                    {level.front.miniboards.map((board, i) => {
+                                                    return    <div 
+                                                            className="micro-board board" 
+                                                            key={i}
+                                                            style={{
+                                                                height: (this.props.tileSize*6)/3-2+'px',
+                                                                width: (this.props.tileSize*6)/3-2+'px'
+                                                            }}
+                                                            > 
+                                                                {board.tiles && board.tiles.map((tile, i) => {
+                                                                const isPortal = tile.contains && (tile.contains.type === 'dungeon_portal' || tile.contains.type === 'dungeon portal');
+                                                                return <Tile
+                                                                key={i}
+                                                                id={tile.id}
+                                                                data-portal-id={isPortal ? tile.contains.portalId : null}
+                                                                className={isPortal ? 'dungeon-preview-portal-tile' : ''}
+                                                                delayedHoverLabel={isPortal ? (tile.contains.targetPortalId ? `Linked Portal (Target: ${tile.contains.targetCoordinates})` : 'Unlinked Portal') : null}
+                                                                tileSize={((this.props.tileSize*6)/3-2)/15}
+                                                                contains={tile.contains}
+                                                                boardTiles={board.tiles}
+                                                                image={tile.image ? tile.image : null}
+                                                                imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
+                                                                color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
+                                                                coordinates={tile.coordinates}
+                                                                index={tile.id}
+                                                                showCoordinates={false}
+                                                                editMode={true}
+                                                                handleHover={null}
+                                                                handleClick={null}
+                                                                type={tile.type}
+                                                                hovered={false}
+                                                                />
+                                                                })}
+                                                            </div>
+                                                    })}
                                                     <div 
                                                     className="canvas-overlay-container mini-boards-container"
                                                     style={{
@@ -500,35 +577,6 @@ class DungeonView extends React.Component {
                                                             data={{levelId: level.id, orientation: 'front'}}
                                                         />}
                                                     </div>
-                                                    {level.front.miniboards.map((board, i) => {
-                                                    return    <div 
-                                                            className="micro-board board" 
-                                                            key={i}
-                                                            style={{
-                                                                height: (this.props.tileSize*6)/3-2+'px',
-                                                                width: (this.props.tileSize*6)/3-2+'px'
-                                                            }}
-                                                            > 
-                                                                {board.tiles && board.tiles.map((tile, i) => {
-                                                                return <Tile
-                                                                key={i}
-                                                                id={i}
-                                                                tileSize={((this.props.tileSize*6)/3-2)/15}
-                                                                image={tile.image ? tile.image : null}
-                                                                imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                                                color={tile.color ? tile.color : 'white'}
-                                                                coordinates={tile.coordinates}
-                                                                index={tile.id}
-                                                                showCoordinates={false}
-                                                                editMode={true}
-                                                                handleHover={null}
-                                                                handleClick={null}
-                                                                type={tile.type}
-                                                                hovered={false}
-                                                                />
-                                                                })}
-                                                            </div>
-                                                    })}
                                                 </div>
                                             </div>}
 
@@ -570,6 +618,41 @@ class DungeonView extends React.Component {
                                                                 ></div>
                                                         })}
                                                     </div>
+                                                    {level.back.miniboards.map((board, i) => {
+                                                    return    <div 
+                                                            className="micro-board board" 
+                                                            key={i}
+                                                            style={{
+                                                                height: (this.props.tileSize*6)/3-2+'px',
+                                                                width: (this.props.tileSize*6)/3-2+'px'
+                                                            }}
+                                                            > 
+                                                                {board.tiles && board.tiles.map((tile, i) => {
+                                                                const isPortal = tile.contains && (tile.contains.type === 'dungeon_portal' || tile.contains.type === 'dungeon portal');
+                                                                return <Tile
+                                                                key={i}
+                                                                id={tile.id}
+                                                                data-portal-id={isPortal ? tile.contains.portalId : null}
+                                                                className={isPortal ? 'dungeon-preview-portal-tile' : ''}
+                                                                delayedHoverLabel={isPortal ? (tile.contains.targetPortalId ? `Linked Portal (Target: ${tile.contains.targetCoordinates})` : 'Unlinked Portal') : null}
+                                                                tileSize={((this.props.tileSize*6)/3-2)/15}
+                                                                contains={tile.contains}
+                                                                boardTiles={board.tiles}
+                                                                image={tile.image ? tile.image : null}
+                                                                imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
+                                                                color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
+                                                                coordinates={tile.coordinates}
+                                                                index={tile.id}
+                                                                showCoordinates={false}
+                                                                editMode={true}
+                                                                handleHover={null}
+                                                                handleClick={null}
+                                                                type={tile.type}
+                                                                hovered={false}
+                                                                />
+                                                                })}
+                                                            </div>
+                                                    })}
                                                     <div 
                                                     className="canvas-overlay-container mini-boards-container"
                                                     style={{
@@ -586,36 +669,6 @@ class DungeonView extends React.Component {
                                                             data={{levelId: level.id, orientation: 'back'}}
                                                         />}
                                                     </div>
-                                                    {level.back.miniboards.map((board, i) => {
-                                                    return    <div 
-                                                            className="micro-board board" 
-                                                            key={i}
-                                                            style={{
-                                                                height: (this.props.tileSize*6)/3-2+'px',
-                                                                width: (this.props.tileSize*6)/3-2+'px'
-                                                            }}
-                                                            > 
-                                                                {board.tiles && board.tiles.map((tile, i) => {
-                                                                return <Tile
-                                                                key={i}
-                                                                id={i}
-                                                                tileSize={((this.props.tileSize*6)/3-2)/15}
-                                                                image={tile.image ? tile.image : null}
-                                                                color={tile.color ? tile.color : 'white'}
-                                                                coordinates={tile.coordinates}
-                                                                index={tile.id}
-                                                                showCoordinates={false}
-                                                                editMode={true}
-                                                                handleHover={null}
-                                                                handleClick={null}
-                                                                type={tile.type}
-                                                                hovered={
-                                                                    false
-                                                                }
-                                                                />
-                                                                })}
-                                                            </div>
-                                                    })}
                                                 </div>
                                             </div>}
                                             
@@ -633,7 +686,30 @@ class DungeonView extends React.Component {
                                         </div>
                                     </div>
                                 })}
-                            </div>}
+                                 {/* Portal Connections Overlay Canvas */}
+                                 {this.props.overlayData && (() => {
+                                     const containerWidth = 80 + this.props.tileSize * 12;
+                                     const containerHeight = (this.props.tileSize * 6) * this.props.loadedDungeon.levels.length;
+                                     return (
+                                         <Canvas
+                                             className="portal-connections-canvas"
+                                             width={containerWidth}
+                                             height={containerHeight}
+                                             style={{
+                                                 position: 'absolute',
+                                                 top: 0,
+                                                 left: 0,
+                                                 width: containerWidth + 'px',
+                                                 height: containerHeight + 'px',
+                                                 zIndex: 12,
+                                                 pointerEvents: 'none'
+                                             }}
+                                             draw={this.drawPortalConnections}
+                                         />
+                                     );
+                                 })()}
+                                </div>
+                             </div>}
                             {!this.props.loadedDungeon && !this.props.loadingData && <div className="empty-dungeons-container">
                                 Select a dungeon, or create a new one
                             </div>}
@@ -641,6 +717,10 @@ class DungeonView extends React.Component {
                             {(this.props.loadingData || this.props.planeSyncInProgress) && <div className="empty-dungeons-container">
                                 <CSpinner/>
                                 {this.props.planeSyncInProgress && <div style={{ marginTop: '8px' }}>Updating dungeon planes...</div>}
+                            </div>}
+                            {this.props.generatingDungeon && <div className="empty-dungeons-container generating-dungeon-overlay">
+                                <CSpinner color="warning" />
+                                <div style={{ marginTop: '12px', color: '#d4a844', fontWeight: 600, fontSize: '14px' }}>Generating dungeon...</div>
                             </div>}
                         </div>
                     </div>

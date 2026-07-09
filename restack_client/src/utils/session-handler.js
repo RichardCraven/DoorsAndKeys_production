@@ -50,13 +50,34 @@ function sanitizeMeta(metadata){
     const safe = {};
     // Copy only small, commonly useful properties. Avoid large nested objects
     // like full dungeon boards, tile arrays, or other heavy structures.
-    const whitelistedKeys = ['dungeonId','boardIndex','tileIndex','crew','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','respawnDate','itemRespawnDate','simulatorDefaults'];
+    const whitelistedKeys = ['dungeonId','boardIndex','tileIndex','crew','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive'];
     for (const k of whitelistedKeys) {
         if (k in metadata) safe[k] = metadata[k];
     }
     // If crew is large, trim each crew member to essential fields
     if (Array.isArray(safe.crew)) {
-        safe.crew = safe.crew.map(c => ({ id: c && c.id, name: c && c.name, hp: c && c.hp, dead: c && c.dead, level: c && c.level, image: c && c.image, type: c && c.type }));
+        safe.crew = safe.crew.map(c => ({
+            id: c && c.id,
+            name: c && c.name,
+            hp: c && c.hp,
+            dead: c && c.dead,
+            level: c && c.level,
+            image: c && c.image,
+            portrait: c && c.portrait,
+            type: c && c.type,
+            globalSkills: c && c.globalSkills,
+            stats: c && c.stats,
+            trainingProgress: c && c.trainingProgress,
+            lastTrained: c && c.lastTrained,
+            trainingActive: c && c.trainingActive,
+            specialActions: c && c.specialActions,
+            passives: c && c.passives,
+            pendingLevelUpPicks: c && c.pendingLevelUpPicks,
+            knownRituals: c && c.knownRituals,
+            knownTattoos: c && c.knownTattoos,
+            tattoos: c && c.tattoos,
+            knownRecipes: c && c.knownRecipes
+        }));
     }
     // If inventory present, keep only counts/names
     if (Array.isArray(safe.inventory)) {
@@ -100,7 +121,13 @@ function setEditorPreference(key, val){
     if(!meta || typeof meta !== 'object') meta = {};
     if(!meta.preferences || typeof meta.preferences !== 'object') meta.preferences = {};
     if(!meta.preferences.editor || typeof meta.preferences.editor !== 'object') meta.preferences.editor = {};
-    meta.preferences.editor[key] = val;
+    
+    let valueToStore = val;
+    if (key === 'loadedDungeon' && val && typeof val === 'object') {
+        valueToStore = { id: val.id || val._id || null, name: val.name || null };
+    }
+    
+    meta.preferences.editor[key] = valueToStore;
     storeMeta(meta)
 }
 
@@ -108,5 +135,34 @@ function setUserName(username){
     sessionStorage.setItem('userName', username)
 }
 
+function getResolvePenaltyReduction() {
+    const meta = getMeta() || {};
+    const crew = meta.crew || [];
+    let reductionPct = 0;
+    crew.forEach(member => {
+        if (!member || !member.globalSkills) return;
+        const skill = member.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === 'strong_resolve');
+        if (skill) {
+            const lvl = typeof skill === 'string' ? 1 : (skill.level || 1);
+            if (lvl === 1) reductionPct = Math.max(reductionPct, 0.40);
+            else if (lvl === 2) reductionPct = Math.max(reductionPct, 0.75);
+            else if (lvl === 3) reductionPct = Math.max(reductionPct, 0.90);
+        }
+    });
+    // Add resolve penalty resistance from equipped items (tabards)
+    const invItems = (meta.inventory && Array.isArray(meta.inventory.items)) ? meta.inventory.items : [];
+    invItems.forEach(item => {
+        if (item && item.equippedBy != null && typeof item.resolveResist === 'number') {
+            reductionPct = Math.min(1.0, reductionPct + (item.resolveResist / 100));
+        }
+    });
+    return reductionPct;
+}
 
-export {storeSessionData, storeMeta, getMeta, getUserId, setEditorPreference, getUserName, setUserName};
+function applyResolvePenalty(basePenalty) {
+    const reduction = getResolvePenaltyReduction();
+    const finalPenalty = basePenalty * (1 - reduction);
+    return Math.round(finalPenalty);
+}
+
+export {storeSessionData, storeMeta, getMeta, getUserId, setEditorPreference, getUserName, setUserName, getResolvePenaltyReduction, applyResolvePenalty};

@@ -8,6 +8,11 @@ import CanvasFireball from '../components/Canvas/canvas_fireball'
 import CanvasAxeThrow from '../components/Canvas/canvas_axe_throw'
 import CanvasClawSwipe from '../components/Canvas/canvas_claw_swipe'
 import CanvasPhysicalAttack from '../components/Canvas/canvas_physical_attack'
+import CanvasSwordSwing from '../components/Canvas/canvas_sword_swing'
+import CanvasWhirlwind from '../components/Canvas/canvas_whirlwind'
+import CanvasJaggedCircle from '../components/Canvas/canvas_jagged_circle'
+import CanvasEnergyBlast from '../components/Canvas/canvas_energy_blast'
+import CanvasHeal from '../components/Canvas/canvas_heal'
 
 // class AnimationGrid extends React.Component {
     // constructor(props){
@@ -97,6 +102,24 @@ const AnimationGrid = ({
                                 targetLaneDiff={anim.targetLaneDiff}
                                 duration={anim.duration}
                             />
+                        } else if (anim.type === 'jaggedCircle') {
+                            return <CanvasJaggedCircle
+                                key={animKey}
+                                origin={anim.origin}
+                                target={anim.target}
+                                width={width}
+                                height={height}
+                                tileSize={TILE_SIZE}
+                                duration={anim.duration}
+                                travelDuration={anim.travelDuration}
+                                lingerDuration={anim.lingerDuration}
+                                color={anim.color}
+                                accentColor={anim.accentColor}
+                                radius={anim.radius}
+                                jaggedness={anim.jaggedness}
+                                rotationSpeed={anim.rotationSpeed}
+                                lineWidth={anim.lineWidth}
+                            />
                         } else if (anim.type === 'magicTriangle') {
                             return <CanvasMagicTriangle
                                 key={animKey}
@@ -143,6 +166,20 @@ const AnimationGrid = ({
                                     zIndex: 20
                                 }}
                             />
+                        } else if (anim.type === 'sword_swing') {
+                            if (!anim.origin || !anim.target) {
+                                console.warn('[AnimationGrid] CanvasSwordSwing missing origin or target', anim);
+                                return null;
+                            }
+                            return <CanvasSwordSwing
+                                key={animKey}
+                                origin={anim.origin}
+                                target={anim.target}
+                                tileSize={TILE_SIZE}
+                                duration={anim.duration || 600}
+                                facing={anim.facing || 'right'}
+                                onComplete={anim.onComplete}
+                            />
                         } else if (anim.type === 'physical_attack') {
                             if (!anim.origin || !anim.target) {
                                 console.warn('[AnimationGrid] CanvasPhysicalAttack missing origin or target', anim);
@@ -174,8 +211,53 @@ const AnimationGrid = ({
                                 onComplete={anim.onComplete}
                                 tracer={typeof anim.tracer === 'boolean' ? anim.tracer : true}
                                 facing={anim.facing}
+                                color={anim.color}
                             />
-                        } 
+                        } else if (anim.type === 'whirlwind') {
+                            if (!anim.origin) {
+                                console.warn('[AnimationGrid] CanvasWhirlwind missing origin', anim);
+                                return null;
+                            }
+                            return <CanvasWhirlwind
+                                key={animKey}
+                                origin={anim.origin}
+                                width={TILE_SIZE}
+                                height={TILE_SIZE}
+                                duration={anim.duration || 650}
+                                caller={anim.caller}
+                                onComplete={anim.onComplete}
+                            />
+                        } else if (anim.type === 'energy_blast') {
+                            if (!anim.origin || !anim.target) {
+                                console.warn('[AnimationGrid] CanvasEnergyBlast missing origin or target', anim);
+                                return null;
+                            }
+                            return <CanvasEnergyBlast
+                                key={animKey}
+                                origin={anim.origin}
+                                target={anim.target}
+                                width={width}
+                                height={height}
+                                duration={anim.duration || 800}
+                                travelDuration={anim.travelDuration || 800}
+                                onComplete={anim.onComplete}
+                            />
+                        } else if (anim.type === 'heal') {
+                            if (!anim.origin || !anim.target) {
+                                console.warn('[AnimationGrid] CanvasHeal missing origin or target', anim);
+                                return null;
+                            }
+                            return <CanvasHeal
+                                key={animKey}
+                                origin={anim.origin}
+                                target={anim.target}
+                                width={width}
+                                height={height}
+                                duration={anim.duration || 1000}
+                                travelDuration={anim.travelDuration || 600}
+                                onComplete={anim.onComplete}
+                            />
+                        }
                         else {
                             return <CanvasMagicMissile
                                 key={animKey}

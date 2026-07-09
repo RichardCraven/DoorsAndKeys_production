@@ -174,10 +174,9 @@ The combat layer is responsible for all turn-based battles between the player's 
 
 ### Key Files
 - `src/pages/sub-views/MonsterBattle.js` — Main React component for combat UI and state.
-- `src/utils/combat-manager.js` — Core combat logic, turn cycles, targeting, VCT handling, and state sync.
-- `src/utils/monster-manager.js` — Monster data, stats, and helpers.
-- `src/utils/monster-ai/` — AI profiles for monsters (e.g., Mummy, etc.).
-- `src/components/combat-panes/` — UI grids for fighters and monsters.
+- `src/utils/combat-manager-redux.js` — Authoritative Redux battle engine, managing stats, round-based turn execution, target acquisition, status effects, and state updates.
+- `src/utils/monster-manager.js` — Monster definitions, base stats, and type helpers.
+- `src/components/combat-panes/` — UI combat grid panels.
 
 ### Main Data Flow
 1. **Initialization**: `MonsterBattle` mounts, resets and initializes the `combatManager`, connects overlay/animation managers, and sets up callbacks for all combat events (actor updates, data sync, game over, etc.).
@@ -242,49 +241,29 @@ The combat layer is responsible for all turn-based battles between the player's 
 
 ---
 
-## Turn Cycle Architecture (factories.js)
+## Round-Based Combat Architecture (combat-manager-redux.js)
 
-Each combatant runs a `setInterval`-based `turnCycle()`. Key fields on every combatant object:
+The Redux combat engine is entirely turn-based and round-based. It does not use real-time intervals, ticks, or eras.
 
-- `tempo` — increments each tick by `(moveCooldown / FIGHT_INTERVAL)`. When `tempo >= 100` one full turn cycle has elapsed → `restartTurnCycle()` is called which resets `tempo = 0`, resets `eraIndex = 0`, resets `movesLeft`, clears `pendingAttack`, and calls `turnCycle()` again.
-- `eraIndex` — 0–4, subdivides each turn cycle into 5 eras. Advances as `movesLeft` is consumed. AI acts once per era via `eraMove()` / `eraAttack()`.
-- `FIGHT_INTERVAL` — global tick rate (ms). Can be changed mid-combat (e.g., Berserker speed buff); `restartTurnCycle` applies the new value immediately by stopping and restarting the interval.
-- `TICKS_PER_ERA = 250` — reference ticks per era at base speed. Used by `kickoffSpecialCooldown()` to convert `specialAction.cooldown` (in eras) to a tick count.
-- `_lastEraIndex` — set to `-1` on each `restartTurnCycle`. The interval tick compares current `eraIndex` to `_lastEraIndex` to detect era transitions for era-counted effects.
+### Turn Queue & Initiative
+- **Round Turns**: The turn sequence is determined inside `processRoundTurns()` by sorting all active combatants by initiative (speed/dexterity) in descending order:
+  ```javascript
+  let speed = unit.stats.speed || unit.stats.dex || 1;
+  ```
+- Higher initiative units act earlier in each combat round.
 
-### setFightInterval re-entrancy guard
-`setFightInterval()` can be called from within `restartTurnCycle()` (e.g., Barbarian `_expireBerserker` chain), which would cause a nested `restartTurnCycle()` call and double-fire any per-cycle logic. Guard: `this._inRestartTurnCycle` is set `true` at entry of `restartTurnCycle` and cleared just before the final `turnCycle()` call. `setFightInterval` checks this flag and only clears the stale interval if re-entrant, trusting the outer call to finish naturally.
+### Special Ability Cooldowns
+- Cooldowns are integer round-duration values mapped on `unit.cooldowns`.
+- Ability cooldowns are set via `_setCooldown(unit, abilityKey, rounds)` and decremented by 1 at the start of the unit's turn in `processRoundTurns()`.
 
----
-
-## Special Ability Cooldown Mechanism
-
-- Defined in `src/utils/specials-matrix.js` — each entry has `cooldown` (in eras) and `duration` (in eras).
-- `kickoffSpecialCooldown(specialAction, caller)` in `combat-manager.js` converts `specialAction.cooldown * TICKS_PER_ERA` to a tick count, automatically adjusting for the live `FIGHT_INTERVAL`. Cooldowns are era-based, speed-agnostic.
-- `cooldown_position` on the special tracks progress (0 = ready to fire, 100 = on cooldown, decrements each tick).
-- **`duration` fields must be used in the implementing ability code** — they are not automatically consumed. Example: `triggerInduceFear` must read `fearSpecial.duration` to set `feared_eras`. If hardcoded instead, the data and code become disconnected.
-
----
-
-## Fear Effect (Induce Fear / Mummy)
-
-- Applied by `triggerInduceFear()` in `src/utils/monster-ai/profiles/Mummy.js`.
-- Sets `enemy.feared = true`, `enemy._fearOriginalAtk`, and `enemy.feared_eras = fearSpecial.duration` (reads from specials-matrix, do **not** hardcode).
-- Guard against re-application: if `enemy.feared` is already `true`, do not reset `feared_eras` — only ensure `feared = true` stays set. Without this guard, two staggered fires (or a fast cooldown) can permanently prevent the counter from reaching 0.
-- **`feared_eras` counts eras, not full turn cycles.** Decremented on each era transition inside the `turnCycle` interval (detected via `_lastEraIndex` changing). When `feared_eras <= 0`: restore `_fearOriginalAtk`/`_fearOriginalDef`, clear `feared`, broadcast state update.
-- Fear cleanup is **only** done in the era-transition block — there is no safety-net `setTimeout`. If a fighter's interval dies, fear will not clear.
-
----
-
-## chooseAttackType Side-Effect Pattern
-
-`chooseAttackType(caller, target)` in `combat-manager.js` assigns `caller.pendingAttack` as a **side effect** before returning. Callers do not need to assign the return value — `if (!this.pendingAttack) chooseAttackType(this, target)` is the correct pattern. The return value is void.
-
----
-
-## manualControl Flag
-
-`manualControl` on a fighter object blocks the `turnCycle` early-return path when paired with `selectedFighter`. However, `enableManualModeForSelectedFighter()` (the only setter) has **no call sites** — it is defined but never invoked. `manualControl` is always `false` for every combatant. Do not rely on it as a mechanism; do not add logic gated on it without first wiring a call site.
+### Evasion & Dodge Mechanics
+- Attacking relies on `hitCheck(caller, target)`.
+- Physical attacks have their hit/dodge check scaled by the target's Dexterity and Speed:
+  ```javascript
+  baseMissChance = (targetDex * 2.0) + (targetSpeed * 1.0);
+  missChance = Math.min(baseMissChance, 45); // normally capped at 45%
+  ```
+- Dexterity directly provides +2% dodge chance per point, making it the primary physical evasion stat.
 
 ---
 This file is for agent context only. Update as new rules or architectural notes are required.

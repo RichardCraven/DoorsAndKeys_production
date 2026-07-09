@@ -15,6 +15,10 @@ class UserProfilePage extends React.Component{
       navToLanding: false,
       isClearing: false,
       clearSuccess: false,
+      isClearingCrew: false,
+      clearCrewSuccess: false,
+      isLeaving: false,
+      leaveSuccess: false,
       isEditingName: false,
       editedName: '',
       isSavingName: false,
@@ -105,23 +109,32 @@ class UserProfilePage extends React.Component{
     
     let meta = getMeta();
     if(this.state.dungeon){
-      await deleteDungeonRequest(meta.dungeonId)
+      try { await deleteDungeonRequest(meta.dungeonId); } catch (e) {}
 
       this.props.boardManager.dungeon.id = null;
       this.props.inventoryManager.inventory = [];
 
-            // clear dungeon and crew
-            meta.dungeonId = null;
-            meta.location = null
-            meta.inventory = { 
-              items: [], 
-              gold: 0,
-              shimmering_dust: 0,
-              totems: 0
-            }
-            // also clear crew when clearing the dungeon
-            meta.crew = [];
-            try { this.props.crewManager.initializeCrew([]); } catch(e) { try { this.props.crewManager.crew = []; } catch(e) {} }
+      meta.dungeonId = null;
+      meta.location = null
+      meta.inventory = { 
+        items: [], 
+        gold: 0,
+        shimmering_dust: 0,
+        totems: 0
+      }
+      
+      // Revive and keep crew
+      if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
+        this.props.crewManager.crew.forEach(c => {
+          if (c) {
+            c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
+            c.dead = false;
+          }
+        });
+        meta.crew = this.props.crewManager.crew;
+        try { this.props.crewManager.initializeCrew(meta.crew); } catch(e) {}
+      }
+
       await updateUserRequest(getUserId(), meta)
       storeMeta(meta);
       
@@ -140,9 +153,19 @@ class UserProfilePage extends React.Component{
         shimmering_dust: 0,
         totems: 0
       }
-      // also clear crew when clearing the dungeon
-      meta.crew = [];
-      try { this.props.crewManager.initializeCrew([]); } catch(e) { try { this.props.crewManager.crew = []; } catch(e) {} }
+      
+      // Revive and keep crew
+      if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
+        this.props.crewManager.crew.forEach(c => {
+          if (c) {
+            c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
+            c.dead = false;
+          }
+        });
+        meta.crew = this.props.crewManager.crew;
+        try { this.props.crewManager.initializeCrew(meta.crew); } catch(e) {}
+      }
+
       await updateUserRequest(getUserId(), meta)
       storeMeta(meta);
       
@@ -150,9 +173,75 @@ class UserProfilePage extends React.Component{
         this.getDungeonDetails();
         this.setState({ isClearing: false, clearSuccess: true });
         setTimeout(() => this.setState({ clearSuccess: false }), 2000);
-        console.log('meta: ', getMeta());
       })
     }
+  }
+
+  leaveDungeon = async () => {
+    console.log('leaving dungeon', this.state.dungeon);
+    this.setState({ isLeaving: true, leaveSuccess: false });
+    
+    let meta = getMeta();
+    if (meta.dungeonId) {
+      try { await deleteDungeonRequest(meta.dungeonId); } catch (e) {}
+    }
+
+    this.props.boardManager.dungeon.id = null;
+    this.props.inventoryManager.inventory = [];
+
+    meta.dungeonId = null;
+    meta.location = null
+    meta.inventory = { 
+      items: [], 
+      gold: 0,
+      shimmering_dust: 0,
+      totems: 0
+    }
+    
+    // Revive and keep crew
+    if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
+      this.props.crewManager.crew.forEach(c => {
+        if (c) {
+          c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
+          c.dead = false;
+        }
+      });
+      meta.crew = this.props.crewManager.crew;
+      try { this.props.crewManager.initializeCrew(meta.crew); } catch(e) {}
+    }
+
+    await updateUserRequest(getUserId(), meta)
+    storeMeta(meta);
+    
+    setTimeout(() => {
+      this.getDungeonDetails();
+      this.setState({ isLeaving: false, leaveSuccess: true, navToLanding: true });
+    });
+  }
+
+  clearCrew = async () => {
+    console.log('clearing crew');
+    this.setState({ isClearingCrew: true, clearCrewSuccess: false });
+    
+    let meta = getMeta();
+    meta.crew = [];
+    
+    if (this.props.crewManager) {
+      try {
+        this.props.crewManager.initializeCrew([]);
+      } catch(e) {
+        try { this.props.crewManager.crew = []; } catch(err) {}
+      }
+    }
+
+    await updateUserRequest(getUserId(), meta);
+    storeMeta(meta);
+
+    setTimeout(() => {
+      this.getDungeonDetails();
+      this.setState({ isClearingCrew: false, clearCrewSuccess: true });
+      setTimeout(() => this.setState({ clearCrewSuccess: false }), 2000);
+    });
   }
   render(){
     const { user, dungeon, isClearing, clearSuccess, navToLanding, isEditingName, editedName, isSavingName, nameSaveSuccess } = this.state;
@@ -218,7 +307,30 @@ class UserProfilePage extends React.Component{
             </div>
           </div>
           
-          <div className="profile-actions">
+          <div className="profile-actions" style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%' }}>
+            {dungeon && (
+              <button 
+                className={`profile-btn leave-btn ${this.state.isLeaving ? 'loading' : ''} ${this.state.leaveSuccess ? 'success' : ''}`}
+                onClick={() => this.leaveDungeon()}
+                disabled={this.state.isLeaving}
+                style={{ backgroundColor: '#2ecc71', color: 'white' }}
+              >
+                {this.state.isLeaving ? (
+                  <span className="btn-content">
+                    <span className="spinner"></span>
+                    Leaving...
+                  </span>
+                ) : this.state.leaveSuccess ? (
+                  <span className="btn-content">
+                    <span className="checkmark">✓</span>
+                    Left Dungeon!
+                  </span>
+                ) : (
+                  'Leave Dungeon'
+                )}
+              </button>
+            )}
+
             <button 
               className={`profile-btn clear-btn ${isClearing ? 'loading' : ''} ${clearSuccess ? 'success' : ''}`}
               onClick={() => this.clearDungeon()}
@@ -238,6 +350,28 @@ class UserProfilePage extends React.Component{
                 'Clear Dungeon'
               )}
             </button>
+
+            <button 
+              className={`profile-btn clear-crew-btn ${this.state.isClearingCrew ? 'loading' : ''} ${this.state.clearCrewSuccess ? 'success' : ''}`}
+              onClick={() => this.clearCrew()}
+              disabled={this.state.isClearingCrew}
+              style={{ backgroundColor: '#e74c3c', color: 'white' }}
+            >
+              {this.state.isClearingCrew ? (
+                <span className="btn-content">
+                  <span className="spinner"></span>
+                  Clearing Crew...
+                </span>
+              ) : this.state.clearCrewSuccess ? (
+                <span className="btn-content">
+                  <span className="checkmark">✓</span>
+                  Crew Cleared!
+                </span>
+              ) : (
+                'Clear Crew'
+              )}
+            </button>
+
             <button 
               className="profile-btn back-btn"
               onClick={() => this.setState({navToLanding: true})}

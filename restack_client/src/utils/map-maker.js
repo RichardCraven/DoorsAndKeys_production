@@ -6,19 +6,21 @@ export function MapMaker(props){
         'delete',
         'void fill',
         'void',
+        'passage',
+        'empty space',
+        'obscured space',
         'door',
-        'pit',
         'way up',
         'way down',
-        'cloud',
         'spawn',
         
         'monsters',
-        'item',
-        'magic',
         'narrative',
         'key',
         'items',
+        'jewels',
+        'runes',
+        'vendors',
         
         'gate',
         'treasure',
@@ -27,7 +29,14 @@ export function MapMaker(props){
         'oracle',
         'dream den',
 
-        'devil'
+        'devil',
+        'pit',
+        'cloud',
+        'dungeon portal',
+        'magic',
+        'inscription',
+        'shrine',
+        'lore_tablet'
     ]
 
     this.tierOptions = [
@@ -46,6 +55,88 @@ export function MapMaker(props){
         { key: 'tier_3_armor',   name: 'Tier 3 Armor',   image: 'tier_3_armor' },
     ];
 
+    this.jewelOptions = [
+        { key: 'amber', name: 'Amber', image: 'amber' },
+        { key: 'sapphire', name: 'Sapphire', image: 'sapphire' },
+        { key: 'ruby', name: 'Ruby', image: 'ruby' },
+        { key: 'amber_shards', name: 'Amber shards', image: 'amber_shards' },
+        { key: 'sapphire_shards', name: 'Sapphire shards', image: 'sapphire_shards' },
+        { key: 'ruby_shards', name: 'Ruby shards', image: 'ruby_shards' },
+
+        { key: 'polished_amber', name: 'Polished amber', image: 'polished_amber' },
+        { key: 'polished_sapphire', name: 'Polished sapphire', image: 'polished_sapphire' },
+        { key: 'polished_ruby', name: 'Polished ruby', image: 'polished_ruby' },
+
+        { key: 'moxite', name: 'Moxite', image: 'moxite' },
+        { key: 'pyrite', name: 'Pyrite', image: 'pyrite' },
+        { key: 'benthite', name: 'Benthite', image: 'benthite' },
+        { key: 'labradite', name: 'Labradite', image: 'labradite' },
+        { key: 'memnite', name: 'Memnite', image: 'memnite' },
+        { key: 'malachite', name: 'Malachite', image: 'malachite' },
+        { key: 'onyx', name: 'Onyx', image: 'onyx' },
+
+        { key: 'moxite_cluster', name: 'Moxite cluster', image: 'moxite_cluster' },
+        { key: 'pyrite_cluster', name: 'Pyrite cluster', image: 'pyrite_cluster' },
+        { key: 'benthite_cluster', name: 'Benthite cluster', image: 'benthite_cluster' },
+        { key: 'memnite_cluster', name: 'Memnite cluster', image: 'memnite_cluster' },
+        { key: 'labradite_cluster', name: 'Labradite cluster', image: 'labradite_cluster' },
+        { key: 'malachite_cluster', name: 'Malachite cluster', image: 'malachite_cluster' },
+        { key: 'onyx_cluster', name: 'Onyx cluster', image: 'onyx_cluster' },
+        { key: 'abyssal_crystal', name: 'Abyssal crystal', image: 'abyssal_crystal' },
+    ];
+
+    this.runeOptions = [
+        { key: 'volcanic_rune', name: 'Volcanic rune', image: 'volcanic_rune' },
+        { key: 'stone_rune', name: 'Stone rune', image: 'stone_rune' },
+        { key: 'pewter_rune', name: 'Pewter rune', image: 'pewter_rune' },
+        { key: 'earthen_rune', name: 'Earthen rune', image: 'earthen_rune' },
+        { key: 'onyxian_rune', name: 'Onyxian rune', image: 'onyxian_rune' },
+        { key: 'shadow_rune', name: 'Shadow rune', image: 'shadow_rune' },
+        { key: 'feldspar_rune', name: 'Feldspar rune', image: 'feldspar_rune' },
+        { key: 'archaic_rune', name: 'Archaic rune', image: 'archaic_rune' },
+        { key: 'sulphuric_rune', name: 'Sulphuric rune', image: 'sulphuric_rune' },
+    ];
+
+    this.treasureOptions = [
+        { key: 'silver_chest', name: 'Silver chest', image: 'silver_chest' },
+        { key: 'gold_chest', name: 'Gold chest', image: 'gold_chest' },
+        { key: 'ornate_chest', name: 'Ornate chest', image: 'ornate_chest' },
+        { key: 'wooden_chest', name: 'Wooden chest', image: 'wooden_chest' },
+        { key: 'iron_chest', name: 'Iron chest', image: 'iron_chest' },
+        { key: 'steel_chest', name: 'Steel chest', image: 'steel_chest' },
+        { key: 'ancient_casket', name: 'Ancient casket', image: 'ancient_casket' },
+        { key: 'gilded_casket', name: 'Gilded casket', image: 'gilded_casket' },
+        { key: 'treasury_chest', name: 'Treasury chest', image: 'treasury_chest' },
+        { key: 'cryptic_chest', name: 'Cryptic chest', image: 'cryptic_chest' }
+    ];
+
+    this.vendorOptions = [
+        { key: 'merchant', name: 'Merchant', image: 'merchant' },
+        { key: 'alchemist', name: 'Alchemist', image: 'alchemist' },
+    ];
+
+    this.passageOptions = [
+        { key: 'wall_breaker', name: 'Wall breaker', image: null }
+    ];
+
+    this.shrineOptions = [
+        { key: 'shrine_barbarian', name: 'Barbarian Shrine', classKey: 'barbarian', color: '#8B0000' },
+        { key: 'shrine_ranger',   name: 'Ranger Shrine',    classKey: 'ranger',    color: '#2D6A00' },
+        { key: 'shrine_sage',     name: 'Sage Shrine',      classKey: 'sage',      color: '#4B0082' },
+        { key: 'shrine_soldier',  name: 'Soldier Shrine',   classKey: 'soldier',   color: '#1A3A6B' },
+        { key: 'shrine_wizard',   name: 'Wizard Shrine',    classKey: 'wizard',    color: '#7700CC' },
+        { key: 'shrine_monk',     name: 'Monk Shrine',      classKey: 'monk',      color: '#8B4513' },
+        { key: 'shrine_summoner', name: 'Summoner Shrine',  classKey: 'summoner',  color: '#1C1C3A' },
+    ];
+
+    this.loreTabletOptions = [
+        { key: 'lore_tablet_endurance',  name: 'Endurance Tablet',  domain: 'endurance',  color: '#3A2A00' },
+        { key: 'lore_tablet_perception', name: 'Perception Tablet', domain: 'perception', color: '#003A3A' },
+        { key: 'lore_tablet_willpower',  name: 'Willpower Tablet',  domain: 'willpower',  color: '#3A003A' },
+        { key: 'lore_tablet_cunning',    name: 'Cunning Tablet',    domain: 'cunning',    color: '#2A3A00' },
+        { key: 'lore_tablet_fortitude',  name: 'Fortitude Tablet',  domain: 'fortitude',  color: '#001A3A' },
+    ];
+
     this.paletteTiles = [];
     this.getIndexFromCoordinates = (coordinates) =>{
         let x = coordinates[0], y = coordinates[1];
@@ -58,6 +149,24 @@ export function MapMaker(props){
     this.getContainsType = (contains) => {
         if (typeof contains === 'object' && contains !== null) return contains.type;
         return contains;
+    }
+    this.getTilePassageType = (tile) => {
+        const contains = tile?.contains;
+        const containsType = this.getContainsType(contains);
+        const containsSubtype = (typeof contains === 'object' && contains !== null) ? contains.subtype : null;
+        const imageType = tile?.image;
+
+        const canonical = ['way_up', 'way_down', 'door', 'spawn_point'];
+
+        if (canonical.includes(containsType)) return containsType;
+        if (canonical.includes(containsSubtype)) return containsSubtype;
+        if (canonical.includes(imageType)) return imageType;
+
+        if (containsType === 'spawn' && (containsSubtype === 'spawn_point' || imageType === 'spawn_point')) {
+            return 'spawn_point';
+        }
+
+        return containsType || containsSubtype || imageType || null;
     }
     this.resetCoordinates = (tiles) => {
         for(let row = 0; row < 15; row++){
@@ -75,7 +184,7 @@ export function MapMaker(props){
             return plane.miniboards.map((board) => {
                 if (!board || !board.tiles) return [];
                 return board.tiles.filter((tile) => {
-                    const type = this.getContainsType(tile.contains);
+                    const type = this.getTilePassageType(tile);
                     return includeSpawnPoint
                         ? (type === 'way_up' || type === 'way_down' || type === 'door' || type === 'spawn_point')
                         : (type === 'way_up' || type === 'way_down' || type === 'door');
@@ -88,7 +197,7 @@ export function MapMaker(props){
                 if(!mb|| !mb.tiles) return
                 mb.tiles.forEach(t=> {
                     t.level = lvl.id
-                    const type = this.getContainsType(t.contains);
+                    const type = this.getTilePassageType(t) || 'none';
                     t.locationCode = `${type}_level-${lvl.id}_miniboard-${i}_F_[${t.coordinates}]`
                 })
             })
@@ -96,7 +205,7 @@ export function MapMaker(props){
                 if(!mb|| !mb.tiles) return
                 mb.tiles.forEach(t=> {
                     t.level = lvl.id
-                    const type = this.getContainsType(t.contains);
+                    const type = this.getTilePassageType(t) || 'none';
                     t.locationCode = `${type}_level-${lvl.id}_miniboard-${i}_B_[${t.coordinates}]`
                 })
             })
@@ -210,7 +319,7 @@ export function MapMaker(props){
                 id: i,
                 color: null,
                 showCoordinates: false,
-                contains: null
+                contains: { type: 'empty_space', subtype: null }
             })
         }
         for(let row = 0; row < 15; row++){
@@ -234,6 +343,58 @@ export function MapMaker(props){
                     optionType: 'voidfill',
                     image: 'voidfill',
                     color: 'black',
+                    id: i
+                })
+            } else if(key === 'passage'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'passage',
+                    image: null,
+                    color: null,
+                    borders: { top: '2px solid black', left: '2px solid black', right: '2px solid black', bottom: '2px solid transparent' },
+                    id: i
+                })
+            } else if(key === 'empty space'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'empty space',
+                    image: null,
+                    color: null,
+                    id: i
+                })
+            } else if(key === 'obscured space'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'obscured space',
+                    image: null,
+                    color: '#a8a8a8',
+                    id: i
+                })
+            } else if(key === 'inscription'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'inscription',
+                    image: null,
+                    color: '#2a1e0a',
+                    isInscription: true,
+                    id: i
+                })
+            } else if(key === 'shrine'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'shrine',
+                    image: null,
+                    color: '#8B0000',
+                    isShrine: true,
+                    id: i
+                })
+            } else if(key === 'lore_tablet'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'lore_tablet',
+                    image: null,
+                    color: '#3A2A00',
+                    isLoreTablet: true,
                     id: i
                 })
             } else {
@@ -417,7 +578,7 @@ export function MapMaker(props){
             }
             let spawns = []
             passages.frontPassages.forEach(passage=>{
-                if(this.getContainsType(passage.contains) === 'spawn_point'){
+                if(this.getTilePassageType(passage) === 'spawn_point'){
                     spawns.push(passage);
                     dungeonSpawns.push(passage);
                 } else {
@@ -430,7 +591,7 @@ export function MapMaker(props){
             passages.backPassages.forEach(passage=>{
                 // console.log('passage location code', passage.locationCode);
                 // mb.forEach(passage=>{
-                if(this.getContainsType(passage.contains) === 'spawn_point'){
+                if(this.getTilePassageType(passage) === 'spawn_point'){
                     spawns.push(passage);
                     dungeonSpawns.push(passage);
                 } else {
@@ -465,8 +626,8 @@ export function MapMaker(props){
             l.spawns = spawns;
             if(!l.valid) dungeonValid = false;
         })
-        // console.log('dungeonSpawns', dungeonSpawns);
-        dungeonObj.valid = dungeonValid;
+        // Dungeon is only valid if structural checks pass AND at least one spawn exists.
+        dungeonObj.valid = dungeonValid && dungeonSpawns.length > 0;
         dungeonObj.spawn_points = dungeonSpawns;
         if(dungeonObj.spawnPoints) delete dungeonObj.spawnPoints
         return dungeonObj
@@ -550,6 +711,14 @@ export function MapMaker(props){
                 return 'treasury_key'
             case 'items':
                 return 'tier_1_weapon'
+            case 'jewels':
+                return 'abyssal_crystal'
+            case 'runes':
+                return 'archaic_rune'
+            case 'treasure':
+                return 'silver_chest'
+            case 'vendors':
+                return 'merchant'
             case 'stairs':
                 return 'stairs_down'
             case 'door':
@@ -558,10 +727,18 @@ export function MapMaker(props){
                 return 'moon_castle'
             case 'devil':
                 return 'mordu_devil'
+            case 'dungeon portal':
+                return 'dungeon_portal'
             case 'food':
                 return 'food'
             case 'spawn':
                 return 'spawn_point'    
+            case 'inscription':
+                return 'inscription'
+            case 'shrine':
+                return 'shrine'
+            case 'lore_tablet':
+                return 'lore_tablet'
             default:
                 return false
         }
@@ -579,5 +756,37 @@ export function MapMaker(props){
         
 
         // numberOfFolders
+    }
+
+    this.getAllPortalsInDungeon = (dungeon) => {
+        const portals = [];
+        if (!dungeon || !Array.isArray(dungeon.levels)) return portals;
+        dungeon.levels.forEach((level) => {
+            ['front', 'back'].forEach((orientation) => {
+                const plane = level[orientation];
+                if (plane && Array.isArray(plane.miniboards)) {
+                    plane.miniboards.forEach((mb, mbIndex) => {
+                        if (mb && Array.isArray(mb.tiles)) {
+                            mb.tiles.forEach((tile) => {
+                                const type = tile.contains && (tile.contains.type || tile.contains);
+                                if (type === 'dungeon_portal' || type === 'dungeon portal') {
+                                    portals.push({
+                                        tileId: tile.id,
+                                        coordinates: tile.coordinates,
+                                        miniboardIndex: mbIndex,
+                                        orientation: orientation,
+                                        levelId: level.id,
+                                        portalId: tile.contains.portalId || null,
+                                        targetPortalId: tile.contains.targetPortalId || null,
+                                        portalName: tile.contains.portalName || `Lvl ${level.id} (${orientation === 'front' ? 'Front' : 'Back'}) Board ${mbIndex + 1} at [${tile.coordinates}]`
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        });
+        return portals;
     }
 }

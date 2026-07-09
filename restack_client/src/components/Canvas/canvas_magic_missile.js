@@ -159,31 +159,48 @@ const CanvasMagicMissile = ({
 
           const startX = origin.x * TILE_SIZE;
           const startY = origin.y * TILE_SIZE;
-          const mid1X = startX + nudgeX;
-          const mid1Y = startY + nudgeY;
-          const mid2X = startX + nudgeX * 2;
-          const mid2Y = startY + nudgeY * 2;
           const finalX = liveTarget.x * TILE_SIZE;
           const finalY = liveTarget.y * TILE_SIZE;
 
           let x;
           let y;
           let scale;
-          if (progress <= 0.25) {
-            const p = progress / 0.25;
-            x = lerp(startX, mid1X, p);
-            y = lerp(startY, mid1Y, p);
-            scale = lerp(0.1, 1, p);
-          } else if (progress <= 0.5) {
-            const p = (progress - 0.25) / 0.25;
-            x = lerp(mid1X, mid2X, p);
-            y = lerp(mid1Y, mid2Y, p);
-            scale = lerp(1, 2.75, p);
+
+          if (bendTo && typeof bendTo.x === 'number' && typeof bendTo.y === 'number') {
+            const bendX = bendTo.x * TILE_SIZE;
+            const bendY = bendTo.y * TILE_SIZE;
+            // Bezier curve using liveTarget (Wraith) as the control point
+            x = (1 - progress) * (1 - progress) * startX + 2 * (1 - progress) * progress * finalX + progress * progress * bendX;
+            y = (1 - progress) * (1 - progress) * startY + 2 * (1 - progress) * progress * finalY + progress * progress * bendY;
+            
+            // Scale up mid-flight, then scale down to 0 at the end (swallowed)
+            if (progress <= 0.5) {
+              scale = lerp(0.1, 2.0, progress / 0.5);
+            } else {
+              scale = lerp(2.0, 0, (progress - 0.5) / 0.5);
+            }
           } else {
-            const p = (progress - 0.5) / 0.5;
-            x = lerp(mid2X, finalX, p);
-            y = lerp(mid2Y, finalY, p);
-            scale = lerp(2.75, 1.5, p);
+            const mid1X = startX + nudgeX;
+            const mid1Y = startY + nudgeY;
+            const mid2X = startX + nudgeX * 2;
+            const mid2Y = startY + nudgeY * 2;
+
+            if (progress <= 0.25) {
+              const p = progress / 0.25;
+              x = lerp(startX, mid1X, p);
+              y = lerp(startY, mid1Y, p);
+              scale = lerp(0.1, 1, p);
+            } else if (progress <= 0.5) {
+              const p = (progress - 0.25) / 0.25;
+              x = lerp(mid1X, mid2X, p);
+              y = lerp(mid1Y, mid2Y, p);
+              scale = lerp(1, 2.75, p);
+            } else {
+              const p = (progress - 0.5) / 0.5;
+              x = lerp(mid2X, finalX, p);
+              y = lerp(mid2Y, finalY, p);
+              scale = lerp(2.75, 1.5, p);
+            }
           }
 
           canvas.style.transform = `translateX(${x}px) translateY(${y}px) scale(${scale})`;

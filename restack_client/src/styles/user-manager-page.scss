@@ -1,30 +1,165 @@
-.user-manager-board{
-    border: 1px solid black;
-    display: flex;
-    flex-flow: row wrap;
-    align-content: center;
-    justify-content: center;
-    background: white;
-    height: 60vh;
-    width: 60vw;
-    border-radius: 1%;
+.user-manager-page {
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  min-height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 40px;
 
-    .table{
-        width: 90%;
-        .row{
-            width: 100%;
-            display: flex;
-            flex-direction: row;
-            justify-content: space-around;
-            div{
-                width: 13vw;
-                // border: 1px dashed grey;
-                display: flex;
-                justify-content: flex-start;
-                &.data-node{
-                    min-height: 4vh;
-                }
-            }
+  .user-manager-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    padding: 30px 40px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+
+    .user-manager-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      border-bottom: 2px solid #e9ecef;
+      padding-bottom: 16px;
+
+      h2 {
+        margin: 0;
+        font-size: 28px;
+        color: #1a1a2e;
+        font-weight: 700;
+        font-family: 'Outfit', 'Inter', 'Roboto', sans-serif;
+      }
+
+      .back-btn {
+        background: #e9ecef;
+        color: #495057;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 18px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+
+        &:hover {
+          background: #dee2e6;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
+
+        &:active {
+          transform: translateY(0);
+        }
+      }
     }
+
+    .user-table-container {
+      width: 100%;
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid #e9ecef;
+
+      .user-table {
+        width: 100%;
+        border-collapse: collapse;
+        text-align: left;
+        font-family: 'Inter', 'Roboto', sans-serif;
+
+        th, td {
+          padding: 14px 18px;
+          border-bottom: 1px solid #e9ecef;
+          font-size: 15px;
+        }
+
+        th {
+          background-color: #f8f9fa;
+          color: #495057;
+          font-weight: 600;
+          text-transform: uppercase;
+          font-size: 12px;
+          letter-spacing: 0.5px;
+        }
+
+        tr {
+          transition: background-color 0.2s ease;
+          &:hover {
+            background-color: #f8f9fa;
+          }
+          &:last-child td {
+            border-bottom: none;
+          }
+        }
+
+        .username-cell {
+          font-weight: 600;
+          color: #1a1a2e;
+        }
+
+        .meta-cell {
+          color: #6c757d;
+        }
+
+        .role-badge {
+          display: inline-block;
+          padding: 4px 10px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 600;
+          text-align: center;
+
+          &.admin {
+            background-color: rgba(102, 126, 234, 0.15);
+            color: #667eea;
+          }
+
+          &.player {
+            background-color: rgba(108, 117, 125, 0.15);
+            color: #495057;
+          }
+        }
+
+        .actions-col {
+          text-align: right;
+        }
+
+        .actions-cell {
+          text-align: right;
+
+          .delete-btn {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+
+            &:hover {
+              background: linear-gradient(135deg, #ff5252 0%, #e04444 100%);
+              box-shadow: 0 4px 12px rgba(238, 90, 90, 0.3);
+              transform: translateY(-1px);
+            }
+
+            &:active {
+              transform: translateY(0);
+            }
+          }
+        }
+
+        .empty-table {
+          text-align: center;
+          color: #adb5bd;
+          font-style: italic;
+          padding: 24px;
+        }
+      }
+    }
+  }
 }

@@ -1,0 +1,637 @@
+diff --git a/src/pages/SandboxPage.js b/src/pages/SandboxPage.js
+index ec58d2c..abcf3f3 100644
+--- a/src/pages/SandboxPage.js
++++ b/src/pages/SandboxPage.js
+@@ -21,6 +21,9 @@ import {
+   perceive,
+   weakness_doubled,
+   beholder_minion_portrait,
++  beholder_portrait,
++  Hagigah,
++  Hashmallim,
+   soldier,
+   wizard,
+   barbarian,
+@@ -275,6 +278,7 @@ const monstersData = [
+     { id: 'head_butt', name: 'Headbutt', desc: 'Deliver a powerful headbutt, pushing back the target.', icon: head_butt, type: 'head_butt' }
+   ] },
+   { id: 'vampire', name: 'Vampire', portrait: vampire_portrait, abilities: [
++    { id: 'claw_strike', name: 'Claw Strike', desc: 'Execute a savage claw strike.', icon: claw_strike, type: 'claw_strike' },
+     { id: 'vampiric_bite', name: 'Vampiric Bite', desc: 'Savage bite that drains vitality and damages the target.', icon: vampiric_bite, type: 'vampiric_bite' },
+     { id: 'bat_fly', name: 'Bat Fly', desc: 'Transform into a swarm of bats to fly across the battlefield.', icon: bat_fly, type: 'bat_fly_type' },
+     { id: 'crimson_sight', name: 'Crimson Sight', desc: 'Perceive critical target vulnerabilities.', icon: crimson_sight, type: 'crimson_sight_type' },
+@@ -291,7 +295,12 @@ const monstersData = [
+   { id: 'troll', name: 'Troll', portrait: troll_portrait, abilities: [{ id: 'claw_strike', name: 'Claw Strike', desc: 'Execute a savage claw strike.', icon: claw_strike, type: 'claw_strike' }] },
+   { id: 'wraith', name: 'Wraith', portrait: wraith_portrait, abilities: [{ id: 'claw_strike', name: 'Claw Strike', desc: 'Execute a savage claw strike.', icon: claw_strike, type: 'claw_strike' }] },
+   { id: 'goat_demon', name: 'Goat Demon', portrait: goat_demon_portrait, abilities: [{ id: 'claw_strike', name: 'Claw Strike', desc: 'Execute a savage claw strike.', icon: claw_strike, type: 'claw_strike' }] },
+-  { id: 'gorgon', name: 'Gorgon', portrait: gorgon_portrait, abilities: [{ id: 'claw_strike', name: 'Claw Strike', desc: 'Execute a savage claw strike.', icon: claw_strike, type: 'claw_strike' }] }
++  { id: 'gorgon', name: 'Gorgon', portrait: gorgon_portrait, abilities: [{ id: 'claw_strike', name: 'Claw Strike', desc: 'Execute a savage claw strike.', icon: claw_strike, type: 'claw_strike' }] },
++  { id: 'dragon', name: 'Dragon', portrait: wyvern_portrait, abilities: [{ id: 'claw_strike', name: 'Claw Strike', desc: 'Execute a savage claw strike.', icon: claw_strike, type: 'claw_strike' }] },
++  { id: 'beholder', name: 'Beholder', portrait: beholder_portrait, abilities: [{ id: 'claw_strike', name: 'Claw Strike', desc: 'Execute a savage claw strike.', icon: claw_strike, type: 'claw_strike' }] },
++  { id: 'beholder_minion', name: 'Beholder Minion', portrait: beholder_minion_portrait, abilities: [{ id: 'claw_strike', name: 'Claw Strike', desc: 'Execute a savage claw strike.', icon: claw_strike, type: 'claw_strike' }] },
++  { id: 'hagigah', name: 'Hagigah', portrait: Hagigah, abilities: [] },
++  { id: 'hashmallim', name: 'Hashmallim', portrait: Hashmallim, abilities: [] }
+ ];
+ 
+ // Predefined list of 8 crew fighters and their test abilities
+@@ -539,6 +548,7 @@ const SandboxPage = () => {
+   const [djinnBindActive, setDjinnBindActive] = useState(false);
+   const [djinnBindEndTime, setDjinnBindEndTime] = useState(null);
+   const [djinnBindFading, setDjinnBindFading] = useState(false);
++  const [targetBindRopesActive, setTargetBindRopesActive] = useState(false);
+ 
+   // Djinn - Betrayal states
+   const [rangerPos, setRangerPos] = useState({ row: 3, col: 0 });
+@@ -1304,24 +1314,36 @@ const SandboxPage = () => {
+         ? 'Soldier Target' 
+         : (selectedFighterId === 'ranger' ? 'Ogre Target' : 'Goblin Target'));
+ 
+-  const isFighterLarge = selectedUnitType === 'monster' && selectedMonsterId !== 'goblin' && selectedMonsterId !== 'skeleton';
+-  const isTargetLarge = selectedUnitType === 'fighter' && (
++  const TIER4_MONSTER_IDS = ['sphinx', 'dragon', 'hagigah', 'hashmallim'];
++  const isFighterHuge = selectedUnitType === 'monster' && TIER4_MONSTER_IDS.includes(selectedMonsterId);
++  const isFighterLarge = selectedUnitType === 'monster' && !isFighterHuge && selectedMonsterId !== 'goblin' && selectedMonsterId !== 'skeleton' && selectedMonsterId !== 'beholder_minion';
++  const isTargetHuge = selectedUnitType === 'fighter' && TIER4_MONSTER_IDS.includes(selectedMonsterId);
++  const isTargetLarge = selectedUnitType === 'fighter' && !isTargetHuge && (
+     (selectedFighterId === 'ranger') || // Ranger target is Ogre (2x)
+-    (selectedFighterId !== 'sage' && selectedMonsterId !== 'goblin' && selectedMonsterId !== 'skeleton')
++    (selectedFighterId !== 'sage' && selectedMonsterId !== 'goblin' && selectedMonsterId !== 'skeleton' && selectedMonsterId !== 'beholder_minion')
+   );
+ 
+-  // Safety check: if fighter or target is large but positioned at row 0, push them to row 1
++  const fighterCenterCol = isFighterHuge ? (fighterPos.col >= 3 ? fighterPos.col - 1 : fighterPos.col + 1) : (isFighterLarge ? (fighterPos.col >= 3 ? fighterPos.col - 0.5 : fighterPos.col + 0.5) : fighterPos.col);
++  const fighterCenterRow = isFighterHuge ? fighterPos.row - 1 : (isFighterLarge ? fighterPos.row - 0.5 : fighterPos.row);
++  const targetCenterCol = isTargetHuge ? (targetPos.col >= 3 ? targetPos.col - 1 : targetPos.col + 1) : (isTargetLarge ? (targetPos.col >= 3 ? targetPos.col - 0.5 : targetPos.col + 0.5) : targetPos.col);
++  const targetCenterRow = isTargetHuge ? targetPos.row - 1 : (isTargetLarge ? targetPos.row - 0.5 : targetPos.row);
++
++  // Safety check: if fighter or target is large/huge but positioned out of bounds, push them
+   useEffect(() => {
+-    if (isFighterLarge && fighterPos.row < 1) {
++    if (isFighterHuge && fighterPos.row < 2) {
++      setFighterPos(prev => ({ ...prev, row: 2 }));
++    } else if (isFighterLarge && fighterPos.row < 1) {
+       setFighterPos(prev => ({ ...prev, row: 1 }));
+     }
+-  }, [isFighterLarge, fighterPos.row]);
++  }, [isFighterHuge, isFighterLarge, fighterPos.row]);
+ 
+   useEffect(() => {
+-    if (isTargetLarge && targetPos.row < 1) {
++    if (isTargetHuge && targetPos.row < 2) {
++      setTargetPos(prev => ({ ...prev, row: 2 }));
++    } else if (isTargetLarge && targetPos.row < 1) {
+       setTargetPos(prev => ({ ...prev, row: 1 }));
+     }
+-  }, [isTargetLarge, targetPos.row]);
++  }, [isTargetHuge, isTargetLarge, targetPos.row]);
+ 
+   // Helper to push floating combat numbers
+   const addFloatingText = (text, type, color, row, col) => {
+@@ -1373,10 +1395,10 @@ const SandboxPage = () => {
+ 
+   // Helper to determine projectile rotation angle
+   const getProjectileAngle = () => {
+-    const fromCol = isFighterLarge ? (fighterPos.col >= 3 ? fighterPos.col - 0.5 : fighterPos.col + 0.5) : fighterPos.col;
+-    const fromRow = isFighterLarge ? fighterPos.row - 0.5 : fighterPos.row;
+-    const toCol = isTargetLarge ? (targetPos.col >= 3 ? targetPos.col - 0.5 : targetPos.col + 0.5) : targetPos.col;
+-    const toRow = isTargetLarge ? targetPos.row - 0.5 : targetPos.row;
++    const fromCol = fighterCenterCol;
++    const fromRow = fighterCenterRow;
++    const toCol = targetCenterCol;
++    const toRow = targetCenterRow;
+     const dy = toRow - fromRow;
+     const dx = toCol - fromCol;
+     return Math.atan2(dy, dx) * (180 / Math.PI);
+@@ -1395,8 +1417,8 @@ const SandboxPage = () => {
+     if (!isAnimating) return 'none';
+     const colDiff = targetPos.col - fighterPos.col;
+     const rowDiff = targetPos.row - fighterPos.row;
+-    const xFactor = isFighterLarge ? 0.5 : 1;
+-    const yFactor = isFighterLarge ? 0.5 : 1;
++    const xFactor = isFighterHuge ? 0.333 : (isFighterLarge ? 0.5 : 1);
++    const yFactor = isFighterHuge ? 0.333 : (isFighterLarge ? 0.5 : 1);
+ 
+     switch (animationPhase) {
+       case 'lunge':
+@@ -2491,11 +2513,14 @@ const SandboxPage = () => {
+       const rows = Array.from({ length: GRID_SIZE }, (_, i) => i).filter(r => r !== fighterPos.row);
+       const destRow = rows.length > 0 ? rows[Math.floor(Math.random() * rows.length)] : 2;
+ 
+-      // After 600ms, start fading out instance icon and fade away Vampire's portrait
++      // After 300ms, start fading away Vampire's portrait so it is gone before bats fly
+       setTimeout(() => {
+-        setVampireBatFlyFading(true);
+         setVampireHidden(true);
++      }, 300);
+ 
++      // After 600ms, start fading out instance icon and activate bats overlay
++      setTimeout(() => {
++        setVampireBatFlyFading(true);
+         setBatFlyDestRow(destRow);
+ 
+         // Turn on the bats overlay at start tile
+@@ -2535,6 +2560,55 @@ const SandboxPage = () => {
+       }, 900);
+     }
+ 
++    // --- VAMPIRE SOUL SUCK ---
++    else if (ability.type === 'soul_suck_type') {
++      const dx = Math.abs(targetPos.col - fighterPos.col);
++      const dy = Math.abs(targetPos.row - fighterPos.row);
++      const distance = Math.max(dx, dy);
++
++      if (distance > 3) {
++        addFloatingText('OUT OF RANGE!', 'normal', '#ff4d4d', fighterPos.row, fighterPos.col);
++        return;
++      }
++
++      setAnimating(true);
++      setActiveBeam('soul_suck_beam');
++      addFloatingText('SOUL SUCK', 'normal', '#ff3333', fighterPos.row, fighterPos.col);
++
++      // Start tick interval simulation representing 2 rounds channeling (8 ticks every 500ms)
++      let ticks = 0;
++      const suckInterval = setInterval(() => {
++        ticks++;
++        setTargetShake(true);
++        setTargetFlash(true);
++
++        const tickDmg = 5; // Mock damage
++        addFloatingText(`-${tickDmg} HP/Stam`, 'normal', '#ff3333', targetPos.row, targetPos.col);
++        addFloatingText(`+${tickDmg} HP/Stam`, 'normal', '#2ec4b6', fighterPos.row, fighterPos.col);
++
++        // 5% stun chance
++        if (Math.random() < 0.05) {
++          setTargetStunned(true);
++          addFloatingText('STUNNED!', 'normal', '#ffe600', targetPos.row, targetPos.col);
++          setTimeout(() => {
++            setTargetStunned(false);
++          }, 3000);
++        }
++
++        setTimeout(() => {
++          setTargetShake(false);
++          setTargetFlash(false);
++        }, 200);
++
++        if (ticks >= 8) {
++          clearInterval(suckInterval);
++          setActiveBeam(null);
++          setAnimating(false);
++          addFloatingText('SOUL SUCK COMPLETE', 'normal', '#2ec4b6', fighterPos.row, fighterPos.col);
++        }
++      }, 500);
++    }
++
+     // --- SKELETON REASSEMBLY PASSIVE ---
+     else if (ability.type === 'reassembly_type') {
+       triggerSkeletonDeath();
+@@ -2911,10 +2985,10 @@ const SandboxPage = () => {
+       else if (arrowType === 'poison') pIcon = ranger_poison_arrow;
+       else if (arrowType === 'celestial') pIcon = ranger_celestial_arrow;
+ 
+-      const startCol = isFighterLarge ? (fighterPos.col >= 3 ? fighterPos.col - 0.5 : fighterPos.col + 0.5) : fighterPos.col;
+-      const startRow = isFighterLarge ? fighterPos.row - 0.5 : fighterPos.row;
+-      const targetCol = isTargetLarge ? (targetPos.col >= 3 ? targetPos.col - 0.5 : targetPos.col + 0.5) : targetPos.col;
+-      const targetRow = isTargetLarge ? targetPos.row - 0.5 : targetPos.row;
++      const startCol = fighterCenterCol;
++      const startRow = fighterCenterRow;
++      const targetCol = targetCenterCol;
++      const targetRow = targetCenterRow;
+ 
+       setProjectile({
+         x: startCol * 20,
+@@ -3025,10 +3099,10 @@ const SandboxPage = () => {
+     // --- RANGER ENSNARE ---
+     else if (ability.id === 'ensnare') {
+       setAnimating(true);
+-      const startCol = isFighterLarge ? (fighterPos.col >= 3 ? fighterPos.col - 0.5 : fighterPos.col + 0.5) : fighterPos.col;
+-      const startRow = isFighterLarge ? fighterPos.row - 0.5 : fighterPos.row;
+-      const targetCol = isTargetLarge ? (targetPos.col >= 3 ? targetPos.col - 0.5 : targetPos.col + 0.5) : targetPos.col;
+-      const targetRow = isTargetLarge ? targetPos.row - 0.5 : targetPos.row;
++      const startCol = fighterCenterCol;
++      const startRow = fighterCenterRow;
++      const targetCol = targetCenterCol;
++      const targetRow = targetCenterRow;
+       setProjectile({
+         x: startCol * 20,
+         y: startRow * 20,
+@@ -3074,8 +3148,8 @@ const SandboxPage = () => {
+       else if (arrowType === 'poison') pIcon = ranger_poison_arrow;
+       else if (arrowType === 'celestial') pIcon = ranger_celestial_arrow;
+ 
+-      const startCol = isFighterLarge ? (fighterPos.col >= 3 ? fighterPos.col - 0.5 : fighterPos.col + 0.5) : fighterPos.col;
+-      const startRow = isFighterLarge ? fighterPos.row - 0.5 : fighterPos.row;
++      const startCol = fighterCenterCol;
++      const startRow = fighterCenterRow;
+ 
+       const fireArrow = (delayTime, index) => {
+         setTimeout(() => {
+@@ -3091,8 +3165,8 @@ const SandboxPage = () => {
+ 
+           // Move
+           setTimeout(() => {
+-            const targetCol = isTargetLarge ? (targetPosRef.current.col >= 3 ? targetPosRef.current.col - 0.5 : targetPosRef.current.col + 0.5) : targetPosRef.current.col;
+-            const targetRow = isTargetLarge ? targetPosRef.current.row - 0.5 : targetPosRef.current.row;
++            const targetCol = isTargetHuge ? (targetPosRef.current.col >= 3 ? targetPosRef.current.col - 1 : targetPosRef.current.col + 1) : (isTargetLarge ? (targetPosRef.current.col >= 3 ? targetPosRef.current.col - 0.5 : targetPosRef.current.col + 0.5) : targetPosRef.current.col);
++            const targetRow = isTargetHuge ? targetPosRef.current.row - 1 : (isTargetLarge ? targetPosRef.current.row - 0.5 : targetPosRef.current.row);
+             setProjectiles(prev => prev.map(p => p.id === arrowId ? {
+               ...p,
+               x: targetCol * 20,
+@@ -3470,7 +3544,7 @@ const SandboxPage = () => {
+             setProjectiles(prev => prev.filter(p => p.id !== missileId));
+             setTargetShake(true);
+             setTargetFlash(true);
+-            setHitEffect({ type: 'shadow' });
++            setHitEffect({ type: 'magic_missile_hit_sigil' });
+             addFloatingText('-10', 'normal', '#b5179e', targetPos.row, targetPos.col);
+ 
+             setTimeout(() => {
+@@ -3992,8 +4066,8 @@ const SandboxPage = () => {
+           
+           // Projectile starts traveling
+           setTimeout(() => {
+-            const targetCol = isTargetLarge ? (targetPos.col >= 3 ? targetPos.col - 0.5 : targetPos.col + 0.5) : targetPos.col;
+-            const targetRow = isTargetLarge ? targetPos.row - 0.5 : targetPos.row;
++            const targetCol = targetCenterCol;
++            const targetRow = targetCenterRow;
+             setProjectile(prev => prev ? { ...prev, x: targetCol * 20, y: targetRow * 20 } : null);
+           }, 30);
+           
+@@ -4040,13 +4114,15 @@ const SandboxPage = () => {
+     // --- DJINN DEATH MISSILE ---
+     else if (ability.type === 'death_missile_type') {
+       setAnimating(true);
++      const startCol = fighterCenterCol;
++      const startRow = fighterCenterRow;
+       setProjectile({
+-        x: fighterPos.col * 20,
+-        y: fighterPos.row * 20,
++        x: startCol * 20,
++        y: startRow * 20,
+         icon: death_missile
+       });
+       setTimeout(() => {
+-        setProjectile(prev => prev ? { ...prev, x: targetPos.col * 20, y: targetPos.row * 20 } : null);
++        setProjectile(prev => prev ? { ...prev, x: targetCenterCol * 20, y: targetCenterRow * 20 } : null);
+       }, 30);
+       setTimeout(() => {
+         setProjectile(null);
+@@ -4078,6 +4154,12 @@ const SandboxPage = () => {
+       setDjinnBindEndTime(Date.now() + 8000); // 8 seconds long duration
+       addFloatingText('BOUND!', 'normal', '#b388ff', targetPos.row, targetPos.col);
+ 
++      // Trigger target ropes bind animation overlay
++      setTargetBindRopesActive(true);
++      setTimeout(() => {
++        setTargetBindRopesActive(false);
++      }, 1500);
++
+       setTimeout(() => {
+         setTargetShake(false);
+         setTargetFlash(false);
+@@ -5287,16 +5369,28 @@ const SandboxPage = () => {
+                   const isAdditionalSoldier = selectedUnitType === 'fighter' && (selectedFighterId === 'sage' && r === 2 && c === 3);
+                   const isAdditionalMonk = selectedUnitType === 'fighter' && (selectedFighterId === 'soldier' && r === 0 && c === 3);
+                   const fOffset = fighterPos.col >= 3 ? -1 : 1;
+-                  const isFighterVCT = isFighterLarge && (
+-                    (fighterPos.row - 1 === r && fighterPos.col === c) ||
+-                    (fighterPos.row === r && fighterPos.col + fOffset === c) ||
+-                    (fighterPos.row - 1 === r && fighterPos.col + fOffset === c)
++                  const isFighterVCT = (isFighterHuge || isFighterLarge) && (
++                    isFighterHuge ? (
++                      (r !== fighterPos.row || c !== fighterPos.col) &&
++                      r <= fighterPos.row && r >= fighterPos.row - 2 &&
++                      (fighterPos.col >= 3 ? (c <= fighterPos.col && c >= fighterPos.col - 2) : (c >= fighterPos.col && c <= fighterPos.col + 2))
++                    ) : (
++                      (fighterPos.row - 1 === r && fighterPos.col === c) ||
++                      (fighterPos.row === r && fighterPos.col + fOffset === c) ||
++                      (fighterPos.row - 1 === r && fighterPos.col + fOffset === c)
++                    )
+                   );
+                   const tOffset = targetPos.col >= 3 ? -1 : 1;
+-                  const isTargetVCT = isTargetLarge && (
+-                    (targetPos.row - 1 === r && targetPos.col === c) ||
+-                    (targetPos.row === r && targetPos.col + tOffset === c) ||
+-                    (targetPos.row - 1 === r && targetPos.col + tOffset === c)
++                  const isTargetVCT = (isTargetHuge || isTargetLarge) && (
++                    isTargetHuge ? (
++                      (r !== targetPos.row || c !== targetPos.col) &&
++                      r <= targetPos.row && r >= targetPos.row - 2 &&
++                      (targetPos.col >= 3 ? (c <= targetPos.col && c >= targetPos.col - 2) : (c >= targetPos.col && c <= targetPos.col + 2))
++                    ) : (
++                      (targetPos.row - 1 === r && targetPos.col === c) ||
++                      (targetPos.row === r && targetPos.col + tOffset === c) ||
++                      (targetPos.row - 1 === r && targetPos.col + tOffset === c)
++                    )
+                   );
+ 
+                   return (
+@@ -5325,6 +5419,20 @@ const SandboxPage = () => {
+                         };
+ 
+                         const getFighterOccupiedTiles = () => {
++                          if (isFighterHuge) {
++                            const offset = fighterPos.col >= 3 ? -1 : 1;
++                            return [
++                              { row: fighterPos.row, col: fighterPos.col },
++                              { row: fighterPos.row - 1, col: fighterPos.col },
++                              { row: fighterPos.row - 2, col: fighterPos.col },
++                              { row: fighterPos.row, col: fighterPos.col + offset },
++                              { row: fighterPos.row - 1, col: fighterPos.col + offset },
++                              { row: fighterPos.row - 2, col: fighterPos.col + offset },
++                              { row: fighterPos.row, col: fighterPos.col + 2 * offset },
++                              { row: fighterPos.row - 1, col: fighterPos.col + 2 * offset },
++                              { row: fighterPos.row - 2, col: fighterPos.col + 2 * offset }
++                            ];
++                          }
+                           if (!isFighterLarge) return [{ row: fighterPos.row, col: fighterPos.col }];
+                           const offset = fighterPos.col >= 3 ? -1 : 1;
+                           return [
+@@ -5336,6 +5444,20 @@ const SandboxPage = () => {
+                         };
+ 
+                         const getTargetOccupiedTiles = () => {
++                          if (isTargetHuge) {
++                            const offset = targetPos.col >= 3 ? -1 : 1;
++                            return [
++                              { row: targetPos.row, col: targetPos.col },
++                              { row: targetPos.row - 1, col: targetPos.col },
++                              { row: targetPos.row - 2, col: targetPos.col },
++                              { row: targetPos.row, col: targetPos.col + offset },
++                              { row: targetPos.row - 1, col: targetPos.col + offset },
++                              { row: targetPos.row - 2, col: targetPos.col + offset },
++                              { row: targetPos.row, col: targetPos.col + 2 * offset },
++                              { row: targetPos.row - 1, col: targetPos.col + 2 * offset },
++                              { row: targetPos.row - 2, col: targetPos.col + 2 * offset }
++                            ];
++                          }
+                           if (!isTargetLarge) return [{ row: targetPos.row, col: targetPos.col }];
+                           const offset = targetPos.col >= 3 ? -1 : 1;
+                           return [
+@@ -5346,7 +5468,21 @@ const SandboxPage = () => {
+                           ];
+                         };
+ 
+-                        const getCandidateTiles = (row, col, isLarge) => {
++                        const getCandidateTiles = (row, col, isLarge, isHuge) => {
++                          if (isHuge) {
++                            const offset = col >= 3 ? -1 : 1;
++                            return [
++                              { row, col },
++                              { row: row - 1, col },
++                              { row: row - 2, col },
++                              { row, col: col + offset },
++                              { row: row - 1, col: col + offset },
++                              { row: row - 2, col: col + offset },
++                              { row, col: col + 2 * offset },
++                              { row: row - 1, col: col + 2 * offset },
++                              { row: row - 2, col: col + 2 * offset }
++                            ];
++                          }
+                           if (!isLarge) return [{ row, col }];
+                           const offset = col >= 3 ? -1 : 1;
+                           return [
+@@ -5358,8 +5494,9 @@ const SandboxPage = () => {
+                         };
+ 
+                         if (placementMode === 'fighter') {
+-                          if (isFighterLarge && r < 1) return; // Vertically out of bounds
+-                          const candidateTiles = getCandidateTiles(r, c, isFighterLarge);
++                          if (isFighterHuge && r < 2) return;
++                          if (!isFighterHuge && isFighterLarge && r < 1) return;
++                          const candidateTiles = getCandidateTiles(r, c, isFighterLarge, isFighterHuge);
+                           if (candidateTiles.some(tile => isTileBlocked(tile.row, tile.col))) return;
+                           
+                           const targetTiles = getTargetOccupiedTiles();
+@@ -5370,8 +5507,9 @@ const SandboxPage = () => {
+ 
+                           setFighterPos({ row: r, col: c });
+                         } else {
+-                          if (isTargetLarge && r < 1) return; // Vertically out of bounds
+-                          const candidateTiles = getCandidateTiles(r, c, isTargetLarge);
++                          if (isTargetHuge && r < 2) return;
++                          if (!isTargetHuge && isTargetLarge && r < 1) return;
++                          const candidateTiles = getCandidateTiles(r, c, isTargetLarge, isTargetHuge);
+                           if (candidateTiles.some(tile => isTileBlocked(tile.row, tile.col))) return;
+ 
+                           const fighterTiles = getFighterOccupiedTiles();
+@@ -6058,10 +6196,10 @@ const SandboxPage = () => {
+               <div
+                 style={{
+                   position: 'absolute',
+-                  width: isFighterLarge ? `${TILE_PCT * 2}%` : `${TILE_PCT}%`,
+-                  height: isFighterLarge ? `${TILE_PCT * 2}%` : `${TILE_PCT}%`,
+-                  left: `${(isFighterLarge ? (fighterPos.col >= 3 ? fighterPos.col - 1 : fighterPos.col) : fighterPos.col) * TILE_PCT}%`,
+-                  top: `${(isFighterLarge ? fighterPos.row - 1 : fighterPos.row) * TILE_PCT}%`,
++                  width: isFighterHuge ? `${TILE_PCT * 3}%` : (isFighterLarge ? `${TILE_PCT * 2}%` : `${TILE_PCT}%`),
++                  height: isFighterHuge ? `${TILE_PCT * 3}%` : (isFighterLarge ? `${TILE_PCT * 2}%` : `${TILE_PCT}%`),
++                  left: `${(isFighterHuge ? (fighterPos.col >= 3 ? fighterPos.col - 2 : fighterPos.col) : (isFighterLarge ? (fighterPos.col >= 3 ? fighterPos.col - 1 : fighterPos.col) : fighterPos.col)) * TILE_PCT}%`,
++                  top: `${(isFighterHuge ? fighterPos.row - 2 : (isFighterLarge ? fighterPos.row - 1 : fighterPos.row)) * TILE_PCT}%`,
+                   display: 'flex',
+                   alignItems: 'center',
+                   justifyContent: 'center',
+@@ -6733,10 +6871,10 @@ const SandboxPage = () => {
+               <div
+                 style={{
+                   position: 'absolute',
+-                  width: isTargetLarge ? `${TILE_PCT * 2}%` : `${TILE_PCT}%`,
+-                  height: isTargetLarge ? `${TILE_PCT * 2}%` : `${TILE_PCT}%`,
+-                  left: `${(isTargetLarge ? (targetPos.col >= 3 ? targetPos.col - 1 : targetPos.col) : targetPos.col) * TILE_PCT}%`,
+-                  top: `${(isTargetLarge ? targetPos.row - 1 : targetPos.row) * TILE_PCT}%`,
++                  width: isTargetHuge ? `${TILE_PCT * 3}%` : (isTargetLarge ? `${TILE_PCT * 2}%` : `${TILE_PCT}%`),
++                  height: isTargetHuge ? `${TILE_PCT * 3}%` : (isTargetLarge ? `${TILE_PCT * 2}%` : `${TILE_PCT}%`),
++                  left: `${(isTargetHuge ? (targetPos.col >= 3 ? targetPos.col - 2 : targetPos.col) : (isTargetLarge ? (targetPos.col >= 3 ? targetPos.col - 1 : targetPos.col) : targetPos.col)) * TILE_PCT}%`,
++                  top: `${(isTargetHuge ? targetPos.row - 2 : (isTargetLarge ? targetPos.row - 1 : targetPos.row)) * TILE_PCT}%`,
+                   display: 'flex',
+                   alignItems: 'center',
+                   justifyContent: 'center',
+@@ -6744,7 +6882,14 @@ const SandboxPage = () => {
+                   pointerEvents: 'none',
+                   transform: (() => {
+                     if (!targetPushback) return 'none';
+-                    if (isTargetLarge) {
++                    if (isTargetHuge) {
++                      const match = targetPushback.match(/translate\(([-\d.]+)%,\s*([-\d.]+)%\)/);
++                      if (match) {
++                        const x = parseFloat(match[1]);
++                        const y = parseFloat(match[2]);
++                        return `translate(${x * 0.333}%, ${y * 0.333}%)`;
++                      }
++                    } else if (isTargetLarge) {
+                       const match = targetPushback.match(/translate\(([-\d.]+)%,\s*([-\d.]+)%\)/);
+                       if (match) {
+                         const x = parseFloat(match[1]);
+@@ -6916,6 +7061,38 @@ const SandboxPage = () => {
+                       <div style={{ position: 'absolute', right: '22%', top: '42%', color: '#42a5f5', fontSize: '11px', fontWeight: 'bold', fontFamily: 'monospace', animation: 'zzzFloat 2s infinite 1.2s', textShadow: '0 0 4px rgba(0,0,0,0.8)' }}>Z</div>
+                     </div>
+                   )}
++                  {targetBindRopesActive && (
++                    <div style={{
++                      position: 'absolute',
++                      top: 0,
++                      left: 0,
++                      width: '100%',
++                      height: '100%',
++                      pointerEvents: 'none',
++                      zIndex: 35
++                    }}>
++                      <svg style={{
++                        position: 'absolute',
++                        left: 0,
++                        top: 0,
++                        width: '100%',
++                        height: '100%'
++                      }} viewBox="0 0 100 100">
++                        <path d="M 10,25 C 30,15 70,35 90,25 M 5,50 C 25,65 75,35 95,50 M 10,75 C 30,65 70,85 90,75 M 20,10 C 10,40 40,60 30,90 M 80,10 C 90,40 60,60 70,90" 
++                              fill="none" 
++                              stroke="#ffffff" 
++                              strokeWidth="4" 
++                              strokeLinecap="round"
++                              style={{ 
++                                  filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.5))',
++                                  strokeDasharray: '300',
++                                  strokeDashoffset: '300',
++                                  animation: 'drawRopes 0.8s ease-out forwards'
++                              }} 
++                        />
++                      </svg>
++                    </div>
++                  )}
+                   {/* Status Effect Icons Container */}
+                   <div style={{
+                     position: 'absolute',
+@@ -8923,40 +9100,67 @@ const SandboxPage = () => {
+                 />
+               )}
+ 
+-              {activeBeam === 'energy_drain_beam' && (() => {
+-                const px1 = fighterPos.col * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
+-                const py1 = fighterPos.row * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
+-                const px2 = targetPos.col * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
+-                const py2 = targetPos.row * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
+-                const dx = px2 - px1;
+-                const dy = py2 - py1;
+-                const length = Math.sqrt(dx * dx + dy * dy);
+-                const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+-                return (
+-                  <div style={{
+-                    position: 'absolute',
+-                    left: `${px1}px`,
+-                    top: `${py1}px`,
+-                    width: `${length}px`,
+-                    height: '8px',
+-                    background: 'linear-gradient(to right, rgba(255, 105, 180, 0.1), #ff69b4, #fff, #ff69b4, rgba(255, 105, 180, 0.1))',
+-                    boxShadow: '0 0 10px #ff69b4, 0 0 20px #ff1493',
+-                    transformOrigin: '0 50%',
+-                    transform: `rotate(${angle}deg) translateY(-50%)`,
+-                    zIndex: 35,
+-                    pointerEvents: 'none',
+-                    filter: 'blur(1.5px)',
+-                    maskImage: 'linear-gradient(to right, transparent, black 12%, black 88%, transparent)',
+-                    WebkitMaskImage: 'linear-gradient(to right, transparent, black 12%, black 88%, transparent)',
+-                    animation: 'pinkBeamPulse 1.5s ease-out forwards'
+-                  }} />
+-                );
+-              })()}
+-
+-              {/* --- Djinn Betrayal Beam --- */}
+-              {betrayalBeamActive && (() => {
+-                const px1 = fighterPos.col * TILE_PCT + TILE_PCT / 2;
+-                const py1 = fighterPos.row * TILE_PCT + TILE_PCT / 2;
++               {activeBeam === 'energy_drain_beam' && (() => {
++                 const px1 = fighterCenterCol * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
++                 const py1 = fighterCenterRow * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
++                 const px2 = targetCenterCol * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
++                 const py2 = targetCenterRow * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
++                 const dx = px2 - px1;
++                 const dy = py2 - py1;
++                 const length = Math.sqrt(dx * dx + dy * dy);
++                 const angle = Math.atan2(dy, dx) * (180 / Math.PI);
++                 return (
++                   <div style={{
++                     position: 'absolute',
++                     left: `${px1}px`,
++                     top: `${py1}px`,
++                     width: `${length}px`,
++                     height: '8px',
++                     background: 'linear-gradient(to right, rgba(255, 105, 180, 0.1), #ff69b4, #fff, #ff69b4, rgba(255, 105, 180, 0.1))',
++                     boxShadow: '0 0 10px #ff69b4, 0 0 20px #ff1493',
++                     transformOrigin: '0 50%',
++                     transform: `rotate(${angle}deg) translateY(-50%)`,
++                     zIndex: 35,
++                     pointerEvents: 'none',
++                     filter: 'blur(1.5px)',
++                     maskImage: 'linear-gradient(to right, transparent, black 12%, black 88%, transparent)',
++                     WebkitMaskImage: 'linear-gradient(to right, transparent, black 12%, black 88%, transparent)',
++                     animation: 'pinkBeamPulse 1.5s ease-out forwards'
++                   }} />
++                 );
++               })()}
++ 
++               {activeBeam === 'soul_suck_beam' && (() => {
++                 const px1 = fighterCenterCol * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
++                 const py1 = fighterCenterRow * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
++                 const px2 = targetCenterCol * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
++                 const py2 = targetCenterRow * (500 / GRID_SIZE) + (500 / GRID_SIZE) / 2;
++                 const dx = px2 - px1;
++                 const dy = py2 - py1;
++                 const length = Math.sqrt(dx * dx + dy * dy);
++                 const angle = Math.atan2(dy, dx) * (180 / Math.PI);
++                 return (
++                   <div style={{
++                     position: 'absolute',
++                     left: `${px1}px`,
++                     top: `${py1}px`,
++                     width: `${length}px`,
++                     height: '24px',
++                     background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 0%, #ffffff 50%, rgba(255, 255, 255, 0.2) 100%)',
++                     boxShadow: '0 0 15px #ffffff, 0 0 30px #ffffff',
++                     transformOrigin: '0 50%',
++                     transform: `rotate(${angle}deg) translateY(-50%)`,
++                     zIndex: 35,
++                     pointerEvents: 'none',
++                     animation: 'soulSuckBeamPulse 0.5s infinite alternate'
++                   }} />
++                 );
++               })()}
++ 
++               {/* --- Djinn Betrayal Beam --- */}
++               {betrayalBeamActive && (() => {
++                 const px1 = fighterCenterCol * TILE_PCT + TILE_PCT / 2;
++                 const py1 = fighterCenterRow * TILE_PCT + TILE_PCT / 2;
+                 const px2 = rangerPos.col * TILE_PCT + TILE_PCT / 2;
+                 const py2 = rangerPos.row * TILE_PCT + TILE_PCT / 2;
+                 const dx = px2 - px1;
+@@ -9885,6 +10089,31 @@ const SandboxPage = () => {
+                       boxShadow: '0 0 20px #7209b7'
+                     }}></div>
+                   )}
++                  {hitEffect.type === 'magic_missile_hit_sigil' && (
++                    <div style={{
++                      width: '60px',
++                      height: '60px',
++                      animation: 'explode 0.35s ease-out forwards',
++                      display: 'flex',
++                      alignItems: 'center',
++                      justifyContent: 'center'
++                    }}>
++                      <svg viewBox="0 0 100 100" style={{ 
++                          width: '100%', 
++                          height: '100%', 
++                          animation: 'geomSpinClockwise 1.2s linear infinite',
++                          filter: 'drop-shadow(0 0 4px #b5179e)'
++                      }}>
++                          {/* Outer circle */}
++                          <circle cx="50" cy="50" r="42" fill="none" stroke="#b5179e" strokeWidth="3" />
++                          {/* Inner dashed circle */}
++                          <circle cx="50" cy="50" r="28" fill="none" stroke="#9d4edd" strokeWidth="2" strokeDasharray="6 6" />
++                          {/* Star / Hexagram double triangle */}
++                          <polygon points="50,15 80,70 20,70" fill="none" stroke="#7209b7" strokeWidth="2.5" />
++                          <polygon points="50,85 80,30 20,30" fill="none" stroke="#7209b7" strokeWidth="2.5" />
++                      </svg>
++                    </div>
++                  )}
+                   {hitEffect.type === 'void_portal' && (
+                     <div style={{
+                       width: '90px',

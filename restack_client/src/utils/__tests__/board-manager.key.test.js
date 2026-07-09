@@ -41,4 +41,65 @@ describe('BoardManager key normalization and pickup', () => {
     // removeTileFromBoard should have been invoked to clear the tile
     expect(removeSpy).toHaveBeenCalledWith(bm.tiles[idx]);
   });
+
+  test('isLockedGateTile returns false if the inventory contains a master key', () => {
+    const bm = new BoardManager();
+
+    // mock getCurrentInventory to return a master key
+    bm.getCurrentInventory = jest.fn().mockReturnValue([
+      { name: 'master key', type: 'key', subtype: 'master_key', _im_key: 'master_key' }
+    ]);
+
+    // create a locked gate tile
+    const gateTile = { id: 1, contains: { type: 'gate', subtype: 'minor_gate' } };
+
+    // check if it is locked
+    const isLocked = bm.isLockedGateTile(gateTile);
+
+    expect(isLocked).toBe(false);
+  });
+
+  test('handleGate consumes a master key if the specific key is missing', () => {
+    const bm = new BoardManager();
+
+    // mock getCurrentInventory to return only a master key
+    const masterKey = { name: 'master key', type: 'key', subtype: 'master_key', _im_key: 'master_key' };
+    bm.getCurrentInventory = jest.fn().mockReturnValue([masterKey]);
+
+    // mock other dependencies
+    bm.broadcastUseConsumableFromInventory = jest.fn();
+    bm.messaging = jest.fn();
+    bm.refreshTiles = jest.fn();
+    bm.updateDungeon = jest.fn();
+
+    // mock pending state to be the same gate
+    bm.pending = { type: 'minor_gate' };
+
+    // create a locked gate tile
+    const gateTile = { id: 1, contains: { type: 'gate', subtype: 'minor_gate' }, image: 'minor_gate' };
+    bm.tiles = { 1: gateTile };
+    
+    // mock dungeon object structure for persistence
+    bm.currentLevel = { id: 1 };
+    bm.currentBoard = { id: 1 };
+    bm.currentOrientation = 'F';
+    bm.dungeon = {
+      levels: [{
+        id: 1,
+        front: {
+          miniboards: [{
+            id: 1,
+            tiles: { 1: gateTile }
+          }]
+        }
+      }]
+    };
+
+    bm.handleGate(gateTile, 'minor_gate');
+
+    // The gate should be opened
+    expect(gateTile.contains).toBe('archway');
+    // The master key should be consumed via broadcast callback
+    expect(bm.broadcastUseConsumableFromInventory).toHaveBeenCalledWith(masterKey);
+  });
 });

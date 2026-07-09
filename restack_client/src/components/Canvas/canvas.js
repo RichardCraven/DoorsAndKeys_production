@@ -37,7 +37,8 @@ const Canvas = props => {
     // drawRef/dataRef are always current without being deps.
     }, [])
   
-    return <canvas height={props.height} width={props.width} ref={canvasRef}/>
+    const { draw, data, ...rest } = props
+    return <canvas ref={canvasRef} {...rest}/>
 }
 
 export default Canvas

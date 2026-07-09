@@ -10,7 +10,8 @@ export default function CanvasClawSwipe({
   duration = 50000, // Doubled duration for longer GIF playback
   onComplete = () => {},
   tracer = true, // If true, do NOT clear canvas (tracer effect ON)
-  facing = 'left'
+  facing = 'left',
+  color = null
 }) {
   const imgRef = useRef();
   // Compute bounding box covering both tiles
@@ -112,7 +113,9 @@ export default function CanvasClawSwipe({
           height: `${height}px`,
           pointerEvents: 'none',
           opacity: 1,
-          filter: 'drop-shadow(0 2px 6px #000)',
+          filter: color === 'purple' 
+            ? 'hue-rotate(270deg) saturate(2.5) drop-shadow(0 0 8px rgba(147, 51, 234, 0.8))' 
+            : 'drop-shadow(0 2px 6px #000)',
           transform: 'none', // animation loop applies flip via flipScale
           transition: 'none',
         }}

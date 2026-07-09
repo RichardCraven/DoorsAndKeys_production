@@ -1,0 +1,284 @@
+// ── Tower Siege Styles ────────────────────────────────────────────────────────
+// Full-screen siege board overlay with cinematic fade-in and dark fantasy theme.
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Inter:wght@300;400;600&display=swap');
+
+// ── Tokens ───────────────────────────────────────────────────────────────────
+$siege-bg:           #0a090d;
+$siege-board-bg:     #111016;
+$siege-border:       rgba(180, 120, 60, 0.25);
+$siege-gold:         #c9922a;
+$siege-red:          #cc3322;
+$siege-green:        #3a8a55;
+$siege-blue:         #2a5a8a;
+$siege-text:         #e8ddc8;
+$siege-text-muted:   rgba(232, 221, 200, 0.55);
+
+// Tile colours
+$tile-light:         rgba(255, 255, 255, 0.025);
+$tile-dark:          rgba(0, 0, 0, 0.18);
+
+// Zone overlay colours
+$zone-player-bg:     rgba(42, 90, 138, 0.06);
+$zone-enemy-bg:      rgba(204, 51, 34, 0.06);
+
+// ── Animations ───────────────────────────────────────────────────────────────
+@keyframes ts-fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+
+@keyframes ts-board-emerge {
+    0%   { opacity: 0; transform: scale(0.97); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes ts-phase-pulse {
+    0%, 100% { opacity: 0.7; letter-spacing: 0.08em; }
+    50%       { opacity: 1;   letter-spacing: 0.12em; }
+}
+
+@keyframes ts-unit-appear {
+    from { transform: translateY(-6px) scale(0.85); }
+    to   { transform: translateY(0)    scale(1);    }
+}
+
+@keyframes ts-summary-slide {
+    from { opacity: 0; transform: translateY(24px); }
+    to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes ts-glow-pulse {
+    0%, 100% { box-shadow: 0 0 12px rgba(201, 146, 42, 0.3); }
+    50%       { box-shadow: 0 0 28px rgba(201, 146, 42, 0.7); }
+}
+
+// ── Overlay (full screen) ────────────────────────────────────────────────────
+.ts-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999999 !important;
+    background: $siege-bg;
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    overflow: hidden;
+    animation: ts-fade-in 0.5s ease forwards;
+    font-family: 'Inter', sans-serif;
+}
+
+// ── Board scaler wrapper (handles viewport scale fallback) ───────────────────
+.ts-board-scaler {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+// ── Board container ──────────────────────────────────────────────────────────
+.ts-board {
+    position: relative;
+    background: $siege-board-bg;
+    box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.8);
+    animation: ts-board-emerge 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    overflow: hidden;
+
+    // Atmospheric vignette
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(ellipse at 50% 50%, transparent 60%, rgba(0, 0, 0, 0.6) 100%);
+        z-index: 1;
+        pointer-events: none;
+    }
+}
+
+// ── Tile grid ────────────────────────────────────────────────────────────────
+.ts-tile-grid {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+}
+
+.ts-tile {
+    position: absolute;
+    box-sizing: border-box;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+
+    &--light { background: $tile-light; }
+    &--dark  { background: $tile-dark; }
+}
+
+// ── Faction zone overlays ────────────────────────────────────────────────────
+.ts-zone {
+    position: absolute;
+    top: 0;
+    z-index: 2;
+    pointer-events: none;
+
+    &--player {
+        left: 0;
+        background: $zone-player-bg;
+        border-right: 1px solid rgba(42, 90, 138, 0.15);
+    }
+
+    &--enemy {
+        background: $zone-enemy-bg;
+        border-left: 1px solid rgba(204, 51, 34, 0.15);
+    }
+}
+
+// ── Unit portraits layer ─────────────────────────────────────────────────────
+.ts-combat-units-layer {
+    z-index: 10;
+}
+
+// Individual unit tile
+.ts-unit {
+    box-sizing: border-box;
+    transition: opacity 0.6s ease, left 0.4s ease, top 0.4s ease;
+    opacity: 0;
+
+    &--dead {
+        pointer-events: none;
+    }
+
+    &--siege-army img {
+        box-shadow: 0 0 8px rgba(74, 158, 107, 0.5);
+    }
+}
+
+.ts-unit-appear-anim {
+    animation: ts-unit-appear 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+// ── Phase label (during fade-in cinematic) ───────────────────────────────────
+.ts-phase-label {
+    position: absolute;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    font-family: 'Cinzel', serif;
+    font-size: 18px;
+    font-weight: 400;
+    color: $siege-text;
+    letter-spacing: 0.1em;
+    text-shadow: 0 0 20px rgba(201, 146, 42, 0.6);
+    animation: ts-phase-pulse 2s ease-in-out infinite;
+    white-space: nowrap;
+    user-select: none;
+}
+
+// ── HUD bar ──────────────────────────────────────────────────────────────────
+.ts-hud {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 10000000 !important;
+    height: 44px;
+    background: linear-gradient(180deg, rgba(10, 9, 13, 0.98) 0%, rgba(10, 9, 13, 0.7) 100%);
+    border-bottom: 1px solid $siege-border;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 16px;
+
+    &__title {
+        font-family: 'Cinzel', serif;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        color: $siege-gold;
+        text-shadow: 0 0 12px rgba(201, 146, 42, 0.4);
+    }
+
+    &__phase {
+        font-size: 11px;
+        color: $siege-text-muted;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        flex: 1;
+    }
+
+    &__exit {
+        background: transparent;
+        border: 1px solid rgba(204, 51, 34, 0.4);
+        color: rgba(204, 51, 34, 0.8);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        padding: 5px 14px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-family: 'Inter', sans-serif;
+
+        &:hover {
+            background: rgba(204, 51, 34, 0.15);
+            border-color: $siege-red;
+            color: #ff6655;
+        }
+    }
+}
+
+// ── Summary panel ─────────────────────────────────────────────────────────────
+.ts-summary {
+    position: fixed;
+    inset: 0;
+    z-index: 10000001 !important;
+    background: rgba(0, 0, 0, 0.88);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+    animation: ts-summary-slide 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    backdrop-filter: blur(4px);
+
+    &__result {
+        font-family: 'Cinzel', serif;
+        font-size: clamp(36px, 6vw, 72px);
+        font-weight: 900;
+        letter-spacing: 0.06em;
+        text-shadow: 0 0 40px currentColor;
+        animation: ts-glow-pulse 2.5s ease-in-out infinite;
+
+        &--victory { color: #f0c040; }
+        &--defeat  { color: #cc3322; }
+    }
+
+    &__text {
+        font-size: 16px;
+        color: $siege-text-muted;
+        letter-spacing: 0.04em;
+        text-align: center;
+        max-width: 400px;
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    &__btn {
+        margin-top: 8px;
+        background: linear-gradient(135deg, #2a1a0a 0%, #3d2910 100%);
+        border: 1px solid $siege-gold;
+        color: $siege-gold;
+        font-family: 'Cinzel', serif;
+        font-size: 14px;
+        letter-spacing: 0.12em;
+        padding: 12px 32px;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+
+        &:hover {
+            background: linear-gradient(135deg, #3d2910 0%, #5a3c14 100%);
+            box-shadow: 0 0 20px rgba(201, 146, 42, 0.4);
+            transform: translateY(-1px);
+        }
+
+        &:active {
+            transform: translateY(0);
+        }
+    }
+}

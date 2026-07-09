@@ -10,6 +10,7 @@ import UserManagerPage from './pages/UserManagerPage'
 import UserProfilePage from './pages/UserProfilePage'
 import CrewManagerPage from './pages/CrewManagerPage'
 import CombatSimulator from './pages/CombatSimulator'
+import SandboxPage from './pages/SandboxPage'
 
 
 import { Route, Switch, Redirect} from "react-router-dom";
@@ -26,33 +27,25 @@ import * as images from '../src/utils/images'
 function App(props) {
 const [loggedIn, setLoggedIn] = useState(!!getUserId())
 const [menuTrayExpanded, setMenuTrayExpanded] = useState(false)
+const [hoveredMenuItem, setHoveredMenuItem] = useState(null)
 // const [isAdmin, setIsAdmin] = useState(sessionStorage.getItem('isAdmin') === 'true' ? true : false)
 const [isAdmin, setIsAdmin] = useState(sessionStorage.getItem('isAdmin') === 'true' ? true : true)
 const [showCoordinates, setShowCoordinates] = useState(false)
 const [allUsers, setAllUsers] = useState([])
 const [showToolbar, setShowToolbar] = useState(true)
 const [narrativeSequenceType, setNarrativeSequenceType] = useState('')
-const [isWakingServer, setIsWakingServer] = useState(true)
 const dungeonMessagingRef = React.useRef(null)
 const saveUserDataRef = React.useRef(null)
 const history = useHistory();
 useEffect(() => {
+  // ...existing code...
   window.pickRandom = (array) => {
     let index = Math.floor(Math.random() * array.length)
     return array[index]
-  }
-  setIsWakingServer(true)
-  getAllUsersRequest()
-    .then((response)=>{
-      if (response && response.data) {
-        setAllUsers(response.data)
-      }
-      setIsWakingServer(false)
-    })
-    .catch((err) => {
-      console.error("Failed connecting to API database:", err)
-      setIsWakingServer(false)
-    })
+}
+  getAllUsersRequest().then((response)=>{
+    setAllUsers(Array.isArray(response?.data) ? response.data : [])
+  })
   if(getUserId()){
     setLoggedIn(true)
   } else {
@@ -99,9 +92,10 @@ const navToLanding = () =>{
 }
 const login = (userCredentials) => {
   let validUser = null;
+  const users = Array.isArray(allUsers) ? allUsers : [];
   console.log('Login attempt - credentials:', userCredentials.username);
-  console.log('Login - allUsers:', allUsers.map(u => ({ id: u._id, username: u.username })));
-  allUsers.forEach((user)=>{
+  console.log('Login - allUsers:', users.map(u => ({ id: u._id, username: u.username })));
+  users.forEach((user)=>{
       if(userCredentials.username === user.username && userCredentials.password === user.password ){
           validUser = user;
       }
@@ -126,7 +120,7 @@ const login = (userCredentials) => {
 
 const refreshAllUsers = () => {
   getAllUsersRequest().then((response)=>{
-    setAllUsers(response.data);
+    setAllUsers(Array.isArray(response?.data) ? response.data : []);
   })
 }
 
@@ -158,9 +152,27 @@ const saveUserData = async () => {
   }
   meta.crew = props.crewManager.crew;
   meta.dungeonId = props.boardManager.dungeon.id;
-  await updateUserRequest(userId, meta)
-  sessionStorage.setItem('metadata', JSON.stringify(meta));
-  if (dungeonMessagingRef.current) dungeonMessagingRef.current('Progress saved')
+  if (dungeonMessagingRef.current) {
+    try {
+      dungeonMessagingRef.current('saving-start');
+    } catch (e) {}
+  }
+  try {
+    await updateUserRequest(userId, meta);
+    sessionStorage.setItem('metadata', JSON.stringify(meta));
+    if (dungeonMessagingRef.current) {
+      try {
+        dungeonMessagingRef.current('Progress saved');
+      } catch (e) {}
+    }
+  } catch (err) {
+    console.error("Failed to save user data:", err);
+    if (dungeonMessagingRef.current) {
+      try {
+        dungeonMessagingRef.current('saving-error');
+      } catch (e) {}
+    }
+  }
 }
 saveUserDataRef.current = saveUserData;
 const goHome = () => {
@@ -199,43 +211,146 @@ const toggleMenuTray = () => {
 }
  return (
    <div className="fullpage">
-      {isWakingServer && (
-        <div className="server-waking-overlay">
-          <div className="waking-content">
-            <div className="waking-spinner">
-              <div className="runic-circle"></div>
-              <span className="glowing-key" role="img" aria-label="Waking server">🔑</span>
-            </div>
-            <h2>Waking Up the Dungeon...</h2>
-            <p>Connecting to the database. This may take up to a minute on our free tier while the portals align.</p>
-            <div className="progress-bar-container">
-              <div className="progress-bar-fill"></div>
-            </div>
-          </div>
-        </div>
-      )}
       <div className="App">
-        {loggedIn === true && showToolbar === true && <div className="nav-buttons-container">
-          <div className="hamburger-button" style={{backgroundImage: `url(${images['hamburger']})`}} onClick={() => toggleMenuTray()}></div>
-          <div className={`menu-tray${menuTrayExpanded ? ' open' : ''}`} style={{
-            border: menuTrayExpanded ? '1px solid lightgrey' : 'none'
+        {loggedIn === true && showToolbar === true && (
+          <div className="horizontal-menu-wrapper" style={{
+            position: 'fixed',
+            top: '12px',
+            left: '12px',
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: '6px'
           }}>
-            <div className="menu-tray-content">
-              <button className="menu-buttons logout-button" onClick={logout}>
-                Logout
+            <div className="horizontal-menu-container" style={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'rgba(0, 0, 0, 0.75)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              padding: '4px 8px',
+              borderRadius: '18px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+              pointerEvents: 'auto'
+            }}>
+              <button 
+                className="menu-buttons logout-button" 
+                onClick={logout} 
+                onMouseEnter={() => setHoveredMenuItem('Logout')}
+                onMouseLeave={() => setHoveredMenuItem(null)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '6px 8px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  outline: 'none'
+                }}
+                title="Logout"
+              >
+                <span style={{ fontSize: '15px' }}>🚪</span>
               </button>
-              <button className="menu-buttons save-button" onClick={saveUserData}>
-                Save
+
+              <button 
+                className="menu-buttons save-button" 
+                onClick={saveUserData}
+                onMouseEnter={() => setHoveredMenuItem('Save Game')}
+                onMouseLeave={() => setHoveredMenuItem(null)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '6px 8px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  outline: 'none'
+                }}
+                title="Save Game"
+              >
+                <span style={{ fontSize: '15px' }}>💾</span>
               </button>
-              <button className="menu-buttons go-home-button" onClick={goHome}>
-                Home
+
+              <button 
+                className="menu-buttons go-home-button" 
+                onClick={goHome}
+                onMouseEnter={() => setHoveredMenuItem('Home')}
+                onMouseLeave={() => setHoveredMenuItem(null)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '6px 8px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  outline: 'none'
+                }}
+                title="Home"
+              >
+                <span style={{ fontSize: '15px' }}>🏠</span>
               </button>
-              {isAdmin && <button className="menu-buttons show-coordinates-button" onClick={toggleShowCoordinates}>
-                Show Coordinates
-              </button>}
+
+              {isAdmin && (
+                <button 
+                  className="menu-buttons show-coordinates-button" 
+                  onClick={toggleShowCoordinates}
+                  onMouseEnter={() => setHoveredMenuItem('Toggle Coordinates')}
+                  onMouseLeave={() => setHoveredMenuItem(null)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '6px 8px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    outline: 'none'
+                  }}
+                  title="Toggle Coordinates"
+                >
+                  <span style={{ fontSize: '15px' }}>🧭</span>
+                </button>
+              )}
+            </div>
+
+            {/* Hover display label under the icons container */}
+            <div style={{
+              height: '16px',
+              paddingLeft: '8px',
+              fontSize: '11px',
+              fontWeight: 'bold',
+              color: '#f9b115',
+              textTransform: 'uppercase',
+              letterSpacing: '0.8px',
+              textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+              pointerEvents: 'none',
+              textAlign: 'left',
+              transition: 'opacity 0.15s ease',
+              opacity: hoveredMenuItem ? 1 : 0
+            }}>
+              {hoveredMenuItem || ''}
             </div>
           </div>
-        </div> }
+        )}
         <Switch>
           <Route exact path="/login" render={() => (
             <LoginPage {...props} login={login} loginFromRegister={(e) => loginFromRegister(e)} refreshAllUsers={(e) => refreshAllUsers(e)}/>
@@ -283,12 +398,13 @@ const toggleMenuTray = () => {
           
           <Route exact path="/usermanager" render={() => (
             !loggedIn ? <Redirect to="/login" /> :
-            <UserManagerPage {...props} />
+            <UserManagerPage {...props} navToLanding={navToLanding} />
             )}/>
           <Route exact path="/mapmaker" render={() => (
             !loggedIn ? <Redirect to="/login" /> :
               <MapmakerPage {...props} showCoordinates={showCoordinates}  />
           )}/>
+          <Route exact path="/sandbox" component={SandboxPage} />
           <Route path="/">
               {loggedIn ? <Redirect to="/landing" /> : 
               <Redirect to="/login" />}

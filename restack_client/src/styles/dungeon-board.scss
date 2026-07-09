@@ -94,31 +94,44 @@
     }
     .center-board-wrapper{
         position: relative;
+        --hud-row-height: 50px;
+        --hud-row-gap: 4px;
         &.show-map-marker-cursor{
             cursor: crosshair;
         }
-        .message-container{
+        .board-hud-row{
             position: absolute;
-            // border: 1px solid yellow;
-            height: 50px;
+            left: 0;
+            top: 0;
             width: 100%;
-            top: -52px;
+            transform: translateY(calc(-100% - var(--hud-row-gap)));
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            pointer-events: none;
+        }
+        .message-container{
+            position: relative;
+            height: var(--hud-row-height);
+            flex: 1 1 auto;
+            z-index: 20;
+            pointer-events: none;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
         }
         .respawn-message-container{
-            position: absolute;
-            // border: 1px solid yellow;
-            height: 50px;
-            width: 150px;
-            // border: 1px solid yellow;
-            top: -52px;
-            left: -29px;
+            position: relative;
+            height: var(--hud-row-height);
+            width: max-content;
+            max-width: 92vw;
+            pointer-events: none;
             display: flex;
             align-items: center;
             justify-content: flex-start;
+            white-space: nowrap;
             color: white;
             .hourglass-icon{
                 height: 20px;
@@ -217,6 +230,24 @@
                         &.active{
                             background-color: #f9b115 !important;
                         }
+
+                        &.unselected {
+                            .portrait {
+                                filter: brightness(0.35) grayscale(0.25);
+                                transition: filter 0.2s ease;
+                            }
+                            &:hover {
+                                .portrait {
+                                    filter: brightness(0.6) grayscale(0.1);
+                                }
+                            }
+                        }
+                        &.selected {
+                            .portrait {
+                                filter: brightness(1) grayscale(0);
+                                transition: filter 0.2s ease;
+                            }
+                        }
                     }
                 }
             }
@@ -224,16 +255,16 @@
         .actions-tray{
             color: white;
             overflow: hidden;
-            transition: all 1s;
-            height: 0px;
-            min-height: 0px;
+            transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
+            max-height: 0px;
             border: 1px solid #bbbbb84d;
             display: flex;
             justify-content: flex-start;
             align-items: center;
             // padding-left: 21px;
             &.expanded{
-                min-height: 50px;
+                max-height: 500px;
+                padding: 10px 0;
             }
             .crew-action-item{
                 color: white;
@@ -299,11 +330,124 @@
                 height: 100%;
                 transition: width 0.6s linear;
             }
-            @keyframes campProgress{
-                from { width: 0%; }
-                to { width: 100%; }
+        }
+
+        @keyframes campProgress{
+            from { width: 0%; }
+            to { width: 100%; }
+        }
+
+        /* Always-visible quick-action button strip */
+        .quick-actions-strip {
+            padding: 6px 8px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+            height: auto;
+            min-height: 122px; /* Prevent height shift during recuperating state */
+            box-sizing: border-box;
+
+            /* Camp progress overlay — same rules as .crew-actions-tray */
+            .action-row {
+                position: relative;
+                min-height: 36px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                height: 100%;
+                width: 100%;
+                justify-content: center;
+            }
+            .camp-label {
+                display: flex;
+                position: relative;
+                line-height: 20px;
+                padding: 4px 6px;
+                height: 100%;
+                width: 100%;
+                align-items: center;
+                color: white;
+                font-size: 12px;
+                border-radius: 4px;
+                overflow: hidden;
+                min-height: 36px;
+                background: rgba(249,177,21,0.08);
+                border: 1px solid rgba(249,177,21,0.2);
+            }
+            .progress-overlay.debug-placeholder {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                box-sizing: border-box;
+                display: block;
+                z-index: 2;
+                pointer-events: none;
+            }
+            .progress-overlay.camp-anim {
+                position: absolute;
+                top: 0;
+                left: 0;
+                background-color: rgba(249,177,21,0.45);
+                width: 0%;
+                transition: none;
+                animation-name: campProgress;
+                animation-timing-function: linear;
+                animation-fill-mode: forwards;
+                height: 100%;
+                z-index: 1;
+                pointer-events: none;
+            }
+            .progress-overlay.camp-static {
+                background-color: rgba(249,177,21,0.45);
+                width: 0%;
+                height: 100%;
+                transition: width 0.6s linear;
             }
         }
+
+        .quick-actions-btns {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+        }
+        .quick-action-btn {
+            background: transparent;
+            border: none;
+            color: rgba(255,255,255,0.7);
+            font-size: 12px;
+            text-align: left;
+            padding: 5px 8px;
+            height: 26px; /* fixed height to ensure precise height calculations */
+            cursor: pointer;
+            border-radius: 5px;
+            width: 100%;
+            transition: background 0.15s, color 0.15s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-sizing: border-box;
+            
+            &:hover {
+                background: rgba(255,255,255,0.07);
+                color: #f9b115;
+            }
+
+            .hotkey-indicator {
+                opacity: 0;
+                color: #ffd700;
+                font-weight: bold;
+                font-size: 10px;
+                transition: opacity 0.15s;
+                text-transform: uppercase;
+                margin-left: 8px;
+            }
+
+            &:hover .hotkey-indicator {
+                opacity: 1;
+            }
+        }
+
         /* When crew-container is placed on the right panel, reuse the left-panel styling
            but render crew tiles horizontally with optional horizontal scrolling. */
         .crew-container{
@@ -549,6 +693,13 @@
                         border-radius: 0px;
                         background-color: rgb(223, 202, 117);
                         transform: rotate3d(55, 28, -59, 79deg);
+                    }
+                    &.merchant{
+                        width: 3px;
+                        height: 3px;
+                        border-radius: 3px;
+                        background-color: rgb(120, 255, 134);
+                        box-shadow: 0 0 2px rgba(120, 255, 134, 0.9);
                     }
                 }
             }
@@ -823,6 +974,7 @@
                     transition: width 300ms ease; /* match HP bar transition */
                 }
             }
+
             .hp-line-container{
                 height: 6px;
                 width: 100%;
@@ -839,23 +991,20 @@
             }
             .actions-tray{
                 color: white;
-                // height: 0px;
                 overflow: hidden;
-                transition: all 1s;
+                transition: max-height 0.4s ease-in-out, padding 0.4s ease-in-out;
                 border: 1px solid #bbbbb84d;
-                width: calc(100% - 40px);
-                padding: 0px 20px;
-                height: 0px;
-                min-height: 0px;
+                width: calc(100% - 20px);
+                padding: 0px 10px;
+                max-height: 0px;
                 position: relative;
+                flex-shrink: 0;
                 &.expanded{
-                    height: auto;
-                    min-height: 50px;
+                    max-height: 500px;
                     overflow: visible;
                 }
                 &.double-expanded{
-                    height: auto;
-                    min-height: 50px;
+                    max-height: 1500px;
                     overflow: visible;
                 }
                 .actions-container{
@@ -868,6 +1017,7 @@
                     .action-wrapper{
                         position: relative;
                         width: 100%;
+                        overflow: hidden;
                         .info-icon{
                             position: absolute;
                             // top: 11px;
@@ -892,6 +1042,13 @@
                             position: relative;
                             &:hover{
                                 background-color: rgba(143, 143, 135, 0.488);
+                            }
+                            &.disabled {
+                                cursor: default;
+                                opacity: 0.4;
+                                &:hover {
+                                    background-color: transparent;
+                                }
                             }
                             .progress-overlay{
                                 position: absolute;
@@ -929,14 +1086,13 @@
                             display: flex;
                             flex-direction: column;
                             align-items: flex-start;
-                            padding-left: 10px;
+                            padding-left: 0;
                             justify-content: center;
                             .max-reached{
                                 color: rgb(97, 57, 57);
                             }
                             &.expanded{
                                 max-height: 1000px;
-                                min-height: 60px;
                                 overflow: visible;
                             }
                             .action-subtype{
@@ -946,6 +1102,7 @@
                                 align-items: center;
                                 justify-content: space-between;
                                 width: 100%;
+                                padding-left: 10px;
                                 padding-right: 10px;
                                 .numeral{
                                     height: 10px;
@@ -980,6 +1137,459 @@
                                     }
                                 }
                             }
+                            // ── Discipline nested children (Monk) ──────────────────
+                            &.discipline-child {
+                                font-size: 10px;
+                                padding: 3px 8px;
+                                color: rgba(200, 210, 225, 0.85);
+                                &:hover {
+                                    color: #9dd5ff;
+                                }
+                                &.active-tier {
+                                    color: #9dd5ff;
+                                    background: rgba(100, 170, 240, 0.1);
+                                    border-radius: 3px;
+                                }
+                            }
+                        }
+                        // ── Nested discipline children container ──────────────────
+                        .discipline-children {
+                            display: flex;
+                            flex-direction: column;
+                            padding-left: 14px;
+                            border-left: 2px solid rgba(120, 180, 220, 0.2);
+                            margin-left: 10px;
+                            animation: disc-children-in 0.15s ease;
+
+                            @keyframes disc-children-in {
+                                from { opacity: 0; max-height: 0; }
+                                to   { opacity: 1; max-height: 120px; }
+                            }
+                        }
+                        .category-arrow {
+                            font-size: 8px;
+                            opacity: 0.6;
+                            margin-left: 4px;
+                        }
+                        // ── Glyph Builder Panel ──────────────────────────────────────
+                        .glyph-builder-panel {
+                            width: calc(100% - 8px);
+                            max-width: 100%;
+                            box-sizing: border-box;
+                            overflow: hidden;
+                            background: rgba(15, 12, 24, 0.97);
+                            border: 1px solid rgba(255, 255, 255, 0.18);
+                            border-radius: 6px;
+                            padding: 10px 8px 8px;
+                            margin: 6px 4px 0 4px;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 8px;
+                            animation: glyphBuilderFadeIn 0.18s ease;
+                        }
+                        @keyframes glyphBuilderFadeIn {
+                            from { opacity: 0; transform: translateY(-5px); }
+                            to   { opacity: 1; transform: translateY(0); }
+                        }
+
+                        // ── Slot row ────────────────────────────────────────────────
+                        .glyph-slot-row {
+                            display: flex;
+                            gap: 5px;
+                            flex-wrap: wrap;
+                            padding-bottom: 8px;
+                            border-bottom: 1px solid rgba(255,255,255,0.08);
+                        }
+                        .glyph-slot {
+                            width: 38px;
+                            height: 38px;
+                            border-radius: 4px;
+                            border: 1.5px solid rgba(255,255,255,0.55);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            cursor: pointer;
+                            position: relative;
+                            transition: border-color 0.15s, background 0.15s;
+
+                            // Empty slot — clean white border, transparent inside
+                            &.empty {
+                                background: transparent;
+                                cursor: default;
+                                border-color: rgba(255,255,255,0.4);
+                            }
+
+                            // Filled slot — icon occupying first sub-slot
+                            &.filled {
+                                border-color: white;
+                                background: rgba(255,255,255,0.06);
+                                &:hover { background: rgba(255,255,255,0.14); }
+
+                                .glyph-slot-icon {
+                                    width: 28px;
+                                    height: 28px;
+                                    background-size: contain;
+                                    background-repeat: no-repeat;
+                                    background-position: center;
+                                    filter: drop-shadow(0 0 3px rgba(255,255,255,0.5));
+                                }
+                            }
+
+                            // Overflow slot — red X, slot 'spent' by previous higher-tier spell
+                            &.slot-overflow {
+                                background: rgba(200, 30, 30, 0.18);
+                                border-color: rgba(220, 60, 60, 0.7);
+                                cursor: pointer;
+                                &:hover { background: rgba(200, 30, 30, 0.32); }
+
+                                .glyph-slot-x {
+                                    color: #ff4d4d;
+                                    font-size: 14px;
+                                    font-weight: 700;
+                                    line-height: 1;
+                                    user-select: none;
+                                }
+                            }
+                        }
+
+                        // ── Spell icon grid ─────────────────────────────────────────
+                        .glyph-spell-grid {
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: 5px;
+                            max-height: 180px;
+                            overflow-y: auto;
+                            padding-right: 2px;
+                            &::-webkit-scrollbar { width: 3px; }
+                            &::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+                        }
+                        .glyph-spell-cell {
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            gap: 3px;
+                            width: 48px;
+                            cursor: pointer;
+                            border-radius: 5px;
+                            padding: 4px 2px;
+                            border: 1px solid transparent;
+                            transition: background 0.12s, border-color 0.12s;
+
+                            &:hover:not(.overflow):not(.selected) {
+                                background: rgba(255,255,255,0.08);
+                                border-color: rgba(255,255,255,0.22);
+                            }
+                            &.selected {
+                                background: rgba(255,255,255,0.14);
+                                border-color: rgba(255,255,255,0.6);
+                                .glyph-spell-cell-icon {
+                                    filter: brightness(1.3) drop-shadow(0 0 4px rgba(255,255,255,0.6));
+                                }
+                            }
+                            &.overflow {
+                                opacity: 0.28;
+                                cursor: not-allowed;
+                                pointer-events: none;
+                            }
+
+                            .glyph-spell-cell-icon {
+                                width: 32px;
+                                height: 32px;
+                                background-size: contain;
+                                background-repeat: no-repeat;
+                                background-position: center;
+                                border-radius: 3px;
+                                transition: filter 0.12s;
+                                // Subtle tier tint on the icon border
+                                &.tier-1 { box-shadow: 0 0 0 1px rgba(100,160,255,0.35); }
+                                &.tier-2 { box-shadow: 0 0 0 1px rgba(80,220,120,0.35); }
+                                &.tier-3 { box-shadow: 0 0 0 1px rgba(255,160,40,0.35); }
+                                &.tier-4 { box-shadow: 0 0 0 1px rgba(210,80,255,0.4); }
+                            }
+                            .glyph-spell-cell-name {
+                                font-size: 8px;
+                                color: rgba(230,225,255,0.75);
+                                text-align: center;
+                                line-height: 1.2;
+                                word-break: break-word;
+                                max-width: 100%;
+                            }
+                        }
+
+                        // ── Prepare button ──────────────────────────────────────────
+                        .glyph-prepare-btn {
+                            width: 100%;
+                            padding: 7px 0;
+                            margin-top: 2px;
+                            background: rgba(255,255,255,0.07);
+                            border: 1px solid rgba(255,255,255,0.3);
+                            border-radius: 4px;
+                            color: rgba(230,225,255,0.9);
+                            font-size: 10px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            letter-spacing: 0.04em;
+                            transition: background 0.15s, border-color 0.15s;
+                            &:hover:not(:disabled) {
+                                background: rgba(255,255,255,0.14);
+                                border-color: rgba(255,255,255,0.6);
+                            }
+                            &.disabled, &:disabled {
+                                opacity: 0.35;
+                                cursor: not-allowed;
+                            }
+                        }
+
+                        .action-subtype.active-tier {
+                            color: #ffffff !important;
+                            opacity: 1;
+                        }
+
+                        // ── Compound Potions Builder Panel ───────────────────────
+                        .compound-builder-panel {
+                            width: calc(100% - 8px);
+                            max-width: 100%;
+                            box-sizing: border-box;
+                            overflow: hidden;
+                            background: rgba(20, 14, 8, 0.97);
+                            border: 1px solid rgba(255, 180, 60, 0.25);
+                            border-radius: 6px;
+                            padding: 10px 8px 8px;
+                            margin: 6px 4px 0 4px;
+                            display: flex;
+                            flex-direction: column;
+                            gap: 8px;
+                            animation: compoundBuilderFadeIn 0.18s ease;
+                        }
+                        @keyframes compoundBuilderFadeIn {
+                            from { opacity: 0; transform: translateY(-5px); }
+                            to   { opacity: 1; transform: translateY(0); }
+                        }
+
+                        // ── Potion slot row ──────────────────────────────────────
+                        .compound-slot-row {
+                            display: flex;
+                            gap: 6px;
+                            padding-bottom: 8px;
+                            border-bottom: 1px solid rgba(255, 180, 60, 0.12);
+                        }
+                        .compound-slot {
+                            width: 42px;
+                            height: 42px;
+                            border-radius: 4px;
+                            border: 1.5px solid rgba(255, 255, 255, 0.45);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            cursor: pointer;
+                            position: relative;
+                            transition: border-color 0.15s, background 0.15s;
+                            flex-shrink: 0;
+
+                            &.empty {
+                                background: transparent;
+                                cursor: default;
+                                border-color: rgba(255, 255, 255, 0.35);
+                            }
+                            &.filled {
+                                border-color: rgba(255, 200, 80, 0.85);
+                                background: rgba(255, 180, 60, 0.08);
+                                &:hover { background: rgba(255, 180, 60, 0.18); }
+
+                                .compound-slot-icon {
+                                    width: 30px;
+                                    height: 30px;
+                                    background-size: contain;
+                                    background-repeat: no-repeat;
+                                    background-position: center;
+                                    filter: drop-shadow(0 0 3px rgba(255, 200, 80, 0.5));
+                                }
+                            }
+                        }
+
+                        // ── Reagent grid ─────────────────────────────────────────
+                        .compound-reagent-grid {
+                            display: flex;
+                            flex-wrap: wrap;
+                            gap: 5px;
+                            max-height: 180px;
+                            overflow-y: auto;
+                            padding-right: 2px;
+                            &::-webkit-scrollbar { width: 3px; }
+                            &::-webkit-scrollbar-thumb { background: rgba(255, 180, 60, 0.3); border-radius: 2px; }
+                        }
+                        .compound-reagent-cell {
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            gap: 3px;
+                            width: 48px;
+                            cursor: pointer;
+                            border-radius: 5px;
+                            padding: 4px 2px;
+                            border: 1px solid transparent;
+                            transition: background 0.12s, border-color 0.12s;
+                            position: relative;
+
+                            &:hover:not(.depleted):not(.selected) {
+                                background: rgba(255, 180, 60, 0.1);
+                                border-color: rgba(255, 180, 60, 0.3);
+                            }
+                            &.selected {
+                                background: rgba(255, 180, 60, 0.18);
+                                border-color: rgba(255, 200, 80, 0.7);
+                                .compound-reagent-icon {
+                                    filter: brightness(1.3) drop-shadow(0 0 4px rgba(255, 200, 80, 0.6));
+                                }
+                            }
+                            &.compatible {
+                                border-color: rgba(255, 200, 80, 0.45);
+                                background: rgba(255, 180, 60, 0.08);
+                                box-shadow: 0 0 5px rgba(255, 200, 80, 0.25);
+                            }
+                            &.incompatible {
+                                opacity: 0.4;
+                                pointer-events: none;
+                            }
+                            &.depleted {
+                                opacity: 0.28;
+                                cursor: not-allowed;
+                                pointer-events: none;
+                            }
+
+                            .compound-reagent-icon {
+                                width: 32px;
+                                height: 32px;
+                                background-size: contain;
+                                background-repeat: no-repeat;
+                                background-position: center;
+                                border-radius: 3px;
+                                transition: filter 0.12s;
+                            }
+                            .compound-reagent-name {
+                                font-size: 8px;
+                                color: rgba(255, 220, 160, 0.75);
+                                text-align: center;
+                                line-height: 1.2;
+                                word-break: break-word;
+                                max-width: 100%;
+                            }
+                            .compound-reagent-count {
+                                position: absolute;
+                                top: 2px;
+                                right: 2px;
+                                background: rgba(0,0,0,0.55);
+                                color: rgba(255, 220, 120, 1);
+                                font-size: 9px;
+                                font-weight: 700;
+                                min-width: 14px;
+                                height: 14px;
+                                border-radius: 7px;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                line-height: 1;
+                            }
+                        }
+
+                        // ── Recipe match label ───────────────────────────────────
+                        .compound-recipe-label {
+                            font-size: 10px;
+                            color: rgba(255, 220, 120, 0.9);
+                            text-align: center;
+                            letter-spacing: 0.05em;
+                            padding: 2px 0;
+                        }
+
+                        // ── Brew button ──────────────────────────────────────────
+                        .compound-brew-btn {
+                            width: 100%;
+                            padding: 7px 0;
+                            margin-top: 2px;
+                            background: rgba(255, 180, 60, 0.12);
+                            border: 1px solid rgba(255, 180, 60, 0.35);
+                            border-radius: 4px;
+                            color: rgba(255, 220, 160, 0.9);
+                            font-size: 10px;
+                            font-weight: 600;
+                            cursor: pointer;
+                            letter-spacing: 0.04em;
+                            transition: background 0.15s, border-color 0.15s;
+                            &:hover:not(:disabled) {
+                                background: rgba(255, 180, 60, 0.28);
+                                border-color: rgba(255, 200, 80, 0.8);
+                            }
+                            &.ready {
+                                border-color: rgba(255, 200, 80, 0.8);
+                                color: rgba(255, 240, 180, 1);
+                            }
+                            &.disabled, &:disabled {
+                                opacity: 0.35;
+                                cursor: not-allowed;
+                            }
+                        }
+
+                        // ── Battle Tactics extra styles ───────────────────────
+                        &.tactics-builder-panel {
+                            gap: 8px;
+
+                            .tactics-placeholder {
+                                font-size: 10px;
+                                color: rgba(200, 200, 220, 0.5);
+                                text-align: center;
+                                padding: 8px 0;
+                                font-style: italic;
+                            }
+
+                            .tactics-detail {
+                                background: rgba(180, 120, 40, 0.1);
+                                border: 1px solid rgba(200, 150, 60, 0.3);
+                                border-radius: 5px;
+                                padding: 8px 10px;
+                                display: flex;
+                                flex-direction: column;
+                                gap: 5px;
+                                animation: tactics-detail-in 0.18s ease;
+
+                                @keyframes tactics-detail-in {
+                                    from { opacity: 0; transform: translateY(-4px); }
+                                    to   { opacity: 1; transform: translateY(0); }
+                                }
+
+                                .tactics-detail-name {
+                                    font-size: 11px;
+                                    font-weight: 700;
+                                    color: rgba(255, 220, 140, 1);
+                                    letter-spacing: 0.06em;
+                                }
+
+                                .tactics-detail-desc {
+                                    font-size: 9.5px;
+                                    color: rgba(210, 200, 185, 0.9);
+                                    line-height: 1.4;
+                                }
+
+                                .tactics-detail-meta {
+                                    display: flex;
+                                    gap: 8px;
+                                    flex-wrap: wrap;
+                                    span {
+                                        font-size: 9px;
+                                        color: rgba(255, 200, 100, 0.85);
+                                        background: rgba(255, 180, 40, 0.1);
+                                        border: 1px solid rgba(255, 180, 40, 0.25);
+                                        border-radius: 3px;
+                                        padding: 2px 5px;
+                                        font-weight: 600;
+                                    }
+                                }
+
+                                .tactics-detail-flavor {
+                                    font-size: 9px;
+                                    color: rgba(180, 170, 160, 0.65);
+                                    font-style: italic;
+                                }
+                            }
                         }
                     }
                 }
@@ -1009,6 +1619,7 @@
                     background-repeat: no-repeat;
                     background-position: center;
                     opacity: 0.5;
+                    filter: invert(1) brightness(1.05) contrast(1.12);
                     z-index: 0;
                     pointer-events: none;
                 }
@@ -1042,16 +1653,24 @@
                     transition: opacity 0.15s ease;
                     z-index: 10;
                 }
-                /* replicate equip-slot styling from inventory-modal so slots show in left panel */
                 .equip-slot{
                     position: absolute;
                     width: 55px;
                     height: 55px;
-                    border: 1px solid black;
-                    background: transparent;
+                    border: 2px solid rgba(205, 202, 202, 0.68);
+                    background: rgba(255,255,255,0.05);
+                    box-shadow: 0 0 0 1px rgba(0,0,0,0.45) inset;
                     box-sizing: border-box;
                     border-radius: 4px;
                     pointer-events: auto;
+
+                    .tile {
+                        background-color: transparent !important;
+                        border: none !important;
+                        margin: 0 !important;
+                        width: 100% !important;
+                        height: 100% !important;
+                    }
                 }
                 .crew-body .slot-chest{
                     left: 50%;
@@ -1185,7 +1804,7 @@
     width: 100vw;
     position: absolute;
     background-color: black;
-    opacity: 0.5;
+    opacity: 0.25;
     z-index: 1;
     pointer-events: none;
 }
@@ -1246,6 +1865,45 @@
     flex-flow: row wrap !important;
     align-content: flex-end !important;
     box-sizing: content-box;
+}
+
+.dungeon-board-container {
+    transform-origin: center center;
+    will-change: transform, filter, opacity;
+}
+
+@keyframes portalSpiralOut {
+    0% {
+        transform: rotate(0deg) scale(1);
+        filter: blur(0px);
+        opacity: 1;
+    }
+    100% {
+        transform: rotate(720deg) scale(0);
+        filter: blur(12px);
+        opacity: 0;
+    }
+}
+
+@keyframes portalSpiralIn {
+    0% {
+        transform: rotate(-720deg) scale(0);
+        filter: blur(12px);
+        opacity: 0;
+    }
+    100% {
+        transform: rotate(0deg) scale(1);
+        filter: blur(0px);
+        opacity: 1;
+    }
+}
+
+.portal-transition-out {
+    animation: portalSpiralOut 0.8s cubic-bezier(0.55, 0.055, 0.675, 0.19) forwards;
+}
+
+.portal-transition-in {
+    animation: portalSpiralIn 0.8s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
 }
 // .monster-battle-board{
 //     border: 3px solid rgb(185, 15, 15);
@@ -1447,6 +2105,65 @@
     }
 }
 
+/* ─── Prep Complete Modal ─────────────────────────────────────────── */
+.prep-complete-modal .modal-content {
+    border: 2px solid #eba636;
+    box-shadow: 0 0 22px rgba(235, 166, 54, 0.45);
+    background: radial-gradient(circle at center, #1b150c 0%, #0c0803 100%);
+}
+.prep-complete-zone {
+    text-align: center;
+    padding: 16px 12px;
+    color: #f3f4f6;
+    animation: prepCompleteFadeIn 0.3s ease-out;
+}
+@keyframes prepCompleteFadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.prep-complete-icon {
+    font-size: 42px;
+    margin-bottom: 12px;
+    display: inline-block;
+    animation: prepIconFloat 2.5s ease-in-out infinite;
+}
+@keyframes prepIconFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+}
+.prep-complete-title {
+    font-size: 19px;
+    font-weight: 700;
+    color: #eba636;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin: 0 0 14px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+.prep-complete-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(235, 166, 54, 0.15);
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin-bottom: 14px;
+    text-align: left;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+.prep-complete-text {
+    font-size: 13.5px;
+    color: #e5e7eb;
+    line-height: 1.6;
+    margin: 0;
+    font-weight: 500;
+}
+.prep-complete-note {
+    font-size: 11px;
+    color: #eba636;
+    font-style: italic;
+    margin-top: 10px;
+    opacity: 0.8;
+}
+
 /* ─── Ritual Complete Modal ───────────────────────────────────────── */
 .ritual-complete-modal .modal-content {
     border: 2px solid #c8a8ff;
@@ -1480,4 +2197,1150 @@
     color: #6a5a8a;
     font-style: italic;
     margin-top: 8px;
+}
+
+/* Chest loot radial arc overlay and items */
+.chest-loot-overlay {
+    position: absolute;
+    pointer-events: none;
+    z-index: 6;
+}
+
+.chest-loot-item {
+    pointer-events: none;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s ease;
+    opacity: 0;
+    transform: scale(0) translateY(10px);
+    border-radius: 50%;
+    background-color: rgba(10, 15, 25, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5), inset 0 0 4px rgba(255, 255, 255, 0.2);
+}
+
+.chest-loot-item.fade-in {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+
+.chest-loot-item.fade-out {
+    opacity: 0;
+    transform: scale(0.3) translateY(-30px);
+    transition: transform 0.35s ease-in, opacity 0.35s ease-in;
+}
+
+/* Ambush Popup Redesign */
+.ambush-popup-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.ambush-popup-card {
+    background: linear-gradient(135deg, #120e0e 0%, #1c0909 100%);
+    border: 2px solid #ff3b30;
+    box-shadow: 0 0 30px rgba(255, 59, 48, 0.35), inset 0 0 15px rgba(255, 59, 48, 0.15);
+    padding: 35px;
+    color: white;
+    text-align: center;
+    border-radius: 16px;
+    width: 380px;
+    max-width: 90%;
+    animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #ff3b30, #ff9500, #ff3b30);
+    }
+}
+
+.ambush-title {
+    font-size: 2rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #ff3b30;
+    text-shadow: 0 0 10px rgba(255, 59, 48, 0.6);
+    margin-bottom: 5px;
+    margin-top: 5px;
+    animation: pulseGlow 1.5s infinite alternate;
+}
+
+.ambush-subtitle {
+    font-size: 1.15rem;
+    color: #eaeaea;
+    margin-bottom: 20px;
+    
+    .monster-highlight {
+        color: #ff9500;
+        font-weight: bold;
+        text-shadow: 0 0 5px rgba(255, 149, 0, 0.4);
+    }
+}
+
+.ambush-portrait-frame {
+    width: 140px;
+    height: 140px;
+    margin: 0 auto 20px;
+    border-radius: 12px;
+    padding: 6px;
+    background: #111;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+
+    .ambush-portrait {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        border-radius: 8px;
+    }
+}
+
+.ambush-badge {
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #111;
+    border-width: 1px;
+    border-style: solid;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+    white-space: nowrap;
+}
+
+.ambush-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 25px;
+    text-align: left;
+}
+
+.ambush-stat-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    color: #cccccc;
+
+    .stat-icon {
+        font-size: 1.1rem;
+        width: 20px;
+        text-align: center;
+    }
+
+    .stat-label {
+        font-weight: 500;
+    }
+
+    .stat-value {
+        margin-left: auto;
+        font-weight: 700;
+        color: #ffffff;
+    }
+}
+
+.ambush-fight-btn {
+    background: linear-gradient(185deg, #d32f2f 0%, #b71c1c 100%);
+    border: 1px solid #ff5252;
+    box-shadow: 0 4px 15px rgba(183, 28, 28, 0.4);
+    color: white;
+    font-size: 1.2rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    padding: 12px 36px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-block;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+
+    &:hover {
+        transform: translateY(-2px) scale(1.03);
+        box-shadow: 0 6px 20px rgba(183, 28, 28, 0.6);
+        background: linear-gradient(185deg, #e53935 0%, #c62828 100%);
+    }
+
+    &:active {
+        transform: translateY(1px);
+    }
+}
+
+.ambush-shortcut-hint {
+    margin-top: 10px;
+    font-size: 0.75rem;
+    color: #777777;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Animations */
+@keyframes pulseGlow {
+    from {
+        text-shadow: 0 0 10px rgba(255, 59, 48, 0.5), 0 0 2px rgba(255, 59, 48, 0.3);
+    }
+    to {
+        text-shadow: 0 0 20px rgba(255, 59, 48, 0.8), 0 0 5px rgba(255, 59, 48, 0.5);
+    }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+/* Trap Popup */
+.trap-popup-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.trap-popup-card {
+    background: linear-gradient(135deg, #1a1408 0%, #1c1205 100%);
+    border: 2px solid #e67e22;
+    box-shadow: 0 0 30px rgba(230, 126, 34, 0.35), inset 0 0 15px rgba(230, 126, 34, 0.15);
+    padding: 30px 35px;
+    color: white;
+    text-align: center;
+    border-radius: 16px;
+    width: 420px;
+    max-width: 90%;
+    animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #e67e22, #f39c12, #e67e22);
+    }
+}
+
+.trap-title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #e67e22;
+    text-shadow: 0 0 10px rgba(230, 126, 34, 0.6);
+    margin-bottom: 5px;
+    margin-top: 5px;
+    animation: pulseGlow 1.5s infinite alternate;
+}
+
+.trap-subtitle {
+    font-size: 1.05rem;
+    color: #ddd;
+    margin-bottom: 18px;
+}
+
+.trap-crew-results {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 20px;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.trap-crew-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+
+    &.saved {
+        background: rgba(46, 204, 113, 0.12);
+        border: 1px solid rgba(46, 204, 113, 0.25);
+    }
+
+    &.hit {
+        background: rgba(231, 76, 60, 0.12);
+        border: 1px solid rgba(231, 76, 60, 0.25);
+    }
+}
+
+.trap-crew-name {
+    font-weight: 600;
+    color: #eaeaea;
+    min-width: 100px;
+    text-align: left;
+}
+
+.trap-roll-info {
+    color: #aaa;
+    font-size: 0.8rem;
+    flex: 1;
+    text-align: center;
+}
+
+.trap-result-label {
+    font-weight: 700;
+    font-size: 0.85rem;
+    min-width: 80px;
+    text-align: right;
+
+    &.dodged {
+        color: #2ecc71;
+    }
+
+    &.damaged {
+        color: #e74c3c;
+    }
+}
+
+.trap-dismiss-btn {
+    background: linear-gradient(185deg, #d35400 0%, #a04000 100%);
+    border: 1px solid #e67e22;
+    box-shadow: 0 4px 15px rgba(211, 84, 0, 0.4);
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    padding: 10px 32px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-block;
+    transition: all 0.2s ease;
+    text-transform: uppercase;
+
+    &:hover {
+        transform: translateY(-2px) scale(1.03);
+        box-shadow: 0 6px 20px rgba(211, 84, 0, 0.6);
+    }
+}
+
+.trap-shortcut-hint {
+    margin-top: 8px;
+    font-size: 0.75rem;
+    color: #777;
+    letter-spacing: 0.5px;
+}
+
+/* Trap tile indicator (Keen Eye reveal) */
+.trap-indicator-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: trapPulse 2s ease-in-out infinite;
+}
+
+.trap-indicator-overlay::after {
+    content: '⚠';
+    font-size: 1.2em;
+    color: #e67e22;
+    text-shadow: 0 0 6px rgba(230, 126, 34, 0.8);
+    filter: drop-shadow(0 0 4px rgba(230, 126, 34, 0.5));
+}
+
+@keyframes trapPulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Imprint Tattoo Overlay
+   ───────────────────────────────────────────────────────────────── */
+
+.tattoo-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.9);
+    backdrop-filter: blur(10px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.25s ease-out;
+}
+
+.tattoo-overlay-card {
+    background: linear-gradient(160deg, #150e08 0%, #1c1208 60%, #120c06 100%);
+    border: 2px solid #8b4513;
+    box-shadow:
+        0 0 50px rgba(139, 69, 19, 0.5),
+        0 0 100px rgba(139, 69, 19, 0.2),
+        inset 0 0 30px rgba(139, 69, 19, 0.08);
+    border-radius: 16px;
+    width: 820px;
+    max-width: 96vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 26px 30px 30px;
+    position: relative;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #6e2a08, #c97a2f, #a04010, #c97a2f, #6e2a08);
+        border-radius: 16px 16px 0 0;
+    }
+}
+
+.tattoo-overlay-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid rgba(139, 69, 19, 0.35);
+}
+
+.tattoo-overlay-title {
+    font-size: 1.45rem;
+    font-weight: 800;
+    color: #c97a2f;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin: 0;
+    text-shadow: 0 0 14px rgba(201, 122, 47, 0.55);
+}
+
+.tattoo-overlay-sub {
+    color: #7a6a5a;
+    font-size: 0.88rem;
+    flex: 1;
+}
+
+.tattoo-close-btn {
+    background: transparent;
+    border: 1px solid #444;
+    color: #888;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+
+    &:hover {
+        border-color: #c97a2f;
+        color: #c97a2f;
+    }
+}
+
+.tattoo-overlay-body {
+    display: flex;
+    gap: 28px;
+    align-items: flex-start;
+}
+
+/* ── Left: Body map ── */
+.tattoo-body-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex-shrink: 0;
+    width: 260px;
+}
+
+.tattoo-body-label {
+    font-size: 0.75rem;
+    color: #7a6a5a;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: center;
+}
+
+.tattoo-body-container {
+    position: relative;
+    width: 260px;
+    /* Height is driven by the image — no fixed value so %-based slots align correctly */
+}
+
+.tattoo-body-img {
+    display: block;
+    width: 100%;
+    height: auto;   /* natural aspect ratio — slots are % of actual rendered size */
+    filter: invert(1) brightness(0.3) sepia(0.5) hue-rotate(10deg);
+    opacity: 0.65;
+    pointer-events: none;
+}
+
+.tattoo-slot {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid rgba(139, 69, 19, 0.65);
+    background: rgba(15, 8, 3, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 0.65rem;
+    color: #666;
+    transform: translate(-50%, -50%);
+    transition: all 0.2s ease;
+    z-index: 2;
+
+    &:hover:not(.filled):not(.imprinting) {
+        border-color: #c97a2f;
+        background: rgba(139, 69, 19, 0.35);
+        transform: translate(-50%, -50%) scale(1.25);
+        box-shadow: 0 0 10px rgba(201, 122, 47, 0.5);
+    }
+
+    &.selected {
+        border-color: #f0a050;
+        background: rgba(201, 122, 47, 0.3);
+        box-shadow: 0 0 10px rgba(240, 160, 80, 0.7), 0 0 20px rgba(240, 160, 80, 0.3);
+        transform: translate(-50%, -50%) scale(1.2);
+        color: #f0a050;
+    }
+
+    &.filled {
+        border-color: #5a4a3a;
+        cursor: default;
+        color: #ccc;
+        font-size: 0.7rem;
+    }
+
+    &.imprinting {
+        border-color: #e67e22;
+        color: #e67e22;
+        cursor: default;
+        animation: tattooSlotPulse 1.5s ease-in-out infinite;
+    }
+}
+
+@keyframes tattooSlotPulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(230, 126, 34, 0.4); }
+    50%       { box-shadow: 0 0 14px rgba(230, 126, 34, 0.9), 0 0 28px rgba(230, 126, 34, 0.3); }
+}
+
+/* Slot legend */
+.tattoo-slot-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 8px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(139, 69, 19, 0.2);
+    border-radius: 8px;
+}
+
+.tattoo-legend-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.72rem;
+    color: #666;
+    padding: 2px 0;
+    transition: color 0.15s;
+
+    &.legend-filled { color: #9a8a7a; }
+    &.legend-selected { color: #f0a050; }
+}
+
+.tattoo-legend-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.tattoo-legend-name {
+    flex: 1;
+}
+
+.tattoo-legend-design {
+    color: #7a6a5a;
+    font-size: 0.68rem;
+    font-style: italic;
+}
+
+/* ── Right: Design panel ── */
+.tattoo-design-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+
+.tattoo-design-label {
+    font-size: 0.75rem;
+    color: #7a6a5a;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.tattoo-design-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tattoo-design-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(139, 69, 19, 0.3);
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    position: relative;
+
+    &:hover:not(.applied) {
+        background: rgba(139, 69, 19, 0.1);
+        border-color: rgba(201, 122, 47, 0.5);
+        transform: translateX(2px);
+    }
+
+    &.selected {
+        background: rgba(139, 69, 19, 0.18);
+        box-shadow: 0 0 12px rgba(201, 122, 47, 0.25), inset 0 0 8px rgba(139, 69, 19, 0.15);
+    }
+
+    &.applied {
+        opacity: 0.4;
+        cursor: not-allowed;
+        transform: none !important;
+    }
+}
+
+.tattoo-design-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 8px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+
+    img {
+        width: 36px;
+        height: 36px;
+        object-fit: contain;
+        opacity: 0.85;
+    }
+}
+
+.tattoo-design-info {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.tattoo-design-name {
+    font-weight: 800;
+    font-size: 0.98rem;
+    letter-spacing: 0.5px;
+}
+
+.tattoo-design-desc {
+    font-size: 0.78rem;
+    color: #9a8a7a;
+    line-height: 1.4;
+}
+
+.tattoo-design-applied-badge {
+    margin-top: 4px;
+    font-size: 0.68rem;
+    color: #8b6914;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── Confirm area ── */
+.tattoo-confirm-area {
+    margin-top: auto;
+    padding-top: 18px;
+    border-top: 1px solid rgba(139, 69, 19, 0.25);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+}
+
+.tattoo-selection-summary {
+    font-size: 0.83rem;
+    color: #8a7a6a;
+    text-align: center;
+    min-height: 1.2em;
+}
+
+.tattoo-imprint-btn {
+    background: linear-gradient(180deg, #a04010 0%, #6e2a08 100%);
+    border: 1px solid #8b4513;
+    box-shadow: 0 4px 18px rgba(139, 69, 19, 0.55);
+    color: #f0d0a0;
+    font-size: 1rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 11px 40px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover:not(.disabled) {
+        background: linear-gradient(180deg, #c05018 0%, #8e3a10 100%);
+        transform: translateY(-2px);
+        box-shadow: 0 6px 24px rgba(139, 69, 19, 0.75);
+    }
+
+    &.disabled {
+        opacity: 0.38;
+        cursor: not-allowed;
+        transform: none;
+        box-shadow: none;
+    }
+}
+
+.tattoo-slots-remaining {
+    font-size: 0.72rem;
+    color: #6a5a4a;
+    letter-spacing: 0.5px;
+}
+
+/* ── Points of Interest Panel ─────────────────────────────────────────────── */
+
+.poi-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-top: 1px solid rgba(230, 126, 34, 0.2);
+    padding: 6px 8px 8px;
+    background: linear-gradient(180deg, rgba(230, 126, 34, 0.05) 0%, rgba(0, 0, 0, 0) 100%);
+}
+
+/* Eye toggle button */
+.poi-toggle-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    transition: transform 0.25s ease, filter 0.25s ease;
+
+    &:hover {
+        transform: scale(1.12);
+        filter: drop-shadow(0 0 8px rgba(230, 126, 34, 0.7));
+    }
+
+    &:active {
+        transform: scale(0.96);
+    }
+}
+
+.poi-eye-icon {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    border-radius: 50%;
+    display: block;
+}
+
+/* "Nothing notable" placeholder */
+.poi-empty {
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.3);
+    text-align: center;
+    padding: 4px 0 2px;
+    font-style: italic;
+    letter-spacing: 0.3px;
+}
+
+/* Scrollable POI list */
+/* Scrollable portrait list */
+.poi-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    max-height: 340px;
+    overflow-y: auto;
+    padding: 0 2px 2px;
+
+    &::-webkit-scrollbar {
+        width: 3px;
+    }
+    &::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    &::-webkit-scrollbar-thumb {
+        background: rgba(230, 126, 34, 0.35);
+        border-radius: 2px;
+    }
+}
+
+/* Large portrait card */
+.poi-portrait-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(230, 126, 34, 0.3);
+    background: rgba(10, 6, 2, 0.6);
+    transition: border-color 0.2s, box-shadow 0.2s;
+
+    &:hover {
+        border-color: rgba(230, 126, 34, 0.65);
+        box-shadow: 0 0 14px rgba(230, 126, 34, 0.25);
+    }
+}
+
+/* Image wrapper with relative positioning for badge overlay */
+.poi-portrait-img-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.poi-portrait-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    image-rendering: pixelated;
+    transition: transform 0.3s ease;
+
+    .poi-portrait-card:hover & {
+        transform: scale(1.04);
+    }
+}
+
+.poi-portrait-placeholder {
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(230, 126, 34, 0.15) 0%, rgba(0,0,0,0) 70%);
+}
+
+/* Distance badge pinned to bottom-right of image */
+.poi-portrait-dist {
+    position: absolute;
+    bottom: 6px;
+    right: 6px;
+    background: rgba(0, 0, 0, 0.72);
+    border: 1px solid rgba(230, 126, 34, 0.5);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 9px;
+    font-weight: 700;
+    color: #e67e22;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+
+/* Name caption below portrait */
+.poi-portrait-name {
+    width: 100%;
+    padding: 5px 8px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
+    text-transform: capitalize;
+    text-align: center;
+    letter-spacing: 0.5px;
+    background: rgba(230, 126, 34, 0.08);
+    border-top: 1px solid rgba(230, 126, 34, 0.15);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Shrine card — two images side by side */
+.poi-shrine-card {
+    border-color: rgba(180, 130, 255, 0.35);
+
+    &:hover {
+        border-color: rgba(180, 130, 255, 0.65);
+        box-shadow: 0 0 14px rgba(160, 100, 255, 0.25);
+    }
+
+    .poi-portrait-name {
+        background: rgba(160, 100, 255, 0.1);
+        border-top-color: rgba(180, 130, 255, 0.2);
+        color: rgba(220, 200, 255, 0.95);
+    }
+}
+
+.poi-shrine-images {
+    display: flex;
+    width: 100%;
+    overflow: hidden;
+}
+
+.poi-shrine-half {
+    flex: 1;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    position: relative;
+
+    &:first-child {
+        border-right: 1px solid rgba(180, 130, 255, 0.2);
+    }
+}
+
+.poi-shrine-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    image-rendering: pixelated;
+    transition: transform 0.3s ease;
+
+    .poi-shrine-card:hover & {
+        transform: scale(1.04);
+    }
+}
+
+/* Chest / loot card — gold theme */
+.poi-chest-card {
+    border-color: rgba(255, 200, 50, 0.35);
+
+    &:hover {
+        border-color: rgba(255, 200, 50, 0.7);
+        box-shadow: 0 0 14px rgba(255, 180, 0, 0.28);
+    }
+
+    .poi-portrait-name {
+        background: rgba(255, 180, 0, 0.1);
+        border-top-color: rgba(255, 200, 50, 0.25);
+        color: rgba(255, 230, 120, 0.95);
+    }
+
+    .poi-portrait-img {
+        object-fit: contain;  /* chest icons are not full-bleed portraits */
+        background: radial-gradient(circle at 50% 60%, rgba(255, 180, 0, 0.1) 0%, rgba(0,0,0,0) 70%);
+    }
+}
+
+/* Gate / door card — steel-blue theme */
+.poi-gate-card {
+    border-color: rgba(80, 160, 220, 0.35);
+
+    &:hover {
+        border-color: rgba(80, 160, 220, 0.7);
+        box-shadow: 0 0 14px rgba(60, 140, 200, 0.28);
+    }
+
+    .poi-portrait-name {
+        background: rgba(60, 140, 200, 0.1);
+        border-top-color: rgba(80, 160, 220, 0.25);
+        color: rgba(160, 210, 255, 0.95);
+    }
+
+    .poi-portrait-img {
+        object-fit: contain;
+        background: radial-gradient(circle at 50% 55%, rgba(60, 140, 200, 0.1) 0%, rgba(0,0,0,0) 70%);
+    }
+}
+
+/* Vendor / shop card — emerald-green theme */
+.poi-vendor-card {
+    border-color: rgba(50, 200, 120, 0.35);
+
+    &:hover {
+        border-color: rgba(50, 200, 120, 0.7);
+        box-shadow: 0 0 14px rgba(30, 180, 100, 0.28);
+    }
+
+    .poi-portrait-name {
+        background: rgba(30, 180, 100, 0.1);
+        border-top-color: rgba(50, 200, 120, 0.25);
+        color: rgba(140, 240, 180, 0.95);
+    }
+}
+
+/* Narrative / lore tablet card — mystic purple-pink */
+.poi-narrative-card {
+    border-color: rgba(200, 80, 220, 0.4);
+
+    &:hover {
+        border-color: rgba(200, 80, 220, 0.75);
+        box-shadow: 0 0 14px rgba(180, 60, 200, 0.3);
+    }
+
+    .poi-portrait-name {
+        background: rgba(180, 60, 200, 0.1);
+        border-top-color: rgba(200, 80, 220, 0.25);
+        color: rgba(240, 180, 255, 0.95);
+    }
+
+    .poi-portrait-img {
+        object-fit: contain;
+        background: radial-gradient(circle at 50% 50%, rgba(180, 60, 200, 0.12) 0%, rgba(0,0,0,0) 70%);
+    }
+}
+
+/* Spawn point card — teal-cyan */
+.poi-spawn-card {
+    border-color: rgba(0, 210, 200, 0.35);
+
+    &:hover {
+        border-color: rgba(0, 210, 200, 0.7);
+        box-shadow: 0 0 14px rgba(0, 190, 180, 0.28);
+    }
+
+    .poi-portrait-name {
+        background: rgba(0, 190, 180, 0.1);
+        border-top-color: rgba(0, 210, 200, 0.25);
+        color: rgba(120, 255, 240, 0.95);
+    }
+
+    .poi-portrait-img {
+        object-fit: contain;
+        background: radial-gradient(circle at 50% 50%, rgba(0, 190, 180, 0.1) 0%, rgba(0,0,0,0) 70%);
+    }
+}
+
+/* Teleporter / dungeon portal card — electric blue */
+.poi-portal-card {
+    border-color: rgba(60, 160, 255, 0.4);
+
+    &:hover {
+        border-color: rgba(60, 160, 255, 0.8);
+        box-shadow: 0 0 16px rgba(40, 130, 255, 0.35);
+    }
+
+    .poi-portrait-name {
+        background: rgba(40, 130, 255, 0.1);
+        border-top-color: rgba(60, 160, 255, 0.25);
+        color: rgba(160, 210, 255, 0.95);
+    }
+
+    .poi-portrait-img {
+        object-fit: contain;
+        background: radial-gradient(circle at 50% 50%, rgba(40, 130, 255, 0.12) 0%, rgba(0,0,0,0) 70%);
+    }
+}
+
+/* Temporary loot card — gold theme with pulse glow and fadeout support */
+.poi-loot-card {
+    border-color: rgba(249, 177, 21, 0.6) !important;
+    box-shadow: 0 0 10px rgba(249, 177, 21, 0.3) !important;
+    animation: lootPulse 1.5s infinite alternate;
+
+    .poi-portrait-name {
+        background: rgba(249, 177, 21, 0.1);
+        border-top-color: rgba(249, 177, 21, 0.3);
+        color: rgba(255, 230, 120, 0.95);
+    }
+
+    .poi-portrait-img {
+        object-fit: contain;
+        background: radial-gradient(circle at 50% 50%, rgba(249, 177, 21, 0.15) 0%, rgba(0,0,0,0) 70%);
+    }
+}
+
+.poi-portrait-card.fade-out {
+    opacity: 0 !important;
+    transform: scale(0.9) !important;
+    transition: opacity 0.3s ease-out, transform 0.3s ease-out !important;
+}
+
+@keyframes lootPulse {
+    from { box-shadow: 0 0 8px rgba(249, 177, 21, 0.2); }
+    to { box-shadow: 0 0 16px rgba(249, 177, 21, 0.5); }
+}
+
+/* Ensure compound brew button styling is applied globally/unnested */
+.compound-brew-btn {
+    width: 100%;
+    padding: 7px 0;
+    margin-top: 2px;
+    background: rgba(255, 180, 60, 0.12) !important;
+    border: 1px solid rgba(255, 180, 60, 0.35) !important;
+    border-radius: 4px !important;
+    color: rgba(255, 220, 160, 0.9) !important;
+    font-size: 10px !important;
+    font-weight: 600 !important;
+    cursor: pointer !important;
+    letter-spacing: 0.04em !important;
+    transition: background 0.15s, border-color 0.15s !important;
+    outline: none !important;
+
+    &:hover:not(:disabled) {
+        background: rgba(255, 180, 60, 0.28) !important;
+        border-color: rgba(255, 200, 80, 0.8) !important;
+    }
+    &.ready {
+        border-color: rgba(255, 200, 80, 0.8) !important;
+        color: rgba(255, 240, 180, 1) !important;
+    }
+    &.disabled, &:disabled {
+        opacity: 0.35 !important;
+        cursor: not-allowed !important;
+        background: rgba(255, 180, 60, 0.06) !important;
+        border-color: rgba(255, 180, 60, 0.15) !important;
+        color: rgba(255, 220, 160, 0.4) !important;
+    }
 }

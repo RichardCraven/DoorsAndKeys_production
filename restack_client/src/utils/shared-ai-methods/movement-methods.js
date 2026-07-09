@@ -4,9 +4,9 @@ import {Methods} from './basic-methods';
 // Teleport the caller to an empty tile on the back line (or next available column)
 // Optionally accepts a callback (onTeleport) to notify when teleport occurs
 const teleportToBackLine = (caller, combatants, onTeleport) => {
-    const isMonsterOrMinion = caller.isMonster || caller.isMinion;
-    const backCol = isMonsterOrMinion ? 0 : MAX_DEPTH;
-    const secondBackCol = isMonsterOrMinion ? 1 : MAX_DEPTH - 1;
+    const isMonster = !!caller.isMonster;
+    const backCol = isMonster ? 0 : MAX_DEPTH;
+    const secondBackCol = isMonster ? 1 : MAX_DEPTH - 1;
     const startLane = caller.coordinates.y;
     // Helper to find available tile in a column, searching vertically from startLane
     function findAvailableInCol(col) {
@@ -33,9 +33,12 @@ const teleportToBackLine = (caller, combatants, onTeleport) => {
     }
 }
 // const clone = (val) => { return JSON.parse(JSON.stringify(val)) }
-const MAX_DEPTH = 7
+export let MAX_DEPTH = 7;
+export function setMaxDepth(val) {
+    MAX_DEPTH = val;
+}
 // ^ index 7, actual col count is 8
-const MAX_LANES = 5
+const MAX_LANES = 6
 const getSurroundings = (coords) => {
     const N = {x: coords.x, y: coords.y-1},
               S = {x: coords.x, y: coords.y+1},
@@ -47,12 +50,13 @@ const getSurroundings = (coords) => {
               SE = {x: coords.x+1, y: coords.y+1}
     return {N,S,E,W,NW,NE,SW,SE}
 }
-const PC_TYPES = ['soldier','rogue','wizard', 'monk', 'sage', 'barbarian']
+const PC_TYPES = ['soldier','ranger','wizard', 'monk', 'sage', 'barbarian']
 const someoneIsInCoords = (coords, combatants)=>{
     if(!combatants) return false
     return Object.values(combatants).some(e=>{
         try {
             if(!e) return false;
+            if (e.dead) return false;
             if (e.coordinates && JSON.stringify(e.coordinates) === JSON.stringify(coords)) return true;
             if (Array.isArray(e.occupiedCoords)) {
                 return e.occupiedCoords.some(c => JSON.stringify(c) === JSON.stringify(coords));
@@ -62,7 +66,7 @@ const someoneIsInCoords = (coords, combatants)=>{
     })
 }
 const isOutOfBounds = (coords) => {
-    return coords.x >= MAX_DEPTH || coords.y > MAX_LANES || coords.x < 0 || coords.y < 0
+    return coords.x > MAX_DEPTH || coords.y >= MAX_LANES || coords.x < 0 || coords.y < 0
 }
 
 // ─── Shield Wall registry ─────────────────────────────────────────────────────
@@ -74,7 +78,7 @@ export const activeShieldWalls = [];
  * Returns true if moving from `fromCoords` to `toCoords` would cross an
  * active shield wall line.
  */
-const crossesShieldWall = (fromCoords, toCoords) => {
+export const crossesShieldWall = (fromCoords, toCoords) => {
     if (!activeShieldWalls.length) return false;
     for (const wall of activeShieldWalls) {
         const { x: wallX, lanesAffected, isFacingRight } = wall;
@@ -97,7 +101,17 @@ const crossesShieldWall = (fromCoords, toCoords) => {
     return false;
 }
 
-const LARGE_MOVER_TYPES = ['dragon','beholder','ogre','sphinx','manticore','wyvern','wyvern_alt'];
+const LARGE_MOVER_TYPES = ['beholder','ogre','sphinx','manticore','wyvern','wyvern_alt','mummy','djinn','vampire','summoned_djinn','summoned_mummy','summoned_ogre','summoned_vampire'];
+
+const isHugeMover = (caller) => {
+    if (!caller) return false;
+    if (typeof caller.huge === 'boolean' && caller.huge) return true;
+    if (caller.type === 'dragon') return true;
+    if (caller.tier === 4) return true;
+    if (typeof caller.size === 'number' && caller.size === 3) return true;
+    if (typeof caller.scale === 'number' && caller.scale === 3) return true;
+    return false;
+};
 
 /**
  * Returns true if `caller` is a large (2-tile-tall) combatant that needs
@@ -105,8 +119,9 @@ const LARGE_MOVER_TYPES = ['dragon','beholder','ogre','sphinx','manticore','wyve
  */
 const isLargeMover = (caller) => {
     if (!caller) return false;
+    if (isHugeMover(caller)) return false;
     if (typeof caller.large === 'boolean' && caller.large) return true;
-    if (caller.type && LARGE_MOVER_TYPES.includes(caller.type)) return true;
+    if (caller.type && LARGE_MOVER_TYPES.includes(caller.type) && caller.isMinion !== true) return true;
     if (typeof caller.size === 'number' && caller.size >= 2) return true;
     if (typeof caller.scale === 'number' && caller.scale >= 2) return true;
     // Main battle monster (not a minion) always uses 2x portrait
@@ -118,8 +133,31 @@ const isAvailableToMoveInto = (coords, combatants, fromCoords = null, caller = n
     if (isOutOfBounds(coords)) return false;
     if (someoneIsInCoords(coords, combatants)) return false;
     if (fromCoords && crossesShieldWall(fromCoords, coords)) return false;
+    // Huge movers occupy 3x3 tiles
+    if (caller && isHugeMover(caller)) {
+        const hOffsetDir = (coords.x >= 4) ? -1 : 1;
+        const hugeCoords = [
+            { x: coords.x, y: coords.y - 1 },
+            { x: coords.x, y: coords.y - 2 },
+            { x: coords.x + hOffsetDir, y: coords.y },
+            { x: coords.x + hOffsetDir, y: coords.y - 1 },
+            { x: coords.x + hOffsetDir, y: coords.y - 2 },
+            { x: coords.x + 2 * hOffsetDir, y: coords.y },
+            { x: coords.x + 2 * hOffsetDir, y: coords.y - 1 },
+            { x: coords.x + 2 * hOffsetDir, y: coords.y - 2 }
+        ];
+        for (const hc of hugeCoords) {
+            if (isOutOfBounds(hc)) return false;
+            if (Object.values(combatants).some(e => {
+                if (!e || e.id === caller.id) return false;
+                if (e.coordinates && e.coordinates.x === hc.x && e.coordinates.y === hc.y) return true;
+                if (Array.isArray(e.occupiedCoords)) return e.occupiedCoords.some(c => c.x === hc.x && c.y === hc.y);
+                return false;
+            })) return false;
+        }
+    }
     // Large movers occupy coords + tile above: both must be free
-    if (caller && isLargeMover(caller)) {
+    else if (caller && isLargeMover(caller)) {
         const above = { x: coords.x, y: coords.y - 1 };
         // If above tile is out of bounds we can't fit — block the move
         if (above.y < 0) return false;
@@ -210,12 +248,12 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
     const {N,E,S,W,NW,SW,NE,SE} = getSurroundings(caller.coordinates)
 
     // Wall-aware availability check: passes fromCoords and caller so large-mover two-tile check is evaluated
-    const canMoveTo = (coords) => isAvailableToMoveInto(coords, combatants, fromCoords, caller);
+    const canMoveTo = (coords, avoidLast = true) => {
+        if (!isAvailableToMoveInto(coords, combatants, fromCoords, caller)) return false;
+        if (avoidLast && caller.lastCoords && coords.x === caller.lastCoords.x && coords.y === caller.lastCoords.y) return false;
+        return true;
+    };
 
-    // overwriting
-    // let someoneIsInCoords = (coords)=>{
-    //     return Object.values(combatants).filter(c=>c.id!==caller.id).some(e=>JSON.stringify(e.coordinates) == JSON.stringify(coords))
-    // }
     const targetIsInCoords = (coords)=>{
         return JSON.stringify(targetTile) === JSON.stringify(coords);
     }
@@ -232,7 +270,7 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
     let newCoords = JSON.parse(JSON.stringify(caller.coordinates))
 
     if(targetIsNorthWest){ /////////////////////////////////////  NW
-        if(targetIsInCoords(NW) && !isTargetTileOccupied){
+        if(targetIsInCoords(NW) && !isTargetTileOccupied && canMoveTo(NW)){
             newCoords = NW;
         } else if(targetIsInCoords(NW)){
             if(canMoveTo(W)){
@@ -241,21 +279,31 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
                 newCoords = N;
             } else {
             }
-        } else if(someoneIsInCoords(NW, combatants)){
+        } else if(!canMoveTo(NW)){
             //go up or left
             if(canMoveTo(N)){
                 newCoords = N
             } else if(canMoveTo(W)){
                 newCoords = W
-            } else {
-                return
+            } else if(canMoveTo(SW)){
+                newCoords = SW
+            } else if(canMoveTo(S)){
+                newCoords = S
+            } else if(canMoveTo(NE)){
+                newCoords = NE
+            } else if(canMoveTo(E)){
+                newCoords = E
+            } else if(canMoveTo(N, false)){
+                newCoords = N
+            } else if(canMoveTo(W, false)){
+                newCoords = W
             }
         } else {
             // space available go NW
             newCoords = NW;
         }
     } else if(targetIsNorthEast){ /////////////////////// NE
-        if(targetIsInCoords(NE) && !isTargetTileOccupied){
+        if(targetIsInCoords(NE) && !isTargetTileOccupied && canMoveTo(NE)){
             newCoords = NE;
         } else if(targetIsInCoords(NE)){
             if(canMoveTo(E)){
@@ -264,7 +312,7 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
                 newCoords = N;
             } else {
             }
-        } else if(someoneIsInCoords(NE, combatants)){
+        } else if(!canMoveTo(NE)){
             //go up or right — when forwardFirst, prefer E (forward) over N (lane adjust)
             const first  = forwardFirst ? (canMoveTo(E) ? E : null) : (canMoveTo(N) ? N : null);
             const second = forwardFirst ? (canMoveTo(N) ? N : null) : (canMoveTo(E) ? E : null);
@@ -272,15 +320,25 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
                 newCoords = first
             } else if(second){
                 newCoords = second
-            } else {
-                return
+            } else if(canMoveTo(SE)){
+                newCoords = SE
+            } else if(canMoveTo(S)){
+                newCoords = S
+            } else if(canMoveTo(NW)){
+                newCoords = NW
+            } else if(canMoveTo(W)){
+                newCoords = W
+            } else if(canMoveTo(E, false)){
+                newCoords = E
+            } else if(canMoveTo(N, false)){
+                newCoords = N
             }
         } else {
             // space available go NE
             newCoords = NE;
         }
     } else if(targetIsSouthWest){ ////////////////////////////////////// SW
-        if(targetIsInCoords(SW) && !isTargetTileOccupied){
+        if(targetIsInCoords(SW) && !isTargetTileOccupied && canMoveTo(SW)){
             newCoords = SW;
         } else if(targetIsInCoords(SW)){
             if(canMoveTo(W)){
@@ -289,23 +347,33 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
                 newCoords = S;
             } else {
             }
-        } else if(someoneIsInCoords(SW, combatants)){
+        } else if(!canMoveTo(SW)){
             //go down or left
             if(canMoveTo(S)){
                 newCoords = S
             } else if(canMoveTo(W)){
                 newCoords = W
-            } else {
-                return
+            } else if(canMoveTo(NW)){
+                newCoords = NW
+            } else if(canMoveTo(N)){
+                newCoords = N
+            } else if(canMoveTo(SE)){
+                newCoords = SE
+            } else if(canMoveTo(E)){
+                newCoords = E
+            } else if(canMoveTo(S, false)){
+                newCoords = S
+            } else if(canMoveTo(W, false)){
+                newCoords = W
             }
         } else {
             // space available go SW
             newCoords = SW;
         }
     } else if(targetIsSouthEast){ //////////////////////// SE
-        if(targetIsInCoords(SE) && !isTargetTileOccupied){
+        if(targetIsInCoords(SE) && !isTargetTileOccupied && canMoveTo(SE)){
             newCoords = SE;
-        } else if(someoneIsInCoords(SE, combatants)){
+        } else if(!canMoveTo(SE)){
             //go down or right — when forwardFirst, prefer E (forward) over S (lane adjust)
             const first  = forwardFirst ? (canMoveTo(E) ? E : null) : (canMoveTo(S) ? S : null);
             const second = forwardFirst ? (canMoveTo(S) ? S : null) : (canMoveTo(E) ? E : null);
@@ -313,19 +381,29 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
                 newCoords = first
             } else if(second){
                 newCoords = second
-            } else {
-                return
+            } else if(canMoveTo(NE)){
+                newCoords = NE
+            } else if(canMoveTo(N)){
+                newCoords = N
+            } else if(canMoveTo(SW)){
+                newCoords = SW
+            } else if(canMoveTo(W)){
+                newCoords = W
+            } else if(canMoveTo(E, false)){
+                newCoords = E
+            } else if(canMoveTo(S, false)){
+                newCoords = S
             }
         } else {
             // space available go SE
             newCoords = SE;
         }
     } else if(targetIsNorth){ ////////// N
-        if(targetIsInCoords(N) && !isTargetTileOccupied){
+        if(targetIsInCoords(N) && !isTargetTileOccupied && canMoveTo(N)){
             newCoords = N;
         } else if(targetIsInCoords(N)){
             // do nothing (original code is empty here)
-        } else if(someoneIsInCoords(N, combatants)){
+        } else if(!canMoveTo(N)){
             //go NW or NE
             if(canMoveTo(NW)){
                 newCoords = NW
@@ -337,8 +415,20 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
                 const horiz = { x: caller.coordinates.x + horizDir, y: caller.coordinates.y };
                 if (canMoveTo(horiz)) {
                     newCoords = horiz;
-                } else {
-                    return
+                } else if(canMoveTo(W)) {
+                    newCoords = W;
+                } else if(canMoveTo(E)) {
+                    newCoords = E;
+                } else if(canMoveTo(SW)) {
+                    newCoords = SW;
+                } else if(canMoveTo(SE)) {
+                    newCoords = SE;
+                } else if(canMoveTo(S)) {
+                    newCoords = S;
+                } else if(canMoveTo(NW, false)){
+                    newCoords = NW
+                } else if(canMoveTo(NE, false)){
+                    newCoords = NE
                 }
             }
         } else {
@@ -346,11 +436,11 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
             newCoords = N;
         }
     } else if(targetIsSouth){ //////////// S
-        if(targetIsInCoords(S) && !isTargetTileOccupied){
+        if(targetIsInCoords(S) && !isTargetTileOccupied && canMoveTo(S)){
             newCoords = S;
         } else if(targetIsInCoords(S)){
             // do nothing (original code is empty here)
-        } else if(someoneIsInCoords(S, combatants)){
+        } else if(!canMoveTo(S)){
             //go SW or SE
             if(canMoveTo(SW)){
                 newCoords = SW
@@ -362,8 +452,20 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
                 const horiz = { x: caller.coordinates.x + horizDir, y: caller.coordinates.y };
                 if (canMoveTo(horiz)) {
                     newCoords = horiz;
-                } else {
-                    return
+                } else if(canMoveTo(W)) {
+                    newCoords = W;
+                } else if(canMoveTo(E)) {
+                    newCoords = E;
+                } else if(canMoveTo(NW)) {
+                    newCoords = NW;
+                } else if(canMoveTo(NE)) {
+                    newCoords = NE;
+                } else if(canMoveTo(N)) {
+                    newCoords = N;
+                } else if(canMoveTo(SW, false)){
+                    newCoords = SW
+                } else if(canMoveTo(SE, false)){
+                    newCoords = SE
                 }
             }
         } else {
@@ -371,11 +473,11 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
             newCoords = S;
         }
     } else if(targetIsEast){ ///////////  E
-        if(targetIsInCoords(E) && !isTargetTileOccupied){
+        if(targetIsInCoords(E) && !isTargetTileOccupied && canMoveTo(E)){
             newCoords = E;
         } else if(targetIsInCoords(E)){
             // Target is directly East and occupied — already adjacent, don't move
-        } else if(someoneIsInCoords(E, combatants)){
+        } else if(!canMoveTo(E)){
             //go NE or SE; for large movers fall back to pure N/S lane shift
             if(canMoveTo(NE)){
                 newCoords = NE
@@ -385,19 +487,27 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
                 newCoords = N
             } else if(canMoveTo(S)){
                 newCoords = S
-            } else {
-                return
+            } else if(canMoveTo(NW)){
+                newCoords = NW
+            } else if(canMoveTo(SW)){
+                newCoords = SW
+            } else if(canMoveTo(W)){
+                newCoords = W
+            } else if(canMoveTo(NE, false)){
+                newCoords = NE
+            } else if(canMoveTo(SE, false)){
+                newCoords = SE
             }
         } else {
             // space available go East
             newCoords = E;
         }
     } else if(targetIsWest){
-        if(targetIsInCoords(W) && !isTargetTileOccupied){
+        if(targetIsInCoords(W) && !isTargetTileOccupied && canMoveTo(W)){
             newCoords = W;
         } else if(targetIsInCoords(W)){
             // Target is directly West and occupied — already adjacent, don't move
-        } else if(someoneIsInCoords(W, combatants)){
+        } else if(!canMoveTo(W)){
             //go NW or SW; for large movers fall back to pure N/S lane shift
             if(canMoveTo(NW)){
                 newCoords = NW
@@ -407,8 +517,16 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
                 newCoords = N
             } else if(canMoveTo(S)){
                 newCoords = S
-            } else {
-                return
+            } else if(canMoveTo(NE)){
+                newCoords = NE
+            } else if(canMoveTo(SE)){
+                newCoords = SE
+            } else if(canMoveTo(E)){
+                newCoords = E
+            } else if(canMoveTo(NW, false)){
+                newCoords = NW
+            } else if(canMoveTo(SW, false)){
+                newCoords = SW
             }
         } else {
             // space available go West
@@ -426,7 +544,10 @@ const goTowards = (caller, combatants, targetTile, forwardFirst = false) => {
     if (isLargeMover(caller) && !isAvailableToMoveInto(newCoords, combatants, fromCoords, caller)) return;
     // Final shield-wall guard: even after clamping, block the move if it crosses a wall
     if (!crossesShieldWall(fromCoords, newCoords)) {
-        caller.coordinates = newCoords;
+        if (caller.coordinates.x !== newCoords.x || caller.coordinates.y !== newCoords.y) {
+            caller.lastCoords = { x: caller.coordinates.x, y: caller.coordinates.y };
+            caller.coordinates = newCoords;
+        }
     }
 }
 
@@ -444,8 +565,8 @@ export const MovementMethods = {
         newCoords.y += amount
         if(newCoords.y < 0){
             newCoords.y = 0;
-        } else if(newCoords.y > MAX_LANES){
-            newCoords.y = MAX_LANES
+        } else if(newCoords.y > MAX_LANES - 1){
+            newCoords.y = MAX_LANES - 1
         }
         caller.coordinates = newCoords;
     },
@@ -457,8 +578,8 @@ export const MovementMethods = {
         newCoords.y -= amount
         if(newCoords.y < 0){
             newCoords.y = 0;
-        } else if(newCoords.y > MAX_LANES){
-            newCoords.y = MAX_LANES
+        } else if(newCoords.y > MAX_LANES - 1){
+            newCoords.y = MAX_LANES - 1
         }
         caller.coordinates = newCoords;
     },
@@ -541,21 +662,23 @@ export const MovementMethods = {
     evadeBack: (caller, combatants) => {
         // Determine if caller is a monster/minion or a fighter
         // Fighters: back is x = 0 (left side)
-        // Monsters/Minions: back is x = MAX_DEPTH (right side)
-        const isMonsterOrMinion = caller.isMonster || caller.isMinion;
-        const targetX = isMonsterOrMinion ? MAX_DEPTH : 0;
+        // Monsters: back is x = MAX_DEPTH (right side)
+        const isMonster = !!caller.isMonster;
+        const targetX = isMonster ? MAX_DEPTH : 0;
         let newCoords = { ...caller.coordinates };
         const atBack = caller.coordinates.x === targetX;
         // Helper to check if enemy is directly in front
-        const inFront = isMonsterOrMinion
+        const inFront = isMonster
             ? { x: caller.coordinates.x - 1, y: caller.coordinates.y }
             : { x: caller.coordinates.x + 1, y: caller.coordinates.y };
-        const enemyInFront = Object.values(combatants).some(e =>
-            (e.isMonster || e.isMinion || e.isFighter) && !e.dead && e.coordinates.x === inFront.x && e.coordinates.y === inFront.y
-        );
+        const enemyInFront = Object.values(combatants).some(e => {
+            if (!e || e.dead || e.isVCT) return false;
+            const otherIsMonster = !!e.isMonster;
+            return (isMonster !== otherIsMonster) && e.coordinates.x === inFront.x && e.coordinates.y === inFront.y;
+        });
         if (!atBack) {
             // Move toward back
-            if (isMonsterOrMinion) {
+            if (isMonster) {
                 const nextCoords = { x: caller.coordinates.x + 1, y: caller.coordinates.y };
                 if (isAvailableToMoveInto(nextCoords, combatants, null, caller)) {
                     newCoords = nextCoords;
@@ -622,6 +745,7 @@ export const MovementMethods = {
     },
     moveTowardsCloseEnemyTarget: (caller, combatants) => {
         const enemyTarget = Object.values(combatants).find(e=>e.id === caller.targetId)
+        if (!enemyTarget) return;
         // const distanceToTarget = Methods.getDistanceToTarget(caller, enemyTarget),
         // laneDiff = Methods.getLaneDifferenceToTarget(caller, enemyTarget)
         let targetTile = {x: enemyTarget.coordinates.x, y: enemyTarget.coordinates.y}
@@ -632,7 +756,10 @@ export const MovementMethods = {
         if(targetTile.x < coords.x) newCoords.x = coords.x-1
         if(targetTile.y > coords.y) newCoords.y = coords.y+1
         if(targetTile.y < coords.y) newCoords.y = coords.y-1
-        caller.coordinates = newCoords;
+        
+        if (!crossesShieldWall(coords, newCoords)) {
+            caller.coordinates = newCoords;
+        }
 
         // if(laneDiff === 1 || laneDiff === -1){
         //     if(distanceToTarget === 0){
@@ -719,58 +846,72 @@ export const MovementMethods = {
         caller.coordinates.x = caller.depth
     },
     moveTowardsCloseFriendlyTarget: (caller, combatants) => {
-        let newPosition, newDepth;
-        let liveCombatants = Object.values(combatants).filter(e=>!e.dead)
         const friendlyTarget = Object.values(combatants).find(e=>e.id === caller.targetId)
-        const distanceToTarget = Methods.getDistanceToTarget(caller, friendlyTarget),
-        laneDiff = Methods.getLaneDifferenceToTarget(caller, friendlyTarget);
         if(!friendlyTarget) return
+
+        const liveCombatants = Object.values(combatants).filter(e => !e.dead)
+
+        const callerDepth = (caller.coordinates && typeof caller.coordinates.x === 'number') ? caller.coordinates.x : caller.depth;
+        const callerLane = (caller.coordinates && typeof caller.coordinates.y === 'number') ? caller.coordinates.y : caller.position;
+        const targetDepth = (friendlyTarget.coordinates && typeof friendlyTarget.coordinates.x === 'number') ? friendlyTarget.coordinates.x : friendlyTarget.depth;
+        const targetLane = (friendlyTarget.coordinates && typeof friendlyTarget.coordinates.y === 'number') ? friendlyTarget.coordinates.y : friendlyTarget.position;
+
+        let newDepth = callerDepth;
+        let newPosition = callerLane;
+
+        const dx = targetDepth - callerDepth;
+        const dy = targetLane - callerLane;
+        const manhattan = Math.abs(dx) + Math.abs(dy);
 
         const finalize = () => {
             if(newPosition < 0) newPosition = 0
-            if(newPosition > MAX_LANES) newPosition = MAX_LANES;
+            if(newPosition > MAX_LANES - 1) newPosition = MAX_LANES - 1;
             if(newDepth < 0) newDepth = 0
             if(newDepth > MAX_DEPTH) newDepth = MAX_DEPTH;
 
-            //set new values
-            if(newDepth !== undefined) caller.depth = newDepth;
-            if(newPosition !== undefined) caller.position = newPosition;
+            caller.depth = newDepth;
+            caller.position = newPosition;
+
+            if (!caller.coordinates) caller.coordinates = { x: caller.depth, y: caller.position };
+            caller.coordinates.x = caller.depth;
+            caller.coordinates.y = caller.position;
         }
 
-        if((laneDiff === 1 || laneDiff === -1 || laneDiff === 0) && Math.abs(distanceToTarget) < 2){
-            newPosition = friendlyTarget.position
-            newDepth = friendlyTarget.depth - 1;
-            finalize();
-            return
-        } else if(laneDiff < -1){
-            newPosition = caller.position - 1
-        } else if(laneDiff > 1){
-            newPosition = caller.position + 1
-        } else if(laneDiff === 0 && distanceToTarget === 1){
-            console.log('LORYASTES: BEHIND ADJACENT!');
-            // newPosition = caller.position - 1
-        }
-        if((distanceToTarget < 0 && laneDiff !== 0) ||  
-        (distanceToTarget < -1 && laneDiff === 0 && caller.depth > 1)){
-            newDepth = caller.depth - 1
-        } else if(distanceToTarget > 1){
-            newDepth = caller.depth + 1
+        // Already orthogonally adjacent to friendly target.
+        if (manhattan === 1) {
+            return;
         }
 
-        if(liveCombatants.some(e=>e.position === newPosition && e.depth === newDepth)){
-            let targetPosition = {x: newDepth, y: newPosition};
-            let upSpaceOccupied = liveCombatants.some(e=>e.depth === targetPosition.x && e.position === targetPosition.y - 1);
-            let downSpaceOccupied = liveCombatants.some(e=>e.depth === targetPosition.x && e.position === targetPosition.y + 1);
-            if(!upSpaceOccupied){
-                newPosition = targetPosition.y-1;
-            } else if(!downSpaceOccupied){
-                newPosition = targetPosition.y+1;
+        // If diagonally adjacent, convert into orthogonal adjacency.
+        if (Math.abs(dx) === 1 && Math.abs(dy) === 1) {
+            newPosition = targetLane;
+            newDepth = (callerDepth <= targetDepth) ? targetDepth - 1 : targetDepth + 1;
+        } else {
+            if (dy < 0) newPosition = callerLane - 1;
+            if (dy > 0) newPosition = callerLane + 1;
+
+            if (dx < 0) newDepth = callerDepth - 1;
+            if (dx > 0) newDepth = callerDepth + 1;
+        }
+
+        const occupied = (x, y) => liveCombatants.some(e => {
+            if (e.id === caller.id) return false;
+            const ex = (e.coordinates && typeof e.coordinates.x === 'number') ? e.coordinates.x : e.depth;
+            const ey = (e.coordinates && typeof e.coordinates.y === 'number') ? e.coordinates.y : e.position;
+            return ex === x && ey === y;
+        });
+
+        if (occupied(newDepth, newPosition)) {
+            if (!occupied(newDepth, newPosition - 1)) {
+                newPosition = newPosition - 1;
+            } else if (!occupied(newDepth, newPosition + 1)) {
+                newPosition = newPosition + 1;
             } else {
-                newPosition = caller.position;
-                newDepth = caller.depth;
+                newDepth = callerDepth;
+                newPosition = callerLane;
             }
         }
-        
+
         finalize();
     }
 }

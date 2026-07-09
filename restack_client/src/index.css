@@ -11,3 +11,8 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* Rotate Burst Shot/Attack skill icon 45 degrees to the right */
+img[src*="burst_shot"], [style*="burst_shot"] {
+  transform: rotate(45deg) !important;
+}

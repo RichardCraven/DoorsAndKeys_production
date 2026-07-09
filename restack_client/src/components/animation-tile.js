@@ -109,7 +109,7 @@ export default function AnimationTile(props) {
 
         break;
         case 'punch':
-            image = images['fist_punch'];
+            image = props.animationData?.icon || images['fist_punch'];
             // For punch, we want to animate from source to target and fade out
             // We'll use animationData: { from: {x, y}, to: {x, y}, duration }
             keyframe = null;
@@ -135,7 +135,7 @@ export default function AnimationTile(props) {
             keyframe = 'spin-attack'
         break;
         case 'dragon_punch':
-            image = images['hand_7']
+            image = props.animationData?.icon || images['hand_7']
             keyframe = 'dragon-punch'
         break;
         case 'windmill':
@@ -176,6 +176,42 @@ export default function AnimationTile(props) {
                 keyframe = null;
             }
         break;
+        case 'bite':
+        case 'tackle':
+        case 'crush':
+            image = props.animationData?.icon || images['claws'];
+            keyframe = `GraspAnimation_${facing || 'right'}`;
+            break;
+        case 'claw_strike':
+            image = props.animationData?.icon || images['claws'];
+            keyframe = `ClawAnimation_${facing || 'right'}`;
+            break;
+        case 'reassembly':
+        case 'acid_blast':
+        case 'sleep':
+        case 'shield_slam':
+        case 'vortex':
+        case 'induce_fear':
+        case 'defensive_stance':
+        case 'shield_wall':
+        case 'cleave':
+        case 'leap_attack':
+        case 'disintegrate':
+        case 'one_man_army':
+        case 'inspire':
+        case 'annihilation':
+        case 'berserker':
+        case 'meditate':
+        case 'monk_meditate':
+        case 'force_punch_flurry':
+        case 'monk_force_punch_flurry':
+        case 'astral_projection':
+        case 'monk_astral_projection':
+        case 'fist_of_honor':
+        case 'imbued_strike':
+            image = props.animationData?.icon;
+            keyframe = `skillPulse`;
+            break;
         default:
             break;
     }
@@ -281,7 +317,21 @@ export default function AnimationTile(props) {
             })()}
             {/* Animated energy_drain render */}
             {props.animationType === 'energy_drain' && image && (() => {
-                const flip = facing === 'left';
+                let drainTransform;
+                switch (facing) {
+                    case 'left':
+                        drainTransform = 'scaleX(-1)';
+                        break;
+                    case 'down':
+                        drainTransform = 'rotate(90deg)';
+                        break;
+                    case 'up':
+                        drainTransform = 'rotate(-90deg)';
+                        break;
+                    default:
+                        drainTransform = undefined;
+                        break;
+                }
                 const drainKey = props.animationData?.startTime || 'energy-drain';
                 return (
                     <img
@@ -297,9 +347,32 @@ export default function AnimationTile(props) {
                             height: '80%',
                             pointerEvents: 'none',
                             zIndex: 5000,
-                            transform: flip ? 'scaleX(-1)' : undefined,
+                            transform: drainTransform,
                             filter: 'drop-shadow(0 0 6px rgba(255,0,0,0.95)) drop-shadow(0 0 14px rgba(220,30,0,0.7))',
                             animation: `EnergyDrainAnimation_${facing} ${duration / 1000}s linear forwards`,
+                        }}
+                    />
+                );
+            })()}
+            {['bite', 'tackle', 'crush', 'reassembly', 'acid_blast', 'sleep', 'claw_strike', 'shield_slam', 'vortex', 'induce_fear', 'defensive_stance', 'shield_wall', 'cleave', 'leap_attack', 'disintegrate', 'one_man_army', 'inspire', 'annihilation', 'berserker', 'meditate', 'monk_meditate', 'force_punch_flurry', 'monk_force_punch_flurry', 'astral_projection', 'monk_astral_projection', 'fist_of_honor', 'imbued_strike'].includes(props.animationType) && image && (() => {
+                const flip = facing === 'left';
+                const animKey = props.animationData?.startTime || props.animationType;
+                return (
+                    <img
+                        key={animKey}
+                        src={image}
+                        alt={props.animationType}
+                        className={`${props.animationType}-icon`}
+                        style={{
+                            position: 'absolute',
+                            top: 'calc(50% - 30%)',
+                            left: 'calc(50% - 30%)',
+                            width: '60%',
+                            height: '60%',
+                            pointerEvents: 'none',
+                            zIndex: 5000,
+                            transform: flip ? 'scaleX(-1)' : undefined,
+                            animation: `${keyframe} ${duration / 1000}s linear forwards`,
                         }}
                     />
                 );
@@ -325,7 +398,7 @@ export default function AnimationTile(props) {
                         {props.overlayAnimationType === 'sword_swing' && (() => {
                             const overFacing = props.overlayAnimationData?.facing;
                             const overDuration = props.overlayAnimationData?.duration;
-                            const overImage = props.fighterType === 'barbarian' ? images['axe_white'] : images['sword_white'];
+                            const overImage = props.fighterType === 'barbarian' ? images['axe_white'] : images['shortsword'];
                             const swingKey = props.overlayAnimationData?.startTime || 'sword-swing-overlay';
                             const swingDirection = ['left', 'up', 'down', 'right'].includes(overFacing) ? overFacing : 'right';
                             return (
@@ -406,7 +479,7 @@ export default function AnimationTile(props) {
                                         height: '60%',
                                         pointerEvents: 'none',
                                         zIndex: 5000,
-                                        filter: 'invert(1)',
+                                        filter: 'invert(1) drop-shadow(0 0 8px rgba(255,255,255,0.95)) drop-shadow(0 0 16px rgba(255,255,255,0.7))',
                                         transform: flip ? 'scaleX(-1)' : undefined
                                     }}
                                 />
@@ -426,7 +499,7 @@ export default function AnimationTile(props) {
                                     const top = y - gridRect.top;
                                     return (
                                         <img
-                                            src={images['fist_punch']}
+                                            src={image || images['fist_punch']}
                                             alt="punch"
                                             className="punch-animation-icon"
                                             style={{
@@ -437,6 +510,7 @@ export default function AnimationTile(props) {
                                                 height: props.tileSize * 0.6 + 'px',
                                                 pointerEvents: 'none',
                                                 zIndex: 5000,
+                                                filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.95)) drop-shadow(0 0 16px rgba(255,255,255,0.65))',
                                                 opacity: 1 - progress,
                                                 transition: 'left 0.1s linear, top 0.1s linear, opacity 0.1s linear',
                                             }}
@@ -507,10 +581,10 @@ export default function AnimationTile(props) {
             {props.animationType === 'windmill' && (
                 <>
                     <div className="windmill-burst" />
-                    {['N', 'S', 'E', 'W'].map(dir => (
+                    {['N', 'S', 'E', 'W'].map((dir, idx) => (
                         <img
                             key={dir}
-                            src={images['fist_punch']}
+                            src={props.animationData?.handIcons?.[idx] || images['fist_punch']}
                             alt={`windmill-${dir}`}
                             className={`windmill-fist fist-${dir}`}
                         />

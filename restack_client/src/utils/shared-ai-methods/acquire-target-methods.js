@@ -60,13 +60,13 @@ export const AcquireTargetMethods = {
 
     _pressureScore: (caller, target, combatants) => {
         if (!Array.isArray(target.targettedBy) || target.targettedBy.length === 0) return 0;
-        const callerIsMonsterOrMinion = caller.isMonster || caller.isMinion;
+        const callerIsMonster = !!caller.isMonster;
         return target.targettedBy.reduce((count, targetterId) => {
             if (!targetterId || targetterId === caller.id) return count;
             const source = combatants[targetterId];
             if (!source || source.dead) return count;
-            const sourceIsMonsterOrMinion = source.isMonster || source.isMinion;
-            if (callerIsMonsterOrMinion === sourceIsMonsterOrMinion) return count + 1;
+            const sourceIsMonster = !!source.isMonster;
+            if (callerIsMonster === sourceIsMonster) return count + 1;
             return count;
         }, 0);
     },
@@ -104,31 +104,31 @@ export const AcquireTargetMethods = {
 
     // Find the closest enemy (not dead, not self)
     acquireClosestEnemy: (caller, combatants) => {
-        // For monsters/minions: enemies are not monsters/minions. For fighters: enemies are monsters/minions.
-        const isMonsterOrMinion = caller.isMonster || caller.isMinion;
+        // For monsters: enemies are fighters/minions (not isMonster). For fighters/minions: enemies are monsters (isMonster).
+        const isMonster = !!caller.isMonster;
         // Exclude VCTs from possible targets
         const enemies = Object.values(combatants).filter(e => {
-            if (isMonsterOrMinion) {
-                return !e.dead && !e.invisible && e.id !== caller.id && !e.isMonster && !e.isMinion;
+            if (isMonster) {
+                return !e.dead && !e.invisible && e.id !== caller.id && !e.isMonster && !e.isVCT;
             } else {
-                return !e.dead && !e.invisible && e.id !== caller.id && (e.isMonster || e.isMinion);
+                return !e.dead && !e.invisible && e.id !== caller.id && e.isMonster && !e.isVCT;
             }
         });
         if (enemies.length === 0) return null;
         return AcquireTargetMethods._pickSpreadTarget(caller, enemies, combatants, null);
     },
 
-    // Prioritize closest 'soft' target (wizard, sage, rogue), fallback to closest enemy
+    // Prioritize closest 'soft' target (wizard, sage, ranger), fallback to closest enemy
     acquireClosestSoftTarget: (caller, combatants) => {
-        const SOFT_CLASSES = ['wizard', 'sage', 'rogue'];
+        const SOFT_CLASSES = ['wizard', 'sage', 'ranger'];
         const SOFT_CLASS_SET = new Set(SOFT_CLASSES);
-        const isMonsterOrMinion = caller.isMonster || caller.isMinion;
+        const isMonster = !!caller.isMonster;
         // Exclude VCTs from possible targets
         const enemies = Object.values(combatants).filter(e => {
-            if (isMonsterOrMinion) {
-                return !e.dead && !e.invisible && e.id !== caller.id && !e.isMonster && !e.isMinion;
+            if (isMonster) {
+                return !e.dead && !e.invisible && e.id !== caller.id && !e.isMonster && !e.isVCT;
             } else {
-                return !e.dead && !e.invisible && e.id !== caller.id && (e.isMonster || e.isMinion);
+                return !e.dead && !e.invisible && e.id !== caller.id && e.isMonster && !e.isVCT;
             }
         });
         if (enemies.length === 0) return null;

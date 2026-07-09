@@ -22,9 +22,6 @@ export default function LoginPage(props) {
   const [registrationInputPropsPass2, setRpass2] = useSpring(() => ({ x: '200px', opacity: 0, config: { mass: 5, tension: 250, friction: 40 } }))
   
   const [successConfirmation, setSuccessConfirmation] = useSpring(() => ({ x: '200px', opacity: 0, config: { mass: 5, tension: 350, friction: 40 } }))
-
-  const [validUser, setValidUser] = useState({})
-
   useEffect(() => {
     const handleKey = (e) => {
       if(e.key && e.key.toLowerCase() === 'enter'){
@@ -132,8 +129,6 @@ export default function LoginPage(props) {
                 username: registerName,
                 password: registerPass1
               }
-
-              setValidUser(registerRes)
               showRegistrationConfirmation(registerRes)
 
             } else {
@@ -176,12 +171,8 @@ export default function LoginPage(props) {
       setPane('confirmation')
     }, 90)
 
-    console.log('loginName', loginName, 'loginPass', 'validUser: ', validUser);
-    console.log('ok but registername: ', registerName, 'registerPass: ', registerPass1);
     props.refreshAllUsers()
-    let scopedValidUser = validUser
     setTimeout(()=>{
-      console.log('barnacle baily');
       // setSuccessConfirmation({x: '200px', opacity: 0})
 
       // setLname({x: '0px', opacity: 1})
@@ -189,9 +180,6 @@ export default function LoginPage(props) {
       //       setLpass({x: '0px', opacity: 1})
       //     }, 90)
       // props.login({username: registerName, password:registerPass1})
-      console.log('valid user',   );
-      console.log('scopedValidUser', scopedValidUser);
-      console.log('ok try this: ', registerRes);
       props.loginFromRegister(registerRes)
     },1500)
 

@@ -9,8 +9,8 @@ import { BoardManager } from './utils/board-manager'
 import { InventoryManager } from './utils/inventory-manager'
 import { CrewManager } from './utils/crew-manager'
 import { MonsterManager } from './utils/monster-manager'
-import { CombatManager } from './utils/combat-manager'
-import { AnimationManager } from './utils/animation-manager'
+import { CombatManagerRedux as CombatManager } from './utils/combat-manager-redux'
+import { AnimationManagerRedux as AnimationManager } from './utils/animation-manager-redux'
 import { OverlayManager } from './utils/overlay-manager';
 import { QuestManager } from './utils/quest-manager';
 

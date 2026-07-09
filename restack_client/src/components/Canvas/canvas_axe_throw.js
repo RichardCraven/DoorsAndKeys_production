@@ -30,20 +30,18 @@ const CanvasAxeThrow = ({ origin, target, height = 100, width = 100, targetDista
             const startX = origin.x * width + width / 2;
             const startY = origin.y * height + height / 2;
             let startTime = performance.now();
-            let endX, endY, dx, dy, distance;
+            let endX, endY, dx, dy;
             const duration = 900;
             if (targetDistance !== null) {
                 endX = (origin.x + targetDistance) * width + width / 2;
                 endY = target.y * height + height / 2;
                 dx = endX - startX;
                 dy = endY - startY;
-                distance = Math.sqrt(dx * dx + dy * dy);
             } else {
                 endX = target.x * width + width / 2;
                 endY = target.y * height + height / 2;
                 dx = endX - startX;
                 dy = endY - startY;
-                distance = Math.sqrt(dx * dx + dy * dy);
             }
 
         const img = new window.Image();

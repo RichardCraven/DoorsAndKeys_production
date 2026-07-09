@@ -71,7 +71,7 @@
   inset: 0;
   background-size: contain;
   background-repeat: no-repeat;
-  background-position: left bottom;
+  background-position: left top;
   filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.42));
 }
 
@@ -79,6 +79,8 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
+  text-align: center;
   gap: 22px;
   padding: 54px 56px;
   color: #f5ead6;
@@ -100,9 +102,21 @@
 
 .narrative-overlay__text {
   min-height: 9.6rem;
-  font-size: clamp(18px, 1.8vw, 25px);
-  line-height: 1.7;
-  color: rgba(245, 234, 214, 0.94);
+  font-size: clamp(14px, 1.4vw, 19px);
+  line-height: 1.8;
+  color: rgba(245, 234, 214, 0.92);
+  animation: dialogTextFadeIn 0.5s ease-out both;
+}
+
+@keyframes dialogTextFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes narrativeOverlayFadeIn {

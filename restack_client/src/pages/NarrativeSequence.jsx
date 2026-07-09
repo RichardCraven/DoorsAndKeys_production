@@ -322,28 +322,23 @@ export default function NarrativeSequence(props) {
 
     const runSequence = (type) => {
         let cloneArray;
-        console.log('run sequence type: ', type);
 
         switch(type){
             case 'intro':
-                console.log('in intro');
                 cloneArray =  Array.from(introSequence);
-                console.log('cloneArray: ', cloneArray);
             break;
             case 'death': 
             cloneArray =  Array.from(deathSequence);
             break;
             default:
-                console.log('NO TYPE'); return
+                return
         }
     
         let counter;
         const fireItOff = () => {
-            console.log('fire it off, cloneArray: ', cloneArray);
             if(!cloneArray) return;
             // let sequence = counter % 2 === 1 ? introSequenceOdd.shift() : introSequenceEven.shift()
             let sequence = cloneArray.shift();
-            console.log('sequence: ', sequence);
             if(sequence.id % 2 === 1){
                 setCurrentOddSequence(sequence)
             } else {
@@ -353,7 +348,6 @@ export default function NarrativeSequence(props) {
             counter = sequence.id;
     
             let nextSequence = cloneArray.find(e=>e.id === counter + 1)
-            console.log('next sequence: ', nextSequence);
             if(counter % 2 === 0 && nextSequence){
                 delay(1.5).then(()=>{
                     setCurrentOddSequence(nextSequence)
@@ -365,7 +359,6 @@ export default function NarrativeSequence(props) {
             }
     
             delay(4).then(()=>{
-                console.log('inside delay');
                 if(cloneArray.length){
                     fireItOff();
                 } else {
@@ -377,14 +370,13 @@ export default function NarrativeSequence(props) {
                             props.endDeathSequence();
                         break;
                         default:
-                            console.log('NO TYPE'); return
+                            return
                     }
                     endSequenceAndNav();
                 }
             })
         }
         const endSequenceAndNav = () => {
-            console.log('end Sequence and Navb');
             switch(type){
                 case 'intro':
                     props.endIntroSequence();
@@ -406,7 +398,7 @@ export default function NarrativeSequence(props) {
                     })
                     break;
                     default:
-                        console.log('NO TYPE'); return
+                        return
                     }
                 }
                 // props.endIntroSequence();
@@ -415,7 +407,6 @@ export default function NarrativeSequence(props) {
         fireItOff();
     }
   useEffect(()=> {
-    console.log('in use effect, props', props);
     switch(props.sequenceType){
         case 'intro':
             setCurrentOddSequence(introSequence[0])
@@ -470,11 +461,13 @@ export default function NarrativeSequence(props) {
          />}
 
          {currentSequence && currentSequence.id%2===0 && <div 
+         key={currentSequence.id}
          className="text-container">
             <Typewriter text={currentSequence.text} delay={40}></Typewriter>
          </div>}
 
          {currentSequence && currentSequence.id%2===1 && <div 
+         key={currentSequence.id}
          className="text-container">
             <Typewriter text={currentSequence.text} delay={40}></Typewriter>
          </div>}

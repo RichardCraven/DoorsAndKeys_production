@@ -1,7 +1,6 @@
 import React from 'react';
 import Overlay from '../Overlay';
 import { ROCK_DURATION } from '../../utils/shared-constants';
-import * as images from '../../utils/images';
 
 const MonstersCombatGrid = ({
     monster,
@@ -28,6 +27,55 @@ const MonstersCombatGrid = ({
     teleportingFighterId,
     fearCastingActive,
 }) => {
+    const getLiveCombatant = (id) => (combatManager && typeof combatManager.getCombatant === 'function') ? combatManager.getCombatant(id) : null;
+
+    const getActiveEffects = (combatant) => {
+        const list = [];
+        if (!combatant) return list;
+        const liveUnit = combatManager?.getCombatant?.(combatant.id) || combatant;
+        if (liveUnit.dead || (typeof liveUnit.hp === 'number' && liveUnit.hp <= 0)) {
+            return [];
+        }
+
+        if (liveUnit.frozen) list.push({ key: 'frozen', icon: images.frozen, border: '#00bfff' });
+        if (liveUnit.stunned && !liveUnit.feared) list.push({ key: 'stunned', icon: images.stunned || images.whiteskull || images.induce_fear, border: '#f5c842' });
+        if (liveUnit.feared) list.push({ key: 'fear', icon: images.fear || images.induce_fear, border: '#8e2de2' });
+        if (liveUnit.bleed) list.push({ key: 'bleed', icon: images.bleeding, border: '#e05555' });
+        if (liveUnit.poison) list.push({ key: 'poison', icon: images.poison, border: '#7affa0' });
+        if (liveUnit.shieldWallActive) list.push({ key: 'shield_wall', icon: images.shield_wall, border: '#90c4ff' });
+        if (liveUnit.defensiveStanceActive || liveUnit.defensiveStance) list.push({ key: 'defensive_stance', icon: images.soldier_defensive_stance, border: '#cccccc' });
+        if (liveUnit.berserkerActive) list.push({ key: 'berserker', icon: images.barbarian_berserker, border: '#ff4444' });
+        if (liveUnit.weaknessRevealed) list.push({ key: 'weakness', icon: images.weakness_doubled, border: '#cc44ff' });
+        if (liveUnit.marked) list.push({ key: 'marked', icon: images.ranger_mark, border: '#ffaa00' });
+        if (liveUnit.ensnared) list.push({ key: 'ensnared', icon: images.ranger_ensnare, border: '#00ff00' });
+        if (liveUnit.astralBeingActive) list.push({ key: 'astral_being', icon: images.monk_astral_being, border: '#21e6c1' });
+        if (liveUnit.thirdEyeActive) list.push({ key: 'third_eye', icon: images.monk_third_eye, border: '#21e6c1' });
+
+        const normalizeName = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, '_');
+        const hexDebuff = Array.isArray(liveUnit.activeDebuffs) ? liveUnit.activeDebuffs.find(d => d && normalizeName(d.name) === 'hexed') : null;
+        if (hexDebuff || liveUnit.hexed) {
+            list.push({ key: 'hexed', icon: images.hex, border: '#cc44ff' });
+        }
+        const polymorphDebuff = Array.isArray(liveUnit.activeDebuffs) ? liveUnit.activeDebuffs.find(d => d && normalizeName(d.name) === 'polymorphed') : null;
+        if (polymorphDebuff || liveUnit.polymorphed) {
+            list.push({ key: 'polymorphed', icon: images.polymorph, border: '#22c55e' });
+        }
+        const betrayedDebuff = Array.isArray(liveUnit.activeDebuffs) ? liveUnit.activeDebuffs.find(d => d && normalizeName(d.name) === 'betrayed') : null;
+        if (betrayedDebuff || liveUnit.betrayed) {
+            list.push({ key: 'betrayed', icon: images.betrayal, border: '#ff00ff' });
+        }
+
+        return list;
+    };
+
+    const formatDamageIndicatorValue = (value) => {
+        if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+        if (typeof value === 'string') {
+            const numericValue = Number(value);
+            if (value.trim() !== '' && Number.isFinite(numericValue)) return Math.round(numericValue);
+        }
+        return value;
+    };
     const [monsterHitFlashKey, setMonsterHitFlashKey] = React.useState(0); // eslint-disable-line no-unused-vars
     const [showMonsterHitFlash, setShowMonsterHitFlash] = React.useState(false); // eslint-disable-line no-unused-vars
     const prevMonsterWounded = React.useRef(false); // eslint-disable-line no-unused-vars
@@ -49,6 +97,7 @@ const MonstersCombatGrid = ({
     const [indicatorQueues, setIndicatorQueues] = React.useState({}); // { [id]: [indicatorObjects] }
     const indicatorTimeouts = React.useRef({});
     const STAGGER_DELAY = 150; // ms between instantiations
+    const processedIndicatorsRef = React.useRef(new Set());
 
     // Add new indicators to the queue
     React.useEffect(() => {
@@ -57,12 +106,18 @@ const MonstersCombatGrid = ({
             const id = entity.id;
             setIndicatorQueues(prev => {
                 const prevQueue = prev[id] || [];
-                const visibleIds = (visibleDamageIndicators[id] || []).map(e => e.id);
-                const queueIds = prevQueue.map(e => e.id);
                 const newIndicators = entity.damageIndicators
-                    .filter(e => e && !visibleIds.includes(e.id) && !queueIds.includes(e.id))
+                    .map((e, index) => {
+                        if (!e) return null;
+                        const stableId = e.id || `${id}_indicator_${index}`;
+                        return { ...e, id: stableId };
+                    })
+                    .filter(e => e && !processedIndicatorsRef.current.has(e.id))
                     .map(e => e.timestamp ? e : { ...e, timestamp: Date.now() });
                 if (newIndicators.length === 0) return prev;
+
+                newIndicators.forEach(e => processedIndicatorsRef.current.add(e.id));
+
                 return { ...prev, [id]: [...prevQueue, ...newIndicators] };
             });
         });
@@ -80,14 +135,16 @@ const MonstersCombatGrid = ({
             return cleaned;
         });
         // Capture ref at effect-run time, not cleanup time (satisfies react-hooks/exhaustive-deps)
-        const timeoutsToClean = indicatorTimeouts.current;
-        // Cleanup on unmount
-        return () => {
-            Object.values(timeoutsToClean).forEach(clearTimeout);
-        };
-    // visibleDamageIndicators omitted: including it causes infinite re-renders since this effect calls setVisibleDamageIndicators
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // visibleDamageIndicators omitted: including it causes infinite re-renders since this effect calls setVisibleDamageIndicators
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [battleData]);
+
+    React.useEffect(() => {
+        return () => {
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+            Object.values(indicatorTimeouts.current).forEach(clearTimeout);
+        };
+    }, []);
 
     // Staggered instantiation: show next indicator from queue after delay
     React.useEffect(() => {
@@ -100,7 +157,24 @@ const MonstersCombatGrid = ({
             if (visibleArr.length === 0 || (now - lastTimestamp >= STAGGER_DELAY)) {
                 // Show next in queue
                 const [next, ...rest] = indicatorQueues[id];
-                setVisibleDamageIndicators(prev => ({ ...prev, [id]: [...(prev[id] || []), next] }));
+                if (visibleArr.some(e => e.id === next.id)) {
+                    setIndicatorQueues(prev => ({ ...prev, [id]: rest }));
+                    return;
+                }
+                let slot = 0;
+                if (visibleArr.length > 0) {
+                    const occupiedSlots = new Set(visibleArr.map(e => e.slot || 0));
+                    while (occupiedSlots.has(slot)) {
+                        slot++;
+                    }
+                }
+                const yOffset = slot * 28;
+                const nextWithOffset = { ...next, slot, yOffset };
+                setVisibleDamageIndicators(prev => {
+                    const currentArr = prev[id] || [];
+                    if (currentArr.some(e => e.id === next.id)) return prev;
+                    return { ...prev, [id]: [...currentArr, nextWithOffset] };
+                });
                 setIndicatorQueues(prev => ({ ...prev, [id]: rest }));
                 // Set timer to remove after ROCK_DURATION
                 if (!indicatorTimeouts.current[next.id]) {
@@ -122,6 +196,16 @@ const MonstersCombatGrid = ({
         });
     }, [indicatorQueues, visibleDamageIndicators, battleData]);
 
+    const isMountedRef = React.useRef(true);
+    React.useEffect(() => {
+        isMountedRef.current = true;
+        return () => {
+            isMountedRef.current = false;
+        };
+    }, []);
+
+    const deathTimeoutsRef = React.useRef({});
+
     // Delay removal of monster/minion portrait after death for death animation
     const [showDeathAnimation, setShowDeathAnimation] = React.useState({});
     const [fullyDead, setFullyDead] = React.useState({});
@@ -134,15 +218,25 @@ const MonstersCombatGrid = ({
                 // Fallback: if onAnimationEnd never fires (e.g. animation conflict),
                 // force fullyDead after the death animation duration + buffer.
                 const id = monster.id;
+                if (deathTimeoutsRef.current[id]) {
+                    clearTimeout(deathTimeoutsRef.current[id]);
+                }
                 const t = setTimeout(() => {
-                    setFullyDead(prev => {
-                        if (!prev[id]) return { ...prev, [id]: true };
-                        return prev;
-                    });
-                    setShowDeathAnimation(prev => ({ ...prev, [id]: false }));
+                    if (isMountedRef.current) {
+                        setFullyDead(prev => {
+                            if (!prev[id]) return { ...prev, [id]: true };
+                            return prev;
+                        });
+                        setShowDeathAnimation(prev => ({ ...prev, [id]: false }));
+                    }
+                    delete deathTimeoutsRef.current[id];
                 }, 2400); // meltDownDeath is 2000ms + 400ms buffer
-                return () => clearTimeout(t);
+                deathTimeoutsRef.current[id] = t;
             } else if (!battleData[monster.id].dead && (showDeathAnimation[monster.id] || fullyDead[monster.id])) {
+                if (deathTimeoutsRef.current[monster.id]) {
+                    clearTimeout(deathTimeoutsRef.current[monster.id]);
+                    delete deathTimeoutsRef.current[monster.id];
+                }
                 setShowDeathAnimation(prev => ({ ...prev, [monster.id]: false }));
                 setFullyDead(prev => ({ ...prev, [monster.id]: false }));
             }
@@ -153,7 +247,26 @@ const MonstersCombatGrid = ({
                 // Don't trigger the death animation for bifurcating minions — they use their own shrink animation
                 if (minion.dead && !minion.bifurcating && !showDeathAnimation[minion.id] && !fullyDead[minion.id]) {
                     setShowDeathAnimation(prev => ({ ...prev, [minion.id]: true }));
+                    const id = minion.id;
+                    if (deathTimeoutsRef.current[id]) {
+                        clearTimeout(deathTimeoutsRef.current[id]);
+                    }
+                    const t = setTimeout(() => {
+                        if (isMountedRef.current) {
+                            setFullyDead(prev => {
+                                if (!prev[id]) return { ...prev, [id]: true };
+                                return prev;
+                            });
+                            setShowDeathAnimation(prev => ({ ...prev, [id]: false }));
+                        }
+                        delete deathTimeoutsRef.current[id];
+                    }, 2400);
+                    deathTimeoutsRef.current[id] = t;
                 } else if (!minion.dead && (showDeathAnimation[minion.id] || fullyDead[minion.id])) {
+                    if (deathTimeoutsRef.current[minion.id]) {
+                        clearTimeout(deathTimeoutsRef.current[minion.id]);
+                        delete deathTimeoutsRef.current[minion.id];
+                    }
                     setShowDeathAnimation(prev => ({ ...prev, [minion.id]: false }));
                     setFullyDead(prev => ({ ...prev, [minion.id]: false }));
                 }
@@ -162,25 +275,14 @@ const MonstersCombatGrid = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [battleData, monster]);
 
-    // Fallback: ensure minion fullyDead is set after death animation even if onAnimationEnd is missed
     React.useEffect(() => {
-        const timers = [];
-        Object.values(battleData).forEach(minion => {
-            if (minion.isMinion && minion.dead && showDeathAnimation[minion.id] && !fullyDead[minion.id]) {
-                const id = minion.id;
-                const t = setTimeout(() => {
-                    setFullyDead(prev => {
-                        if (!prev[id]) return { ...prev, [id]: true };
-                        return prev;
-                    });
-                    setShowDeathAnimation(prev => ({ ...prev, [id]: false }));
-                }, 2400);
-                timers.push(t);
+        const timeouts = deathTimeoutsRef.current;
+        return () => {
+            if (timeouts) {
+                Object.values(timeouts).forEach(t => clearTimeout(t));
             }
-        });
-        return () => timers.forEach(t => clearTimeout(t));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [showDeathAnimation]);
+        };
+    }, []);
 
     // Determine if monster or minion is teleporting (by id)
     const isTeleporting = (id) => {
@@ -330,7 +432,7 @@ const MonstersCombatGrid = ({
         vct = battleData[`${monster.id}_VCT`];
     }
     return (
-        <div className="mb-col monster-pane" style={{ overflow: 'visible' }}>
+        <div className="mb-col monster-pane" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
             {/* VCT: render above the monster if present */}
             {vct && (
                 <div
@@ -346,11 +448,11 @@ const MonstersCombatGrid = ({
                         className="vct-portrait-wrapper"
                         style={{
                             left: `${vct.coordinates.x * 100 + (SHOW_TILE_BORDERS ? vct.coordinates.x * 2 : 0)}px`,
+                            pointerEvents: 'auto',
                             zIndex: 300,
                             width: `${TILE_SIZE}px`,
                             height: `${TILE_SIZE}px`,
                             position: 'absolute',
-                            pointerEvents: 'none',
                             overflow: 'visible',
                         }}
                     >
@@ -358,8 +460,8 @@ const MonstersCombatGrid = ({
                         <div className="portrait-overlay" style={{ zIndex: 301, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' }}>
                             <div className="damage-indicator-container" style={{ overflow: 'visible' }}>
                                 {(visibleDamageIndicators[vct.id] || []).map((indicator, idx, arr) => {
-                                    const isStatDebuff = !indicator.isCrit && !indicator.isMiss && typeof indicator.value === 'string' && indicator.type !== 'robbed';
-                                    const yOffset = idx * 28;
+                                    const isStatDebuff = !indicator.isCrit && !indicator.isMiss && typeof indicator.value === 'string' && indicator.type !== 'robbed' && isNaN(indicator.value);
+                                    const yOffset = typeof indicator.yOffset === 'number' ? indicator.yOffset : 0;
                                     return (
                                         <div
                                             className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${indicator.isCrit ? ' crit' : ''}${indicator.type === 'heal' ? ' heal' : ''}${indicator.type === 'robbed' ? ' robbed' : ''}${indicator.isMiss ? ' miss' : ''}`}
@@ -374,7 +476,7 @@ const MonstersCombatGrid = ({
                                                 pointerEvents: 'none',
                                             }}
                                         >
-                                            {indicator.value}
+                                            {formatDamageIndicatorValue(indicator.value)}
                                         </div>
                                     );
                                 })}
@@ -398,20 +500,12 @@ const MonstersCombatGrid = ({
                         className={`monster-wrapper ${battleData[monster.id]?.rocked ? 'rocked' : ''} ${battleData[monster.id]?.wounded ? 'hit' : ''} ${battleData[monster.id]?.wounded ? getHitAnimation(battleData[monster.id]) : ''} ${battleData[monster.id]?.wounded ? 'hit-flash' : ''} ${battleData[monster.id]?.facing === 'right' ? 'reversed' : ''} ${battleData[monster.id]?.stunned ? 'stunned' : ''}`}
                         style={computeHitVars(battleData[monster.id])}
                     >
-                        <div
-                            className="action-bar-wrapper"
-                            style={{
-                                width: !!battleData[monster.id]?.targetId ? `${combatManager.getDistanceToTargetWidthString(battleData[monster.id])}px` : '5px',
-                                left: `calc(100px * ${combatManager.getCombatant(battleData[monster.id]?.targetId)?.coordinates.x} + 50px)`
-                            }}
-                        >
-                            <div className={`action-bar ${battleData[monster.id]?.attacking ? (battleData[monster.id]?.facing === 'right' ? 'monsterHitsAnimation_LtoR' : 'monsterHitsAnimation') : ''}`}></div>
-                        </div>
+
                         {/* {(() => {
                             let weaponWrapper = null;
-                            if (battleData[monster.id] && battleData[monster.id].pendingAttack) {
-                                const pendingAttack = battleData[monster.id].pendingAttack;
-                                if (pendingAttack && pendingAttack.type === 'grasp') {
+                            if (battleData[monster.id] && battleData[monster.id].activeAbility) {
+                                const activeAbility = battleData[monster.id].activeAbility;
+                                if (activeAbility && activeAbility.type === 'grasp') {
                                     debugger;
                                 }
                                 weaponWrapper = (
@@ -424,7 +518,7 @@ const MonstersCombatGrid = ({
                                             left: battleData[monster.id]?.facing === 'right'
                                                 ? `${battleData[monster.id]?.coordinates.x * 100 + 65 + (battleData[monster.id]?.coordinates.x * 2)}px`
                                                 : `${battleData[monster.id]?.coordinates.x * 100 - 45 + (battleData[monster.id]?.coordinates.x * 2)}px`,
-                                            backgroundImage: `url(${battleData[monster.id].pendingAttack.icon})`
+                                            backgroundImage: `url(${battleData[monster.id].activeAbility.icon})`
                                         }}
                                     ></div>
                                 );
@@ -435,12 +529,52 @@ const MonstersCombatGrid = ({
                             className="portrait-wrapper monster-portrait-wrapper"
                             style={{
                                 left: `${battleData[monster.id]?.coordinates.x * 100 + (SHOW_TILE_BORDERS ? battleData[monster.id]?.coordinates.x * 2 : 0)}px`,
+                                pointerEvents: 'auto',
                                 zIndex: `${battleData[monster.id]?.dead ? '0' : '200'}`,
                                 overflow: 'visible',
                                 ...transitionStyle(monster.id),
                                 border: undefined
                             }}
                         >
+                            {/* Effect Icons Overlay */}
+                            <div style={{
+                                position: 'absolute',
+                                top: '-6px',
+                                right: '-6px',
+                                display: 'flex',
+                                gap: '2px',
+                                zIndex: 350,
+                                pointerEvents: 'none'
+                            }}>
+                                {getActiveEffects(battleData[monster.id]).map((eff) => (
+                                    <div
+                                        key={eff.key}
+                                        className="effect-icon-active"
+                                        style={{
+                                            width: '20px',
+                                            height: '20px',
+                                            borderRadius: '50%',
+                                            backgroundColor: '#111',
+                                            border: `2px solid ${eff.border}`,
+                                            boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                                            position: 'relative'
+                                        }}
+                                    >
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: 0,
+                                            left: 0,
+                                            width: '100%',
+                                            height: '100%',
+                                            borderRadius: '50%',
+                                            backgroundImage: `url(${eff.icon?.default || eff.icon})`,
+                                            backgroundSize: 'contain',
+                                            backgroundRepeat: 'no-repeat',
+                                            backgroundPosition: 'center'
+                                        }} />
+                                    </div>
+                                ))}
+                            </div>
                             <div
                                 className="portrait-relative-container"
                                 onMouseEnter={() => portraitHovered(monster.id)}
@@ -453,10 +587,10 @@ const MonstersCombatGrid = ({
                                     className={`portrait monster-portrait
                                         ${greetingInProcess ? 'enlarged' : ''}
                                         ${battleData[monster.id]?.active ? 'active' : ''}
-                                        ${battleData[monster.id]?.dead ? 'dead monsterDeadAnimation' : ''}
+                                        ${portraitHoveredId === monster.id ? 'hover-linked-target' : ''}
+                                        ${battleData[monster.id]?.dead ? 'dead mummyDeadAnimation' : ''}
                                         ${battleData[monster.id]?.missed ? (battleData[monster.id]?.facing === 'right' ? 'missed-reversed' : 'missed') : ''}
                                         ${selectedMonster?.id === monster.id ? 'selected' : ''}
-                                        ${selectedFighter?.targetId === monster.id ? 'targetted' : ''}
                                         ${battleData[monster.id]?.facing === 'right' ? 'reversed' : ''}
                                         ${battleData[monster.id]?.facing === 'up' ? 'facing-up' : ''}
                                         ${battleData[monster.id]?.facing === 'down' ? 'facing-down' : ''}
@@ -473,7 +607,7 @@ const MonstersCombatGrid = ({
                                     }}
                                     style={{
                                         backgroundImage: monster.portrait ? `url(${monster.portrait})` : 'none',
-                                        filter: `saturate(${((battleData[monster.id]?.hp / monster.stats.hp) * 100) / 2}) sepia(${portraitHoveredId === monster.id ? '2' : '0'})`,
+                                        filter: `sepia(${portraitHoveredId === monster.id ? '2' : '0'}) ${battleData[monster.id]?.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''}`,
                                         zIndex: 1,
                                         position: 'relative',
                                         // Never apply BulgePortrait when dead — it competes with meltDownDeath
@@ -508,6 +642,19 @@ const MonstersCombatGrid = ({
                                     {(showMonsterHitFlash || battleData[monster.id]?.wounded) && (
                                         <div className="hit-flash-overlay" key={monsterHitFlashKey} />
                                     )}
+                                    {/* Betrayal Overlay (pulsing pink glow) */}
+                                    {(battleData[monster.id]?.betrayed || battleData[monster.id]?.activeDebuffs?.some(d => d && d.name === 'Betrayed')) && (
+                                        <div style={{
+                                            boxSizing: 'border-box',
+                                            position: 'absolute',
+                                            top: 0, left: 0, width: '100%', height: '100%',
+                                            borderRadius: '6px',
+                                            pointerEvents: 'none',
+                                            zIndex: 14,
+                                            animation: 'betrayalPulseGlow 1.5s ease-in-out infinite alternate',
+                                            border: '2px solid rgba(255, 0, 255, 0.6)'
+                                        }} />
+                                    )}
                                 </div>
                                 {/* Fear-cast glow — behind the portrait via z-index, after in DOM */}
                                 {fearCastingActive && !monster.isMinion && (
@@ -515,31 +662,29 @@ const MonstersCombatGrid = ({
                                 )}
                                 {/* Overlay and indicators above portrait */
 }                                <div className={`portrait-overlay ${battleData[monster.id]?.frozen ? 'frozen' : ''}`} style={{zIndex: 2, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%'}}>
-                                    {!vct && (
-                                        <div className="damage-indicator-container" style={{ overflow: 'visible' }}>
-                                            {(visibleDamageIndicators[monster.id] || []).map((indicator, idx, arr) => {
-                                                const yOffset = idx * 28;
-                                                const isStatDebuff = !indicator.isCrit && typeof indicator.value === 'string' && indicator.type !== 'robbed';
-                                                return (
-                                                    <div
-                                                        className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${indicator.isCrit ? ' crit' : ''}${indicator.type === 'heal' ? ' heal' : ''}${indicator.type === 'robbed' ? ' robbed' : ''}`}
-                                                        key={indicator.id}
-                                                        style={{
-                                                            transform: `translateY(-${yOffset}px)`,
-                                                            zIndex: 10 + (arr.length - idx),
-                                                            position: 'absolute',
-                                                            left: 0,
-                                                            right: 0,
-                                                            margin: '0 auto',
-                                                            pointerEvents: 'none',
-                                                        }}
-                                                    >
-                                                        {indicator.value}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
+                                    <div className="damage-indicator-container" style={{ overflow: 'visible' }}>
+                                        {(visibleDamageIndicators[monster.id] || []).map((indicator, idx, arr) => {
+                                            const yOffset = typeof indicator.yOffset === 'number' ? indicator.yOffset : 0;
+                                            const isStatDebuff = !indicator.isCrit && !indicator.isMiss && typeof indicator.value === 'string' && indicator.type !== 'robbed' && isNaN(indicator.value);
+                                            return (
+                                                <div
+                                                    className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${indicator.isCrit ? ' crit' : ''}${indicator.type === 'heal' ? ' heal' : ''}${indicator.type === 'robbed' ? ' robbed' : ''}${indicator.isMiss ? ' miss' : ''}`}
+                                                    key={indicator.id}
+                                                    style={{
+                                                        transform: `translateY(-${yOffset}px)`,
+                                                        zIndex: 10 + (arr.length - idx),
+                                                        position: 'absolute',
+                                                        left: 0,
+                                                        right: 0,
+                                                        margin: '0 auto',
+                                                        pointerEvents: 'none',
+                                                    }}
+                                                >
+                                                    {formatDamageIndicatorValue(indicator.value)}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                                 {/* { !battleData[monster.id]?.dead && (
                                   <div className="targetted-by-container" style={{zIndex: 3, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%'}}>
@@ -555,7 +700,7 @@ const MonstersCombatGrid = ({
                                 {/* Target indicator: tiny portrait of whoever this monster is targeting */}
                                 {(() => {
                                     const targetId = battleData[monster.id]?.targetId;
-                                    const target = targetId ? combatManager.getCombatant(targetId) : null;
+                                    const target = targetId ? getLiveCombatant(targetId) : null;
                                     return target?.portrait && !target?.invisible && !battleData[monster.id]?.dead ? (
                                         <div className="monster-target-indicator" style={{ zIndex: 10 }}>
                                             <div
@@ -589,23 +734,32 @@ const MonstersCombatGrid = ({
                                 };
                                 return <Overlay key={i} animationType={overlay.type} data={overlayData} />;
                             })}
-                            <div className="indicators-wrapper">
-                                <div className="monster-hp-bar hp-bar">
-                                    {!battleData[monster.id]?.dead && (
+                            {battleData[monster.id] && !battleData[monster.id]?.dead && battleData[monster.id].isChargingTransform && (
+                                <Overlay animationType="transform_charging_overlay" data={battleData[monster.id]} />
+                            )}
+                            {!battleData[monster.id]?.dead && (
+                                <div className="indicators-wrapper" style={{ display: 'flex', flexDirection: 'column-reverse', position: 'absolute', bottom: 0, left: 0, width: '100%', pointerEvents: 'none' }}>
+                                    <div className="monster-hp-bar hp-bar" style={{ position: 'relative', height: '4px' }}>
                                         <div className="red-fill" style={{ width: `${(battleData[monster.id]?.hp / battleData[monster.id]?.stats.hp) * 100}%` }}></div>
+                                    </div>
+                                    {!(battleData[monster.id]?.type && String(battleData[monster.id]?.type).includes('spider')) && (
+                                        combatManager && combatManager.round !== undefined ? (
+                                            <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative' }}>
+                                                <div className="white-fill" style={{ height: '100%', backgroundColor: '#ffffff', width: `${(battleData[monster.id]?.endurance / battleData[monster.id]?.maxEndurance) * 100}%` }}></div>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <div className="monster-energy-bar energy-bar" style={{ position: 'relative', height: '4px' }}>
+                                                    <div className="yellow-fill" style={{ width: `calc(${battleData[monster.id]?.energy}%)` }}></div>
+                                                </div>
+                                                <div className="tempo-bar" style={{ position: 'relative', height: '4px' }}>
+                                                    <div className="tempo-indicator" style={{ left: `calc(${battleData[monster.id]?.tempo}% - 4px)` }}></div>
+                                                </div>
+                                            </>
+                                        )
                                     )}
                                 </div>
-                                <div className="monster-energy-bar energy-bar">
-                                    {!battleData[monster.id]?.dead && (
-                                        <div className="yellow-fill" style={{ width: `calc(${battleData[monster.id]?.energy}%)` }}></div>
-                                    )}
-                                </div>
-                                <div className="tempo-bar">
-                                    {!battleData[monster.id]?.dead && (
-                                        <div className="tempo-indicator" style={{ left: `calc(${battleData[monster.id]?.tempo}% - 4px)` }}></div>
-                                    )}
-                                </div>
-                            </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -616,8 +770,12 @@ const MonstersCombatGrid = ({
                         key={minion.id}
                         className="lane-wrapper"
                         style={{
-                            top: `${minion.coordinates.y * TILE_SIZE + (SHOW_TILE_BORDERS ? minion.coordinates.y * 2 : 0)}px`,
-                            height: `${TILE_SIZE}px`,
+                        top: `${minion.coordinates.y * TILE_SIZE + (SHOW_TILE_BORDERS ? minion.coordinates.y * 2 : 0)}px`,
+                        height: `${TILE_SIZE}px`,
+                        position: 'absolute',
+                        left: '0px',
+                        width: '100%',
+                        pointerEvents: 'none',
                             ...transitionStyle(minion.id)
                         }}
                     >
@@ -625,16 +783,8 @@ const MonstersCombatGrid = ({
                             className={`monster-wrapper ${minion.rocked ? 'rocked' : ''} ${minion.wounded ? 'hit' : ''} ${minion.wounded ? getHitAnimation(minion) : ''} ${minion.wounded ? 'hit-flash' : ''} ${minion.facing === 'right' ? 'reversed' : ''} ${minion.stunned ? 'stunned' : ''}`}
                             style={computeHitVars(minion)}
                         >
-                            <div
-                                className="action-bar-wrapper"
-                                style={{
-                                    width: !!minion.targetId ? `${combatManager.getDistanceToTargetWidthString(minion)}px` : '5px',
-                                    left: `calc(100px * ${combatManager.getCombatant(minion.targetId)?.coordinates.x} + 50px)`
-                                }}
-                            >
-                                <div className={`action-bar ${minion.attacking ? (minion.facing === 'right' ? 'monsterHitsAnimation_LtoR' : 'monsterHitsAnimation') : ''}`}></div>
-                            </div>
-                            {/* {minion.pendingAttack && (
+
+                            {/* {minion.activeAbility && (
                                 <div
                                     className={`weapon-wrapper
                                         ${getMonsterWeaponAnimation(minion)}
@@ -644,7 +794,7 @@ const MonstersCombatGrid = ({
                                         left: minion.facing === 'right'
                                             ? `${minion.coordinates.x * 100 + 65 + (minion.coordinates.x * 2)}px`
                                             : `${minion.coordinates.x * 100 - 45 + (minion.coordinates.x * 2)}px`,
-                                        backgroundImage: `url(${minion.pendingAttack.icon})`
+                                        backgroundImage: `url(${minion.activeAbility.icon})`
                                     }}
                                 ></div>
                             )} */}
@@ -652,19 +802,59 @@ const MonstersCombatGrid = ({
                                 className="portrait-wrapper"
                                 style={{
                                     left: `${minion.coordinates.x * 100 + (SHOW_TILE_BORDERS ? minion.coordinates.x * 2 : 0)}px`,
+                                    pointerEvents: 'auto',
                                     zIndex: `${minion.dead ? '0' : '100'}`,
                                     ...transitionStyle(minion.id)
                                 }}
                             >
+                                {/* Effect Icons Overlay */}
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '-6px',
+                                    right: '-6px',
+                                    display: 'flex',
+                                    gap: '2px',
+                                    zIndex: 350,
+                                    pointerEvents: 'none'
+                                }}>
+                                    {getActiveEffects(minion).map((eff) => (
+                                        <div
+                                            key={eff.key}
+                                            className="effect-icon-active"
+                                            style={{
+                                                width: '20px',
+                                                height: '20px',
+                                                borderRadius: '50%',
+                                                backgroundColor: '#111',
+                                                border: `2px solid ${eff.border}`,
+                                                boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                                                position: 'relative'
+                                            }}
+                                        >
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                width: '100%',
+                                                height: '100%',
+                                                borderRadius: '50%',
+                                                backgroundImage: `url(${eff.key === 'stunned' ? images.stunned : (eff.icon?.default || eff.icon)})`,
+                                                backgroundSize: 'contain',
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'center'
+                                            }} />
+                                        </div>
+                                    ))}
+                                </div>
                                 <div
                                     className={`portrait minion-portrait
                                             ${minion.active ? 'active' : ''}
-                                            ${minion.bifurcating ? 'bifurcatingAnimation' : (minion.dead ? 'dead monsterDeadAnimation' : '')}
+                                            ${portraitHoveredId === minion.id ? 'hover-linked-target' : ''}
+                                            ${minion.bifurcating ? 'bifurcatingAnimation' : (minion.dead ? (minion.key === 'mummy' || minion.type === 'mummy' ? 'dead mummyDeadAnimation' : 'dead monsterDeadAnimation') : '')}
                                             ${minion.isBifurcateSmall ? 'bifurcate-copy' : ''}
                                             ${minion.isBifurcateCopy ? 'bifurcate-copy-spawning' : ''}
                                             ${minion.missed ? (minion.facing === 'right' ? 'missed-reversed' : 'missed') : ''}
                                             ${selectedMonster?.id === minion.id ? 'selected' : ''}
-                                            ${selectedFighter?.targetId === minion.id ? 'targetted' : ''}
                                             ${minion.facing === 'right' ? 'reversed' : ''}
                                             ${minion.facing === 'up' ? 'facing-up' : ''}
                                             ${minion.facing === 'down' ? 'facing-down' : ''}
@@ -673,7 +863,7 @@ const MonstersCombatGrid = ({
                                         }
                                     style={{
                                         backgroundImage: `url(${minion.portrait})`,
-                                        filter: `saturate(${((minion.hp / minion.stats.hp) * 100) / 2}) ${minion.portraitFilter || ''} sepia(${portraitHoveredId === minion.id ? '2' : '0'})`,
+                                        filter: `${minion.portraitFilter || ''} sepia(${portraitHoveredId === minion.id ? '2' : '0'}) ${minion.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''}`,
                                         zIndex: 2, // Always below fighter portraits
                                         // Never apply BulgePortrait when dead — it competes with meltDownDeath
                                         animation: (minion.wounded && !minion.dead) ? 'BulgePortrait var(--portrait-animation-duration, 420ms) var(--portrait-animation-timing, cubic-bezier(.2,.8,.2,1))' : undefined,
@@ -720,6 +910,19 @@ const MonstersCombatGrid = ({
                                     {minionHitFlash[minion.id] && (
                                         <div className="hit-flash-overlay" />
                                     )}
+                                    {/* Betrayal Overlay (pulsing pink glow) */}
+                                    {(minion.betrayed || minion.activeDebuffs?.some(d => d && d.name === 'Betrayed')) && (
+                                        <div style={{
+                                            boxSizing: 'border-box',
+                                            position: 'absolute',
+                                            top: 0, left: 0, width: '100%', height: '100%',
+                                            borderRadius: '6px',
+                                            pointerEvents: 'none',
+                                            zIndex: 14,
+                                            animation: 'betrayalPulseGlow 1.5s ease-in-out infinite alternate',
+                                            border: '2px solid rgba(255, 0, 255, 0.6)'
+                                        }} />
+                                    )}
                                 </div>
                                 {animationOverlays[minion.id] && getAllOverlaysById(minion.id).map((overlay, i) => {
                                     const overlayData = {
@@ -745,7 +948,7 @@ const MonstersCombatGrid = ({
                                     </div>
                                     {/* Target indicator: tiny portrait of whoever this minion is targeting */}
                                     {(() => {
-                                        const target = minion.targetId ? combatManager.getCombatant(minion.targetId) : null;
+                                        const target = minion.targetId ? getLiveCombatant(minion.targetId) : null;
                                         return target?.portrait && !minion.dead ? (
                                             <div className="monster-target-indicator" style={{ zIndex: 10 }}>
                                                 <div
@@ -774,9 +977,8 @@ const MonstersCombatGrid = ({
                                 <div className={`portrait-overlay ${minion.frozen ? 'frozen' : ''}`}> 
                                     <div className="damage-indicator-container">
                                         {(visibleDamageIndicators[minion.id] || []).map((indicator, idx, arr) => {
-                                            // For minions, always use the default offset.
-                                            const yOffset = idx * 28;
-                                            const isStatDebuff = !indicator.isCrit && typeof indicator.value === 'string' && indicator.type !== 'robbed';
+                                            const yOffset = typeof indicator.yOffset === 'number' ? indicator.yOffset : 0;
+                                            const isStatDebuff = !indicator.isCrit && typeof indicator.value === 'string' && indicator.type !== 'robbed' && isNaN(indicator.value);
                                             return (
                                                 <div
                                                     className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${indicator.isCrit ? ' crit' : ''}${indicator.type === 'heal' ? ' heal' : ''}${indicator.type === 'robbed' ? ' robbed' : ''}`}
@@ -791,34 +993,39 @@ const MonstersCombatGrid = ({
                                                         pointerEvents: 'none',
                                                     }}
                                                 >
-                                                    {indicator.value}
+                                                    {formatDamageIndicatorValue(indicator.value)}
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 </div>
-                                <div className="indicators-wrapper">
-                                    <div className="monster-hp-bar hp-bar">
-                                        {!minion.dead && (
+                                {!minion.dead && (
+                                    <div className="indicators-wrapper" style={{ display: 'flex', flexDirection: 'column-reverse', position: 'absolute', bottom: 0, left: 0, width: '100%', pointerEvents: 'none' }}>
+                                        <div className="monster-hp-bar hp-bar" style={{ position: 'relative', height: '4px' }}>
                                             <div className="red-fill" style={{ width: `${(minion.hp / minion.stats.hp) * 100}%` }}></div>
+                                        </div>
+                                        {!(minion.type && String(minion.type).includes('spider')) && (
+                                            combatManager && combatManager.round !== undefined ? (
+                                                <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative' }}>
+                                                    <div className="white-fill" style={{ height: '100%', backgroundColor: '#ffffff', width: `${(minion.endurance / minion.maxEndurance) * 100}%` }}></div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="monster-energy-bar energy-bar" style={{ position: 'relative', height: '4px' }}>
+                                                        <div className="yellow-fill" style={{ width: `calc(${minion.energy}%)` }}></div>
+                                                    </div>
+                                                    <div className="tempo-bar" style={{ position: 'relative', height: '4px' }}>
+                                                        <div className="tempo-indicator" style={{ left: `calc(${minion.tempo}% - 4px)` }}></div>
+                                                    </div>
+                                                </>
+                                            )
                                         )}
                                     </div>
-                                    <div className="monster-energy-bar energy-bar">
-                                        {!minion.dead && (
-                                            <div className="yellow-fill" style={{ width: `calc(${minion.energy}%)` }}></div>
-                                        )}
-                                    </div>
-                                    <div className="tempo-bar">
-                                        {!minion.dead && (
-                                            <div className="tempo-indicator" style={{ left: `calc(${minion.tempo}% - 4px)` }}></div>
-                                        )}
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         </div>
                     </div>
                 ))}
-            {/* </div> */}
         </div>
     );
 };
