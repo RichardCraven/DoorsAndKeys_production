@@ -105,6 +105,35 @@ export default function LandingPage(props) {
       }
     }).filter(Boolean);
 
+    console.groupCollapsed("[LandingPage] Dungeon Dropdown Diagnostics");
+    console.log(`Loaded ${all.length} total dungeons from API.`);
+
+    const diagnostics = all.map((d) => {
+      const spawnDiag = findSpawnPointDiagnostic(d);
+      const isValidProp = d.valid === true;
+      const hasSpawn = spawnDiag.found;
+      const isInstance = isInstanceDungeonName(d.name);
+      const passesAll = isValidProp && hasSpawn && !isInstance;
+
+      let reason = "PASSED";
+      if (!isValidProp) reason = "valid property is not true";
+      else if (!hasSpawn) reason = "no spawn point found";
+      else if (isInstance) reason = "is an instance dungeon (filtered out of templates)";
+
+      return {
+        name: d.name,
+        id: d.id,
+        validProp: d.valid,
+        spawnPointFound: hasSpawn,
+        spawnPointDetails: spawnDiag,
+        isInstanceDungeon: isInstance,
+        verdict: reason
+      };
+    });
+
+    console.table(diagnostics);
+    console.groupEnd();
+
     const validOnly = all.filter((d) => {
       const spawnDiag = findSpawnPointDiagnostic(d);
       return d.valid === true && spawnDiag.found;

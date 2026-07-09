@@ -127,7 +127,47 @@ function Tile(props) {
         if (typeof unwrapped === 'object') {
             unwrapped = unwrapped.default || '';
         }
-        const normalizedUrl = String(unwrapped).trim().replace(/^['"]|['"]$/g, '');
+        let normalizedUrl = String(unwrapped).trim().replace(/^['"]|['"]$/g, '');
+
+        // Resolve cross-environment/build asset path hashes
+        if (normalizedUrl.includes('/') || normalizedUrl.includes('.')) {
+            let filename = normalizedUrl.substring(normalizedUrl.lastIndexOf('/') + 1);
+            filename = decodeURIComponent(filename);
+            const lastDot = filename.lastIndexOf('.');
+            if (lastDot !== -1) {
+                filename = filename.substring(0, lastDot);
+            }
+            // Strip Webpack build hashes (e.g. .c03f8c82 or -c03f8c82)
+            filename = filename.replace(/[-.][a-f0-9]{8,32}$/i, '');
+
+            // Convert to matching key format (lowercase and underscores)
+            let key = filename.trim().toLowerCase().replace(/[\s-]+/g, '_');
+
+            if (images[key]) {
+                normalizedUrl = images[key];
+            } else {
+                // Remove trailing underscores/dots
+                const cleanKey = key.replace(/_+$/, '');
+                if (images[cleanKey]) {
+                    normalizedUrl = images[cleanKey];
+                } else if (cleanKey === 'tier_1' && images['tier_1_armor']) {
+                    normalizedUrl = images['tier_1_armor'];
+                } else if (cleanKey === 'tier_2' && images['tier_2_armor']) {
+                    normalizedUrl = images['tier_2_armor'];
+                } else if (cleanKey === 'tier_3' && images['tier_3_armor']) {
+                    normalizedUrl = images['tier_3_armor'];
+                } else if (images[cleanKey + '_portrait']) {
+                    normalizedUrl = images[cleanKey + '_portrait'];
+                } else if (images[cleanKey + '_key']) {
+                    normalizedUrl = images[cleanKey + '_key'];
+                } else if (images[cleanKey + '_gate']) {
+                    normalizedUrl = images[cleanKey + '_gate'];
+                } else if (images[cleanKey + '_chest']) {
+                    normalizedUrl = images[cleanKey + '_chest'];
+                }
+            }
+        }
+
         return `url("${encodeURI(normalizedUrl)}")`;
     };
 
