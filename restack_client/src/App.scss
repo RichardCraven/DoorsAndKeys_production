@@ -1233,9 +1233,9 @@ button{
       }
     }
     .button-row-top{
-      position: absolute;
-      top: -33px;
-      left: 0;
+      position: relative;
+      z-index: 10;
+      padding: 8px 0 4px 0;
       button {
         font-size: 11px;
         padding: 3px 8px;

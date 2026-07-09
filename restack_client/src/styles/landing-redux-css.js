@@ -415,13 +415,15 @@ export const LANDING_REDUX_CSS = `
   filter: brightness(1.15);
 }
 
-.redux-landing-container .hero-card .action-row .btn-play.disabled {
+.redux-landing-container .hero-card .action-row .btn-play.disabled,
+.redux-landing-container .hero-card .action-row .btn-play:disabled {
   background: #2b2724 !important;
   color: #57524f !important;
   cursor: not-allowed;
   transform: none !important;
   box-shadow: none !important;
   border: 1px solid rgba(120, 113, 108, 0.1);
+  pointer-events: auto;
 }
 
 .redux-landing-container .hero-card .action-row .dungeon-selector-group {

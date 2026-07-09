@@ -293,13 +293,21 @@ export default function LandingPage(props) {
                 </div>
 
                 {/* Play Button */}
-                <button
-                  className={`btn-play ${showWarning ? 'disabled' : ''}`}
-                  onMouseEnter={checkForCrew}
-                  onMouseLeave={() => setShowWarning(false)}
-                  onClick={enterClicked}
-                  type="button"
-                >⚔️ Enter Dungeon</button>
+                {(() => {
+                  const hasActiveDungeon = !!(getMeta()?.dungeonId);
+                  const noDungeonSelected = !selectedDungeonTemplateId && !hasActiveDungeon;
+                  const isDisabled = showWarning || noDungeonSelected;
+                  return (
+                    <button
+                      className={`btn-play ${isDisabled ? 'disabled' : ''}`}
+                      onMouseEnter={checkForCrew}
+                      onMouseLeave={() => setShowWarning(false)}
+                      onClick={isDisabled ? undefined : enterClicked}
+                      disabled={isDisabled}
+                      type="button"
+                    >⚔️ Enter Dungeon</button>
+                  );
+                })()}
 
                 {/* Skip Intro */}
                 <label className="skip-intro-label">
