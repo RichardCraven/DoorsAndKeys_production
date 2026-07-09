@@ -137,7 +137,7 @@ class BoardsPanel extends React.Component {
                                                                                                 
                                                                                         })}
                                                                                         </div>
-                                                                                        <div className="map-title">{board.name}</div>
+                                                                                        <div className="map-title">{board.displayName || board.name}</div>
                                                                             </div>
                                                                         })}
                                                                     </div>
@@ -180,7 +180,7 @@ class BoardsPanel extends React.Component {
                                                                             
                                                                     })}
                                                                     </div>
-                                                                    <div className="map-title">{board.name}</div>
+                                                                    <div className="map-title">{board.displayName || board.name}</div>
                                                                 </div>)
                                                         })}
                                                     </div>
@@ -222,7 +222,7 @@ class BoardsPanel extends React.Component {
                                                             
                                                     })}
                                                     </div>
-                                                    <div className="map-title">{board.name}</div>
+                                                    <div className="map-title">{board.displayName || board.name}</div>
                                                 </div>)
                                         })}
                                     </CCollapse>
@@ -261,7 +261,7 @@ class BoardsPanel extends React.Component {
                                             
                                     })}
                                     </div>
-                                    <div className="map-title">{board.name}</div>
+                                    <div className="map-title">{board.displayName || board.name}</div>
                                 </div>)
                         })}
                         {this.props.compatibilityMatrix && this.props.compatibilityMatrix.show === true && 
@@ -295,7 +295,7 @@ class BoardsPanel extends React.Component {
                                             </Tile>
                                         })}
                                     </div>
-                                    <div className="map-title">{board.name}</div>
+                                    <div className="map-title">{board.displayName || board.name}</div>
                                 </div>)
                             })}
                             </div>}
@@ -329,7 +329,7 @@ class BoardsPanel extends React.Component {
                                                         </Tile>
                                             })}
                                             </div>
-                                            <div className="map-title">{board.name}</div>
+                                            <div className="map-title">{board.displayName || board.name}</div>
                                         </div>)
                                 })}
                             </div>}
@@ -361,7 +361,7 @@ class BoardsPanel extends React.Component {
                                         </Tile>
                                 })}
                                 </div>
-                                <div className="map-title">{board.name}</div>
+                                <div className="map-title">{board.displayName || board.name}</div>
                                 </div>)
                             })}
                         </div>}
@@ -396,7 +396,7 @@ class BoardsPanel extends React.Component {
                                             </Tile>
                                 })}
                                 </div>
-                                <div className="map-title">{board.name}</div>
+                                <div className="map-title">{board.displayName || board.name}</div>
                                 </div>)
                             })}
                         </div>}

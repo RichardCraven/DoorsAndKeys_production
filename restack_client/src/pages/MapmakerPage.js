@@ -184,6 +184,7 @@ class MapMakerPage extends React.Component {
       dungeonNameInput: React.createRef(),
       planeNameInput: React.createRef(),
       boardNameInput: React.createRef(),
+      boardFolderPathInput: React.createRef(),
       showClearUniqueDungeonInstancesModal: false,
       contextMenu: { visible: false, x: 0, y: 0, tileId: null },
       zoomLevelId: null,
@@ -1875,6 +1876,7 @@ class MapMakerPage extends React.Component {
       // }
       let obj = {
         name: this.state.loadedBoard.name,
+        folderPath: this.state.loadedBoard.folderPath || '',
         tiles: clone(this.state.tiles),
         config: clone(config)
       }
@@ -1895,6 +1897,7 @@ class MapMakerPage extends React.Component {
 
       const newBoard = {
         name: clone(this.state.loadedBoard.name),
+        folderPath: this.state.loadedBoard.folderPath || '',
         tiles: clone(this.state.tiles),
         config: clone(config)
       }
@@ -2272,6 +2275,29 @@ class MapMakerPage extends React.Component {
   //     tiles: board.tiles
   //   })
   // }
+  getBoardFolderInfo = (board) => {
+    if (!board) return { displayName: '', folderPath: '' };
+    if (board.folderPath !== undefined) {
+      return {
+        displayName: board.name,
+        folderPath: board.folderPath || ''
+      };
+    }
+    if (board.name && board.name.includes('_')) {
+      const parts = board.name.split('_');
+      if (parts.length > 1) {
+        return {
+          displayName: parts[parts.length - 1],
+          folderPath: parts.slice(0, parts.length - 1).join('/')
+        };
+      }
+    }
+    return {
+      displayName: board.name,
+      folderPath: ''
+    };
+  }
+
   findBoardRefInFolders = (boardId) => {
     const boardFolders = this.state.boardsFolders;
     let found = null;
@@ -2425,11 +2451,14 @@ class MapMakerPage extends React.Component {
 
     console.log('in insertNewBoardIntoPanel board: ', board, 'boards', boards, 'boardsFolders', boardsFolders);
 
+    const info = this.getBoardFolderInfo(board);
+    board.displayName = info.displayName;
 
-    if (board.name && board.name.includes('_')) {
-      let title = board.name.split('_')[0],
-        subtitle = board.name.split('_').length > 2 ? board.name.split('_')[1] : null,
-        deeptitle = subtitle && board.name.split('_').length > 3 ? board.name.split('_')[2] : null,
+    if (info.folderPath) {
+      const parts = info.folderPath.split('/');
+      let title = parts[0] || null,
+        subtitle = parts[1] || null,
+        deeptitle = parts.slice(2).join('/') || null,
         folderExists = boardsFolders.map(e => e.title).includes(title),
         existingSubfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle),
         existingDeepfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle)?.deepfolders.find(e => e.title === deeptitle)
@@ -2536,23 +2565,28 @@ class MapMakerPage extends React.Component {
     let boards = this.state.boards,
       boardsFolders = this.state.boardsFolders;
 
-    if (board.name && board.name.includes('_')) {
-      let title = board.name.split('_')[0],
-        subtitle = board.name.split('_').length > 2 ? board.name.split('_')[1] : null,
-        deeptitle = subtitle && board.name.split('_').length > 3 ? board.name.split('_')[2] : null,
+    const info = this.getBoardFolderInfo(board);
+
+    if (info.folderPath) {
+      const parts = info.folderPath.split('/');
+      let title = parts[0] || null,
+        subtitle = parts[1] || null,
+        deeptitle = parts.slice(2).join('/') || null,
         existingSubfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle),
         existingDeepfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle)?.deepfolders.find(e => e.title === deeptitle)
 
       if (existingDeepfolder) {
-        // let found = existingDeepfolder.contents.find(e=>e.name === board.name)
-        existingDeepfolder.contents = existingDeepfolder.contents.filter(e => e.name !== board.name)
+        existingDeepfolder.contents = existingDeepfolder.contents.filter(e => e.id !== board.id)
       }
       if (existingSubfolder) {
-        // let found = existingSubfolder.contents.find(e=>e.name === board.name)
-        existingSubfolder.contents = existingSubfolder.contents.filter(e => e.name !== board.name)
+        existingSubfolder.contents = existingSubfolder.contents.filter(e => e.id !== board.id)
+      }
+      const folder = boardsFolders.find(e => e.title === title);
+      if (folder) {
+        folder.contents = folder.contents.filter(e => e.id !== board.id);
       }
     } else {
-      boards = boards.filter(e => e.name !== board.name)
+      boards = boards.filter(e => e.id !== board.id)
     }
 
     this.setState(() => {
@@ -2571,10 +2605,15 @@ class MapMakerPage extends React.Component {
     val.data.forEach((e) => {
       let board = JSON.parse(e.content)
       board.id = e._id;
-      if (board.name && board.name.includes('_')) {
-        let title = board.name.split('_')[0],
-          subtitle = board.name.split('_').length > 2 ? board.name.split('_')[1] : null,
-          deeptitle = subtitle && board.name.split('_').length > 3 ? board.name.split('_')[2] : null,
+
+      const info = this.getBoardFolderInfo(board);
+      board.displayName = info.displayName;
+
+      if (info.folderPath) {
+        const parts = info.folderPath.split('/');
+        let title = parts[0] || null,
+          subtitle = parts[1] || null,
+          deeptitle = parts.slice(2).join('/') || null,
           folderExists = boardsFolders.map(e => e.title).includes(title),
           existingSubfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle),
           existingDeepfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle)?.deepfolders.find(e => e.title === deeptitle)
@@ -2681,6 +2720,7 @@ class MapMakerPage extends React.Component {
 
     let newBoard = {
       name: `board${rand}`,
+      folderPath: '',
       config: [[], [], [], []],
       tiles: []
     }
@@ -2709,6 +2749,7 @@ class MapMakerPage extends React.Component {
 
     let newBoard = {
       name: `board${rand}`,
+      folderPath: this.state.loadedBoard ? (this.state.loadedBoard.folderPath || '') : '',
       config: [[], [], [], []],
       tiles: []
     }
@@ -4009,7 +4050,8 @@ class MapMakerPage extends React.Component {
           debugger
         }
         const boardId = board.id;
-        board.name = this.state.boardNameInput.current.value;
+        board.name = this.state.boardNameInput.current.value.trim();
+        board.folderPath = this.state.boardFolderPathInput.current.value.trim();
         this.setState({
           loadedBoard: board,
           showModal: false
@@ -4454,10 +4496,23 @@ class MapMakerPage extends React.Component {
             {this.state.modalType === 'rename board' && <CModalTitle>Rename this board</CModalTitle>}
           </CModalHeader>
           <CModalBody>
-            {(this.state.modalType === 'name dungeon' || this.state.modalType === 'rename dungeon') && <input ref={this.state.dungeonNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedDungeon?.name || ''} placeholder={this.state.loadedDungeon?.name || ''} />}
+             {(this.state.modalType === 'name dungeon' || this.state.modalType === 'rename dungeon') && <input ref={this.state.dungeonNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedDungeon?.name || ''} placeholder={this.state.loadedDungeon?.name || ''} />}
             {(this.state.modalType === 'name plane' || this.state.modalType === 'rename plane') && <input ref={this.state.planeNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedPlane?.name || ''} placeholder={this.state.loadedPlane?.name || ''} />}
-            {(this.state.modalType === 'name board' || this.state.modalType === 'rename board') && <input ref={this.state.boardNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedBoard?.name || ''} placeholder={this.state.loadedBoard?.name || ''} />}
-            LOADED BOARD.NAME: {this.state.loadedBoard?.name}
+            {(this.state.modalType === 'name board' || this.state.modalType === 'rename board') && (() => {
+              const info = this.getBoardFolderInfo(this.state.loadedBoard);
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#9da5b1' }}>Board Name</label>
+                    <input ref={this.state.boardNameInput} className="dungeonname-input" type="text" defaultValue={info.displayName} placeholder="e.g. Boss Room" style={{ width: '100%' }} />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#9da5b1' }}>Folder Path (optional, e.g. "dream/0/middle")</label>
+                    <input ref={this.state.boardFolderPathInput} className="dungeonname-input" type="text" defaultValue={info.folderPath} placeholder="e.g. dream/0/middle" style={{ width: '100%' }} />
+                  </div>
+                </div>
+              );
+            })()}
           </CModalBody>
           <CModalFooter>
             <CButton color="secondary" onClose={() => this.closeModal()}>
