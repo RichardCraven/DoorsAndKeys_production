@@ -230,7 +230,7 @@ class PlanesPanel extends React.Component {
             <div className="palette right-palette" 
             style={{
                 width: this.props.tileSize*3+'px', height: this.props.boardSize+ 'px',
-                backgroundColor: 'white',
+                backgroundColor: 'black',
                 overflow: 'scroll'
             }}
             onMouseLeave={() => {
