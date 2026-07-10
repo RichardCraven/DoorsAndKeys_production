@@ -4062,32 +4062,79 @@ class MapMakerPage extends React.Component {
     event.preventDefault();
   }
 
-  onDrop = (event, index) => {
-    let minis = this.state.loadedPlane.miniboards
+  onDrop = async (event, index) => {
+    let minis = this.state.loadedPlane.miniboards;
     minis[index] = [];
     if (this.state.draggedBoardOrigin !== null) {
-      minis[this.state.draggedBoardOrigin] = []
+      minis[this.state.draggedBoardOrigin] = [];
     }
-    // const loadedPlane = this.state.loadedPlane;
-    // loadedPlane.miniboards = minis
-    // this.setState({
-    //   loadedPlane
-    // })
 
-    // setTimeout(()=>{
     const loadedPlane = this.state.loadedPlane;
-    let sections = loadedPlane.miniboards
-    if (this.state.draggedBoard) {
-      sections[index] = this.state.draggedBoard
+    let sections = loadedPlane.miniboards;
+    const dragged = this.state.draggedBoard;
+    if (dragged) {
+      sections[index] = dragged;
+      
+      const planeId = loadedPlane.id;
+      if (planeId && Array.isArray(this.state.dungeons)) {
+        let dungeonName = '';
+        let levelName = '';
+        let orientation = 'front';
+        
+        for (const d of this.state.dungeons) {
+          if (Array.isArray(d.levels)) {
+            for (const lvl of d.levels) {
+              if (lvl.front && lvl.front.id === planeId) {
+                dungeonName = d.name;
+                levelName = String(lvl.id);
+                orientation = 'front';
+                break;
+              }
+              if (lvl.back && lvl.back.id === planeId) {
+                dungeonName = d.name;
+                levelName = String(lvl.id);
+                orientation = 'back';
+                break;
+              }
+            }
+          }
+          if (dungeonName) break;
+        }
+        
+        if (dungeonName && levelName) {
+          const slotNames = [
+            'top_left', 'top_mid', 'top_right',
+            'middle_left', 'middle_mid', 'middle_right',
+            'bottom_left', 'bottom_mid', 'bottom_right'
+          ];
+          const slotName = slotNames[index];
+          const suffix = orientation === 'back' ? '_back' : '';
+          const folderPath = `${dungeonName}/${levelName}/${slotName}${suffix}`;
+          
+          try {
+            let updatedBoard = {
+              name: dragged.name,
+              folderPath: folderPath,
+              tiles: clone(dragged.tiles),
+              config: clone(dragged.config || [[], [], [], []])
+            };
+            await updateBoardRequest(dragged.id, updatedBoard);
+          } catch (err) {
+            console.error('Failed to update board folderPath in onDrop:', err);
+          }
+        }
+      }
     }
+    
     loadedPlane.miniboards = sections;
     this.setState({
       draggedBoard: null,
       hoveredSection: null,
       loadedPlane,
       planeHasUnsavedChanges: true,
-    })
-    // })
+    });
+    
+    await this.loadAllBoards();
   }
 
   // DUNGEON drag and drop
