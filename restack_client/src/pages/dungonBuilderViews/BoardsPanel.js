@@ -32,6 +32,54 @@ class BoardsPanel extends React.Component {
         );
     }
 
+    parseBoardPlacement = (board) => {
+        let folderPath = board.folderPath;
+        let name = board.name || '';
+        
+        if (folderPath) {
+            const parts = folderPath.split('/');
+            if (parts.length >= 2) {
+                const dungeon = parts[0];
+                const level = parts[1];
+                const slot = parts.slice(2).join('/');
+                const isBack = folderPath.toLowerCase().includes('/back') || folderPath.toLowerCase().includes('_back') || name.toLowerCase().includes('_back');
+                return {
+                    dungeon,
+                    level,
+                    slot: slot || '',
+                    orientation: isBack ? 'back' : 'front'
+                };
+            }
+        }
+        
+        if (name.includes('_')) {
+            const parts = name.split('_');
+            const dungeon = parts[0];
+            const level = parts[1];
+            
+            const lastPart = parts[parts.length - 1].toLowerCase();
+            const isBack = lastPart === 'back';
+            
+            const endIdx = isBack ? parts.length - 1 : parts.length;
+            const slotParts = parts.slice(2, endIdx);
+            const slot = slotParts.join('/');
+            
+            return {
+                dungeon,
+                level,
+                slot,
+                orientation: isBack ? 'back' : 'front'
+            };
+        }
+        
+        return {
+            dungeon: '',
+            level: '',
+            slot: '',
+            orientation: 'front'
+        };
+    }
+
     getLevelGrids = (subfolder) => {
         const boardsList = [];
         if (Array.isArray(subfolder.contents)) {
@@ -72,12 +120,9 @@ class BoardsPanel extends React.Component {
         };
 
         boardsList.forEach(b => {
-            const info = this.props.getBoardFolderInfo ? this.props.getBoardFolderInfo(b) : { displayName: b.name, folderPath: '' };
-            const suffix = b.slotPathSuffix || (info.folderPath ? info.folderPath.split('/').slice(2).join('/') : '');
-            const isBack = info.folderPath ? (info.folderPath.toLowerCase().includes('/back') || info.folderPath.toLowerCase().includes('_back')) : false;
-            
-            const idx = getGridIndexFromPathSuffix(suffix);
-            if (isBack) {
+            const placement = this.parseBoardPlacement(b);
+            const idx = getGridIndexFromPathSuffix(placement.slot);
+            if (placement.orientation === 'back') {
                 back[idx] = b;
             } else {
                 front[idx] = b;
