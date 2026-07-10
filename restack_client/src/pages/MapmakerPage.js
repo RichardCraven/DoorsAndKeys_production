@@ -3,7 +3,7 @@ import '@coreui/coreui/dist/css/coreui.min.css'
 import '../styles/dungeon-board.scss'
 import '../styles/map-maker.scss'
 import { storeMeta, getMeta, setEditorPreference } from '../utils/session-handler'
-import BoardView from './dungonBuilderViews/BoardView'
+import BoardView, { FLOOR_TEXTURES } from './dungonBuilderViews/BoardView'
 import BoardsPanel from './dungonBuilderViews/BoardsPanel'
 import PlanesPanel from './dungonBuilderViews/PlanesPanel'
 import PlaneView from './dungonBuilderViews/PlaneView'
@@ -125,7 +125,13 @@ class MapMakerPage extends React.Component {
       dungeonOverlayOnFromPrefs = meta.preferences.editor.dungeonOverlayOn
     }
 
+    let floorTextureFromPrefs = null;
+    if (meta?.preferences?.editor?.floorTexture) {
+      floorTextureFromPrefs = meta.preferences.editor.floorTexture
+    }
+
     this.state = {
+      floorTexture: floorTextureFromPrefs,
       loadedBoard: null,
       loadedPlane: null,
       loadedDungeon: null,
@@ -4152,6 +4158,11 @@ class MapMakerPage extends React.Component {
         break;
     }
   }
+  handleFloorTextureChange = (e) => {
+    const val = e.target.value;
+    this.setState({ floorTexture: val });
+    setEditorPreference('floorTexture', val);
+  }
   collapseFilterHeader = (header) => {
     switch (header) {
       case 'left':
@@ -5207,7 +5218,38 @@ class MapMakerPage extends React.Component {
                 onChange={this.viewSelectorChange}
               />
             </CButtonGroup>
-            <div className="right-menus" style={{ width: this.state.tileSize * 4.5 + 'px' }}>
+            <div className="right-menus" style={{ 
+              width: this.state.tileSize * 4.5 + 'px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '8px'
+            }}>
+              {this.state.selectedView === 'board' && (
+                <>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a4b0be', whiteSpace: 'nowrap' }}>Floor:</span>
+                  <select
+                    value={this.state.floorTexture || ''}
+                    onChange={this.handleFloorTextureChange}
+                    style={{
+                      background: '#1c1c1e',
+                      color: '#f9b115',
+                      border: '1px solid rgba(249, 177, 21, 0.4)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      fontSize: '11px',
+                      outline: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {FLOOR_TEXTURES.map((tex) => (
+                      <option key={tex.key} value={tex.src}>
+                        {tex.label}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              )}
             </div>
           </div>
           <div className="row-wrapper">
@@ -5275,6 +5317,7 @@ class MapMakerPage extends React.Component {
               selectedView={this.state.selectedView}
               showCoordinates={this.state.showCoordinates}
               mapMaker={this.props.mapMaker}
+              floorTexture={this.state.floorTexture}
 
               setViewState={this.setViewState}
               addNewBoard={this.addNewBoard}

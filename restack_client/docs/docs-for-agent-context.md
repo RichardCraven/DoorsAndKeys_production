@@ -89,6 +89,26 @@ The map creation layer provides tools for designing, editing, and managing dunge
 3. Board/overlay events trigger callbacks → update UI
 4. All changes are persisted via `session-handler`/API
 
+### BoardView Floor Rendering (Two-Layer Texture System)
+Empty-space tile rendering in `BoardView.js` uses a layered CSS approach — **do not** revert to flat colours or procedural HSL without reviewing this.
+
+**Layer 1 — Board container background** (`div.board.map-board`):
+- CSS `backgroundImage` set to a repeating Poly Haven stone texture (default: `ground_grey_diff_1k.jpg`).
+- Texture tiles at `350px × 350px`. `backgroundSize` can be tuned to taste.
+- All 7 available textures are imported and exported as `FLOOR_TEXTURES` from `BoardView.js`.
+- Pass a `floorTexture` prop to override the default programmatically.
+
+**Layer 2 — Tile overlay**:
+- Tiles whose `contains` is `empty_space` or `passage` are rendered with `backgroundColor: rgba(0,0,0,0.55)` — a semi-transparent dark overlay sitting on top of the board's texture background.
+- This gives ~45% texture visibility while keeping tile borders readable.
+- Content tiles (monsters, gates, vendors, etc.) use their solid stored `color` value, completely covering the texture — preserving clear editorial distinction.
+- Void tiles remain solid near-black for the same reason.
+
+**`isEmptySpaceContains(contains)`** — returns `true` for `null`, `empty_space`, and `passage`.
+If new "floor-like" tile types are added, add them here so they receive the overlay treatment.
+
+**Assets location**: `src/assets/tilesets/` — seven `*_diff_1k.jpg` files sourced from [Poly Haven](https://polyhaven.com) (CC0).
+
 ---
 
 ## 2. Dungeon Explorer Layer

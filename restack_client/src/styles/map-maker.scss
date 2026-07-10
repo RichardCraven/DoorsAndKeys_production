@@ -381,26 +381,31 @@ ul.dropdown-menu.show{
             justify-content: flex-start;
             flex-direction: row;
             transition: background-color 0.15s;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+            padding: 4px 0;
             
             &.sub-hovered{
-                background-color: rgba(0, 0, 0, 0.08);
+                background-color: rgba(255, 255, 255, 0.05);
             }
             &.sub-selected{
-                background-color: rgba(0, 120, 220, 0.15);
-                box-shadow: inset 3px 0 0 #007bff;
+                background-color: rgba(249, 177, 21, 0.12);
+                box-shadow: inset 3px 0 0 #f9b115;
             }
             &.sub-hovered.sub-selected{
-                background-color: rgba(0, 120, 220, 0.25);
+                background-color: rgba(249, 177, 21, 0.20);
             }
             
             .text-container{
-                // width: 64%;
                 display: flex;
                 align-items: center;
-                justify-content: center;
-                flex: auto;
+                justify-content: flex-start;
+                padding-left: 20px;
+                color: #adad93;
+                font-size: 12px;
+                text-transform: capitalize;
             }
         }
+        background-color: #0b0a09;
     }
     .palette-option-container{
         cursor: pointer;
@@ -409,12 +414,29 @@ ul.dropdown-menu.show{
         align-items: center;
         justify-content: flex-start;
         flex-direction: row;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        background: linear-gradient(135deg, #1d1c1a 0%, #131211 100%);
+        transition: background 0.2s ease;
+
+        &:hover {
+            background: linear-gradient(135deg, #262320 0%, #1a1917 100%);
+        }
+
         .text-container{
-            width: 64%;
+            flex: 1;
             display: flex;
             align-items: center;
-            justify-content: center;
-            opacity:1;
+            justify-content: flex-start;
+            padding-left: 15px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: capitalize;
+            color: #e0dcd3;
+
+            &.hovered {
+                color: #f9b115;
+            }
         }
     }
 }
