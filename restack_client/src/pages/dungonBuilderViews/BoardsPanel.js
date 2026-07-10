@@ -151,7 +151,7 @@ class BoardsPanel extends React.Component {
                                     onMouseEnter={() => this.setState({ hoveredSlot: `${folderTitle}_${subfolder.title}_${orientation}_${idx}` })}
                                     onMouseLeave={() => this.setState({ hoveredSlot: null })}
                                     draggable={!!board}
-                                    onDragStart={(e) => board && this.props.onDragStart && this.props.onDragStart(e, board)}
+                                    onDragStart={(e) => board && this.props.onDragStart && this.props.onDragStart(e, board, null)}
                                     onDragOver={(e) => e.preventDefault()}
                                     onDrop={(e) => {
                                         e.preventDefault();

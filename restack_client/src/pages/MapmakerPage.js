@@ -4063,13 +4063,18 @@ class MapMakerPage extends React.Component {
   }
 
   onDrop = async (event, index) => {
-    let minis = this.state.loadedPlane.miniboards;
+    if (!this.state.loadedPlane) return;
+    
+    // Deep clone to avoid direct mutations
+    const loadedPlane = clone(this.state.loadedPlane);
+    let minis = loadedPlane.miniboards;
     minis[index] = [];
-    if (this.state.draggedBoardOrigin !== null) {
-      minis[this.state.draggedBoardOrigin] = [];
+    
+    const origin = this.state.draggedBoardOrigin;
+    if (origin !== null && origin !== undefined && origin >= 0 && origin < 9) {
+      minis[origin] = [];
     }
 
-    const loadedPlane = this.state.loadedPlane;
     let sections = loadedPlane.miniboards;
     const dragged = this.state.draggedBoard;
     if (dragged) {
@@ -4113,6 +4118,8 @@ class MapMakerPage extends React.Component {
         }
       }
       
+      console.log('onDrop resolved details:', { dungeonName, levelName, orientation, planeName: loadedPlane.name, index });
+
       if (dungeonName && levelName) {
           let formattedLevel = levelName;
           if (/^-?\d+$/.test(levelName)) {
@@ -4130,6 +4137,8 @@ class MapMakerPage extends React.Component {
           const suffix = orientation === 'back' ? '_back' : '';
           const folderPath = `${dungeonName}/${formattedLevel}/${slotName}${suffix}`;
           
+          console.log('onDrop updating board folderPath to:', folderPath, 'for board:', dragged.name, 'id:', dragged.id);
+
           try {
             let updatedBoard = {
               name: dragged.name,
@@ -4141,12 +4150,15 @@ class MapMakerPage extends React.Component {
           } catch (err) {
             console.error('Failed to update board folderPath in onDrop:', err);
           }
+        } else {
+          console.warn('onDrop could not resolve dungeonName or levelName for plane:', loadedPlane.name);
         }
       }
 
     loadedPlane.miniboards = sections;
     this.setState({
       draggedBoard: null,
+      draggedBoardOrigin: null,
       hoveredSection: null,
       loadedPlane,
       planeHasUnsavedChanges: true,
