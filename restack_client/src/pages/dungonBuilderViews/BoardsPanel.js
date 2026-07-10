@@ -142,10 +142,11 @@ class BoardsPanel extends React.Component {
                     <div className="grid-3x3">
                         {gridData.map((board, idx) => {
                             const isHovered = this.state.hoveredSlot === `${folderTitle}_${subfolder.title}_${orientation}_${idx}`;
+                            const isSelected = this.props.loadedBoard && board && (board.id === this.props.loadedBoard.id);
                             return (
                                 <div
                                     key={idx}
-                                    className={`grid-cell ${board ? 'filled' : 'empty'} ${isHovered ? 'hovered' : ''}`}
+                                    className={`grid-cell ${board ? 'filled' : 'empty'} ${isHovered ? 'hovered' : ''} ${isSelected ? 'selected' : ''}`}
                                     title={board ? `${board.displayName || board.name}` : 'Empty Slot'}
                                     onClick={() => board && this.props.loadBoard(board)}
                                     onMouseEnter={() => this.setState({ hoveredSlot: `${folderTitle}_${subfolder.title}_${orientation}_${idx}` })}
@@ -269,6 +270,7 @@ class BoardsPanel extends React.Component {
                                                     draggable
                                                     style={{
                                                         height: this.props.tileSize*3,
+                                                        width: this.props.tileSize*3,
                                                         boxSizing: 'border-box',
                                                         filter: this.props.loadedBoard && board.id === this.props.loadedBoard.id ? 'sepia(1)' : ''
                                                     }}
@@ -290,6 +292,7 @@ class BoardsPanel extends React.Component {
                                                                 hovered={
                                                                 false
                                                                 }
+                                                                passThrough={true}
                                                                 >
                                                                 </Tile>
                                                             
@@ -309,6 +312,7 @@ class BoardsPanel extends React.Component {
                                     className="map-preview draggable" 
                                     style={{
                                         height: this.props.tileSize*3,
+                                        width: this.props.tileSize*3,
                                         boxSizing: 'border-box',
                                         filter: this.props.loadedBoard && board.id === this.props.loadedBoard.id ? 'sepia(1)' : ''   
                                     }}
@@ -329,6 +333,7 @@ class BoardsPanel extends React.Component {
                                                 hovered={
                                                 false
                                                 }
+                                                passThrough={true}
                                                 >
                                                 </Tile>
                                             
@@ -351,6 +356,7 @@ class BoardsPanel extends React.Component {
                                     draggable
                                     style={{
                                         height: this.props.tileSize*3,
+                                        width: this.props.tileSize*3,
                                         boxSizing: 'border-box'
                                     }}>
                                         {board.tiles.map((tile, i) => {
@@ -364,7 +370,8 @@ class BoardsPanel extends React.Component {
                                             index={tile.id}
                                             showCoordinates={false}
                                             type={tile.type}
-                                            hovered={false}>
+                                            hovered={false}
+                                            passThrough={true}>
                                             </Tile>
                                         })}
                                     </div>
@@ -381,6 +388,7 @@ class BoardsPanel extends React.Component {
                                             className="map-preview draggable" 
                                             style={{
                                                 height: this.props.tileSize*3,
+                                                width: this.props.tileSize*3,
                                                 boxSizing: 'border-box'
                                             }}
                                             onClick={() => {return this.props.loadBoard(board)}}
@@ -398,7 +406,8 @@ class BoardsPanel extends React.Component {
                                                         index={tile.id}
                                                         showCoordinates={false}
                                                         type={tile.type}
-                                                        hovered={false}>
+                                                        hovered={false}
+                                                        passThrough={true}>
                                                         </Tile>
                                             })}
                                             </div>
@@ -417,6 +426,7 @@ class BoardsPanel extends React.Component {
                                 draggable
                                 style={{
                                     height: this.props.tileSize*3,
+                                    width: this.props.tileSize*3,
                                     boxSizing: 'border-box'
                                 }}>
                                 {board.tiles.map((tile, i) => {
@@ -430,7 +440,8 @@ class BoardsPanel extends React.Component {
                                         index={tile.id}
                                         showCoordinates={false}
                                         type={tile.type}
-                                        hovered={false}>
+                                        hovered={false}
+                                        passThrough={true}>
                                         </Tile>
                                 })}
                                 </div>
@@ -449,6 +460,7 @@ class BoardsPanel extends React.Component {
                                 draggable
                                 style={{
                                     height: this.props.tileSize*3,
+                                    width: this.props.tileSize*3,
                                     boxSizing: 'border-box'
                                 }} >
                                 {board.tiles.map((tile, i) => {
@@ -465,6 +477,7 @@ class BoardsPanel extends React.Component {
                                             hovered={
                                                 false
                                             }
+                                            passThrough={true}
                                             >
                                             </Tile>
                                 })}

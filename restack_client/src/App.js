@@ -13,7 +13,7 @@ import CombatSimulator from './pages/CombatSimulator'
 import SandboxPage from './pages/SandboxPage'
 
 
-import { Route, Switch, Redirect} from "react-router-dom";
+import { Route, Switch, Redirect, useLocation } from "react-router-dom";
 import { useEffect } from 'react';
 
 import {updateUserRequest} from '../src/utils/api-handler'
@@ -25,6 +25,8 @@ import * as images from '../src/utils/images'
 
 
 function App(props) {
+const location = useLocation();
+const isMapmaker = location.pathname === '/mapmaker';
 const [loggedIn, setLoggedIn] = useState(!!getUserId())
 const [menuTrayExpanded, setMenuTrayExpanded] = useState(false)
 const [hoveredMenuItem, setHoveredMenuItem] = useState(null)
@@ -222,19 +224,19 @@ const toggleMenuTray = () => {
             left: '12px',
             zIndex: 9999,
             display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-start',
+            flexDirection: isMapmaker ? 'row' : 'column',
+            alignItems: isMapmaker ? 'center' : 'flex-start',
             gap: '6px'
           }}>
             <div className="horizontal-menu-container" style={{
               display: 'flex',
-              flexDirection: 'row',
+              flexDirection: isMapmaker ? 'column' : 'row',
               alignItems: 'center',
               gap: '4px',
               background: 'rgba(0, 0, 0, 0.75)',
               backdropFilter: 'blur(10px)',
               WebkitBackdropFilter: 'blur(10px)',
-              padding: '4px 8px',
+              padding: isMapmaker ? '8px 4px' : '4px 8px',
               borderRadius: '18px',
               border: '1px solid rgba(255, 255, 255, 0.1)',
               boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
@@ -335,10 +337,10 @@ const toggleMenuTray = () => {
               )}
             </div>
 
-            {/* Hover display label under the icons container */}
+            {/* Hover display label */}
             <div style={{
               height: '16px',
-              paddingLeft: '8px',
+              paddingLeft: isMapmaker ? '0' : '8px',
               fontSize: '11px',
               fontWeight: 'bold',
               color: '#f9b115',
@@ -348,7 +350,8 @@ const toggleMenuTray = () => {
               pointerEvents: 'none',
               textAlign: 'left',
               transition: 'opacity 0.15s ease',
-              opacity: hoveredMenuItem ? 1 : 0
+              opacity: hoveredMenuItem ? 1 : 0,
+              whiteSpace: 'nowrap'
             }}>
               {hoveredMenuItem || ''}
             </div>

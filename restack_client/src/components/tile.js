@@ -266,6 +266,7 @@ function Tile(props) {
         <div 
             data-portal-id={props['data-portal-id']}
             style={{
+            opacity: props.isPreview ? 0.6 : 1,
             pointerEvents: props.passThrough ? 'none' : 'inherit',
             boxSizing: 'border-box',
             transition: 'background-color 0.35s, border-color 0.35s',

@@ -28,10 +28,12 @@ class BoardsPalette extends React.Component {
         return (
             <div className="palette right-palette" 
                 style={{
-                    width: this.props.tileSize*3+'px', height: this.props.boardSize+ 'px',
-                    backgroundColor: 'white',
-                    overflow: 'scroll'
-                    // marginLeft: '25px'
+                    width: this.props.tileSize*4.5+'px', height: this.props.boardSize+ 'px',
+                    backgroundColor: '#0b0a09',
+                    overflow: 'scroll',
+                    marginLeft: '20px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(255, 255, 255, 0.08)'
                 }}
                 onMouseLeave={() => {
                     if(this.props.optionClickedIdx === null){
@@ -44,7 +46,7 @@ class BoardsPalette extends React.Component {
                     <div key={i} className="palette-options-pane">
                         <div className="palette-option-container"
                         style={{
-                            backgroundImage: this.props.optionClickedIdx === i ? 'linear-gradient(90deg, transparent, black)' : 'none'
+                            backgroundImage: this.props.optionClickedIdx === i ? 'linear-gradient(90deg, transparent, rgba(249, 177, 21, 0.15))' : 'none'
                         }}
                         onMouseOver={() => this.props.setPaletteHover(i)}
                         onClick={() => {
@@ -58,7 +60,7 @@ class BoardsPalette extends React.Component {
                             tileSize={this.props.tileSize}
                             image={tile.image ? tile.image : null}
                             imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                            color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'}
+                            color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#2c3036'}
                             borders={tile.borders}
                             coordinates={tile.coordinates}
                             index={tile.id}
@@ -81,7 +83,8 @@ class BoardsPalette extends React.Component {
                                 }>
                                 <span
                                 style={{
-                                color: this.props.optionClickedIdx === i ? 'white' : 'black'
+                                color: this.props.optionClickedIdx === i ? '#f9b115' : '#e0dcd3',
+                                fontWeight: this.props.optionClickedIdx === i ? '600' : 'normal'
                                 }}
                                 >{this.getOptionLabel(tile.optionType)}</span>
                             </div>

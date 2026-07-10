@@ -1,3 +1,35 @@
+# Change Summary - July 10, 2026
+
+## Map Maker — Photorealistic Floor Texture System
+
+### New: Poly Haven Floor Textures (`src/assets/tilesets/`)
+- Downloaded 7 high-resolution (1K) stone/rock diffuse textures from [Poly Haven](https://polyhaven.com) (CC0, no attribution required).
+- Files stored in `src/assets/tilesets/`:
+  - `ground_grey_diff_1k.jpg` — neutral grey ground (default)
+  - `rock_01_diff_1k.jpg` — rough rock
+  - `rock_face_diff_1k.jpg` — rock face
+  - `rock_face_03_diff_1k.jpg` — dark rock face
+  - `moon_01_diff_1k.jpg` — lunar stone surface
+  - `lichen_rock_diff_1k.jpg` — lichen-covered rock
+  - `coast_sand_rocks_02_diff_1k.jpg` — coastal rock
+
+### Changed: `BoardView.js` — Floor Rendering Architecture
+Previous behavior: empty-space tiles used a flat warm-brown color (`#6b6057`) or a procedural HSL slate color.
+
+New behavior — two-layer approach:
+1. **Board container background**: The `.board.map-board` div now has a repeating `backgroundImage` (default: `ground_grey`) tiling at `350px × 350px`.
+2. **Empty-space tile overlay**: Tiles with `empty_space` or `passage` contains are rendered as `rgba(0, 0, 0, 0.55)` — a dark semi-transparent overlay that lets ~45% of the texture beneath show through.
+3. **Content tiles** (monsters, gates, vendors, etc.) keep their solid stored colour, completely covering the texture beneath — this preserves clear editorial distinction between empty floor and placed content.
+4. **Void tiles** remain solid near-black, also covering the texture.
+
+Exported constant `FLOOR_TEXTURES` (array of `{ key, label, src }`) from `BoardView.js` — ready to be wired into a texture-picker UI. Pass a `floorTexture` prop to `BoardView` to override the default.
+
+### Fixed: Passage Tile Colour (`BoardView.isEmptySpaceContains`)
+- `isEmptySpaceContains` now returns `true` for `passage` tiles in addition to `empty_space`.
+- Previously, passage tiles fell through to the warm-brown fallback while empty-space tiles were getting the stone treatment. Both now render consistently.
+
+---
+
 # Change Summary - April 25, 2026
 
 ## Required Patterns for All AI Profiles
