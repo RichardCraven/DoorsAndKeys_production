@@ -187,6 +187,7 @@ class MapMakerPage extends React.Component {
       boardFolderPathInput: React.createRef(),
       showClearUniqueDungeonInstancesModal: false,
       contextMenu: { visible: false, x: 0, y: 0, tileId: null },
+      planeBoardContextMenu: { visible: false, x: 0, y: 0, levelId: null, miniboardIndex: null, frontOrBack: null },
       zoomLevelId: null,
       zoomMiniboardIndex: null,
       zoomOrientation: null,
@@ -2432,6 +2433,91 @@ class MapMakerPage extends React.Component {
     return syncedDungeon;
   }
 
+  handlePlaneBoardContextMenu = (e, levelId, miniboardIndex, frontOrBack) => {
+    e.preventDefault();
+    this.setState({
+      planeBoardContextMenu: {
+        visible: true,
+        x: e.clientX,
+        y: e.clientY,
+        levelId: levelId,
+        miniboardIndex: miniboardIndex,
+        frontOrBack: frontOrBack
+      }
+    });
+  }
+
+  handleRemoveBoardFromPlane = async () => {
+    const { levelId, miniboardIndex, frontOrBack } = this.state.planeBoardContextMenu;
+    this.setState({ planeBoardContextMenu: { ...this.state.planeBoardContextMenu, visible: false } });
+    
+    // CASE 1: Standalone Plane View
+    if (levelId === null || levelId === undefined) {
+      if (!this.state.loadedPlane) return;
+      let miniboards = [...this.state.loadedPlane.miniboards];
+      const boardToRemove = miniboards[miniboardIndex];
+      if (boardToRemove && boardToRemove.id) {
+        try {
+          let updatedBoard = {
+            name: boardToRemove.name,
+            folderPath: '',
+            tiles: clone(boardToRemove.tiles),
+            config: clone(boardToRemove.config || [[], [], [], []])
+          };
+          await updateBoardRequest(boardToRemove.id, updatedBoard);
+        } catch (err) {
+          console.error('Failed to clear board folderPath on plane removal:', err);
+        }
+      }
+      
+      miniboards[miniboardIndex] = {};
+      const loadedPlane = {
+        ...this.state.loadedPlane,
+        miniboards
+      };
+      
+      this.setState({ loadedPlane, planeHasUnsavedChanges: true });
+      await this.loadAllBoards();
+      this.flashLeftReadout('Removed from Plane');
+      return;
+    }
+    
+    // CASE 2: Dungeon View
+    if (this.state.loadedDungeon) {
+      let dungeon = clone(this.state.loadedDungeon);
+      let level = dungeon.levels.find(l => l.id === levelId);
+      if (!level) return;
+      
+      let plane = frontOrBack === 'front' ? level.front : level.back;
+      if (!plane) return;
+      
+      const boardToRemove = plane.miniboards[miniboardIndex];
+      if (boardToRemove && boardToRemove.id) {
+        try {
+          let updatedBoard = {
+            name: boardToRemove.name,
+            folderPath: '',
+            tiles: clone(boardToRemove.tiles),
+            config: clone(boardToRemove.config || [[], [], [], []])
+          };
+          await updateBoardRequest(boardToRemove.id, updatedBoard);
+        } catch (err) {
+          console.error('Failed to clear board folderPath on dungeon removal:', err);
+        }
+      }
+      
+      plane.miniboards[miniboardIndex] = {};
+      
+      this.setState({
+        loadedDungeon: this.props.mapMaker.formatDungeon(dungeon),
+        dungeonHasUnsavedChanges: true
+      });
+      
+      await this.loadAllBoards();
+      this.flashLeftReadout('Removed from Plane');
+    }
+  }
+
   findBoardRefInFolders = (boardId) => {
     const boardFolders = this.state.boardsFolders;
     let found = null;
@@ -4377,6 +4463,57 @@ class MapMakerPage extends React.Component {
           </div>
         )}
 
+        {this.state.planeBoardContextMenu && this.state.planeBoardContextMenu.visible && (
+          <div
+            className="context-menu-backdrop"
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, background: 'transparent' }}
+            onClick={() => this.setState({ planeBoardContextMenu: { ...this.state.planeBoardContextMenu, visible: false } })}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              this.setState({ planeBoardContextMenu: { ...this.state.planeBoardContextMenu, visible: false } });
+            }}
+          >
+            <div
+              className="custom-context-menu"
+              style={{
+                position: 'absolute',
+                top: this.state.planeBoardContextMenu.y,
+                left: this.state.planeBoardContextMenu.x,
+                backgroundColor: '#1c1c1e',
+                border: '1px solid rgba(249, 177, 21, 0.3)',
+                borderRadius: '8px',
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
+                padding: '6px 0',
+                zIndex: 10000,
+                minWidth: '160px',
+                display: 'flex',
+                flexDirection: 'column',
+                backdropFilter: 'blur(10px)'
+              }}
+            >
+              <button
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '10px 16px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  transition: 'background-color 0.2s',
+                  outline: 'none',
+                  fontFamily: 'inherit'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                onClick={this.handleRemoveBoardFromPlane}
+              >
+                Remove from Plane
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Inscription Wall-Picker — compass overlay on the clicked tile */}
         {this.state.inscriptionWallPicker && (() => {
           const tileId = this.state.inscriptionWallPicker.tileId;
@@ -4933,6 +5070,7 @@ class MapMakerPage extends React.Component {
               onDragStart={this.onDragStart}
               onDrop={this.onDrop}
               resetLoadedPlane={this.resetLoadedPlane}
+              handlePlaneBoardContextMenu={this.handlePlaneBoardContextMenu}
               //            plane specific ^
 
 
@@ -5041,6 +5179,7 @@ class MapMakerPage extends React.Component {
 
                 imagesMatrix={this.state.imagesMatrix}
                 zoomIntoBoard={this.zoomIntoBoard}
+                handlePlaneBoardContextMenu={this.handlePlaneBoardContextMenu}
               ></DungeonView>}
 
             {(this.state.selectedView === 'plane' ||

@@ -525,6 +525,7 @@ class DungeonView extends React.Component {
                                                                     }}
                                                                     className={`interaction-section`}
                                                                     onClick={() => this.props.zoomIntoBoard(level.id, i, 'front')}
+                                                                    onContextMenu={(event) => this.props.handlePlaneBoardContextMenu && this.props.handlePlaneBoardContextMenu(event, level.id, i, 'front')}
                                                                 ></div>
                                                         })}
                                                     </div>
@@ -616,6 +617,7 @@ class DungeonView extends React.Component {
                                                                     }}
                                                                     className={`interaction-section`}
                                                                     onClick={() => this.props.zoomIntoBoard(level.id, i, 'back')}
+                                                                    onContextMenu={(event) => this.props.handlePlaneBoardContextMenu && this.props.handlePlaneBoardContextMenu(event, level.id, i, 'back')}
                                                                 ></div>
                                                         })}
                                                     </div>

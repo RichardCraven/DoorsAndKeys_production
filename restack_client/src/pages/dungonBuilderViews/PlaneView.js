@@ -92,6 +92,7 @@ class PlaneView extends React.Component {
                                         onClick={(event) => {
                                             this.miniboardClicked(event, board, boardIndex)
                                         }}
+                                        onContextMenu={(event) => this.props.handlePlaneBoardContextMenu && this.props.handlePlaneBoardContextMenu(event, null, boardIndex, null)}
 
                                         onDragStart = {(event) => this.props.onDragStart(event, board, boardIndex)}
                                         draggable
