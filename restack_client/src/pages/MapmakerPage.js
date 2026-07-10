@@ -4114,6 +4114,13 @@ class MapMakerPage extends React.Component {
       }
       
       if (dungeonName && levelName) {
+          let formattedLevel = levelName;
+          if (/^-?\d+$/.test(levelName)) {
+            formattedLevel = `Level ${levelName}`;
+          } else if (!levelName.toLowerCase().startsWith('level')) {
+            formattedLevel = `Level ${levelName}`;
+          }
+
           const slotNames = [
             'top_left', 'top_mid', 'top_right',
             'middle_left', 'middle_mid', 'middle_right',
@@ -4121,7 +4128,7 @@ class MapMakerPage extends React.Component {
           ];
           const slotName = slotNames[index];
           const suffix = orientation === 'back' ? '_back' : '';
-          const folderPath = `${dungeonName}/${levelName}/${slotName}${suffix}`;
+          const folderPath = `${dungeonName}/${formattedLevel}/${slotName}${suffix}`;
           
           try {
             let updatedBoard = {
