@@ -229,7 +229,7 @@ class PlanesPanel extends React.Component {
         return (
             <div className="palette right-palette" 
             style={{
-                width: this.props.tileSize*3.8+'px', height: this.props.boardSize+ 'px',
+                width: this.props.tileSize*4.5+'px', height: this.props.boardSize+ 'px',
                 backgroundColor: 'black',
                 overflow: 'scroll'
             }}
@@ -241,7 +241,7 @@ class PlanesPanel extends React.Component {
             >
                 <div className="planes-title">Planes</div>
                 <div className="planes-options-buttons-container" 
-                style={{width: this.props.tileSize*3.8+'px'}}
+                style={{width: this.props.tileSize*4.5+'px'}}
                 >
                     <CDropdown>
                         <CDropdownToggle color="secondary">Actions</CDropdownToggle>

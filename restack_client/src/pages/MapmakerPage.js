@@ -4619,7 +4619,7 @@ class MapMakerPage extends React.Component {
         </CModal>
         <div className="column-wrapper">
           <div className="inputs-container">
-            <div className="left-text-readout title" style={{ width: this.state.tileSize * 3.8 + 'px' }}>
+            <div className="left-text-readout title" style={{ width: this.state.tileSize * 4.5 + 'px' }}>
               {this.state.leftReadoutFlashMessage || this.state.selectedThingTitle}
             </div>
 
@@ -4655,7 +4655,7 @@ class MapMakerPage extends React.Component {
                 onChange={this.viewSelectorChange}
               />
             </CButtonGroup>
-            <div className="right-menus" style={{ width: this.state.tileSize * 3.8 + 'px' }}>
+            <div className="right-menus" style={{ width: this.state.tileSize * 4.5 + 'px' }}>
             </div>
           </div>
           <div className="row-wrapper">
