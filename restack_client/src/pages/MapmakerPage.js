@@ -2522,6 +2522,7 @@ class MapMakerPage extends React.Component {
         tiles: Array(15*15).fill(null).map((_, i) => ({
           id: i,
           type: 'void',
+          color: 'black',
           contains: 'empty',
           borders: []
         })),
