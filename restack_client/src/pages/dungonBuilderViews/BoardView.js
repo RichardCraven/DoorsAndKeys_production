@@ -13,13 +13,18 @@ import '../../styles/map-maker.scss'
 // import * as images from '../../utils/images'
 
 // ── Poly Haven floor textures (CC0) ─────────────────────────────────────────
-import texGroundGrey    from '../../assets/tilesets/ground_grey_diff_1k.jpg';
-import texRock01        from '../../assets/tilesets/rock_01_diff_1k.jpg';
-import texRockFace      from '../../assets/tilesets/rock_face_diff_1k.jpg';
-import texRockFace03    from '../../assets/tilesets/rock_face_03_diff_1k.jpg';
-import texMoon01        from '../../assets/tilesets/moon_01_diff_1k.jpg';
-import texLichenRock    from '../../assets/tilesets/lichen_rock_diff_1k.jpg';
-import texCoastRocks    from '../../assets/tilesets/coast_sand_rocks_02_diff_1k.jpg';
+import texGroundGrey            from '../../assets/tilesets/ground_grey_diff_1k.jpg';
+import texRock01                from '../../assets/tilesets/rock_01_diff_1k.jpg';
+import texRockFace              from '../../assets/tilesets/rock_face_diff_1k.jpg';
+import texRockFace03            from '../../assets/tilesets/rock_face_03_diff_1k.jpg';
+import texLichenRock            from '../../assets/tilesets/lichen_rock_diff_1k.jpg';
+import texCoastRocks            from '../../assets/tilesets/coast_sand_rocks_02_diff_1k.jpg';
+import texPlasteredWall05       from '../../assets/tilesets/plastered_wall_05_diff_1k.jpg';
+import texBluePlasterWall       from '../../assets/tilesets/blue_plaster_wall_diff_1k.jpg';
+import texCrackedConcrete02     from '../../assets/tilesets/cracked_concrete_02_diff_1k.jpg';
+import texConcreteFloorDamaged  from '../../assets/tilesets/concrete_floor_damaged_01_diff_1k.jpg';
+import texWornMossyPlaster      from '../../assets/tilesets/worn_mossy_plasterwall_diff_1k.jpg';
+import texPlasteredStoneWall    from '../../assets/tilesets/plastered_stone_wall_diff_1k.jpg';
 
 /**
  * All available floor textures.  Each entry becomes an option when we expose
@@ -29,13 +34,18 @@ import texCoastRocks    from '../../assets/tilesets/coast_sand_rocks_02_diff_1k.
  * src    – imported asset (resolved by Webpack/CRA)
  */
 export const FLOOR_TEXTURES = [
-    { key: 'ground_grey',        label: 'Grey Ground',       src: texGroundGrey  },
-    { key: 'rock_01',            label: 'Rock',              src: texRock01      },
-    { key: 'rock_face',          label: 'Rock Face',         src: texRockFace    },
-    { key: 'rock_face_03',       label: 'Rock Face (Dark)',  src: texRockFace03  },
-    { key: 'moon_01',            label: 'Lunar Stone',       src: texMoon01      },
-    { key: 'lichen_rock',        label: 'Lichen Rock',       src: texLichenRock  },
-    { key: 'coast_sand_rocks_02',label: 'Coastal Rock',      src: texCoastRocks  },
+    { key: 'ground_grey',             label: 'Grey Ground',            src: texGroundGrey             },
+    { key: 'rock_01',                 label: 'Rock',                   src: texRock01                 },
+    { key: 'rock_face',               label: 'Rock Face',              src: texRockFace               },
+    { key: 'rock_face_03',            label: 'Rock Face (Dark)',       src: texRockFace03             },
+    { key: 'lichen_rock',             label: 'Lichen Rock',            src: texLichenRock             },
+    { key: 'coast_sand_rocks_02',     label: 'Coastal Rock',           src: texCoastRocks             },
+    { key: 'plastered_wall_05',       label: 'Plastered Wall',         src: texPlasteredWall05        },
+    { key: 'blue_plaster_wall',       label: 'Blue Plaster Wall',      src: texBluePlasterWall        },
+    { key: 'cracked_concrete_02',     label: 'Cracked Concrete',       src: texCrackedConcrete02      },
+    { key: 'concrete_floor_damaged_01',label: 'Damaged Concrete Floor', src: texConcreteFloorDamaged   },
+    { key: 'worn_mossy_plasterwall',  label: 'Worn Mossy Plaster',     src: texWornMossyPlaster       },
+    { key: 'plastered_stone_wall',    label: 'Plastered Stone Wall',   src: texPlasteredStoneWall     },
 ];
 const DEFAULT_FLOOR_TEXTURE = FLOOR_TEXTURES[0].src;
 
@@ -325,21 +335,22 @@ class BoardView extends React.Component {
                             // (opacity ~45% texture visible, 55% dark overlay for depth)
                             //
                             // Void tiles: stored as near-black, completely cover the texture.
-                            // Content tiles (monsters/gates/etc): solid stored colour, cover texture.
-                            const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined'
+                             const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined'
                                 ? tile.color : null;
                             const isTileEmptySpace = BoardView.isEmptySpaceContains(tile.contains);
-                            const baseColor = storedColor
-                                ? (isTileEmptySpace && storedColor === '#6b6057'
-                                    ? EMPTY_SPACE_OVERLAY  // default brown → texture overlay
-                                    : storedColor)         // keep custom/void colour
-                                : (isTileEmptySpace
-                                    ? EMPTY_SPACE_OVERLAY  // no colour set → texture overlay
-                                    : '#1a1822');          // non-empty, no colour → dark fallback
 
-                            const isPreviewEmptySpace = BoardView.isEmptySpaceContains(previewContains);
+                            const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                           (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+
+                            const baseColor = isVoid
+                                ? 'black'
+                                : (storedColor && storedColor !== '#6b6057'
+                                    ? storedColor
+                                    : EMPTY_SPACE_OVERLAY);
+
+                            const isPreviewVoid = previewContains === 'void' || (previewContains && previewContains.type === 'void');
                             const tileColor = showPreview
-                                ? (previewColor || (isPreviewEmptySpace ? EMPTY_SPACE_OVERLAY : '#6b6057'))
+                                ? (previewColor || (isPreviewVoid ? 'black' : EMPTY_SPACE_OVERLAY))
                                 : baseColor;
 
                             const tileContains = showPreview ? previewContains : tile.contains;
