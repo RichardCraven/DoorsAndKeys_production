@@ -199,12 +199,17 @@ $bot-level-zIndex: 2; // doubletall containers
                 width: 10px;
             }
             .map-preview{
-                display: flex;
-                flex-flow: row wrap;
-                align-content: flex-end;
+                display: grid;
+                grid-template-columns: repeat(15, 1fr);
+                grid-template-rows: repeat(15, 1fr);
                 border: 1px solid rgba(255, 255, 255, 0.05);
                 box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
                 transition: border-color 0.2s ease, box-shadow 0.2s ease;
+                
+                .tile {
+                    width: 100% !important;
+                    height: 100% !important;
+                }
                 
                 &:hover {
                     border-color: rgba(249, 177, 21, 0.4);
