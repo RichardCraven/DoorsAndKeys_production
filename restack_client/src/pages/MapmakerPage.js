@@ -4128,12 +4128,8 @@ class MapMakerPage extends React.Component {
       console.log('onDrop resolved details:', { dungeonName, levelName, orientation, planeName: loadedPlane.name, index });
 
       if (dungeonName && levelName) {
-          let formattedLevel = levelName;
-          if (/^-?\d+$/.test(levelName)) {
-            formattedLevel = `Level ${levelName}`;
-          } else if (!levelName.toLowerCase().startsWith('level')) {
-            formattedLevel = `Level ${levelName}`;
-          }
+          // Normalize levelName to raw number segment (e.g., 'Level 0' -> '0')
+          const normalizedLevel = levelName.replace(/^[Ll]evel\s*/, '');
 
           const slotNames = [
             'top_left', 'top_mid', 'top_right',
@@ -4142,7 +4138,7 @@ class MapMakerPage extends React.Component {
           ];
           const slotName = slotNames[index];
           const suffix = orientation === 'back' ? '_back' : '';
-          const folderPath = `${dungeonName}/${formattedLevel}/${slotName}${suffix}`;
+          const folderPath = `${dungeonName}/${normalizedLevel}/${slotName}${suffix}`;
           
           console.log('onDrop updating board folderPath to:', folderPath, 'for board:', dragged.name, 'id:', dragged.id);
 
