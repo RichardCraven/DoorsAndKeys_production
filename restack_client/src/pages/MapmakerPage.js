@@ -4085,8 +4085,26 @@ class MapMakerPage extends React.Component {
       let levelName = '';
       let orientation = 'front';
       
-      if (Array.isArray(this.state.dungeons)) {
-        for (const d of this.state.dungeons) {
+      // 1. Primary Strategy: Parse from the plane's name directly (e.g. dream_0_back)
+      if (loadedPlane.name && loadedPlane.name.includes('_')) {
+        const parts = loadedPlane.name.split('_');
+        if (parts.length >= 3) {
+          dungeonName = parts[0];
+          levelName = parts[1];
+          const lastPart = parts[parts.length - 1].toLowerCase();
+          orientation = lastPart === 'back' ? 'back' : 'front';
+        }
+      }
+      
+      // 2. Fallback: Search in dungeons list (prioritize loadedDungeon)
+      if (!dungeonName && Array.isArray(this.state.dungeons)) {
+        const candidateDungeons = [...this.state.dungeons];
+        if (this.state.loadedDungeon) {
+          // Put the loaded dungeon at the front to prioritize matching it
+          candidateDungeons.unshift(this.state.loadedDungeon);
+        }
+        
+        for (const d of candidateDungeons) {
           if (Array.isArray(d.levels)) {
             for (const lvl of d.levels) {
               if (lvl.front && (lvl.front.id === planeId || (lvl.front.name && lvl.front.name === loadedPlane.name))) {
@@ -4104,17 +4122,6 @@ class MapMakerPage extends React.Component {
             }
           }
           if (dungeonName) break;
-        }
-      }
-      
-      // Fallback: Parse dungeonName, levelName, and orientation from the plane's name directly (e.g. dream_0_back)
-      if (!dungeonName && loadedPlane.name && loadedPlane.name.includes('_')) {
-        const parts = loadedPlane.name.split('_');
-        if (parts.length >= 3) {
-          dungeonName = parts[0];
-          levelName = parts[1];
-          const lastPart = parts[parts.length - 1].toLowerCase();
-          orientation = lastPart === 'back' ? 'back' : 'front';
         }
       }
       
