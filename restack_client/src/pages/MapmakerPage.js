@@ -2457,6 +2457,97 @@ class MapMakerPage extends React.Component {
     });
   }
 
+  handleFillWithEmptyBoard = async () => {
+    const { levelId, miniboardIndex, frontOrBack } = this.state.planeBoardContextMenu;
+    this.setState({ planeBoardContextMenu: { ...this.state.planeBoardContextMenu, visible: false } });
+    
+    if (levelId === null || levelId === undefined) {
+      if (!this.state.loadedPlane) return;
+      
+      const slotNames = [
+        'top_left', 'top_mid', 'top_right',
+        'middle_left', 'middle_mid', 'middle_right',
+        'bottom_left', 'bottom_mid', 'bottom_right'
+      ];
+      const slotName = slotNames[miniboardIndex];
+      
+      let dungeonName = '';
+      let levelName = '';
+      let orientation = 'front';
+      
+      if (this.state.loadedPlane.name && this.state.loadedPlane.name.includes('_')) {
+        const parts = this.state.loadedPlane.name.split('_');
+        if (parts.length >= 3) {
+          dungeonName = parts[0];
+          levelName = parts[1];
+          const lastPart = parts[parts.length - 1].toLowerCase();
+          orientation = lastPart === 'back' ? 'back' : 'front';
+        }
+      }
+      
+      if (!dungeonName && Array.isArray(this.state.dungeons)) {
+        for (let i = 0; i < this.state.dungeons.length; i++) {
+          const d = this.state.dungeons[i];
+          if (Array.isArray(d.levels)) {
+            for (let j = 0; j < d.levels.length; j++) {
+              const lvl = d.levels[j];
+              if (lvl.front && (lvl.front.id === this.state.loadedPlane.id || (lvl.front.name && lvl.front.name === this.state.loadedPlane.name))) {
+                dungeonName = d.name;
+                levelName = String(lvl.id);
+                orientation = 'front';
+                break;
+              }
+              if (lvl.back && (lvl.back.id === this.state.loadedPlane.id || (lvl.back.name && lvl.back.name === this.state.loadedPlane.name))) {
+                dungeonName = d.name;
+                levelName = String(lvl.id);
+                orientation = 'back';
+                break;
+              }
+            }
+          }
+          if (dungeonName) break;
+        }
+      }
+      
+      let folderPath = '';
+      if (dungeonName && levelName) {
+        const normalizedLevel = levelName.replace(/^[Ll]evel\s*/, '');
+        const suffix = orientation === 'back' ? '_back' : '';
+        folderPath = `${dungeonName}/${normalizedLevel}/${slotName}${suffix}`;
+      }
+      
+      let newBoard = {
+        name: "empty",
+        folderPath: folderPath,
+        tiles: Array(15*15).fill(null).map((_, i) => ({
+          id: i,
+          type: 'floor',
+          contains: 'empty',
+          borders: []
+        })),
+        config: [[], [], [], []]
+      };
+      
+      try {
+        const addedMap = await addBoardRequest(newBoard);
+        newBoard.id = addedMap.data._id;
+        
+        let loadedPlane = clone(this.state.loadedPlane);
+        let minis = loadedPlane.miniboards;
+        if (!Array.isArray(minis)) minis = [];
+        while (minis.length < 9) minis.push({});
+        
+        minis[miniboardIndex] = newBoard;
+        this.setState({ loadedPlane, planeHasUnsavedChanges: true }, async () => {
+          await this.loadAllBoards();
+          this.flashLeftReadout('Empty board created');
+        });
+      } catch (err) {
+        console.error('Failed to create and assign empty board:', err);
+      }
+    }
+  }
+
   handleRemoveBoardFromPlane = async () => {
     const { levelId, miniboardIndex, frontOrBack } = this.state.planeBoardContextMenu;
     this.setState({ planeBoardContextMenu: { ...this.state.planeBoardContextMenu, visible: false } });
@@ -4591,6 +4682,26 @@ class MapMakerPage extends React.Component {
                 backdropFilter: 'blur(10px)'
               }}
             >
+              <button
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '10px 16px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  transition: 'background-color 0.2s',
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                  borderBottom: '1px solid rgba(255,255,255,0.1)'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                onClick={this.handleFillWithEmptyBoard}
+              >
+                Create Empty Board
+              </button>
               <button
                 style={{
                   background: 'transparent',
