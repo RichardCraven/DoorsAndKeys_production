@@ -4076,21 +4076,21 @@ class MapMakerPage extends React.Component {
       sections[index] = dragged;
       
       const planeId = loadedPlane.id;
-      if (planeId && Array.isArray(this.state.dungeons)) {
-        let dungeonName = '';
-        let levelName = '';
-        let orientation = 'front';
-        
+      let dungeonName = '';
+      let levelName = '';
+      let orientation = 'front';
+      
+      if (Array.isArray(this.state.dungeons)) {
         for (const d of this.state.dungeons) {
           if (Array.isArray(d.levels)) {
             for (const lvl of d.levels) {
-              if (lvl.front && lvl.front.id === planeId) {
+              if (lvl.front && (lvl.front.id === planeId || (lvl.front.name && lvl.front.name === loadedPlane.name))) {
                 dungeonName = d.name;
                 levelName = String(lvl.id);
                 orientation = 'front';
                 break;
               }
-              if (lvl.back && lvl.back.id === planeId) {
+              if (lvl.back && (lvl.back.id === planeId || (lvl.back.name && lvl.back.name === loadedPlane.name))) {
                 dungeonName = d.name;
                 levelName = String(lvl.id);
                 orientation = 'back';
@@ -4100,8 +4100,20 @@ class MapMakerPage extends React.Component {
           }
           if (dungeonName) break;
         }
-        
-        if (dungeonName && levelName) {
+      }
+      
+      // Fallback: Parse dungeonName, levelName, and orientation from the plane's name directly (e.g. dream_0_back)
+      if (!dungeonName && loadedPlane.name && loadedPlane.name.includes('_')) {
+        const parts = loadedPlane.name.split('_');
+        if (parts.length >= 3) {
+          dungeonName = parts[0];
+          levelName = parts[1];
+          const lastPart = parts[parts.length - 1].toLowerCase();
+          orientation = lastPart === 'back' ? 'back' : 'front';
+        }
+      }
+      
+      if (dungeonName && levelName) {
           const slotNames = [
             'top_left', 'top_mid', 'top_right',
             'middle_left', 'middle_mid', 'middle_right',
@@ -4124,8 +4136,7 @@ class MapMakerPage extends React.Component {
           }
         }
       }
-    }
-    
+
     loadedPlane.miniboards = sections;
     this.setState({
       draggedBoard: null,
