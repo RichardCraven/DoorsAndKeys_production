@@ -2351,6 +2351,16 @@ class MapMakerPage extends React.Component {
     
     let syncedDungeon = clone(dungeon);
     
+    // Completely clear all miniboards in the dungeon to avoid ghost duplicates
+    syncedDungeon.levels.forEach(level => {
+      if (level.front) {
+        level.front.miniboards = Array(9).fill(null).map(() => ({}));
+      }
+      if (level.back) {
+        level.back.miniboards = Array(9).fill(null).map(() => ({}));
+      }
+    });
+    
     const getGridIndexFromPathSuffix = (pathSuffix) => {
       if (!pathSuffix) return 4;
       const normalized = pathSuffix.toLowerCase().replace(/_/g, '/');
@@ -4073,6 +4083,16 @@ class MapMakerPage extends React.Component {
     const origin = this.state.draggedBoardOrigin;
     if (origin !== null && origin !== undefined && origin >= 0 && origin < 9) {
       minis[origin] = [];
+    }
+    
+    // Scan all slots in the current plane and remove any existing instances of this board
+    // This ensures dragging a board from the sidebar to a new slot *moves* it instead of duplicating it
+    if (this.state.draggedBoard && this.state.draggedBoard.id) {
+      for (let i = 0; i < 9; i++) {
+        if (i !== index && minis[i] && minis[i].id === this.state.draggedBoard.id) {
+          minis[i] = [];
+        }
+      }
     }
 
     let sections = loadedPlane.miniboards;
