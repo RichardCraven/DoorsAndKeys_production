@@ -346,7 +346,7 @@ class DungeonView extends React.Component {
                     destinationX_back = (originPointX_back + x) + (unit * 4) ,
                     destinationY_back = (originPointY + y) + (unit * 4) 
                     ctx.lineWidth = 2;
-                    ctx.strokeStyle = 'lightgreen'
+                    ctx.strokeStyle = '#ca8a04'; // dark yellow / gold for front-to-back door connection
                     ctx.beginPath();
                     ctx.moveTo(newOriginX,newOriginY);
                     let bezierControlPoint1 = {x: newOriginX, y: newOriginY + 100}
