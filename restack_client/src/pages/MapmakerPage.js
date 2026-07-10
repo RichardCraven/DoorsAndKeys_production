@@ -897,6 +897,156 @@ class MapMakerPage extends React.Component {
     return modified ? nextTiles : tiles;
   }
 
+  placeTileAtId = (tileId, pinnedOption, pinned) => {
+    if (!pinnedOption) return null;
+
+    let monster, gate, key, tierOption, jewelOption, runeOption, treasureOption, vendorOption;
+    if (pinnedOption.type === 'monster-tile') {
+      monster = Object.values(this.props.monsterManager.monsters)[pinnedOption.id];
+    }
+    if (pinnedOption.type === 'gate-tile') {
+      gate = GATES[pinnedOption.id];
+    }
+    if (pinnedOption.type === 'key-tile') {
+      key = KEYS[pinnedOption.id];
+    }
+    if (pinnedOption.type === 'tier-tile') {
+      tierOption = this.props.mapMaker.tierOptions[pinnedOption.id];
+    }
+    if (pinnedOption.type === 'jewel-tile') {
+      jewelOption = this.props.mapMaker.jewelOptions[pinnedOption.id];
+    }
+    if (pinnedOption.type === 'rune-tile') {
+      runeOption = this.props.mapMaker.runeOptions[pinnedOption.id];
+    }
+    if (pinnedOption.type === 'treasure-tile') {
+      treasureOption = this.props.mapMaker.treasureOptions[pinnedOption.id];
+    }
+    if (pinnedOption.type === 'vendor-tile') {
+      vendorOption = this.props.mapMaker.vendorOptions[pinnedOption.id];
+    }
+
+    let shrineOption = null, loreTabletOption = null;
+    if (pinnedOption.type === 'shrine-tile') {
+      shrineOption = this.props.mapMaker.shrineOptions[pinnedOption.id];
+    }
+    if (pinnedOption.type === 'lore-tablet-tile') {
+      loreTabletOption = this.props.mapMaker.loreTabletOptions[pinnedOption.id];
+    }
+
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || loreTabletOption;
+    if (!isSpecialOption && !pinned) return null;
+
+    let arr = this.state.tiles.map(t => ({ ...t }));
+
+    if (monster) {
+      arr[tileId].contains = { type: 'monster', subtype: monster.key };
+      arr[tileId].image = monster.portrait;
+      arr[tileId].color = null;
+    } else if (gate) {
+      arr[tileId].contains = { type: 'gate', subtype: gate.key };
+      arr[tileId].image = images[gate.key];
+      arr[tileId].color = null;
+    } else if (key) {
+      arr[tileId].contains = { type: 'item', subtype: key.key };
+      arr[tileId].image = images[key.key];
+      arr[tileId].color = null;
+    } else if (tierOption) {
+      arr[tileId].contains = { type: tierOption.key, subtype: null };
+      arr[tileId].image = images[tierOption.image];
+      arr[tileId].color = null;
+    } else if (jewelOption) {
+      arr[tileId].contains = { type: 'item', subtype: jewelOption.key };
+      arr[tileId].image = images[jewelOption.image];
+      arr[tileId].color = null;
+    } else if (runeOption) {
+      arr[tileId].contains = { type: 'item', subtype: runeOption.key };
+      arr[tileId].image = images[runeOption.image];
+      arr[tileId].color = null;
+    } else if (treasureOption) {
+      arr[tileId].contains = { type: 'item', subtype: treasureOption.key };
+      arr[tileId].image = images[treasureOption.image];
+      arr[tileId].color = null;
+    } else if (vendorOption) {
+      if (!this.canPlaceVendorFootprint(arr, tileId)) {
+        this.toast('Vendors require a 2x2 empty space.');
+        return null;
+      }
+      arr = this.placeVendorFootprint(arr, tileId, vendorOption.key);
+    } else if (shrineOption) {
+      arr[tileId].contains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
+      arr[tileId].color = shrineOption.color;
+      arr[tileId].image = null;
+    } else if (loreTabletOption) {
+      arr[tileId].contains = { type: 'lore_tablet', subtype: loreTabletOption.domain, key: loreTabletOption.key };
+      arr[tileId].color = loreTabletOption.color;
+      arr[tileId].image = null;
+    } else if (pinned.optionType === 'passage') {
+      let prevTileIdx = this.state.hoveredTileIdx;
+      let connectedTop = false, connectedBot = false, connectedLeft = false, connectedRight = false;
+      let isAdjacent = false;
+      if (prevTileIdx !== null && prevTileIdx !== tileId) {
+        let prevTile = arr[prevTileIdx];
+        if (prevTile && this.getContainsType(prevTile.contains) === 'passage') {
+          if (tileId === prevTileIdx - 15) { connectedBot = true; isAdjacent = true; } // moved up
+          if (tileId === prevTileIdx + 15) { connectedTop = true; isAdjacent = true; } // moved down
+          if (tileId === prevTileIdx - 1) { connectedRight = true; isAdjacent = true; } // moved left
+          if (tileId === prevTileIdx + 1) { connectedLeft = true; isAdjacent = true; } // moved right
+          if (isAdjacent) {
+            let pb = prevTile.borders ? { ...prevTile.borders } : { top: '2px solid black', bottom: '2px solid black', left: '2px solid black', right: '2px solid black' };
+            if (connectedBot) pb.top = '2px solid transparent';
+            if (connectedTop) pb.bottom = '2px solid transparent';
+            if (connectedRight) pb.left = '2px solid transparent';
+            if (connectedLeft) pb.right = '2px solid transparent';
+            arr[prevTileIdx] = { ...prevTile, borders: pb };
+          }
+        }
+      }
+      let newBorders = { top: '2px solid black', bottom: '2px solid black', left: '2px solid black', right: '2px solid black' };
+      if (this.getContainsType(arr[tileId].contains) === 'passage') {
+        newBorders = arr[tileId].borders ? { ...arr[tileId].borders } : newBorders;
+      }
+      if (connectedBot) newBorders.bottom = '2px solid transparent';
+      if (connectedTop) newBorders.top = '2px solid transparent';
+      if (connectedRight) newBorders.right = '2px solid transparent';
+      if (connectedLeft) newBorders.left = '2px solid transparent';
+
+      arr[tileId].image = null;
+      arr[tileId].color = null;
+      arr[tileId].contains = { type: 'passage', subtype: null };
+      arr[tileId].borders = newBorders;
+    } else if (pinned.optionType === 'empty space') {
+      arr[tileId].image = null;
+      arr[tileId].color = null;
+      arr[tileId].contains = { type: 'empty_space', subtype: null };
+      arr[tileId].borders = null;
+    } else if (pinned.optionType === 'obscured space') {
+      const preservedBorders = arr[tileId].borders ? { ...arr[tileId].borders } : null;
+      arr[tileId].image = null;
+      arr[tileId].color = '#a8a8a8';
+      arr[tileId].contains = { type: 'obscured_space', subtype: null };
+      arr[tileId].borders = preservedBorders;
+    } else if (pinned.optionType === 'void') {
+      arr[tileId].image = null;
+      arr[tileId].color = 'black';
+      arr[tileId].contains = { type: 'void', subtype: null };
+      arr[tileId].borders = null;
+    } else if (pinned.optionType === 'delete') {
+      arr = this.deleteTileWithVendorSupport(arr, tileId);
+    } else {
+      const rawType = pinned.optionType || pinned.image || pinned.type || 'misc';
+      const normalizedType = String(rawType).replace(/\s+/g, '_');
+      let containsObj = { type: normalizedType, subtype: pinned.image };
+      if (String(normalizedType).indexOf('key') !== -1 || String(pinned.image).indexOf('key') !== -1) {
+        containsObj = { type: 'item', subtype: String(pinned.image || normalizedType).replace(/\s+/g, '_') };
+      }
+      arr[tileId].contains = containsObj;
+      arr[tileId].image = pinned.image;
+      arr[tileId].color = pinned.color || null;
+    }
+    return arr;
+  };
+
   handleHover = (id, type) => {
     const pinnedPaletteTile = this.state.pinnedOption && this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]
       ? this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]
@@ -904,101 +1054,46 @@ class MapMakerPage extends React.Component {
     const pinnedPassageTool = this.state.pinnedOption?.type === 'passage-tool-tile'
       ? this.props.mapMaker.passageOptions?.[this.state.pinnedOption.id]
       : null;
-    if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool)) {
-      let tile = this.props.mapMaker.tiles[id];
+    const isSpecialOption = this.state.pinnedOption && [
+      'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'lore-tablet-tile'
+    ].includes(this.state.pinnedOption.type);
+
+    if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
+      let tile = this.state.tiles[id];
       let pinned = pinnedPaletteTile;
       if (pinnedPassageTool?.key === 'wall_breaker') {
         const arr = this.breakPassageWall([...this.state.tiles], this.state.hoveredTileIdx, tile.id);
+        const updatedLoadedBoard = this.state.loadedBoard ? {
+          ...this.state.loadedBoard,
+          tiles: arr
+        } : null;
         this.setState({
           tiles: arr,
+          loadedBoard: updatedLoadedBoard,
           hoveredTileIdx: tile.id
-        })
+        });
         return;
       }
-      if (pinned && pinned.optionType === 'passage') {
-        let arr = [...this.state.tiles]
-        let prevTileIdx = this.state.hoveredTileIdx;
-        let connectedTop = false, connectedBot = false, connectedLeft = false, connectedRight = false;
-        let isAdjacent = false;
-        if (prevTileIdx !== null && prevTileIdx !== tile.id) {
-          let prevTile = arr[prevTileIdx];
-          if (prevTile && this.getContainsType(prevTile.contains) === 'passage') {
-            if (tile.id === prevTileIdx - 15) { connectedBot = true; isAdjacent = true; } // moved up
-            if (tile.id === prevTileIdx + 15) { connectedTop = true; isAdjacent = true; } // moved down
-            if (tile.id === prevTileIdx - 1) { connectedRight = true; isAdjacent = true; } // moved left
-            if (tile.id === prevTileIdx + 1) { connectedLeft = true; isAdjacent = true; } // moved right
-            if (isAdjacent) {
-              let pb = prevTile.borders ? { ...prevTile.borders } : { top: '2px solid black', bottom: '2px solid black', left: '2px solid black', right: '2px solid black' };
-              if (connectedBot) pb.top = '2px solid transparent';
-              if (connectedTop) pb.bottom = '2px solid transparent';
-              if (connectedRight) pb.left = '2px solid transparent';
-              if (connectedLeft) pb.right = '2px solid transparent';
-              arr[prevTileIdx] = { ...prevTile, borders: pb };
-            }
-          }
-        }
-        let newBorders = { top: '2px solid black', bottom: '2px solid black', left: '2px solid black', right: '2px solid black' };
-        if (this.getContainsType(arr[tile.id].contains) === 'passage') {
-          newBorders = arr[tile.id].borders ? { ...arr[tile.id].borders } : newBorders;
-        }
-        if (connectedBot) newBorders.bottom = '2px solid transparent';
-        if (connectedTop) newBorders.top = '2px solid transparent';
-        if (connectedRight) newBorders.right = '2px solid transparent';
-        if (connectedLeft) newBorders.left = '2px solid transparent';
-
-        arr[tile.id].image = null;
-        arr[tile.id].color = null;
-        arr[tile.id].contains = { type: 'passage', subtype: null };
-        arr[tile.id].borders = newBorders;
-
-        this.setState({
-          hoveredTileIdx: tile.id,
-          tiles: arr
-        })
-      } else if (pinned && pinned.optionType === 'empty space') {
-        let arr = [...this.state.tiles]
-        arr[tile.id].image = null;
-        arr[tile.id].color = null;
-        arr[tile.id].contains = { type: 'empty_space', subtype: null }
-        arr[tile.id].borders = null;
-        this.setState({
-          hoveredTileIdx: tile.id,
-          tiles: arr
-        })
-      } else if (pinned && pinned.optionType === 'obscured space') {
-        let arr = [...this.state.tiles]
-        const preservedBorders = arr[tile.id].borders ? { ...arr[tile.id].borders } : null;
-        arr[tile.id].image = null;
-        arr[tile.id].color = '#a8a8a8';
-        arr[tile.id].contains = { type: 'obscured_space', subtype: null }
-        arr[tile.id].borders = preservedBorders;
-        this.setState({
-          hoveredTileIdx: tile.id,
-          tiles: arr
-        })
-      } else if (pinned && pinned.optionType === 'void') {
-        let arr = [...this.state.tiles]
-        arr[tile.id].image = null;
-        arr[tile.id].color = 'black';
-        arr[tile.id].contains = { type: 'void', subtype: null }
-        arr[tile.id].borders = null;
-        this.setState({
-          hoveredTileIdx: null,
-          tiles: arr
-        })
-      } else if (pinned && pinned.optionType === 'inscription') {
+      if (pinned && pinned.optionType === 'inscription') {
         // Inscription hover: do nothing (inscription is placed via click/drag, not hover-paint)
-        this.setState({ hoveredTileIdx: tile.id })
+        this.setState({ hoveredTileIdx: tile.id });
         return;
       }
-      if (pinned && pinned.optionType === 'delete') {
-        let arr = [...this.state.tiles];
-        arr = this.deleteTileWithVendorSupport(arr, tile.id);
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
 
+      const nextTiles = this.placeTileAtId(tile.id, this.state.pinnedOption, pinned);
+      if (nextTiles) {
+        const updatedLoadedBoard = this.state.loadedBoard ? {
+          ...this.state.loadedBoard,
+          tiles: nextTiles
+        } : null;
+        this.setState({
+          tiles: nextTiles,
+          loadedBoard: updatedLoadedBoard,
+          hoveredTileIdx: tile.id,
+          dungeonHasUnsavedChanges: true,
+          boardHasUnsavedChanges: true
+        });
       }
     } else {
       if (type === 'palette-tile') {
@@ -1418,6 +1513,30 @@ class MapMakerPage extends React.Component {
 
   handleClick = (tile) => {
     if (tile.type === 'palette-tile') {
+      if (tile.optionType === 'voidfill') {
+        const arr = this.state.tiles.map(e => {
+          const containsType = this.getContainsType(e.contains);
+          if (!containsType || containsType === 'empty_space') {
+            return {
+              ...e,
+              image: null,
+              color: 'black',
+              contains: { type: 'void', subtype: null },
+              borders: null
+            };
+          }
+          return e;
+        });
+        this.setState({
+          tiles: arr,
+          optionClickedIdx: null,
+          pinnedOption: null,
+          dungeonHasUnsavedChanges: true,
+          boardHasUnsavedChanges: true
+        });
+        return;
+      }
+
       if (this.state.optionClickedIdx === tile.id) {
         this.setState({
           optionClickedIdx: null,
@@ -1438,23 +1557,31 @@ class MapMakerPage extends React.Component {
       this.setState({
         pinnedOption: tile
       })
-    } else if (tile.type === 'board-tile') {
-      const containsType = this.getContainsType(tile.contains);
+    } else {
+      // Catch-all: treat as a board tile. We intentionally use `else` rather than
+      // `else if (tile.type === 'board-tile')` because board tiles in state can carry
+      // their content type ('void', 'empty_space', etc.) as the structural `type` field
+      // depending on how they were initialized. All specific non-board types (palette-tile,
+      // monster-tile, passage-tool-tile, etc.) are already handled in the branches above.
+
+      const actualContains = this.state.tiles[tile.id]?.contains ?? tile.contains;
+      const containsType = this.getContainsType(actualContains);
+
       if (containsType === 'dungeon_portal' || containsType === 'dungeon portal') {
         const pinnedOption = this.state.pinnedOption;
         const pinnedPaletteTile = pinnedOption && this.props.mapMaker.paletteTiles[pinnedOption.id];
         if (pinnedPaletteTile && pinnedPaletteTile.optionType === 'delete') {
           // Allow delete to fall through
         } else {
-          // Ensure portal has a unique portalId
-          if (!tile.contains.portalId) {
-            tile.contains.portalId = `portal_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+          // Ensure portal has a unique portalId — read from actual state, not preview props
+          if (!actualContains?.portalId) {
+            const newPortalId = `portal_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
             const nextTiles = [...this.state.tiles];
             nextTiles[tile.id] = {
               ...nextTiles[tile.id],
               contains: {
                 ...nextTiles[tile.id].contains,
-                portalId: tile.contains.portalId
+                portalId: newPortalId
               }
             };
             if (this.state.loadedDungeon && this.state.loadedBoard) {
@@ -1473,246 +1600,95 @@ class MapMakerPage extends React.Component {
           } else {
             this.setState({
               showPortalModal: true,
-              portalModalTile: tile
+              portalModalTile: this.state.tiles[tile.id]
             });
           }
           return;
         }
       }
-      let pinned = null, monster, gate, key, tierOption, jewelOption, runeOption, treasureOption, vendorOption, passageToolOption;
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'monster-tile') {
-        monster = Object.values(this.props.monsterManager.monsters)[this.state.pinnedOption.id];
-      };
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'gate-tile') {
-        gate = GATES[this.state.pinnedOption.id];
-      };
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'key-tile') {
-        key = KEYS[this.state.pinnedOption.id];
-      };
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'tier-tile') {
-        tierOption = this.props.mapMaker.tierOptions[this.state.pinnedOption.id];
-      };
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'jewel-tile') {
-        jewelOption = this.props.mapMaker.jewelOptions[this.state.pinnedOption.id];
-      };
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'rune-tile') {
-        runeOption = this.props.mapMaker.runeOptions[this.state.pinnedOption.id];
-      };
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'treasure-tile') {
-        treasureOption = this.props.mapMaker.treasureOptions[this.state.pinnedOption.id];
-      };
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'vendor-tile') {
-        vendorOption = this.props.mapMaker.vendorOptions[this.state.pinnedOption.id];
-      };
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'passage-tool-tile') {
-        passageToolOption = this.props.mapMaker.passageOptions[this.state.pinnedOption.id];
-      };
-      // Shrine and lore_tablet: resolve sub-item when a specific variant is pinned
-      let shrineOption = null, loreTabletOption = null;
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'shrine-tile') {
-        shrineOption = this.props.mapMaker.shrineOptions[this.state.pinnedOption.id];
-      };
-      if (this.state.pinnedOption && this.state.pinnedOption.type === 'lore-tablet-tile') {
-        loreTabletOption = this.props.mapMaker.loreTabletOptions[this.state.pinnedOption.id];
-      };
-      if (monster) {
-        let arr = [...this.state.tiles];
-        arr[tile.id].contains = { type: 'monster', subtype: monster.key }
-        arr[tile.id].image = monster.portrait
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-        return
-      } else if (gate) {
-        let arr = [...this.state.tiles];
-        arr[tile.id].contains = { type: 'gate', subtype: gate.key }
-        arr[tile.id].image = images[gate.key]
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-        return
-      } else if (key) {
-        let arr = [...this.state.tiles];
-        arr[tile.id].contains = { type: 'item', subtype: key.key }
-        arr[tile.id].image = images[key.key]
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-        return
-      } else if (tierOption) {
-        let arr = [...this.state.tiles];
-        arr[tile.id].contains = { type: tierOption.key, subtype: null }
-        arr[tile.id].image = images[tierOption.image]
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-        return
-      } else if (jewelOption) {
-        let arr = [...this.state.tiles];
-        arr[tile.id].contains = { type: 'item', subtype: jewelOption.key }
-        arr[tile.id].image = images[jewelOption.image]
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-        return
-      } else if (runeOption) {
-        let arr = [...this.state.tiles];
-        arr[tile.id].contains = { type: 'item', subtype: runeOption.key }
-        arr[tile.id].image = images[runeOption.image]
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-        return
-      } else if (treasureOption) {
-        let arr = [...this.state.tiles];
-        arr[tile.id].contains = { type: 'item', subtype: treasureOption.key }
-        arr[tile.id].image = images[treasureOption.image]
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-        return
-      } else if (vendorOption) {
-        let arr = [...this.state.tiles];
-        if (!this.canPlaceVendorFootprint(arr, tile.id)) {
-          this.toast('Vendors require a 2x2 empty space.');
-          return;
-        }
-        arr = this.placeVendorFootprint(arr, tile.id, vendorOption.key);
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-        return
-      } else if (passageToolOption) {
-        if (passageToolOption.key === 'wall_breaker') {
-          if (this.state.previousHoveredTileIdx !== null && this.state.previousHoveredTileIdx !== undefined) {
-            const arr = this.breakPassageWall([...this.state.tiles], this.state.previousHoveredTileIdx, tile.id);
-            this.setState({
-              tiles: arr,
-              hoveredTileIdx: tile.id
-            });
-          }
-        }
-        return
-      } else if (shrineOption) {
-        let arr = [...this.state.tiles];
-        arr[tile.id].contains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
-        arr[tile.id].color = shrineOption.color;
-        arr[tile.id].image = null;
-        this.setState({ tiles: arr, hoveredTileIdx: null });
-        return;
-      } else if (loreTabletOption) {
-        let arr = [...this.state.tiles];
-        arr[tile.id].contains = { type: 'lore_tablet', subtype: loreTabletOption.domain, key: loreTabletOption.key };
-        arr[tile.id].color = loreTabletOption.color;
-        arr[tile.id].image = null;
-        this.setState({ tiles: arr, hoveredTileIdx: null });
-        return;
-      } else if (this.state.pinnedOption && this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]) {
-        pinned = this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]
+
+      let pinned = null;
+      if (this.state.pinnedOption?.type === 'palette-tile' && this.props.mapMaker.paletteTiles[this.state.pinnedOption.id]) {
+        pinned = this.props.mapMaker.paletteTiles[this.state.pinnedOption.id];
       }
-      console.log('pinned: ', pinned);
-      console.log('this.props.mapMaker.paletteTiles', this.props.mapMaker.paletteTiles);
-      if (pinned && pinned.optionType === 'passage') {
-        let arr = [...this.state.tiles];
-        if (this.getContainsType(arr[tile.id].contains) === 'passage') {
-          this.setState({
-            hoveredTileIdx: tile.id
-          });
-        } else {
-          arr[tile.id].image = null;
-          arr[tile.id].color = null
-          arr[tile.id].contains = { type: 'passage', subtype: null }
-          arr[tile.id].borders = { top: '2px solid black', bottom: '2px solid black', left: '2px solid black', right: '2px solid black' };
+
+      const pinnedPassageTool = this.state.pinnedOption?.type === 'passage-tool-tile'
+        ? this.props.mapMaker.passageOptions?.[this.state.pinnedOption.id]
+        : null;
+
+      if (pinnedPassageTool?.key === 'wall_breaker') {
+        if (this.state.previousHoveredTileIdx !== null && this.state.previousHoveredTileIdx !== undefined) {
+          const arr = this.breakPassageWall([...this.state.tiles], this.state.previousHoveredTileIdx, tile.id);
+          const updatedLoadedBoard = this.state.loadedBoard ? {
+            ...this.state.loadedBoard,
+            tiles: arr
+          } : null;
           this.setState({
             tiles: arr,
-            hoveredTileIdx: tile.id
-          })
+            loadedBoard: updatedLoadedBoard,
+            hoveredTileIdx: tile.id,
+            dungeonHasUnsavedChanges: true,
+            boardHasUnsavedChanges: true
+          });
         }
-      } else if (pinned && pinned.optionType === 'empty space') {
-        let arr = [...this.state.tiles];
-        arr[tile.id].image = null;
-        arr[tile.id].color = null
-        arr[tile.id].contains = { type: 'empty_space', subtype: null }
-        arr[tile.id].borders = null;
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: tile.id
-        })
-      } else if (pinned && pinned.optionType === 'obscured space') {
-        let arr = [...this.state.tiles];
-        const preservedBorders = arr[tile.id].borders ? { ...arr[tile.id].borders } : null;
-        arr[tile.id].image = null;
-        arr[tile.id].color = '#a8a8a8'
-        arr[tile.id].contains = { type: 'obscured_space', subtype: null }
-        arr[tile.id].borders = preservedBorders;
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: tile.id
-        })
-      } else if (pinned && pinned.optionType === 'inscription') {
-        // Inscription: click any tile to show the wall-side picker
+        return;
+      }
+
+      if (pinned && pinned.optionType === 'inscription') {
         this.showInscriptionWallPicker(tile.id);
         return;
-      } else if (pinned && pinned.optionType === 'void') {
-        let arr = [...this.state.tiles];
-        arr[tile.id].image = null;
-        arr[tile.id].color = 'black'
-        arr[tile.id].contains = { type: 'void', subtype: null }
-        arr[tile.id].borders = null;
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-      } else if (pinned && pinned.optionType === 'voidfill') {
-        let arr = [...this.state.tiles];
-        arr.forEach(e => {
+      }
+
+      if (pinned && pinned.optionType === 'voidfill') {
+        const arr = this.state.tiles.map(e => {
           const containsType = this.getContainsType(e.contains);
           if (!containsType || containsType === 'empty_space') {
-            e.image = null;
-            e.color = 'black'
-            e.contains = { type: 'void', subtype: null }
-            e.borders = null;
+            return {
+              ...e,
+              image: null,
+              color: 'black',
+              contains: { type: 'void', subtype: null },
+              borders: null
+            };
           }
-        })
+          return e;
+        });
+        const updatedLoadedBoard = this.state.loadedBoard ? {
+          ...this.state.loadedBoard,
+          tiles: arr
+        } : null;
         this.setState({
           tiles: arr,
-          hoveredTileIdx: null
-        })
-      } else if (pinned && pinned.optionType === 'delete') {
-        let arr = [...this.state.tiles];
-        arr = this.deleteTileWithVendorSupport(arr, tile.id);
+          loadedBoard: updatedLoadedBoard,
+          hoveredTileIdx: null,
+          dungeonHasUnsavedChanges: true,
+          boardHasUnsavedChanges: true
+        });
+        return;
+      }
+
+      if (pinned && this.isParentPaletteOption(pinned.optionType)) {
+        return;
+      }
+
+      if (!pinned && !this.state.pinnedOption) {
+        return;
+      }
+
+      const nextTiles = this.placeTileAtId(tile.id, this.state.pinnedOption, pinned);
+
+      if (nextTiles) {
+        const updatedLoadedBoard = this.state.loadedBoard ? {
+          ...this.state.loadedBoard,
+          tiles: nextTiles
+        } : null;
         this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
-      } else if (pinned && this.isParentPaletteOption(pinned.optionType)) {
-        return
-      } else if (pinned) {
-        let arr = [...this.state.tiles];
-        // Store new contains shape for placed tiles. Prefer canonical shapes:
-        // - Keys should be stored as items with subtype (e.g. {type: 'item', subtype: 'minor_key'})
-        // - Monsters/gates are handled above. Fallback to pinned.optionType/image when needed.
-        const rawType = pinned.optionType || pinned.image || pinned.type || 'misc';
-        const normalizedType = String(rawType).replace(/\s+/g, '_');
-        let containsObj = { type: normalizedType, subtype: pinned.image };
-        if (String(normalizedType).indexOf('key') !== -1 || String(pinned.image).indexOf('key') !== -1) {
-          containsObj = { type: 'item', subtype: String(pinned.image || normalizedType).replace(/\s+/g, '_') };
-        }
-        arr[tile.id].contains = containsObj;
-        arr[tile.id].image = pinned.image
-        console.log('in final pin block, pinned: ', pinned);
-        this.setState({
-          tiles: arr,
-          hoveredTileIdx: null
-        })
+          tiles: nextTiles,
+          loadedBoard: updatedLoadedBoard,
+          hoveredTileIdx: tile.id,
+          dungeonHasUnsavedChanges: true,
+          boardHasUnsavedChanges: true
+        });
       }
     }
   }

@@ -20,6 +20,27 @@ class BoardView extends React.Component {
       this.state = {}
     }
 
+    /**
+     * Deterministic stone-texture colour for empty-space tiles.
+     * Uses a sine-based hash seeded by tileId so the colour is identical
+     * on every render (no flicker) while each tile looks visually distinct.
+     * Produces warm dark-stone: hsl(22–28°, 13–20%, 22–30%).
+     */
+    static stoneColorForTile(tileId) {
+        const noise = Math.abs(Math.sin(tileId * 127.1 + 311.7) * 43758.5453) % 1;
+        const hue = (22 + noise * 6).toFixed(1);
+        const sat = (13 + noise * 7).toFixed(1);
+        const lig = (22 + noise * 8).toFixed(1);
+        return `hsl(${hue}, ${sat}%, ${lig}%)`;
+    }
+
+    /** Returns true when a contains object represents empty/unset floor space. */
+    static isEmptySpaceContains(contains) {
+        if (!contains) return true;
+        const t = typeof contains === 'object' ? contains.type : contains;
+        return !t || t === 'empty_space';
+    }
+
     formatHoverLabel(value) {
         if (!value) return null;
         return String(value)
@@ -75,6 +96,104 @@ class BoardView extends React.Component {
         const hoveredTileFootprint = Array.isArray(this.props.hoveredTileFootprint)
             ? this.props.hoveredTileFootprint
             : [];
+
+        let previewImage = null, previewColor = null, previewContains = null;
+        let hasPreview = false;
+        
+        const pinnedOption = this.props.pinnedOption;
+        const pinned = pinnedOption && this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
+        
+        if (pinnedOption && pinned) {
+            hasPreview = true;
+            let monster, gate, key, tierOption, jewelOption, runeOption, treasureOption, vendorOption;
+            if (pinnedOption.type === 'monster-tile') {
+                monster = Object.values(this.props.monsterManager?.monsters || {})[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'gate-tile') {
+                gate = (this.props.gates || [])[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'key-tile') {
+                key = (this.props.keys || [])[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'tier-tile') {
+                tierOption = this.props.mapMaker?.tierOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'jewel-tile') {
+                jewelOption = this.props.mapMaker?.jewelOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'rune-tile') {
+                runeOption = this.props.mapMaker?.runeOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'treasure-tile') {
+                treasureOption = this.props.mapMaker?.treasureOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'vendor-tile') {
+                vendorOption = this.props.mapMaker?.vendorOptions?.[pinnedOption.id];
+            }
+
+            let shrineOption = null, loreTabletOption = null;
+            if (pinnedOption.type === 'shrine-tile') {
+                shrineOption = this.props.mapMaker?.shrineOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'lore-tablet-tile') {
+                loreTabletOption = this.props.mapMaker?.loreTabletOptions?.[pinnedOption.id];
+            }
+
+            if (monster) {
+                previewContains = { type: 'monster', subtype: monster.key };
+                previewImage = monster.portrait;
+            } else if (gate) {
+                previewContains = { type: 'gate', subtype: gate.key };
+                previewImage = gate.key;
+            } else if (key) {
+                previewContains = { type: 'item', subtype: key.key };
+                previewImage = key.key;
+            } else if (tierOption) {
+                previewContains = { type: tierOption.key, subtype: null };
+                previewImage = tierOption.image;
+            } else if (jewelOption) {
+                previewContains = { type: 'item', subtype: jewelOption.key };
+                previewImage = jewelOption.image;
+            } else if (runeOption) {
+                previewContains = { type: 'item', subtype: runeOption.key };
+                previewImage = runeOption.image;
+            } else if (treasureOption) {
+                previewContains = { type: 'item', subtype: treasureOption.key };
+                previewImage = treasureOption.image;
+            } else if (vendorOption) {
+                previewContains = { type: 'vendor', subtype: vendorOption.vendorKey, key: vendorOption.key };
+                previewImage = vendorOption.image;
+            } else if (shrineOption) {
+                previewContains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
+                previewColor = shrineOption.color;
+            } else if (loreTabletOption) {
+                previewContains = { type: 'lore_tablet', subtype: loreTabletOption.domain, key: loreTabletOption.key };
+                previewColor = loreTabletOption.color;
+            } else if (pinned.optionType === 'passage') {
+                previewContains = { type: 'passage', subtype: null };
+            } else if (pinned.optionType === 'empty space') {
+                previewContains = { type: 'empty_space', subtype: null };
+            } else if (pinned.optionType === 'obscured space') {
+                previewContains = { type: 'obscured_space', subtype: null };
+                previewColor = '#a8a8a8';
+            } else if (pinned.optionType === 'void') {
+                previewContains = { type: 'void', subtype: null };
+                previewColor = 'black';
+            } else if (pinned.optionType === 'delete') {
+                previewContains = { type: 'empty_space', subtype: null };
+            } else {
+                const rawType = pinned.optionType || pinned.image || pinned.type || 'misc';
+                const normalizedType = String(rawType).replace(/\s+/g, '_');
+                let containsObj = { type: normalizedType, subtype: pinned.image };
+                if (String(normalizedType).indexOf('key') !== -1 || String(pinned.image).indexOf('key') !== -1) {
+                    containsObj = { type: 'item', subtype: String(pinned.image || normalizedType).replace(/\s+/g, '_') };
+                }
+                previewContains = containsObj;
+                previewImage = pinned.image;
+                previewColor = pinned.color || null;
+            }
+        }
+
         return (
             <div className="board-view-container">
                 <div className="center-board-container" style={{flexDirection: 'column'}}>
@@ -100,16 +219,54 @@ class BoardView extends React.Component {
                         backgroundColor: 'white'
                         }}>
                         {this.props.tiles && this.props.tiles.map((tile, i) => {
+                            const isHovered = (hoveredTileFootprint.length > 0 && hoveredTileFootprint.includes(tile.id)) || this.props.hoveredTileIdx === tile.id;
+                            // Don't show preview when the tile already has the content that would be placed.
+                            // This makes single-click placement visually immediate: the placed tile shows
+                            // at full opacity without the hover overlay hiding it.
+                            const tileMatchesPreview = previewContains != null &&
+                                tile.contains?.type === previewContains.type &&
+                                (previewContains.subtype == null || tile.contains?.subtype === previewContains.subtype);
+                            const showPreview = isHovered && hasPreview && !tileMatchesPreview;
+                            
+                            const tileImage = showPreview ? previewImage : tile.image;
+
+                            // Determine the base colour for this tile.
+                            // Empty-space tiles get a deterministic per-tile stone texture instead of
+                            // the flat #6b6057 brown, so the board feels more natural while editing.
+                            // Tiles with an explicit custom colour (board colour set by the author)
+                            // and void tiles (rendered black) are left untouched.
+                            const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined'
+                                ? tile.color : null;
+                            const isTileEmptySpace = BoardView.isEmptySpaceContains(tile.contains);
+                            const baseColor = storedColor
+                                ? (isTileEmptySpace && storedColor === '#6b6057'
+                                    ? BoardView.stoneColorForTile(tile.id)   // default brown → stone texture
+                                    : storedColor)                            // keep custom colour
+                                : (isTileEmptySpace
+                                    ? BoardView.stoneColorForTile(tile.id)   // no colour set → stone texture
+                                    : '#6b6057');                            // non-empty, no colour → fallback
+
+                            // For the preview colour: empty-space preview also shows stone texture
+                            // for the hovered tile so the placement preview feels natural.
+                            const isPreviewEmptySpace = BoardView.isEmptySpaceContains(previewContains);
+                            const tileColor = showPreview
+                                ? (previewColor || (isPreviewEmptySpace
+                                    ? BoardView.stoneColorForTile(tile.id)
+                                    : '#6b6057'))
+                                : baseColor;
+
+                            const tileContains = showPreview ? previewContains : tile.contains;
+
                             return <Tile 
                                 key={i}
                                 id={tile.id}
                                 index={tile.id}
                                 tileSize={this.props.tileSize}
-                                contains={tile.contains}
+                                contains={tileContains}
                                 boardTiles={this.props.tiles}
-                                image={tile.image ? tile.image : null}
-                                imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'}
+                                image={tileImage ? tileImage : null}
+                                imageOverride={tileImage && tileImage.includes('/') ? tileImage : null}
+                                color={tileColor}
                                 borders={tile.borders}
                                 coordinates={tile.coordinates}
                                 showCoordinates={this.props.showCoordinates}
@@ -119,10 +276,8 @@ class BoardView extends React.Component {
                                 handleContextMenu={this.props.handleContextMenu}
                                 delayedHoverLabel={this.getTileHoverLabel(tile)}
                                 type={tile.type}
-                                hovered={
-                                    (hoveredTileFootprint.length > 0 && hoveredTileFootprint.includes(tile.id)) || this.props.hoveredTileIdx === tile.id ?
-                                    true : false
-                                }
+                                hovered={isHovered && !tileMatchesPreview}
+                                isPreview={showPreview}
                                 inscriptions={tile.inscriptions}
                                 combatManager={this.props.combatManager}
                             />
