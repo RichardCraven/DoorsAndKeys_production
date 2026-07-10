@@ -269,6 +269,7 @@ class BoardsPanel extends React.Component {
                                                     draggable
                                                     style={{
                                                         height: this.props.tileSize*3,
+                                                        width: this.props.tileSize*3,
                                                         boxSizing: 'border-box',
                                                         filter: this.props.loadedBoard && board.id === this.props.loadedBoard.id ? 'sepia(1)' : ''
                                                     }}
@@ -309,6 +310,7 @@ class BoardsPanel extends React.Component {
                                     className="map-preview draggable" 
                                     style={{
                                         height: this.props.tileSize*3,
+                                        width: this.props.tileSize*3,
                                         boxSizing: 'border-box',
                                         filter: this.props.loadedBoard && board.id === this.props.loadedBoard.id ? 'sepia(1)' : ''   
                                     }}
@@ -351,6 +353,7 @@ class BoardsPanel extends React.Component {
                                     draggable
                                     style={{
                                         height: this.props.tileSize*3,
+                                        width: this.props.tileSize*3,
                                         boxSizing: 'border-box'
                                     }}>
                                         {board.tiles.map((tile, i) => {
@@ -381,6 +384,7 @@ class BoardsPanel extends React.Component {
                                             className="map-preview draggable" 
                                             style={{
                                                 height: this.props.tileSize*3,
+                                                width: this.props.tileSize*3,
                                                 boxSizing: 'border-box'
                                             }}
                                             onClick={() => {return this.props.loadBoard(board)}}
@@ -417,6 +421,7 @@ class BoardsPanel extends React.Component {
                                 draggable
                                 style={{
                                     height: this.props.tileSize*3,
+                                    width: this.props.tileSize*3,
                                     boxSizing: 'border-box'
                                 }}>
                                 {board.tiles.map((tile, i) => {
@@ -449,6 +454,7 @@ class BoardsPanel extends React.Component {
                                 draggable
                                 style={{
                                     height: this.props.tileSize*3,
+                                    width: this.props.tileSize*3,
                                     boxSizing: 'border-box'
                                 }} >
                                 {board.tiles.map((tile, i) => {
