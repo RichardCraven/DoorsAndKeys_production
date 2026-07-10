@@ -35,7 +35,7 @@ class BoardsPanel extends React.Component {
     render (){
         return (
             <div className="left-palette  palette boards-palette" style={{
-                width: this.props.tileSize*3+'px', 
+                width: this.props.tileSize*3.8+'px', 
                 height: this.props.boardSize+ 'px'
                 }}>
                     <div className="boards-title" onClick={() => {this.props.setViewState('board')}}>
@@ -44,7 +44,7 @@ class BoardsPanel extends React.Component {
                     </div>
                     <div className="board-options-buttons-container" 
                     style={{
-                        width: this.props.tileSize*3+'px',
+                        width: this.props.tileSize*3.8+'px',
                         height: '40px'
                     }}
                     >
