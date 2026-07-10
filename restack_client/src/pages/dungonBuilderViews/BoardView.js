@@ -12,27 +12,47 @@ import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 // import * as images from '../../utils/images'
 
+// ── Poly Haven floor textures (CC0) ─────────────────────────────────────────
+import texGroundGrey    from '../../assets/tilesets/ground_grey_diff_1k.jpg';
+import texRock01        from '../../assets/tilesets/rock_01_diff_1k.jpg';
+import texRockFace      from '../../assets/tilesets/rock_face_diff_1k.jpg';
+import texRockFace03    from '../../assets/tilesets/rock_face_03_diff_1k.jpg';
+import texMoon01        from '../../assets/tilesets/moon_01_diff_1k.jpg';
+import texLichenRock    from '../../assets/tilesets/lichen_rock_diff_1k.jpg';
+import texCoastRocks    from '../../assets/tilesets/coast_sand_rocks_02_diff_1k.jpg';
+
+/**
+ * All available floor textures.  Each entry becomes an option when we expose
+ * a texture-picker in the MapMaker UI.  The first entry is the default.
+ * label  – human-readable name shown in the picker
+ * key    – stable identifier stored in board preferences
+ * src    – imported asset (resolved by Webpack/CRA)
+ */
+export const FLOOR_TEXTURES = [
+    { key: 'ground_grey',        label: 'Grey Ground',       src: texGroundGrey  },
+    { key: 'rock_01',            label: 'Rock',              src: texRock01      },
+    { key: 'rock_face',          label: 'Rock Face',         src: texRockFace    },
+    { key: 'rock_face_03',       label: 'Rock Face (Dark)',  src: texRockFace03  },
+    { key: 'moon_01',            label: 'Lunar Stone',       src: texMoon01      },
+    { key: 'lichen_rock',        label: 'Lichen Rock',       src: texLichenRock  },
+    { key: 'coast_sand_rocks_02',label: 'Coastal Rock',      src: texCoastRocks  },
+];
+const DEFAULT_FLOOR_TEXTURE = FLOOR_TEXTURES[0].src;
+
+/**
+ * Semi-transparent dark overlay used for empty-space and passage tiles.
+ * The board container's texture background shows through this overlay,
+ * giving each tile the photorealistic stone texture without needing per-tile
+ * image loads. Opacity 0.55 = ~45% texture visible.
+ */
+const EMPTY_SPACE_OVERLAY = 'rgba(0, 0, 0, 0.55)';
+
 
 // Expects prop: combatManager for VCT highlighting
 class BoardView extends React.Component {
     constructor(props){
       super(props)
       this.state = {}
-    }
-
-    /**
-     * Deterministic stone-texture colour for empty-space tiles.
-     * Uses a sine-based hash seeded by tileId so the colour is identical
-     * on every render (no flicker) while each tile looks visually distinct.
-     * Produces cool slate-gray: hsl(210–220°, 8–14%, 20–24%) — subtle
-     * variation that reads as natural stone without distracting from placed content.
-     */
-    static stoneColorForTile(tileId) {
-        const noise = Math.abs(Math.sin(tileId * 127.1 + 311.7) * 43758.5453) % 1;
-        const hue = (210 + noise * 10).toFixed(1);  // 210–220° cool blue-slate
-        const sat = (8 + noise * 6).toFixed(1);     // 8–14%  desaturated
-        const lig = (20 + noise * 4).toFixed(1);    // 20–24%  tight band, subtle variation
-        return `hsl(${hue}, ${sat}%, ${lig}%)`;
     }
 
     /** Returns true when a contains object represents empty/unset floor space (including passages). */
@@ -211,13 +231,80 @@ class BoardView extends React.Component {
                         <div className="icon-container" title="New Board" onClick={() => this.props.addNewBoard && this.props.addNewBoard()}>
                             <CIcon icon={cilPlus} size="lg"/>
                         </div>
+                        <div
+                            className="icon-container"
+                            style={{ position: 'relative' }}
+                            onMouseEnter={(e) => e.currentTarget.querySelector('.bv-fp-tooltip').style.display = 'block'}
+                            onMouseLeave={(e) => e.currentTarget.querySelector('.bv-fp-tooltip').style.display = 'none'}
+                            title="Folder Path Shorthand Help"
+                        >
+                            <span style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                width: '22px', height: '22px', borderRadius: '50%',
+                                background: 'rgba(249, 177, 21, 0.15)', border: '1px solid rgba(249, 177, 21, 0.4)',
+                                color: '#f9b115', fontSize: '12px', fontWeight: 'bold', cursor: 'default',
+                                lineHeight: 1, userSelect: 'none'
+                            }}>?</span>
+                            <div className="bv-fp-tooltip" style={{
+                                display: 'none',
+                                position: 'absolute',
+                                top: '30px',
+                                left: '50%',
+                                transform: 'translateX(-50%)',
+                                zIndex: 99999,
+                                background: '#1c1c1e',
+                                border: '1px solid rgba(249, 177, 21, 0.4)',
+                                borderRadius: '8px',
+                                padding: '12px 14px',
+                                width: '300px',
+                                boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+                                pointerEvents: 'none',
+                                whiteSpace: 'normal'
+                            }}>
+                                <div style={{ color: '#f9b115', fontWeight: '700', fontSize: '12px', marginBottom: '8px' }}>
+                                    Folder Path Shorthand
+                                </div>
+                                <div style={{ color: '#e0dcd3', fontSize: '11px', lineHeight: 1.6 }}>
+                                    <div style={{ marginBottom: '6px' }}>
+                                        Use the <strong style={{ color: '#f9b115' }}>✏️ Rename</strong> icon to set a board's folder path using shorthand:
+                                    </div>
+                                    <code style={{ color: '#f9b115', display: 'block', marginBottom: '8px' }}>dungeon / level / orientation / slot</code>
+                                    <div style={{ marginBottom: '4px', color: '#9da5b1', fontWeight: '600' }}>Orientation</div>
+                                    <div style={{ marginBottom: '8px' }}>
+                                        <code style={{ color: '#d4a844' }}>f</code> / <code style={{ color: '#d4a844' }}>front</code> → Front &nbsp;|&nbsp;
+                                        <code style={{ color: '#d4a844' }}>b</code> / <code style={{ color: '#d4a844' }}>back</code> → Back
+                                    </div>
+                                    <div style={{ marginBottom: '4px', color: '#9da5b1', fontWeight: '600' }}>Slots</div>
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '2px 8px', fontFamily: 'monospace', fontSize: '10px', marginBottom: '8px' }}>
+                                        <span><code style={{ color: '#d4a844' }}>TL</code> top-left</span>
+                                        <span><code style={{ color: '#d4a844' }}>TM</code> top-mid</span>
+                                        <span><code style={{ color: '#d4a844' }}>TR</code> top-right</span>
+                                        <span><code style={{ color: '#d4a844' }}>ML</code> mid-left</span>
+                                        <span><code style={{ color: '#d4a844' }}>MM</code> center</span>
+                                        <span><code style={{ color: '#d4a844' }}>MR</code> mid-right</span>
+                                        <span><code style={{ color: '#d4a844' }}>BL</code> bot-left</span>
+                                        <span><code style={{ color: '#d4a844' }}>BM</code> bot-mid</span>
+                                        <span><code style={{ color: '#d4a844' }}>BR</code> bot-right</span>
+                                    </div>
+                                    <div style={{ color: '#9da5b1', fontStyle: 'italic' }}>
+                                        Example: <code style={{ color: '#f9b115' }}>primari/0/B/TR</code> → Back, Top Right
+                                    </div>
+                                    <div style={{ color: '#9da5b1', fontStyle: 'italic' }}>
+                                        Omitting orientation defaults to Front.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div className="board map-board" 
                         onMouseLeave={() => {return this.props.setHover(null)}}
                         style={{
                         position: 'relative',
                         width: this.props.boardSize+'px', height: this.props.boardSize+ 'px',
-                        backgroundColor: 'white'
+                        backgroundColor: '#0e0e12',
+                        backgroundImage: `url(${this.props.floorTexture || DEFAULT_FLOOR_TEXTURE})`,
+                        backgroundRepeat: 'repeat',
+                        backgroundSize: '350px 350px',
                         }}>
                         {this.props.tiles && this.props.tiles.map((tile, i) => {
                             const isHovered = (hoveredTileFootprint.length > 0 && hoveredTileFootprint.includes(tile.id)) || this.props.hoveredTileIdx === tile.id;
@@ -231,29 +318,28 @@ class BoardView extends React.Component {
                             
                             const tileImage = showPreview ? previewImage : tile.image;
 
-                            // Determine the base colour for this tile.
-                            // Empty-space tiles get a deterministic per-tile stone texture instead of
-                            // the flat #6b6057 brown, so the board feels more natural while editing.
-                            // Tiles with an explicit custom colour (board colour set by the author)
-                            // and void tiles (rendered black) are left untouched.
+                            // Determine the background colour for this tile.
+                            //
+                            // Empty-space / passage tiles use a semi-transparent dark overlay
+                            // so the board container's photorealistic stone texture shows through.
+                            // (opacity ~45% texture visible, 55% dark overlay for depth)
+                            //
+                            // Void tiles: stored as near-black, completely cover the texture.
+                            // Content tiles (monsters/gates/etc): solid stored colour, cover texture.
                             const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined'
                                 ? tile.color : null;
                             const isTileEmptySpace = BoardView.isEmptySpaceContains(tile.contains);
                             const baseColor = storedColor
                                 ? (isTileEmptySpace && storedColor === '#6b6057'
-                                    ? BoardView.stoneColorForTile(tile.id)   // default brown → stone texture
-                                    : storedColor)                            // keep custom colour
+                                    ? EMPTY_SPACE_OVERLAY  // default brown → texture overlay
+                                    : storedColor)         // keep custom/void colour
                                 : (isTileEmptySpace
-                                    ? BoardView.stoneColorForTile(tile.id)   // no colour set → stone texture
-                                    : '#6b6057');                            // non-empty, no colour → fallback
+                                    ? EMPTY_SPACE_OVERLAY  // no colour set → texture overlay
+                                    : '#1a1822');          // non-empty, no colour → dark fallback
 
-                            // For the preview colour: empty-space preview also shows stone texture
-                            // for the hovered tile so the placement preview feels natural.
                             const isPreviewEmptySpace = BoardView.isEmptySpaceContains(previewContains);
                             const tileColor = showPreview
-                                ? (previewColor || (isPreviewEmptySpace
-                                    ? BoardView.stoneColorForTile(tile.id)
-                                    : '#6b6057'))
+                                ? (previewColor || (isPreviewEmptySpace ? EMPTY_SPACE_OVERLAY : '#6b6057'))
                                 : baseColor;
 
                             const tileContains = showPreview ? previewContains : tile.contains;
