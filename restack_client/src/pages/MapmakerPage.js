@@ -2298,6 +2298,53 @@ class MapMakerPage extends React.Component {
     };
   }
 
+  onAssignBoardToSlot = async (boardId, dungeonName, levelName, slotIndex, orientation) => {
+    console.log('assigning board', boardId, 'to', dungeonName, levelName, slotIndex, orientation);
+    
+    let board = this.state.boards.find(b => b.id === boardId);
+    if (!board) {
+      board = this.findBoardRefInFolders(boardId);
+    }
+    
+    if (!board) {
+      console.error('Board not found for ID:', boardId);
+      return;
+    }
+    
+    const slotNames = [
+      'top_left',
+      'top_mid',
+      'top_right',
+      'middle_left',
+      'middle',
+      'middle_right',
+      'bottom_left',
+      'bottom_mid',
+      'bottom_right'
+    ];
+    const slotName = slotNames[slotIndex];
+    const suffix = orientation === 'back' ? '_BACK' : '';
+    
+    board.folderPath = `${dungeonName}/${levelName}/${slotName}${suffix}`;
+    
+    if (this.state.loadedBoard && this.state.loadedBoard.id === boardId) {
+      this.setState({
+        loadedBoard: board
+      });
+    }
+    
+    let obj = {
+      name: board.name,
+      folderPath: board.folderPath,
+      tiles: clone(board.tiles),
+      config: clone(board.config || [[], [], [], []])
+    };
+    
+    await updateBoardRequest(board.id, obj);
+    await this.loadAllBoards();
+    this.flashLeftReadout(`Assigned to Lvl ${levelName} (${orientation === 'front' ? 'Front' : 'Back'})`);
+  }
+
   findBoardRefInFolders = (boardId) => {
     const boardFolders = this.state.boardsFolders;
     let found = null;
@@ -4652,6 +4699,9 @@ class MapMakerPage extends React.Component {
               gates={GATES}
               keys={KEYS}
               onDragStart={this.onDragStart}
+              draggedBoard={this.state.draggedBoard}
+              onAssignBoardToSlot={this.onAssignBoardToSlot}
+              getBoardFolderInfo={this.getBoardFolderInfo}
             >
             </BoardsPanel>
 

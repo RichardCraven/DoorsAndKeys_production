@@ -13,14 +13,12 @@ import '../../styles/map-maker.scss'
 class BoardsPanel extends React.Component {
     constructor(props){
         super(props)
-        this.state = {}
-    // no-op mapping removed; state initialization kept minimal
+        this.state = {
+            hoveredSlot: null
+        }
     }
 
-    shouldComponentUpdate(nextProps) {
-        // The panel content only changes when the boards data, folder structure,
-        // filter state, or sizing actually changes — not when a dropdown elsewhere
-        // opens/closes or an unrelated part of MapmakerPage re-renders.
+    shouldComponentUpdate(nextProps, nextState) {
         return (
             nextProps.boards !== this.props.boards ||
             nextProps.boardsFolders !== this.props.boardsFolders ||
@@ -28,7 +26,113 @@ class BoardsPanel extends React.Component {
             nextProps.compatibilityMatrix !== this.props.compatibilityMatrix ||
             nextProps.loadedBoard !== this.props.loadedBoard ||
             nextProps.tileSize !== this.props.tileSize ||
-            nextProps.boardSize !== this.props.boardSize
+            nextProps.boardSize !== this.props.boardSize ||
+            nextProps.draggedBoard !== this.props.draggedBoard ||
+            nextState.hoveredSlot !== this.state.hoveredSlot
+        );
+    }
+
+    getLevelGrids = (subfolder) => {
+        const boardsList = [];
+        if (Array.isArray(subfolder.contents)) {
+            boardsList.push(...subfolder.contents);
+        }
+        if (Array.isArray(subfolder.deepfolders)) {
+            subfolder.deepfolders.forEach(df => {
+                if (Array.isArray(df.contents)) {
+                    df.contents.forEach(b => {
+                        boardsList.push({
+                            ...b,
+                            slotPathSuffix: df.title
+                        });
+                    });
+                }
+            });
+        }
+
+        const front = Array(9).fill(null);
+        const back = Array(9).fill(null);
+
+        const getGridIndexFromPathSuffix = (pathSuffix) => {
+            if (!pathSuffix) return 4; // Default to middle
+            const normalized = pathSuffix.toLowerCase().replace(/_/g, '/');
+            
+            let row = 1;
+            if (normalized.includes('top')) row = 0;
+            else if (normalized.includes('bottom') || normalized.includes('bot')) row = 2;
+            
+            let col = 1;
+            if (normalized.includes('left')) col = 0;
+            else if (normalized.includes('right')) col = 2;
+            else if (normalized.includes('/mid') || normalized.includes('_mid')) col = 1;
+            else if (normalized.includes('middle/left')) col = 0;
+            else if (normalized.includes('middle/right')) col = 2;
+            
+            return row * 3 + col;
+        };
+
+        boardsList.forEach(b => {
+            const info = this.props.getBoardFolderInfo ? this.props.getBoardFolderInfo(b) : { displayName: b.name, folderPath: '' };
+            const suffix = b.slotPathSuffix || (info.folderPath ? info.folderPath.split('/').slice(2).join('/') : '');
+            const isBack = info.folderPath ? (info.folderPath.toLowerCase().includes('/back') || info.folderPath.toLowerCase().includes('_back')) : false;
+            
+            const idx = getGridIndexFromPathSuffix(suffix);
+            if (isBack) {
+                back[idx] = b;
+            } else {
+                front[idx] = b;
+            }
+        });
+
+        return { front, back };
+    }
+
+    renderLevelGrids = (subfolder, folderTitle) => {
+        const { front, back } = this.getLevelGrids(subfolder);
+        
+        const renderGrid = (gridData, orientation) => {
+            return (
+                <div className="plane-mini-grid">
+                    <div className="plane-grid-title">{orientation.toUpperCase()}</div>
+                    <div className="grid-3x3">
+                        {gridData.map((board, idx) => {
+                            const isHovered = this.state.hoveredSlot === `${folderTitle}_${subfolder.title}_${orientation}_${idx}`;
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`grid-cell ${board ? 'filled' : 'empty'} ${isHovered ? 'hovered' : ''}`}
+                                    title={board ? `${board.displayName || board.name}` : 'Empty Slot'}
+                                    onClick={() => board && this.props.loadBoard(board)}
+                                    onMouseEnter={() => this.setState({ hoveredSlot: `${folderTitle}_${subfolder.title}_${orientation}_${idx}` })}
+                                    onMouseLeave={() => this.setState({ hoveredSlot: null })}
+                                    onDragOver={(e) => e.preventDefault()}
+                                    onDrop={(e) => {
+                                        e.preventDefault();
+                                        if (this.props.draggedBoard) {
+                                            this.props.onAssignBoardToSlot(
+                                                this.props.draggedBoard.id,
+                                                folderTitle,
+                                                subfolder.title,
+                                                idx,
+                                                orientation
+                                            );
+                                        }
+                                    }}
+                                >
+                                    {board ? (board.displayName || board.name).slice(0, 3) : ''}
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        return (
+            <div className="side-by-side-planes-wrapper">
+                {renderGrid(front, 'front')}
+                {renderGrid(back, 'back')}
+            </div>
         );
     }
 
@@ -78,115 +182,38 @@ class BoardsPanel extends React.Component {
                                         <div className="folder-headline-text">{folder.title}</div> 
                                     </div>
                                     <CCollapse visible={this.props.boardsFoldersExpanded[folder.title]}>
-                                        {folder.subfolders?.length > 0 && folder.subfolders.map((subfolder, i)=>{
-                                        return (
-                                            <div key={i} className="subfolder-wrapper">
-                                                <div className="boards-folder-headline subfolder-headline"  onClick={() => this.props.expandCollapseBoardFolders(`${folder.title}_${subfolder.title}`)}> 
-                                                    <div className="folder-color-line" style={{backgroundColor: i % 2 ? '#199595' : '#13c2c2'}}></div>
-                                                    <div className="icon-container">
-                                                        <CIcon icon={cilCaretRight} className={`expand-icon ${this.props.boardsFoldersExpanded[`${folder.title}_${subfolder.title}`] ? 'expanded' : ''}`} size="sm"/>
-                                                    </div>
-                                                    <div className="subfolder-headline-text">{subfolder.title}</div> 
+                                        {(() => {
+                                          const parseLevelLabel = (label) => {
+                                            const raw = `${label ?? ''}`.trim().replace(/\u2212/g, '-');
+                                            if (!/^[+-]?\d+$/.test(raw)) return null;
+                                            return Number(raw);
+                                          };
+                                          const sortedSubfolders = (folder.subfolders || []).slice().sort((a, b) => {
+                                            const aNum = parseLevelLabel(a.title);
+                                            const bNum = parseLevelLabel(b.title);
+                                            if (aNum !== null && bNum !== null) return bNum - aNum;
+                                            if (aNum !== null) return -1;
+                                            if (bNum !== null) return 1;
+                                            return `${a.title}`.localeCompare(`${b.title}`);
+                                          });
+
+                                          return sortedSubfolders.map((subfolder, i) => {
+                                            return (
+                                              <div key={i} className="subfolder-wrapper">
+                                                <div className="boards-folder-headline subfolder-headline" onClick={() => this.props.expandCollapseBoardFolders(`${folder.title}_${subfolder.title}`)}> 
+                                                  <div className="folder-color-line" style={{backgroundColor: i % 2 ? '#199595' : '#13c2c2'}}></div>
+                                                  <div className="icon-container">
+                                                    <CIcon icon={cilCaretRight} className={`expand-icon ${this.props.boardsFoldersExpanded[`${folder.title}_${subfolder.title}`] ? 'expanded' : ''}`} size="sm"/>
+                                                  </div>
+                                                  <div className="subfolder-headline-text">Level {subfolder.title}</div> 
                                                 </div>
                                                 <CCollapse visible={this.props.boardsFoldersExpanded[`${folder.title}_${subfolder.title}`]}>
-                                                    {subfolder.deepfolders?.length > 0 && subfolder.deepfolders.map((deepfolder, i)=>{
-                                                        return (
-                                                            <div key={i} className="deepfolder-wrapper"
-                                                            >
-                                                                <div className="boards-folder-headline subfolder-headline"  onClick={() => this.props.expandCollapseBoardFolders(`${folder.title}_${subfolder.title}_${deepfolder.title}`)}> 
-                                                                    <div className="folder-color-line" style={{backgroundColor: i % 2 ? '#199595' : '#13c2c2'}}></div>
-                                                                    <div className="icon-container">
-                                                                        <CIcon icon={cilCaretRight} className={`expand-icon ${this.props.boardsFoldersExpanded[`${folder.title}_${subfolder.title}_${deepfolder.title}`] ? 'expanded' : ''}`} size="sm"/>
-                                                                    </div>
-                                                                    <div className="deepfolder-headline-text">{deepfolder.title}</div> 
-                                                                </div>
-                                                                <CCollapse visible={this.props.boardsFoldersExpanded[`${folder.title}_${subfolder.title}_${deepfolder.title}`]}>
-                                                                    <div className="subfolder-contents-wrapper">
-                                                                        {deepfolder.contents.map((board, idx) => {
-                                                                            return <div key={idx} className="board-preview-wrapper">
-                                                                                        <div className="folder-color-line" style={{backgroundColor: i % 2 ? '#199595' : '#13c2c2'}}></div>
-                                                                                        <div 
-                                                                                        className="map-preview draggable" 
-                                                                                        onDragStart = {(event) => this.props.onDragStart(event, board)}
-                                                                                        draggable
-                                                                                        style={{
-                                                                                            height: this.props.tileSize*3,
-                                                                                            boxSizing: 'border-box',
-                                                                                            filter: this.props.loadedBoard && board.id === this.props.loadedBoard.id ? 'sepia(1)' : ''
-                                                                                        }}
-                                                                                        onClick={() => {
-                                                                                            return this.props.loadBoard(board)
-                                                                                        }}>
-                                                                                        {board.tiles.map((tile, i) => {
-                                                                                        return    <Tile 
-                                                                                                    key={i}
-                                                                                                    id={tile.id}
-                                                                                                    tileSize={(this.props.tileSize*3)/15}
-                                                                                                    contains={tile.contains}
-                                                                                                    image={tile.image ? tile.image : null}
-                                                                                                    imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                                                                                    color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
-                                                                                                    index={tile.id}
-                                                                                                    showCoordinates={false}
-                                                                                                    type={tile.type}
-                                                                                                    hovered={
-                                                                                                    false
-                                                                                                    }
-                                                                                                    >
-                                                                                                    </Tile>
-                                                                                                
-                                                                                        })}
-                                                                                        </div>
-                                                                                        <div className="map-title">{board.displayName || board.name}</div>
-                                                                            </div>
-                                                                        })}
-                                                                    </div>
-                                                                </CCollapse>
-                                                            </div>
-                                                        )
-                                                    })}
-                                                    <div className="subfolder-contents-wrapper">
-                                                        {subfolder.contents.map((board, idx) => {
-                                                        return (<div key={idx} className="board-preview-wrapper">
-                                                                    <div className="folder-color-line" style={{backgroundColor: i % 2 ? '#199595' : '#13c2c2'}}></div>
-                                                                    <div 
-                                                                    className="map-preview draggable" 
-                                                                    onDragStart = {(event) => this.props.onDragStart(event, board)}
-                                                                    draggable
-                                                                    style={{
-                                                                        height: this.props.tileSize*3,
-                                                                        boxSizing: 'border-box',
-                                                                        filter: this.props.loadedBoard && board.id === this.props.loadedBoard.id ? 'sepia(1)' : ''
-                                                                    }}
-                                                                    onClick={() => {
-                                                                        return this.props.loadBoard(board)
-                                                                    }}>
-                                                                    {board.tiles.map((tile, i) => {
-                                                                    return    <Tile 
-                                                                                key={i}
-                                                                                id={tile.id}
-                                                                                tileSize={(this.props.tileSize*3)/15}
-                                                                                contains={tile.contains}
-                                                                                image={tile.image ? tile.image : null}
-                                                                                color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
-                                                                                index={tile.id}
-                                                                                showCoordinates={false}
-                                                                                type={tile.type}
-                                                                                hovered={
-                                                                                false
-                                                                                }
-                                                                                >
-                                                                                </Tile>
-                                                                            
-                                                                    })}
-                                                                    </div>
-                                                                    <div className="map-title">{board.displayName || board.name}</div>
-                                                                </div>)
-                                                        })}
-                                                    </div>
+                                                  {this.renderLevelGrids(subfolder, folder.title)}
                                                 </CCollapse>
-                                            </div>
-                                        )})}
+                                              </div>
+                                            );
+                                          });
+                                        })()}
                                         {folder.contents.map((board, i) => {
                                         return (<div key={i} className="board-preview-wrapper">
                                                     <div className="folder-color-line thin-outside" style={{backgroundColor: idx % 2 ? 'magenta' : 'aqua'}}></div>
