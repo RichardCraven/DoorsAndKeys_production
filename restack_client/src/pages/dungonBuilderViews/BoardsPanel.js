@@ -291,6 +291,7 @@ class BoardsPanel extends React.Component {
                                                                 hovered={
                                                                 false
                                                                 }
+                                                                passThrough={true}
                                                                 >
                                                                 </Tile>
                                                             
@@ -331,6 +332,7 @@ class BoardsPanel extends React.Component {
                                                 hovered={
                                                 false
                                                 }
+                                                passThrough={true}
                                                 >
                                                 </Tile>
                                             
@@ -367,7 +369,8 @@ class BoardsPanel extends React.Component {
                                             index={tile.id}
                                             showCoordinates={false}
                                             type={tile.type}
-                                            hovered={false}>
+                                            hovered={false}
+                                            passThrough={true}>
                                             </Tile>
                                         })}
                                     </div>
@@ -402,7 +405,8 @@ class BoardsPanel extends React.Component {
                                                         index={tile.id}
                                                         showCoordinates={false}
                                                         type={tile.type}
-                                                        hovered={false}>
+                                                        hovered={false}
+                                                        passThrough={true}>
                                                         </Tile>
                                             })}
                                             </div>
@@ -435,7 +439,8 @@ class BoardsPanel extends React.Component {
                                         index={tile.id}
                                         showCoordinates={false}
                                         type={tile.type}
-                                        hovered={false}>
+                                        hovered={false}
+                                        passThrough={true}>
                                         </Tile>
                                 })}
                                 </div>
@@ -471,6 +476,7 @@ class BoardsPanel extends React.Component {
                                             hovered={
                                                 false
                                             }
+                                            passThrough={true}
                                             >
                                             </Tile>
                                 })}
