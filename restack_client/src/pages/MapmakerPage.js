@@ -2521,7 +2521,7 @@ class MapMakerPage extends React.Component {
         folderPath: folderPath,
         tiles: Array(15*15).fill(null).map((_, i) => ({
           id: i,
-          type: 'floor',
+          type: 'void',
           contains: 'empty',
           borders: []
         })),
