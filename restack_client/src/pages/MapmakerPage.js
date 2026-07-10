@@ -5057,7 +5057,56 @@ class MapMakerPage extends React.Component {
                     <input ref={this.state.boardNameInput} className="dungeonname-input" type="text" defaultValue={info.displayName} placeholder="e.g. Boss Room" style={{ width: '100%' }} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#9da5b1' }}>Folder Path (e.g. "dream/0/middle" or shorthand "dream/0/b/tr")</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '5px' }}>
+                      <label style={{ margin: 0, fontSize: '13px', fontWeight: '600', color: '#9da5b1' }}>Folder Path</label>
+                      <div
+                        style={{ position: 'relative', display: 'inline-block' }}
+                        onMouseEnter={(e) => e.currentTarget.querySelector('.fp-tooltip').style.display = 'block'}
+                        onMouseLeave={(e) => e.currentTarget.querySelector('.fp-tooltip').style.display = 'none'}
+                      >
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: '16px', height: '16px', borderRadius: '50%',
+                          background: 'rgba(249, 177, 21, 0.2)', border: '1px solid rgba(249, 177, 21, 0.5)',
+                          color: '#f9b115', fontSize: '10px', fontWeight: 'bold', cursor: 'default',
+                          lineHeight: 1, userSelect: 'none'
+                        }}>?</span>
+                        <div className="fp-tooltip" style={{
+                          display: 'none', position: 'absolute', bottom: '22px', left: '50%',
+                          transform: 'translateX(-50%)', zIndex: 99999,
+                          background: '#1c1c1e', border: '1px solid rgba(249, 177, 21, 0.4)',
+                          borderRadius: '8px', padding: '12px 14px', width: '300px',
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.6)', pointerEvents: 'none'
+                        }}>
+                          <div style={{ color: '#f9b115', fontWeight: '700', fontSize: '12px', marginBottom: '8px' }}>
+                            Folder Path Shorthand
+                          </div>
+                          <div style={{ color: '#e0dcd3', fontSize: '11px', lineHeight: 1.5 }}>
+                            <code style={{ color: '#f9b115' }}>dungeon / level / orientation / slot</code>
+                            <div style={{ marginTop: '8px', marginBottom: '4px', color: '#9da5b1', fontWeight: '600' }}>Orientation</div>
+                            <div><code style={{ color: '#d4a844' }}>f</code> or <code style={{ color: '#d4a844' }}>front</code> → Front &nbsp;|&nbsp; <code style={{ color: '#d4a844' }}>b</code> or <code style={{ color: '#d4a844' }}>back</code> → Back</div>
+                            <div style={{ marginTop: '8px', marginBottom: '4px', color: '#9da5b1', fontWeight: '600' }}>Slots (case-insensitive)</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '2px 8px', fontFamily: 'monospace', fontSize: '10px' }}>
+                              <span><code style={{ color: '#d4a844' }}>TL</code> top-left</span>
+                              <span><code style={{ color: '#d4a844' }}>TM</code> top-mid</span>
+                              <span><code style={{ color: '#d4a844' }}>TR</code> top-right</span>
+                              <span><code style={{ color: '#d4a844' }}>ML</code> mid-left</span>
+                              <span><code style={{ color: '#d4a844' }}>MM</code> center</span>
+                              <span><code style={{ color: '#d4a844' }}>MR</code> mid-right</span>
+                              <span><code style={{ color: '#d4a844' }}>BL</code> bot-left</span>
+                              <span><code style={{ color: '#d4a844' }}>BM</code> bot-mid</span>
+                              <span><code style={{ color: '#d4a844' }}>BR</code> bot-right</span>
+                            </div>
+                            <div style={{ marginTop: '8px', color: '#9da5b1', fontStyle: 'italic' }}>
+                              Example: <code style={{ color: '#f9b115' }}>primari/0/B/TR</code> → Back, Top Right
+                            </div>
+                            <div style={{ color: '#9da5b1', fontStyle: 'italic' }}>
+                              Omitting orientation defaults to Front.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                     <input ref={this.state.boardFolderPathInput} className="dungeonname-input" type="text" defaultValue={info.folderPath} placeholder="e.g. primari/0/b/tr  or  dream/0/middle_right_back" style={{ width: '100%' }} />
                   </div>
                 </div>
