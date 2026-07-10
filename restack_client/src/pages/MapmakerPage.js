@@ -2345,6 +2345,93 @@ class MapMakerPage extends React.Component {
     this.flashLeftReadout(`Assigned to Lvl ${levelName} (${orientation === 'front' ? 'Front' : 'Back'})`);
   }
 
+  syncDungeonPlanesWithBoards = (dungeon, boards) => {
+    if (!dungeon || !Array.isArray(dungeon.levels) || !Array.isArray(boards)) return dungeon;
+    
+    let syncedDungeon = clone(dungeon);
+    
+    const getGridIndexFromPathSuffix = (pathSuffix) => {
+      if (!pathSuffix) return 4;
+      const normalized = pathSuffix.toLowerCase().replace(/_/g, '/');
+      let row = 1;
+      if (normalized.includes('top')) row = 0;
+      else if (normalized.includes('bottom') || normalized.includes('bot')) row = 2;
+      let col = 1;
+      if (normalized.includes('left')) col = 0;
+      else if (normalized.includes('right')) col = 2;
+      else if (normalized.includes('/mid') || normalized.includes('_mid')) col = 1;
+      else if (normalized.includes('middle/left')) col = 0;
+      else if (normalized.includes('middle/right')) col = 2;
+      return row * 3 + col;
+    };
+    
+    const parseBoardPlacement = (board) => {
+      let folderPath = board.folderPath;
+      let name = board.name || '';
+      
+      if (folderPath) {
+        const parts = folderPath.split('/');
+        if (parts.length >= 2) {
+          const dungeonName = parts[0];
+          const level = parts[1];
+          const slot = parts.slice(2).join('/');
+          const isBack = folderPath.toLowerCase().includes('/back') || folderPath.toLowerCase().includes('_back') || name.toLowerCase().includes('_back');
+          return {
+            dungeon: dungeonName,
+            level,
+            slot: slot || '',
+            orientation: isBack ? 'back' : 'front'
+          };
+        }
+      }
+      
+      if (name.includes('_')) {
+        const parts = name.split('_');
+        const dungeonName = parts[0];
+        const level = parts[1];
+        const lastPart = parts[parts.length - 1].toLowerCase();
+        const isBack = lastPart === 'back';
+        const endIdx = isBack ? parts.length - 1 : parts.length;
+        const slotParts = parts.slice(2, endIdx);
+        const slot = slotParts.join('/');
+        return {
+          dungeon: dungeonName,
+          level,
+          slot,
+          orientation: isBack ? 'back' : 'front'
+        };
+      }
+      
+      return { dungeon: '', level: '', slot: '', orientation: 'front' };
+    };
+
+    boards.forEach((board) => {
+      const placement = parseBoardPlacement(board);
+      if (!placement.dungeon || !placement.level) return;
+      if (placement.dungeon.toLowerCase() !== syncedDungeon.name.toLowerCase()) return;
+      
+      const levelVal = Number(placement.level);
+      const level = syncedDungeon.levels.find(l => l.id === levelVal);
+      if (!level) return;
+      
+      const plane = placement.orientation === 'back' ? level.back : level.front;
+      if (!plane) return;
+      
+      const idx = getGridIndexFromPathSuffix(placement.slot);
+      if (idx >= 0 && idx < 9) {
+        if (!Array.isArray(plane.miniboards)) {
+          plane.miniboards = Array(9).fill(null).map(() => ({}));
+        }
+        while (plane.miniboards.length < 9) {
+          plane.miniboards.push({});
+        }
+        plane.miniboards[idx] = clone(board);
+      }
+    });
+
+    return syncedDungeon;
+  }
+
   findBoardRefInFolders = (boardId) => {
     const boardFolders = this.state.boardsFolders;
     let found = null;
@@ -2647,11 +2734,13 @@ class MapMakerPage extends React.Component {
     const val = await loadAllBoardsRequest();
     const boards = [],
       boardsFolders = [],
-      boardsFoldersExpanded = {};
+      boardsFoldersExpanded = {},
+      allBoards = [];
     const meta = getMeta();
     val.data.forEach((e) => {
       let board = JSON.parse(e.content)
       board.id = e._id;
+      allBoards.push(board);
 
       const info = this.getBoardFolderInfo(board);
       board.displayName = info.displayName;
@@ -2719,11 +2808,15 @@ class MapMakerPage extends React.Component {
 
     return new Promise((resolve) => {
       this.setState(() => {
-        return {
+        let nextStateObj = {
           boards,
           boardsFolders,
           boardsFoldersExpanded
+        };
+        if (this.state.loadedDungeon) {
+          nextStateObj.loadedDungeon = this.syncDungeonPlanesWithBoards(this.state.loadedDungeon, allBoards);
         }
+        return nextStateObj;
       }, () => {
         // Check for cross-page dev console handoff
         try {
@@ -3353,6 +3446,22 @@ class MapMakerPage extends React.Component {
     let e = val.data[0];
     let dungeon = JSON.parse(e.content), dungeonValid = true;
     dungeon = this.props.mapMaker.formatDungeon(dungeon);
+
+    // Fetch all boards and sync dynamically
+    try {
+      const boardsVal = await loadAllBoardsRequest();
+      if (boardsVal && Array.isArray(boardsVal.data)) {
+        const allBoards = boardsVal.data.map(item => {
+          const b = JSON.parse(item.content);
+          b.id = item._id;
+          return b;
+        });
+        dungeon = this.syncDungeonPlanesWithBoards(dungeon, allBoards);
+      }
+    } catch (err) {
+      console.error('Failed to sync dungeon planes on load:', err);
+    }
+
     for (let key in dungeon.levels) {
       let level = dungeon.levels[key]
       if (level.front) {
