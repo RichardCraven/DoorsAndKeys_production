@@ -24,21 +24,22 @@ class BoardView extends React.Component {
      * Deterministic stone-texture colour for empty-space tiles.
      * Uses a sine-based hash seeded by tileId so the colour is identical
      * on every render (no flicker) while each tile looks visually distinct.
-     * Produces warm dark-stone: hsl(22–28°, 13–20%, 22–30%).
+     * Produces cool slate-gray: hsl(210–220°, 8–14%, 20–24%) — subtle
+     * variation that reads as natural stone without distracting from placed content.
      */
     static stoneColorForTile(tileId) {
         const noise = Math.abs(Math.sin(tileId * 127.1 + 311.7) * 43758.5453) % 1;
-        const hue = (22 + noise * 6).toFixed(1);
-        const sat = (13 + noise * 7).toFixed(1);
-        const lig = (22 + noise * 8).toFixed(1);
+        const hue = (210 + noise * 10).toFixed(1);  // 210–220° cool blue-slate
+        const sat = (8 + noise * 6).toFixed(1);     // 8–14%  desaturated
+        const lig = (20 + noise * 4).toFixed(1);    // 20–24%  tight band, subtle variation
         return `hsl(${hue}, ${sat}%, ${lig}%)`;
     }
 
-    /** Returns true when a contains object represents empty/unset floor space. */
+    /** Returns true when a contains object represents empty/unset floor space (including passages). */
     static isEmptySpaceContains(contains) {
         if (!contains) return true;
         const t = typeof contains === 'object' ? contains.type : contains;
-        return !t || t === 'empty_space';
+        return !t || t === 'empty_space' || t === 'passage';
     }
 
     formatHoverLabel(value) {

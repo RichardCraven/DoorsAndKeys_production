@@ -669,6 +669,74 @@ class MapMakerPage extends React.Component {
       modalType: 'rename dungeon'
     })
   }
+  /**
+   * Parses shorthand folder path notation into a canonical folder path.
+   *
+   * Accepts paths like:
+   *   dungeon/level/orientation/slot   (4-part shorthand)
+   *   dungeon/level/slot               (3-part, orientation defaults to front)
+   *
+   * Orientation tokens (case-insensitive): f, front → front; b, back → back
+   *
+   * Slot shorthands (case-insensitive):
+   *   TL / top-left / top_left        → top_left
+   *   TM / top-mid  / top_mid         → top_mid
+   *   TR / top-right / top_right      → top_right
+   *   ML / mid-left / middle_left     → middle_left
+   *   MM / mid-mid  / middle_mid / mid / middle → middle
+   *   MR / mid-right / middle_right   → middle_right
+   *   BL / bot-left / bottom_left     → bottom_left
+   *   BM / bot-mid  / bottom_mid      → bottom_mid
+   *   BR / bot-right / bottom_right   → bottom_right
+   *
+   * Returns the canonical path, or the original string if it can't be parsed.
+   */
+  parseFolderPathShorthand = (rawPath) => {
+    if (!rawPath || typeof rawPath !== 'string') return rawPath;
+
+    const ORIENTATION_MAP = {
+      'f': 'front', 'front': 'front',
+      'b': 'back', 'back': 'back'
+    };
+
+    const SLOT_MAP = {
+      'tl': 'top_left',  'top_left': 'top_left',  'top-left': 'top_left',
+      'tm': 'top_mid',   'top_mid': 'top_mid',    'top-mid': 'top_mid',  'top_middle': 'top_mid',
+      'tr': 'top_right', 'top_right': 'top_right','top-right': 'top_right',
+      'ml': 'middle_left',  'mid_left': 'middle_left',  'middle_left': 'middle_left',  'mid-left': 'middle_left',
+      'mm': 'middle', 'mid': 'middle', 'middle': 'middle', 'middle_mid': 'middle', 'mid_mid': 'middle', 'mid-mid': 'middle', 'center': 'middle',
+      'mr': 'middle_right', 'mid_right': 'middle_right', 'middle_right': 'middle_right', 'mid-right': 'middle_right',
+      'bl': 'bottom_left',  'bot_left': 'bottom_left',  'bottom_left': 'bottom_left',  'bot-left': 'bottom_left',
+      'bm': 'bottom_mid',   'bot_mid': 'bottom_mid',    'bottom_mid': 'bottom_mid',    'bot-mid': 'bottom_mid', 'bottom_middle': 'bottom_mid',
+      'br': 'bottom_right', 'bot_right': 'bottom_right','bottom_right': 'bottom_right','bot-right': 'bottom_right'
+    };
+
+    const parts = rawPath.split('/');
+
+    if (parts.length === 4) {
+      // dungeon / level / orientation / slot
+      const [dungeonPart, levelPart, orientationPart, slotPart] = parts;
+      const orientation = ORIENTATION_MAP[orientationPart.toLowerCase().trim()];
+      const slot = SLOT_MAP[slotPart.toLowerCase().trim().replace(/-/g, '_')];
+      if (orientation && slot) {
+        const suffix = orientation === 'back' ? '_back' : '';
+        return `${dungeonPart.trim()}/${levelPart.trim()}/${slot}${suffix}`;
+      }
+    }
+
+    if (parts.length === 3) {
+      // dungeon / level / slot  (front implied)
+      const [dungeonPart, levelPart, slotPart] = parts;
+      const slot = SLOT_MAP[slotPart.toLowerCase().trim().replace(/-/g, '_')];
+      if (slot) {
+        return `${dungeonPart.trim()}/${levelPart.trim()}/${slot}`;
+      }
+    }
+
+    // Can't recognize the shorthand — return as-is so existing long-form paths are unchanged.
+    return rawPath;
+  }
+
   renameBoard = () => {
     this.setState({
       showModal: true,
@@ -4461,7 +4529,8 @@ class MapMakerPage extends React.Component {
         }
         const boardId = board.id;
         board.name = this.state.boardNameInput.current.value.trim();
-        board.folderPath = this.state.boardFolderPathInput.current.value.trim();
+        const rawFolderPath = this.state.boardFolderPathInput.current.value.trim();
+        board.folderPath = this.parseFolderPathShorthand(rawFolderPath);
         this.setState({
           loadedBoard: board,
           showModal: false
@@ -4988,8 +5057,8 @@ class MapMakerPage extends React.Component {
                     <input ref={this.state.boardNameInput} className="dungeonname-input" type="text" defaultValue={info.displayName} placeholder="e.g. Boss Room" style={{ width: '100%' }} />
                   </div>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#9da5b1' }}>Folder Path (optional, e.g. "dream/0/middle")</label>
-                    <input ref={this.state.boardFolderPathInput} className="dungeonname-input" type="text" defaultValue={info.folderPath} placeholder="e.g. dream/0/middle" style={{ width: '100%' }} />
+                    <label style={{ display: 'block', marginBottom: '5px', fontSize: '13px', fontWeight: '600', color: '#9da5b1' }}>Folder Path (e.g. "dream/0/middle" or shorthand "dream/0/b/tr")</label>
+                    <input ref={this.state.boardFolderPathInput} className="dungeonname-input" type="text" defaultValue={info.folderPath} placeholder="e.g. primari/0/b/tr  or  dream/0/middle_right_back" style={{ width: '100%' }} />
                   </div>
                 </div>
               );
