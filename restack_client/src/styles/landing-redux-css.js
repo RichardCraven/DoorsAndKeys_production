@@ -1,5 +1,7 @@
+import homepageBg from '../assets/graphics/dream_tower_background.jpg';
+
 export const LANDING_REDUX_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative:wght@700&family=MedievalSharp&family=Metamorphous&family=Uncial+Antiqua&family=Almendra+SC:wght@700&family=Outfit:wght@300;400;500;600;700&display=swap');
 
 .redux-login-container {
   font-family: 'Outfit', sans-serif;
@@ -206,7 +208,8 @@ export const LANDING_REDUX_CSS = `
   flex-direction: column;
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(circle at center, #1b1715 0%, #0c0a09 100%);
+  background: url(${homepageBg}) no-repeat center center;
+  background-size: cover;
   position: absolute;
   top: 0;
   left: 0;
