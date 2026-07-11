@@ -463,6 +463,8 @@ ul.dropdown-menu.show{
         letter-spacing: 0.5px;
         transition: background 0.2s ease, color 0.2s ease;
         padding-left: 10px;
+        padding-right: 10px;
+        box-sizing: border-box;
 
         &:hover {
             background: linear-gradient(135deg, #262320 0%, #1a1917 100%);
@@ -558,6 +560,8 @@ ul.dropdown-menu.show{
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        text-align: left;
+        padding-left: 4px;
     }
 }
 .mapmaker-container{
@@ -1104,6 +1108,28 @@ ul.dropdown-menu.show{
         &.selected {
             background: linear-gradient(135deg, #f9b115 0%, #d49810 100%) !important;
             border-color: #fff !important;
+            color: #111 !important;
+            box-shadow: 0 0 10px rgba(249, 177, 21, 0.65), inset 0 0 4px rgba(255, 255, 255, 0.5) !important;
+        }
+    }
+
+    &.empty-board {
+        background-color: rgba(249, 177, 21, 0.04);
+        border: 1px dashed rgba(249, 177, 21, 0.45);
+        color: rgba(249, 177, 21, 0.5);
+        box-shadow: none;
+
+        &:hover, &.hovered {
+            background-color: rgba(249, 177, 21, 0.15);
+            border-color: #f9b115;
+            border-style: solid;
+            color: #fff;
+        }
+
+        &.selected {
+            background: linear-gradient(135deg, #f9b115 0%, #d49810 100%) !important;
+            border-color: #fff !important;
+            border-style: solid !important;
             color: #111 !important;
             box-shadow: 0 0 10px rgba(249, 177, 21, 0.65), inset 0 0 4px rgba(255, 255, 255, 0.5) !important;
         }

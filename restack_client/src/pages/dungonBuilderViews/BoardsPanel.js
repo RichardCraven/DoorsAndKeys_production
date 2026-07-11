@@ -143,10 +143,11 @@ class BoardsPanel extends React.Component {
                         {gridData.map((board, idx) => {
                             const isHovered = this.state.hoveredSlot === `${folderTitle}_${subfolder.title}_${orientation}_${idx}`;
                             const isSelected = this.props.loadedBoard && board && (board.id === this.props.loadedBoard.id);
+                            const isEmptyBoard = board && (board.name === 'empty' || board.displayName === 'empty');
                             return (
                                 <div
                                     key={idx}
-                                    className={`grid-cell ${board ? 'filled' : 'empty'} ${isHovered ? 'hovered' : ''} ${isSelected ? 'selected' : ''}`}
+                                    className={`grid-cell ${board ? (isEmptyBoard ? 'empty-board' : 'filled') : 'empty'} ${isHovered ? 'hovered' : ''} ${isSelected ? 'selected' : ''}`}
                                     title={board ? `${board.displayName || board.name}` : 'Empty Slot'}
                                     onClick={() => board && this.props.loadBoard(board)}
                                     onMouseEnter={() => this.setState({ hoveredSlot: `${folderTitle}_${subfolder.title}_${orientation}_${idx}` })}
@@ -167,7 +168,7 @@ class BoardsPanel extends React.Component {
                                         }
                                     }}
                                 >
-                                    {board ? (board.displayName || board.name).slice(0, 3) : ''}
+                                    {board && !isEmptyBoard ? (board.displayName || board.name).slice(0, 3) : ''}
                                 </div>
                             );
                         })}

@@ -195,14 +195,15 @@ class PlanesPanel extends React.Component {
                             }}
                         >
                             {plane.miniboards.map((mb, idx) => {
-                                const hasTiles = mb && mb.tiles && mb.tiles.some(t => t.contains && t.contains.type !== 'empty_space' && t.contains.type !== 'void');
+                                const isFilled = mb && (mb.id || mb._id || (mb.tiles && mb.tiles.length > 0) || mb.name);
+                                const isEmptyBoard = mb && (mb.name === 'empty' || mb.displayName === 'empty');
                                 return (
                                     <div
                                         key={idx}
-                                        className={`grid-cell ${hasTiles ? 'filled' : 'empty'}`}
+                                        className={`grid-cell ${isFilled ? (isEmptyBoard ? 'empty-board' : 'filled') : 'empty'}`}
                                         style={{ fontSize: '8px' }}
                                     >
-                                        {mb && (mb.displayName || mb.name) ? (mb.displayName || mb.name).slice(0, 3) : ''}
+                                        {mb && !isEmptyBoard && (mb.displayName || mb.name) ? (mb.displayName || mb.name).slice(0, 3) : ''}
                                     </div>
                                 );
                             })}
