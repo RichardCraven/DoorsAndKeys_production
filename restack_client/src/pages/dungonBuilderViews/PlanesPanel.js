@@ -202,11 +202,6 @@ class PlanesPanel extends React.Component {
                             }}
                             onMouseEnter={() => this.setState({ hoveredPlane: previewKey })}
                             onMouseLeave={() => this.setState({ hoveredPlane: null })}
-                            style={{ 
-                                cursor: 'pointer',
-                                border: isSelected ? '1px solid #f9b115' : '1px solid rgba(249, 177, 21, 0.15)',
-                                boxShadow: isSelected ? '0 0 10px rgba(249, 177, 21, 0.4)' : 'none'
-                            }}
                         >
                             {plane.miniboards.map((mb, idx) => {
                                 const isFilled = mb && (mb.id || mb._id || (mb.tiles && mb.tiles.length > 0) || mb.name);
@@ -333,9 +328,12 @@ class PlanesPanel extends React.Component {
         return (
             <div className="palette right-palette" 
             style={{
-                width: this.props.tileSize*4.5+'px', height: this.props.boardSize+ 'px',
-                backgroundColor: 'black',
-                overflow: 'scroll'
+                width: this.props.tileSize*4.5+'px', height: (this.props.boardSize + 35) + 'px',
+                backgroundColor: '#0b0a09',
+                overflow: 'scroll',
+                marginLeft: '20px',
+                borderRadius: '6px',
+                border: '1px solid rgba(255, 255, 255, 0.08)'
             }}
             onMouseLeave={() => {
                 if(this.props.optionClickedIdx === null){
@@ -345,7 +343,7 @@ class PlanesPanel extends React.Component {
             >
                 <div className="planes-title">Planes</div>
                 <div className="planes-options-buttons-container" 
-                style={{width: this.props.tileSize*4.5+'px'}}
+                style={{width: (this.props.tileSize*4.5 - 2)+'px'}}
                 >
                     <CDropdown>
                         <CDropdownToggle color="secondary">Actions</CDropdownToggle>

@@ -28,7 +28,6 @@ export function MapMaker(props){
         'food',
         'dream den',
         'dungeon portal',
-        'magic',
         'inscription',
         'shrine',
         'lore_tablet'
@@ -698,8 +697,6 @@ export function MapMaker(props){
                 return 'wyvern'
             case 'item':
                 return 'lantern'
-            case 'magic':
-                return 'spell'
             case 'narrative':
                 return 'narrative'
             case 'key':

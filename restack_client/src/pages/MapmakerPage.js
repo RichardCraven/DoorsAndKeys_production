@@ -1878,6 +1878,15 @@ class MapMakerPage extends React.Component {
     storeMeta(meta);
   }
 
+  collapseAllBoardFolders = () => {
+    this.setState({ boardsFoldersExpanded: {} });
+    setEditorPreference('boardsFoldersExpanded', {});
+    const userId = sessionStorage.getItem('userId');
+    const meta = getMeta();
+    if (userId) updateUserRequest(userId, meta);
+    storeMeta(meta);
+  }
+
   expandCollapsePlaneFolders = (folderTitle) => {
     const matrix = { ...this.state.planesFoldersExpanded };
     matrix[folderTitle] = !matrix[folderTitle];
@@ -1894,6 +1903,10 @@ class MapMakerPage extends React.Component {
   // Board CRUD methods
   writeBoard = async () => {
     console.log('write board');
+    if (!this.state.loadedBoard || !this.state.loadedBoard.id) {
+      console.warn('Cannot write board: no loadedBoard or loadedBoard.id');
+      return;
+    }
     // let planesToUpdate = [];
     // let miniboards;
 
@@ -2188,7 +2201,7 @@ class MapMakerPage extends React.Component {
     const plane = frontOrBack === 'front' ? level?.front : level?.back;
     const miniboard = plane?.miniboards[miniboardIndex]
     console.log('level:', level, 'plane:', plane, 'miniboard:', miniboard);
-    if (level && miniboard) {
+    if (level && miniboard && miniboard.id) {
       this.setState({
         zoomLevelId: levelId,
         zoomMiniboardIndex: miniboardIndex,
@@ -2509,14 +2522,51 @@ class MapMakerPage extends React.Component {
     
     let syncedDungeon = clone(dungeon);
     
-    // Completely clear all miniboards in the dungeon to avoid ghost duplicates
+    // First, sync any existing miniboards in-place using matching IDs or names
     syncedDungeon.levels.forEach(level => {
-      if (level.front) {
-        level.front.miniboards = Array(9).fill(null).map(() => ({}));
-      }
-      if (level.back) {
-        level.back.miniboards = Array(9).fill(null).map(() => ({}));
-      }
+      const syncPlaneInPlace = (plane) => {
+        if (!plane) return;
+        if (!Array.isArray(plane.miniboards)) {
+          plane.miniboards = Array(9).fill(null).map(() => ({}));
+          return;
+        }
+        
+        // Ensure exactly 9 slots
+        while (plane.miniboards.length < 9) {
+          plane.miniboards.push({});
+        }
+        if (plane.miniboards.length > 9) {
+          plane.miniboards = plane.miniboards.slice(0, 9);
+        }
+        
+        for (let idx = 0; idx < 9; idx++) {
+          const currentBoard = plane.miniboards[idx];
+          if (!currentBoard || !currentBoard.name || currentBoard.name === 'empty') {
+            continue;
+          }
+          
+          // Find matching board in database boards
+          const matchedBoard = boards.find(b => {
+            if (!b) return false;
+            // Match by ID
+            if (currentBoard.id && (b.id === currentBoard.id || b._id === currentBoard.id)) {
+              return true;
+            }
+            // Match by name
+            if (currentBoard.name && b.name && b.name.toLowerCase() === currentBoard.name.toLowerCase()) {
+              return true;
+            }
+            return false;
+          });
+          
+          if (matchedBoard) {
+            plane.miniboards[idx] = clone(matchedBoard);
+          }
+        }
+      };
+      
+      syncPlaneInPlace(level.front);
+      syncPlaneInPlace(level.back);
     });
     
     const getGridIndexFromPathSuffix = (pathSuffix) => {
@@ -2534,7 +2584,10 @@ class MapMakerPage extends React.Component {
       return row * 3 + col;
     };
 
+    // Second, run the placement parsing logic to sync any boards that match the parser layout naming convention
+    // but only overwrite slots if they are empty/unassigned.
     boards.forEach((board) => {
+      if (!board) return;
       const placement = this.parseBoardPlacement(board);
       if (!placement.dungeon || !placement.level) return;
       if (placement.dungeon.toLowerCase() !== syncedDungeon.name.toLowerCase()) return;
@@ -2554,7 +2607,12 @@ class MapMakerPage extends React.Component {
         while (plane.miniboards.length < 9) {
           plane.miniboards.push({});
         }
-        plane.miniboards[idx] = clone(board);
+        
+        const existing = plane.miniboards[idx];
+        const isEmpty = !existing || !existing.name || existing.name === 'empty';
+        if (isEmpty) {
+          plane.miniboards[idx] = clone(board);
+        }
       }
     });
 
@@ -3591,7 +3649,7 @@ class MapMakerPage extends React.Component {
   }
   planesContainingBoard = (board) => {
     let planesToUpdate = [];
-    if (!board.id) return planesToUpdate;
+    if (!board || !board.id) return planesToUpdate;
     if (this.state.planes.length > 0) {
       this.state.planes.forEach((plane) => {
         let planeHasMatchingBoard = false;
@@ -4709,10 +4767,42 @@ class MapMakerPage extends React.Component {
     event.preventDefault();
   }
 
-  onDropDungeon = (levelIndex, frontOrBack) => {
+  onDropDungeon = async (levelIndex, frontOrBack) => {
     const dungeon = clone(this.state.loadedDungeon);
     if (!dungeon || !Array.isArray(dungeon.levels) || !dungeon.levels[levelIndex]) return;
-    dungeon.levels[levelIndex][frontOrBack] = clone(this.state.draggedPlane);
+    
+    let plane = clone(this.state.draggedPlane);
+    dungeon.levels[levelIndex][frontOrBack] = plane;
+
+    const dungeonName = dungeon.name;
+    const normalizedLevel = String(dungeon.levels[levelIndex].id);
+    const suffix = frontOrBack === 'back' ? '_back' : '';
+    const slotNames = [
+      'top_left', 'top_mid', 'top_right',
+      'middle_left', 'middle_mid', 'middle_right',
+      'bottom_left', 'bottom_mid', 'bottom_right'
+    ];
+
+    if (plane.miniboards && Array.isArray(plane.miniboards)) {
+      await Promise.all(plane.miniboards.map(async (board, idx) => {
+        if (board && board.id) {
+          const slotName = slotNames[idx];
+          const newFolderPath = `${dungeonName}/${normalizedLevel}/${slotName}${suffix}`;
+          try {
+            let updatedBoard = {
+              name: board.name,
+              folderPath: newFolderPath,
+              tiles: clone(board.tiles),
+              config: clone(board.config || [[], [], [], []])
+            };
+            await updateBoardRequest(board.id, updatedBoard);
+          } catch (err) {
+            console.error('Failed to transfer board to new dungeon:', err);
+          }
+        }
+      }));
+    }
+
     setTimeout(() => {
       this.setState({
         loadedDungeon: this.props.mapMaker.formatDungeon(dungeon),
@@ -5634,38 +5724,52 @@ class MapMakerPage extends React.Component {
               {this.state.leftReadoutFlashMessage || this.state.selectedThingTitle}
             </div>
 
-            <CButtonGroup className='view-state-radio-group' role="group" aria-label="Basic checkbox toggle button group" >
-              <CFormCheck
-                type="radio"
-                button={{ color: 'secondary', variant: 'outline' }}
-                name="btnradio"
-                id="board-view"
-                autoComplete="off"
-                label="Board View"
-                checked={this.state.selectedView === 'board'}
-                onChange={this.viewSelectorChange}
-              />
-              <CFormCheck
-                type="radio"
-                button={{ color: 'secondary', variant: 'outline' }}
-                name="btnradio"
-                id="plane-view"
-                autoComplete="off"
-                label="Plane View"
-                checked={this.state.selectedView === 'plane'}
-                onChange={this.viewSelectorChange}
-              />
-              <CFormCheck
-                type="radio"
-                button={{ color: 'secondary', variant: 'outline' }}
-                name="btnradio"
-                id="dungeon-view"
-                autoComplete="off"
-                label="Dungeon View"
-                checked={this.state.selectedView === 'dungeon'}
-                onChange={this.viewSelectorChange}
-              />
-            </CButtonGroup>
+            <div className="view-selector-container">
+              <div className={`view-indicator-graphic left-indicator selected-${this.state.selectedView}`}>
+                {[...Array(12)].map((_, i) => (
+                  <span key={i} className={`indicator-line line-${i}`} />
+                ))}
+              </div>
+
+              <CButtonGroup className='view-state-radio-group' role="group" aria-label="Basic checkbox toggle button group" >
+                <CFormCheck
+                  type="radio"
+                  button={{ color: 'secondary', variant: 'outline' }}
+                  name="btnradio"
+                  id="board-view"
+                  autoComplete="off"
+                  label="Board View"
+                  checked={this.state.selectedView === 'board'}
+                  onChange={this.viewSelectorChange}
+                />
+                <CFormCheck
+                  type="radio"
+                  button={{ color: 'secondary', variant: 'outline' }}
+                  name="btnradio"
+                  id="plane-view"
+                  autoComplete="off"
+                  label="Plane View"
+                  checked={this.state.selectedView === 'plane'}
+                  onChange={this.viewSelectorChange}
+                />
+                <CFormCheck
+                  type="radio"
+                  button={{ color: 'secondary', variant: 'outline' }}
+                  name="btnradio"
+                  id="dungeon-view"
+                  autoComplete="off"
+                  label="Dungeon View"
+                  checked={this.state.selectedView === 'dungeon'}
+                  onChange={this.viewSelectorChange}
+                />
+              </CButtonGroup>
+
+              <div className={`view-indicator-graphic right-indicator selected-${this.state.selectedView}`}>
+                {[...Array(12)].map((_, i) => (
+                  <span key={i} className={`indicator-line line-${i}`} />
+                ))}
+              </div>
+            </div>
             <div className="right-menus" style={{ 
               width: this.state.tileSize * 4.5 + 'px',
               display: 'flex',
@@ -5745,6 +5849,7 @@ class MapMakerPage extends React.Component {
               onAssignBoardToSlot={this.onAssignBoardToSlot}
               getBoardFolderInfo={this.getBoardFolderInfo}
               onSyncLevelToPlane={this.onSyncLevelToPlane}
+              collapseAllBoardFolders={this.collapseAllBoardFolders}
             >
             </BoardsPanel>
 

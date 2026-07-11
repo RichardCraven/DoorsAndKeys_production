@@ -1811,6 +1811,8 @@ export function BoardManager(){
                 }
                 break;
             case 'spell':
+            case 'dream den':
+            case 'dream_den':
                 this.removeTileFromBoard(destinationTile)
                 this.triggerRitualEncounter();
             break;

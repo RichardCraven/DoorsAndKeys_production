@@ -395,39 +395,42 @@ export const LANDING_REDUX_CSS = `
 
 .redux-landing-container .hero-card .btn-play {
   width: 100%;
-  padding: 18px 0 !important;
-  background: linear-gradient(135deg, #d4a844 0%, #a37c26 100%);
-  color: #12100e;
+  padding: 16px 0 !important;
+  background: rgba(22, 19, 17, 0.45);
+  color: #e5b54f;
   font-weight: 700;
-  font-size: 1.15rem;
-  letter-spacing: 1.5px;
+  font-size: 1.1rem;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  border: none;
+  border: 1px solid rgba(229, 181, 79, 0.4);
   border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 0 6px 20px rgba(212, 168, 68, 0.2);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(229, 181, 79, 0.03);
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   gap: 12px;
   text-indent: 0 !important;
+  backdrop-filter: blur(4px);
 }
 
 .redux-landing-container .hero-card .btn-play:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(212, 168, 68, 0.35);
-  filter: brightness(1.15);
+  transform: translateY(-1px);
+  background: rgba(229, 181, 79, 0.08);
+  border-color: #e5b54f;
+  color: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(229, 181, 79, 0.15), inset 0 0 12px rgba(229, 181, 79, 0.08);
 }
 
 .redux-landing-container .hero-card .btn-play.disabled,
 .redux-landing-container .hero-card .btn-play:disabled {
-  background: #2b2724 !important;
+  background: rgba(43, 39, 36, 0.2) !important;
   color: #57524f !important;
   cursor: not-allowed;
   transform: none !important;
   box-shadow: none !important;
-  border: 1px solid rgba(120, 113, 108, 0.1);
+  border: 1px solid rgba(120, 113, 108, 0.1) !important;
   pointer-events: auto;
 }
 
