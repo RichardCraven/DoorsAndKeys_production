@@ -4,6 +4,7 @@ import { storeMeta, getMeta } from '../utils/session-handler';
 import { CrewManager } from '../utils/crew-manager'
 import { Redirect } from "react-router-dom";
 import MonsterBattle from './sub-views/MonsterBattle';
+import loadingGif from '../assets/highres-gifs/gifOne.gif';
 import { CombatManagerRedux } from '../utils/combat-manager-redux';
 import skillsMatrix from '../utils/skills-matrix';
 
@@ -210,6 +211,7 @@ class CrewManagerPage extends React.Component {
             selectedMinionKeys: ['skeleton', 'skeleton', 'skeleton', null],
             selectedEnemyForInfo: null,
             lord: false,
+            loadingSimulator: false,
         }
     }
     timer = null;
@@ -601,6 +603,8 @@ class CrewManagerPage extends React.Component {
     }
 
     submit = async () => {
+        this.setState({ loadingSimulator: true });
+
         // Create a fresh clone of selectedCrew to keep original intact when returning or displaying
         const clonedCrew = clone(this.state.selectedCrew);
 
@@ -677,7 +681,7 @@ class CrewManagerPage extends React.Component {
 
                             const isBow = (w) => {
                                 const k = w._im_key || '';
-                                return k.endsWith('_bow') || k === 'merklins_peacekeeper' || w.range === 'far';
+                                  return k.endsWith('_bow') || k === 'merklins_peacekeeper' || w.range === 'far';
                             };
                             const isMartial = (w) => {
                                 const k = w._im_key || '';
@@ -733,11 +737,35 @@ class CrewManagerPage extends React.Component {
         } else {
             this.reduxCombatManager = null;
         }
+
+        // Pre-load all character and monster portraits while showing the loader
+        const startTime = Date.now();
+        const crewPortraits = clonedCrew.map(m => m && m.portrait).filter(Boolean);
+        const monsterPortraits = [monster, ...minions].map(m => m && m.portrait).filter(Boolean);
+        const allPortraits = [...new Set([...crewPortraits, ...monsterPortraits])];
+
+        await Promise.all(allPortraits.map(src => {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.src = src;
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+            });
+        }));
+
+        // Enforce a minimum display time of 1.8 seconds so loading feels smooth and premium
+        const elapsed = Date.now() - startTime;
+        const minDuration = 1800;
+        if (elapsed < minDuration) {
+            await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
+        }
+
         this.setState({
             monster,
             minions,
             preppedCrew: clonedCrew,
-            crewSelected: true
+            crewSelected: true,
+            loadingSimulator: false
         });
     }
     clear = () => {
@@ -895,7 +923,50 @@ class CrewManagerPage extends React.Component {
         const formatMonsterType = (type) => type ? type.replace(/_/g, ' ') : '';
         return (
             <div className="page-container">
-                {/* ...existing code... */}
+                {this.state.loadingSimulator && (
+                    <div style={{
+                        position: 'fixed',
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: '#0c0b0e',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        zIndex: 999999,
+                        fontFamily: "'Inter', system-ui, -apple-system, sans-serif"
+                    }}>
+                        <img 
+                            src={loadingGif} 
+                            alt="Loading..." 
+                            style={{
+                                width: '280px',
+                                height: '280px',
+                                objectFit: 'contain',
+                                marginBottom: '24px',
+                                filter: 'drop-shadow(0 0 20px rgba(192, 132, 252, 0.25))'
+                            }}
+                        />
+                        <div style={{
+                            color: '#c084fc',
+                            fontSize: '18px',
+                            fontWeight: '700',
+                            letterSpacing: '1.5px',
+                            textTransform: 'uppercase',
+                            marginBottom: '8px',
+                            textShadow: '0 0 10px rgba(192, 132, 252, 0.4)'
+                        }}>
+                            Preparing Combat Simulation
+                        </div>
+                        <div style={{
+                            color: '#a1a1aa',
+                            fontSize: '13px',
+                            fontWeight: '400',
+                            letterSpacing: '0.5px'
+                        }}>
+                            Loading high-resolution combat assets...
+                        </div>
+                    </div>
+                )}
                 {!this.state.crewSelected && <div className="crew-manager">
                     {this.state.navToLanding && <Redirect to='/' />}
                     <div className="content-container">

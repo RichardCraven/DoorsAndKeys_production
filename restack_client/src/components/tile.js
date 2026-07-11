@@ -473,7 +473,7 @@ function Tile(props) {
            )}
 
            {/* Passage corridor double border overlay to clearly represent stone walls */}
-           { ((props.contains && props.contains.type === 'passage') || props.optionType === 'passage') && (
+           { props.optionType === 'passage' && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     borderLeft: props.borders?.left && props.borders.left !== '2px solid transparent' ? '4px double #bda88a' : 'none',
