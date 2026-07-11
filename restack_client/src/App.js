@@ -268,28 +268,30 @@ const toggleMenuTray = () => {
                 <span style={{ fontSize: '15px' }}>🚪</span>
               </button>
 
-              <button 
-                className="menu-buttons save-button" 
-                onClick={saveUserData}
-                onMouseEnter={() => setHoveredMenuItem('Save Game')}
-                onMouseLeave={() => setHoveredMenuItem(null)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '6px 8px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  outline: 'none'
-                }}
-                title="Save Game"
-              >
-                <span style={{ fontSize: '15px' }}>💾</span>
-              </button>
+              {location.pathname !== '/userProfilePage' && (
+                <button 
+                  className="menu-buttons save-button" 
+                  onClick={saveUserData}
+                  onMouseEnter={() => setHoveredMenuItem('Save Game')}
+                  onMouseLeave={() => setHoveredMenuItem(null)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '6px 8px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    outline: 'none'
+                  }}
+                  title="Save Game"
+                >
+                  <span style={{ fontSize: '15px' }}>💾</span>
+                </button>
+              )}
 
               <button 
                 className="menu-buttons go-home-button" 

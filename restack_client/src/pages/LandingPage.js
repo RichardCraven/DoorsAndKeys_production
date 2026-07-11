@@ -289,7 +289,7 @@ export default function LandingPage(props) {
             Welcome <span>{username}</span>
           </div>
           <button className="btn-logout" onClick={handleLogout}>
-            🚪 Logout
+            Logout
           </button>
         </div>
       </header>
