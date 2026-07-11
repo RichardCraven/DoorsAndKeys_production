@@ -2126,17 +2126,27 @@ class MapMakerPage extends React.Component {
       return;
     }
 
+    // Find if this board belongs to a plane
+    const associatedPlane = (this.state.planes || []).find(plane => 
+      plane.miniboards && plane.miniboards.some(mb => mb && (mb.id === board.id || mb._id === board.id))
+    );
+
     // When usePassedTiles is true (e.g. zooming into a generated/in-memory board),
     // skip the saved-boards lookup and use the board data we already have.
     if (usePassedTiles) {
       if (this.state.selectedView !== 'board') {
         this.setViewState('board')
       }
-      this.setState({
+      const nextState = {
         loadedBoard: clone(board),
         tiles: clone(board.tiles),
         selectedThingTitle: `Board: ${board.name}`
-      })
+      };
+      if (associatedPlane) {
+        nextState.loadedPlane = associatedPlane;
+        setEditorPreference('loadedPlaneId', associatedPlane.id || null);
+      }
+      this.setState(nextState);
       return;
     }
 
@@ -2153,11 +2163,17 @@ class MapMakerPage extends React.Component {
     if (this.state.selectedView !== 'board') {
       this.setViewState('board')
     }
-    this.setState({
+    
+    const nextState = {
       loadedBoard: boardRef,
       tiles: boardRef.tiles,
       selectedThingTitle: `Board: ${board.name}`
-    })
+    };
+    if (associatedPlane) {
+      nextState.loadedPlane = associatedPlane;
+      setEditorPreference('loadedPlaneId', associatedPlane.id || null);
+    }
+    this.setState(nextState);
 
     // Persist only selected board identity. Never persist tile/content edits here.
     setEditorPreference('loadedBoardId', boardRef.id || null);
@@ -5822,6 +5838,7 @@ class MapMakerPage extends React.Component {
               boardsFoldersExpanded={this.state.boardsFoldersExpanded}
               planeHasUnsavedChanges={this.state.planeHasUnsavedChanges}
               boards={this.state.boards}
+              loadedBoard={this.state.loadedBoard}
               tiles={this.state.tiles}
               compatibilityMatrix={this.state.compatibilityMatrix}
               hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}

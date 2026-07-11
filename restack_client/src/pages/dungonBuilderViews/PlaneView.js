@@ -74,8 +74,9 @@ class PlaneView extends React.Component {
                     >
                         <div className="mini-boards-container">
                             {this.props.loadedPlane && this.props.miniboards && this.props.miniboards.map((board, boardIndex) => {
+                                const isLoadedBoard = this.props.loadedBoard && board && (board.id === this.props.loadedBoard.id || board._id === this.props.loadedBoard.id);
                                 return  <div 
-                                        className="mini-board board" 
+                                        className={`mini-board board ${isLoadedBoard ? 'selected-board-outline' : ''}`}
                                         key={boardIndex}
                                         style={{
                                         height: (this.props.tileSize*15)/3-2+'px',
