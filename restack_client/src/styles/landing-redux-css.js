@@ -1,5 +1,7 @@
+import homepageBg from '../assets/graphics/dream_tower_background.jpg';
+
 export const LANDING_REDUX_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative:wght@700&family=Outfit:wght@300;400;500;600;700&display=swap');
 
 .redux-login-container {
   font-family: 'Outfit', sans-serif;
@@ -206,7 +208,8 @@ export const LANDING_REDUX_CSS = `
   flex-direction: column;
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(circle at center, #1b1715 0%, #0c0a09 100%);
+  background: url(${homepageBg}) no-repeat center center;
+  background-size: cover;
   position: absolute;
   top: 0;
   left: 0;
@@ -230,10 +233,11 @@ export const LANDING_REDUX_CSS = `
 .redux-landing-container .landing-header .header-logo {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
 }
 
 .redux-landing-container .landing-header .header-logo .logo-title {
-  font-family: 'Cinzel', serif;
+  font-family: 'Cinzel Decorative', serif;
   font-size: 1.8rem;
   font-weight: 700;
   color: #e5b54f;
@@ -247,6 +251,7 @@ export const LANDING_REDUX_CSS = `
   text-transform: uppercase;
   letter-spacing: 1.5px;
   margin-top: 4px;
+  text-align: left;
 }
 
 .redux-landing-container .landing-header .header-user {
@@ -388,7 +393,7 @@ export const LANDING_REDUX_CSS = `
   gap: 20px;
 }
 
-.redux-landing-container .hero-card .action-row .btn-play {
+.redux-landing-container .hero-card .btn-play {
   width: 100%;
   padding: 18px 0 !important;
   background: linear-gradient(135deg, #d4a844 0%, #a37c26 100%);
@@ -409,14 +414,14 @@ export const LANDING_REDUX_CSS = `
   text-indent: 0 !important;
 }
 
-.redux-landing-container .hero-card .action-row .btn-play:hover {
+.redux-landing-container .hero-card .btn-play:hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 25px rgba(212, 168, 68, 0.35);
   filter: brightness(1.15);
 }
 
-.redux-landing-container .hero-card .action-row .btn-play.disabled,
-.redux-landing-container .hero-card .action-row .btn-play:disabled {
+.redux-landing-container .hero-card .btn-play.disabled,
+.redux-landing-container .hero-card .btn-play:disabled {
   background: #2b2724 !important;
   color: #57524f !important;
   cursor: not-allowed;
@@ -426,14 +431,14 @@ export const LANDING_REDUX_CSS = `
   pointer-events: auto;
 }
 
-.redux-landing-container .hero-card .action-row .dungeon-selector-group {
+.redux-landing-container .hero-card .dungeon-selector-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
   position: relative;
 }
 
-.redux-landing-container .hero-card .action-row .dungeon-selector-group .selector-label {
+.redux-landing-container .hero-card .dungeon-selector-group .selector-label {
   font-size: 0.75rem;
   color: #78716c;
   text-transform: uppercase;
@@ -441,7 +446,7 @@ export const LANDING_REDUX_CSS = `
   font-weight: 600;
 }
 
-.redux-landing-container .hero-card .action-row .dungeon-selector-group .custom-select-trigger {
+.redux-landing-container .hero-card .dungeon-selector-group .custom-select-trigger {
   width: 100%;
   padding: 12px 16px;
   background: rgba(12, 10, 9, 0.6);
@@ -457,16 +462,16 @@ export const LANDING_REDUX_CSS = `
   box-sizing: border-box;
 }
 
-.redux-landing-container .hero-card .action-row .dungeon-selector-group .custom-select-trigger:hover {
+.redux-landing-container .hero-card .dungeon-selector-group .custom-select-trigger:hover {
   border-color: #e5b54f;
   background: rgba(12, 10, 9, 0.85);
 }
 
-.redux-landing-container .hero-card .action-row .dungeon-selector-group .custom-select-trigger.selected {
+.redux-landing-container .hero-card .dungeon-selector-group .custom-select-trigger.selected {
   border-color: rgba(229, 181, 79, 0.6);
 }
 
-.redux-landing-container .hero-card .action-row .dungeon-selector-group .custom-select-menu {
+.redux-landing-container .hero-card .dungeon-selector-group .custom-select-menu {
   position: absolute;
   bottom: 105%;
   left: 0;
@@ -480,7 +485,7 @@ export const LANDING_REDUX_CSS = `
   overflow-y: auto;
 }
 
-.redux-landing-container .hero-card .action-row .dungeon-selector-group .custom-select-menu .menu-item {
+.redux-landing-container .hero-card .dungeon-selector-group .custom-select-menu .menu-item {
   padding: 12px 16px;
   font-size: 0.9rem;
   color: #a8a29e;
@@ -488,18 +493,18 @@ export const LANDING_REDUX_CSS = `
   transition: all 0.2s ease;
 }
 
-.redux-landing-container .hero-card .action-row .dungeon-selector-group .custom-select-menu .menu-item:hover {
+.redux-landing-container .hero-card .dungeon-selector-group .custom-select-menu .menu-item:hover {
   background: rgba(212, 168, 68, 0.1);
   color: #e5b54f;
 }
 
-.redux-landing-container .hero-card .action-row .dungeon-selector-group .custom-select-menu .menu-item.active {
+.redux-landing-container .hero-card .dungeon-selector-group .custom-select-menu .menu-item.active {
   background: rgba(212, 168, 68, 0.15);
   color: #e5b54f;
   font-weight: 600;
 }
 
-.redux-landing-container .hero-card .action-row .skip-intro-label {
+.redux-landing-container .hero-card .skip-intro-label {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -510,7 +515,7 @@ export const LANDING_REDUX_CSS = `
   margin-top: 5px;
 }
 
-.redux-landing-container .hero-card .action-row .skip-intro-label input {
+.redux-landing-container .hero-card .skip-intro-label input {
   accent-color: #d4a844;
   width: 16px;
   height: 16px;

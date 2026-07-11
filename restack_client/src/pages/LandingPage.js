@@ -6,6 +6,7 @@ import { loadAllDungeonsRequest } from '../utils/api-handler';
 
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 
+
 export default function LandingPage(props) {
   useEffect(() => {
     const styleId = 'landing-redux-injected-styles';
@@ -25,6 +26,7 @@ export default function LandingPage(props) {
   const [navToCombatSimulator, setNavToCombatSimulator] = useState(false);
   const [navToCrew, setNavCrew] = useState(false);
   const [navToPortal, setNavMapmaker] = useState(false);
+
   const [navToUsermanager, setNavUsermanager] = useState(false);
   const [navToDungeon, setNavDungeon] = useState(false);
   const [navToSandbox, setNavToSandbox] = useState(false);
@@ -34,7 +36,13 @@ export default function LandingPage(props) {
   const [showDungeonPicker, setShowDungeonPicker] = useState(false)
   const [selectedDungeonTemplateId, setSelectedDungeonTemplateId] = useState(null)
   const [skipIntro, setSkipIntro] = useState(() => {
-    try { return !!(getMeta() || {}).skipIntro; } catch (e) { return false; }
+    try {
+      const isAdminUser = sessionStorage.getItem('isAdmin') === 'true';
+      if (!isAdminUser) return false;
+      return !!(getMeta() || {}).skipIntro;
+    } catch (e) {
+      return false;
+    }
   })
 
   const [navToIntro, setNavToIntro] = useState(false)
@@ -160,8 +168,12 @@ export default function LandingPage(props) {
       pathname: '/landing'
     })
     if (mounted) {
-      if (JSON.parse(sessionStorage.getItem('isAdmin'))) {
+      const isAdminUser = sessionStorage.getItem('isAdmin') === 'true';
+      if (isAdminUser) {
         setIsAdmin(true)
+      } else {
+        setIsAdmin(false)
+        setSkipIntro(false)
       }
     }
     return () => {
@@ -257,88 +269,72 @@ export default function LandingPage(props) {
   const username = sessionStorage.getItem('userName') || sessionStorage.getItem('username') || 'Adventurer';
 
   return (
-      <div className="redux-landing-container">
-        {navToIntro && <Redirect to='/intro' />}
-        {navToUserProfile && <Redirect to='/userProfilePage' />}
-        {navToCrew && <Redirect to='/crewManager' />}
-        {navToPortal && <Redirect to='/mapmaker' />}
-        {navToDungeon && <Redirect to='/dungeon' />}
-        {navToUsermanager && <Redirect to='/usermanager' />}
-        {navToCombatSimulator && <Redirect to='/combatSimulator' />}
-        {navToSandbox && <Redirect to='/sandbox' />}
+    <div className="redux-landing-container">
+      {navToIntro && <Redirect to='/intro' />}
+      {navToUserProfile && <Redirect to='/userProfilePage' />}
+      {navToCrew && <Redirect to='/crewManager' />}
+      {navToPortal && <Redirect to='/mapmaker' />}
+      {navToDungeon && <Redirect to='/dungeon' />}
+      {navToUsermanager && <Redirect to='/usermanager' />}
+      {navToCombatSimulator && <Redirect to='/combatSimulator' />}
+      {navToSandbox && <Redirect to='/sandbox' />}
 
-        <header className="landing-header">
-          <div className="header-logo">
-            <span className="logo-title">Dream Tower</span>
-            <span className="logo-subtitle">Descend into the unreal</span>
+      <header className="landing-header">
+        <div className="header-logo">
+          <span className="logo-title">Dream Tower</span>
+          <span className="logo-subtitle">v 0.1.9 BETA</span>
+        </div>
+        <div className="header-user">
+          <div className="user-info">
+            Welcome <span>{username}</span>
           </div>
-          <div className="header-user">
-            <div className="user-info">
-              Welcome <span>{username}</span>
-            </div>
-            <button className="btn-logout" onClick={handleLogout}>
-              🚪 Logout
-            </button>
-          </div>
-        </header>
+          <button className="btn-logout" onClick={handleLogout}>
+            Logout
+          </button>
+        </div>
+      </header>
 
-        <main className="landing-main-grid">
-          <div className="hero-column">
-            <div className="hero-card">
-              <div />
+      <main className="landing-main-grid">
+        <div className="hero-column">
+          <div className="hero-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <div />
 
-              <div className="action-row">
-                {/* Select Dungeon Dropdown */}
-                <div className="dungeon-selector-group" ref={dungeonPickerRef}>
-                  <span className="selector-label">Target Dungeon</span>
-                  <div
-                    className={`custom-select-trigger ${selectedDungeonTemplateId ? 'selected' : ''}`}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      if (!showDungeonPicker) {
-                        refreshValidDungeons();
-                      }
-                      setShowDungeonPicker((s) => !s);
-                    }}
-                  >
-                    <span>{getMeta()?.selectedDungeonTemplateName || 'Select a Dungeon...'}</span>
-                    <span>▼</span>
-                  </div>
-
-                  {showDungeonPicker && (
-                    <div className="custom-select-menu">
-                      {validDungeons.map((d) => (
-                        <div
-                          key={d.id}
-                          className={`menu-item ${selectedDungeonTemplateId === d.id ? 'active' : ''}`}
-                          onClick={() => selectDungeonTemplate(d)}
-                        >
-                          🏰 {d.name}
-                        </div>
-                      ))}
-                    </div>
-                  )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {/* Select Dungeon Dropdown */}
+              <div className="dungeon-selector-group" ref={dungeonPickerRef}>
+                <span className="selector-label">Target Dungeon</span>
+                <div
+                  className={`custom-select-trigger ${selectedDungeonTemplateId ? 'selected' : ''}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!showDungeonPicker) {
+                      refreshValidDungeons();
+                    }
+                    setShowDungeonPicker((s) => !s);
+                  }}
+                >
+                  <span>{getMeta()?.selectedDungeonTemplateName || 'Select a Dungeon...'}</span>
+                  <span>▼</span>
                 </div>
 
-                {/* Play Button */}
-                {(() => {
-                  const hasActiveDungeon = !!(getMeta()?.dungeonId);
-                  const noDungeonSelected = !selectedDungeonTemplateId && !hasActiveDungeon;
-                  const isDisabled = showWarning || noDungeonSelected;
-                  return (
-                    <button
-                      className={`btn-play ${isDisabled ? 'disabled' : ''}`}
-                      onMouseEnter={checkForCrew}
-                      onMouseLeave={() => setShowWarning(false)}
-                      onClick={isDisabled ? undefined : enterClicked}
-                      disabled={isDisabled}
-                      type="button"
-                    >⚔️ Enter Dungeon</button>
-                  );
-                })()}
+                {showDungeonPicker && (
+                  <div className="custom-select-menu">
+                    {validDungeons.map((d) => (
+                      <div
+                        key={d.id}
+                        className={`menu-item ${selectedDungeonTemplateId === d.id ? 'active' : ''}`}
+                        onClick={() => selectDungeonTemplate(d)}
+                      >
+                        🏰 {d.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
 
-                {/* Skip Intro */}
+              {/* Skip Intro - Render only if admin */}
+              {isAdmin && (
                 <label className="skip-intro-label">
                   <input
                     type="checkbox"
@@ -347,74 +343,99 @@ export default function LandingPage(props) {
                   />
                   <span>Skip cinematic introduction</span>
                 </label>
+              )}
+            </div>
 
-                {showWarning && (
-                  <div className="warning-box" style={{ marginTop: '10px' }}>
-                    ⚠️ Cannot enter dungeon without a crew. Recruit members first!
-                  </div>
-                )}
-              </div>
+            {/* Leave space for future dungeon graphic/previews */}
+            <div className="dungeon-preview-space" style={{ flexGrow: 1 }} />
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {showWarning && (
+                <div className="warning-box" style={{ margin: '0 0 10px 0' }}>
+                  ⚠️ Cannot enter dungeon without a crew. Recruit members first!
+                </div>
+              )}
+
+              {/* Play Button */}
+              {(() => {
+                const hasActiveDungeon = !!(getMeta()?.dungeonId);
+                const noDungeonSelected = !selectedDungeonTemplateId && !hasActiveDungeon;
+                const isDisabled = showWarning || noDungeonSelected;
+                return (
+                  <button
+                    className={`btn-play ${isDisabled ? 'disabled' : ''}`}
+                    onMouseEnter={checkForCrew}
+                    onMouseLeave={() => setShowWarning(false)}
+                    onClick={isDisabled ? undefined : enterClicked}
+                    disabled={isDisabled}
+                    type="button"
+                  >
+                    ⚔️ Enter Dungeon
+                  </button>
+                );
+              })()}
             </div>
           </div>
+        </div>
 
-          <div className="menu-column">
-            {/* Crew Card */}
-            <div className="menu-card" onClick={() => setNavCrew(true)}>
-              <div className="card-top">
-                <span className="card-title">Crew Manager</span>
-                <span className="card-desc">Recruit and manage your heroes, view statistics, and assemble your party.</span>
-              </div>
-              <span className="card-arrow">Manage →</span>
+        <div className="menu-column">
+          {/* Crew Card */}
+          <div className="menu-card" onClick={() => setNavCrew(true)}>
+            <div className="card-top">
+              <span className="card-title">Crew Manager</span>
+              <span className="card-desc">Recruit and manage your heroes, view statistics, and assemble your party.</span>
             </div>
-
-            {/* Profile Card */}
-            <div className="menu-card" onClick={() => setNavUserProfile(true)}>
-              <div className="card-top">
-                <span className="card-title">Profile</span>
-                <span className="card-desc">Review your accomplishments, collection progress, and player credentials.</span>
-              </div>
-              <span className="card-arrow">View →</span>
-            </div>
-
-            {/* Combat Simulator Card */}
-            <div className="menu-card" onClick={() => setNavToCombatSimulator(true)}>
-              <div className="card-top">
-                <span className="card-title">Combat Simulator</span>
-                <span className="card-desc">Simulate battle scenarios, adjust speed constants, and balance combatant parameters.</span>
-              </div>
-              <span className="card-arrow">Simulate →</span>
-            </div>
-
-            {/* Admin Cards */}
-            {isAdmin && (
-              <>
-                <div className="menu-card" onClick={() => setNavMapmaker(true)}>
-                  <div className="card-top">
-                    <span className="card-title">Dungeon Builder</span>
-                    <span className="card-desc">Construct new maps, design boards, design custom planes, and orchestrate campaigns.</span>
-                  </div>
-                  <span className="card-arrow">Build →</span>
-                </div>
-
-                <div className="menu-card" onClick={() => setNavUsermanager(true)}>
-                  <div className="card-top">
-                    <span className="card-title">User Manager</span>
-                    <span className="card-desc">Administer player accounts, permissions, and session records.</span>
-                  </div>
-                  <span className="card-arrow">Administer →</span>
-                </div>
-
-                <div className="menu-card" onClick={() => setNavToSandbox(true)}>
-                  <div className="card-top">
-                    <span className="card-title">Sandbox</span>
-                    <span className="card-desc">Test prototype mechanics, procedural features, and mock API inputs.</span>
-                  </div>
-                  <span className="card-arrow">Test →</span>
-                </div>
-              </>
-            )}
+            <span className="card-arrow">Manage →</span>
           </div>
-        </main>
-      </div>
-    );
+
+          {/* Profile Card */}
+          <div className="menu-card" onClick={() => setNavUserProfile(true)}>
+            <div className="card-top">
+              <span className="card-title">Profile</span>
+              <span className="card-desc">Review your accomplishments, collection progress, and player credentials.</span>
+            </div>
+            <span className="card-arrow">View →</span>
+          </div>
+
+          {/* Combat Simulator Card */}
+          <div className="menu-card" onClick={() => setNavToCombatSimulator(true)}>
+            <div className="card-top">
+              <span className="card-title">Combat Simulator</span>
+              <span className="card-desc">Simulate battle scenarios, adjust speed constants, and balance combatant parameters.</span>
+            </div>
+            <span className="card-arrow">Simulate →</span>
+          </div>
+
+          {/* Admin Cards */}
+          {isAdmin && (
+            <>
+              <div className="menu-card" onClick={() => setNavMapmaker(true)}>
+                <div className="card-top">
+                  <span className="card-title">Dungeon Builder</span>
+                  <span className="card-desc">Construct new maps, design boards, design custom planes, and orchestrate campaigns.</span>
+                </div>
+                <span className="card-arrow">Build →</span>
+              </div>
+
+              <div className="menu-card" onClick={() => setNavUsermanager(true)}>
+                <div className="card-top">
+                  <span className="card-title">User Manager</span>
+                  <span className="card-desc">Administer player accounts, permissions, and session records.</span>
+                </div>
+                <span className="card-arrow">Administer →</span>
+              </div>
+
+              <div className="menu-card" onClick={() => setNavToSandbox(true)}>
+                <div className="card-top">
+                  <span className="card-title">Sandbox</span>
+                  <span className="card-desc">Test prototype mechanics and procedural features.</span>
+                </div>
+                <span className="card-arrow">Test →</span>
+              </div>
+            </>
+          )}
+        </div>
+      </main>
+    </div>
+  );
 }

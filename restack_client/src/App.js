@@ -220,7 +220,7 @@ const toggleMenuTray = () => {
  return (
    <div className="fullpage">
       <div className="App">
-        {loggedIn === true && showToolbar === true && (
+        {loggedIn === true && showToolbar === true && location.pathname !== '/landing' && location.pathname !== '/' && (
           <div className="horizontal-menu-wrapper" style={{
             position: 'fixed',
             top: '12px',
@@ -268,28 +268,30 @@ const toggleMenuTray = () => {
                 <span style={{ fontSize: '15px' }}>🚪</span>
               </button>
 
-              <button 
-                className="menu-buttons save-button" 
-                onClick={saveUserData}
-                onMouseEnter={() => setHoveredMenuItem('Save Game')}
-                onMouseLeave={() => setHoveredMenuItem(null)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '6px 8px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  outline: 'none'
-                }}
-                title="Save Game"
-              >
-                <span style={{ fontSize: '15px' }}>💾</span>
-              </button>
+              {location.pathname !== '/userProfilePage' && (
+                <button 
+                  className="menu-buttons save-button" 
+                  onClick={saveUserData}
+                  onMouseEnter={() => setHoveredMenuItem('Save Game')}
+                  onMouseLeave={() => setHoveredMenuItem(null)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '6px 8px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#fff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    outline: 'none'
+                  }}
+                  title="Save Game"
+                >
+                  <span style={{ fontSize: '15px' }}>💾</span>
+                </button>
+              )}
 
               <button 
                 className="menu-buttons go-home-button" 
@@ -314,7 +316,7 @@ const toggleMenuTray = () => {
                 <span style={{ fontSize: '15px' }}>🏠</span>
               </button>
 
-              {isAdmin && (
+              {/* {isAdmin && (
                 <button 
                   className="menu-buttons show-coordinates-button" 
                   onClick={toggleShowCoordinates}
@@ -337,7 +339,7 @@ const toggleMenuTray = () => {
                 >
                   <span style={{ fontSize: '15px' }}>🧭</span>
                 </button>
-              )}
+              )} */}
             </div>
 
             {/* Hover display label */}
