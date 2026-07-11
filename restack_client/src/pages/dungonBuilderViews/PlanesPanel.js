@@ -153,6 +153,95 @@ class PlanesPanel extends React.Component {
         return sorted.sort((a, b) => this.compareLevelLabels(a, b));
     }
 
+    renderLevelPlanes = (subfolder, folderTitle) => {
+        let frontPlane = null;
+        let backPlane = null;
+
+        if (Array.isArray(subfolder.contents)) {
+            subfolder.contents.forEach(plane => {
+                const lastPart = plane.name.split('_').pop().toLowerCase();
+                if (lastPart === 'b' || lastPart === 'back') {
+                    backPlane = plane;
+                } else {
+                    frontPlane = plane;
+                }
+            });
+        }
+
+        const renderGrid = (plane, orientation) => {
+            const isSelected = this.props.loadedPlane && plane && (plane.id === this.props.loadedPlane.id);
+            const previewKey = `${folderTitle}_${subfolder.title}_${orientation}`;
+            const isHovered = this.state.hoveredPlane === previewKey;
+
+            return (
+                <div className="plane-mini-grid">
+                    <div className="plane-grid-title">{orientation.toUpperCase()}</div>
+                    {plane ? (
+                        <div
+                            className={`grid-3x3 ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
+                            title={`${plane.name}${!plane.valid ? ' (Invalid)' : ''}`}
+                            onClick={() => {
+                                this.props.loadPlane(plane);
+                                if (this.props.selectedView === 'dungeon' && typeof this.props.setViewState === 'function') {
+                                    this.props.setViewState('plane');
+                                }
+                            }}
+                            onMouseEnter={() => this.setState({ hoveredPlane: previewKey })}
+                            onMouseLeave={() => this.setState({ hoveredPlane: null })}
+                            style={{ 
+                                cursor: 'pointer',
+                                border: isSelected ? '1px solid #f9b115' : '1px solid rgba(249, 177, 21, 0.15)',
+                                boxShadow: isSelected ? '0 0 10px rgba(249, 177, 21, 0.4)' : 'none'
+                            }}
+                        >
+                            {plane.miniboards.map((mb, idx) => {
+                                const hasTiles = mb && mb.tiles && mb.tiles.some(t => t.contains && t.contains.type !== 'empty_space' && t.contains.type !== 'void');
+                                return (
+                                    <div
+                                        key={idx}
+                                        className={`grid-cell ${hasTiles ? 'filled' : 'empty'}`}
+                                        style={{ fontSize: '8px' }}
+                                    >
+                                        {mb && (mb.displayName || mb.name) ? (mb.displayName || mb.name).slice(0, 3) : ''}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <div
+                            className="grid-3x3 empty"
+                            style={{
+                                border: '1px dashed rgba(255,255,255,0.15)',
+                                borderRadius: '4px',
+                                background: 'transparent',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                cursor: 'pointer',
+                                color: 'rgba(255,255,255,0.3)',
+                                fontSize: '20px',
+                                width: '108px',
+                                height: '108px',
+                                boxSizing: 'border-box'
+                            }}
+                            title={`Create ${orientation} plane for Level ${subfolder.title}`}
+                            onClick={() => this.props.addNewPlane && this.props.addNewPlane(`${folderTitle}_${subfolder.title}_${orientation === 'front' ? 'F' : 'B'}`)}
+                        >
+                            +
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        return (
+            <div className="side-by-side-planes-wrapper">
+                {renderGrid(frontPlane, 'front')}
+                {renderGrid(backPlane, 'back')}
+            </div>
+        );
+    }
+
     renderPlanePreview = (plane, key, colorLineStyle = null) => {
         return (
             <div className='plane-previews-container' key={key}>
@@ -281,27 +370,10 @@ class PlanesPanel extends React.Component {
                                                 <div className="icon-container">
                                                     <CIcon icon={cilCaretRight} className={`expand-icon ${this.isFolderExpanded(subfolderKey) ? 'expanded' : ''}`} size="sm"/>
                                                 </div>
-                                                <div className="subfolder-headline-text">{subfolder.title}</div>
+                                                <div className="subfolder-headline-text">Level {subfolder.title}</div>
                                             </div>
                                             <CCollapse visible={this.isFolderExpanded(subfolderKey)}>
-                                                {subfolder.deepfolders?.length > 0 && subfolder.deepfolders.map((deepfolder, dIdx) => {
-                                                    const deepfolderKey = `${folder.title}_${subfolder.title}_${deepfolder.title}`;
-                                                    return (
-                                                        <div key={dIdx} className="deepfolder-wrapper">
-                                                            <div className="boards-folder-headline subfolder-headline" onClick={(e) => this.toggleFolder(e, deepfolderKey)}>
-                                                                <div className="folder-color-line" style={{backgroundColor: dIdx % 2 ? '#199595' : '#13c2c2'}}></div>
-                                                                <div className="icon-container">
-                                                                    <CIcon icon={cilCaretRight} className={`expand-icon ${this.isFolderExpanded(deepfolderKey) ? 'expanded' : ''}`} size="sm"/>
-                                                                </div>
-                                                                <div className="deepfolder-headline-text">{deepfolder.title}</div>
-                                                            </div>
-                                                            <CCollapse visible={this.isFolderExpanded(deepfolderKey)}>
-                                                                {deepfolder.contents.map((plane, pIdx) => this.renderPlanePreview(plane, `${deepfolderKey}_${pIdx}`, {backgroundColor: dIdx % 2 ? '#199595' : '#13c2c2'}))}
-                                                            </CCollapse>
-                                                        </div>
-                                                    )
-                                                })}
-                                                {subfolder.contents.map((plane, pIdx) => this.renderPlanePreview(plane, `${subfolderKey}_${pIdx}`, {backgroundColor: i % 2 ? '#199595' : '#13c2c2'}))}
+                                                {this.renderLevelPlanes(subfolder, folder.title)}
                                             </CCollapse>
                                         </div>
                                     )
