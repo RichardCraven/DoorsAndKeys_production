@@ -212,6 +212,7 @@ class BoardsPanel extends React.Component {
                             <CDropdownItem disabled={!this.props.loadedBoard} onClick={() => this.props.renameBoard()}>Rename Current Map</CDropdownItem>
                             <CDropdownItem onClick={() => this.props.adjacencyFilterClicked()}>Filter: Adjacency</CDropdownItem>
                             <CDropdownItem onClick={() => this.props.nameFilterClicked()}>Filter: Name</CDropdownItem>
+                            <CDropdownItem onClick={() => this.props.collapseAllBoardFolders && this.props.collapseAllBoardFolders()}>Collapse All Folders</CDropdownItem>
                         </CDropdownMenu>
                         </CDropdown>
                     </div>

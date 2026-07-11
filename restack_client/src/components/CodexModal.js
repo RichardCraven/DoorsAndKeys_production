@@ -195,14 +195,6 @@ const INTERACTABLES = [
         tags: ['lore', 'event'],
     },
     {
-        id: 'oracle',
-        name: 'Oracle',
-        icon: images.oracle,
-        category: 'interactable',
-        desc: 'A mystical presence that reveals hidden information about the dungeon or crew.',
-        tags: ['mystery', 'lore'],
-    },
-    {
         id: 'minor_key',
         name: 'Minor Key',
         icon: images.minor_key,

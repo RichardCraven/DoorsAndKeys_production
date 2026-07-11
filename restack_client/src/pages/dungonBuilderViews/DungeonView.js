@@ -349,8 +349,13 @@ class DungeonView extends React.Component {
                     ctx.strokeStyle = '#ca8a04'; // dark yellow / gold for front-to-back door connection
                     ctx.beginPath();
                     ctx.moveTo(newOriginX,newOriginY);
-                    let bezierControlPoint1 = {x: newOriginX, y: newOriginY + 100}
-                    let bezierControlPoint2 = {x:destinationX_back, y: newOriginY + 100}
+                    
+                    // If the door is in the bottom half of the plane, arch the curve upwards
+                    // to prevent it from drooping below the bottom boundary.
+                    let bendDir = newOriginY > (planeHeight / 2) ? -1 : 1;
+                    let controlOffset = 100 * bendDir;
+                    let bezierControlPoint1 = {x: newOriginX, y: newOriginY + controlOffset}
+                    let bezierControlPoint2 = {x:destinationX_back, y: newOriginY + controlOffset}
                     ctx.bezierCurveTo(bezierControlPoint1.x, bezierControlPoint1.y, bezierControlPoint2.x, bezierControlPoint2.y, destinationX_back, destinationY_back)
                     ctx.stroke();
                 })
@@ -390,8 +395,15 @@ class DungeonView extends React.Component {
                     ctx.strokeStyle = 'lightgreen'
                     ctx.beginPath();
                     ctx.moveTo(newOriginX,newOriginY);
-                    let bezierControlPoint1 = {x: newOriginX - 50, y: newOriginY}
-                    let bezierControlPoint2 = {x:newOriginX - 50, y: destinationY_up}
+                    
+                    // If the door is on the right half of the plane, arch the curve to the left (-50)
+                    // If the door is on the left half of the plane, arch the curve to the right (+50)
+                    // to prevent the curve from going off the left/right boundaries of the canvas.
+                    let planeWidth = this.props.tileSize * 6;
+                    let bendDirH = newOriginX > (planeWidth / 2) ? -1 : 1;
+                    let controlOffsetH = 50 * bendDirH;
+                    let bezierControlPoint1 = {x: newOriginX + controlOffsetH, y: newOriginY}
+                    let bezierControlPoint2 = {x: newOriginX + controlOffsetH, y: destinationY_up}
                     ctx.bezierCurveTo(bezierControlPoint1.x, bezierControlPoint1.y, bezierControlPoint2.x, bezierControlPoint2.y, destinationX_up, destinationY_up)
                     ctx.stroke();
                 })
