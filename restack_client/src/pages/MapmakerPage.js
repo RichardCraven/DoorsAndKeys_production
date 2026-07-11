@@ -1097,7 +1097,7 @@ class MapMakerPage extends React.Component {
     } else if (pinned.optionType === 'obscured space') {
       const preservedBorders = arr[tileId].borders ? { ...arr[tileId].borders } : null;
       arr[tileId].image = null;
-      arr[tileId].color = '#a8a8a8';
+      arr[tileId].color = '#111012';
       arr[tileId].contains = { type: 'obscured_space', subtype: null };
       arr[tileId].borders = preservedBorders;
     } else if (pinned.optionType === 'void') {
@@ -2396,6 +2396,98 @@ class MapMakerPage extends React.Component {
     this.flashLeftReadout(`Assigned to Lvl ${levelName} (${orientation === 'front' ? 'Front' : 'Back'})`);
   }
 
+  parseBoardPlacement = (board) => {
+    let folderPath = board.folderPath;
+    let name = board.name || '';
+    
+    if (folderPath) {
+      const parts = folderPath.split('/');
+      if (parts.length >= 2) {
+        const dungeonName = parts[0];
+        const level = parts[1];
+        const slot = parts.slice(2).join('/');
+        const isBack = folderPath.toLowerCase().includes('/back') || folderPath.toLowerCase().includes('_back') || name.toLowerCase().includes('_back');
+        return {
+          dungeon: dungeonName,
+          level,
+          slot: slot || '',
+          orientation: isBack ? 'back' : 'front'
+        };
+      }
+    }
+    
+    if (name.includes('_')) {
+      const parts = name.split('_');
+      const dungeonName = parts[0];
+      const level = parts[1];
+      const lastPart = parts[parts.length - 1].toLowerCase();
+      const isBack = lastPart === 'back';
+      const endIdx = isBack ? parts.length - 1 : parts.length;
+      const slotParts = parts.slice(2, endIdx);
+      const slot = slotParts.join('/');
+      return {
+        dungeon: dungeonName,
+        level,
+        slot,
+        orientation: isBack ? 'back' : 'front'
+      };
+    }
+    
+    return { dungeon: '', level: '', slot: '', orientation: 'front' };
+  }
+
+  getLevelGrids = (subfolder) => {
+    const boardsList = [];
+    if (Array.isArray(subfolder.contents)) {
+        boardsList.push(...subfolder.contents);
+    }
+    if (Array.isArray(subfolder.deepfolders)) {
+        subfolder.deepfolders.forEach(df => {
+            if (Array.isArray(df.contents)) {
+                df.contents.forEach(b => {
+                    boardsList.push({
+                        ...b,
+                        slotPathSuffix: df.title
+                    });
+                });
+            }
+        });
+    }
+
+    const front = Array(9).fill(null);
+    const back = Array(9).fill(null);
+
+    const getGridIndexFromPathSuffix = (pathSuffix) => {
+        if (!pathSuffix) return 4; // Default to middle
+        const normalized = pathSuffix.toLowerCase().replace(/_/g, '/');
+        
+        let row = 1;
+        if (normalized.includes('top')) row = 0;
+        else if (normalized.includes('bottom') || normalized.includes('bot')) row = 2;
+        
+        let col = 1;
+        if (normalized.includes('left')) col = 0;
+        else if (normalized.includes('right')) col = 2;
+        else if (normalized.includes('/mid') || normalized.includes('_mid')) col = 1;
+        else if (normalized.includes('middle/left')) col = 0;
+        else if (normalized.includes('middle/right')) col = 2;
+        
+        return row * 3 + col;
+    };
+
+    boardsList.forEach(b => {
+        const placement = this.parseBoardPlacement(b);
+        const idx = getGridIndexFromPathSuffix(placement.slot || b.slotPathSuffix);
+        if (placement.orientation === 'back') {
+            back[idx] = b;
+        } else {
+            front[idx] = b;
+        }
+    });
+
+    return { front, back };
+  }
+
   syncDungeonPlanesWithBoards = (dungeon, boards) => {
     if (!dungeon || !Array.isArray(dungeon.levels) || !Array.isArray(boards)) return dungeon;
     
@@ -2425,49 +2517,9 @@ class MapMakerPage extends React.Component {
       else if (normalized.includes('middle/right')) col = 2;
       return row * 3 + col;
     };
-    
-    const parseBoardPlacement = (board) => {
-      let folderPath = board.folderPath;
-      let name = board.name || '';
-      
-      if (folderPath) {
-        const parts = folderPath.split('/');
-        if (parts.length >= 2) {
-          const dungeonName = parts[0];
-          const level = parts[1];
-          const slot = parts.slice(2).join('/');
-          const isBack = folderPath.toLowerCase().includes('/back') || folderPath.toLowerCase().includes('_back') || name.toLowerCase().includes('_back');
-          return {
-            dungeon: dungeonName,
-            level,
-            slot: slot || '',
-            orientation: isBack ? 'back' : 'front'
-          };
-        }
-      }
-      
-      if (name.includes('_')) {
-        const parts = name.split('_');
-        const dungeonName = parts[0];
-        const level = parts[1];
-        const lastPart = parts[parts.length - 1].toLowerCase();
-        const isBack = lastPart === 'back';
-        const endIdx = isBack ? parts.length - 1 : parts.length;
-        const slotParts = parts.slice(2, endIdx);
-        const slot = slotParts.join('/');
-        return {
-          dungeon: dungeonName,
-          level,
-          slot,
-          orientation: isBack ? 'back' : 'front'
-        };
-      }
-      
-      return { dungeon: '', level: '', slot: '', orientation: 'front' };
-    };
 
     boards.forEach((board) => {
-      const placement = parseBoardPlacement(board);
+      const placement = this.parseBoardPlacement(board);
       if (!placement.dungeon || !placement.level) return;
       if (placement.dungeon.toLowerCase() !== syncedDungeon.name.toLowerCase()) return;
       
@@ -2491,6 +2543,166 @@ class MapMakerPage extends React.Component {
     });
 
     return syncedDungeon;
+  }
+
+  onSyncLevelToPlane = async (dungeonName, levelName, subfolder) => {
+    console.log('[onSyncLevelToPlane] syncing', dungeonName, levelName);
+    const { front, back } = this.getLevelGrids(subfolder);
+    
+    const hasFrontBoards = front.some(b => b !== null);
+    const hasBackBoards = back.some(b => b !== null);
+    
+    const targetFrontName = `${dungeonName}_${levelName}_F`;
+    const targetBackName = `${dungeonName}_${levelName}_B`;
+    
+    const existingFrontPlane = this.state.planes.find(p => 
+      p.name.toLowerCase() === targetFrontName.toLowerCase() || 
+      p.name.toLowerCase() === `${dungeonName}_${levelName}_front`.toLowerCase()
+    );
+    const existingBackPlane = this.state.planes.find(p => 
+      p.name.toLowerCase() === targetBackName.toLowerCase() || 
+      p.name.toLowerCase() === `${dungeonName}_${levelName}_back`.toLowerCase()
+    );
+    
+    const needFront = hasFrontBoards && !existingFrontPlane;
+    const needBack = hasBackBoards && !existingBackPlane;
+    
+    if (needFront || needBack) {
+      this.setState({
+        showModal: true,
+        modalType: 'create sync planes',
+        syncModalDungeonName: dungeonName,
+        syncModalLevelName: levelName,
+        syncModalCreateFront: needFront,
+        syncModalCreateBack: needBack,
+        syncModalFrontName: targetFrontName,
+        syncModalBackName: targetBackName,
+        syncModalSubfolder: subfolder
+      });
+    } else {
+      await this.executeSyncLevelToPlanes(subfolder, existingFrontPlane, existingBackPlane);
+    }
+  }
+
+  executeSyncLevelToPlanes = async (subfolder, frontPlane, backPlane) => {
+    const { front, back } = this.getLevelGrids(subfolder);
+    this.setState({ planeSyncInProgress: true });
+    
+    try {
+      let finalFront = null;
+      let finalBack = null;
+
+      if (frontPlane) {
+        const miniboards = Array(9).fill(null).map((_, idx) => {
+          const board = front[idx];
+          return board ? clone(board) : [];
+        });
+        const updatedFront = {
+          ...frontPlane,
+          miniboards,
+          spawnPoints: this.props.mapMaker.getSpawnPoints(miniboards),
+          valid: this.props.mapMaker.isValidPlane(miniboards)
+        };
+        await updatePlaneRequest(frontPlane.id, updatedFront);
+        finalFront = updatedFront;
+      }
+      
+      if (backPlane) {
+        const miniboards = Array(9).fill(null).map((_, idx) => {
+          const board = back[idx];
+          return board ? clone(board) : [];
+        });
+        const updatedBack = {
+          ...backPlane,
+          miniboards,
+          spawnPoints: this.props.mapMaker.getSpawnPoints(miniboards),
+          valid: this.props.mapMaker.isValidPlane(miniboards)
+        };
+        await updatePlaneRequest(backPlane.id, updatedBack);
+        finalBack = updatedBack;
+      }
+      
+      await this.loadAllPlanes();
+
+      if (finalFront && this.state.loadedPlane && this.state.loadedPlane.id === finalFront.id) {
+        this.loadPlane(finalFront);
+      } else if (finalBack && this.state.loadedPlane && this.state.loadedPlane.id === finalBack.id) {
+        this.loadPlane(finalBack);
+      }
+
+      this.flashLeftReadout('Planes Synced successfully!');
+    } catch (err) {
+      console.error('Error syncing level to planes:', err);
+      this.toast('Error syncing level to planes');
+    } finally {
+      this.setState({ planeSyncInProgress: false });
+    }
+  }
+
+  executeCreateAndSyncPlanes = async () => {
+    const { 
+      syncModalCreateFront, 
+      syncModalCreateBack, 
+      syncModalFrontName, 
+      syncModalBackName, 
+      syncModalSubfolder 
+    } = this.state;
+    
+    const { front, back } = this.getLevelGrids(syncModalSubfolder);
+    this.setState({ planeSyncInProgress: true });
+    
+    try {
+      let frontPlane = null;
+      let backPlane = null;
+      
+      if (syncModalCreateFront) {
+        const miniboards = Array(9).fill(null).map((_, idx) => {
+          const board = front[idx];
+          return board ? clone(board) : [];
+        });
+        const payload = {
+          name: syncModalFrontName,
+          miniboards,
+          spawnPoints: this.props.mapMaker.getSpawnPoints(miniboards),
+          valid: this.props.mapMaker.isValidPlane(miniboards)
+        };
+        const res = await addPlaneRequest(payload);
+        frontPlane = { ...payload, id: res.data._id };
+      }
+      
+      if (syncModalCreateBack) {
+        const miniboards = Array(9).fill(null).map((_, idx) => {
+          const board = back[idx];
+          return board ? clone(board) : [];
+        });
+        const payload = {
+          name: syncModalBackName,
+          miniboards,
+          spawnPoints: this.props.mapMaker.getSpawnPoints(miniboards),
+          valid: this.props.mapMaker.isValidPlane(miniboards)
+        };
+        const res = await addPlaneRequest(payload);
+        backPlane = { ...payload, id: res.data._id };
+      }
+      
+      // Also fetch standard existing if not created but requested
+      const existingFront = this.state.planes.find(p => p.name.toLowerCase() === syncModalFrontName.toLowerCase());
+      const existingBack = this.state.planes.find(p => p.name.toLowerCase() === syncModalBackName.toLowerCase());
+      
+      if (!frontPlane && existingFront) {
+        frontPlane = existingFront;
+      }
+      if (!backPlane && existingBack) {
+        backPlane = existingBack;
+      }
+      
+      await this.executeSyncLevelToPlanes(syncModalSubfolder, frontPlane, backPlane);
+    } catch (err) {
+      console.error('Error creating and syncing planes:', err);
+      this.toast('Error creating/syncing planes');
+    } finally {
+      this.setState({ planeSyncInProgress: false });
+    }
   }
 
   handlePlaneBoardContextMenu = (e, levelId, miniboardIndex, frontOrBack) => {
@@ -2596,6 +2808,109 @@ class MapMakerPage extends React.Component {
       } catch (err) {
         console.error('Failed to create and assign empty board:', err);
       }
+    }
+  }
+
+  handleFillPlaneWithEmptyBoards = async () => {
+    this.setState({ planeBoardContextMenu: { ...this.state.planeBoardContextMenu, visible: false } });
+    if (!this.state.loadedPlane) return;
+    
+    let loadedPlane = clone(this.state.loadedPlane);
+    let minis = loadedPlane.miniboards;
+    if (!Array.isArray(minis)) minis = [];
+    while (minis.length < 9) minis.push({});
+    
+    const slotNames = [
+      'top_left', 'top_mid', 'top_right',
+      'middle_left', 'middle_mid', 'middle_right',
+      'bottom_left', 'bottom_mid', 'bottom_right'
+    ];
+    
+    let dungeonName = '';
+    let levelName = '';
+    let orientation = 'front';
+    
+    if (loadedPlane.name && loadedPlane.name.includes('_')) {
+      const parts = loadedPlane.name.split('_');
+      if (parts.length >= 3) {
+        dungeonName = parts[0];
+        levelName = parts[1];
+        const lastPart = parts[parts.length - 1].toLowerCase();
+        orientation = lastPart === 'back' ? 'back' : 'front';
+      }
+    }
+    
+    if (!dungeonName && Array.isArray(this.state.dungeons)) {
+      for (let i = 0; i < this.state.dungeons.length; i++) {
+        const d = this.state.dungeons[i];
+        if (Array.isArray(d.levels)) {
+          for (let j = 0; j < d.levels.length; j++) {
+            const lvl = d.levels[j];
+            if (lvl.front && (lvl.front.id === loadedPlane.id || (lvl.front.name && lvl.front.name === loadedPlane.name))) {
+              dungeonName = d.name;
+              levelName = String(lvl.id);
+              orientation = 'front';
+              break;
+            }
+            if (lvl.back && (lvl.back.id === loadedPlane.id || (lvl.back.name && lvl.back.name === loadedPlane.name))) {
+              dungeonName = d.name;
+              levelName = String(lvl.id);
+              orientation = 'back';
+              break;
+            }
+          }
+        }
+        if (dungeonName) break;
+      }
+    }
+    
+    this.setState({ planeSyncInProgress: true });
+    
+    try {
+      let changed = false;
+      for (let idx = 0; idx < 9; idx++) {
+        const mb = minis[idx];
+        const isEmpty = !mb || !mb.id || (Array.isArray(mb) && mb.length === 0) || (typeof mb === 'object' && Object.keys(mb).length === 0);
+        if (isEmpty) {
+          const slotName = slotNames[idx];
+          let folderPath = '';
+          if (dungeonName && levelName) {
+            const normalizedLevel = levelName.replace(/^[Ll]evel\s*/, '');
+            const suffix = orientation === 'back' ? '_back' : '';
+            folderPath = `${dungeonName}/${normalizedLevel}/${slotName}${suffix}`;
+          }
+          
+          let newBoard = {
+            name: "empty",
+            folderPath: folderPath,
+            tiles: Array(15*15).fill(null).map((_, i) => ({
+              id: i,
+              type: 'void',
+              color: 'black',
+              contains: 'empty',
+              borders: []
+            })),
+            config: [[], [], [], []]
+          };
+          
+          const addedMap = await addBoardRequest(newBoard);
+          newBoard.id = addedMap.data._id;
+          minis[idx] = newBoard;
+          changed = true;
+        }
+      }
+      
+      if (changed) {
+        this.setState({ loadedPlane, planeHasUnsavedChanges: true }, async () => {
+          await this.loadAllBoards();
+          this.flashLeftReadout('Plane filled with empty boards');
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fill plane with empty boards:', err);
+      this.toast('Failed to fill plane with empty boards');
+    } finally {
+      this.setState({ planeSyncInProgress: false });
     }
   }
 
@@ -3037,7 +3352,7 @@ class MapMakerPage extends React.Component {
 
     const persistedExpanded = meta?.preferences?.editor?.boardsFoldersExpanded;
     if (persistedExpanded && typeof persistedExpanded === 'object') {
-      Object.keys(boardsFoldersExpanded).forEach((folderKey) => {
+      Object.keys(persistedExpanded).forEach((folderKey) => {
         if (typeof persistedExpanded[folderKey] === 'boolean') {
           boardsFoldersExpanded[folderKey] = persistedExpanded[folderKey];
         }
@@ -3854,7 +4169,7 @@ class MapMakerPage extends React.Component {
     const meta = getMeta();
     const persistedExpanded = meta?.preferences?.editor?.planesFoldersExpanded;
     if (persistedExpanded && typeof persistedExpanded === 'object') {
-      Object.keys(planesFoldersExpanded).forEach((folderKey) => {
+      Object.keys(persistedExpanded).forEach((folderKey) => {
         if (typeof persistedExpanded[folderKey] === 'boolean') {
           planesFoldersExpanded[folderKey] = persistedExpanded[folderKey];
         }
@@ -3879,6 +4194,8 @@ class MapMakerPage extends React.Component {
     const loadedDungeonPref = meta?.preferences?.editor?.loadedDungeon;
     const loadedPlaneId = meta?.preferences?.editor?.loadedPlaneId;
     const loadedBoardId = meta?.preferences?.editor?.loadedBoardId;
+
+    this.setState({ selectedView });
 
     if (loadedDungeonPref && loadedDungeonPref.id) {
       const dungeon = this.state.dungeons.find(d => d.id === loadedDungeonPref.id);
@@ -3949,35 +4266,58 @@ class MapMakerPage extends React.Component {
     }
 
     // Restore standalone selections if not restored within dungeon context
+    let restoredPlane = null;
+    let restoredBoard = null;
+
     if (loadedPlaneId) {
       const plane = this.state.planes.find(p => p.id === loadedPlaneId);
       if (plane) {
-        this.loadPlane(plane);
+        restoredPlane = this.validatePlane(plane);
       }
     }
 
     if (loadedBoardId) {
       const board = this.findBoardRefInFolders(loadedBoardId);
       if (board) {
-        this.loadBoard(board);
+        restoredBoard = board;
       }
     }
+
+    let selectedThingTitle = '';
+    if (selectedView === 'board' && restoredBoard) {
+      selectedThingTitle = `Board: ${restoredBoard.name}`;
+    } else if (selectedView === 'plane' && restoredPlane) {
+      selectedThingTitle = `Plane: ${restoredPlane.name}`;
+    } else if (selectedView === 'dungeon' && this.state.loadedDungeon) {
+      selectedThingTitle = `Dungeon: ${this.state.loadedDungeon.name}`;
+    }
+
+    this.setState({
+      loadedPlane: restoredPlane,
+      loadedBoard: restoredBoard,
+      tiles: restoredBoard ? restoredBoard.tiles : this.state.tiles,
+      selectedThingTitle: selectedThingTitle || this.state.selectedThingTitle
+    });
   }
-  addNewPlane = async () => {
+  addNewPlane = async (defaultName) => {
     let d = new Date()
     let n = d.getTime();
     let rand = n.toString().slice(9, 13)
     let newPlane = {
-      name: `plane${rand}`,
+      name: defaultName || `plane${rand}`,
       miniboards: [[], [], [], [], [], [], [], [], []],
       spawnPoints: null,
       valid: false
     }
     this.setState({
-      // miniboards: [],
       loadedPlane: newPlane,
+    }, () => {
+      if (defaultName) {
+        this.writePlane();
+      } else {
+        this.renamePlane();
+      }
     })
-    this.renamePlane();
   }
   deletePlane = async () => {
     if (this.state.loadedPlane) {
@@ -4554,6 +4894,12 @@ class MapMakerPage extends React.Component {
           }
         })
         break;
+      case 'sync':
+        this.setState({ showModal: false });
+        setTimeout(async () => {
+          await this.executeCreateAndSyncPlanes();
+        });
+        break;
       default:
 
         break;
@@ -4758,6 +5104,26 @@ class MapMakerPage extends React.Component {
                 onClick={this.handleFillWithEmptyBoard}
               >
                 Create Empty Board
+              </button>
+              <button
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '10px 16px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  transition: 'background-color 0.2s',
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                  borderBottom: '1px solid rgba(255,255,255,0.1)'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                onClick={this.handleFillPlaneWithEmptyBoards}
+              >
+                Fill Plane with Empty Boards
               </button>
               <button
                 style={{
@@ -5055,10 +5421,74 @@ class MapMakerPage extends React.Component {
             {this.state.modalType === 'rename plane' && <CModalTitle>Rename this plane</CModalTitle>}
             {this.state.modalType === 'name board' && <CModalTitle>Name this board</CModalTitle>}
             {this.state.modalType === 'rename board' && <CModalTitle>Rename this board</CModalTitle>}
+            {this.state.modalType === 'create sync planes' && <CModalTitle>Establish planes for Level {this.state.syncModalLevelName}</CModalTitle>}
           </CModalHeader>
           <CModalBody>
              {(this.state.modalType === 'name dungeon' || this.state.modalType === 'rename dungeon') && <input ref={this.state.dungeonNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedDungeon?.name || ''} placeholder={this.state.loadedDungeon?.name || ''} />}
             {(this.state.modalType === 'name plane' || this.state.modalType === 'rename plane') && <input ref={this.state.planeNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedPlane?.name || ''} placeholder={this.state.loadedPlane?.name || ''} />}
+            {this.state.modalType === 'create sync planes' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                <div style={{ color: '#adad93', fontSize: '13px', marginBottom: '5px' }}>
+                  Planes for Level <strong>{this.state.syncModalLevelName}</strong> do not exist. Select which ones to create:
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input 
+                      type="checkbox" 
+                      id="createFrontCheckbox" 
+                      checked={this.state.syncModalCreateFront}
+                      onChange={(e) => this.setState({ syncModalCreateFront: e.target.checked })}
+                      style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="createFrontCheckbox" style={{ fontSize: '13px', color: '#e0dcd3', cursor: 'pointer', userSelect: 'none', width: '130px', margin: 0 }}>
+                      Create Front Plane: 
+                    </label>
+                    <input 
+                      type="text" 
+                      value={this.state.syncModalFrontName} 
+                      onChange={(e) => this.setState({ syncModalFrontName: e.target.value })}
+                      disabled={!this.state.syncModalCreateFront}
+                      style={{
+                        background: '#1c1c1e',
+                        color: '#f9b115',
+                        border: '1px solid rgba(249, 177, 21, 0.4)',
+                        borderRadius: '4px',
+                        padding: '2px 8px',
+                        fontSize: '13px',
+                        width: '200px'
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <input 
+                      type="checkbox" 
+                      id="createBackCheckbox" 
+                      checked={this.state.syncModalCreateBack}
+                      onChange={(e) => this.setState({ syncModalCreateBack: e.target.checked })}
+                      style={{ transform: 'scale(1.2)', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="createBackCheckbox" style={{ fontSize: '13px', color: '#e0dcd3', cursor: 'pointer', userSelect: 'none', width: '130px', margin: 0 }}>
+                      Create Back Plane: 
+                    </label>
+                    <input 
+                      type="text" 
+                      value={this.state.syncModalBackName} 
+                      onChange={(e) => this.setState({ syncModalBackName: e.target.value })}
+                      disabled={!this.state.syncModalCreateBack}
+                      style={{
+                        background: '#1c1c1e',
+                        color: '#f9b115',
+                        border: '1px solid rgba(249, 177, 21, 0.4)',
+                        borderRadius: '4px',
+                        padding: '2px 8px',
+                        fontSize: '13px',
+                        width: '200px'
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
             {(this.state.modalType === 'name board' || this.state.modalType === 'rename board') && (() => {
               const info = this.getBoardFolderInfo(this.state.loadedBoard);
               return (
@@ -5125,10 +5555,12 @@ class MapMakerPage extends React.Component {
             })()}
           </CModalBody>
           <CModalFooter>
-            <CButton color="secondary" onClose={() => this.closeModal()}>
+            <CButton color="secondary" onClick={() => this.closeModal()}>
               Close
             </CButton>
-            <CButton color="primary" onClick={() => this.modalSaveChanges()}>Save changes</CButton>
+            <CButton color="primary" onClick={() => this.modalSaveChanges()}>
+              {this.state.modalType === 'create sync planes' ? 'Create & Sync' : 'Save changes'}
+            </CButton>
           </CModalFooter>
         </CModal>
         <CModal
@@ -5296,6 +5728,7 @@ class MapMakerPage extends React.Component {
               draggedBoard={this.state.draggedBoard}
               onAssignBoardToSlot={this.onAssignBoardToSlot}
               getBoardFolderInfo={this.getBoardFolderInfo}
+              onSyncLevelToPlane={this.onSyncLevelToPlane}
             >
             </BoardsPanel>
 
@@ -5551,6 +5984,8 @@ class MapMakerPage extends React.Component {
 
                 loadedPlane={this.state.loadedPlane}
                 planes={this.state.planes}
+                planesFolders={this.state.planesFolders}
+                planesFoldersExpanded={this.state.planesFoldersExpanded}
                 miniboards={this.state.loadedPlane?.miniboards || [[], [], [], [], [], [], [], [], []]}
                 adjacencyHoverIdx={this.state.adjacencyHoverIdx}
                 hoveredSection={this.state.hoveredSection}
@@ -5567,6 +6002,7 @@ class MapMakerPage extends React.Component {
                 onDragStart={this.onDragStart}
                 onDrop={this.onDrop}
                 resetLoadedPlane={this.resetLoadedPlane}
+                getLevelGrids={this.getLevelGrids}
                 //            plane specific ^
 
 

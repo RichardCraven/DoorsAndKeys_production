@@ -28,7 +28,7 @@ class BoardsPalette extends React.Component {
         return (
             <div className="palette right-palette" 
                 style={{
-                    width: this.props.tileSize*4.5+'px', height: this.props.boardSize+ 'px',
+                    width: this.props.tileSize*4.5+'px', height: (this.props.boardSize + 35) + 'px',
                     backgroundColor: '#0b0a09',
                     overflow: 'scroll',
                     marginLeft: '20px',

@@ -206,7 +206,7 @@ class BoardView extends React.Component {
                 previewContains = { type: 'empty_space', subtype: null };
             } else if (pinned.optionType === 'obscured space') {
                 previewContains = { type: 'obscured_space', subtype: null };
-                previewColor = '#a8a8a8';
+                previewColor = '#111012';
             } else if (pinned.optionType === 'void') {
                 previewContains = { type: 'void', subtype: null };
                 previewColor = 'black';

@@ -21,7 +21,7 @@ import {updateUserRequest} from '../src/utils/api-handler'
 import {getAllUsersRequest} from './utils/api-handler';
 import {storeSessionData, getUserId, getMeta} from './utils/session-handler';
 import { useHistory } from "react-router";
-import * as images from '../src/utils/images'
+import loadingGif from './assets/highres-gifs/gifOne.gif';
 
 
 function App(props) {
@@ -39,7 +39,10 @@ const dungeonMessagingRef = React.useRef(null)
 const saveUserDataRef = React.useRef(null)
 const history = useHistory();
 useEffect(() => {
-  // ...existing code...
+  // Pre-load the high-res loading animation GIF so it is ready in cache
+  const img = new Image();
+  img.src = loadingGif;
+
   window.pickRandom = (array) => {
     let index = Math.floor(Math.random() * array.length)
     return array[index]

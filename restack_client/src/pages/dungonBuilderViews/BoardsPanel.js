@@ -5,7 +5,7 @@ import '../../styles/map-maker.scss'
 import Tile from '../../components/tile'
 import { CDropdown, CDropdownToggle, CDropdownMenu, CDropdownItem, CCollapse} from '@coreui/react';
 import  CIcon  from '@coreui/icons-react'
-import { cilCaretRight } from '@coreui/icons';
+import { cilCaretRight, cilSync } from '@coreui/icons';
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 
@@ -143,10 +143,11 @@ class BoardsPanel extends React.Component {
                         {gridData.map((board, idx) => {
                             const isHovered = this.state.hoveredSlot === `${folderTitle}_${subfolder.title}_${orientation}_${idx}`;
                             const isSelected = this.props.loadedBoard && board && (board.id === this.props.loadedBoard.id);
+                            const isEmptyBoard = board && (board.name === 'empty' || board.displayName === 'empty');
                             return (
                                 <div
                                     key={idx}
-                                    className={`grid-cell ${board ? 'filled' : 'empty'} ${isHovered ? 'hovered' : ''} ${isSelected ? 'selected' : ''}`}
+                                    className={`grid-cell ${board ? (isEmptyBoard ? 'empty-board' : 'filled') : 'empty'} ${isHovered ? 'hovered' : ''} ${isSelected ? 'selected' : ''}`}
                                     title={board ? `${board.displayName || board.name}` : 'Empty Slot'}
                                     onClick={() => board && this.props.loadBoard(board)}
                                     onMouseEnter={() => this.setState({ hoveredSlot: `${folderTitle}_${subfolder.title}_${orientation}_${idx}` })}
@@ -167,7 +168,7 @@ class BoardsPanel extends React.Component {
                                         }
                                     }}
                                 >
-                                    {board ? (board.displayName || board.name).slice(0, 3) : ''}
+                                    {board && !isEmptyBoard ? (board.displayName || board.name).slice(0, 3) : ''}
                                 </div>
                             );
                         })}
@@ -188,7 +189,7 @@ class BoardsPanel extends React.Component {
         return (
             <div className="left-palette  palette boards-palette" style={{
                 width: this.props.tileSize*4.5+'px', 
-                height: this.props.boardSize+ 'px'
+                height: (this.props.boardSize + 35) + 'px'
                 }}>
                     <div className="boards-title" onClick={() => {this.props.setViewState('board')}}>
                         <div className="color-line-blocker"></div>
@@ -216,7 +217,7 @@ class BoardsPanel extends React.Component {
                     </div>
                     <div className="board-previews-container previews-container"
                         style={{
-                            height: (this.props.boardSize - 78)+ 'px'
+                            height: (this.props.boardSize - 43)+ 'px'
                           }}
                     >
                         {this.props.boardsFolders.length > 0 && this.props.boardsFolders.map((folder, idx) => {
@@ -253,6 +254,43 @@ class BoardsPanel extends React.Component {
                                                     <CIcon icon={cilCaretRight} className={`expand-icon ${this.props.boardsFoldersExpanded[`${folder.title}_${subfolder.title}`] ? 'expanded' : ''}`} size="sm"/>
                                                   </div>
                                                   <div className="subfolder-headline-text">Level {subfolder.title}</div> 
+                                                  <div 
+                                                    className="sync-to-plane-btn"
+                                                    style={{
+                                                      marginLeft: 'auto',
+                                                      marginRight: '12px',
+                                                      display: 'flex',
+                                                      alignItems: 'center',
+                                                      justifyContent: 'center',
+                                                      width: '24px',
+                                                      height: '24px',
+                                                      borderRadius: '4px',
+                                                      background: 'rgba(249, 177, 21, 0.1)',
+                                                      border: '1px solid rgba(249, 177, 21, 0.3)',
+                                                      color: '#f9b115',
+                                                      transition: 'all 0.2s ease',
+                                                      zIndex: 10
+                                                    }}
+                                                    onMouseEnter={(e) => {
+                                                      e.currentTarget.style.background = 'rgba(249, 177, 21, 0.25)';
+                                                      e.currentTarget.style.borderColor = '#f9b115';
+                                                      e.currentTarget.style.color = '#fff';
+                                                    }}
+                                                    onMouseLeave={(e) => {
+                                                      e.currentTarget.style.background = 'rgba(249, 177, 21, 0.1)';
+                                                      e.currentTarget.style.borderColor = 'rgba(249, 177, 21, 0.3)';
+                                                      e.currentTarget.style.color = '#f9b115';
+                                                    }}
+                                                    title="Sync level boards to plane"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      if (typeof this.props.onSyncLevelToPlane === 'function') {
+                                                        this.props.onSyncLevelToPlane(folder.title, subfolder.title, subfolder);
+                                                      }
+                                                    }}
+                                                  >
+                                                    <CIcon icon={cilSync} size="sm" />
+                                                  </div>
                                                 </div>
                                                 <CCollapse visible={this.props.boardsFoldersExpanded[`${folder.title}_${subfolder.title}`]}>
                                                   {this.renderLevelGrids(subfolder, folder.title)}
