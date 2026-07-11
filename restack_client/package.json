@@ -6,7 +6,7 @@
     "node": "20.x"
   },
   "dependencies": {
-    "@babel/runtime": "^8.0.0",
+    "@babel/runtime": "^7.29.7",
     "@coreui/coreui": "^4.2.4",
     "@coreui/icons": "^2.1.0",
     "@coreui/icons-react": "^2.1.0",
@@ -29,8 +29,9 @@
     "timers-browserify": "^2.0.12"
   },
   "scripts": {
+    "postinstall": "node disable-module-scope.js",
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "node disable-module-scope.js && react-scripts build",
     "test": "react-scripts test",
     "test:harness": "react-scripts test src/utils/__tests__/fog-harness.test.js --watchAll=false",
     "eject": "react-scripts eject"
