@@ -158,10 +158,10 @@ function Tile(props) {
                     normalizedUrl = images['tier_3_armor'];
                 } else if (images[cleanKey + '_portrait']) {
                     normalizedUrl = images[cleanKey + '_portrait'];
-                } else if (images[cleanKey + '_key']) {
-                    normalizedUrl = images[cleanKey + '_key'];
                 } else if (images[cleanKey + '_gate']) {
                     normalizedUrl = images[cleanKey + '_gate'];
+                } else if (images[cleanKey + '_key']) {
+                    normalizedUrl = images[cleanKey + '_key'];
                 } else if (images[cleanKey + '_chest']) {
                     normalizedUrl = images[cleanKey + '_chest'];
                 }
