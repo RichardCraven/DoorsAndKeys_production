@@ -233,6 +233,7 @@ export const LANDING_REDUX_CSS = `
 .redux-landing-container .landing-header .header-logo {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
 }
 
 .redux-landing-container .landing-header .header-logo .logo-title {
@@ -250,6 +251,7 @@ export const LANDING_REDUX_CSS = `
   text-transform: uppercase;
   letter-spacing: 1.5px;
   margin-top: 4px;
+  text-align: left;
 }
 
 .redux-landing-container .landing-header .header-user {

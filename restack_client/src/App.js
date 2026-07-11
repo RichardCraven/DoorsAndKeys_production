@@ -220,7 +220,7 @@ const toggleMenuTray = () => {
  return (
    <div className="fullpage">
       <div className="App">
-        {loggedIn === true && showToolbar === true && (
+        {loggedIn === true && showToolbar === true && location.pathname !== '/landing' && location.pathname !== '/' && (
           <div className="horizontal-menu-wrapper" style={{
             position: 'fixed',
             top: '12px',
@@ -314,7 +314,7 @@ const toggleMenuTray = () => {
                 <span style={{ fontSize: '15px' }}>🏠</span>
               </button>
 
-              {isAdmin && (
+              {/* {isAdmin && (
                 <button 
                   className="menu-buttons show-coordinates-button" 
                   onClick={toggleShowCoordinates}
@@ -337,7 +337,7 @@ const toggleMenuTray = () => {
                 >
                   <span style={{ fontSize: '15px' }}>🧭</span>
                 </button>
-              )}
+              )} */}
             </div>
 
             {/* Hover display label */}
