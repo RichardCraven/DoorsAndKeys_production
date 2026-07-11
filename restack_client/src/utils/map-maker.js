@@ -367,7 +367,7 @@ export function MapMaker(props){
                     type: 'palette-tile',
                     optionType: 'obscured space',
                     image: null,
-                    color: '#a8a8a8',
+                    color: '#111012',
                     id: i
                 })
             } else if(key === 'inscription'){

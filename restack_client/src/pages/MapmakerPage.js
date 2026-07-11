@@ -1097,7 +1097,7 @@ class MapMakerPage extends React.Component {
     } else if (pinned.optionType === 'obscured space') {
       const preservedBorders = arr[tileId].borders ? { ...arr[tileId].borders } : null;
       arr[tileId].image = null;
-      arr[tileId].color = '#a8a8a8';
+      arr[tileId].color = '#111012';
       arr[tileId].contains = { type: 'obscured_space', subtype: null };
       arr[tileId].borders = preservedBorders;
     } else if (pinned.optionType === 'void') {

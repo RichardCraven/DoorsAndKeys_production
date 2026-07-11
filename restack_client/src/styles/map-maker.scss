@@ -378,11 +378,12 @@ ul.dropdown-menu.show{
             width: 100%;
             display: flex;
             align-items: center;
-            justify-content: flex-start;
+            justify-content: space-between;
             flex-direction: row;
             transition: background-color 0.15s;
             border-bottom: 1px solid rgba(255, 255, 255, 0.02);
-            padding: 4px 0;
+            padding: 4px 15px 4px 0;
+            box-sizing: border-box;
             
             &.sub-hovered{
                 background-color: rgba(255, 255, 255, 0.05);
@@ -396,6 +397,7 @@ ul.dropdown-menu.show{
             }
             
             .text-container{
+                flex: 1;
                 display: flex;
                 align-items: center;
                 justify-content: flex-start;

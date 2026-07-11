@@ -464,11 +464,25 @@ function Tile(props) {
            { ((props.contains && props.contains.type === 'obscured_space') || props.optionType === 'obscured space') && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundImage: 'repeating-linear-gradient(45deg, #777 0, #777 2px, transparent 2px, transparent 8px)',
+                    backgroundImage: 'repeating-linear-gradient(45deg, #2d2b30 0, #2d2b30 2px, transparent 2px, transparent 8px)',
                     zIndex: 1,
-                    opacity: color === 'black' ? 0 : 0.5,
+                    opacity: color === 'black' ? 0 : 0.7,
                     pointerEvents: 'none',
                     transition: 'opacity 0.35s ease-in-out'
+                }} />
+           )}
+
+           {/* Passage corridor double border overlay to clearly represent stone walls */}
+           { ((props.contains && props.contains.type === 'passage') || props.optionType === 'passage') && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    borderLeft: props.borders?.left && props.borders.left !== '2px solid transparent' ? '4px double #bda88a' : 'none',
+                    borderRight: props.borders?.right && props.borders.right !== '2px solid transparent' ? '4px double #bda88a' : 'none',
+                    borderTop: props.borders?.top && props.borders.top !== '2px solid transparent' ? '4px double #bda88a' : 'none',
+                    borderBottom: props.borders?.bottom && props.borders.bottom !== '2px solid transparent' ? '4px double #bda88a' : 'none',
+                    pointerEvents: 'none',
+                    zIndex: 2,
+                    boxSizing: 'border-box'
                 }} />
            )}
 
