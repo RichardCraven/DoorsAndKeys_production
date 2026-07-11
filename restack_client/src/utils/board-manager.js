@@ -54,9 +54,7 @@ export function BoardManager(){
         'delete',
         'void',
         'door',
-        'pit',
         'stairs',
-        'cloud',
         'spawn',
         
         'monster',
@@ -68,10 +66,7 @@ export function BoardManager(){
         'gate',
         'treasure',
         'gold',
-        'oracle',
-        'dream den',
-
-        'devil'
+        'dream den'
     ]
     this.monstersArr = [
         'witch',
@@ -2549,8 +2544,6 @@ export function BoardManager(){
                 return 'moon_castle'
             case 'masterkey':
                 return 'ornate_key'  
-            case 'devil':
-                return 'mordu_devil'
             case 'spawn':
                 return 'spawn_point'    
             default:

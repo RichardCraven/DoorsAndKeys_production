@@ -174,7 +174,21 @@ class PlanesPanel extends React.Component {
             const isHovered = this.state.hoveredPlane === previewKey;
 
             return (
-                <div className="plane-mini-grid">
+                <div 
+                    className={`plane-mini-grid ${plane ? 'draggable' : ''}`}
+                    draggable={!!plane}
+                    onDragStart={(e) => {
+                        if (plane) this.props.onDragStartDungeon(plane);
+                    }}
+                    onClick={() => {
+                        if (plane) {
+                            this.props.loadPlane(plane);
+                            if (this.props.selectedView === 'dungeon' && typeof this.props.setViewState === 'function') {
+                                this.props.setViewState('plane');
+                            }
+                        }
+                    }}
+                >
                     <div className="plane-grid-title">{orientation.toUpperCase()}</div>
                     {plane ? (
                         <div

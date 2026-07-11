@@ -12493,7 +12493,7 @@ class DungeonPage extends React.Component {
                                 // misc
                                 camp:     { tab: 'interactables', entryId: 'camp',     search: 'camp' },
                                 campfire: { tab: 'interactables', entryId: 'camp',     search: 'camp' },
-                                oracle:   { tab: 'interactables', entryId: 'oracle',   search: 'oracle' },
+
                                 shrine:   { tab: 'interactables', entryId: 'shrine',   search: 'shrine' },
                             };
 

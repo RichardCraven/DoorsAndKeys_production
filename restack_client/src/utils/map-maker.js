@@ -26,12 +26,7 @@ export function MapMaker(props){
         'treasure',
         'gold',
         'food',
-        'oracle',
         'dream den',
-
-        'devil',
-        'pit',
-        'cloud',
         'dungeon portal',
         'magic',
         'inscription',
@@ -725,8 +720,6 @@ export function MapMaker(props){
                 return 'door'
             case 'dream den':
                 return 'moon_castle'
-            case 'devil':
-                return 'mordu_devil'
             case 'dungeon portal':
                 return 'dungeon_portal'
             case 'food':
