@@ -1,7 +1,7 @@
 import homepageBg from '../assets/graphics/dream_tower_background.jpg';
 
 export const LANDING_REDUX_CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative:wght@700&family=MedievalSharp&family=Metamorphous&family=Uncial+Antiqua&family=Almendra+SC:wght@700&family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Cinzel+Decorative:wght@700&family=Outfit:wght@300;400;500;600;700&display=swap');
 
 .redux-login-container {
   font-family: 'Outfit', sans-serif;
@@ -236,7 +236,7 @@ export const LANDING_REDUX_CSS = `
 }
 
 .redux-landing-container .landing-header .header-logo .logo-title {
-  font-family: 'Cinzel', serif;
+  font-family: 'Cinzel Decorative', serif;
   font-size: 1.8rem;
   font-weight: 700;
   color: #e5b54f;

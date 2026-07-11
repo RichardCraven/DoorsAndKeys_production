@@ -6,14 +6,6 @@ import { loadAllDungeonsRequest } from '../utils/api-handler';
 
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 
-const FONT_OPTIONS = [
-  { name: 'Cinzel (Default)', family: "'Cinzel', serif" },
-  { name: 'Cinzel Decorative (Elaborate Swashes)', family: "'Cinzel Decorative', serif" },
-  { name: 'MedievalSharp (Gothic/Medieval)', family: "'MedievalSharp', cursive" },
-  { name: 'Metamorphous (Mystic/Fantasy)', family: "'Metamorphous', serif" },
-  { name: 'Uncial Antiqua (Celtic/Ancient)', family: "'Uncial Antiqua', display" },
-  { name: 'Almendra SC (Elegant Codex)', family: "'Almendra SC', serif" }
-];
 
 export default function LandingPage(props) {
   useEffect(() => {
@@ -34,11 +26,7 @@ export default function LandingPage(props) {
   const [navToCombatSimulator, setNavToCombatSimulator] = useState(false);
   const [navToCrew, setNavCrew] = useState(false);
   const [navToPortal, setNavMapmaker] = useState(false);
-  const [fontIdx, setFontIdx] = useState(0);
 
-  const cycleFont = () => {
-    setFontIdx((prev) => (prev + 1) % FONT_OPTIONS.length);
-  };
   const [navToUsermanager, setNavUsermanager] = useState(false);
   const [navToDungeon, setNavDungeon] = useState(false);
   const [navToSandbox, setNavToSandbox] = useState(false);
@@ -282,38 +270,8 @@ export default function LandingPage(props) {
         {navToSandbox && <Redirect to='/sandbox' />}
 
         <header className="landing-header">
-          <div className="header-logo" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <span className="logo-title" style={{ fontFamily: FONT_OPTIONS[fontIdx].family, transition: 'font-family 0.2s' }}>
-                Dream Tower
-              </span>
-              <button 
-                onClick={cycleFont}
-                style={{
-                  background: 'rgba(249, 177, 21, 0.12)',
-                  border: '1px solid rgba(249, 177, 21, 0.4)',
-                  borderRadius: '16px',
-                  color: '#f9b115',
-                  padding: '4px 10px',
-                  fontSize: '11px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  outline: 'none',
-                  transition: 'all 0.2s ease',
-                  userSelect: 'none'
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.background = 'rgba(249, 177, 21, 0.25)';
-                  e.target.style.boxShadow = '0 0 8px rgba(249, 177, 21, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = 'rgba(249, 177, 21, 0.12)';
-                  e.target.style.boxShadow = 'none';
-                }}
-              >
-                🔄 Font: {FONT_OPTIONS[fontIdx].name}
-              </button>
-            </div>
+          <div className="header-logo">
+            <span className="logo-title">Dream Tower</span>
             <span className="logo-subtitle">Descend into the unreal</span>
           </div>
           <div className="header-user">
