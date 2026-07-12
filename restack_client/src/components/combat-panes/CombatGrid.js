@@ -631,6 +631,9 @@ export default function CombatGrid(props) {
         monsterCombatPortraitClicked,
         onDragStart,
         onFighterMouseDown,
+        onFighterShiftClick,
+        onFighterRightClick,
+        groupSelectedIds = [],
         getManualMovementArc,
         getManualMovementArcColor,
         getFighterDetails,
@@ -1208,6 +1211,7 @@ export default function CombatGrid(props) {
             getLiveCombatant(fighter.id)?.astralBeingActive ? 'astral-being' : '',
             getLiveCombatant(fighter.id)?.astralProjectionActive ? 'astral-projection-active' : '',
             fighter.isLeader ? 'leader-portrait' : '',
+            groupSelectedIds.includes(fighter.id) && !details?.dead ? 'group-selected' : '',
         ].filter(Boolean).join(' ');
 
         const isBatFlying = activeAnimations.some(a => a.type === 'bat_fly_anim' && a.sourceUnitId === fighter.id);
@@ -1216,6 +1220,7 @@ export default function CombatGrid(props) {
         return (
             <div
                 key={fighter.id}
+                id={`unit-tile-${fighter.id}`}
                 className={unitTileClasses}
                 style={{
                     position: 'absolute',
@@ -1298,12 +1303,28 @@ export default function CombatGrid(props) {
                                         ? 'BulgePortrait var(--portrait-animation-duration, 420ms) var(--portrait-animation-timing, cubic-bezier(.2,.8,.2,1)) forwards'
                                         : undefined)),
                         }}
-                        onClick={() => fighterPortraitClicked(fighter.id)}
+
+                        onClick={(e) => {
+                            // Shift+click is handled by onMouseDown; block normal selection when shift is held
+                            if (e.shiftKey) return;
+                            fighterPortraitClicked(fighter.id);
+                        }}
                         onMouseDown={(e) => {
-                            if (onFighterMouseDown && !details?.dead && !details?.isMonster && !details?.isMinion) {
+                            if (!details?.dead && !details?.isMonster && !details?.isMinion) {
                                 e.preventDefault();
                                 const liveDetails = getLiveCombatant(fighter.id) || details || fighter;
-                                onFighterMouseDown(liveDetails, e);
+                                if (e.shiftKey && onFighterShiftClick) {
+                                    // Shift-click: add/remove from group selection (onClick won't fire after this due to the guard above)
+                                    onFighterShiftClick(fighter.id);
+                                } else if (onFighterMouseDown) {
+                                    onFighterMouseDown(liveDetails, e);
+                                }
+                            }
+                        }}
+                        onContextMenu={(e) => {
+                            if (!details?.dead && !details?.isMonster && !details?.isMinion && onFighterRightClick) {
+                                e.preventDefault();
+                                onFighterRightClick(fighter.id, e.clientX, e.clientY);
                             }
                         }}
                         onMouseEnter={() => portraitHovered(fighter.id)}

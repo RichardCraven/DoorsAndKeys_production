@@ -467,22 +467,23 @@ export function MapMaker(props){
             left: []
         }
 
-        // console.log('map:', map, 'config: ', config);
-        if(!config) return
-        boards.forEach((b, i) => {
-            let leftCompatibleCount = 0,
-            rightCompatibleCount = 0,
-            topCompatibleCount = 0,
-            botCompatibleCount = 0
+        if (!config || !Array.isArray(config) || config.length < 4) {
+            config = [[], [], [], []];
+        }
+        config = config.map(arr => Array.isArray(arr) ? arr : []);
 
-            // SCANS TOP TO BOTTOM, LEFT TO RIGHT
-            
+        boards.forEach((b, i) => {
+            if (!b) return;
+            let bConfig = b.config;
+            if (!bConfig || !Array.isArray(bConfig) || bConfig.length < 4) {
+                bConfig = [[], [], [], []];
+            }
+            bConfig = bConfig.map(arr => Array.isArray(arr) ? arr : []);
+
             // top
-            // console.log('b', b, 'b.config', b.config);
-            if(!b || !b.config) return
             if(boardIndex > 2){
-                const bothEmpty = config[0].length === 0 && b.config[2].length === 0;
-                const hasConnection = config[0].some(c => b.config[2].includes(c + 210));
+                const bothEmpty = config[0].length === 0 && bConfig[2].length === 0;
+                const hasConnection = config[0].some(c => bConfig[2].includes(c + 210));
                 if(bothEmpty || hasConnection){
                     compatibilityMatrix.top.push(b.id);
                 }
@@ -490,11 +491,11 @@ export function MapMaker(props){
 
             // right
             if(boardIndex !== 2 && boardIndex !== 5 && boardIndex !== 8){
-                const bothEmpty = config[1].length === 0 && b.config[3].length === 0;
+                const bothEmpty = config[1].length === 0 && bConfig[3].length === 0;
                 const hasConnection = config[1].some(idx1 => {
                     const row = Math.floor(idx1 / 15);
                     const idx3 = row * 15;
-                    return b.config[3].includes(idx3);
+                    return bConfig[3].includes(idx3);
                 });
                 if(bothEmpty || hasConnection){
                     compatibilityMatrix.right.push(b.id);
@@ -503,8 +504,8 @@ export function MapMaker(props){
 
             // bot
             if(boardIndex < 6){
-                const bothEmpty = config[2].length === 0 && b.config[0].length === 0;
-                const hasConnection = config[2].some(c => b.config[0].includes(c - 210));
+                const bothEmpty = config[2].length === 0 && bConfig[0].length === 0;
+                const hasConnection = config[2].some(c => bConfig[0].includes(c - 210));
                 if(bothEmpty || hasConnection){
                     compatibilityMatrix.bot.push(b.id);
                 }
@@ -512,11 +513,11 @@ export function MapMaker(props){
 
             // left
             if(boardIndex !== 0 && boardIndex !== 3 && boardIndex !== 6){
-                const bothEmpty = config[3].length === 0 && b.config[1].length === 0;
+                const bothEmpty = config[3].length === 0 && bConfig[1].length === 0;
                 const hasConnection = config[3].some(idx3 => {
                     const row = Math.floor(idx3 / 15);
                     const idx1 = row * 15 + 14;
-                    return b.config[1].includes(idx1);
+                    return bConfig[1].includes(idx1);
                 });
                 if(bothEmpty || hasConnection){
                     compatibilityMatrix.left.push(b.id);

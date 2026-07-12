@@ -28,7 +28,6 @@ class PlaneView extends React.Component {
     //     }
     // }
     miniboardClicked(event, board, boardIndex){
-        console.log('miniboard clicked', event.detail);
         if(!board || !board.id){
             if(this.props.selectedView !== 'board'){
                 this.props.setViewState('board');

@@ -290,11 +290,20 @@ class MonsterBattle extends React.Component {
             dragTargetIsEnemy: false, // true when cursor is over an enemy unit
             dragFlashTile: null,      // { x, y, color } tile playing flash-on-release
             _preDragPaused: false,    // was combat paused before drag started?
+            committedArc: null,       // { src, dst, isEnemy } — persists arc after mouseup
             // ── Acid Bomb targeting mode ─────────────────────────────────────
             acidBombMode: false,
             acidBombItem: null,
             acidBombPlacedAt: null,   // { x, y } where the bomb icon is shown on the board
             acidBombExploding: null,  // { x, y } tile currently exploding (acid rain animation)
+            // ── Group Selection ───────────────────────────────────────────────
+            groupSelectedIds: [],        // ordered array of PC fighter IDs in the group
+            groupPlan: 'bunch_up',       // 'bunch_up' | 'spread_out' | 'corner'
+            groupFlashTiles: [],         // [{ x, y, color }] flashing tiles for group move destinations
+            // ── Unit Context Menu (right-click) ───────────────────────────────
+            unitContextMenu: null,       // { fighterId, x, y } screen position
+            showPlanPicker: false,       // whether plan-picker circles are visible
+            planPickerAnchor: null,      // { x, y } anchor for plan circle layout
         }
         this.combatLogContainerRef = React.createRef();
         this.latestCombatLogEntryRef = React.createRef();
@@ -312,6 +321,8 @@ class MonsterBattle extends React.Component {
         // Bound drag handlers — stored so we can remove them from window
         this._boundDragMouseMove = this._handleDragMouseMove.bind(this);
         this._boundDragMouseUp = this._handleDragMouseUp.bind(this);
+        // Bound context-menu dismiss handler
+        this._boundContextMenuDismiss = this._handleContextMenuDismiss.bind(this);
     }
 
     // Public method to force sync battleData from combatManager (including VCT positions)
@@ -858,7 +869,8 @@ class MonsterBattle extends React.Component {
             this.setState({
                 selectedFighter,
                 selectedMonster: null,
-                selectedAttack: null
+                selectedAttack: null,
+                groupSelectedIds: [],   // clear any group on normal click
             })
         }
     }
@@ -977,9 +989,20 @@ class MonsterBattle extends React.Component {
             ? (clonedBattleData[selectedMonsterId] && !clonedBattleData[selectedMonsterId].dead ? clonedBattleData[selectedMonsterId] : null)
             : null;
 
+        // Check if committedArc fighter reached target or died, and clear it from state
+        let nextCommittedArc = this.state.committedArc;
+        if (nextCommittedArc) {
+            const { fighterId, dst } = nextCommittedArc;
+            const fighter = clonedBattleData[fighterId];
+            if (!fighter || fighter.dead || (fighter.coordinates && fighter.coordinates.x === dst.x && fighter.coordinates.y === dst.y)) {
+                nextCommittedArc = null;
+            }
+        }
+
         this.setState({
             battleData: clonedBattleData,
             combatLog,
+            committedArc: nextCommittedArc,
             ...(selectedFighterId ? { selectedFighter: nextSelectedFighter } : {}),
             ...(selectedMonsterId ? { selectedMonster: nextSelectedMonster } : {})
         }, () => {
@@ -2279,7 +2302,11 @@ class MonsterBattle extends React.Component {
             dragTargetTile: null,
             dragTargetIsEnemy: false,
             _preDragPaused: wasPaused,
+            committedArc: null, // clear any previous committed arc when starting a new drag
         });
+        // Reset synchronous tracking vars
+        this._lastDragTarget = null;
+        this._lastDragTargetIsEnemy = false;
         window.addEventListener('mousemove', this._boundDragMouseMove);
         window.addEventListener('mouseup', this._boundDragMouseUp);
     }
@@ -2304,12 +2331,16 @@ class MonsterBattle extends React.Component {
                          event.clientY < rect.top  || event.clientY > rect.bottom;
         if (offBoard) {
             this.setState({ dragTargetTile: null, dragTargetIsEnemy: false });
-            return;
+        this._lastDragTarget = null;
+        this._lastDragTargetIsEnemy = false;
+        return;
         }
         // Suppress highlight when on the source tile (arc only appears after leaving)
         const onSource = gridX === this.state.dragSource.x && gridY === this.state.dragSource.y;
         if (onSource) {
             this.setState({ dragTargetTile: null, dragTargetIsEnemy: false });
+            this._lastDragTarget = null;
+            this._lastDragTargetIsEnemy = false;
             return;
         }
         // Detect enemy at this grid position
@@ -2317,6 +2348,9 @@ class MonsterBattle extends React.Component {
             u && !u.dead && (u.isMonster || u.isMinion) &&
             u.coordinates && u.coordinates.x === gridX && u.coordinates.y === gridY
         );
+        // Keep sync instance vars so _handleDragMouseUp can read them immediately
+        this._lastDragTarget = { x: gridX, y: gridY };
+        this._lastDragTargetIsEnemy = isEnemy;
         this.setState({ dragTargetTile: { x: gridX, y: gridY }, dragTargetIsEnemy: isEnemy });
     }
 
@@ -2327,7 +2361,10 @@ class MonsterBattle extends React.Component {
     _handleDragMouseUp = (event) => {
         window.removeEventListener('mousemove', this._boundDragMouseMove);
         window.removeEventListener('mouseup', this._boundDragMouseUp);
-        const { dragSource, dragTargetTile, dragTargetIsEnemy, _preDragPaused } = this.state;
+        const { dragSource, _preDragPaused } = this.state;
+        // Use synchronous instance vars — this.state may not have latest target due to React batching
+        const dragTargetTile = this._lastDragTarget;
+        const dragTargetIsEnemy = this._lastDragTargetIsEnemy || false;
         // Restore pre-drag pause state
         if (this.props.combatManager && typeof this.props.combatManager.pauseCombat === 'function') {
             this.props.combatManager.pauseCombat(!!_preDragPaused);
@@ -2348,21 +2385,214 @@ class MonsterBattle extends React.Component {
                     if (enemyUnit && typeof cm.setManualTarget === 'function') {
                         cm.setManualTarget(dragSource.id, enemyUnit.id);
                     }
+                    // Issue group attack command to remaining group members
+                    if (enemyUnit) this._issueGroupCommand(dragSource.id, dragTargetTile, true, enemyUnit.id);
                 } else {
                     // Dragged onto an empty tile — send the fighter toward that destination.
                     if (typeof cm.setFighterDestination === 'function') {
                         cm.setFighterDestination(dragSource.id, dragTargetTile);
                     }
+                    // Issue group move command to remaining group members
+                    this._issueGroupCommand(dragSource.id, dragTargetTile, false, null);
                 }
             }
             // Clear flash after animation completes
             this._setTimeout(() => {
                 this.setState({ dragFlashTile: null });
             }, 650);
+            // Persist the committed arc (dimmer ghost line shown until next drag)
+            this.setState({
+                committedArc: {
+                    fighterId: dragSource.id,
+                    dst: { x: dragTargetTile.x, y: dragTargetTile.y },
+                    isEnemy: dragTargetIsEnemy,
+                },
+            });
         }
-        // Always reset drag state
+        // Always reset active drag state
         this.setState({ dragSource: null, dragTargetTile: null, dragTargetIsEnemy: false });
     }
+
+    // ── Group command: issue move/attack to all other group members ───────────
+    _issueGroupCommand = (primaryId, targetTile, isEnemy, enemyId) => {
+        const cm = this.props.combatManager;
+        if (!cm) return;
+        const group = (this.state.groupSelectedIds || []).filter(id => id !== primaryId);
+        if (!group.length) return;
+
+        const plan = this.state.groupPlan || 'bunch_up';
+        const occupied = new Set();
+        occupied.add(`${targetTile.x},${targetTile.y}`);
+
+        const flashTiles = [];
+        const numCols = this.state.numBoardColumns || 8;
+        const maxRows = 6;
+
+        group.forEach((fighterId, idx) => {
+            const fighter = this.state.battleData[fighterId];
+            if (!fighter || fighter.dead) return;
+
+            if (isEnemy) {
+                // Group attack: each member targets the same enemy
+                if (enemyId && typeof cm.setManualTarget === 'function') {
+                    cm.setManualTarget(fighterId, enemyId);
+                }
+                return;
+            }
+
+            // Find an appropriate tile near the target
+            const dest = this._resolveGroupMemberTile(
+                fighter, fighterId, targetTile, idx, plan, occupied, numCols, maxRows
+            );
+            if (!dest) return;
+            occupied.add(`${dest.x},${dest.y}`);
+            flashTiles.push({ ...dest, color: 'yellow' });
+            if (typeof cm.setFighterDestination === 'function') {
+                cm.setFighterDestination(fighterId, dest);
+            }
+        });
+
+        if (flashTiles.length) {
+            this.setState({ groupFlashTiles: flashTiles });
+            this._setTimeout(() => this.setState({ groupFlashTiles: [] }), 650);
+        }
+    }
+
+    // ── Resolve the best tile for a group member near the target ─────────────
+    _resolveGroupMemberTile = (fighter, fighterId, targetTile, memberIdx, plan, occupied, numCols, maxRows) => {
+        const battleData = this.state.battleData;
+        // Build set of tiles occupied by enemies or other PC fighters
+        const hardOccupied = new Set(occupied);
+        Object.values(battleData).forEach(u => {
+            if (u && !u.dead && u.id !== fighterId && u.coordinates) {
+                hardOccupied.add(`${u.coordinates.x},${u.coordinates.y}`);
+            }
+        });
+
+        const isValid = (x, y) => {
+            if (x < 0 || y < 0 || x >= numCols || y >= maxRows) return false;
+            if (hardOccupied.has(`${x},${y}`)) return false;
+            return true;
+        };
+
+        // Collect all PC live positions for plan calculations
+        const pcPositions = Object.values(battleData).filter(u =>
+            u && !u.dead && !u.isMonster && !u.isMinion && u.coordinates
+        ).map(u => u.coordinates);
+
+        if (plan === 'spread_out') {
+            // Prefer tiles further from other PCs — spiral out but bias away from centroid
+            const cx = pcPositions.reduce((s, p) => s + p.x, 0) / (pcPositions.length || 1);
+            const cy = pcPositions.reduce((s, p) => s + p.y, 0) / (pcPositions.length || 1);
+            // Candidate tiles in a ring, sorted by distance from centroid (furthest first)
+            const candidates = [];
+            for (let r = 1; r <= 4; r++) {
+                for (let dx = -r; dx <= r; dx++) {
+                    for (let dy = -r; dy <= r; dy++) {
+                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                        const tx = targetTile.x + dx;
+                        const ty = targetTile.y + dy;
+                        if (isValid(tx, ty)) {
+                            const distFromCentroid = Math.hypot(tx - cx, ty - cy);
+                            candidates.push({ x: tx, y: ty, score: distFromCentroid });
+                        }
+                    }
+                }
+            }
+            candidates.sort((a, b) => b.score - a.score);
+            return candidates[0] || null;
+        }
+
+        if (plan === 'corner') {
+            // Soft units (low maxHP or caster type) go to the target tile (handled by primary).
+            // Other members take intercept positions (between target and enemy centroid).
+            const enemyPositions = Object.values(battleData).filter(u =>
+                u && !u.dead && (u.isMonster || u.isMinion) && u.coordinates
+            ).map(u => u.coordinates);
+
+            const ecx = enemyPositions.reduce((s, p) => s + p.x, 0) / (enemyPositions.length || 1);
+            const ecy = enemyPositions.reduce((s, p) => s + p.y, 0) / (enemyPositions.length || 1);
+            const isSoft = (fighter.type === 'wizard' || fighter.type === 'ranger') ||
+                ((fighter.starting_hp || fighter.stats?.hp || 999) < 20);
+
+            if (isSoft) {
+                // Soft unit: stay close to target (bunch-up logic)
+            } else {
+                // Tanky unit: intercept toward enemies
+                const interceptX = Math.round(targetTile.x + (ecx - targetTile.x) * 0.5);
+                const interceptY = Math.round(targetTile.y + (ecy - targetTile.y) * 0.5);
+                // Spiral from intercept
+                for (let r = 0; r <= 3; r++) {
+                    for (let dx = -r; dx <= r; dx++) {
+                        for (let dy = -r; dy <= r; dy++) {
+                            const tx = interceptX + dx, ty = interceptY + dy;
+                            if (isValid(tx, ty)) return { x: tx, y: ty };
+                        }
+                    }
+                }
+            }
+        }
+
+        // Default: bunch_up — spiral outward from targetTile
+        for (let r = 1; r <= 5; r++) {
+            for (let dx = -r; dx <= r; dx++) {
+                for (let dy = -r; dy <= r; dy++) {
+                    if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                    const tx = targetTile.x + dx, ty = targetTile.y + dy;
+                    if (isValid(tx, ty)) return { x: tx, y: ty };
+                }
+            }
+        }
+        return null;
+    }
+
+    // ── Group Selection: shift-click handler ─────────────────────────────────
+    onFighterShiftClick = (fighterId) => {
+        const fighter = this.state.battleData[fighterId];
+        if (!fighter || fighter.dead || fighter.isMonster || fighter.isMinion) return;
+
+        const primary = this.state.selectedFighter;
+        let next = [...(this.state.groupSelectedIds || [])];
+
+        if (next.includes(fighterId)) {
+            // Deselect
+            next = next.filter(id => id !== fighterId);
+        } else {
+            // Ensure primary is always first
+            if (primary && !next.includes(primary.id)) next = [primary.id, ...next];
+            if (!next.includes(fighterId)) next.push(fighterId);
+        }
+        this.setState({ groupSelectedIds: next });
+    }
+
+    // ── Context Menu Handlers ─────────────────────────────────────────────────
+    onFighterRightClick = (fighterId, x, y) => {
+        this.setState({
+            unitContextMenu: { fighterId, x, y },
+            showPlanPicker: false,
+            planPickerAnchor: null,
+        });
+        window.addEventListener('mousedown', this._boundContextMenuDismiss);
+    }
+
+    _handleContextMenuDismiss = (e) => {
+        // Dismiss unless the click is on the menu itself
+        const menu = document.querySelector('.unit-context-menu');
+        const picker = document.querySelector('.plan-picker-overlay');
+        if ((menu && menu.contains(e.target)) || (picker && picker.contains(e.target))) return;
+        window.removeEventListener('mousedown', this._boundContextMenuDismiss);
+        this.setState({ unitContextMenu: null, showPlanPicker: false, planPickerAnchor: null });
+    }
+
+    openPlanPicker = (anchorX, anchorY) => {
+        this.setState({ showPlanPicker: true, planPickerAnchor: { x: anchorX, y: anchorY } });
+    }
+
+    selectPlan = (plan) => {
+        window.removeEventListener('mousedown', this._boundContextMenuDismiss);
+        this.setState({ groupPlan: plan, showPlanPicker: false, unitContextMenu: null, planPickerAnchor: null });
+    }
+
     monsterCombatPortraitClicked = (id) => {
         // console.log('battle data: ', this.state.battleData);
         // console.log('images[this.state.battleData[e]?.portrait]', this.state.battleData[id].targettedBy);
@@ -3034,12 +3264,16 @@ class MonsterBattle extends React.Component {
                             // Manual drag highlight
                             const isDragTarget = this.state.dragTargetTile && this.state.dragTargetTile.x === t.x && this.state.dragTargetTile.y === t.y;
                             const isDragFlash  = this.state.dragFlashTile  && this.state.dragFlashTile.x  === t.x && this.state.dragFlashTile.y  === t.y;
+                            const isGroupFlash = (this.state.groupFlashTiles || []).some(ft => ft.x === t.x && ft.y === t.y);
                             const dragEnemy    = isDragTarget && this.state.dragTargetIsEnemy;
                             let tileClassName = 'combat-tile';
                             if (isDragFlash) {
                                 tileClassName += this.state.dragFlashTile.color === 'red'
                                     ? ' combat-tile--flash-red'
                                     : ' combat-tile--flash-yellow';
+                            }
+                            if (isGroupFlash) {
+                                tileClassName += ' combat-tile--flash-yellow';
                             }
                             const isAcidBombTarget = this.state.acidBombMode;
                             const isBombPlaced = this.state.acidBombPlacedAt && this.state.acidBombPlacedAt.x === t.x && this.state.acidBombPlacedAt.y === t.y;
@@ -3195,6 +3429,9 @@ class MonsterBattle extends React.Component {
                             monsterCombatPortraitClicked={this.monsterCombatPortraitClicked}
                             onDragStart={this.onDragStart}
                             onFighterMouseDown={this.onFighterMouseDown}
+                            onFighterShiftClick={this.onFighterShiftClick}
+                            onFighterRightClick={this.onFighterRightClick}
+                            groupSelectedIds={this.state.groupSelectedIds}
                             getActionBarLeftValForFighter={this.getActionBarLeftValForFighter}
                             getManualMovementArc={this.getManualMovementArc}
                             getManualMovementArcColor={this.getManualMovementArcColor}
@@ -3211,19 +3448,69 @@ class MonsterBattle extends React.Component {
                         />
 
                         {/* ── Manual Input drag arc SVG overlay ──────────────────────── */}
-                        {this.state.dragSource && this.state.dragTargetTile && (() => {
-                            const CELL = TILE_SIZE + (SHOW_TILE_BORDERS ? 2 : 0); // 102px
-                            const srcCx = this.state.dragSource.x * CELL + CELL / 2;
-                            const srcCy = this.state.dragSource.y * CELL + CELL / 2;
-                            const dstCx = this.state.dragTargetTile.x * CELL + CELL / 2;
-                            const dstCy = this.state.dragTargetTile.y * CELL + CELL / 2;
-                            // Control point arcs upward (above both points)
-                            const cpX = (srcCx + dstCx) / 2;
-                            const cpY = Math.min(srcCy, dstCy) - 90;
-                            const arcColor = this.state.dragTargetIsEnemy ? '#e74c3c' : '#f9b115';
+                        {(() => {
+                            const CELL = TILE_SIZE + (SHOW_TILE_BORDERS ? 2 : 0);
                             const boardW = TILE_SIZE * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0);
                             const boardH = TILE_SIZE * MAX_ROWS + (SHOW_TILE_BORDERS ? MAX_ROWS * 2 : 0);
-                            const d = `M ${srcCx} ${srcCy} Q ${cpX} ${cpY} ${dstCx} ${dstCy}`;
+
+                            // ── Committed (persistent ghost) arc ───────────────────────────
+                            const committed = !this.state.dragSource && this.state.committedArc;
+                            const committedArc = committed ? (() => {
+                                const { fighterId, dst, isEnemy } = this.state.committedArc;
+                                const fighter = this.state.battleData[fighterId];
+                                if (!fighter || fighter.dead || !fighter.coordinates) return null;
+
+                                // If the fighter has already arrived at the destination, hide the arc
+                                if (fighter.coordinates.x === dst.x && fighter.coordinates.y === dst.y) {
+                                    return null;
+                                }
+
+                                // Try to get the live visual position from DOM to match the CSS transition
+                                let srcCx = fighter.coordinates.x * CELL + CELL / 2;
+                                let srcCy = fighter.coordinates.y * CELL + CELL / 2;
+                                const el = document.getElementById(`unit-tile-${fighterId}`);
+                                if (el) {
+                                    const style = window.getComputedStyle(el);
+                                    const transform = style.transform;
+                                    if (transform && transform !== 'none') {
+                                        const parts = transform.split(',');
+                                        if (parts.length >= 6) {
+                                            const tx = parseFloat(parts[parts.length - 2]);
+                                            const ty = parseFloat(parts[parts.length - 1]);
+                                            if (!isNaN(tx) && !isNaN(ty)) {
+                                                srcCx = tx + CELL / 2;
+                                                srcCy = ty + CELL / 2;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                const dstCx = dst.x * CELL + CELL / 2;
+                                const dstCy = dst.y * CELL + CELL / 2;
+                                const cpX = (srcCx + dstCx) / 2;
+                                const cpY = Math.min(srcCy, dstCy) - 90;
+                                const arcColor = isEnemy ? '#e74c3c' : '#f9b115';
+                                const d = `M ${srcCx} ${srcCy} Q ${cpX} ${cpY} ${dstCx} ${dstCy}`;
+                                return { srcCx, srcCy, dstCx, dstCy, arcColor, d };
+                            })() : null;
+
+                            // ── Live drag arc (full brightness) ────────────────────────────
+                            const liveSrc = this.state.dragSource;
+                            const liveDst = this.state.dragTargetTile;
+                            const liveArc = liveSrc && liveDst ? (() => {
+                                const srcCx = liveSrc.x * CELL + CELL / 2;
+                                const srcCy = liveSrc.y * CELL + CELL / 2;
+                                const dstCx = liveDst.x * CELL + CELL / 2;
+                                const dstCy = liveDst.y * CELL + CELL / 2;
+                                const cpX = (srcCx + dstCx) / 2;
+                                const cpY = Math.min(srcCy, dstCy) - 90;
+                                const arcColor = this.state.dragTargetIsEnemy ? '#e74c3c' : '#f9b115';
+                                const d = `M ${srcCx} ${srcCy} Q ${cpX} ${cpY} ${dstCx} ${dstCy}`;
+                                return { srcCx, srcCy, dstCx, dstCy, arcColor, d };
+                            })() : null;
+
+                            if (!liveArc && !committedArc) return null;
+
                             return (
                                 <svg
                                     style={{
@@ -3246,20 +3533,36 @@ class MonsterBattle extends React.Component {
                                             </feMerge>
                                         </filter>
                                     </defs>
-                                    {/* Glow halo */}
-                                    <path d={d} fill="none" stroke={arcColor} strokeWidth="8" strokeOpacity="0.2"
-                                          strokeDasharray="12 7" />
-                                    {/* Main marching-ants arc */}
-                                    <path d={d} fill="none" stroke={arcColor} strokeWidth="2.5"
-                                          strokeDasharray="12 7" filter="url(#drag-arc-glow)"
-                                          className="drag-arc-line" />
-                                    {/* Destination dot */}
-                                    <circle cx={dstCx} cy={dstCy} r="7"
-                                            fill={arcColor} opacity="0.9"
-                                            filter="url(#drag-arc-glow)" />
-                                    {/* Source dot */}
-                                    <circle cx={srcCx} cy={srcCy} r="4"
-                                            fill={arcColor} opacity="0.5" />
+
+                                    {/* Committed ghost arc — dimmer, no animation */}
+                                    {committedArc && (
+                                        <g opacity="0.38">
+                                            <path d={committedArc.d} fill="none" stroke={committedArc.arcColor} strokeWidth="8" strokeOpacity="0.08"
+                                                  strokeDasharray="12 7" />
+                                            <path d={committedArc.d} fill="none" stroke={committedArc.arcColor} strokeWidth="2"
+                                                  strokeDasharray="12 7" strokeOpacity="1" />
+                                            <circle cx={committedArc.dstCx} cy={committedArc.dstCy} r="6"
+                                                    fill={committedArc.arcColor} opacity="0.7" />
+                                            <circle cx={committedArc.srcCx} cy={committedArc.srcCy} r="3"
+                                                    fill={committedArc.arcColor} opacity="0.4" />
+                                        </g>
+                                    )}
+
+                                    {/* Live drag arc — full brightness with glow + animation */}
+                                    {liveArc && (
+                                        <g>
+                                            <path d={liveArc.d} fill="none" stroke={liveArc.arcColor} strokeWidth="8" strokeOpacity="0.2"
+                                                  strokeDasharray="12 7" />
+                                            <path d={liveArc.d} fill="none" stroke={liveArc.arcColor} strokeWidth="2.5"
+                                                  strokeDasharray="12 7" filter="url(#drag-arc-glow)"
+                                                  className="drag-arc-line" />
+                                            <circle cx={liveArc.dstCx} cy={liveArc.dstCy} r="7"
+                                                    fill={liveArc.arcColor} opacity="0.9"
+                                                    filter="url(#drag-arc-glow)" />
+                                            <circle cx={liveArc.srcCx} cy={liveArc.srcCy} r="4"
+                                                    fill={liveArc.arcColor} opacity="0.5" />
+                                        </g>
+                                    )}
                                 </svg>
                             );
                         })()}
@@ -3291,6 +3594,28 @@ class MonsterBattle extends React.Component {
                             </div>
                             {this.props.paused && <span className="paused-marker">PAUSED</span>}
                         </div>
+                        {/* ── Group selection portrait pips ── */}
+                        {this.state.groupSelectedIds.length > 1 && (
+                            <div className="group-selection-portraits">
+                                {this.state.groupSelectedIds
+                                    .filter(id => id !== liveSelectedFighter?.id)
+                                    .map(id => {
+                                        const member = this.state.battleData[id];
+                                        if (!member) return null;
+                                        const url = images[member.portrait] || member.portrait || images.avatar;
+                                        return (
+                                            <div
+                                                key={id}
+                                                className="group-portrait-pip"
+                                                style={{ backgroundImage: `url(${url})` }}
+                                                onClick={() => this.onFighterShiftClick(id)}
+                                                title={member.name}
+                                            />
+                                        );
+                                    })
+                                }
+                            </div>
+                        )}
                     </div>
 
                     {/* ── Redux AI Mode: read-only status panel ───────────────────────── */}
@@ -4719,6 +5044,48 @@ class MonsterBattle extends React.Component {
                         onSave={() => { try { this.props.saveUserData && this.props.saveUserData(); } catch (e) { } }}
                     />
                 )}
+
+                {/* ── Unit Context Menu (right-click) ─────────────────────────────── */}
+                {this.state.unitContextMenu && !this.state.showPlanPicker && (
+                    <div
+                        className="unit-context-menu"
+                        style={{ left: this.state.unitContextMenu.x, top: this.state.unitContextMenu.y }}
+                    >
+                        <div
+                            className="ucm-option"
+                            onClick={(e) => this.openPlanPicker(e.clientX, e.clientY)}
+                        >
+                            ⚔ Plan
+                        </div>
+                    </div>
+                )}
+
+                {/* ── Plan Picker Circles ─────────────────────────────────────────── */}
+                {this.state.showPlanPicker && this.state.planPickerAnchor && (() => {
+                    const { x, y } = this.state.planPickerAnchor;
+                    const plans = [
+                        { key: 'bunch_up',   symbol: '⬤', title: 'Bunch Up'  },
+                        { key: 'spread_out', symbol: '⬡', title: 'Spread Out' },
+                        { key: 'corner',     symbol: '◣', title: 'Corner'     },
+                    ];
+                    return (
+                        <div className="plan-picker-overlay" style={{ left: x, top: y }}>
+                            {plans.map((p, i) => (
+                                <div
+                                    key={p.key}
+                                    className={`plan-circle${this.state.groupPlan === p.key ? ' active' : ''}`}
+                                    style={{ '--plan-i': i }}
+                                    onClick={() => this.selectPlan(p.key)}
+                                    title={p.title}
+                                >
+                                    <span className="plan-symbol">{p.symbol}</span>
+                                    <span className="plan-title">{p.title}</span>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })()}
+
             </div>
         );
     }

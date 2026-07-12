@@ -1340,3 +1340,89 @@ ul.dropdown-menu.show{
         }
     }
 }
+
+.dungeon-builder-modal {
+    .modal-content {
+        background: #1c1c1e;
+        border: 1px solid rgba(229, 181, 79, 0.4);
+        border-radius: 8px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+        color: #e0dcd3;
+    }
+    
+    .modal-header {
+        border-bottom: 1px solid rgba(229, 181, 79, 0.2);
+        padding: 16px 20px;
+        
+        .modal-title {
+            font-family: 'Cinzel', serif;
+            color: #e5b54f;
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+        
+        .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+            opacity: 0.5;
+            
+            &:hover {
+                opacity: 1;
+            }
+        }
+    }
+    
+    .modal-body {
+        padding: 20px;
+        
+        .dungeonname-input {
+            width: 100%;
+            background: rgba(12, 10, 9, 0.6);
+            color: #f9b115;
+            border: 1px solid rgba(229, 181, 79, 0.3);
+            border-radius: 4px;
+            padding: 10px 12px;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+            
+            &:focus {
+                border-color: rgba(229, 181, 79, 0.8);
+                box-shadow: 0 0 8px rgba(229, 181, 79, 0.15);
+            }
+            
+            &::placeholder {
+                color: rgba(164, 176, 190, 0.5);
+            }
+        }
+    }
+    
+    .modal-footer {
+        border-top: 1px solid rgba(229, 181, 79, 0.2);
+        padding: 12px 20px;
+        
+        .btn-secondary {
+            background: rgba(45, 45, 48, 0.8);
+            color: #a4b0be;
+            border: 1px solid rgba(164, 176, 190, 0.3);
+            
+            &:hover {
+                background: rgba(60, 60, 64, 0.9);
+                color: #fff;
+            }
+        }
+        
+        .btn-primary {
+            background: rgba(229, 181, 79, 0.15);
+            color: #e5b54f;
+            border: 1px solid rgba(229, 181, 79, 0.5);
+            
+            &:hover {
+                background: rgba(229, 181, 79, 0.25);
+                box-shadow: 0 0 10px rgba(229, 181, 79, 0.2);
+            }
+        }
+    }
+}

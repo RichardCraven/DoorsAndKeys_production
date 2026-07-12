@@ -1490,9 +1490,8 @@ export function CombatManagerRedux() {
                 }
             } catch (e) { }
             if (mentalityResist > 0) {
-                missChance = Math.min(95, missChance + mentalityResist);
+                missChance = missChance + mentalityResist;
             }
-            isHit = roll >= missChance;
         } else {
             // Dex is the primary dodge stat; fall back to speed for backward compat
             let targetDex = target.stats.dex || target.stats.speed || 1;
@@ -1531,7 +1530,6 @@ export function CombatManagerRedux() {
                 } else if (resolve < 20) {
                     missChance -= 10;
                 }
-                missChance = Math.max(0, Math.min(missChance, 95));
             }
             // Beholder invisibility: 40% flat dodge chance
             if (target.beholderInvisible && typeof target.beholderDodgeBonus === 'number') {
@@ -1539,12 +1537,36 @@ export function CombatManagerRedux() {
                     return false; // dodged due to invisibility
                 }
             }
-
-            missChance = Math.max(0, Math.min(missChance, 95));
-            isHit = roll >= missChance;
         }
 
+        // Projectile accuracy distance penalty
+        const activeAbility = caller.activeAbility || caller.pendingAttack;
+        const isProjectile = activeAbility && typeof activeAbility.type === 'string' && activeAbility.type.includes('projectile');
+        if (isProjectile) {
+            const getDistance = (c, t) => {
+                if (!c || !t || !c.coordinates || !t.coordinates) return 0;
+                const cTiles = (Array.isArray(c.occupiedCoords) && c.occupiedCoords.length > 0) ? c.occupiedCoords : [c.coordinates];
+                const tTiles = (Array.isArray(t.occupiedCoords) && t.occupiedCoords.length > 0) ? t.occupiedCoords : [t.coordinates];
+                let minDist = Infinity;
+                cTiles.forEach(cc => {
+                    tTiles.forEach(tc => {
+                        const dx = Math.abs(cc.x - tc.x);
+                        const dy = Math.abs(cc.y - tc.y);
+                        const dist = dx + dy;
+                        if (dist < minDist) minDist = dist;
+                    });
+                });
+                return minDist === Infinity ? 0 : minDist;
+            };
 
+            const dist = getDistance(caller, target);
+            const projectilePenalty = dist * 8;
+            missChance += projectilePenalty;
+            siegeLog(`[hitCheck] Projectile detected: ${activeAbility.name || activeAbility.id}. Distance: ${dist}, Penalty added: +${projectilePenalty}%, final missChance: ${missChance}%`);
+        }
+
+        missChance = Math.max(0, Math.min(missChance, 95));
+        isHit = roll >= missChance;
 
         return isHit;
     };
