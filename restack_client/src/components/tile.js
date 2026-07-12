@@ -568,6 +568,27 @@ function Tile(props) {
                 </div>
            )}
 
+            {/* Connecting Path overlay */}
+            { ((props.contains && props.contains.type === 'connecting_path') || props.optionType === 'connecting path') && (
+                 <div style={{
+                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                     backgroundColor: 'rgba(180, 130, 20, 0.22)',
+                     border: '2px dashed rgba(180, 130, 20, 0.65)',
+                     zIndex: 10, pointerEvents: 'none',
+                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                     opacity: color === 'black' ? 0 : 1,
+                     transition: 'opacity 0.35s ease-in-out'
+                 }}>
+                     <span style={{
+                         fontSize: Math.max(7, (props.tileSize || 30) * 0.28) + 'px',
+                         color: '#dddddd', fontWeight: 'bold',
+                         textTransform: 'uppercase', lineHeight: 1.2,
+                         textShadow: '0 1px 3px rgba(0,0,0,0.9)',
+                         letterSpacing: '0.5px'
+                     }}>CONN</span>
+                 </div>
+            )}
+
            {/* Inscription edge markers — golden bars on inscribed walls */}
            { props.inscriptions && (
                 <div style={{

@@ -964,11 +964,77 @@ ul.dropdown-menu.show{
                     width: 8px;
                     border-radius: 8px;
                     background-color: grey;
+                    position: relative;
+                    cursor: pointer;
+                    
                     &.valid{
                         background-color: #0ec30e;
                     }
                     &.invalid{
                         background-color: red;
+                    }
+
+                    .validation-errors-tooltip {
+                        display: none;
+                        position: absolute;
+                        bottom: 150%; // position above the indicator dot
+                        left: -4px; // align left edge near the dot, extending to the right
+                        background: rgba(20, 20, 20, 0.95);
+                        border: 1px solid rgba(249, 177, 21, 0.4);
+                        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.6), 0 0 8px rgba(229, 62, 62, 0.2);
+                        border-radius: 6px;
+                        padding: 8px 12px;
+                        color: #f7fafc;
+                        font-size: 11px;
+                        line-height: 1.4;
+                        z-index: 1000;
+                        width: max-content;
+                        max-width: 320px;
+                        text-align: left;
+                        pointer-events: none;
+                        opacity: 0;
+                        transition: opacity 0.15s ease-in-out;
+
+                        ul {
+                            margin: 0;
+                            padding-left: 14px;
+                            list-style-type: disc;
+                            
+                            li {
+                                margin-bottom: 4px;
+                                color: #feb2b2; // subtle light red for errors
+                                font-weight: normal;
+                                letter-spacing: 0.2px;
+                                text-shadow: none;
+                                &:last-child {
+                                    margin-bottom: 0;
+                                }
+                            }
+                        }
+
+                        .valid-text {
+                            color: #a3e635; // lime green
+                            font-weight: 600;
+                            text-shadow: none;
+                        }
+
+                        &::after {
+                            content: "";
+                            position: absolute;
+                            top: 100%;
+                            left: 8px; // align arrow with the dot's horizontal center
+                            margin-left: -5px;
+                            border-width: 5px;
+                            border-style: solid;
+                            border-color: rgba(20, 20, 20, 0.95) transparent transparent transparent;
+                        }
+                    }
+
+                    &:hover {
+                        .validation-errors-tooltip {
+                            display: block;
+                            opacity: 1;
+                        }
                     }
                 }
             }

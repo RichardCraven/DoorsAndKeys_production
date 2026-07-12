@@ -32,6 +32,29 @@ class BoardsPanel extends React.Component {
         );
     }
 
+    getBoardFolderInfo = (board) => {
+        if (!board) return { displayName: '', folderPath: '' };
+        if (board.folderPath !== undefined) {
+            return {
+                displayName: board.name,
+                folderPath: board.folderPath || ''
+            };
+        }
+        if (board.name && board.name.includes('_')) {
+            const parts = board.name.split('_');
+            if (parts.length > 1) {
+                return {
+                    displayName: parts[parts.length - 1],
+                    folderPath: parts.slice(0, parts.length - 1).join('/')
+                };
+            }
+        }
+        return {
+            displayName: board.name,
+            folderPath: ''
+        };
+    }
+
     parseBoardPlacement = (board) => {
         let folderPath = board.folderPath;
         let name = board.name || '';
@@ -343,7 +366,10 @@ class BoardsPanel extends React.Component {
                                     </CCollapse>
                                 </div>
                         })}
-                        {this.props.boards && this.props.compatibilityMatrix.show === false && this.props.boards.map((board, i) => {
+                        {this.props.boards && this.props.compatibilityMatrix.show === false && this.props.boards.filter(board => {
+                            const info = this.getBoardFolderInfo(board);
+                            return !info.folderPath;
+                        }).map((board, i) => {
                         return (<div key={i} className="board-preview-wrapper">
                                     <div 
                                     onDragStart = {(event) => this.props.onDragStart(event, board)}

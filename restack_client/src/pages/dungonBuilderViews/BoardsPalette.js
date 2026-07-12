@@ -21,6 +21,7 @@ class BoardsPalette extends React.Component {
     getOptionLabel = (optionType) => {
         if (optionType === 'jewels') return 'Jewels';
         if (optionType === 'runes') return 'Runes';
+        if (optionType === 'connecting path') return 'Connecting Path';
         return optionType;
     }
 
@@ -69,6 +70,7 @@ class BoardsPalette extends React.Component {
                             handleHover={null}
                             handleClick={null}
                             type={tile.type}
+                            optionType={tile.optionType}
                             hovered={
                                 this.props.hoveredPaletteTileIdx === tile.id ?
                                 true :
