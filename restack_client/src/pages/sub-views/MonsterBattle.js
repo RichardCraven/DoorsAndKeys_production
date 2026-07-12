@@ -304,6 +304,9 @@ class MonsterBattle extends React.Component {
             unitContextMenu: null,       // { fighterId, x, y } screen position
             showPlanPicker: false,       // whether plan-picker circles are visible
             planPickerAnchor: null,      // { x, y } anchor for plan circle layout
+            notchedArrow: 'force',       // 'force' | 'ice' | 'poison' | 'celestial'
+            showNotchPicker: false,      // whether Ranger's notch picker submenu is visible
+            skillContextMenu: null,      // { fighterId, skillKey, spec, x, y }
         }
         this.combatLogContainerRef = React.createRef();
         this.latestCombatLogEntryRef = React.createRef();
@@ -337,17 +340,26 @@ class MonsterBattle extends React.Component {
         }
     }
 
+    handleLogFilterToggle = (e) => {
+        const checked = e.target.checked;
+        this.setState({ logFilterSelectedFighter: checked });
+        const meta = getMeta();
+        meta.logFilterSelectedFighter = checked;
+        storeMeta(meta);
+    }
+
     componentDidMount() {
         // mark mounted so async callbacks can safely call setState
         this._isMounted = true;
-        // Reset any previous group-death suppression flag and one-time guards
-        // when mounting a new battle. This prevents prior battle state from
-        // affecting subsequent battles if the component instance is reused.
-        this._suppressPersistFinalHP = false;
-        this._gameOverHandled = false;
-        this._goldAwarded = false;
+        const meta = getMeta();
+        const savedLogFilter = meta?.logFilterSelectedFighter ?? false;
         // Reset UI state that persists across remounts (shield walls, fear, etc.)
-        this.setState({ activeWalls: [], boardFearActive: false, fearCastingActive: false });
+        this.setState({
+            activeWalls: [],
+            boardFearActive: false,
+            fearCastingActive: false,
+            logFilterSelectedFighter: savedLogFilter
+        });
 
         // --- FIX: Ensure combatManager resets combatants and removes all active enemies ---
         if (this.props.combatManager && typeof this.props.combatManager.reset === 'function') {
@@ -1446,6 +1458,26 @@ class MonsterBattle extends React.Component {
                     }
                 } catch (e) { console.warn('dust loot drop failed', e); }
 
+                // ── Rune Shard loot drop: 10% chance per combat victory ─────────────
+                try {
+                    if (Math.random() < 0.10) {
+                        const shardDef = this.props.inventoryManager && this.props.inventoryManager.allItems['archaic_rune_shard'];
+                        if (shardDef) {
+                            this.props.inventoryManager.addItem({ ...shardDef });
+                            try {
+                                if (typeof this.props.onTriggerLootArc === 'function') {
+                                    this.props.onTriggerLootArc({ 
+                                        type: 'reagent', 
+                                        id: 'archaic_rune_shard_' + Math.random(), 
+                                        icon: images[shardDef.icon] || images['archaic_rune_shard'], 
+                                        name: shardDef.name 
+                                    });
+                                }
+                            } catch (e) { }
+                        }
+                    }
+                } catch (e) { console.warn('rune shard loot drop failed', e); }
+
                 // Snapshot levels before awarding XP so we can show before→after
                 const levelsBefore = {};
                 try {
@@ -1976,7 +2008,7 @@ class MonsterBattle extends React.Component {
                 });
                 return;
             }
-            const isSelfTarget = clickedSpecial.range === 'self' || clickedSpecial.id === 'notch' || (clickedSpecial.effect && (
+            const isSelfTarget = clickedSpecial.range === 'self' || clickedSpecial.id === 'notch' || (clickedSpecial.id && clickedSpecial.id.startsWith('summon_')) || (clickedSpecial.effect && (
                 (Array.isArray(clickedSpecial.effect) && clickedSpecial.effect.some(e => typeof e === 'string' && e.includes('buff_self'))) ||
                 (typeof clickedSpecial.effect === 'string' && clickedSpecial.effect.includes('buff_self')) ||
                 clickedSpecial.id === 'monk_ethereal_speed' ||
@@ -2567,10 +2599,13 @@ class MonsterBattle extends React.Component {
 
     // ── Context Menu Handlers ─────────────────────────────────────────────────
     onFighterRightClick = (fighterId, x, y) => {
+        const fighter = this.state.battleData[fighterId];
+        const isRanger = fighter && (fighter.type === 'ranger' || fighter.image === 'ranger');
         this.setState({
             unitContextMenu: { fighterId, x, y },
             showPlanPicker: false,
             planPickerAnchor: null,
+            showNotchPicker: isRanger ? true : false,
         });
         window.addEventListener('mousedown', this._boundContextMenuDismiss);
     }
@@ -2579,9 +2614,16 @@ class MonsterBattle extends React.Component {
         // Dismiss unless the click is on the menu itself
         const menu = document.querySelector('.unit-context-menu');
         const picker = document.querySelector('.plan-picker-overlay');
-        if ((menu && menu.contains(e.target)) || (picker && picker.contains(e.target))) return;
+        const skillMenu = document.querySelector('.skill-context-menu');
+        if ((menu && menu.contains(e.target)) || (picker && picker.contains(e.target)) || (skillMenu && skillMenu.contains(e.target))) return;
         window.removeEventListener('mousedown', this._boundContextMenuDismiss);
-        this.setState({ unitContextMenu: null, showPlanPicker: false, planPickerAnchor: null });
+        this.setState({
+            unitContextMenu: null,
+            showPlanPicker: false,
+            planPickerAnchor: null,
+            showNotchPicker: false,
+            skillContextMenu: null
+        });
     }
 
     openPlanPicker = (anchorX, anchorY) => {
@@ -2591,6 +2633,17 @@ class MonsterBattle extends React.Component {
     selectPlan = (plan) => {
         window.removeEventListener('mousedown', this._boundContextMenuDismiss);
         this.setState({ groupPlan: plan, showPlanPicker: false, unitContextMenu: null, planPickerAnchor: null });
+    }
+
+    openSkillContextMenu = (fighterId, skillKey, spec, x, y) => {
+        this.setState({
+            skillContextMenu: { fighterId, skillKey, spec, x, y },
+            unitContextMenu: null,
+            showPlanPicker: false,
+            planPickerAnchor: null,
+            showNotchPicker: false,
+        });
+        window.addEventListener('mousedown', this._boundContextMenuDismiss);
     }
 
     monsterCombatPortraitClicked = (id) => {
@@ -2723,6 +2776,12 @@ class MonsterBattle extends React.Component {
     }
 
     render() {
+        const selectedPlanObj = [
+            { key: 'bunch_up',   symbol: '⬤', title: 'Bunch'  },
+            { key: 'spread_out', symbol: '⬡', title: 'Spread' },
+            { key: 'corner',     symbol: '◣', title: 'Corner'     },
+        ].find(p => p.key === this.state.groupPlan);
+
         const selectedUnit = this.state.selectedFighter || this.state.selectedMonster;
         const liveSelectedFighter = selectedUnit
             ? (this.state.battleData[selectedUnit.id] || selectedUnit)
@@ -3313,7 +3372,18 @@ class MonsterBattle extends React.Component {
                                     }}
                                 >
                                     {/* Cell Coordinates */}
-                                    <div style={{ position: 'absolute', top: '5px', left: '5px', fontSize: '9px', color: 'rgba(255,255,255,0.15)', pointerEvents: 'none' }}>
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '5px',
+                                        left: '5px',
+                                        fontSize: '9px',
+                                        color: 'rgba(255,255,255,0.15)',
+                                        pointerEvents: 'none',
+                                        userSelect: 'none',
+                                        WebkitUserSelect: 'none',
+                                        MozUserSelect: 'none',
+                                        msUserSelect: 'none'
+                                    }}>
                                         {t.x},{t.y}
                                     </div>
                                     {/* Acid Bomb placed icon */}
@@ -3912,7 +3982,25 @@ class MonsterBattle extends React.Component {
                             </div>
 
                             {/* MIDDLE COLUMN: ability cooldown grid */}
-                            <div className="redux-abilities-col">
+                            <div className="redux-abilities-col" style={{ overflow: 'visible', position: 'relative' }}>
+                                {this.props.combatManager && this.props.combatManager.round !== undefined && selectedPlanObj && (
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            top: '-20px',
+                                            left: '50%',
+                                            transform: 'translate(-50%, -50%)',
+                                            fontSize: '18px',
+                                            color: '#a370f7',
+                                            pointerEvents: 'none',
+                                            userSelect: 'none',
+                                            zIndex: 100
+                                        }}
+                                        title={`Active Group Plan: ${selectedPlanObj.title}`}
+                                    >
+                                        {selectedPlanObj.symbol}
+                                    </div>
+                                )}
                                 {liveSelectedFighter && (() => {
                                     const cm = this.props.combatManager;
                                     const fighterId = liveSelectedFighter.id;
@@ -4018,7 +4106,7 @@ class MonsterBattle extends React.Component {
                                                 </div>
                                                 {/* Icon wrapper */}
                                                 <div className="interaction-tile-wrapper">
-                                                    <div
+                                                                                    <div
                                                         className={`interaction-tile special${isReady ? ' available' : ''}${isQueued ? ' queued' : ''}`}
                                                         style={{
                                                             backgroundImage: iconUrl ? `url("${encodeURI(String(iconUrl).replace(/^['"]|['"]$/g, ''))}")` : 'none',
@@ -4026,6 +4114,14 @@ class MonsterBattle extends React.Component {
                                                             opacity: isReady ? 1 : 0.7,
                                                         }}
                                                         onClick={() => this.handleQueueSkill(fighterId, normalizedKey)}
+                                                        onContextMenu={(e) => {
+                                                            const unitType = String(liveSelectedFighter?.type || liveSelectedFighter?.image || '').toLowerCase();
+                                                            if (unitType === 'ranger' || unitType === 'soldier') {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                this.openSkillContextMenu(fighterId, normalizedKey, spec, e.clientX, e.clientY);
+                                                            }
+                                                        }}
                                                     />
                                                     <CooldownSvg pct={cooldownPct} />
                                                     {!isReady && (
@@ -4190,6 +4286,12 @@ class MonsterBattle extends React.Component {
                                     const allConsumableTiles = [...consumableTiles, ...inventoryConsumableTiles];
                                     const activeTab = this.state.activeSkillsTab || 'skills';
 
+                                    const selectedPlanObj = [
+                                        { key: 'bunch_up',   symbol: '⬤', title: 'Bunch'  },
+                                        { key: 'spread_out', symbol: '⬡', title: 'Spread' },
+                                        { key: 'corner',     symbol: '◣', title: 'Corner'     },
+                                    ].find(p => p.key === this.state.groupPlan);
+
                                     return (
                                         <>
                                             <div className="redux-abilities-tabs" style={{ display: 'flex', borderBottom: '1px solid rgba(255, 255, 255, 0.15)', background: 'rgba(0, 0, 0, 0.15)', flexShrink: 0 }}>
@@ -4276,7 +4378,7 @@ class MonsterBattle extends React.Component {
                                             <input
                                                 type="checkbox"
                                                 checked={this.state.logFilterSelectedFighter}
-                                                onChange={(e) => this.setState({ logFilterSelectedFighter: e.target.checked })}
+                                                onChange={this.handleLogFilterToggle}
                                                 style={{ cursor: 'pointer' }}
                                             />
                                             Filter Selected
@@ -4783,7 +4885,7 @@ class MonsterBattle extends React.Component {
                                             <input
                                                 type="checkbox"
                                                 checked={this.state.logFilterSelectedFighter}
-                                                onChange={(e) => this.setState({ logFilterSelectedFighter: e.target.checked })}
+                                                onChange={this.handleLogFilterToggle}
                                                 style={{ cursor: 'pointer' }}
                                             />
                                             Filter Selected
@@ -5057,6 +5159,119 @@ class MonsterBattle extends React.Component {
                         >
                             ⚔ Plan
                         </div>
+                        {(() => {
+                            const fighter = this.state.battleData[this.state.unitContextMenu.fighterId];
+                            const isRanger = fighter && (fighter.type === 'ranger' || fighter.image === 'ranger');
+                            if (!isRanger) return null;
+                            return (
+                                <div style={{
+                                    borderTop: '1px solid rgba(255, 183, 3, 0.2)',
+                                    paddingTop: '8px',
+                                    marginTop: '4px',
+                                    display: 'flex',
+                                    justifyContent: 'center',
+                                    height: '42px',
+                                    position: 'relative'
+                                }}>
+                                    <button
+                                        style={{
+                                            width: '32px',
+                                            height: '32px',
+                                            borderRadius: '50%',
+                                            background: '#222',
+                                            backgroundImage: `url(${images.ranger_notch?.default || images.ranger_notch})`,
+                                            backgroundSize: '80%',
+                                            backgroundRepeat: 'no-repeat',
+                                            backgroundPosition: 'center',
+                                            border: '1px solid rgba(255, 183, 3, 0.4)',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                                            outline: 'none',
+                                            position: 'relative'
+                                        }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            this.setState({ showNotchPicker: !this.state.showNotchPicker });
+                                        }}
+                                    />
+                                    {this.state.showNotchPicker && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            bottom: 'calc(100% - 6px)',
+                                            left: '50%',
+                                            width: '0',
+                                            height: '0',
+                                            zIndex: 100,
+                                        }}>
+                                            {[
+                                                { id: 'force', icon: images.ranger_force_arrow, label: 'Force', x: -32, y: -35 },
+                                                { id: 'ice', icon: images.ranger_ice_arrow, label: 'Ice', x: -11, y: -46 },
+                                                { id: 'poison', icon: images.ranger_poison_arrow, label: 'Poison', x: 11, y: -46 },
+                                                { id: 'celestial', icon: images.ranger_celestial_arrow, label: 'Celestial', x: 32, y: -35 }
+                                            ].map((arrow, idx) => {
+                                                const isCurrent = this.state.notchedArrow === arrow.id;
+                                                return (
+                                                    <button
+                                                        key={arrow.id}
+                                                        title={`${arrow.label} Arrow`}
+                                                        onClick={(evt) => {
+                                                            evt.stopPropagation();
+                                                            const cm = this.props.combatManager;
+                                                            const rangerId = this.state.unitContextMenu.fighterId;
+                                                            if (cm && cm.combatants && cm.combatants[rangerId]) {
+                                                                cm.combatants[rangerId].notchedArrowType = arrow.id;
+                                                                const rangerRef = cm.combatants[rangerId];
+                                                                const hasCooldown = rangerRef.cooldowns?.['notch'] > 0;
+                                                                if (hasCooldown) {
+                                                                    this.handleQueueSkill(rangerId, 'notch');
+                                                                } else {
+                                                                    const notchSpec = cm.resolveSpecial?.(rangerRef, 'notch') || { id: 'notch', name: 'Notch' };
+                                                                    cm.fighterSpecialAttack(notchSpec);
+                                                                }
+                                                            }
+                                                            this.setState({
+                                                                notchedArrow: arrow.id,
+                                                                showNotchPicker: false,
+                                                                unitContextMenu: null
+                                                            });
+                                                        }}
+                                                        style={{
+                                                            position: 'absolute',
+                                                            left: `${arrow.x}px`,
+                                                            top: `${arrow.y}px`,
+                                                            transform: 'translate(-50%, -50%)',
+                                                            width: '28px',
+                                                            height: '28px',
+                                                            borderRadius: '50%',
+                                                            background: '#222',
+                                                            backgroundImage: `url(${arrow.icon?.default || arrow.icon})`,
+                                                            backgroundSize: '70%',
+                                                            backgroundRepeat: 'no-repeat',
+                                                            backgroundPosition: 'center',
+                                                            border: isCurrent ? '2px solid #ffb703' : '1px solid rgba(255, 255, 255, 0.25)',
+                                                            cursor: 'pointer',
+                                                            boxShadow: isCurrent ? '0 0 8px #ffb703' : '0 4px 8px rgba(0,0,0,0.5)',
+                                                            transition: 'transform 0.15s, border-color 0.15s, box-shadow 0.15s',
+                                                            padding: 0,
+                                                            outline: 'none',
+                                                            animation: `scaleUp 0.15s ease-out ${idx * 0.03}s both`
+                                                        }}
+                                                        onMouseEnter={(evt) => {
+                                                            evt.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.2)';
+                                                            evt.currentTarget.style.borderColor = '#ffb703';
+                                                        }}
+                                                        onMouseLeave={(evt) => {
+                                                            evt.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)';
+                                                            evt.currentTarget.style.borderColor = isCurrent ? '#ffb703' : 'rgba(255, 255, 255, 0.25)';
+                                                        }}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
                     </div>
                 )}
 
@@ -5064,8 +5279,8 @@ class MonsterBattle extends React.Component {
                 {this.state.showPlanPicker && this.state.planPickerAnchor && (() => {
                     const { x, y } = this.state.planPickerAnchor;
                     const plans = [
-                        { key: 'bunch_up',   symbol: '⬤', title: 'Bunch Up'  },
-                        { key: 'spread_out', symbol: '⬡', title: 'Spread Out' },
+                        { key: 'bunch_up',   symbol: '⬤', title: 'Bunch'  },
+                        { key: 'spread_out', symbol: '⬡', title: 'Spread' },
                         { key: 'corner',     symbol: '◣', title: 'Corner'     },
                     ];
                     return (
@@ -5084,6 +5299,134 @@ class MonsterBattle extends React.Component {
                             ))}
                         </div>
                     );
+                })()}
+
+                {/* ── Skill Context Menu (right-click on skill button) ──────────────── */}
+                {this.state.skillContextMenu && (() => {
+                    const { fighterId, skillKey, spec, x, y } = this.state.skillContextMenu;
+                    const cm = this.props.combatManager;
+                    const fighterRef = cm?.combatants?.[fighterId] || this.state.battleData[fighterId];
+                    const isRanger = fighterRef && (fighterRef.type === 'ranger' || fighterRef.image === 'ranger');
+                    const isNotch = skillKey === 'notch';
+
+                    if (isRanger && isNotch) {
+                        return (
+                            <div className="skill-context-menu plan-picker-overlay" style={{ left: x, top: y, position: 'fixed', zIndex: 10000 }}>
+                                {[
+                                    { id: 'force', icon: images.ranger_force_arrow, label: 'Force', x: -32, y: -35 },
+                                    { id: 'ice', icon: images.ranger_ice_arrow, label: 'Ice', x: -11, y: -46 },
+                                    { id: 'poison', icon: images.ranger_poison_arrow, label: 'Poison', x: 11, y: -46 },
+                                    { id: 'celestial', icon: images.ranger_celestial_arrow, label: 'Celestial', x: 32, y: -35 }
+                                ].map((arrow, idx) => {
+                                    const isCurrent = this.state.notchedArrow === arrow.id;
+                                    return (
+                                        <button
+                                            key={arrow.id}
+                                            title={`${arrow.label} Arrow`}
+                                            onClick={(evt) => {
+                                                evt.stopPropagation();
+                                                if (cm && cm.combatants && cm.combatants[fighterId]) {
+                                                    cm.combatants[fighterId].notchedArrowType = arrow.id;
+                                                    const rangerRef = cm.combatants[fighterId];
+                                                    const hasCooldown = rangerRef.cooldowns?.['notch'] > 0;
+                                                    if (hasCooldown) {
+                                                        this.handleQueueSkill(fighterId, 'notch');
+                                                    } else {
+                                                        const notchSpec = cm.resolveSpecial?.(rangerRef, 'notch') || { id: 'notch', name: 'Notch' };
+                                                        cm.fighterSpecialAttack(notchSpec);
+                                                    }
+                                                }
+                                                this.setState({
+                                                    notchedArrow: arrow.id,
+                                                    skillContextMenu: null
+                                                });
+                                            }}
+                                            style={{
+                                                position: 'absolute',
+                                                left: `${arrow.x}px`,
+                                                top: `${arrow.y}px`,
+                                                transform: 'translate(-50%, -50%)',
+                                                width: '28px',
+                                                height: '28px',
+                                                borderRadius: '50%',
+                                                background: '#222',
+                                                backgroundImage: `url(${arrow.icon?.default || arrow.icon})`,
+                                                backgroundSize: '70%',
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'center',
+                                                border: isCurrent ? '2px solid #ffb703' : '1px solid rgba(255, 255, 255, 0.25)',
+                                                cursor: 'pointer',
+                                                boxShadow: isCurrent ? '0 0 8px #ffb703' : '0 4px 8px rgba(0,0,0,0.5)',
+                                                transition: 'transform 0.15s, border-color 0.15s, box-shadow 0.15s',
+                                                padding: 0,
+                                                outline: 'none',
+                                                animation: `scaleUp 0.15s ease-out ${idx * 0.03}s both`
+                                            }}
+                                            onMouseEnter={(evt) => {
+                                                evt.currentTarget.style.transform = 'translate(-50%, -50%) scale(1.2)';
+                                                evt.currentTarget.style.borderColor = '#ffb703';
+                                            }}
+                                            onMouseLeave={(evt) => {
+                                                evt.currentTarget.style.transform = 'translate(-50%, -50%) scale(1)';
+                                                evt.currentTarget.style.borderColor = isCurrent ? '#ffb703' : 'rgba(255, 255, 255, 0.25)';
+                                            }}
+                                        />
+                                    );
+                                })}
+                            </div>
+                        );
+                    } else {
+                        // Standard option dropdown (Queue/Use)
+                        const hasCooldown = fighterRef?.cooldowns?.[spec.id] > 0 || fighterRef?.cooldowns?.[skillKey] > 0;
+                        const isRangerOrSoldier = fighterRef && (
+                            fighterRef.type === 'ranger' || fighterRef.image === 'ranger' ||
+                            fighterRef.type === 'soldier' || fighterRef.image === 'soldier'
+                        );
+                        return (
+                            <div className="unit-context-menu skill-context-menu" style={{ left: x, top: y, position: 'fixed', zIndex: 10000 }}>
+                                {isRangerOrSoldier ? (
+                                    <div
+                                        className="ucm-option"
+                                        onClick={(evt) => {
+                                            evt.stopPropagation();
+                                            if (hasCooldown) {
+                                                this.handleQueueSkill(fighterId, skillKey);
+                                            } else {
+                                                this.fireSpecial(spec);
+                                            }
+                                            this.setState({ skillContextMenu: null });
+                                        }}
+                                    >
+                                        {hasCooldown ? `🕒 Queue ${spec.name || skillKey}` : `⚡ Use ${spec.name || skillKey}`}
+                                    </div>
+                                ) : (
+                                    hasCooldown ? (
+                                        <div
+                                            className="ucm-option"
+                                            onClick={(evt) => {
+                                                evt.stopPropagation();
+                                                this.handleQueueSkill(fighterId, skillKey);
+                                                this.setState({ skillContextMenu: null });
+                                            }}
+                                        >
+                                            🕒 Queue Skill
+                                        </div>
+                                    ) : (
+                                        <div
+                                            className="ucm-option"
+                                            onClick={(evt) => {
+                                                evt.stopPropagation();
+                                                this.fireSpecial(spec);
+                                                this.setState({ skillContextMenu: null });
+                                            }}
+                                        >
+                                            ⚡ Use Skill
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                        );
+                    }
                 })()}
 
             </div>

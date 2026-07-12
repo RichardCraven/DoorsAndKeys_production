@@ -80,6 +80,8 @@ import kabuki_demon from '../assets/portraits/monsters/variations/kabuki_demon/k
 import kabuki_demon_portrait from '../assets/portraits/monsters/variations/kabuki_demon/kabuki_demon1.png'
 import kabuki_demon_minion_portrait from '../assets/portraits/monsters/variations/kabuki_demon/kabuki_demon_minion.png'
 import kabuki_demon_minion from '../assets/portraits/monsters/variations/kabuki_demon/kabuki_demon_minion.png'
+import archaic_familiar_portrait from '../assets/familiars/stone_familiar_dormant.png'
+import stone_familiar_dormant from '../assets/familiars/stone_familiar_dormant.png'
 
 import arrowUp from '../assets/graphics/arrow_up.png'
 import arrowDown from '../assets/graphics/arrow_down.png'
@@ -549,8 +551,8 @@ import onyxian_rune from '../assets/icons/runes/onyxian.png'
 import shadow_rune from '../assets/icons/runes/shadow.png'
 import feldspar_rune from '../assets/icons/runes/feldspar.png'
 import archaic_rune from '../assets/icons/runes/archaic.png'
+import archaic_rune_shard from '../assets/icons/runes/archaic.png'
 import sulphuric_rune from '../assets/icons/runes/sulphuric.png'
-
 
 import quest_09_goldbar from '../assets/icons/misc/loot/gold/Quest_09_goldbar.png'
 import quest_10_treasure from '../assets/icons/misc/loot/gold/Quest_10_treasure.png'
@@ -1184,6 +1186,8 @@ export {
     beholder_portrait,
     beholder_minion,
     beholder_minion_portrait,
+    archaic_familiar_portrait,
+    stone_familiar_dormant,
     black_banshee,
     black_djinn,
     black_gorgon,
@@ -1641,6 +1645,7 @@ export {
     shadow_rune,
     feldspar_rune,
     archaic_rune,
+    archaic_rune_shard,
     sulphuric_rune,
     quest_09_goldbar,
     quest_10_treasure,

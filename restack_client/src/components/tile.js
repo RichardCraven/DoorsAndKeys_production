@@ -516,57 +516,57 @@ function Tile(props) {
                 </div>
            )}
 
-           {/* Shrine marker */}
-           { (props.contains && props.contains.type === 'shrine') && (
-                <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    zIndex: 10, pointerEvents: 'none',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    opacity: color === 'black' ? 0 : 1,
-                    transition: 'opacity 0.35s ease-in-out'
-                }}>
-                    <div style={{
-                        width: '70%',
-                        height: '70%',
-                        backgroundImage: `url(${images.shrine})`,
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center'
-                    }} />
-                    <span style={{
-                        fontSize: Math.max(5, (props.tileSize || 30) * 0.2) + 'px',
-                        color: '#ffd700', fontWeight: 'bold',
-                        textTransform: 'uppercase', lineHeight: 1.2,
-                        textShadow: '0 1px 2px rgba(0,0,0,0.8)'
-                    }}>{(props.contains.subtype || '').slice(0,3)}</span>
-                </div>
-           )}
+            {/* Shrine marker */}
+            { ((props.contains && props.contains.type === 'shrine') || props.optionType === 'shrine' || props.isShrine) && (
+                 <div style={{
+                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                     zIndex: 10, pointerEvents: 'none',
+                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                     opacity: color === 'black' ? 0 : 1,
+                     transition: 'opacity 0.35s ease-in-out'
+                 }}>
+                     <div style={{
+                         width: '70%',
+                         height: '70%',
+                         backgroundImage: `url(${images.shrine})`,
+                         backgroundSize: 'contain',
+                         backgroundRepeat: 'no-repeat',
+                         backgroundPosition: 'center'
+                     }} />
+                     <span style={{
+                         fontSize: Math.max(5, (props.tileSize || 30) * 0.2) + 'px',
+                         color: '#ffd700', fontWeight: 'bold',
+                         textTransform: 'uppercase', lineHeight: 1.2,
+                         textShadow: '0 1px 2px rgba(0,0,0,0.8)'
+                     }}>{(props.contains && props.contains.subtype ? props.contains.subtype.slice(0,3) : '')}</span>
+                 </div>
+            )}
 
-           {/* Lore Tablet marker */}
-           { (props.contains && props.contains.type === 'lore_tablet') && (
-                <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    zIndex: 10, pointerEvents: 'none',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                    fontSize: Math.max(8, (props.tileSize || 30) * 0.45) + 'px',
-                    opacity: color === 'black' ? 0 : 1,
-                    transition: 'opacity 0.35s ease-in-out'
-                }}>
-                    <div style={{
-                        width: '70%',
-                        height: '70%',
-                        backgroundImage: `url(${images.lore_tablet})`,
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center'
-                    }} />
-                    <span style={{
-                        fontSize: Math.max(5, (props.tileSize || 30) * 0.2) + 'px',
-                        color: '#d4a844', fontWeight: 'bold',
-                        textTransform: 'uppercase', lineHeight: 1.2
-                    }}>{(props.contains.subtype || '').slice(0,3)}</span>
-                </div>
-           )}
+            {/* Lore Tablet marker */}
+            { ((props.contains && props.contains.type === 'lore_tablet') || props.optionType === 'lore_tablet' || props.isLoreTablet) && (
+                 <div style={{
+                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                     zIndex: 10, pointerEvents: 'none',
+                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                     fontSize: Math.max(8, (props.tileSize || 30) * 0.45) + 'px',
+                     opacity: color === 'black' ? 0 : 1,
+                     transition: 'opacity 0.35s ease-in-out'
+                 }}>
+                     <div style={{
+                         width: '70%',
+                         height: '70%',
+                         backgroundImage: `url(${images.lore_tablet})`,
+                         backgroundSize: 'contain',
+                         backgroundRepeat: 'no-repeat',
+                         backgroundPosition: 'center'
+                     }} />
+                     <span style={{
+                         fontSize: Math.max(5, (props.tileSize || 30) * 0.2) + 'px',
+                         color: '#d4a844', fontWeight: 'bold',
+                         textTransform: 'uppercase', lineHeight: 1.2
+                     }}>{(props.contains && props.contains.subtype ? props.contains.subtype.slice(0,3) : '')}</span>
+                 </div>
+            )}
 
             {/* Connecting Path overlay */}
             { ((props.contains && props.contains.type === 'connecting_path') || props.optionType === 'connecting path') && (

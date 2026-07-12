@@ -1248,6 +1248,19 @@ const skillsMatrix = {
         range: 'medium',
         type: 'utility'
     },
+    summon_familiar: {
+        class: 'none',
+        id: 'summon_familiar',
+        name: 'Summon Familiar',
+        desc: 'One-time use. Summon an archaic familiar to the battlefield to support you as a spellcaster.',
+        icon: images['archaic_rune'],
+        cooldown: 0,
+        initialCount: 1,
+        duration: 'instant',
+        range: 'self',
+        type: 'utility',
+        isOneTimeUse: true
+    },
     summon_imp: {
         class: 'summoner',
         treePath: 'combat_b',

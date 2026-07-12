@@ -1283,7 +1283,7 @@ export default function CombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: `url(${resolvePortrait(fighter.portrait)})`,
+                            backgroundImage: `url("${resolvePortrait(fighter.portrait)}")`,
                             opacity: getLiveCombatant(fighter.id)?.astralBeingActive ? 0.55 : 1,
                             filter: [
                                 details?.chargingUpActive ? "url('#ripple-effect')" : null,
@@ -1341,10 +1341,10 @@ export default function CombatGrid(props) {
                     {details?.marked && !details?.dead && (
                         <div style={{
                             position: 'absolute',
-                            top: '-12.5%',
-                            left: '-12.5%',
-                            width: '125%',
-                            height: '125%',
+                            top: '18.75%',
+                            left: '18.75%',
+                            width: '62.5%',
+                            height: '62.5%',
                             backgroundImage: `url(${images.ranger_mark?.default || images.ranger_mark})`,
                             backgroundSize: 'contain',
                             backgroundRepeat: 'no-repeat',
@@ -1758,13 +1758,13 @@ export default function CombatGrid(props) {
                     const target = liveFighter?.targetId ? getLiveCombatant(liveFighter.targetId) : null;
                     return target?.portrait && !target?.invisible && !details?.dead ? (
                         <div className="monster-target-indicator" style={{ zIndex: 310, position: 'absolute' }}>
-                            <div className="monster-target-portrait" style={{ backgroundImage: `url(${resolvePortrait(target.portrait)})` }} />
+                            <div className="monster-target-portrait" style={{ backgroundImage: `url("${resolvePortrait(target.portrait)}")` }} />
                         </div>
                     ) : null;
                 })()}
                 {consumableFlashes[fighter.id] && !details?.dead && (
                     <div className="fighter-consumable-indicator" style={{ zIndex: 310, position: 'absolute' }}>
-                        <div className="fighter-consumable-portrait" style={{ backgroundImage: `url(${resolvePortrait(consumableFlashes[fighter.id])})` }} />
+                        <div className="fighter-consumable-portrait" style={{ backgroundImage: `url("${resolvePortrait(consumableFlashes[fighter.id])}")` }} />
                     </div>
                 )}
 
@@ -2061,7 +2061,7 @@ export default function CombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: unit.portrait ? `url(${resolvePortrait(unit.portrait)})` : 'none',
+                            backgroundImage: unit.portrait ? `url("${resolvePortrait(unit.portrait)}")` : 'none',
                             backgroundSize: undefined,
                             backgroundPosition: undefined,
                             filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),
@@ -6999,6 +6999,8 @@ export default function CombatGrid(props) {
                                     mixBlendMode: 'screen',
                                     pointerEvents: 'none',
                                     zIndex: 25,
+                                    maskImage: 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 90%)',
+                                    WebkitMaskImage: 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 90%)',
                                     animation: 'pulse 2s ease-in-out infinite'
                                 }}
                             />

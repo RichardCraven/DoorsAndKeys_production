@@ -218,6 +218,30 @@ export function MonsterManager() {
             minions: ['beholder_minion', 'beholder_minion'],
             greetings: [], deathCries: [], skills: [], weaknesses: [], drops: []
         },
+        archaic_familiar: {
+            type: 'archaic_familiar',
+            tier: 2,
+            subtype: 'undead',
+            key: 'archaic_familiar',
+            image_names: ['archaic_familiar'],
+            monster_names: ['none'],
+            lordName: '',
+            stats: {
+                hp: 80,
+                atk: 7,
+                def: 6,
+                speed: 5,
+                willpower: 3,
+                str: 7,
+                int: 3,
+                dex: 6,
+                fort: 4
+            },
+            level: 6,
+            portrait: 'archaic_familiar_portrait',
+            minions: [],
+            greetings: [], deathCries: [], skills: ['lightning_strike', 'ice_blast'], weaknesses: ['crushing'], drops: []
+        },
         blalok: {
             type: 'blalok',
             tier: 2,

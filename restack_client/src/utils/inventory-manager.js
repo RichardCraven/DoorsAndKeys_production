@@ -2753,32 +2753,37 @@ export function InventoryManager() {
     this.initializeItems = (data = null) => {
         for (let key in this.consumables) {
             this.allItems[key] = this.consumables[key]
+            if (this.allItems[key] && !this.allItems[key]._im_key) this.allItems[key]._im_key = key;
         }
         // Masks/ornaments were merged into `this.magical` above. We no longer
         // iterate `this.ornaments` here.
         for (let key in this.armor) {
             this.allItems[key] = this.armor[key]
+            if (this.allItems[key] && !this.allItems[key]._im_key) this.allItems[key]._im_key = key;
         }
         for (let key in this.magical) {
             this.allItems[key] = this.magical[key]
+            if (this.allItems[key] && !this.allItems[key]._im_key) this.allItems[key]._im_key = key;
         }
         for (let key in this.jewels) {
             this.allItems[key] = this.jewels[key]
+            if (this.allItems[key] && !this.allItems[key]._im_key) this.allItems[key]._im_key = key;
         }
         for (let key in this.runes) {
             this.allItems[key] = this.runes[key]
+            if (this.allItems[key] && !this.allItems[key]._im_key) this.allItems[key]._im_key = key;
         }
         for (let key in BREW_INGREDIENTS) {
             this.allItems[key] = BREW_INGREDIENTS[key];
+            if (this.allItems[key] && !this.allItems[key]._im_key) this.allItems[key]._im_key = key;
         }
         for (let key in REAGENTS) {
             this.allItems[key] = REAGENTS[key];
+            if (this.allItems[key] && !this.allItems[key]._im_key) this.allItems[key]._im_key = key;
         }
         this.iconToKey = {};
         for (let key in this.weapons) {
             this.allItems[key] = this.weapons[key];
-            // Stamp each weapon entry with its own key so saved copies can be
-            // re-hydrated even without knowing the original property name.
             if (this.allItems[key] && !this.allItems[key]._im_key) {
                 this.allItems[key]._im_key = key;
             }
