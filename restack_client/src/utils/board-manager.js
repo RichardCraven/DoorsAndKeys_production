@@ -680,26 +680,7 @@ export function BoardManager(){
         return this.pickRandom(shardPool);
     }
     this.getRandomRuneShardKey = () => {
-        const fallbackRuneShards = [
-            'volcanic_rune_shard',
-            'stone_rune_shard',
-            'pewter_rune_shard',
-            'earthen_rune_shard',
-            'onyxian_rune_shard',
-            'shadow_rune_shard',
-            'feldspar_rune_shard',
-            'archaic_rune_shard',
-            'sulphuric_rune_shard'
-        ];
-        const inventory = this.getCurrentInventory ? this.getCurrentInventory() : null;
-        const itemRegistry = inventory && !Array.isArray(inventory) && inventory.allItems ? inventory.allItems : null;
-        if (!itemRegistry) return this.pickRandom(fallbackRuneShards);
-
-        const pool = Object.keys(itemRegistry).filter((key) => {
-            const item = itemRegistry[key];
-            return item && item.type === 'rune' && item.shard === true;
-        });
-        return pool.length ? this.pickRandom(pool) : this.pickRandom(fallbackRuneShards);
+        return 'archaic_rune_shard';
     }
     this.getRandomTierTwoJewelKey = () => {
         const fallbackTierTwoJewels = ['pyrite', 'benthite', 'memnite', 'moxite', 'labradite', 'malachite', 'onyx'];
@@ -731,26 +712,7 @@ export function BoardManager(){
         return pool.length ? this.pickRandom(pool) : this.pickRandom(fallbackTierThreeJewelShards);
     }
     this.getRandomRuneKey = () => {
-        const fallbackRunes = [
-            'volcanic_rune',
-            'stone_rune',
-            'pewter_rune',
-            'earthen_rune',
-            'onyxian_rune',
-            'shadow_rune',
-            'feldspar_rune',
-            'archaic_rune',
-            'sulphuric_rune'
-        ];
-        const inventory = this.getCurrentInventory ? this.getCurrentInventory() : null;
-        const itemRegistry = inventory && !Array.isArray(inventory) && inventory.allItems ? inventory.allItems : null;
-        if (!itemRegistry) return this.pickRandom(fallbackRunes);
-
-        const pool = Object.keys(itemRegistry).filter((key) => {
-            const item = itemRegistry[key];
-            return item && item.type === 'rune' && item.shard !== true;
-        });
-        return pool.length ? this.pickRandom(pool) : this.pickRandom(fallbackRunes);
+        return 'archaic_rune';
     }
     this.resolveSilverChestReward = () => {
         const roll = Math.random();
@@ -1864,7 +1826,7 @@ export function BoardManager(){
                 let treasureItems;
                 switch (treasureFactor){
                     case 4:
-                        treasureItems = ['sayan_amulet', 'twilight_mask', 'major_key', 'nukta_charm', 'scepter', 'grand_health_potion', ...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS]
+                        treasureItems = ['sayan_amulet', 'twilight_mask', 'major_key', 'nukta_charm', 'scepter', 'grand_health_potion', 'archaic_rune_shard', ...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS]
                         this.addTreasureToInventory({
                             item: this.pickRandom(treasureItems),
                             currency: {
@@ -1874,7 +1836,7 @@ export function BoardManager(){
                         }, destinationTile)
                     break;
                     case 3:
-                        treasureItems = ['glyndas_wand', 'knight_helm', 'hamsa_charm', 'grand_health_potion', ...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS]
+                        treasureItems = ['glyndas_wand', 'knight_helm', 'hamsa_charm', 'grand_health_potion', 'archaic_rune_shard', ...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS]
                         this.addTreasureToInventory({
                             item: this.pickRandom(treasureItems),
                             currency: {
@@ -1884,7 +1846,7 @@ export function BoardManager(){
                         }, destinationTile)
                     break;
                     case 2:
-                        treasureItems = ['minor_key', 'cretan_helm', 'major_health_potion', ...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS]
+                        treasureItems = ['minor_key', 'cretan_helm', 'major_health_potion', 'archaic_rune_shard', ...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS]
                         this.addTreasureToInventory({
                             item: this.pickRandom(treasureItems),
                             currency: {
@@ -1894,7 +1856,7 @@ export function BoardManager(){
                         }, destinationTile)
                     break;
                     case 1:
-                        treasureItems = ['infantry_shield', 'crimson_mask', 'seraphic_mask', 'basic_helm', 'axe', 'minor_health_potion', ...REAGENT_KEYS]
+                        treasureItems = ['infantry_shield', 'crimson_mask', 'seraphic_mask', 'basic_helm', 'axe', 'minor_health_potion', 'archaic_rune_shard', ...REAGENT_KEYS]
                         this.addTreasureToInventory({
                             item: this.pickRandom(treasureItems),
                             currency: {

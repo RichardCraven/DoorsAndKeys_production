@@ -1294,7 +1294,7 @@ export default function SiegeCombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: `url(${resolvePortrait(fighter.portrait)})`,
+                            backgroundImage: `url("${resolvePortrait(fighter.portrait)}")`,
                             width: '100%',
                             height: '100%',
                             opacity: getLiveCombatant(fighter.id)?.astralBeingActive ? 0.55 : 1,
@@ -1757,13 +1757,13 @@ export default function SiegeCombatGrid(props) {
                     const target = liveFighter?.targetId ? getLiveCombatant(liveFighter.targetId) : null;
                     return target?.portrait && !target?.invisible && !details?.dead ? (
                         <div className="monster-target-indicator" style={{ zIndex: 310, position: 'absolute' }}>
-                            <div className="monster-target-portrait" style={{ backgroundImage: `url(${resolvePortrait(target.portrait)})` }} />
+                            <div className="monster-target-portrait" style={{ backgroundImage: `url("${resolvePortrait(target.portrait)}")` }} />
                         </div>
                     ) : null;
                 })()}
                 {consumableFlashes[fighter.id] && !details?.dead && (
                     <div className="fighter-consumable-indicator" style={{ zIndex: 310, position: 'absolute' }}>
-                        <div className="fighter-consumable-portrait" style={{ backgroundImage: `url(${resolvePortrait(consumableFlashes[fighter.id])})` }} />
+                        <div className="fighter-consumable-portrait" style={{ backgroundImage: `url("${resolvePortrait(consumableFlashes[fighter.id])}")` }} />
                     </div>
                 )}
 
@@ -2060,7 +2060,7 @@ export default function SiegeCombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: unit.portrait ? `url(${resolvePortrait(unit.portrait)})` : 'none',
+                            backgroundImage: unit.portrait ? `url("${resolvePortrait(unit.portrait)}")` : 'none',
                             backgroundSize: undefined,
                             backgroundPosition: undefined,
                             filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),
@@ -2416,7 +2416,7 @@ export default function SiegeCombatGrid(props) {
                         const target = unit.targetId ? combatManager?.getCombatant?.(unit.targetId) : null;
                         return target?.portrait && !isDead ? (
                             <div className="monster-target-indicator" style={{ zIndex: 10 }}>
-                                <div className="monster-target-portrait" style={{ backgroundImage: `url(${resolvePortrait(target.portrait)})` }} />
+                                <div className="monster-target-portrait" style={{ backgroundImage: `url("${resolvePortrait(target.portrait)}")` }} />
                             </div>
                         ) : null;
                     })()}
@@ -2425,7 +2425,7 @@ export default function SiegeCombatGrid(props) {
                         const stolenImg = unit.stolenItemIcon ? resolvePortrait(unit.stolenItemIcon) : null;
                         return stolenImg && !isDead ? (
                             <div className="monster-stolen-item-indicator" style={{ zIndex: 10 }}>
-                                <div className="monster-stolen-item-portrait" style={{ backgroundImage: `url(${stolenImg})` }} />
+                                <div className="monster-stolen-item-portrait" style={{ backgroundImage: `url("${stolenImg}")` }} />
                             </div>
                         ) : null;
                     })()}
@@ -7004,6 +7004,8 @@ export default function SiegeCombatGrid(props) {
                                     mixBlendMode: 'screen',
                                     pointerEvents: 'none',
                                     zIndex: 25,
+                                    maskImage: 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 90%)',
+                                    WebkitMaskImage: 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 90%)',
                                     animation: 'pulse 2s ease-in-out infinite'
                                 }}
                             />

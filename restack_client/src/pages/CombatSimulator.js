@@ -286,12 +286,14 @@ class CrewManagerPage extends React.Component {
             ? { 
                 selectedMonsterKey: savedDefaults.selectedMonsterKey ?? 'mummy', 
                 selectedMinionKeys: savedDefaults.selectedMinionKeys ?? ['skeleton', 'skeleton', 'skeleton', null],
-                lord: savedDefaults.lord ?? false
+                lord: savedDefaults.lord ?? false,
+                randomTierPoints: savedDefaults.randomTierPoints ?? 6
               }
             : { 
                 selectedMonsterKey: 'mummy', 
                 selectedMinionKeys: ['skeleton', 'skeleton', 'skeleton', null],
-                lord: false
+                lord: false,
+                randomTierPoints: 6
               };
 
         // Restore saved crew roster if present; otherwise fall back to the hardcoded defaults above
@@ -464,6 +466,7 @@ class CrewManagerPage extends React.Component {
             fighterLevels: this.state.fighterLevels,
             fighterSkillTiers: this.state.fighterSkillTiers,
             lord: this.state.lord,
+            randomTierPoints: this.state.randomTierPoints,
         };
         storeMeta(meta);
         this.setState({ defaultEnemySaved: true });
@@ -777,6 +780,25 @@ class CrewManagerPage extends React.Component {
                     }
                 }
             });
+
+            // Automatically equip archaic_rune on the first PC unit of the group that has a pet slot
+            const firstPC = clonedCrew.find(member => member);
+            if (firstPC) {
+                try {
+                    const archaicRuneBase = this.props.inventoryManager.runes['archaic_rune'];
+                    if (archaicRuneBase) {
+                        const archaicRune = clone(archaicRuneBase);
+                        archaicRune._im_key = 'archaic_rune';
+                        archaicRune.equippedBy = firstPC.id;
+                        archaicRune.equippedSlot = 'pet';
+                        firstPC.inventory = firstPC.inventory || [];
+                        firstPC.inventory = firstPC.inventory.filter(i => !i || i.equippedSlot !== 'pet');
+                        firstPC.inventory.push(archaicRune);
+                    }
+                } catch (e) {
+                    console.warn('Simulator archaic rune default assignment failed', e);
+                }
+            }
         }
 
         // Calculate monster and minions synchronously
@@ -1316,7 +1338,14 @@ class CrewManagerPage extends React.Component {
                                 <select
                                     id="random-tier-points-select"
                                     value={this.state.randomTierPoints}
-                                    onChange={e => this.setState({ randomTierPoints: Number(e.target.value) })}
+                                    onChange={e => {
+                                        const val = Number(e.target.value);
+                                        this.setState({ randomTierPoints: val });
+                                        const meta = getMeta();
+                                        if (!meta.simulatorDefaults) meta.simulatorDefaults = {};
+                                        meta.simulatorDefaults.randomTierPoints = val;
+                                        storeMeta(meta);
+                                    }}
                                     title="Total tier points for random encounter"
                                     style={{
                                         background: '#1a1a1f',

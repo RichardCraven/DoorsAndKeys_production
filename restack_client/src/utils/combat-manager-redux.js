@@ -6,6 +6,7 @@ import { INTERVALS, getDurationRounds, RANGE_LIMITS } from './shared-constants';
 import * as images from './images';
 import { getMeta, storeMeta, applyResolvePenalty } from './session-handler';
 import { BATTLE_TACTICS } from './spells-table';
+import { MonsterManager } from './monster-manager';
 const MAX_LANES = 6;
 
 
@@ -620,6 +621,20 @@ export function CombatManagerRedux() {
             } else if (e.type === 'barbarian') {
                 e.attacks = e.attacks || [];
                 if (!e.attacks.includes('sword_swing')) e.attacks.push('sword_swing');
+            }
+
+            // Check if unit has archaic_rune equipped in their pet slot, grant them the summon_familiar special skill
+            const hasArchaicRune = (e.inventory || []).some(
+                item => item && item.equippedSlot === 'pet' && (item._im_key === 'archaic_rune' || item.key === 'archaic_rune')
+            );
+            if (hasArchaicRune) {
+                e.specials = e.specials || [];
+                if (!e.specials.includes('summon_familiar')) {
+                    e.specials.push('summon_familiar');
+                }
+                if (e.skills && !e.skills.includes('summon_familiar')) {
+                    e.skills.push('summon_familiar');
+                }
             }
 
             e.coordinates = { x: 0, y: index };
@@ -4992,60 +5007,101 @@ export function CombatManagerRedux() {
             return;
         }
 
-        const minionType = abilityKey.replace('summon_', '').replace('_army', '');
-        const minionId = `minion_${minionType}_${Date.now()}`;
-        const hpBase = 5 + Math.round((unit.stats.int || 5) * 2);
+        let newMinion;
+        let minionId;
+        let minionType;
+        if (abilityKey === 'summon_familiar') {
+            minionId = `minion_archaic_familiar_${Date.now()}`;
+            minionType = 'archaic_familiar';
+            const mm = new MonsterManager();
+            const template = mm.monsters['archaic_familiar'];
+            const finalHp = template ? (template.stats?.hp || 80) : 80;
+            const stats = template ? { ...template.stats } : { str: 7, dex: 6, int: 3, fort: 4, willpower: 3, atk: 7, def: 6, speed: 5 };
+            const portrait = template ? template.portrait : 'archaic_familiar_portrait';
+            
+            newMinion = {
+                id: minionId,
+                type: 'archaic_familiar',
+                name: 'archaic familiar',
+                isMinion: true,
+                isMonster: !!unit.isMonster,
+                summonedBy: unit.id,
+                dead: false,
+                coordinates: { ...freeTile },
+                hp: finalHp,
+                starting_hp: finalHp,
+                stats: stats,
+                attacks: ['magic_missile'],
+                specials: ['lightning_strike', 'ice_blast'],
+                skills: ['lightning_strike', 'ice_blast'],
+                portrait: portrait,
+                cooldowns: {},
+                movesTakenThisRound: 0,
+                actionsTakenThisRound: 0,
+                endurance: 40,
+                maxEndurance: 40,
+                enduranceFrozenRounds: 0,
+                damageIndicators: [],
+                activeBuffs: [],
+                activeDebuffs: [],
+                invisible: true
+            };
+        } else {
+            minionType = abilityKey.replace('summon_', '').replace('_army', '');
+            minionId = `minion_${minionType}_${Date.now()}`;
+            const hpBase = 5 + Math.round((unit.stats.int || 5) * 2);
 
-        let finalHp = hpBase;
-        let stats = { str: 3, dex: 3, atk: 4, def: 2, speed: 3 };
+            let finalHp = hpBase;
+            let stats = { str: 3, dex: 3, atk: 4, def: 2, speed: 3 };
 
-        if (minionType === 'skeleton') {
-            const lvl = this.getSkillLevel(unit, 'summon_skeleton');
-            if (lvl === 3) {
-                finalHp = hpBase * 2;
-                stats.atk = stats.atk * 2;
-                stats.hp = finalHp;
+            if (minionType === 'skeleton') {
+                const lvl = this.getSkillLevel(unit, 'summon_skeleton');
+                if (lvl === 3) {
+                    finalHp = hpBase * 2;
+                    stats.atk = stats.atk * 2;
+                    stats.hp = finalHp;
+                }
+            } else if (minionType === 'imp') {
+                const lvl = this.getSkillLevel(unit, 'summon_imp');
+                if (lvl === 3) {
+                    stats.speed = stats.speed * 2;
+                }
             }
-        } else if (minionType === 'imp') {
-            const lvl = this.getSkillLevel(unit, 'summon_imp');
-            if (lvl === 3) {
-                stats.speed = stats.speed * 2;
+
+            let portraitKey = `summon_${minionType}_icon`;
+            if (minionType === 'skeleton_army') {
+                portraitKey = 'summon_skeleton_army_icon';
+            } else if (minionType === 'imp_army') {
+                portraitKey = 'summon_imp_army_icon';
             }
-        }
 
-        let portraitKey = `summon_${minionType}_icon`;
-        if (minionType === 'skeleton_army') {
-            portraitKey = 'summon_skeleton_army_icon';
-        } else if (minionType === 'imp_army') {
-            portraitKey = 'summon_imp_army_icon';
+            newMinion = {
+                id: minionId,
+                type: minionType,
+                name: minionType.replace(/_/g, ' '),
+                isMinion: true,
+                isMonster: !!unit.isMonster,
+                summonedBy: unit.id,
+                dead: false,
+                coordinates: { ...freeTile },
+                hp: finalHp,
+                starting_hp: finalHp,
+                stats: stats,
+                attacks: [minionType.includes('skeleton') ? 'sword_swing' : 'claw_strike'],
+                specials: ['reassembly'],
+                portrait: portraitKey || 'summon_skeleton_icon',
+                cooldowns: {},
+                movesTakenThisRound: 0,
+                actionsTakenThisRound: 0,
+                endurance: 20,
+                maxEndurance: 20,
+                enduranceFrozenRounds: 0,
+                damageIndicators: [],
+                activeBuffs: [],
+                activeDebuffs: [],
+                invisible: true
+            };
         }
-
-        const newMinion = {
-            id: minionId,
-            type: minionType,
-            name: minionType.replace(/_/g, ' '),
-            isMinion: true,
-            isMonster: !!unit.isMonster,
-            summonedBy: unit.id,
-            dead: false,
-            coordinates: { ...freeTile },
-            hp: finalHp,
-            starting_hp: finalHp,
-            stats: stats,
-            attacks: [minionType.includes('skeleton') ? 'sword_swing' : 'claw_strike'],
-            specials: ['reassembly'],
-            portrait: images[portraitKey] || images['summon_skeleton_icon'],
-            cooldowns: {},
-            movesTakenThisRound: 0,
-            actionsTakenThisRound: 0,
-            endurance: 20,
-            maxEndurance: 20,
-            enduranceFrozenRounds: 0,
-            damageIndicators: [],
-            activeBuffs: [],
-            activeDebuffs: [],
-            invisible: true // starts invisible during portal animation
-        };
 
         this.combatants[minionId] = newMinion;
         this._setCombatantOccupiedCoords(newMinion);
@@ -5053,6 +5109,19 @@ export function CombatManagerRedux() {
         this._setCooldown(unit, abilityKey, ability.cooldown || 8);
         unit.actionsTakenThisRound += 1;
         this.appendCombatLog(`${this.getCombatantLogName(unit)} summons a ${newMinion.name}!`);
+
+        if (abilityKey === 'summon_familiar') {
+            unit.specials = (unit.specials || []).filter(s => {
+                if (typeof s === 'string') return s !== 'summon_familiar';
+                return s.id !== 'summon_familiar' && s.key !== 'summon_familiar';
+            });
+            if (unit.skills) {
+                unit.skills = unit.skills.filter(s => {
+                    if (typeof s === 'string') return s !== 'summon_familiar';
+                    return s.id !== 'summon_familiar' && s.key !== 'summon_familiar';
+                });
+            }
+        }
 
         // Trigger portal animation
         let transitionIcon = images['summon_icon'];
@@ -7035,7 +7104,7 @@ export function CombatManagerRedux() {
             stats: { str: 5, dex: 4, atk: 8, def: 5, speed: 6 },
             attacks: ['claw_strike', 'bite'],
             specials: [],
-            portrait: images['dragon_hatchling'],
+            portrait: 'dragon_hatchling',
             cooldowns: {},
             movesTakenThisRound: 0,
             actionsTakenThisRound: 0,
@@ -7817,7 +7886,7 @@ export function CombatManagerRedux() {
                 stats: { str: 1, dex: 1, atk: 0, def: 99, speed: 1 },
                 attacks: [],
                 specials: [],
-                portrait: images['sphere_of_darkness'],
+                portrait: 'sphere_of_darkness',
                 cooldowns: {},
                 darknessRoundsLeft: 6,
                 unkillable: true,
@@ -7972,7 +8041,7 @@ export function CombatManagerRedux() {
                     stats: { str: 3, dex: 5, atk: 7, def: 2, speed: 10, willpower: 1, int: 2, fort: 2 },
                     attacks: ['bite'],
                     specials: [],
-                    portrait: images['hagigah_summon_skulls'],
+                    portrait: 'hagigah_summon_skulls',
                     cooldowns: {},
                     fadingIn: true,
                     subtype: 'demon',
@@ -9521,20 +9590,24 @@ export function CombatManagerRedux() {
             const linkDuration = chainCoords.length > 0 ? Math.floor(totalRoundMs / chainCoords.length) : 450;
 
             let currentIdx = 0;
+            const actualHitCoords = [{ x: unit.coordinates.x, y: unit.coordinates.y }];
+
             const runNextLink = () => {
                 if (currentIdx >= hits.length) {
                     if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
                     return;
                 }
                 const c = hits[currentIdx];
-                const coord = { x: chainCoords[currentIdx].x, y: chainCoords[currentIdx].y };
-                const srcCoord = currentIdx === 0 ? unit.coordinates : chainCoords[currentIdx - 1];
 
-                // 1. Play animation for this link
+                // Check right before it beams to them on what tile the unit is currently at
+                const targetCoord = { x: c.coordinates.x, y: c.coordinates.y };
+                const srcCoord = currentIdx === 0 ? { x: unit.coordinates.x, y: unit.coordinates.y } : actualHitCoords[currentIdx];
+
+                // 1. Play animation for this link towards targetCoord
                 if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
                     this.animManagerRedux.triggerAbility(
                         srcCoord,
-                        coord,
+                        targetCoord,
                         'chainbolt',
                         false, null, unit.id, null, linkDuration
                     );
@@ -9542,10 +9615,12 @@ export function CombatManagerRedux() {
 
                 // 2. Apply damage when the beam reaches the target (at the end of the link duration)
                 setTimeout(() => {
+                    actualHitCoords.push({ x: targetCoord.x, y: targetCoord.y });
+
                     if (c.dead || c.hp <= 0) {
                         // If target died to something else, chain can still proceed
-                    } else if (c.coordinates.x !== coord.x || c.coordinates.y !== coord.y) {
-                        // Missed! Unit has moved from the tile. Chain broken!
+                    } else if (c.coordinates.x !== targetCoord.x || c.coordinates.y !== targetCoord.y) {
+                        // Missed! Unit has moved from the tile *during* the link duration. Chain broken!
                         this.appendCombatLog(`Chainbolt misses ${this.getCombatantLogName(c)} (unit moved from tile). Chain broken!`);
                         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
                         return;
@@ -10784,7 +10859,8 @@ export function CombatManagerRedux() {
                 let minD = Infinity;
                 for (const ut of unitTiles) {
                     for (const tt of targetTiles) {
-                        const d = Math.abs(ut.x - tt.x) + Math.abs(ut.y - tt.y);
+                        // Chebyshev distance: diagonals count as 1 step
+                        const d = Math.max(Math.abs(ut.x - tt.x), Math.abs(ut.y - tt.y));
                         if (d < minD) {
                             minD = d;
                         }
@@ -10792,7 +10868,8 @@ export function CombatManagerRedux() {
                 }
                 return minD;
             } else {
-                return Math.abs(x - targetX) + Math.abs(y - targetY);
+                // Chebyshev distance: diagonals count as 1 step
+                return Math.max(Math.abs(x - targetX), Math.abs(y - targetY));
             }
         };
 
@@ -10833,10 +10910,16 @@ export function CombatManagerRedux() {
             }
 
             const neighbors = [
+                // Cardinal
                 { x: current.x + 1, y: current.y },
                 { x: current.x - 1, y: current.y },
                 { x: current.x, y: current.y + 1 },
-                { x: current.x, y: current.y - 1 }
+                { x: current.x, y: current.y - 1 },
+                // Diagonal
+                { x: current.x + 1, y: current.y + 1 },
+                { x: current.x + 1, y: current.y - 1 },
+                { x: current.x - 1, y: current.y + 1 },
+                { x: current.x - 1, y: current.y - 1 },
             ];
 
             for (const n of neighbors) {
@@ -11633,7 +11716,7 @@ export function CombatManagerRedux() {
         const target = fighter.targetId ? this.combatants[fighter.targetId] : null;
 
         // Some abilities (self utility) don't need a hostile target
-        const isSelfTarget = resolved.range === 'self' || resolved.id === 'notch' || resolved.id === 'monk_meditate' || resolved.id === 'monk_ethereal_speed';
+        const isSelfTarget = resolved.range === 'self' || resolved.id === 'notch' || resolved.id === 'monk_meditate' || resolved.id === 'monk_ethereal_speed' || (resolved.id && resolved.id.startsWith('summon_'));
 
         const targetUnit = isSelfTarget ? fighter : target;
         if (!targetUnit) return;

@@ -47,10 +47,20 @@ import '../styles/camp-modal.scss'
 import '../styles/codex.scss'
 import SkillTree from '../components/SkillTree';
 import CodexModal from '../components/CodexModal';
+import AssemblyAnimation from '../components/assembly-animation';
 import '../styles/narrative-overlay.scss'
 import MapRedux from '../components/MapRedux';
 import '../styles/map-redux.scss';
 import { FLAGS } from '../flags';
+
+const runeCtx = require.context('../assets/icons/runes', true, /\.png$/);
+const archaicPieces = {
+    'top left': runeCtx('./archaic/top left.png').default || runeCtx('./archaic/top left.png'),
+    'top right': runeCtx('./archaic/top right.png').default || runeCtx('./archaic/top right.png'),
+    'bottom left': runeCtx('./archaic/bottom left.png').default || runeCtx('./archaic/bottom left.png'),
+    'bottom right': runeCtx('./archaic/bottom right.png').default || runeCtx('./archaic/bottom right.png'),
+    'top center': runeCtx('./archaic/top center.png').default || runeCtx('./archaic/top center.png')
+};
 
 const SLOT_INFO = {
     'chest': { name: 'Chest Slot', desc: 'Equip body armor or tabards here.' },
@@ -160,6 +170,8 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
     const [feedbackMsg, setFeedbackMsg] = React.useState('');
     const [feedbackColor, setFeedbackColor] = React.useState('#fff');
     const [showContent, setShowContent] = React.useState(false);
+    const [showAssembly, setShowAssembly] = React.useState(false);
+    const [isAssembled, setIsAssembled] = React.useState(false);
 
     React.useEffect(() => {
         if (modalType === 'Merchant' || modalType === 'Alchemist') {
@@ -302,6 +314,38 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
         setFeedbackColor('#2ecc71');
         if (saveUserData) saveUserData().catch(() => {});
         if (onForceUpdate) onForceUpdate();
+    };
+
+    const handleAssembleRune = () => {
+        const shards = (inventoryManager.inventory || []).filter(item => item && item._im_key === 'archaic_rune_shard');
+        if (shards.length < 5) {
+            setFeedbackMsg('Requires 5 Archaic Shards!');
+            setFeedbackColor('#ff4d4d');
+            return;
+        }
+        for (let i = 0; i < 5; i++) {
+            inventoryManager.removeItemByKey('archaic_rune_shard');
+        }
+        setShowAssembly(true);
+        setIsAssembled(false);
+
+        const item = inventoryManager.allItems['archaic_rune'];
+        if (item) {
+            inventoryManager.addItem({ ...item });
+        }
+        setFeedbackMsg(`Successfully assembled Archaic Rune!`);
+        setFeedbackColor('#2ecc71');
+
+        setTimeout(() => {
+            setIsAssembled(true);
+        }, 300);
+
+        setTimeout(() => {
+            setShowAssembly(false);
+            setIsAssembled(false);
+            if (saveUserData) saveUserData().catch(() => {});
+            if (onForceUpdate) onForceUpdate();
+        }, 2500);
     };
 
     const handleTradeIngredient = (action, type, goldAmount) => {
@@ -619,8 +663,54 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                     opacity: showContent ? 1 : 0,
                     transform: showContent ? 'scale(1)' : 'scale(0.98)',
                     transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
-                    pointerEvents: showContent ? 'auto' : 'none'
+                    pointerEvents: showContent ? 'auto' : 'none',
+                    position: 'relative'
                 }}>
+                    {showAssembly && (
+                        <div style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            width: '100%',
+                            height: '100%',
+                            zIndex: 999,
+                            backgroundColor: 'rgba(10, 10, 12, 0.95)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '12px'
+                        }}>
+                            <div style={{
+                                width: '200px',
+                                height: '200px',
+                                position: 'relative',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                border: '2px solid rgba(179, 136, 255, 0.3)',
+                                borderRadius: '12px',
+                                overflow: 'hidden',
+                                boxShadow: '0 0 30px rgba(179, 136, 255, 0.2)'
+                            }}>
+                                <AssemblyAnimation
+                                    pieces={archaicPieces}
+                                    isAssembled={isAssembled}
+                                    distance={80}
+                                />
+                            </div>
+                            <div style={{
+                                marginTop: '24px',
+                                fontSize: '18px',
+                                fontWeight: 'bold',
+                                color: '#b388ff',
+                                textShadow: '0 0 10px rgba(179, 136, 255, 0.5)',
+                                letterSpacing: '1px'
+                            }}>
+                                Assembling Shards...
+                            </div>
+                        </div>
+                    )}
                     <div className="vendor-split-container">
                         <div className="vendor-panel">
                             <h3 className="panel-title">Potion Brewing</h3>
@@ -734,8 +824,8 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                                                 title={recipe.tooltip} 
                                                 style={{ cursor: 'help' }}
                                                 onClick={() => {
-                                                    setFeedbackColor('#4db8ff');
-                                                    setFeedbackMsg(`${recipe.name}: ${recipe.tooltip}`);
+                                                     setFeedbackColor('#4db8ff');
+                                                     setFeedbackMsg(`${recipe.name}: ${recipe.tooltip}`);
                                                 }}
                                             >
                                                 {renderItemIcon(recipe.icon)}
@@ -758,6 +848,39 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                                         </div>
                                     );
                                 })}
+
+                                {(() => {
+                                    const shardCount = (inventoryManager?.inventory || []).filter(item => item && item._im_key === 'archaic_rune_shard').length;
+                                    return (
+                                        <div className="item-card" style={{ border: '1px solid rgba(179, 136, 255, 0.25)', boxShadow: '0 0 10px rgba(179, 136, 255, 0.05)' }}>
+                                            <div 
+                                                title="Assemble Archaic Rune from 5 Archaic Rune Shards" 
+                                                style={{ cursor: 'help' }}
+                                                onClick={() => {
+                                                     setFeedbackColor('#b388ff');
+                                                     setFeedbackMsg("Archaic Rune: Equip in Pet slot to gain Summon Familiar.");
+                                                }}
+                                            >
+                                                {renderItemIcon('archaic_rune')}
+                                            </div>
+                                            <div className="item-details">
+                                                <div className="item-name" style={{ color: '#b388ff' }}>Assemble Archaic Rune</div>
+                                                <div className="item-description">Combine 5 Archaic Shards into a full Archaic Rune.</div>
+                                            </div>
+                                            <button 
+                                                className={`buy-btn brew-btn ${shardCount < 5 ? 'disabled' : ''}`} 
+                                                onClick={() => shardCount >= 5 && handleAssembleRune()}
+                                                disabled={shardCount < 5}
+                                                style={{ opacity: shardCount >= 5 ? 1 : 0.5 }}
+                                            >
+                                                <span>Assemble</span>
+                                                <span className="price-tag" style={{ fontSize: '10px' }}>
+                                                    {shardCount}/5 Shards
+                                                </span>
+                                            </button>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         </div>
                     </div>
@@ -6881,6 +7004,10 @@ class DungeonPage extends React.Component {
             if(!slotOccupied('ancillary-left')) targetSlot = 'ancillary-left';
             else if(!slotOccupied('ancillary-right')) targetSlot = 'ancillary-right';
             else targetSlot = null;
+        } else if (type === 'rune' && item.shard !== true) {
+            // pet slot
+            targetSlot = 'pet';
+            if (slotOccupied(targetSlot)) targetSlot = null;
         }
 
         if(!targetSlot){
