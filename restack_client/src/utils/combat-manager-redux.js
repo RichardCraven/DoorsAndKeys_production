@@ -3498,7 +3498,7 @@ export function CombatManagerRedux() {
         // Duplicate/triplicate require at least one friendly minion to duplicate
         if (normKey === 'summoner_duplicate' || normKey === 'summoner_triplicate') {
             const hasMinions = Object.values(this.combatants).some(c => 
-                c && !c.dead && c.isMinion && !!c.isMonster === !!unit.isMonster
+                c && !c.dead && c.isMinion && c.type !== 'archaic_familiar' && !!c.isMonster === !!unit.isMonster
             );
             if (!hasMinions) return false;
         }
@@ -4952,7 +4952,7 @@ export function CombatManagerRedux() {
 
         // Priority 4: Duplicate/triplicate existing minions
         const hasMinions = Object.values(this.combatants).some(
-            c => c && !c.dead && c.isMinion
+            c => c && !c.dead && c.isMinion && c.type !== 'archaic_familiar'
         );
         if (hasMinions && this._abilityReady(unit, 'summoner_duplicate')) {
             const pick = this.resolveSpecial(unit, 'summoner_duplicate');
@@ -5151,7 +5151,7 @@ export function CombatManagerRedux() {
     this._duplicateMinion = (unit, ability, isTriplicate) => {
         // Find the most recent living minion to duplicate
         const minionsToDupe = Object.values(this.combatants).filter(
-            c => c && !c.dead && c.isMinion && (!!c.isMonster === !!unit.isMonster)
+            c => c && !c.dead && c.isMinion && c.type !== 'archaic_familiar' && (!!c.isMonster === !!unit.isMonster)
         );
         if (minionsToDupe.length === 0) return;
 

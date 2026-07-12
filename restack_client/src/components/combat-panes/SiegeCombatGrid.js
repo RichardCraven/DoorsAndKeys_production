@@ -1294,7 +1294,11 @@ export default function SiegeCombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: `url("${resolvePortrait(fighter.portrait)}")`,
+                            backgroundImage: `url("${resolvePortrait(
+                                (fighter.type === 'archaic_familiar' && activeAnimations.some(a => a.sourceUnitId === fighter.id))
+                                ? 'stone_familiar_glowing'
+                                : fighter.portrait
+                            )}")`,
                             width: '100%',
                             height: '100%',
                             opacity: getLiveCombatant(fighter.id)?.astralBeingActive ? 0.55 : 1,
@@ -2060,7 +2064,11 @@ export default function SiegeCombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: unit.portrait ? `url("${resolvePortrait(unit.portrait)}")` : 'none',
+                            backgroundImage: unit.portrait ? `url("${resolvePortrait(
+                                (unit.type === 'archaic_familiar' && activeAnimations.some(a => a.sourceUnitId === unit.id))
+                                ? 'stone_familiar_glowing'
+                                : unit.portrait
+                            )}")` : 'none',
                             backgroundSize: undefined,
                             backgroundPosition: undefined,
                             filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),
