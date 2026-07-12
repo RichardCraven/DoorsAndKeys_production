@@ -964,11 +964,77 @@ ul.dropdown-menu.show{
                     width: 8px;
                     border-radius: 8px;
                     background-color: grey;
+                    position: relative;
+                    cursor: pointer;
+                    
                     &.valid{
                         background-color: #0ec30e;
                     }
                     &.invalid{
                         background-color: red;
+                    }
+
+                    .validation-errors-tooltip {
+                        display: none;
+                        position: absolute;
+                        bottom: 150%; // position above the indicator dot
+                        left: -4px; // align left edge near the dot, extending to the right
+                        background: rgba(20, 20, 20, 0.95);
+                        border: 1px solid rgba(249, 177, 21, 0.4);
+                        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.6), 0 0 8px rgba(229, 62, 62, 0.2);
+                        border-radius: 6px;
+                        padding: 8px 12px;
+                        color: #f7fafc;
+                        font-size: 11px;
+                        line-height: 1.4;
+                        z-index: 1000;
+                        width: max-content;
+                        max-width: 320px;
+                        text-align: left;
+                        pointer-events: none;
+                        opacity: 0;
+                        transition: opacity 0.15s ease-in-out;
+
+                        ul {
+                            margin: 0;
+                            padding-left: 14px;
+                            list-style-type: disc;
+                            
+                            li {
+                                margin-bottom: 4px;
+                                color: #feb2b2; // subtle light red for errors
+                                font-weight: normal;
+                                letter-spacing: 0.2px;
+                                text-shadow: none;
+                                &:last-child {
+                                    margin-bottom: 0;
+                                }
+                            }
+                        }
+
+                        .valid-text {
+                            color: #a3e635; // lime green
+                            font-weight: 600;
+                            text-shadow: none;
+                        }
+
+                        &::after {
+                            content: "";
+                            position: absolute;
+                            top: 100%;
+                            left: 8px; // align arrow with the dot's horizontal center
+                            margin-left: -5px;
+                            border-width: 5px;
+                            border-style: solid;
+                            border-color: rgba(20, 20, 20, 0.95) transparent transparent transparent;
+                        }
+                    }
+
+                    &:hover {
+                        .validation-errors-tooltip {
+                            display: block;
+                            opacity: 1;
+                        }
                     }
                 }
             }
@@ -1271,6 +1337,92 @@ ul.dropdown-menu.show{
             opacity: 1;
             transform: scale(1);
             box-shadow: 0 0 4px rgba(249, 177, 21, 0.6);
+        }
+    }
+}
+
+.dungeon-builder-modal {
+    .modal-content {
+        background: #1c1c1e;
+        border: 1px solid rgba(229, 181, 79, 0.4);
+        border-radius: 8px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+        color: #e0dcd3;
+    }
+    
+    .modal-header {
+        border-bottom: 1px solid rgba(229, 181, 79, 0.2);
+        padding: 16px 20px;
+        
+        .modal-title {
+            font-family: 'Cinzel', serif;
+            color: #e5b54f;
+            font-size: 1.4rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+        
+        .btn-close {
+            filter: invert(1) grayscale(100%) brightness(200%);
+            opacity: 0.5;
+            
+            &:hover {
+                opacity: 1;
+            }
+        }
+    }
+    
+    .modal-body {
+        padding: 20px;
+        
+        .dungeonname-input {
+            width: 100%;
+            background: rgba(12, 10, 9, 0.6);
+            color: #f9b115;
+            border: 1px solid rgba(229, 181, 79, 0.3);
+            border-radius: 4px;
+            padding: 10px 12px;
+            font-size: 1rem;
+            outline: none;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+            
+            &:focus {
+                border-color: rgba(229, 181, 79, 0.8);
+                box-shadow: 0 0 8px rgba(229, 181, 79, 0.15);
+            }
+            
+            &::placeholder {
+                color: rgba(164, 176, 190, 0.5);
+            }
+        }
+    }
+    
+    .modal-footer {
+        border-top: 1px solid rgba(229, 181, 79, 0.2);
+        padding: 12px 20px;
+        
+        .btn-secondary {
+            background: rgba(45, 45, 48, 0.8);
+            color: #a4b0be;
+            border: 1px solid rgba(164, 176, 190, 0.3);
+            
+            &:hover {
+                background: rgba(60, 60, 64, 0.9);
+                color: #fff;
+            }
+        }
+        
+        .btn-primary {
+            background: rgba(229, 181, 79, 0.15);
+            color: #e5b54f;
+            border: 1px solid rgba(229, 181, 79, 0.5);
+            
+            &:hover {
+                background: rgba(229, 181, 79, 0.25);
+                box-shadow: 0 0 10px rgba(229, 181, 79, 0.2);
+            }
         }
     }
 }

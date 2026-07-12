@@ -212,6 +212,7 @@ class CrewManagerPage extends React.Component {
             selectedEnemyForInfo: null,
             lord: false,
             loadingSimulator: false,
+            randomTierPoints: 6,
         }
     }
     timer = null;
@@ -491,6 +492,75 @@ class CrewManagerPage extends React.Component {
             keys[index] = null;
             this.setState({ selectedMinionKeys: keys });
         }
+    }
+
+    // ── Random encounter: build a monster + minions lineup from a tier budget ─
+    startRandomCombat = async () => {
+        const { monsterManager } = this.props;
+        const budget = this.state.randomTierPoints;
+        const allRosterKeys = ['skeleton', 'goblin', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok'];
+        const rosterMonsters = allRosterKeys
+            .map(k => monsterManager.getMonster(k))
+            .filter(m => m && m.tier && !m.isMinion);
+
+        // Shuffle helper
+        const shuffle = (arr) => {
+            const a = arr.slice();
+            for (let i = a.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [a[i], a[j]] = [a[j], a[i]];
+            }
+            return a;
+        };
+
+        // Build a combination of monsters that exactly fills (or gets as close to) the budget
+        // Strategy: pick a random main monster first (tier <= budget), then fill remaining budget with minions (max 4 total slots)
+        let remaining = budget;
+        let chosenMonsterKey = null;
+        let chosenMinionKeys = [null, null, null, null];
+
+        // Shuffle roster and try to pick a main monster that fits
+        const shuffled = shuffle(rosterMonsters);
+        const mainCandidates = shuffled.filter(m => m.tier <= remaining);
+        if (mainCandidates.length === 0) {
+            // Fallback: pick the lowest tier monster
+            const fallback = rosterMonsters.slice().sort((a, b) => a.tier - b.tier)[0];
+            chosenMonsterKey = fallback ? fallback.key : 'mummy';
+            remaining = 0;
+        } else {
+            const main = mainCandidates[Math.floor(Math.random() * mainCandidates.length)];
+            chosenMonsterKey = main.key;
+            remaining -= main.tier;
+        }
+
+        // Fill minion slots with random monsters that fit remaining budget (up to 4 slots)
+        const minionCandidates = shuffle(rosterMonsters);
+        let minionSlot = 0;
+        while (remaining > 0 && minionSlot < 4) {
+            const fits = minionCandidates.filter(m => {
+                if (m.tier > remaining) return false;
+                // Avoid duplicating a tier 4 unit
+                if (m.tier === 4) {
+                    const alreadyChosen = chosenMonsterKey === m.key || chosenMinionKeys.includes(m.key);
+                    if (alreadyChosen) return false;
+                }
+                return true;
+            });
+            if (fits.length === 0) break;
+            const pick = fits[Math.floor(Math.random() * fits.length)];
+            chosenMinionKeys[minionSlot] = pick.key;
+            remaining -= pick.tier;
+            minionSlot++;
+        }
+
+        // Immediately kick off combat with the selected lineup
+        this.setState({
+            selectedMonsterKey: chosenMonsterKey,
+            selectedMinionKeys: chosenMinionKeys,
+            lord: false,
+        }, () => {
+            this.submit();
+        });
     }
 
     addEnemyFromRoster = (monsterKey) => {
@@ -1207,6 +1277,64 @@ class CrewManagerPage extends React.Component {
                                         </div>
                                     </>)}
                                 </div>
+                            </div>
+
+                            {/* ── Random encounter row ── */}
+                            <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'flex-end',
+                                gap: '10px',
+                                marginTop: '10px',
+                            }}>
+                                <button
+                                    id="random-combat-btn"
+                                    onClick={this.startRandomCombat}
+                                    style={{
+                                        padding: '7px 18px',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        letterSpacing: '0.5px',
+                                        background: 'rgba(139, 92, 246, 0.15)',
+                                        color: '#a78bfa',
+                                        border: '1px solid rgba(139, 92, 246, 0.45)',
+                                        borderRadius: '6px',
+                                        cursor: 'pointer',
+                                        transition: 'all 0.18s ease',
+                                    }}
+                                    onMouseEnter={e => {
+                                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.28)';
+                                        e.currentTarget.style.boxShadow = '0 0 10px rgba(139, 92, 246, 0.25)';
+                                    }}
+                                    onMouseLeave={e => {
+                                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
+                                        e.currentTarget.style.boxShadow = 'none';
+                                    }}
+                                >
+                                    Random
+                                </button>
+                                <select
+                                    id="random-tier-points-select"
+                                    value={this.state.randomTierPoints}
+                                    onChange={e => this.setState({ randomTierPoints: Number(e.target.value) })}
+                                    title="Total tier points for random encounter"
+                                    style={{
+                                        background: '#1a1a1f',
+                                        color: '#a78bfa',
+                                        border: '1px solid rgba(139, 92, 246, 0.35)',
+                                        borderRadius: '6px',
+                                        padding: '6px 8px',
+                                        fontSize: '13px',
+                                        fontWeight: '600',
+                                        cursor: 'pointer',
+                                        width: '52px',
+                                        textAlign: 'center',
+                                    }}
+                                >
+                                    {[1,2,3,4,5,6,7,8,9].map(n => (
+                                        <option key={n} value={n}>{n}</option>
+                                    ))}
+                                </select>
                             </div>
 
                             {/* Monster roster */}

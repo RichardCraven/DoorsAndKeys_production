@@ -459,6 +459,7 @@ class DungeonView extends React.Component {
                                 <CFormSelect 
                                 aria-label="Dungeon Selector"
                                 ref={this.props.dungeonSelectVal}
+                                value={this.props.selectedDungeonName}
                                     options={[
                                         { label: 'Dungeon Selector', value: 'Dungeon Selector' },
                                         ...((Array.isArray(this.props.dungeons) ? this.props.dungeons : []).map((e) => {
@@ -472,16 +473,39 @@ class DungeonView extends React.Component {
                             </div>
                         </div>
                         <div className="dungeon-planes-container">
-                            {this.props.loadedDungeon && !this.props.loadingData && !this.props.planeSyncInProgress && <div className="loaded-dungeon-wrapper"
+                        {this.props.loadedDungeon && !this.props.loadingData && !this.props.planeSyncInProgress && <div className="loaded-dungeon-wrapper"
                             style={{
                                 justifyContent: this.props.loadedDungeon.levels.length > 2 ? 'flex-start' : 'center'
                             }}
                             >
                                 <div className="dungeon-levels-container" style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                     { this.props.loadedDungeon.levels.sort((a,b) => b.id - a.id).map((level,levelIndex)=>{
-                                     return <div key={levelIndex} className="level-wrapper">
-                                        <div className="level-info">
-                                            <div className={`level-valid-indicator ${level.valid ? 'valid' : ''} ${level.valid === false ? 'invalid' : ''}`}></div>
+                                      const levelErrors = [];
+                                      if (level.front && Array.isArray(level.front.validationErrors)) {
+                                          level.front.validationErrors.forEach(err => levelErrors.push(`Front: ${err}`));
+                                      }
+                                      if (level.back && Array.isArray(level.back.validationErrors)) {
+                                          level.back.validationErrors.forEach(err => levelErrors.push(`Back: ${err}`));
+                                      }
+                                      if (level.valid === false && levelErrors.length === 0) {
+                                          levelErrors.push("Connection or placement adjacency error on this level.");
+                                      }
+                                      
+                                      return <div key={levelIndex} className="level-wrapper">
+                                         <div className="level-info">
+                                             <div className={`level-valid-indicator ${level.valid ? 'valid' : ''} ${level.valid === false ? 'invalid' : ''}`}>
+                                                 <div className="validation-errors-tooltip">
+                                                     {level.valid ? (
+                                                         <div className="valid-text">Level is valid!</div>
+                                                     ) : (
+                                                         <ul>
+                                                             {levelErrors.map((err, errIdx) => (
+                                                                 <li key={errIdx}>{err}</li>
+                                                             ))}
+                                                         </ul>
+                                                     )}
+                                                 </div>
+                                             </div>
                                             <div className="level-readout">{`Lvl ${level.id}`}</div>
                                             {level.id !== 0 && <div className="icon-container" onClick={() =>  this.props.clearDungeonLevel(level.id)}>
                                                 <CIcon icon={cilTrash} size="lg"/>

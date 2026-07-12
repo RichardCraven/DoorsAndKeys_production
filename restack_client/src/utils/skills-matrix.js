@@ -107,7 +107,7 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage projectile'
     },
     mark: {
         class: 'ranger',
@@ -136,7 +136,7 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 300,
-        type: 'damage'
+        type: 'damage projectile'
     },
     burst_shot: {
         class: 'ranger',
@@ -655,7 +655,7 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 100,
-        type: 'damage',
+        type: 'damage projectile',
         flatDamage: 15
     },
     ice_blast: {
@@ -671,7 +671,7 @@ const skillsMatrix = {
         duration: 'short',
         range: 'medium',
         atkPercentage: 100,
-        type: 'debuff damage',
+        type: 'debuff damage projectile',
         flatDamage: 10,
         effect: { type: 'frozen', chance: 80, duration: 'short' }
     },
@@ -688,7 +688,7 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 10,
-        type: 'damage',
+        type: 'damage projectile',
         flatDamage: 5
     },
     lightning_strike: {
@@ -718,7 +718,7 @@ const skillsMatrix = {
         duration: 'short',
         range: 'medium',
         atkPercentage: 100,
-        type: 'debuff damage',
+        type: 'debuff damage projectile',
         flatDamage: 12,
         effect: { type: 'poison', chance: 100, duration: 'short' }
     },

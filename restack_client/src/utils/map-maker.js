@@ -7,6 +7,7 @@ export function MapMaker(props){
         'void fill',
         'void',
         'passage',
+        'connecting path',
         'empty space',
         'obscured space',
         'door',
@@ -348,6 +349,14 @@ export function MapMaker(props){
                     borders: { top: '2px solid black', left: '2px solid black', right: '2px solid black', bottom: '2px solid transparent' },
                     id: i
                 })
+            } else if(key === 'connecting path'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'connecting path',
+                    image: null,
+                    color: null,
+                    id: i
+                })
             } else if(key === 'empty space'){
                 this.paletteTiles.push({
                     type: 'palette-tile',
@@ -410,7 +419,7 @@ export function MapMaker(props){
             let topRow = () => {
                 let openings = []
                 for(let p = 0; p<15; p++){
-                    if(this.getContainsType(tiles[p].contains) !== 'void'){
+                    if(this.getContainsType(tiles[p].contains) === 'connecting_path'){
                         openings.push(p)
                     }
                 }
@@ -420,7 +429,7 @@ export function MapMaker(props){
                 let openings = []
                 for(let p = 0; p<15; p++){
                     let index = p*15
-                    if(this.getContainsType(tiles[p*15].contains) !== 'void'){
+                    if(this.getContainsType(tiles[p*15].contains) === 'connecting_path'){
                         openings.push(index)
                     }
                 }
@@ -430,7 +439,7 @@ export function MapMaker(props){
                 let openings = []
                 for(let p = 0; p<15; p++){
                     let index = p*15+14
-                    if(this.getContainsType(tiles[index].contains) !== 'void'){
+                    if(this.getContainsType(tiles[index].contains) === 'connecting_path'){
                         openings.push(index)
                     }
                 }
@@ -439,7 +448,7 @@ export function MapMaker(props){
             let botRow = () => {
                 let openings = []
                 for(let p = 210; p<225; p++){
-                    if(this.getContainsType(tiles[p].contains) !== 'void'){
+                    if(this.getContainsType(tiles[p].contains) === 'connecting_path'){
                         openings.push(p)
                     }
                 }
@@ -458,81 +467,59 @@ export function MapMaker(props){
             left: []
         }
 
-        // console.log('map:', map, 'config: ', config);
-        if(!config) return
-        boards.forEach((b, i) => {
-            let leftCompatibleCount = 0,
-            rightCompatibleCount = 0,
-            topCompatibleCount = 0,
-            botCompatibleCount = 0
+        if (!config || !Array.isArray(config) || config.length < 4) {
+            config = [[], [], [], []];
+        }
+        config = config.map(arr => Array.isArray(arr) ? arr : []);
 
-            // SCANS TOP TO BOTTOM, LEFT TO RIGHT
-            
+        boards.forEach((b, i) => {
+            if (!b) return;
+            let bConfig = b.config;
+            if (!bConfig || !Array.isArray(bConfig) || bConfig.length < 4) {
+                bConfig = [[], [], [], []];
+            }
+            bConfig = bConfig.map(arr => Array.isArray(arr) ? arr : []);
+
             // top
-            // console.log('b', b, 'b.config', b.config);
-            if(!b.config) return
             if(boardIndex > 2){
-                for(let i = 0; i < config[0].length; i++){
-                    if(b.config[2].length !== config[0].length){
-                        break;
-                    }
-                    if(b.config[2][i] && b.config[2][i]-210 === config[0][i]){topCompatibleCount++}
-                }
-                if(
-                    (topCompatibleCount > 0 && topCompatibleCount === config[0].length)
-                        || 
-                        (b.config[2].length === 0 && config[0].length === 0)
-                    ){
+                const bothEmpty = config[0].length === 0 && bConfig[2].length === 0;
+                const hasConnection = config[0].some(c => bConfig[2].includes(c + 210));
+                if(bothEmpty || hasConnection){
                     compatibilityMatrix.top.push(b.id);
                 }
             }
 
-
-
             // right
             if(boardIndex !== 2 && boardIndex !== 5 && boardIndex !== 8){
-                for(let i = 0; i < config[1].length; i++){
-                    if(b.config[3].length !== config[1].length){
-                        break;
-                    }
-                    if(b.config[3][i] && b.config[3][i]+14 === config[1][i]){rightCompatibleCount++}
-                }
-                
-                if(
-                    (rightCompatibleCount > 0 && rightCompatibleCount === config[1].length) 
-                    || 
-                    (b.config[3].length === 0 && config[1].length === 0)
-                    ){
+                const bothEmpty = config[1].length === 0 && bConfig[3].length === 0;
+                const hasConnection = config[1].some(idx1 => {
+                    const row = Math.floor(idx1 / 15);
+                    const idx3 = row * 15;
+                    return bConfig[3].includes(idx3);
+                });
+                if(bothEmpty || hasConnection){
                     compatibilityMatrix.right.push(b.id);
                 }
             }
 
             // bot
             if(boardIndex < 6){
-                for(let i = 0; i < config[2].length; i++){
-                    if(b.config[0].length !== config[2].length) break;
-                    if(b.config[0][i] && b.config[0][i]+210 === config[2][i]){botCompatibleCount++}
-                }
-                if(
-                    (botCompatibleCount > 0 && botCompatibleCount === config[2].length) 
-                    || 
-                    (b.config[0].length === 0 && config[2].length === 0)
-                    ){
+                const bothEmpty = config[2].length === 0 && bConfig[0].length === 0;
+                const hasConnection = config[2].some(c => bConfig[0].includes(c - 210));
+                if(bothEmpty || hasConnection){
                     compatibilityMatrix.bot.push(b.id);
                 }
             }
 
             // left
             if(boardIndex !== 0 && boardIndex !== 3 && boardIndex !== 6){
-                for(let i = 0; i < config[3].length; i++){
-                    if(b.config[1].length !== config[3].length) break;
-                    if(b.config[1][i] && b.config[1][i]-14 === config[3][i]){leftCompatibleCount++}
-                }
-                if(
-                    (leftCompatibleCount > 0 && leftCompatibleCount === config[3].length)
-                    || 
-                    (b.config[1].length === 0 && config[3].length === 0)
-                    ){
+                const bothEmpty = config[3].length === 0 && bConfig[1].length === 0;
+                const hasConnection = config[3].some(idx3 => {
+                    const row = Math.floor(idx3 / 15);
+                    const idx1 = row * 15 + 14;
+                    return bConfig[1].includes(idx1);
+                });
+                if(bothEmpty || hasConnection){
                     compatibilityMatrix.left.push(b.id);
                 }
             }
@@ -562,8 +549,14 @@ export function MapMaker(props){
         let dungeonSpawns = [];
         dungeonObj.levels.forEach((l)=>{
             l.valid = true;
-            if(l.front) l.front.valid = true;
-            if(l.back) l.back.valid = true;
+            if(l.front) {
+                l.front.validationErrors = (l.front.validationErrors || []).filter(err => err.startsWith('Slot '));
+                l.front.valid = l.front.validationErrors.length === 0;
+            }
+            if(l.back) {
+                l.back.validationErrors = (l.back.validationErrors || []).filter(err => err.startsWith('Slot '));
+                l.back.valid = l.back.validationErrors.length === 0;
+            }
             let passages = markedPassages.find(p=>p.id === l.id) || {
                 id: l.id,
                 frontPassages: [],
@@ -571,6 +564,20 @@ export function MapMaker(props){
                 connected: []
             }
             let spawns = []
+            
+            const slotNames = [
+              'top-left', 'top-middle', 'top-right',
+              'middle-left', 'center', 'middle-right',
+              'bottom-left', 'bottom-middle', 'bottom-right'
+            ];
+            
+            const getPassageName = (type) => {
+                if (type === 'way_up') return 'Staircase Up';
+                if (type === 'way_down') return 'Staircase Down';
+                if (type === 'door') return 'Door to Back/Front';
+                return 'Passage';
+            };
+
             passages.frontPassages.forEach(passage=>{
                 if(this.getTilePassageType(passage) === 'spawn_point'){
                     spawns.push(passage);
@@ -578,27 +585,30 @@ export function MapMaker(props){
                 } else {
                     let connectedMatch = passages.connected.find(e=>e.locationCode === passage.locationCode)
                     if(!connectedMatch){
-                        if(l.front) l.front.valid = false;
+                        if(l.front) {
+                            l.front.valid = false;
+                            const slotName = slotNames[passage.miniboardIndex] || `slot ${passage.miniboardIndex}`;
+                            const passageType = getPassageName(this.getTilePassageType(passage));
+                            l.front.validationErrors.push(`${passageType} in slot ${slotName} at [${passage.coordinates}] has no matching connection.`);
+                        }
                     }
                 }
             })
             passages.backPassages.forEach(passage=>{
-                // console.log('passage location code', passage.locationCode);
-                // mb.forEach(passage=>{
                 if(this.getTilePassageType(passage) === 'spawn_point'){
                     spawns.push(passage);
                     dungeonSpawns.push(passage);
                 } else {
-
                     let connectedMatch = passages.connected.find(e=>e.locationCode === passage.locationCode)
                     if(!connectedMatch){
-                        // console.log('setting level valid to false in back');
-                        // debugger
-                        // l.valid = false;
-                        if(l.back) l.back.valid = false;
+                        if(l.back) {
+                            l.back.valid = false;
+                            const slotName = slotNames[passage.miniboardIndex] || `slot ${passage.miniboardIndex}`;
+                            const passageType = getPassageName(this.getTilePassageType(passage));
+                            l.back.validationErrors.push(`${passageType} in slot ${slotName} at [${passage.coordinates}] has no matching connection.`);
+                        }
                     }
                 }
-                // })
             })
             // console.log('level ', l);
             // debugger

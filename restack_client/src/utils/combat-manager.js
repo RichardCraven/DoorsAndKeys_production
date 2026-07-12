@@ -2156,7 +2156,32 @@ export function CombatManager() {
             : ((target.stats && typeof target.stats.dex === 'number' && target.stats.dex > 0)
                 ? target.stats.dex : 1);
         const MAX_MISS_CHANCE = 35; // never fully un-hittable
-        const missChance = Math.min(targetSpeed * 2.5, MAX_MISS_CHANCE);
+        let missChance = Math.min(targetSpeed * 2.5, MAX_MISS_CHANCE);
+
+        const activeAbility = caller.activeAbility || caller.pendingAttack;
+        const isProjectile = activeAbility && typeof activeAbility.type === 'string' && activeAbility.type.includes('projectile');
+        if (isProjectile) {
+            const getDistance = (c, t) => {
+                if (!c || !t || !c.coordinates || !t.coordinates) return 0;
+                const cTiles = (Array.isArray(c.occupiedCoords) && c.occupiedCoords.length > 0) ? c.occupiedCoords : [c.coordinates];
+                const tTiles = (Array.isArray(t.occupiedCoords) && t.occupiedCoords.length > 0) ? t.occupiedCoords : [t.coordinates];
+                let minDist = Infinity;
+                cTiles.forEach(cc => {
+                    tTiles.forEach(tc => {
+                        const dx = Math.abs(cc.x - tc.x);
+                        const dy = Math.abs(cc.y - tc.y);
+                        const dist = dx + dy;
+                        if (dist < minDist) minDist = dist;
+                    });
+                });
+                return minDist === Infinity ? 0 : minDist;
+            };
+            const dist = getDistance(caller, target);
+            const projectilePenalty = dist * 8;
+            missChance += projectilePenalty;
+        }
+
+        missChance = Math.max(0, Math.min(missChance, 95));
         return (Math.random() * 100) >= missChance;
     };
 

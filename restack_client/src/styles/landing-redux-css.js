@@ -59,7 +59,7 @@ export const LANDING_REDUX_CSS = `
 }
 
 .redux-login-container .login-card .title-glowing {
-  font-family: 'Cinzel', serif;
+  font-family: 'Cinzel Decorative', serif;
   font-size: 2.2rem;
   font-weight: 700;
   color: #e5b54f;
@@ -242,6 +242,7 @@ export const LANDING_REDUX_CSS = `
   font-weight: 700;
   color: #e5b54f;
   letter-spacing: 2px;
+  text-transform: uppercase;
   text-shadow: 0 0 10px rgba(229, 181, 79, 0.25);
 }
 
