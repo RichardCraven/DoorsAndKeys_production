@@ -69,7 +69,7 @@ export class AnimationManagerRedux {
   /** Emit an animation event and auto-remove it after duration */
   _emit(anim) {
     const id = `anim_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const entry = { id, ...anim };
+    const entry = { id, sourceUnitId: this._currentSourceUnitId, ...anim };
     this.activeAnimations = [...this.activeAnimations, entry];
     if (this.onAnimationEvent) this.onAnimationEvent([...this.activeAnimations]);
 
@@ -93,6 +93,7 @@ export class AnimationManagerRedux {
     this._isTargetLarge = isTargetLarge;
     this._currentTargetOccupiedCoords = Array.isArray(targetOccupiedCoords) ? targetOccupiedCoords : null;
     this._currentAbilityName = name;
+    this._currentSourceUnitId = sourceUnitId || casterId;
     this._negatedByBarrier = negatedByBarrier;
 
     const spherePx = sphereCoords ? this._px(sphereCoords) : null;

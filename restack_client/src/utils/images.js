@@ -82,6 +82,7 @@ import kabuki_demon_minion_portrait from '../assets/portraits/monsters/variation
 import kabuki_demon_minion from '../assets/portraits/monsters/variations/kabuki_demon/kabuki_demon_minion.png'
 import archaic_familiar_portrait from '../assets/familiars/stone_familiar_dormant.png'
 import stone_familiar_dormant from '../assets/familiars/stone_familiar_dormant.png'
+import stone_familiar_glowing from '../assets/familiars/stone familiar glowing.png'
 
 import arrowUp from '../assets/graphics/arrow_up.png'
 import arrowDown from '../assets/graphics/arrow_down.png'
@@ -1188,6 +1189,7 @@ export {
     beholder_minion_portrait,
     archaic_familiar_portrait,
     stone_familiar_dormant,
+    stone_familiar_glowing,
     black_banshee,
     black_djinn,
     black_gorgon,

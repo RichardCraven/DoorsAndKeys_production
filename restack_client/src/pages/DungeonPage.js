@@ -53,14 +53,14 @@ import MapRedux from '../components/MapRedux';
 import '../styles/map-redux.scss';
 import { FLAGS } from '../flags';
 
-const runeCtx = require.context('../assets/icons/runes', true, /\.png$/);
-const archaicPieces = {
+const runeCtx = typeof require.context === 'function' ? require.context('../assets/icons/runes', true, /\.png$/) : null;
+const archaicPieces = runeCtx ? {
     'top left': runeCtx('./archaic/top left.png').default || runeCtx('./archaic/top left.png'),
     'top right': runeCtx('./archaic/top right.png').default || runeCtx('./archaic/top right.png'),
     'bottom left': runeCtx('./archaic/bottom left.png').default || runeCtx('./archaic/bottom left.png'),
     'bottom right': runeCtx('./archaic/bottom right.png').default || runeCtx('./archaic/bottom right.png'),
     'top center': runeCtx('./archaic/top center.png').default || runeCtx('./archaic/top center.png')
-};
+} : {};
 
 const SLOT_INFO = {
     'chest': { name: 'Chest Slot', desc: 'Equip body armor or tabards here.' },
