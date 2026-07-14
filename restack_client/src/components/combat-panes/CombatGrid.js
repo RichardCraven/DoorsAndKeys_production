@@ -541,7 +541,10 @@ const computeHitVars = (combatant, getHitAnimation) => {
     // CombatGrid portraits fill their container via width:100%/height:100%,
     // so --portrait-base-scale should always be 1 (container is already 200px for large monsters).
     const baseScale = '1';
-    const flip = (combatant && combatant.facing === 'right') ? '-1' : '1';
+    const isFighter = combatant && !combatant.isMonster && !combatant.isMinion;
+    const flip = isFighter
+        ? (combatant.facing === 'left' ? '-1' : '1')
+        : (combatant.facing === 'right' ? '-1' : '1');
     if (!combatant || !combatant.wounded) return { '--portrait-base-scale': baseScale, '--portrait-flip': flip };
     const hc = (getHitAnimation && getHitAnimation(combatant)) || '';
     let severity = 'minor';

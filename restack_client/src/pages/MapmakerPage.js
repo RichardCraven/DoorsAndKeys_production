@@ -1970,6 +1970,7 @@ class MapMakerPage extends React.Component {
             tiles: clone(this.state.tiles),
             config: clone(config)
           };
+          loadedPlane = this.validatePlane(loadedPlane);
           this.setState({ loadedPlane });
         }
       }
@@ -1984,6 +1985,7 @@ class MapMakerPage extends React.Component {
                 tiles: clone(this.state.tiles),
                 config: clone(config)
               };
+              this.validatePlane(p);
             }
           }
         });
@@ -2032,6 +2034,7 @@ class MapMakerPage extends React.Component {
         let index = plane.miniboards.findIndex(b => b && (b.id === newBoard.id || b._id === newBoard.id || (b.name && b.name === newBoard.name)));
         if (index !== -1) {
           plane.miniboards[index] = newBoard;
+          plane = this.validatePlane(plane);
           const obj = {
             name: plane.name,
             miniboards: plane.miniboards,
@@ -2097,6 +2100,7 @@ class MapMakerPage extends React.Component {
                 if (idx !== -1) {
                   pClone.miniboards[idx] = newBoard;
                 }
+                pClone = this.validatePlane(pClone);
                 level[side] = pClone;
               } else {
                 if (Array.isArray(p.miniboards)) {
@@ -2109,6 +2113,7 @@ class MapMakerPage extends React.Component {
                       };
                     }
                   });
+                  level[side] = this.validatePlane(p);
                 }
               }
             }
@@ -2118,6 +2123,20 @@ class MapMakerPage extends React.Component {
         await updateDungeonRequest(validatedDungeon.id, validatedDungeon);
         if (this.state.loadedDungeon && this.state.loadedDungeon.id === validatedDungeon.id) {
           await new Promise(resolve => this.setState({ loadedDungeon: validatedDungeon }, resolve));
+          
+          if (this.state.loadedPlane) {
+            const loadedPlaneId = this.state.loadedPlane.id || this.state.loadedPlane._id;
+            for (const level of validatedDungeon.levels) {
+              if (level.front && ((loadedPlaneId && level.front.id === loadedPlaneId) || level.front.name === this.state.loadedPlane.name)) {
+                this.setState({ loadedPlane: clone(level.front) });
+                break;
+              }
+              if (level.back && ((loadedPlaneId && level.back.id === loadedPlaneId) || level.back.name === this.state.loadedPlane.name)) {
+                this.setState({ loadedPlane: clone(level.back) });
+                break;
+              }
+            }
+          }
         }
       }
       if (affectedDungeons.length > 0) {
@@ -4389,6 +4408,10 @@ class MapMakerPage extends React.Component {
       dungeon.valid = false;
       return dungeon;
     }
+    
+    // First format/evaluate all passage connections in the dungeon
+    dungeon = this.props.mapMaker.formatDungeon(dungeon);
+    
     let dungeonValid = true;
     for (let key in dungeon.levels) {
       let level = dungeon.levels[key];
