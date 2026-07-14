@@ -232,6 +232,15 @@ const toggleMenuTray = () => {
 }
  return (
    <div className="fullpage">
+      <div className="rotate-overlay">
+        <div className="rotate-card">
+          <div className="rotate-icon-container">📱🔄</div>
+          <h2 className="rotate-title">Please Rotate Your Device</h2>
+          <p className="rotate-desc">
+            This experience is designed to be played in landscape mode. Please turn your device horizontally to continue.
+          </p>
+        </div>
+      </div>
       {showWakingOverlay && (
         <div className={`server-waking-overlay ${!serverLoading ? 'fade-out' : ''}`}>
           <div className="server-waking-card">

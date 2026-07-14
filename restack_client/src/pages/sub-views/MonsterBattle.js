@@ -646,18 +646,13 @@ class MonsterBattle extends React.Component {
         } catch (err) {
             console.warn('componentDidUpdate: level-flag clearing failed', err);
         }
-
-        if (prevState.combatLog.length !== this.state.combatLog.length && this.latestCombatLogEntryRef.current) {
+        if (prevState.combatLog.length !== this.state.combatLog.length && this.combatLogContainerRef.current) {
             try {
-                this.latestCombatLogEntryRef.current.scrollIntoView({
-                    block: 'center',
-                    behavior: 'smooth'
-                });
+                this.combatLogContainerRef.current.scrollTop = this.combatLogContainerRef.current.scrollHeight;
             } catch (err) {
                 console.warn('componentDidUpdate: combat-log scroll failed', err);
             }
         }
-
         // Sync queuedSkillMap: if the AI consumed and cleared a queued skill
         // (unit.queuedSkill set to null on combatants), remove it from local state too.
         if (prevState.battleData !== this.state.battleData) {

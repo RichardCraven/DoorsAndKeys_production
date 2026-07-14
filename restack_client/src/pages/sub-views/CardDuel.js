@@ -416,6 +416,16 @@ class CardDuel extends React.Component {
 
         if (playerEnergy < effectiveCost) return;
 
+        const eff = card.effect || {};
+        if (eff.type === 'summon_player_unit') {
+            const limit = 3;
+            const pf = this.state.playerField || [];
+            if (pf.length >= limit) {
+                this.setState({ message: `${card.name}: Cannot summon — your army is at full capacity (${limit} units).` });
+                return;
+            }
+        }
+
         // Soul Tithe: playing an echo restores 1 Soul
         let newSoul = playerSoul;
         if (card.type === 'echo' && hasSoulTithe) {
@@ -455,8 +465,6 @@ class CardDuel extends React.Component {
             if (newDeathMark) { newDeathMark = false; return dmg * 2; }
             return dmg;
         };
-
-        const eff = card.effect || {};
 
         switch (eff.type) {
             case 'summon_player_unit': {
@@ -1105,6 +1113,7 @@ class CardDuel extends React.Component {
                             atk:  unit.atk  || 2,
                             hp:   unit.maxHp || 6,
                             maxHp: unit.maxHp || 6,
+                            art:  unit.art  || 'skeleton',
                         };
                         reaperField.push(newUnit);
                         this.addLog(`💀 ${newUnit.name} rises on the Reaper's field! (${newUnit.atk} ATK · ${newUnit.hp} HP)`);
@@ -1461,6 +1470,28 @@ class CardDuel extends React.Component {
         );
     }
 
+    renderDeckPile = () => {
+        const deckCount = this.state.playerDeck.length;
+        return (
+            <div className="pe-pile pe-pile--deck" title={`${deckCount} cards remaining in deck`}>
+                <div className="pe-pile-card" style={images.reaper_card_back ? { backgroundImage: `url(${images.reaper_card_back})` } : {}} />
+                {deckCount > 0 && <div className="pe-pile-badge">{deckCount}</div>}
+                <div className="pe-pile-label">DECK</div>
+            </div>
+        );
+    }
+
+    renderDiscardPile = () => {
+        const discardCount = this.state.playerDiscard.length;
+        return (
+            <div className="pe-pile pe-pile--discard" title={`${discardCount} cards in discard pile`}>
+                <div className="pe-pile-card pe-pile-card--discard" />
+                {discardCount > 0 && <div className="pe-pile-badge">{discardCount}</div>}
+                <div className="pe-pile-label">DISCARD</div>
+            </div>
+        );
+    }
+
     renderCard = (card) => {
         if (!card) return null;
         const { playerEnergy, phase, gameOver, engineerDiscountUsed, fieldChampions } = this.state;
@@ -1710,17 +1741,12 @@ class CardDuel extends React.Component {
                             </div>
                         </div>
 
-                        {/* Hand panel */}
-                        <div className="pe-hand-panel">
-                            <div className="pe-hand-title">
-                                {this.state.duelStarted ? `Your Hand (${playerHand.length})` : `Your Deck (${this.state.playerDeck.length})`}
-                            </div>
-                            {this.state.duelStarted ? (
-                                <div className="pe-hand-scroll">
-                                    {playerHand.map(card => this.renderCard(card))}
-                                    {playerHand.length === 0 && <div className="pe-empty-hand">No cards in hand.</div>}
+                        {/* Hand panel (Only render when not duelStarted) */}
+                        {!this.state.duelStarted && (
+                            <div className="pe-hand-panel">
+                                <div className="pe-hand-title">
+                                    Your Deck ({this.state.playerDeck.length})
                                 </div>
-                            ) : (
                                 <div className="pe-setup-cols-container">
                                     {this.state.playerDeck.length === 0 ? (
                                         <div className="pe-empty-hand">No cards in deck.</div>
@@ -1728,15 +1754,11 @@ class CardDuel extends React.Component {
                                         this.renderSetupDeckColumns()
                                     )}
                                 </div>
-                            )}
-                            {this.state.duelStarted ? (
-                                this.renderCardPile()
-                            ) : (
                                 <div className="pe-deck-info">
                                     <span>Deck: {this.state.playerDeck.length}</span>
                                 </div>
-                            )}
-                        </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* ── CENTER: Arena ── */}
@@ -1809,7 +1831,7 @@ class CardDuel extends React.Component {
                                     </div>
                                 </div>
 
-                                {/* Reaper field units */}
+                                 {/* Reaper field units */}
                                 {reaperField.length > 0 && (
                                     <div className="pe-reaper-field-zone">
                                         <div className="pe-reaper-field-label">
@@ -1818,8 +1840,15 @@ class CardDuel extends React.Component {
                                         <div className="pe-reaper-field-units">
                                             {reaperField.map(unit => {
                                                 const hpPct = Math.max(0, (unit.hp / unit.maxHp) * 100);
+                                                const art = unit.art ? (images[unit.art] || null) : null;
                                                 return (
                                                     <div key={unit.id} className="pe-reaper-field-unit">
+                                                        {art && (
+                                                            <div 
+                                                                className="pe-unit-portrait" 
+                                                                style={{ backgroundImage: `url(${art})` }} 
+                                                            />
+                                                        )}
                                                         <div className="pe-rfu-name">{unit.name}</div>
                                                         <div className="pe-rfu-hp-bar-bg">
                                                             <div className="pe-rfu-hp-bar-fill" style={{ width: `${hpPct}%` }} />
@@ -1869,8 +1898,15 @@ class CardDuel extends React.Component {
                                         <div className="pe-player-field-units">
                                             {this.state.playerField.map(unit => {
                                                 const hpPct = Math.max(0, (unit.hp / unit.maxHp) * 100);
+                                                const art = unit.art ? (images[unit.art] || null) : null;
                                                 return (
                                                     <div key={unit.id} className="pe-player-field-unit">
+                                                        {art && (
+                                                            <div 
+                                                                className="pe-unit-portrait" 
+                                                                style={{ backgroundImage: `url(${art})` }} 
+                                                            />
+                                                        )}
                                                         <div className="pe-pfu-name">{unit.name}</div>
                                                         <div className="pe-pfu-hp-bar-bg">
                                                             <div className="pe-pfu-hp-bar-fill" style={{ width: `${hpPct}%` }} />
@@ -1904,6 +1940,27 @@ class CardDuel extends React.Component {
                                     </div>
                                     {this.renderSoulBar(playerSoul, playerMaxSoul, true)}
                                     {this.renderCombatantStatuses(true)}
+                                </div>
+
+                                {/* Player Hand at bottom center of the screen */}
+                                <div className="pe-battle-hand-area">
+                                    {/* DECK PILE */}
+                                    <div className="pe-battle-hand-left">
+                                        {this.renderDeckPile()}
+                                    </div>
+
+                                    {/* HAND CARDS */}
+                                    <div className="pe-battle-hand-center">
+                                        <div className="pe-battle-hand-cards">
+                                            {playerHand.map(card => this.renderCard(card))}
+                                            {playerHand.length === 0 && <div className="pe-empty-hand-duel">No cards in hand.</div>}
+                                        </div>
+                                    </div>
+
+                                    {/* DISCARD PILE */}
+                                    <div className="pe-battle-hand-right">
+                                        {this.renderDiscardPile()}
+                                    </div>
                                 </div>
                             </>
                         )}

@@ -2076,11 +2076,13 @@ export default function SiegeCombatGrid(props) {
                             position: 'relative',
                             width: '100%',
                             height: '100%',
-                            transform: unit.isUpsideDown 
-                                ? 'rotate(180deg)' 
-                                : ((!unit.isMonster && unit.isSiegeArmy)
-                                    ? 'scaleX(-1)'
-                                    : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined)),
+                            transform: (isLarge || isHuge)
+                                ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} ${unit.facing === 'right' ? 'scaleX(-1)' : ''} ${greetingInProcess ? 'scale(1.5)' : ''}`.trim() || 'none'
+                                : (unit.isUpsideDown 
+                                    ? 'rotate(180deg)' 
+                                    : ((!unit.isMonster && unit.isSiegeArmy)
+                                        ? 'scaleX(-1)'
+                                        : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined))),
                             boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                             borderRadius: '0',
                             transition: 'filter 0.25s ease-in-out',

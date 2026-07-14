@@ -16,3 +16,109 @@ code {
 img[src*="burst_shot"], [style*="burst_shot"] {
   transform: rotate(45deg) !important;
 }
+
+/* PWA Installation Banner */
+.pwa-install-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #1e1b18 0%, #120f0d 100%);
+  border: 1px solid rgba(229, 181, 79, 0.35);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 12px 18px;
+  margin: 10px auto;
+  max-width: 900px;
+  width: 90%;
+  box-sizing: border-box;
+  animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 999;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.pwa-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  text-align: left;
+}
+
+.pwa-icon {
+  font-size: 24px;
+  filter: drop-shadow(0 2px 8px rgba(229, 181, 79, 0.3));
+}
+
+.pwa-text-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pwa-title {
+  font-family: 'Cinzel', serif;
+  font-size: 14px;
+  font-weight: 700;
+  color: #e5b54f;
+  text-shadow: 0 0 8px rgba(229, 181, 79, 0.25);
+  letter-spacing: 0.5px;
+}
+
+.pwa-desc {
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+  color: #a8a29e;
+  line-height: 1.4;
+}
+
+.pwa-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pwa-btn {
+  font-family: 'Outfit', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.pwa-btn-install {
+  background: linear-gradient(135deg, #e5b54f 0%, #c9932b 100%);
+  border: 1px solid #ffe58f;
+  color: #0c0a09;
+  padding: 6px 16px;
+  box-shadow: 0 2px 8px rgba(229, 181, 79, 0.2);
+}
+
+.pwa-btn-install:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(229, 181, 79, 0.35);
+  background: linear-gradient(135deg, #ffd166 0%, #e5b54f 100%);
+}
+
+.pwa-btn-close {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #d6d3d1;
+  padding: 6px 12px;
+}
+
+.pwa-btn-close:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}

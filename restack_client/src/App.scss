@@ -1595,3 +1595,97 @@ canvas.spell-animation {
   0% { width: 0%; }
   100% { width: 95%; }
 }
+
+/* --- Mobile Portrait Rotate Device Overlay --- */
+.rotate-overlay {
+  display: none;
+}
+
+@media (max-width: 1024px) and (orientation: portrait) {
+  .rotate-overlay {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 1000000;
+    background: radial-gradient(circle at center, rgba(16, 12, 28, 0.98) 0%, rgba(6, 4, 12, 1) 100%);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+}
+
+.rotate-card {
+  background: rgba(22, 19, 32, 0.95);
+  border: 2px solid rgba(212, 168, 68, 0.25);
+  border-radius: 16px;
+  padding: 40px 30px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.8), 0 0 40px rgba(212, 168, 68, 0.15);
+  text-align: center;
+  position: relative;
+  box-sizing: border-box;
+
+  &::before,
+  &::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(212, 168, 68, 0.5);
+  }
+
+  &::before {
+    top: 12px;
+    left: 12px;
+    border-right: none;
+    border-bottom: none;
+  }
+
+  &::after {
+    bottom: 12px;
+    right: 12px;
+    border-left: none;
+    border-top: none;
+  }
+
+  .rotate-icon-container {
+    font-size: 56px;
+    margin-bottom: 24px;
+    animation: rotatePhone 2.5s ease-in-out infinite;
+    display: inline-block;
+    filter: drop-shadow(0 0 12px rgba(212, 168, 68, 0.3));
+  }
+
+  .rotate-title {
+    font-family: 'Cinzel', serif;
+    font-size: 22px;
+    color: #e5b54f;
+    margin: 0 0 16px 0;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-shadow: 0 0 10px rgba(229, 181, 79, 0.3);
+  }
+
+  .rotate-desc {
+    font-family: 'Outfit', 'Inter', sans-serif;
+    font-size: 14px;
+    color: #c0b8b0;
+    line-height: 1.6;
+    margin: 0;
+    font-weight: 400;
+  }
+}
+
+@keyframes rotatePhone {
+  0% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-90deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
