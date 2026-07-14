@@ -1311,7 +1311,7 @@ export default function SiegeCombatGrid(props) {
                             ].filter(Boolean).join(' '),
                             transform: (getLiveCombatant(fighter.id)?.isUpsideDown || details?.isUpsideDown)
                                 ? `rotate(180deg)${needsFlip ? ' scaleX(-1)' : ''}`
-                                : (needsFlip ? 'scaleX(-1)' : 'none'),
+                                : (needsFlip ? 'scaleX(-1)' : undefined),
                             boxShadow: (getLiveCombatant(fighter.id)?.isSinisterReflection || details?.isSinisterReflection) ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                             zIndex: 300,
                             animation: (getLiveCombatant(fighter.id)?.isSinisterReflection || details?.isSinisterReflection)
@@ -2080,7 +2080,7 @@ export default function SiegeCombatGrid(props) {
                                 ? 'rotate(180deg)' 
                                 : ((!unit.isMonster && unit.isSiegeArmy)
                                     ? 'scaleX(-1)'
-                                    : (unit.type === 'spider_minion' ? 'scale(0.5)' : 'none')),
+                                    : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined)),
                             boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                             borderRadius: '0',
                             transition: 'filter 0.25s ease-in-out',

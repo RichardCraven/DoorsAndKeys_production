@@ -158,6 +158,47 @@ $bot-level-zIndex: 2; // doubletall containers
     }
 }
 }
+.board-nav-dpad {
+    position: absolute;
+    right: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-right: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, 20px);
+    grid-template-rows: repeat(3, 20px);
+    gap: 2px;
+    align-items: center;
+    justify-content: center;
+
+    .dpad-btn {
+        background: none;
+        border: none;
+        color: #f9b115;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        width: 20px;
+        height: 20px;
+        outline: none;
+        transition: color 0.15s ease, transform 0.15s ease;
+
+        &:hover:not(:disabled) {
+            color: #ffd043;
+            transform: scale(1.25);
+        }
+
+        &:disabled {
+            color: #4a4a4a;
+            cursor: not-allowed;
+            transform: none;
+        }
+    }
+}
 .left-palette.boards-palette{
     background-color: transparent;
     padding-left: 8px;
@@ -1188,6 +1229,14 @@ ul.dropdown-menu.show{
         font-weight: bold;
         letter-spacing: 0.5px;
         text-transform: uppercase;
+        cursor: pointer;
+        transition: color 0.22s ease-out, text-shadow 0.22s ease-out, transform 0.22s ease-out;
+
+        &:hover {
+            color: #f9b115;
+            text-shadow: 0 0 8px rgba(249, 177, 21, 0.6);
+            transform: scale(1.05);
+        }
     }
 }
 
@@ -1425,4 +1474,59 @@ ul.dropdown-menu.show{
             }
         }
     }
+}
+
+/* --- Connecting Path Shimmer Overlay --- */
+.connecting-path-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 15;
+  
+  &.horizontal {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.08) 25%,
+      rgba(255, 255, 255, 0.55) 50%,
+      rgba(255, 255, 255, 0.08) 75%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: goldGleamShimmerHorizontal 3s infinite linear;
+  }
+
+  &.vertical {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.08) 25%,
+      rgba(255, 255, 255, 0.55) 50%,
+      rgba(255, 255, 255, 0.08) 75%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 100% 200%;
+    animation: goldGleamShimmerVertical 3s infinite linear;
+  }
+}
+
+@keyframes goldGleamShimmerHorizontal {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes goldGleamShimmerVertical {
+  0% {
+    background-position: 0 -200%;
+  }
+  100% {
+    background-position: 0 200%;
+  }
 }

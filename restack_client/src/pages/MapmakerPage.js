@@ -1891,6 +1891,15 @@ class MapMakerPage extends React.Component {
     storeMeta(meta);
   }
 
+  collapseAllPlaneFolders = () => {
+    this.setState({ planesFoldersExpanded: {} });
+    setEditorPreference('planesFoldersExpanded', {});
+    const userId = sessionStorage.getItem('userId');
+    const meta = getMeta();
+    if (userId) updateUserRequest(userId, meta);
+    storeMeta(meta);
+  }
+
   expandCollapsePlaneFolders = (folderTitle) => {
     const matrix = { ...this.state.planesFoldersExpanded };
     matrix[folderTitle] = !matrix[folderTitle];
@@ -2129,6 +2138,145 @@ class MapMakerPage extends React.Component {
 
   updateBoard = (boardId) => {
     console.log('updating board with id: ', boardId);
+  }
+
+  getBoardNavigationState = () => {
+    const loadedBoard = this.state.loadedBoard;
+    const loadedPlane = this.state.loadedPlane;
+
+    if (!loadedBoard || !loadedPlane || !Array.isArray(loadedPlane.miniboards)) {
+      return {
+        boardIndex: -1,
+        canGoNorth: false,
+        canGoSouth: false,
+        canGoWest: false,
+        canGoEast: false,
+        northBoard: null,
+        southBoard: null,
+        westBoard: null,
+        eastBoard: null
+      };
+    }
+
+    const boardIndex = loadedPlane.miniboards.findIndex(mb => 
+      mb && (mb.id === loadedBoard.id || mb._id === loadedBoard.id || mb.name === loadedBoard.name)
+    );
+
+    if (boardIndex === -1) {
+      return {
+        boardIndex: -1,
+        canGoNorth: false,
+        canGoSouth: false,
+        canGoWest: false,
+        canGoEast: false,
+        northBoard: null,
+        southBoard: null,
+        westBoard: null,
+        eastBoard: null
+      };
+    }
+
+    const row = Math.floor(boardIndex / 3);
+    const col = boardIndex % 3;
+
+    const getBoardAtSlot = (idx) => {
+      const mb = loadedPlane.miniboards[idx];
+      if (!mb || (!mb.id && !mb._id && !mb.name)) return null;
+      return this.state.boards.find(b => 
+        b && (b.id === mb.id || b._id === mb.id || b.name === mb.name)
+      ) || null;
+    };
+
+    const northBoard = row > 0 ? getBoardAtSlot(boardIndex - 3) : null;
+    const southBoard = row < 2 ? getBoardAtSlot(boardIndex + 3) : null;
+    const westBoard = col > 0 ? getBoardAtSlot(boardIndex - 1) : null;
+    const eastBoard = col < 2 ? getBoardAtSlot(boardIndex + 1) : null;
+
+    return {
+      boardIndex,
+      canGoNorth: !!northBoard,
+      canGoSouth: !!southBoard,
+      canGoWest: !!westBoard,
+      canGoEast: !!eastBoard,
+      northBoard,
+      southBoard,
+      westBoard,
+      eastBoard
+    };
+  }
+
+  getPlaneNavigationState = () => {
+    const loadedPlane = this.state.loadedPlane;
+    const dungeon = this.state.loadedDungeon;
+
+    if (!loadedPlane || !dungeon || !Array.isArray(dungeon.levels)) {
+      return {
+        canGoNorth: false,
+        canGoSouth: false,
+        canGoWest: false,
+        canGoEast: false,
+        northPlane: null,
+        southPlane: null,
+        westPlane: null,
+        eastPlane: null
+      };
+    }
+
+    const currentLevelEntry = dungeon.levels.find(level => 
+      (level.front && (level.front.id === loadedPlane.id || level.front._id === loadedPlane.id || level.front.name === loadedPlane.name)) ||
+      (level.back && (level.back.id === loadedPlane.id || level.back._id === loadedPlane.id || level.back.name === loadedPlane.name))
+    );
+
+    if (!currentLevelEntry) {
+      return {
+        canGoNorth: false,
+        canGoSouth: false,
+        canGoWest: false,
+        canGoEast: false,
+        northPlane: null,
+        southPlane: null,
+        westPlane: null,
+        eastPlane: null
+      };
+    }
+
+    const currentOrientation = (currentLevelEntry.front && (currentLevelEntry.front.id === loadedPlane.id || currentLevelEntry.front._id === loadedPlane.id || currentLevelEntry.front.name === loadedPlane.name)) ? 'front' : 'back';
+
+    const sortedLevelIds = dungeon.levels.map(l => l.id).sort((a, b) => a - b);
+    const currentLevelIdx = sortedLevelIds.indexOf(currentLevelEntry.id);
+
+    // North (Up) -> Higher level ID
+    const upLevelEntry = currentLevelIdx < sortedLevelIds.length - 1 
+      ? dungeon.levels.find(l => l.id === sortedLevelIds[currentLevelIdx + 1]) 
+      : null;
+    const northPlane = upLevelEntry 
+      ? (currentOrientation === 'front' ? (upLevelEntry.front || upLevelEntry.back) : (upLevelEntry.back || upLevelEntry.front))
+      : null;
+
+    // South (Down) -> Lower level ID
+    const downLevelEntry = currentLevelIdx > 0 
+      ? dungeon.levels.find(l => l.id === sortedLevelIds[currentLevelIdx - 1]) 
+      : null;
+    const southPlane = downLevelEntry 
+      ? (currentOrientation === 'front' ? (downLevelEntry.front || downLevelEntry.back) : (downLevelEntry.back || downLevelEntry.front))
+      : null;
+
+    // West (Left) -> Switch to Front
+    const westPlane = currentOrientation === 'back' ? currentLevelEntry.front : null;
+
+    // East (Right) -> Switch to Back
+    const eastPlane = currentOrientation === 'front' ? currentLevelEntry.back : null;
+
+    return {
+      canGoNorth: !!northPlane,
+      canGoSouth: !!southPlane,
+      canGoWest: !!westPlane,
+      canGoEast: !!eastPlane,
+      northPlane,
+      southPlane,
+      westPlane,
+      eastPlane
+    };
   }
 
   loadBoard = (board, usePassedTiles = false) => {
@@ -3629,39 +3777,75 @@ class MapMakerPage extends React.Component {
       await this.clearLoadedBoard();
       this.toast('Board Deleted')
 
-      if (planesToUpdate && planesToUpdate.lensgth > 1) {
-        console.log('multiple planes to update, figure this out');
-        debugger
-        // const payload = planesToUpdate.map(p=> {
-        //   return {
-        //     name: p.name,
-        //     miniboards: p.miniboards,
-        //     spawnPoints: p.spawnPoints,
-        //     valid: p.valid,
-        //     id: p.id
-        //   }
-        // })
-
-      } else if (planesToUpdate && planesToUpdate.length === 1) {
-        console.log('there is a plane to update', planesToUpdate[0]);
-        let plane = planesToUpdate[0],
-          index = plane.miniboards.findIndex(b => {
-            return b.id === boardId
-          });
-        // planeId = plane.id;
-        console.log('index to update', index);
-        console.log('plane to update: ', plane);
-        let newPlane = clone(plane)
-        newPlane.miniboards[index] = { processed: undefined };
-        console.log('now newPlane is ', newPlane);
-        const obj = {
-          name: newPlane.name,
-          miniboards: newPlane.miniboards,
-          spawnPoints: newPlane.spawnPoints,
-          valid: newPlane.valid
+      if (planesToUpdate && planesToUpdate.length > 0) {
+        for (let plane of planesToUpdate) {
+          let index = plane.miniboards.findIndex(b => b && (b.id === boardId || b._id === boardId || b.name === board.name));
+          if (index !== -1) {
+            let newPlane = clone(plane);
+            newPlane.miniboards[index] = {};
+            const obj = {
+              name: newPlane.name,
+              miniboards: newPlane.miniboards,
+              spawnPoints: newPlane.spawnPoints,
+              valid: newPlane.valid
+            };
+            await updatePlaneRequest(plane.id, obj);
+            
+            const loadedPlaneId = this.state.loadedPlane ? (this.state.loadedPlane.id || this.state.loadedPlane._id) : null;
+            const targetPlaneId = plane.id || plane._id;
+            const isMatchingPlane = (loadedPlaneId && loadedPlaneId === targetPlaneId) || 
+                                    (this.state.loadedPlane && this.state.loadedPlane.name === plane.name);
+            if (isMatchingPlane) {
+              this.setState({
+                loadedPlane: newPlane
+              });
+            }
+          }
         }
-        await updatePlaneRequest(plane.id, obj);
         await this.loadAllPlanes();
+      }
+
+      if (this.state.loadedDungeon && Array.isArray(this.state.loadedDungeon.levels)) {
+        let dungeonChanged = false;
+        let newDungeon = clone(this.state.loadedDungeon);
+        newDungeon.levels.forEach(level => {
+          ['front', 'back'].forEach(side => {
+            const plane = level[side];
+            if (plane && Array.isArray(plane.miniboards)) {
+              let index = plane.miniboards.findIndex(b => b && (b.id === boardId || b._id === boardId || b.name === board.name));
+              if (index !== -1) {
+                plane.miniboards[index] = {};
+                dungeonChanged = true;
+              }
+            }
+          });
+        });
+        if (dungeonChanged) {
+          await updateDungeonRequest(newDungeon.id, newDungeon);
+          await this.loadAllDungeons();
+          
+          if (this.state.loadedPlane) {
+            let updatedLoadedPlane = null;
+            const loadedPlaneId = this.state.loadedPlane.id || this.state.loadedPlane._id;
+            for (const level of newDungeon.levels) {
+              if (level.front && ((loadedPlaneId && level.front.id === loadedPlaneId) || level.front.name === this.state.loadedPlane.name)) {
+                updatedLoadedPlane = level.front;
+                break;
+              }
+              if (level.back && ((loadedPlaneId && level.back.id === loadedPlaneId) || level.back.name === this.state.loadedPlane.name)) {
+                updatedLoadedPlane = level.back;
+                break;
+              }
+            }
+            if (updatedLoadedPlane) {
+              this.setState({
+                loadedPlane: updatedLoadedPlane
+              });
+            }
+          }
+          
+          this.setState({ loadedDungeon: newDungeon });
+        }
       }
     }
   }
@@ -3935,7 +4119,7 @@ class MapMakerPage extends React.Component {
       this.setState({ loadedDungeon: validatedDungeon });
       await this.addDungeonPlanesAndBoardsToState(validatedDungeon);
       setEditorPreference('loadedDungeon', validatedDungeon)
-      this.loadAllDungeons()
+      await this.loadAllDungeons()
       this.flashLeftReadout('Dungeon Saved')
     } else {
       let newDungeonPayload = {
@@ -3956,7 +4140,7 @@ class MapMakerPage extends React.Component {
       }, async () => {
         await this.addDungeonPlanesAndBoardsToState(formatted);
         setEditorPreference('loadedDungeon', formatted);
-        this.loadAllDungeons();
+        await this.loadAllDungeons();
       })
       this.flashLeftReadout('Dungeon Saved')
     }
@@ -4002,29 +4186,7 @@ class MapMakerPage extends React.Component {
       if (!b || !b.name || b.name === 'empty') return;
 
       let boardHasMissingPaths = false;
-      // Check for boundary passage tiles missing connecting paths
-      if (Array.isArray(b.tiles)) {
-        b.tiles.forEach((t, tileIdx) => {
-          const isEdge = tileIdx < 15 || tileIdx >= 210 || tileIdx % 15 === 0 || tileIdx % 15 === 14;
-          const containsType = this.props.mapMaker.getContainsType(t.contains);
-          const isPassageOrExit = containsType === 'passage' || 
-                                  containsType === 'passage_space' || 
-                                  containsType === 'door' || 
-                                  containsType === 'empty_space' ||
-                                  !t.contains ||
-                                  !containsType;
-          if (isEdge && isPassageOrExit) {
-            let directionName = '';
-            if (tileIdx < 15) directionName = 'top';
-            else if (tileIdx >= 210) directionName = 'bottom';
-            else if (tileIdx % 15 === 0) directionName = 'left';
-            else if (tileIdx % 15 === 14) directionName = 'right';
-            
-            errors.push(`Slot ${slotNames[i]} has a passage corridor touching the ${directionName} boundary (tile #${tileIdx}) that is missing a connecting path.`);
-            boardHasMissingPaths = true;
-          }
-        });
-      }
+      // Boundary passage tiles check bypassed to allow edge-of-board empty spaces and passages
 
       b.processed = this.props.mapMaker.filterMapAdjacency(b, i, plane.miniboards);
 
@@ -4043,78 +4205,86 @@ class MapMakerPage extends React.Component {
         return mb && mb.name && mb.name !== 'empty' ? mb.name : 'empty slot';
       };
 
+      const isSlotEmpty = (idx) => {
+        const mb = plane.miniboards[idx];
+        return !mb || !mb.name || mb.name === 'empty';
+      };
+      const hasAdjacentBoard = (idx) => {
+        return idx >= 0 && idx <= 8 && !isSlotEmpty(idx);
+      };
+
       if (i === 0) {
-        const rightOk = b.processed.right.includes(getMbId(1));
-        const botOk = b.processed.bot.includes(getMbId(3));
+        const rightOk = !hasAdjacentBoard(1) || b.processed.right.includes(getMbId(1));
+        const botOk = !hasAdjacentBoard(3) || b.processed.bot.includes(getMbId(3));
         check = rightOk && botOk;
-        if (!rightOk && b.config[1] && b.config[1].length > 0) errors.push(`Slot top-left exit to right doesn't connect to top-middle (${getMbName(1)}).`);
-        if (!botOk && b.config[2] && b.config[2].length > 0) errors.push(`Slot top-left exit to bottom doesn't connect to middle-left (${getMbName(3)}).`);
+        if (hasAdjacentBoard(1) && !b.processed.right.includes(getMbId(1)) && b.config[1] && b.config[1].length > 0) errors.push(`Slot top-left exit to right doesn't connect to top-middle (${getMbName(1)}).`);
+        if (hasAdjacentBoard(3) && !b.processed.bot.includes(getMbId(3)) && b.config[2] && b.config[2].length > 0) errors.push(`Slot top-left exit to bottom doesn't connect to middle-left (${getMbName(3)}).`);
       }
       if (i === 1) {
-        const leftOk = b.processed.left.includes(getMbId(0));
-        const rightOk = b.processed.right.includes(getMbId(2));
-        const botOk = b.processed.bot.includes(getMbId(4));
+        const leftOk = !hasAdjacentBoard(0) || b.processed.left.includes(getMbId(0));
+        const rightOk = !hasAdjacentBoard(2) || b.processed.right.includes(getMbId(2));
+        const botOk = !hasAdjacentBoard(4) || b.processed.bot.includes(getMbId(4));
         check = leftOk && rightOk && botOk;
-        if (!leftOk && b.config[3] && b.config[3].length > 0) errors.push(`Slot top-middle exit to left doesn't connect to top-left (${getMbName(0)}).`);
-        if (!rightOk && b.config[1] && b.config[1].length > 0) errors.push(`Slot top-middle exit to right doesn't connect to top-right (${getMbName(2)}).`);
-        if (!botOk && b.config[2] && b.config[2].length > 0) errors.push(`Slot top-middle exit to bottom doesn't connect to center (${getMbName(4)}).`);
+        if (hasAdjacentBoard(0) && !b.processed.left.includes(getMbId(0)) && b.config[3] && b.config[3].length > 0) errors.push(`Slot top-middle exit to left doesn't connect to top-left (${getMbName(0)}).`);
+        if (hasAdjacentBoard(2) && !b.processed.right.includes(getMbId(2)) && b.config[1] && b.config[1].length > 0) errors.push(`Slot top-middle exit to right doesn't connect to top-right (${getMbName(2)}).`);
+        if (hasAdjacentBoard(4) && !b.processed.bot.includes(getMbId(4)) && b.config[2] && b.config[2].length > 0) errors.push(`Slot top-middle exit to bottom doesn't connect to center (${getMbName(4)}).`);
       }
       if (i === 2) {
-        const leftOk = b.processed.left.includes(getMbId(1));
-        const botOk = b.processed.bot.includes(getMbId(5));
+        const leftOk = !hasAdjacentBoard(1) || b.processed.left.includes(getMbId(1));
+        const botOk = !hasAdjacentBoard(5) || b.processed.bot.includes(getMbId(5));
         check = leftOk && botOk;
-        if (!leftOk && b.config[3] && b.config[3].length > 0) errors.push(`Slot top-right exit to left doesn't connect to top-middle (${getMbName(1)}).`);
-        if (!botOk && b.config[2] && b.config[2].length > 0) errors.push(`Slot top-right exit to bottom doesn't connect to middle-right (${getMbName(5)}).`);
+        if (hasAdjacentBoard(1) && !b.processed.left.includes(getMbId(1)) && b.config[3] && b.config[3].length > 0) errors.push(`Slot top-right exit to left doesn't connect to top-middle (${getMbName(1)}).`);
+        if (hasAdjacentBoard(5) && !b.processed.bot.includes(getMbId(5)) && b.config[2] && b.config[2].length > 0) errors.push(`Slot top-right exit to bottom doesn't connect to middle-right (${getMbName(5)}).`);
       }
       if (i === 3) {
-        const topOk = b.processed.top.includes(getMbId(0));
-        const rightOk = b.processed.right.includes(getMbId(4));
-        const botOk = b.processed.bot.includes(getMbId(6));
+        const topOk = !hasAdjacentBoard(0) || b.processed.top.includes(getMbId(0));
+        const rightOk = !hasAdjacentBoard(4) || b.processed.right.includes(getMbId(4));
+        const botOk = !hasAdjacentBoard(6) || b.processed.bot.includes(getMbId(6));
         check = topOk && rightOk && botOk;
-        if (!topOk && b.config[0] && b.config[0].length > 0) errors.push(`Slot middle-left exit to top doesn't connect to top-left (${getMbName(0)}).`);
-        if (!rightOk && b.config[1] && b.config[1].length > 0) errors.push(`Slot middle-left exit to right doesn't connect to center (${getMbName(4)}).`);
-        if (!botOk && b.config[2] && b.config[2].length > 0) errors.push(`Slot middle-left exit to bottom doesn't connect to bottom-left (${getMbName(6)}).`);
+        if (hasAdjacentBoard(0) && !b.processed.top.includes(getMbId(0)) && b.config[0] && b.config[0].length > 0) errors.push(`Slot middle-left exit to top doesn't connect to top-left (${getMbName(0)}).`);
+        if (hasAdjacentBoard(4) && !b.processed.right.includes(getMbId(4)) && b.config[1] && b.config[1].length > 0) errors.push(`Slot middle-left exit to right doesn't connect to center (${getMbName(4)}).`);
+        if (hasAdjacentBoard(6) && !b.processed.bot.includes(getMbId(6)) && b.config[2] && b.config[2].length > 0) errors.push(`Slot middle-left exit to bottom doesn't connect to bottom-left (${getMbName(6)}).`);
       }
       if (i === 4) {
-        const leftOk = b.processed.left.includes(getMbId(3));
-        const botOk = b.processed.bot.includes(getMbId(7));
-        const topOk = b.processed.top.includes(getMbId(1));
-        const rightOk = b.processed.right.includes(getMbId(5));
+        const leftOk = !hasAdjacentBoard(3) || b.processed.left.includes(getMbId(3));
+        const botOk = !hasAdjacentBoard(7) || b.processed.bot.includes(getMbId(7));
+        const topOk = !hasAdjacentBoard(1) || b.processed.top.includes(getMbId(1));
+        const rightOk = !hasAdjacentBoard(5) || b.processed.right.includes(getMbId(5));
         check = leftOk && botOk && topOk && rightOk;
-        if (!leftOk && b.config[3] && b.config[3].length > 0) errors.push(`Slot center exit to left doesn't connect to middle-left (${getMbName(3)}).`);
-        if (!topOk && b.config[0] && b.config[0].length > 0) errors.push(`Slot center exit to top doesn't connect to top-middle (${getMbName(1)}).`);
-        if (!rightOk && b.config[1] && b.config[1].length > 0) errors.push(`Slot center exit to right doesn't connect to middle-right (${getMbName(5)}).`);
-        if (!botOk && b.config[2] && b.config[2].length > 0) errors.push(`Slot center exit to bottom doesn't connect to bottom-middle (${getMbName(7)}).`);
+        if (hasAdjacentBoard(3) && !b.processed.left.includes(getMbId(3)) && b.config[3] && b.config[3].length > 0) errors.push(`Slot center exit to left doesn't connect to middle-left (${getMbName(3)}).`);
+        if (hasAdjacentBoard(1) && !b.processed.top.includes(getMbId(1)) && b.config[0] && b.config[0].length > 0) errors.push(`Slot center exit to top doesn't connect to top-middle (${getMbName(1)}).`);
+        if (hasAdjacentBoard(5) && !b.processed.right.includes(getMbId(5)) && b.config[1] && b.config[1].length > 0) errors.push(`Slot center exit to right doesn't connect to middle-right (${getMbName(5)}).`);
+        if (hasAdjacentBoard(7) && !b.processed.bot.includes(getMbId(7)) && b.config[2] && b.config[2].length > 0) errors.push(`Slot center exit to bottom doesn't connect to bottom-middle (${getMbName(7)}).`);
       }
       if (i === 5) {
-        const leftOk = b.processed.left.includes(getMbId(4));
-        const botOk = b.processed.bot.includes(getMbId(8));
+        const leftOk = !hasAdjacentBoard(4) || b.processed.left.includes(getMbId(4));
+        const botOk = !hasAdjacentBoard(8) || b.processed.bot.includes(getMbId(8));
         check = leftOk && botOk;
-        if (!leftOk && b.config[3] && b.config[3].length > 0) errors.push(`Slot middle-right exit to left doesn't connect to center (${getMbName(4)}).`);
-        if (!botOk && b.config[2] && b.config[2].length > 0) errors.push(`Slot middle-right exit to bottom doesn't connect to bottom-right (${getMbName(8)}).`);
+        if (hasAdjacentBoard(4) && !b.processed.left.includes(getMbId(4)) && b.config[3] && b.config[3].length > 0) errors.push(`Slot middle-right exit to left doesn't connect to center (${getMbName(4)}).`);
+        if (hasAdjacentBoard(8) && !b.processed.bot.includes(getMbId(8)) && b.config[2] && b.config[2].length > 0) errors.push(`Slot middle-right exit to bottom doesn't connect to bottom-right (${getMbName(8)}).`);
       }
       if (i === 6) {
-        const topOk = b.processed.top.includes(getMbId(3));
-        const rightOk = b.processed.right.includes(getMbId(7));
+        const topOk = !hasAdjacentBoard(3) || b.processed.top.includes(getMbId(3));
+        const rightOk = !hasAdjacentBoard(7) || b.processed.right.includes(getMbId(7));
         check = topOk && rightOk;
-        if (!topOk && b.config[0] && b.config[0].length > 0) errors.push(`Slot bottom-left exit to top doesn't connect to middle-left (${getMbName(3)}).`);
-        if (!rightOk && b.config[1] && b.config[1].length > 0) errors.push(`Slot bottom-left exit to right doesn't connect to bottom-middle (${getMbName(7)}).`);
+        if (hasAdjacentBoard(3) && !b.processed.top.includes(getMbId(3)) && b.config[0] && b.config[0].length > 0) errors.push(`Slot bottom-left exit to top doesn't connect to middle-left (${getMbName(3)}).`);
+        if (hasAdjacentBoard(7) && !b.processed.right.includes(getMbId(7)) && b.config[1] && b.config[1].length > 0) errors.push(`Slot bottom-left exit to right doesn't connect to bottom-middle (${getMbName(7)}).`);
       }
       if (i === 7) {
-        const topOk = b.processed.top.includes(getMbId(4));
-        const leftOk = b.processed.left.includes(getMbId(6));
-        const rightOk = b.processed.right.includes(getMbId(8));
+        const topOk = !hasAdjacentBoard(4) || b.processed.top.includes(getMbId(4));
+        const leftOk = !hasAdjacentBoard(6) || b.processed.left.includes(getMbId(6));
+        const rightOk = !hasAdjacentBoard(8) || b.processed.right.includes(getMbId(8));
         check = topOk && leftOk && rightOk;
-        if (!topOk && b.config[0] && b.config[0].length > 0) errors.push(`Slot bottom-middle exit to top doesn't connect to center (${getMbName(4)}).`);
-        if (!leftOk && b.config[3] && b.config[3].length > 0) errors.push(`Slot bottom-middle exit to left doesn't connect to bottom-left (${getMbName(6)}).`);
-        if (!rightOk && b.config[1] && b.config[1].length > 0) errors.push(`Slot bottom-middle exit to right doesn't connect to bottom-right (${getMbName(8)}).`);
+        if (hasAdjacentBoard(4) && !b.processed.top.includes(getMbId(4)) && b.config[0] && b.config[0].length > 0) errors.push(`Slot bottom-middle exit to top doesn't connect to center (${getMbName(4)}).`);
+        if (hasAdjacentBoard(6) && !b.processed.left.includes(getMbId(6)) && b.config[3] && b.config[3].length > 0) errors.push(`Slot bottom-middle exit to left doesn't connect to bottom-left (${getMbName(6)}).`);
+        if (hasAdjacentBoard(8) && !b.processed.right.includes(getMbId(8)) && b.config[1] && b.config[1].length > 0) errors.push(`Slot bottom-middle exit to right doesn't connect to bottom-right (${getMbName(8)}).`);
       }
       if (i === 8) {
-        const topOk = b.processed.top.includes(getMbId(5));
-        const leftOk = b.processed.left.includes(getMbId(7));
+        const topOk = !hasAdjacentBoard(5) || b.processed.top.includes(getMbId(5));
+        const leftOk = !hasAdjacentBoard(7) || b.processed.left.includes(getMbId(7));
         check = topOk && leftOk;
-        if (!topOk && b.config[0] && b.config[0].length > 0) errors.push(`Slot bottom-right exit to top doesn't connect to middle-right (${getMbName(5)}).`);
-        if (!leftOk && b.config[3] && b.config[3].length > 0) errors.push(`Slot bottom-right exit to left doesn't connect to bottom-middle (${getMbName(7)}).`);
+        if (hasAdjacentBoard(5) && !b.processed.top.includes(getMbId(5)) && b.config[0] && b.config[0].length > 0) errors.push(`Slot bottom-right exit to top doesn't connect to middle-right (${getMbName(5)}).`);
+        if (hasAdjacentBoard(7) && !b.processed.left.includes(getMbId(7)) && b.config[3] && b.config[3].length > 0) errors.push(`Slot bottom-right exit to left doesn't connect to bottom-middle (${getMbName(7)}).`);
       }
 
       b.valid = check && !boardHasMissingPaths;
@@ -4319,7 +4489,11 @@ class MapMakerPage extends React.Component {
       this.setState({
         dungeons,
         loadingData: false
-      }, resolve);
+      }, () => {
+        const currentName = this.state.loadedDungeon?.name || 'Dungeon Selector';
+        this.setLoadedDungeonDropdownValue(currentName);
+        resolve(true);
+      });
     });
   }
   setLoadedDungeonDropdownValue = (name) => {
@@ -4637,6 +4811,7 @@ class MapMakerPage extends React.Component {
           if (matchedBoard) {
             return {
               ...mb,
+              id: matchedBoard.id || matchedBoard._id || mb.id,
               tiles: clone(matchedBoard.tiles),
               config: clone(matchedBoard.config)
             };
@@ -4723,7 +4898,7 @@ class MapMakerPage extends React.Component {
       }, resolve)
     })
   }
-  restoreEditorSelection = () => {
+  restoreEditorSelection = async () => {
     if (this._handoffActive) {
       return;
     }
@@ -4751,23 +4926,33 @@ class MapMakerPage extends React.Component {
         });
         this.setLoadedDungeonDropdownValue(dungeon.name);
 
+        // Populates folder structures for boards and planes, and sets state.
+        await this.addDungeonPlanesAndBoardsToState(dungeon);
+
         // Check if the loadedBoardId is part of this dungeon
         if (loadedBoardId) {
           const context = this.resolveDungeonContext(loadedBoardId);
           if (context) {
-            this.setState({
-              zoomLevelId: context.levelId,
-              zoomMiniboardIndex: context.miniboardIndex,
-              zoomOrientation: context.orientation,
-              loadedPlane: context.plane,
-              loadedBoard: context.miniboard,
-              tiles: context.miniboard.tiles,
-              selectedThingTitle: selectedView === 'board' ? `Board: ${context.miniboard.name}` : (selectedView === 'plane' ? `Plane: ${context.plane.name}` : `Dungeon: ${dungeon.name}`)
-            });
-            // Update preferences
-            setEditorPreference('loadedPlaneId', context.plane.id || null);
-            setEditorPreference('loadedBoardId', context.miniboard.id || null);
-            return;
+            const lvl = dungeon.levels.find(l => l.id === context.levelId);
+            const plane = lvl ? lvl[context.orientation] : null;
+            const miniboardRef = plane && Array.isArray(plane.miniboards) ? plane.miniboards[context.boardIndex] : null;
+            const miniboard = miniboardRef ? (this.state.boards.find(b => b && (b.id === miniboardRef.id || b._id === miniboardRef.id || b.name === miniboardRef.name)) || null) : null;
+
+            if (miniboard && plane) {
+              this.setState({
+                zoomLevelId: context.levelId,
+                zoomMiniboardIndex: context.boardIndex,
+                zoomOrientation: context.orientation,
+                loadedPlane: plane,
+                loadedBoard: miniboard,
+                tiles: miniboard.tiles || [],
+                selectedThingTitle: selectedView === 'board' ? `Board: ${miniboard.name}` : (selectedView === 'plane' ? `Plane: ${plane.name}` : `Dungeon: ${dungeon.name}`)
+              });
+              // Update preferences
+              setEditorPreference('loadedPlaneId', plane.id || null);
+              setEditorPreference('loadedBoardId', miniboard.id || null);
+              return;
+            }
           }
         }
 
@@ -4800,6 +4985,7 @@ class MapMakerPage extends React.Component {
             return;
           }
         }
+        return;
       }
     }
 
@@ -6328,10 +6514,61 @@ class MapMakerPage extends React.Component {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-end',
-              gap: '8px'
+              gap: '8px',
+              position: 'relative'
             }}>
               {this.state.selectedView === 'board' && (
                 <>
+                  {(() => {
+                    const nav = this.getBoardNavigationState();
+                    return (
+                      <div className="board-nav-dpad">
+                        {/* Row 0 */}
+                        <div />
+                        <button 
+                          className="dpad-btn" 
+                          title="Navigate North"
+                          disabled={!nav.canGoNorth} 
+                          onClick={() => this.loadBoard(nav.northBoard)}
+                        >
+                          ︿
+                        </button>
+                        <div />
+                        
+                        {/* Row 1 */}
+                        <button 
+                          className="dpad-btn" 
+                          title="Navigate West"
+                          disabled={!nav.canGoWest} 
+                          onClick={() => this.loadBoard(nav.westBoard)}
+                        >
+                          〈
+                        </button>
+                        <div />
+                        <button 
+                          className="dpad-btn" 
+                          title="Navigate East"
+                          disabled={!nav.canGoEast} 
+                          onClick={() => this.loadBoard(nav.eastBoard)}
+                        >
+                          〉
+                        </button>
+
+                        {/* Row 2 */}
+                        <div />
+                        <button 
+                          className="dpad-btn" 
+                          title="Navigate South"
+                          disabled={!nav.canGoSouth} 
+                          onClick={() => this.loadBoard(nav.southBoard)}
+                        >
+                          ﹀
+                        </button>
+                        <div />
+                      </div>
+                    );
+                  })()}
+
                   <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a4b0be', whiteSpace: 'nowrap' }}>Floor:</span>
                   <select
                     value={this.state.floorTexture || ''}
@@ -6353,6 +6590,59 @@ class MapMakerPage extends React.Component {
                       </option>
                     ))}
                   </select>
+                </>
+              )}
+              {this.state.selectedView === 'plane' && (
+                <>
+                  {(() => {
+                    const nav = this.getPlaneNavigationState();
+                    return (
+                      <div className="board-nav-dpad">
+                        {/* Row 0 */}
+                        <div />
+                        <button 
+                          className="dpad-btn" 
+                          title="Navigate Up a Level"
+                          disabled={!nav.canGoNorth} 
+                          onClick={() => this.loadPlane(nav.northPlane)}
+                        >
+                          ︿
+                        </button>
+                        <div />
+                        
+                        {/* Row 1 */}
+                        <button 
+                          className="dpad-btn" 
+                          title="Switch to Front"
+                          disabled={!nav.canGoWest} 
+                          onClick={() => this.loadPlane(nav.westPlane)}
+                        >
+                          〈
+                        </button>
+                        <div />
+                        <button 
+                          className="dpad-btn" 
+                          title="Switch to Back"
+                          disabled={!nav.canGoEast} 
+                          onClick={() => this.loadPlane(nav.eastPlane)}
+                        >
+                          〉
+                        </button>
+
+                        {/* Row 2 */}
+                        <div />
+                        <button 
+                          className="dpad-btn" 
+                          title="Navigate Down a Level"
+                          disabled={!nav.canGoSouth} 
+                          onClick={() => this.loadPlane(nav.southPlane)}
+                        >
+                          ﹀
+                        </button>
+                        <div />
+                      </div>
+                    );
+                  })()}
                 </>
               )}
             </div>
@@ -6705,6 +6995,7 @@ class MapMakerPage extends React.Component {
 
                 toggleShowPlaneNames={this.toggleShowPlaneNames}
                 expandCollapsePlaneFolders={this.expandCollapsePlaneFolders}
+                collapseAllPlaneFolders={this.collapseAllPlaneFolders}
               ></PlanesPanel>}
 
           </div>
