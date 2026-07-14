@@ -1185,7 +1185,6 @@ export default function CombatGrid(props) {
             (details?.stunned && !isAsleepFighter) ? 'stunned' : '',
             isDisintegrating ? 'disintegrate-shaking' : '',
             activeReturnTrialAnim ? 'respawn-fade-in' : '',
-            details?.isCelebrating ? 'victory-celebrating' : '',
         ].filter(Boolean).join(' ');
 
         const portraitClasses = [
@@ -1212,6 +1211,7 @@ export default function CombatGrid(props) {
             getLiveCombatant(fighter.id)?.astralProjectionActive ? 'astral-projection-active' : '',
             fighter.isLeader ? 'leader-portrait' : '',
             groupSelectedIds.includes(fighter.id) && !details?.dead ? 'group-selected' : '',
+            details?.isCelebrating ? 'victory-celebrating' : '',
         ].filter(Boolean).join(' ');
 
         const isBatFlying = activeAnimations.some(a => a.type === 'bat_fly_anim' && a.sourceUnitId === fighter.id);
@@ -2077,9 +2077,11 @@ export default function CombatGrid(props) {
                             position: 'relative',
                             width: '100%',
                             height: '100%',
-                            transform: unit.isUpsideDown 
-                                ? 'rotate(180deg)' 
-                                : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined),
+                            transform: (isLarge || isHuge)
+                                ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} ${unit.facing === 'right' ? 'scaleX(-1)' : ''} ${greetingInProcess ? 'scale(1.5)' : ''}`.trim() || 'none'
+                                : (unit.isUpsideDown 
+                                    ? 'rotate(180deg)' 
+                                    : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined)),
                             boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                             borderRadius: '0',
                             transition: 'filter 0.25s ease-in-out',

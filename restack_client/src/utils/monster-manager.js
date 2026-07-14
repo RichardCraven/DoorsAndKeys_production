@@ -762,6 +762,37 @@ export function MonsterManager() {
                 { itemPool: TIER3_ITEM, percentChance: 35 },
             ]
         },
+        qlippoth: {
+            type: 'qlippoth',
+            tier: 3,
+            subtype: 'eldritch',
+            key: 'qlippoth',
+            image_names: ['qlippoth'],
+            monster_names: ['Whisperer', 'Gloom'],
+            lordName: 'Oblivion',
+            stats: {
+                hp: 220,
+                atk: 8,
+                def: 8,
+                speed: 10,
+                willpower: 4,
+                str: 3,
+                int: 7,
+                dex: 6,
+                fort: 4
+            },
+            level: 6,
+            portrait: images['qlippoth'],
+            greetings: ['*chilling whispers*', 'the shadows consume you'],
+            deathCries: ['*shrieks and fades*'],
+            skills: ['undead_grasp', 'despair', 'induce_fear'],
+            weaknesses: ['fire', 'holy'],
+            minions: ['shade'],
+            drops: [
+                { item: TIER1_POTION, percentChance: 35 },
+                { itemPool: TIER1_ITEM, percentChance: 35 },
+            ]
+        },
         // ── Level 19 ─────────────────────────────────────────────────────
         djinn: {
             type: 'djinn',

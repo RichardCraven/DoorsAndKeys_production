@@ -631,6 +631,7 @@ import basilisk_cultists_portrait from '../assets/portraits/monsters/basilisk_cu
 import horned_pet from '../assets/portraits/monsters/horned_pet.png'
 import horned_pet_portrait from '../assets/portraits/monsters/horned_pet.png'
 import dragon_hatchling from '../assets/portraits/monsters/dragon_hatchling.png'
+import qlippoth from '../assets/portraits/monsters/qlippoth.png'
 
 
 //MID JOURNEY
@@ -1237,6 +1238,7 @@ export {
     horned_pet,
     horned_pet_portrait,
     dragon_hatchling,
+    qlippoth,
 
     beetle_charm,
     demonskull_charm,
@@ -1776,7 +1778,9 @@ export {
     arcane_soul_bolt,
     arcane_bone_armor,
     arcane_sprint,
+    arcane_sprint as recruit,
     arcane_spectral_strike,
+    arcane_spectral_strike as spirit,
     arcane_chain_lightning,
     arcane_runic_barrage,
     arcane_battlecry,

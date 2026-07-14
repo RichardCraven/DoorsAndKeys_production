@@ -970,9 +970,9 @@ class ShrineScreen extends React.Component {
             <React.Fragment key="shrine-tile-frag">
                 <style>{`
                     @keyframes shrine-victory-spin {
-                        0% { transform: scale(1) rotate(0deg); filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.8)); }
-                        50% { transform: scale(1.3) rotate(180deg); filter: drop-shadow(0 0 35px rgba(255, 215, 0, 1)) brightness(1.35); }
-                        100% { transform: scale(1) rotate(360deg); filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.8)); }
+                        0% { transform: scale(1); filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.8)); }
+                        50% { transform: scale(1.3); filter: drop-shadow(0 0 35px rgba(255, 215, 0, 1)) brightness(1.35); }
+                        100% { transform: scale(1); filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.8)); }
                     }
                     @keyframes shriner-victory-glow {
                         0% { transform: scale(1); filter: brightness(1) drop-shadow(0 0 10px rgba(249, 177, 21, 0.5)); }

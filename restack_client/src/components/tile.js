@@ -262,6 +262,33 @@ function Tile(props) {
 
     const portraitZIndex = foregroundPortalImages.includes(props.image) ? 12 : 3;
 
+    const imageString = String(props.imageOverride || props.image || '').toLowerCase();
+    const isItemImage = imageString.includes('key') ||
+                        imageString.includes('chest') ||
+                        imageString.includes('sword') ||
+                        imageString.includes('shield') ||
+                        imageString.includes('helm') ||
+                        imageString.includes('armor') ||
+                        imageString.includes('boots') ||
+                        imageString.includes('ring') ||
+                        imageString.includes('amulet') ||
+                        imageString.includes('potion') ||
+                        imageString.includes('scroll') ||
+                        imageString.includes('book') ||
+                        imageString.includes('tablet') ||
+                        imageString.includes('relic') ||
+                        imageString.includes('coin') ||
+                        imageString.includes('gold') ||
+                        imageString.includes('gem') ||
+                        imageString.includes('jewel') ||
+                        imageString.includes('rune') ||
+                        imageString.includes('shard');
+
+    const isItemCell = props.type === 'item' || 
+                       (containsObj && (containsObj.type === 'item' || containsObj.type === 'key')) ||
+                       ['key', 'items', 'jewels', 'runes', 'treasure'].includes(props.optionType) ||
+                       isItemImage;
+
     return (
         <div 
             data-portal-id={props['data-portal-id']}
@@ -389,7 +416,7 @@ function Tile(props) {
 
                      {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
                       {(props.imageOverride || images[props.image]) && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
-                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : '100% 100%', backgroundPosition: isVendorCell ? vendorBackgroundPosition : 'inherit', backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
+                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
                       )}
 
             {/* Soul Shard custom overlay */}

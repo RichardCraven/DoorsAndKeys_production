@@ -2073,3 +2073,86 @@
 .pe-pfu-atk { color: #80c0e0; font-weight: 700; }
 .pe-pfu-hp  { color: rgba(255,255,255,0.5); }
 
+/* ── Combat Battle Hand Area (Bottom Center) ───────────────── */
+.pe-battle-hand-area {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 24px;
+  background: rgba(14, 14, 22, 0.75);
+  border: 1px solid rgba(120, 80, 200, 0.2);
+  border-radius: var(--pe-radius-lg);
+  margin-top: 10px;
+  width: 100%;
+  flex: 0 0 auto;
+  box-shadow: inset 0 0 20px rgba(120, 80, 200, 0.08), var(--pe-shadow);
+  overflow: visible;
+  z-index: 10;
+}
+
+.pe-battle-hand-left,
+.pe-battle-hand-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 90px;
+}
+
+.pe-battle-hand-center {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  overflow: visible;
+  min-width: 0;
+}
+
+.pe-battle-hand-cards {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: visible;
+  padding: 8px 16px;
+  max-width: 100%;
+  scrollbar-width: none; /* Firefox */
+}
+
+.pe-battle-hand-cards::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.pe-empty-hand-duel {
+  color: var(--pe-text-dim);
+  font-size: 13px;
+  font-style: italic;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.05em;
+  padding: 20px 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Make Reserve Zone occupy full sidebar height during active duels */
+.pe-layout--battle .pe-reserve-zone {
+  flex: 1 1 100%;
+  max-height: 100%;
+  border-bottom: none;
+}
+
+/* Portrait rendering inside summoned field units */
+.pe-unit-portrait {
+  width: 100%;
+  height: 50px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 4px;
+}
+
+

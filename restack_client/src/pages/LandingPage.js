@@ -22,6 +22,32 @@ export default function LandingPage(props) {
       if (el) el.remove();
     };
   }, []);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showIOSPrompt, setShowIOSPrompt] = useState(false);
+
+  useEffect(() => {
+    // Check if iOS and not standalone
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
+    
+    if (isIOS && !isStandalone) {
+      const dismissed = sessionStorage.getItem('ios-pwa-prompt-dismissed');
+      if (!dismissed) {
+        setShowIOSPrompt(true);
+      }
+    }
+
+    const handleBeforeInstall = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+    };
+  }, []);
+
   const [navToUserProfile, setNavUserProfile] = useState(false);
   const [navToCombatSimulator, setNavToCombatSimulator] = useState(false);
   const [navToCrew, setNavCrew] = useState(false);
@@ -260,6 +286,18 @@ export default function LandingPage(props) {
     setShowDungeonPicker(false);
   }
 
+  const triggerInstall = () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choiceResult) => {
+        if (choiceResult.outcome === 'accepted') {
+          console.log('User accepted the PWA install prompt');
+        }
+        setDeferredPrompt(null);
+      });
+    }
+  };
+
   const handleLogout = () => {
     sessionStorage.clear();
     history.push('/login');
@@ -270,6 +308,40 @@ export default function LandingPage(props) {
 
   return (
     <div className="redux-landing-container">
+      {deferredPrompt && (
+        <div className="pwa-install-banner">
+          <div className="pwa-banner-content">
+            <span className="pwa-icon" role="img" aria-label="phone">📱</span>
+            <div className="pwa-text-group">
+              <div className="pwa-title">Play in Full Screen</div>
+              <div className="pwa-desc">Install DreamTower to your home screen for the full borderless experience.</div>
+            </div>
+          </div>
+          <div className="pwa-banner-actions">
+            <button className="pwa-btn pwa-btn-install" onClick={triggerInstall}>Install</button>
+            <button className="pwa-btn pwa-btn-close" onClick={() => setDeferredPrompt(null)}>✕</button>
+          </div>
+        </div>
+      )}
+
+      {showIOSPrompt && (
+        <div className="pwa-install-banner">
+          <div className="pwa-banner-content">
+            <span className="pwa-icon" role="img" aria-label="apple">🍎</span>
+            <div className="pwa-text-group">
+              <div className="pwa-title">Install on iPhone / iPad</div>
+              <div className="pwa-desc">Tap the <strong style={{color:'#e5b54f'}}>Share button</strong> (square with up arrow) in Safari, then select <strong style={{color:'#e5b54f'}}>"Add to Home Screen"</strong>.</div>
+            </div>
+          </div>
+          <div className="pwa-banner-actions">
+            <button className="pwa-btn pwa-btn-close" onClick={() => {
+              setShowIOSPrompt(false);
+              sessionStorage.setItem('ios-pwa-prompt-dismissed', 'true');
+            }}>Got it</button>
+          </div>
+        </div>
+      )}
+
       {navToIntro && <Redirect to='/intro' />}
       {navToUserProfile && <Redirect to='/userProfilePage' />}
       {navToCrew && <Redirect to='/crewManager' />}

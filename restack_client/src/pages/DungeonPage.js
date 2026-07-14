@@ -1,4 +1,5 @@
 import React from 'react';
+import loadingGif from '../assets/highres-gifs/gifOne.gif';
 
 import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../utils/shared-constants';
 import '../styles/dungeon-board.scss'
@@ -2325,6 +2326,7 @@ class DungeonPage extends React.Component {
         this._monsterSightings = new Map();
         this._wasPoiPanelExpanded = !!((getMeta() || {}).camping);
         this.state = {
+            isLoadingDungeon: true,
             tileSize: 0,
             boardSize: 0,
             tiles: [],
@@ -7275,6 +7277,7 @@ class DungeonPage extends React.Component {
             selectedDungeon = pool[Math.floor(Math.random() * pool.length)];
         }
         if (!selectedDungeon) {
+            this.setState({ isLoadingDungeon: false });
             return;
         }
         // selectedDungeon = dungeons.find(e=>e.name === 'Primari');
@@ -7379,6 +7382,7 @@ class DungeonPage extends React.Component {
 
             this.setState(()=>{
                 return {
+                    isLoadingDungeon: false,
                     overlayTiles: this.props.boardManager.overlayTiles,
                     tiles: this.props.boardManager.tiles,
                     minimap,
@@ -7410,6 +7414,7 @@ class DungeonPage extends React.Component {
         } else {
             // no valid dungeon
             // alert('no valid dungeon!')
+            this.setState({ isLoadingDungeon: false });
         }
     }
     loadExistingDungeon = async (dungeonId) => {
@@ -7549,6 +7554,7 @@ class DungeonPage extends React.Component {
         const dungeonLevel = dungeon.levels.find(l => Number(l.id) === targetLevelId) || dungeon.levels[0];
         if (!dungeonLevel) {
             console.error('DungeonPage.loadExistingDungeon: dungeon has no levels, cannot initialize board');
+            this.setState({ isLoadingDungeon: false });
             return;
         }
         // Patch meta.location so the rest of the function uses the resolved id
@@ -7586,6 +7592,7 @@ class DungeonPage extends React.Component {
             });
         } catch (initErr) {
             console.error('DungeonPage.loadExistingDungeon: initializeTilesFromMap THREW:', initErr);
+            this.setState({ isLoadingDungeon: false });
             return;
         }
         const minimap = this.state.minimap,
@@ -7597,6 +7604,7 @@ class DungeonPage extends React.Component {
         }
         if (!level) {
             console.error('DungeonPage.loadExistingDungeon: no levels in levelTracker, cannot continue');
+            this.setState({ isLoadingDungeon: false });
             return;
         }
         levels.forEach(e=>e.active = false)
@@ -7645,6 +7653,7 @@ class DungeonPage extends React.Component {
         const expanded = selectedCrewMember ? (Array.isArray(selectedCrewMember.actionMenuTypeExpanded) ? selectedCrewMember.actionMenuTypeExpanded : (selectedCrewMember.actionMenuTypeExpanded ? [selectedCrewMember.actionMenuTypeExpanded] : [])) : [];
         this.setState(()=>{
             return {
+                isLoadingDungeon: false,
                 spawn: meta.location.tileIndex,
                 tiles: this.props.boardManager.tiles,
                 overlayTiles: this.props.boardManager.overlayTiles,
@@ -9870,6 +9879,22 @@ class DungeonPage extends React.Component {
 
         return (
         <div className={`dungeon-container ${this.state.ritualWrecked ? 'wrecked' : ''}`}>
+            {this.state.isLoadingDungeon && (
+                <div className="server-waking-overlay">
+                    <div className="server-waking-card">
+                        <h2 className="server-waking-title">Entering the Dungeon</h2>
+                        <div className="server-waking-gif-container">
+                            <img src={loadingGif} className="server-waking-gif" alt="Loading..." />
+                        </div>
+                        <p className="server-waking-desc">
+                            Delving into the depths, preparing the layout...
+                        </p>
+                        <div className="server-waking-progress-container">
+                            <div className="server-waking-progress-bar" style={{ animationDuration: '3s' }} />
+                        </div>
+                    </div>
+                </div>
+            )}
             {this.state.showFoodGoneBadPopup && (
                 <CModal
                     visible={this.state.showFoodGoneBadPopup}
@@ -12025,7 +12050,7 @@ class DungeonPage extends React.Component {
                         {(() => {
                             const selected = this.state.selectedCrewMember || {};
                             const maxHp = (selected.stats && selected.stats.hp) ? selected.stats.hp : 0;
-                            const currentHp = (typeof selected.hp !== 'undefined') ? selected.hp : maxHp;
+                            const currentHp = (typeof selected.hp !== 'undefined') ? Math.floor(selected.hp) : maxHp;
                             const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, Math.ceil((currentHp / maxHp) * 100))) : 0;
                             return (
                                 <div className="hp-line-container" style={{width: '100%'}}>
@@ -12042,7 +12067,7 @@ class DungeonPage extends React.Component {
                         {(() => {
                             const selected = this.state.selectedCrewMember || {};
                             const maxHp = (selected.stats && selected.stats.hp) ? selected.stats.hp : 0;
-                            const currentHp = (typeof selected.hp !== 'undefined') ? selected.hp : maxHp;
+                            const currentHp = (typeof selected.hp !== 'undefined') ? Math.floor(selected.hp) : maxHp;
                             return (
                                 <div className="stat-line"> <span className="stat-name">hitpoints</span>  <span className='stat-value'>{currentHp}/{maxHp}</span> </div>
                             )
@@ -12939,7 +12964,7 @@ class DungeonPage extends React.Component {
                                 backgroundPosition: 'center',
                                 pointerEvents: 'none',
                                 transform: this.state.playerFloatStyle.transform,
-                                zIndex: 5,
+                                zIndex: 25,
                                 backgroundImage: this.state.playerFloatStyle.backgroundImage
                             }}
                         />
@@ -12956,7 +12981,7 @@ class DungeonPage extends React.Component {
                                 height: this.state.tileSize,
                                 transform: this.state.chestLootStyle ? this.state.chestLootStyle.transform : this.state.playerFloatStyle.transform,
                                 pointerEvents: 'none',
-                                zIndex: 6
+                                zIndex: 26
                             }}
                         >
                             {this.state.activeChestLoot.map((loot, idx) => {
