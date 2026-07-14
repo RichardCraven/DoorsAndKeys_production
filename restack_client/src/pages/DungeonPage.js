@@ -177,10 +177,30 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
     React.useEffect(() => {
         if (modalType === 'Merchant' || modalType === 'Alchemist') {
             setShowContent(false);
-            const timer = setTimeout(() => {
-                setShowContent(true);
-            }, 1300);
-            return () => clearTimeout(timer);
+            const imgKey = modalType === 'Merchant' ? 'merchant_bg' : 'alchemist_bg';
+            const imgAsset = images[imgKey];
+            const imgSrc = imgAsset?.default || imgAsset;
+
+            if (imgSrc) {
+                const img = new Image();
+                let timer;
+                const onImageLoaded = () => {
+                    timer = setTimeout(() => {
+                        setShowContent(true);
+                    }, 1300);
+                };
+                img.onload = onImageLoaded;
+                img.onerror = onImageLoaded; // fallback if image fails to load
+                img.src = imgSrc;
+                return () => {
+                    if (timer) clearTimeout(timer);
+                };
+            } else {
+                const timer = setTimeout(() => {
+                    setShowContent(true);
+                }, 1300);
+                return () => clearTimeout(timer);
+            }
         } else {
             setShowContent(true);
         }
@@ -12804,6 +12824,7 @@ class DungeonPage extends React.Component {
                                         const isNarrative = type === 'narrative' || type === 'lore_tablet';
                                         const isSpawn    = type === 'spawn';
                                         const isPortal   = type === 'dungeon_portal' || type === 'dungeon portal';
+                                        const isItem     = type === 'item' && !CHEST_SUBTYPES.has(subtype);
                                         // Image: prefer tile.image (already resolved by boardManager)
                                         const icon = t.image
                                             ? (images[t.image] || t.image)
@@ -12827,6 +12848,7 @@ class DungeonPage extends React.Component {
                                             : isNarrative ? ' poi-narrative-card'
                                             : isSpawn     ? ' poi-spawn-card'
                                             : isPortal    ? ' poi-portal-card'
+                                            : isItem      ? ' poi-item-card'
                                             : t.isLoot    ? ' poi-loot-card'
                                             : '';
                                         return (

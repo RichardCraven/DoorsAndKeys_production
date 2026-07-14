@@ -3301,6 +3301,29 @@
     }
 }
 
+/* Item / key card — silver/steel theme */
+.poi-item-card {
+    border-color: rgba(180, 180, 180, 0.35);
+
+    &:hover {
+        border-color: rgba(220, 220, 220, 0.7);
+        box-shadow: 0 0 14px rgba(200, 200, 200, 0.28);
+    }
+
+    .poi-portrait-name {
+        background: rgba(255, 255, 255, 0.05);
+        border-top-color: rgba(255, 255, 255, 0.15);
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .poi-portrait-img {
+        object-fit: contain;
+        background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08) 0%, rgba(0,0,0,0) 70%);
+        padding: 8px; /* Clean padding to make keys look beautiful and not too large */
+    }
+}
+
+
 .poi-portrait-card.fade-out {
     opacity: 0 !important;
     transform: scale(0.9) !important;

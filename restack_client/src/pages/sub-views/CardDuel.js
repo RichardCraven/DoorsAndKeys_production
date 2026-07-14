@@ -1864,15 +1864,16 @@ class CardDuel extends React.Component {
                                     </div>
                                 )}
 
-                                {/* Battlefield — active field champions */}
-                                <div className={`pe-field-zone ${attackFlash ? 'pe-field-attack' : ''}`}>
-                                    <div className="pe-field-label">
-                                        BATTLEFIELD
+                                {/* Unified Player Army Zone (Field Champions + Summoned Units) */}
+                                <div className={`pe-player-field-zone ${attackFlash ? 'pe-field-attack' : ''}`}>
+                                    <div className="pe-player-field-label">
+                                        <span role="img" aria-label="shield">🛡️</span> YOUR ARMY
                                         {fallenChampions.length > 0 && (
                                             <span className="pe-field-fallen-count"> · {fallenChampions.length} fallen</span>
                                         )}
                                     </div>
-                                    <div className="pe-field-champions">
+                                    <div className="pe-player-field-units">
+                                        {/* Field Champions */}
                                         {fieldChampions.map(c => this.renderFieldChampion(c))}
                                         {fieldChampions.length === 0 && (
                                             <div className="pe-field-empty">Summon a champion from the Reserve →</div>
@@ -1880,47 +1881,38 @@ class CardDuel extends React.Component {
                                         {fieldChampions.length === 1 && (
                                             <div className="pe-field-slot-empty">[ Empty Slot ]</div>
                                         )}
+
+                                        {/* Summoned Units from Hand */}
+                                        {this.state.playerField && this.state.playerField.map(unit => {
+                                            const hpPct = Math.max(0, (unit.hp / unit.maxHp) * 100);
+                                            const art = unit.art ? (images[unit.art] || null) : null;
+                                            return (
+                                                <div key={unit.id} className="pe-player-field-unit">
+                                                    {art && (
+                                                        <div 
+                                                            className="pe-unit-portrait" 
+                                                            style={{ backgroundImage: `url(${art})` }} 
+                                                        />
+                                                    )}
+                                                    <div className="pe-pfu-name">{unit.name}</div>
+                                                    <div className="pe-pfu-hp-bar-bg">
+                                                        <div className="pe-pfu-hp-bar-fill" style={{ width: `${hpPct}%` }} />
+                                                    </div>
+                                                    <div className="pe-pfu-stats">
+                                                        <span className="pe-pfu-atk">⚔ {unit.atk}</span>
+                                                        <span className="pe-pfu-hp">{unit.hp}/{unit.maxHp}</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                     {totalATK > 0 && (
-                                        <div className="pe-field-atk-total">
+                                        <div className="pe-field-atk-total" style={{ marginTop: '8px' }}>
                                             Combined ATK: <strong>{totalATK}</strong>
                                             {this.state.hasDeathMark && <span className="pe-death-mark-hint"> → ☠️ ×2 = {totalATK * 2}</span>}
                                         </div>
                                     )}
                                 </div>
-
-                                {/* Player field units */}
-                                {this.state.playerField && this.state.playerField.length > 0 && (
-                                    <div className="pe-player-field-zone">
-                                        <div className="pe-player-field-label">
-                                            <span role="img" aria-label="shield">🛡️</span> YOUR ARMY
-                                        </div>
-                                        <div className="pe-player-field-units">
-                                            {this.state.playerField.map(unit => {
-                                                const hpPct = Math.max(0, (unit.hp / unit.maxHp) * 100);
-                                                const art = unit.art ? (images[unit.art] || null) : null;
-                                                return (
-                                                    <div key={unit.id} className="pe-player-field-unit">
-                                                        {art && (
-                                                            <div 
-                                                                className="pe-unit-portrait" 
-                                                                style={{ backgroundImage: `url(${art})` }} 
-                                                            />
-                                                        )}
-                                                        <div className="pe-pfu-name">{unit.name}</div>
-                                                        <div className="pe-pfu-hp-bar-bg">
-                                                            <div className="pe-pfu-hp-bar-fill" style={{ width: `${hpPct}%` }} />
-                                                        </div>
-                                                        <div className="pe-pfu-stats">
-                                                            <span className="pe-pfu-atk">⚔ {unit.atk}</span>
-                                                            <span className="pe-pfu-hp">{unit.hp}/{unit.maxHp}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                )}
 
                                 {/* Message strip */}
                                 <div className="pe-message-strip">
