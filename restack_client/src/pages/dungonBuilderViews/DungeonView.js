@@ -61,6 +61,74 @@ class DungeonView extends React.Component {
         if(matrix[type]) val=matrix[type]
         return val
     }
+    hasLinedUpConnection = (miniboards, boardIndex, tileIdx) => {
+        if (!miniboards) return null;
+        const board = miniboards[boardIndex];
+        if (!board || !board.tiles) return null;
+        const tile = board.tiles[tileIdx];
+        if (!tile || !tile.contains || tile.contains.type !== 'connecting_path') return null;
+
+        const x = tileIdx % 15;
+        const y = Math.floor(tileIdx / 15);
+
+        // Left edge (x === 0)
+        if (x === 0) {
+            const col = boardIndex % 3;
+            if (col > 0) {
+                const leftBoard = miniboards[boardIndex - 1];
+                if (leftBoard && leftBoard.tiles) {
+                    const rightTileIdx = y * 15 + 14;
+                    const leftTile = leftBoard.tiles[rightTileIdx];
+                    if (leftTile && leftTile.contains && leftTile.contains.type === 'connecting_path') {
+                        return 'left';
+                    }
+                }
+            }
+        }
+        // Right edge (x === 14)
+        if (x === 14) {
+            const col = boardIndex % 3;
+            if (col < 2) {
+                const rightBoard = miniboards[boardIndex + 1];
+                if (rightBoard && rightBoard.tiles) {
+                    const leftTileIdx = y * 15;
+                    const rightTile = rightBoard.tiles[leftTileIdx];
+                    if (rightTile && rightTile.contains && rightTile.contains.type === 'connecting_path') {
+                        return 'right';
+                    }
+                }
+            }
+        }
+        // Top edge (y === 0)
+        if (y === 0) {
+            const row = Math.floor(boardIndex / 3);
+            if (row > 0) {
+                const topBoard = miniboards[boardIndex - 3];
+                if (topBoard && topBoard.tiles) {
+                    const bottomTileIdx = 14 * 15 + x;
+                    const topTile = topBoard.tiles[bottomTileIdx];
+                    if (topTile && topTile.contains && topTile.contains.type === 'connecting_path') {
+                        return 'top';
+                    }
+                }
+            }
+        }
+        // Bottom edge (y === 14)
+        if (y === 14) {
+            const row = Math.floor(boardIndex / 3);
+            if (row < 2) {
+                const bottomBoard = miniboards[boardIndex + 3];
+                if (bottomBoard && bottomBoard.tiles) {
+                    const topTileIdx = x;
+                    const bottomTile = bottomBoard.tiles[topTileIdx];
+                    if (bottomTile && bottomTile.contains && bottomTile.contains.type === 'connecting_path') {
+                        return 'bottom';
+                    }
+                }
+            }
+        }
+        return null;
+    }
     containsImages = (passagesArray) => {
         let imageTypes = ['way_up', 'way_down']
         return passagesArray.some(p=>imageTypes.includes((typeof p.contains === 'object' && p.contains !== null) ? p.contains.type : p.contains))
@@ -565,41 +633,42 @@ class DungeonView extends React.Component {
                                                                 ></div>
                                                         })}
                                                     </div>
-                                                    {level.front.miniboards.map((board, i) => {
-                                                    return    <div 
-                                                            className="micro-board board" 
-                                                            key={i}
-                                                            style={{
-                                                                height: (this.props.tileSize*6)/3-2+'px',
-                                                                width: (this.props.tileSize*6)/3-2+'px'
-                                                            }}
-                                                            > 
-                                                                {board.tiles && board.tiles.map((tile, i) => {
-                                                                const isPortal = tile.contains && (tile.contains.type === 'dungeon_portal' || tile.contains.type === 'dungeon portal');
-                                                                return <Tile
-                                                                key={i}
-                                                                id={tile.id}
-                                                                data-portal-id={isPortal ? tile.contains.portalId : null}
-                                                                className={isPortal ? 'dungeon-preview-portal-tile' : ''}
-                                                                delayedHoverLabel={isPortal ? (tile.contains.targetPortalId ? `Linked Portal (Target: ${tile.contains.targetCoordinates})` : 'Unlinked Portal') : null}
-                                                                tileSize={((this.props.tileSize*6)/3-2)/15}
-                                                                contains={tile.contains}
-                                                                boardTiles={board.tiles}
-                                                                image={tile.image ? tile.image : null}
-                                                                imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                                                color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
-                                                                coordinates={tile.coordinates}
-                                                                index={tile.id}
-                                                                showCoordinates={false}
-                                                                editMode={true}
-                                                                handleHover={null}
-                                                                handleClick={null}
-                                                                type={tile.type}
-                                                                hovered={false}
-                                                                />
-                                                                })}
-                                                            </div>
-                                                    })}
+                                                    {level.front.miniboards.map((board, boardIdx) => {
+                                                     return    <div 
+                                                             className="micro-board board" 
+                                                             key={boardIdx}
+                                                             style={{
+                                                                 height: (this.props.tileSize*6)/3-2+'px',
+                                                                 width: (this.props.tileSize*6)/3-2+'px'
+                                                             }}
+                                                             > 
+                                                                 {board.tiles && board.tiles.map((tile, tileIdx) => {
+                                                                 const isPortal = tile.contains && (tile.contains.type === 'dungeon_portal' || tile.contains.type === 'dungeon portal');
+                                                                 return <Tile
+                                                                 key={tileIdx}
+                                                                 id={tile.id}
+                                                                 connectedEdge={this.hasLinedUpConnection(level.front.miniboards, boardIdx, tileIdx)}
+                                                                 data-portal-id={isPortal ? tile.contains.portalId : null}
+                                                                 className={isPortal ? 'dungeon-preview-portal-tile' : ''}
+                                                                 delayedHoverLabel={isPortal ? (tile.contains.targetPortalId ? `Linked Portal (Target: ${tile.contains.targetCoordinates})` : 'Unlinked Portal') : null}
+                                                                 tileSize={((this.props.tileSize*6)/3-2)/15}
+                                                                 contains={tile.contains}
+                                                                 boardTiles={board.tiles}
+                                                                 image={tile.image ? tile.image : null}
+                                                                 imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
+                                                                 color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
+                                                                 coordinates={tile.coordinates}
+                                                                 index={tile.id}
+                                                                 showCoordinates={false}
+                                                                 editMode={true}
+                                                                 handleHover={null}
+                                                                 handleClick={null}
+                                                                 type={tile.type}
+                                                                 hovered={false}
+                                                                 />
+                                                                 })}
+                                                             </div>
+                                                     })}
                                                     <div 
                                                     className="canvas-overlay-container mini-boards-container"
                                                     style={{
@@ -657,19 +726,20 @@ class DungeonView extends React.Component {
                                                                 ></div>
                                                         })}
                                                     </div>
-                                                    {level.back.miniboards.map((board, i) => {
+                                                    {level.back.miniboards.map((board, boardIdx) => {
                                                     return    <div 
                                                             className="micro-board board" 
-                                                            key={i}
+                                                            key={boardIdx}
                                                             style={{
                                                                 height: (this.props.tileSize*6)/3-2+'px',
                                                                 width: (this.props.tileSize*6)/3-2+'px'
                                                             }}
                                                             > 
-                                                                {board.tiles && board.tiles.map((tile, i) => {
+                                                                {board.tiles && board.tiles.map((tile, tileIdx) => {
                                                                 const isPortal = tile.contains && (tile.contains.type === 'dungeon_portal' || tile.contains.type === 'dungeon portal');
                                                                 return <Tile
-                                                                key={i}
+                                                                key={tileIdx}
+                                                                connectedEdge={this.hasLinedUpConnection(level.back.miniboards, boardIdx, tileIdx)}
                                                                 id={tile.id}
                                                                 data-portal-id={isPortal ? tile.contains.portalId : null}
                                                                 className={isPortal ? 'dungeon-preview-portal-tile' : ''}

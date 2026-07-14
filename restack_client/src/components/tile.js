@@ -282,7 +282,7 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: 'hidden',
+            overflow: props.connectedEdge ? 'visible' : 'hidden',
             border: vctBorder,
             borderLeft: isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
                 (props.type === 'palette-tile' && props.hovered ? '2px solid red' : '1px solid transparent'))))),
@@ -388,7 +388,7 @@ function Tile(props) {
                      })()}
 
                      {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
-                      {(props.imageOverride || images[props.image]) && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
+                      {(props.imageOverride || images[props.image]) && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
                           <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : '100% 100%', backgroundPosition: isVendorCell ? vendorBackgroundPosition : 'inherit', backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
                       )}
 
@@ -473,7 +473,7 @@ function Tile(props) {
            )}
 
            {/* Passage corridor double border overlay to clearly represent stone walls */}
-           { props.optionType === 'passage' && (
+           { props.optionType === 'passage' && props.type !== 'palette-tile' && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     borderLeft: props.borders?.left && props.borders.left !== '2px solid transparent' ? '4px double #bda88a' : 'none',
@@ -484,6 +484,35 @@ function Tile(props) {
                     zIndex: 2,
                     boxSizing: 'border-box'
                 }} />
+           )}
+
+           {/* Winding passage path for palette tile */}
+           { props.optionType === 'passage' && props.type === 'palette-tile' && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    zIndex: 10, pointerEvents: 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    backgroundColor: 'black'
+                }}>
+                    <svg width='75%' height='75%' viewBox='0 0 34 34' xmlns='http://www.w3.org/2000/svg'>
+                        {/* Row 0 */}
+                        <rect x='0' y='0' width='6' height='6' fill='#7a8290' rx='1' />
+                        <rect x='7' y='0' width='6' height='6' fill='#7a8290' rx='1' />
+                        {/* Row 1 */}
+                        <rect x='14' y='7' width='6' height='6' fill='#7a8290' rx='1' />
+                        <rect x='21' y='7' width='6' height='6' fill='#7a8290' rx='1' />
+                        {/* Row 2 */}
+                        <rect x='28' y='14' width='6' height='6' fill='#7a8290' rx='1' />
+                        {/* Row 3 */}
+                        <rect x='14' y='21' width='6' height='6' fill='#7a8290' rx='1' />
+                        <rect x='21' y='21' width='6' height='6' fill='#7a8290' rx='1' />
+                        {/* Row 4 */}
+                        <rect x='7' y='28' width='6' height='6' fill='#7a8290' rx='1' />
+                        <rect x='14' y='28' width='6' height='6' fill='#7a8290' rx='1' />
+                        <rect x='21' y='28' width='6' height='6' fill='#7a8290' rx='1' />
+                        <rect x='28' y='28' width='6' height='6' fill='#7a8290' rx='1' />
+                    </svg>
+                </div>
            )}
 
            {/* Trap indicator (Keen Eye reveal) */}
@@ -497,6 +526,46 @@ function Tile(props) {
                     <div className="trap-indicator-overlay" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1}} />
                 </div>
            )}
+
+            {/* Delete option custom white X overlay */}
+            { props.optionType === 'delete' && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    zIndex: 10, pointerEvents: 'none',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'opacity 0.35s ease-in-out'
+                }}>
+                    <svg width='60%' height='60%' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'>
+                        <line x1='4' y1='4' x2='20' y2='20' stroke='white' strokeWidth='1.5' strokeLinecap='round'/>
+                        <line x1='20' y1='4' x2='4' y2='20' stroke='white' strokeWidth='1.5' strokeLinecap='round'/>
+                    </svg>
+                </div>
+            )}
+
+            {/* Voidfill option custom grid pattern SVG overlay */}
+            { props.optionType === 'voidfill' && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    zIndex: 10, pointerEvents: 'none',
+                    transition: 'opacity 0.35s ease-in-out'
+                }}>
+                    <svg width='100%' height='100%' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'>
+                        {/* Vertical lines */}
+                        <line x1='10' y1='0' x2='10' y2='60' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                        <line x1='20' y1='0' x2='20' y2='60' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                        <line x1='30' y1='0' x2='30' y2='60' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                        <line x1='40' y1='0' x2='40' y2='60' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                        <line x1='50' y1='0' x2='50' y2='60' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                        
+                        {/* Horizontal lines */}
+                        <line x1='0' y1='10' x2='60' y2='10' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                        <line x1='0' y1='20' x2='60' y2='20' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                        <line x1='0' y1='30' x2='60' y2='30' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                        <line x1='0' y1='40' x2='60' y2='40' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                        <line x1='0' y1='50' x2='60' y2='50' stroke='#bda88a' strokeWidth='1.2' opacity='0.7' />
+                    </svg>
+                </div>
+            )}
 
            {/* Inscription marker: 3 diagonal lines drawn on wall tiles */}
            { ((props.contains && props.contains.type === 'inscription') || props.optionType === 'inscription') && (
@@ -568,26 +637,90 @@ function Tile(props) {
                  </div>
             )}
 
-            {/* Connecting Path overlay */}
-            { ((props.contains && props.contains.type === 'connecting_path') || props.optionType === 'connecting path') && (
-                 <div style={{
-                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                     backgroundColor: 'rgba(180, 130, 20, 0.22)',
-                     border: '2px dashed rgba(180, 130, 20, 0.65)',
-                     zIndex: 10, pointerEvents: 'none',
-                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                     opacity: color === 'black' ? 0 : 1,
-                     transition: 'opacity 0.35s ease-in-out'
-                 }}>
-                     <span style={{
-                         fontSize: Math.max(7, (props.tileSize || 30) * 0.28) + 'px',
-                         color: '#dddddd', fontWeight: 'bold',
-                         textTransform: 'uppercase', lineHeight: 1.2,
-                         textShadow: '0 1px 3px rgba(0,0,0,0.9)',
-                         letterSpacing: '0.5px'
-                     }}>CONN</span>
-                 </div>
-            )}
+             {/* Connecting Path overlay */}
+             { ((props.contains && props.contains.type === 'connecting_path') || props.optionType === 'connecting path') && (() => {
+                  const isConnected = !!props.connectedEdge;
+                  let edge = props.connectedEdge;
+                  if (!edge && props.id !== undefined && props.id !== null) {
+                      const col = props.id % 15;
+                      const row = Math.floor(props.id / 15);
+                      if (col === 0) edge = 'left';
+                      else if (col === 14) edge = 'right';
+                      else if (row === 0) edge = 'top';
+                      else if (row === 14) edge = 'bottom';
+                  }
+                  const overlayStyle = {
+                      position: 'absolute',
+                      top: edge === 'top' ? -3 : 0,
+                      left: edge === 'left' ? -3 : 0,
+                      right: edge === 'right' ? -3 : 0,
+                      bottom: edge === 'bottom' ? -3 : 0,
+                      backgroundColor: isConnected ? 'rgba(212, 168, 68, 0.45)' : 'rgba(180, 130, 20, 0.22)',
+                      border: isConnected ? '2px solid rgba(212, 168, 68, 0.95)' : '2px dashed rgba(180, 130, 20, 0.65)',
+                      boxShadow: isConnected ? '0 0 10px rgba(212, 168, 68, 0.65), inset 0 0 6px rgba(255, 255, 255, 0.35)' : 'none',
+                      borderRadius: isConnected ? '3px' : '0px',
+                      zIndex: 10,
+                      pointerEvents: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: color === 'black' ? 0 : 1,
+                      transition: 'opacity 0.35s ease-in-out'
+                  };
+                  if (edge === 'top') {
+                      overlayStyle.borderTop = 'none';
+                  } else if (edge === 'bottom') {
+                      overlayStyle.borderBottom = 'none';
+                  } else if (edge === 'left') {
+                     overlayStyle.borderLeft = 'none';
+                  } else if (edge === 'right') {
+                      overlayStyle.borderRight = 'none';
+                  }
+                  const isHorizontal = edge === 'left' || edge === 'right';
+                 return (
+                      <div style={overlayStyle}>
+                          {/* Passage with golden connection background SVG */}
+                          {isHorizontal ? (
+                              <svg width="100%" height="100%" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
+                                  {/* Slate background representing the passage floor */}
+                                  <rect x="0" y="4" width="24" height="16" fill="#2c3036" opacity="0.8" />
+                                  
+                                  {/* Stone walls of the passage (top and bottom) */}
+                                  <line x1="0" y1="4" x2="24" y2="4" stroke="#bda88a" strokeWidth="1.5" />
+                                  <line x1="0" y1="6" x2="24" y2="6" stroke="#bda88a" strokeWidth="0.75" />
+                                  
+                                  <line x1="0" y1="20" x2="24" y2="20" stroke="#bda88a" strokeWidth="1.5" />
+                                  <line x1="0" y1="18" x2="24" y2="18" stroke="#bda88a" strokeWidth="0.75" />
+                                  
+                                  {/* Golden Connection line in the center */}
+                                  <line x1="0" y1="12" x2="24" y2="12" stroke="#ffd700" strokeWidth="4.5" opacity="0.3" />
+                                  <line x1="0" y1="12" x2="24" y2="12" stroke="#ffd700" strokeWidth="2" />
+                              </svg>
+                          ) : (
+                              <svg width="100%" height="100%" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0}}>
+                                  {/* Slate background representing the passage floor */}
+                                  <rect x="4" y="0" width="16" height="24" fill="#2c3036" opacity="0.8" />
+                                  
+                                  {/* Stone walls of the passage (left and right) */}
+                                  <line x1="4" y1="0" x2="4" y2="24" stroke="#bda88a" strokeWidth="1.5" />
+                                  <line x1="6" y1="0" x2="6" y2="24" stroke="#bda88a" strokeWidth="0.75" />
+                                  
+                                  <line x1="20" y1="0" x2="20" y2="24" stroke="#bda88a" strokeWidth="1.5" />
+                                  <line x1="18" y1="0" x2="18" y2="24" stroke="#bda88a" strokeWidth="0.75" />
+                                  
+                                  {/* Golden Connection line in the center */}
+                                  <line x1="12" y1="0" x2="12" y2="24" stroke="#ffd700" strokeWidth="4.5" opacity="0.3" />
+                                  <line x1="12" y1="0" x2="12" y2="24" stroke="#ffd700" strokeWidth="2" />
+                              </svg>
+                          )}
+
+                          {/* Gleaming/shimmering overlay animation if connected */}
+                          {isConnected && (
+                              <div className={`connecting-path-shimmer ${isHorizontal ? 'horizontal' : 'vertical'}`} />
+                          )}
+                      </div>
+                 );
+            })()}
 
            {/* Inscription edge markers — golden bars on inscribed walls */}
            { props.inscriptions && (

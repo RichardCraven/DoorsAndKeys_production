@@ -44,6 +44,74 @@ class PlaneView extends React.Component {
             }
         }
     }
+    hasLinedUpConnection = (miniboards, boardIndex, tileIdx) => {
+        if (!miniboards) return null;
+        const board = miniboards[boardIndex];
+        if (!board || !board.tiles) return null;
+        const tile = board.tiles[tileIdx];
+        if (!tile || !tile.contains || tile.contains.type !== 'connecting_path') return null;
+
+        const x = tileIdx % 15;
+        const y = Math.floor(tileIdx / 15);
+
+        // Left edge (x === 0)
+        if (x === 0) {
+            const col = boardIndex % 3;
+            if (col > 0) {
+                const leftBoard = miniboards[boardIndex - 1];
+                if (leftBoard && leftBoard.tiles) {
+                    const rightTileIdx = y * 15 + 14;
+                    const leftTile = leftBoard.tiles[rightTileIdx];
+                    if (leftTile && leftTile.contains && leftTile.contains.type === 'connecting_path') {
+                        return 'left';
+                    }
+                }
+            }
+        }
+        // Right edge (x === 14)
+        if (x === 14) {
+            const col = boardIndex % 3;
+            if (col < 2) {
+                const rightBoard = miniboards[boardIndex + 1];
+                if (rightBoard && rightBoard.tiles) {
+                    const leftTileIdx = y * 15;
+                    const rightTile = rightBoard.tiles[leftTileIdx];
+                    if (rightTile && rightTile.contains && rightTile.contains.type === 'connecting_path') {
+                        return 'right';
+                    }
+                }
+            }
+        }
+        // Top edge (y === 0)
+        if (y === 0) {
+            const row = Math.floor(boardIndex / 3);
+            if (row > 0) {
+                const topBoard = miniboards[boardIndex - 3];
+                if (topBoard && topBoard.tiles) {
+                    const bottomTileIdx = 14 * 15 + x;
+                    const topTile = topBoard.tiles[bottomTileIdx];
+                    if (topTile && topTile.contains && topTile.contains.type === 'connecting_path') {
+                        return 'top';
+                    }
+                }
+            }
+        }
+        // Bottom edge (y === 14)
+        if (y === 14) {
+            const row = Math.floor(boardIndex / 3);
+            if (row < 2) {
+                const bottomBoard = miniboards[boardIndex + 3];
+                if (bottomBoard && bottomBoard.tiles) {
+                    const topTileIdx = x;
+                    const bottomTile = bottomBoard.tiles[topTileIdx];
+                    if (bottomTile && bottomTile.contains && bottomTile.contains.type === 'connecting_path') {
+                        return 'bottom';
+                    }
+                }
+            }
+        }
+        return null;
+    }
 
     render (){
         return (
@@ -103,6 +171,7 @@ class PlaneView extends React.Component {
                                             key={i}
                                             id={i}
                                             // boardIndex={boardIndex}
+                                            connectedEdge={this.hasLinedUpConnection(this.props.miniboards, boardIndex, i)}
                                             tileSize={((this.props.tileSize*15)/3-2)/15}
                                             contains={tile.contains}
                                             image={tile.image ? tile.image : null}

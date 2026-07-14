@@ -3,13 +3,13 @@
 export function MapMaker(props){
     this.tiles = [];
     this.options = [
-        'delete',
-        'void fill',
-        'void',
-        'passage',
-        'connecting path',
         'empty space',
         'obscured space',
+        'void',
+        'void fill',
+        'passage',
+        'connecting path',
+        'delete',
         'door',
         'way up',
         'way down',
@@ -324,7 +324,15 @@ export function MapMaker(props){
         }
         for(let i = 0; i < this.options.length; i++){
             let key = this.options[i]
-            if(key === 'void'){
+            if(key === 'delete'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'delete',
+                    image: null,
+                    color: 'black',
+                    id: i
+                })
+            } else if(key === 'void'){
                 this.paletteTiles.push({
                     type: 'palette-tile',
                     optionType: 'void',
@@ -345,8 +353,8 @@ export function MapMaker(props){
                     type: 'palette-tile',
                     optionType: 'passage',
                     image: null,
-                    color: null,
-                    borders: { top: '2px solid black', left: '2px solid black', right: '2px solid black', bottom: '2px solid transparent' },
+                    color: 'black',
+                    borders: null,
                     id: i
                 })
             } else if(key === 'connecting path'){
@@ -378,7 +386,7 @@ export function MapMaker(props){
                     type: 'palette-tile',
                     optionType: 'inscription',
                     image: null,
-                    color: '#2a1e0a',
+                    color: null,
                     isInscription: true,
                     id: i
                 })
@@ -387,7 +395,7 @@ export function MapMaker(props){
                     type: 'palette-tile',
                     optionType: 'shrine',
                     image: null,
-                    color: '#8B0000',
+                    color: null,
                     isShrine: true,
                     id: i
                 })
@@ -396,7 +404,7 @@ export function MapMaker(props){
                     type: 'palette-tile',
                     optionType: 'lore_tablet',
                     image: null,
-                    color: '#3A2A00',
+                    color: null,
                     isLoreTablet: true,
                     id: i
                 })

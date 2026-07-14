@@ -90,6 +90,29 @@ class BoardsPalette extends React.Component {
                                 }}
                                 >{this.getOptionLabel(tile.optionType)}</span>
                             </div>
+                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'lore_tablet'].includes(tile.optionType) && (() => {
+                                const isExpanded = this.props.optionClickedIdx === i;
+                                return (
+                                    <div style={{ marginRight: '15px', display: 'flex', alignItems: 'center', userSelect: 'none' }}>
+                                        <svg 
+                                            width="12" 
+                                            height="12" 
+                                            viewBox="0 0 24 24" 
+                                            fill="none" 
+                                            stroke="#f9b115" 
+                                            strokeWidth="3.5" 
+                                            strokeLinecap="round" 
+                                            strokeLinejoin="round" 
+                                            style={{ 
+                                                transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                                                transition: 'transform 0.2s ease, stroke 0.2s ease'
+                                            }}
+                                        >
+                                            <polyline points="6 9 12 15 18 9" />
+                                        </svg>
+                                    </div>
+                                );
+                            })()}
                         </div>
                         {tile.optionType === 'monsters' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
                             {(this.props.mapMaker.tierOptions || []).map((tierItem, ti) => {

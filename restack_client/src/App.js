@@ -35,6 +35,8 @@ const [showCoordinates, setShowCoordinates] = useState(false)
 const [allUsers, setAllUsers] = useState([])
 const [showToolbar, setShowToolbar] = useState(true)
 const [narrativeSequenceType, setNarrativeSequenceType] = useState('')
+const [serverLoading, setServerLoading] = useState(true)
+const [showWakingOverlay, setShowWakingOverlay] = useState(true)
 const dungeonMessagingRef = React.useRef(null)
 const saveUserDataRef = React.useRef(null)
 const history = useHistory();
@@ -49,6 +51,10 @@ useEffect(() => {
 }
   getAllUsersRequest().then((response)=>{
     setAllUsers(Array.isArray(response?.data) ? response.data : [])
+    setServerLoading(false)
+  }).catch((err) => {
+    console.error("Failed to load initial users:", err);
+    setServerLoading(false);
   })
   if(getUserId()){
     setLoggedIn(true)
@@ -60,8 +66,15 @@ useEffect(() => {
     root.classList.add('loaded');
   }
 }, [])
-useEffect(()=>{
-}, [allUsers])
+
+useEffect(() => {
+  if (!serverLoading) {
+    const timer = setTimeout(() => {
+      setShowWakingOverlay(false);
+    }, 500);
+    return () => clearTimeout(timer);
+  }
+}, [serverLoading]);
 
 useEffect(() => {
   const handleKeyDown = (e) => {
@@ -219,6 +232,22 @@ const toggleMenuTray = () => {
 }
  return (
    <div className="fullpage">
+      {showWakingOverlay && (
+        <div className={`server-waking-overlay ${!serverLoading ? 'fade-out' : ''}`}>
+          <div className="server-waking-card">
+            <h2 className="server-waking-title">Arising from Slumber</h2>
+            <div className="server-waking-gif-container">
+              <img src={loadingGif} className="server-waking-gif" alt="Waking up..." />
+            </div>
+            <p className="server-waking-desc">
+              The game server is waking up. Render's free tier backend spins down during inactivity, taking up to 50 seconds to arise.
+            </p>
+            <div className="server-waking-progress-container">
+              <div className="server-waking-progress-bar" />
+            </div>
+          </div>
+        </div>
+      )}
       <div className="App">
         {loggedIn === true && showToolbar === true && location.pathname !== '/landing' && location.pathname !== '/' && (
           <div className="horizontal-menu-wrapper" style={{

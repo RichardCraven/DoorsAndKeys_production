@@ -186,6 +186,10 @@ class PlanesPanel extends React.Component {
                             if (this.props.selectedView === 'dungeon' && typeof this.props.setViewState === 'function') {
                                 this.props.setViewState('plane');
                             }
+                        } else {
+                            if (this.props.addNewPlane) {
+                                this.props.addNewPlane(`${folderTitle}_${subfolder.title}_${orientation === 'front' ? 'F' : 'B'}`);
+                            }
                         }
                     }}
                 >
@@ -194,12 +198,6 @@ class PlanesPanel extends React.Component {
                         <div
                             className={`grid-3x3 ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
                             title={`${plane.name}${!plane.valid ? ' (Invalid)' : ''}`}
-                            onClick={() => {
-                                this.props.loadPlane(plane);
-                                if (this.props.selectedView === 'dungeon' && typeof this.props.setViewState === 'function') {
-                                    this.props.setViewState('plane');
-                                }
-                            }}
                             onMouseEnter={() => this.setState({ hoveredPlane: previewKey })}
                             onMouseLeave={() => this.setState({ hoveredPlane: null })}
                         >
@@ -226,7 +224,7 @@ class PlanesPanel extends React.Component {
                                 background: 'transparent',
                                 display: 'flex',
                                 alignItems: 'center',
-                                justifyContent: 'center',
+                                justifyCenter: 'center',
                                 cursor: 'pointer',
                                 color: 'rgba(255,255,255,0.3)',
                                 fontSize: '20px',
@@ -235,7 +233,6 @@ class PlanesPanel extends React.Component {
                                 boxSizing: 'border-box'
                             }}
                             title={`Create ${orientation} plane for Level ${subfolder.title}`}
-                            onClick={() => this.props.addNewPlane && this.props.addNewPlane(`${folderTitle}_${subfolder.title}_${orientation === 'front' ? 'F' : 'B'}`)}
                         >
                             +
                         </div>
@@ -355,6 +352,7 @@ class PlanesPanel extends React.Component {
                             <CDropdownItem onClick={() => this.props.renamePlane()}>Rename</CDropdownItem>
                             <CDropdownItem onClick={() => this.props.deletePlane()}>Delete</CDropdownItem>
                             <CDropdownItem onClick={() => this.props.toggleShowPlaneNames()}>Toggle Show Name</CDropdownItem>
+                            <CDropdownItem onClick={() => this.props.collapseAllPlaneFolders && this.props.collapseAllPlaneFolders()}>Collapse All Folders</CDropdownItem>
                         </CDropdownMenu>
                     </CDropdown>
                 </div>
