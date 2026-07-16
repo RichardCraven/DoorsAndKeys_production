@@ -2896,21 +2896,58 @@ class MapMakerPage extends React.Component {
       syncModalCreateBack, 
       syncModalFrontName, 
       syncModalBackName, 
-      syncModalSubfolder 
+      syncModalSubfolder,
+      syncModalDungeonName,
+      syncModalLevelName
     } = this.state;
     
     const { front, back } = this.getLevelGrids(syncModalSubfolder);
     this.setState({ planeSyncInProgress: true });
+ 
+    const slotNames = [
+      'top_left', 'top_mid', 'top_right',
+      'middle_left', 'middle_mid', 'middle_right',
+      'bottom_left', 'bottom_mid', 'bottom_right'
+    ];
     
     try {
       let frontPlane = null;
       let backPlane = null;
       
       if (syncModalCreateFront) {
-        const miniboards = Array(9).fill(null).map((_, idx) => {
+        const miniboards = [];
+        for (let idx = 0; idx < 9; idx++) {
           const board = front[idx];
-          return board ? clone(board) : [];
-        });
+          if (board) {
+            miniboards.push(clone(board));
+          } else {
+            const slotName = slotNames[idx];
+            const folderPath = `${syncModalDungeonName}/${syncModalLevelName}/${slotName}`;
+            const boardName = `${syncModalFrontName}_${slotName}`;
+            const newBoard = {
+              name: boardName,
+              folderPath,
+              tiles: Array(15*15).fill(null).map((_, i) => ({
+                id: i,
+                type: 'void',
+                color: 'black',
+                contains: 'empty',
+                borders: []
+              })),
+              config: [[], [], [], []]
+            };
+            const boardRes = await addBoardRequest(newBoard);
+            const createdEmpty = {
+              id: boardRes.data._id,
+              name: boardName,
+              tiles: newBoard.tiles,
+              config: newBoard.config,
+              folderPath: newBoard.folderPath
+            };
+            await this.registerCreatedBoard(createdEmpty);
+            miniboards.push(createdEmpty);
+          }
+        }
         const payload = {
           name: syncModalFrontName,
           miniboards,
@@ -2922,10 +2959,39 @@ class MapMakerPage extends React.Component {
       }
       
       if (syncModalCreateBack) {
-        const miniboards = Array(9).fill(null).map((_, idx) => {
+        const miniboards = [];
+        for (let idx = 0; idx < 9; idx++) {
           const board = back[idx];
-          return board ? clone(board) : [];
-        });
+          if (board) {
+            miniboards.push(clone(board));
+          } else {
+            const slotName = slotNames[idx];
+            const folderPath = `${syncModalDungeonName}/${syncModalLevelName}/${slotName}_back`;
+            const boardName = `${syncModalBackName}_${slotName}`;
+            const newBoard = {
+              name: boardName,
+              folderPath,
+              tiles: Array(15*15).fill(null).map((_, i) => ({
+                id: i,
+                type: 'void',
+                color: 'black',
+                contains: 'empty',
+                borders: []
+              })),
+              config: [[], [], [], []]
+            };
+            const boardRes = await addBoardRequest(newBoard);
+            const createdEmpty = {
+              id: boardRes.data._id,
+              name: boardName,
+              tiles: newBoard.tiles,
+              config: newBoard.config,
+              folderPath: newBoard.folderPath
+            };
+            await this.registerCreatedBoard(createdEmpty);
+            miniboards.push(createdEmpty);
+          }
+        }
         const payload = {
           name: syncModalBackName,
           miniboards,
@@ -3030,7 +3096,7 @@ class MapMakerPage extends React.Component {
       }
       
       let newBoard = {
-        name: "empty",
+        name: `${this.state.loadedPlane.name}_${slotName}`,
         folderPath: folderPath,
         tiles: Array(15*15).fill(null).map((_, i) => ({
           id: i,
@@ -3045,6 +3111,8 @@ class MapMakerPage extends React.Component {
       try {
         const addedMap = await addBoardRequest(newBoard);
         newBoard.id = addedMap.data._id;
+        
+        await this.registerCreatedBoard(newBoard);
         
         let loadedPlane = clone(this.state.loadedPlane);
         let minis = loadedPlane.miniboards;
@@ -3132,7 +3200,7 @@ class MapMakerPage extends React.Component {
           }
           
           let newBoard = {
-            name: "empty",
+            name: `${loadedPlane.name}_${slotName}`,
             folderPath: folderPath,
             tiles: Array(15*15).fill(null).map((_, i) => ({
               id: i,
@@ -3146,6 +3214,9 @@ class MapMakerPage extends React.Component {
           
           const addedMap = await addBoardRequest(newBoard);
           newBoard.id = addedMap.data._id;
+          
+          await this.registerCreatedBoard(newBoard);
+          
           minis[idx] = newBoard;
           changed = true;
         }
@@ -3379,8 +3450,11 @@ class MapMakerPage extends React.Component {
     //   console.log('existingSubfolder_second', existingSubfolder_second);
     //   console.log('existingDeepfolder_first', existingDeepfolder_first);
     //   console.log('existingDeepfolder_second', existingDeepfolder_second);
-    //   if(folderExists_first === folderExists_second && existingSubfolder_first === existingSubfolder_second && existingDeepfolder_first === existingDeepfolder_second) return true
-    //   return false
+  }
+  registerCreatedBoard = async (board) => {
+    let boards = [...(this.state.boards || []), board];
+    await new Promise(resolve => this.setState({ boards }, resolve));
+    this.insertNewBoardIntoPanel(board);
   }
   insertNewBoardIntoPanel = (board) => {
     const boards = this.state.boards,
@@ -5050,21 +5124,66 @@ class MapMakerPage extends React.Component {
     let d = new Date()
     let n = d.getTime();
     let rand = n.toString().slice(9, 13)
-    let newPlane = {
-      name: defaultName || `plane${rand}`,
-      miniboards: [[], [], [], [], [], [], [], [], []],
-      spawnPoints: null,
-      valid: false
-    }
-    this.setState({
-      loadedPlane: newPlane,
-    }, () => {
-      if (defaultName) {
-        this.writePlane();
-      } else {
-        this.renamePlane();
+    const planeName = defaultName || `plane${rand}`;
+ 
+    const slotNames = [
+      'top_left', 'top_mid', 'top_right',
+      'middle_left', 'middle_mid', 'middle_right',
+      'bottom_left', 'bottom_mid', 'bottom_right'
+    ];
+ 
+    this.setState({ planeSyncInProgress: true });
+    try {
+      const miniboards = [];
+      for (let idx = 0; idx < 9; idx++) {
+        const slotName = slotNames[idx];
+        const boardName = `${planeName}_${slotName}`;
+        const newBoard = {
+          name: boardName,
+          folderPath: '',
+          tiles: Array(15*15).fill(null).map((_, i) => ({
+            id: i,
+            type: 'void',
+            color: 'black',
+            contains: 'empty',
+            borders: []
+          })),
+          config: [[], [], [], []]
+        };
+        const boardRes = await addBoardRequest(newBoard);
+        const createdEmpty = {
+          id: boardRes.data._id,
+          name: boardName,
+          tiles: newBoard.tiles,
+          config: newBoard.config,
+          folderPath: newBoard.folderPath
+        };
+        await this.registerCreatedBoard(createdEmpty);
+        miniboards.push(createdEmpty);
       }
-    })
+ 
+      let newPlane = {
+        name: planeName,
+        miniboards,
+        spawnPoints: null,
+        valid: false
+      }
+ 
+      this.setState({
+        loadedPlane: newPlane,
+      }, () => {
+        if (defaultName) {
+          this.writePlane();
+        } else {
+          this.renamePlane();
+        }
+      });
+    } catch (err) {
+      console.error('Failed to create new plane with unique miniboards:', err);
+      this.toast('Failed to create new plane');
+    } finally {
+      this.setState({ planeSyncInProgress: false });
+    }
   }
   deletePlane = async () => {
     if (this.state.loadedPlane) {
@@ -5660,22 +5779,47 @@ class MapMakerPage extends React.Component {
             const createdBoard = { ...defaultBoardPayload, id: boardRes.data._id };
 
             // Update boards in local state so it appears in sidebar
-            let boards = [...this.state.boards, createdBoard];
-            await new Promise(resolve => this.setState({ boards }, resolve));
             this.insertNewBoardIntoPanel(createdBoard);
-
             // 2. Create Front plane with this board in the first slot
-            const frontMiniboards = Array(9).fill(null).map((_, idx) => {
+            const slotNames = [
+              'top_left', 'top_mid', 'top_right',
+              'middle_left', 'middle_mid', 'middle_right',
+              'bottom_left', 'bottom_mid', 'bottom_right'
+            ];
+            const frontMiniboards = [];
+            for (let idx = 0; idx < 9; idx++) {
               if (idx === 0) {
-                return {
+                frontMiniboards.push({
                   id: createdBoard.id,
                   name: createdBoard.name,
                   tiles: createdBoard.tiles,
                   config: createdBoard.config
+                });
+              } else {
+                const slotName = slotNames[idx];
+                const folderPath = `${newName}/0/${slotName}`;
+                const boardName = `${newName}_0_F_${slotName}`;
+                const newBoard = {
+                  name: boardName,
+                  folderPath,
+                  tiles: Array(15*15).fill(null).map((_, i) => ({
+                    id: i,
+                    type: 'void',
+                    color: 'black',
+                    contains: 'empty',
+                    borders: []
+                  })),
+                  config: [[], [], [], []]
                 };
+                const boardRes = await addBoardRequest(newBoard);
+                frontMiniboards.push({
+                  id: boardRes.data._id,
+                  name: boardName,
+                  tiles: newBoard.tiles,
+                  config: newBoard.config
+                });
               }
-              return [];
-            });
+            }
             const frontPlanePayload = {
               name: `${newName}_0_F`,
               miniboards: frontMiniboards,
@@ -5684,9 +5828,33 @@ class MapMakerPage extends React.Component {
             };
             const frontRes = await addPlaneRequest(frontPlanePayload);
             const createdFront = { ...frontPlanePayload, id: frontRes.data._id };
-
-            // 3. Create Back plane (completely empty)
-            const backMiniboards = Array(9).fill(null).map(() => []);
+ 
+            // 3. Create Back plane (filled with unique empty boards)
+            const backMiniboards = [];
+            for (let idx = 0; idx < 9; idx++) {
+              const slotName = slotNames[idx];
+              const folderPath = `${newName}/0/${slotName}_back`;
+              const boardName = `${newName}_0_B_${slotName}`;
+              const newBoard = {
+                name: boardName,
+                folderPath,
+                tiles: Array(15*15).fill(null).map((_, i) => ({
+                  id: i,
+                  type: 'void',
+                  color: 'black',
+                  contains: 'empty',
+                  borders: []
+                })),
+                config: [[], [], [], []]
+              };
+              const boardRes = await addBoardRequest(newBoard);
+              backMiniboards.push({
+                id: boardRes.data._id,
+                name: boardName,
+                tiles: newBoard.tiles,
+                config: newBoard.config
+              });
+            }
             const backPlanePayload = {
               name: `${newName}_0_B`,
               miniboards: backMiniboards,

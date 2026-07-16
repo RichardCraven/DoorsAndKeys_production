@@ -5,7 +5,7 @@ export const NARRATIVE_SEQUENCES = [
         id: 0,
         narratorName: 'Hikaron',
         narratorImage: hikaron,
-        text: 'Hail, dreamers. The fate winds have blown you to this... Place within a place, in a time outside of time. Like a blind child, you will explore these confines, map out the corners and halls, while you grow like a seedling, expanding and changing. When you are a sapling ready for the next test, I will find you.'
+        text: 'Hail, dreamers. The winds of fate have blown you to this... Place within a place, in a time outside of time. Like a blind child, you will explore these confines, map out the corners and halls, while you grow like a seedling, expanding and changing. When you are a sapling ready for the next test, I will find you.'
     },
     {
         id: 1,

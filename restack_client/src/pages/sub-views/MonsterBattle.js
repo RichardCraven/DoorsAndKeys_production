@@ -121,6 +121,14 @@ const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
 
 // const SHOW_BORDERS = true;
 class MonsterBattle extends React.Component {
+    getTileSize = () => {
+        const size = this.state.isMobileLandscape ? Math.floor((window.innerHeight - 4) / 6) : 100;
+        if (this._animManagerRedux) {
+            this._animManagerRedux.TILE_SIZE = size;
+        }
+        return size;
+    }
+
     getGameSpeed = () => {
         return this.props.combatManager?.FIGHT_INTERVAL;
     }
@@ -211,7 +219,10 @@ class MonsterBattle extends React.Component {
         super(props)
         // mount flag to avoid setState on unmounted component warnings
         this._isMounted = false;
+        const isMobile = window.matchMedia("(max-width: 950px) and (orientation: landscape)").matches;
         this.state = {
+            isMobileLandscape: isMobile,
+            eventLogPoppedOut: isMobile,
             goldIcon: images.getRandomGoldIcon(),
             activeSkillsTab: 'skills',
             activeEffectPopup: null,
@@ -348,9 +359,17 @@ class MonsterBattle extends React.Component {
         storeMeta(meta);
     }
 
+    _handleResize = () => {
+        if (this._isMounted) {
+            const isMobile = window.matchMedia("(max-width: 950px) and (orientation: landscape)").matches;
+            this.setState({ isMobileLandscape: isMobile });
+        }
+    }
+
     componentDidMount() {
         // mark mounted so async callbacks can safely call setState
         this._isMounted = true;
+        window.addEventListener('resize', this._handleResize);
         const meta = getMeta();
         const savedLogFilter = meta?.logFilterSelectedFighter ?? false;
         // Reset UI state that persists across remounts (shield walls, fear, etc.)
@@ -676,6 +695,7 @@ class MonsterBattle extends React.Component {
     componentWillUnmount() {
         // mark unmounted to prevent async callbacks attempting setState
         try { this._isMounted = false; } catch (e) { }
+        window.removeEventListener('resize', this._handleResize);
         if (this._rafId) {
             cancelAnimationFrame(this._rafId);
         }
@@ -852,12 +872,13 @@ class MonsterBattle extends React.Component {
         // fighter rather than shifting left by the range width.
         const selectedFighter = this.state.battleData[id];
         const details = this.getFighterDetails(selectedFighter);
-        const baseX = (details?.coordinates.x || 0) * 100;
+        const currentTileSize = this.getTileSize();
+        const baseX = (details?.coordinates.x || 0) * currentTileSize;
         // Use the fighter details when asking combatManager for the range width
         const rangeWidth = this.props.combatManager.getRangeWidthVal(details) || 0;
         // If the fighter is explicitly facing left, offset to the left by the range width;
         // otherwise (right, up, down, or undefined) place the bar to the right.
-        const offset = (selectedFighter?.facing === 'left') ? (0 - (rangeWidth * 100)) : 100;
+        const offset = (selectedFighter?.facing === 'left') ? (0 - (rangeWidth * currentTileSize)) : currentTileSize;
         return baseX + offset;
     }
     fighterPortraitClicked = (id) => {
@@ -2346,7 +2367,7 @@ class MonsterBattle extends React.Component {
         if (!this.state.dragSource) return;
         const rect = this._dragBoardRect;
         if (!rect) return;
-        const EFFECTIVE_CELL = TILE_SIZE + (SHOW_TILE_BORDERS ? 2 : 0); // 102px
+        const EFFECTIVE_CELL = this.getTileSize() + (SHOW_TILE_BORDERS ? 2 : 0);
         const rawX = Math.floor((event.clientX - rect.left) / EFFECTIVE_CELL);
         const rawY = Math.floor((event.clientY - rect.top) / EFFECTIVE_CELL);
         const numCols = this.state.numBoardColumns;
@@ -2770,7 +2791,348 @@ class MonsterBattle extends React.Component {
         ctx.drawImage(that.state.arrowUpImage, 5, 5, size, size);
     }
 
+    renderAbilitiesTabContent = (liveSelectedFighter) => {
+        if (!liveSelectedFighter) {
+            return <div className="redux-no-selection" style={{ padding: '20px', color: '#888', fontSize: '11px', textAlign: 'center', fontStyle: 'italic', width: '100%' }}>Select a fighter to use skills</div>;
+        }
+
+        const cm = this.props.combatManager;
+        const fighterId = liveSelectedFighter.id;
+
+        // Icon resolution helper
+        const resolveIcon = (candidate) => {
+            if (!candidate) return '';
+            if (typeof candidate === 'string') {
+                if (candidate.trim().startsWith('url(')) return candidate.replace(/^url\((.*)?\/\)$/i, '$1').replace(/^['"]|['"]$/g, '');
+                const mapped = images[candidate.trim()];
+                if (mapped) return mapped.default || mapped;
+                return candidate;
+            }
+            if (typeof candidate === 'object' && candidate.default) return candidate.default;
+            return '';
+        };
+
+        // Spec resolution helper
+        const resolveSpec = (a) => {
+            const sourceKey = typeof a === 'string' ? a : (a?.key || a?.name || '');
+            const normalizedKey = String(sourceKey).toLowerCase().replaceAll(' ', '_');
+            const canonical = cm
+                ? ((cm.specialsMatrix && (cm.specialsMatrix[sourceKey] || cm.specialsMatrix[normalizedKey])) ||
+                    (cm.attacksMatrix && (cm.attacksMatrix[sourceKey] || cm.attacksMatrix[normalizedKey])) || {})
+                : {};
+            const runtime = (cm?.resolveSpecial && liveSelectedFighter)
+                ? (cm.resolveSpecial(liveSelectedFighter, sourceKey) || {})
+                : {};
+            const spec = { ...canonical, ...(typeof a === 'object' ? a : {}), ...runtime };
+            if (!spec.name) spec.name = String(sourceKey).replaceAll('_', ' ');
+            return { spec, sourceKey, normalizedKey };
+        };
+
+        // Build consumable list from specialActions
+        const consumableTypes = new Set(['glyph', 'acid_bomb', 'spell']);
+        const consumableActions = (liveSelectedFighter.specialActions || []).filter(
+            a => a && consumableTypes.has(a.type) && a.available
+        );
+
+        // Build regular skills (specials + attacks, de-duped, no consumables)
+        const allSpecials = [
+            ...(liveSelectedFighter.specials || []),
+            ...(liveSelectedFighter.attacks || []),
+        ];
+        const seenKeys = new Set();
+        const regularEntries = allSpecials.filter(entry => {
+            const key = typeof entry === 'string' ? entry : (entry?.key || entry?.name || '');
+            const nk = String(key).trim().toLowerCase().replaceAll(' ', '_');
+            if (!nk || seenKeys.has(nk)) return false;
+            seenKeys.add(nk);
+            return true;
+        });
+
+        const hoveredKey = this.state.hoveredAbilityKey;
+        const queuedKey = this.state.queuedSkillMap[fighterId] || null;
+
+        // Cooldown helper
+        const getCooldownPct = (spec, sourceKey, normalizedKey) => {
+            const remaining = liveSelectedFighter?.cooldowns?.[spec.id]
+                || liveSelectedFighter?.cooldowns?.[sourceKey]
+                || liveSelectedFighter?.cooldowns?.[normalizedKey] || 0;
+            if (remaining <= 0) return { pct: 0, smooth: 0 };
+            const baseCd = spec.cooldown || 5;
+            const ratio = cm?.roundTimeRemainingRatio ?? 1.0;
+            const smooth = Math.max(0, remaining - (1 - ratio));
+            return { pct: (smooth / baseCd) * 100, smooth };
+        };
+
+        // Cooldown SVG overlay
+        const CooldownSvg = ({ pct }) => pct <= 0 ? null : (
+            <svg
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', transform: 'rotate(-90deg)', pointerEvents: 'none', zIndex: 10 }}
+                viewBox="0 0 20 20"
+            >
+                <circle cx="10" cy="10" r="10" fill="none" stroke="rgba(0,0,0,0.75)" strokeWidth="20" strokeDasharray="62.83" strokeDashoffset={(1 - (pct / 100)) * 62.83} />
+            </svg>
+        );
+
+        const renderRegularTile = (a, i) => {
+            const { spec, sourceKey, normalizedKey } = resolveSpec(a);
+            const iconUrl = resolveIcon(spec.iconUrl || spec.icon);
+            const { pct: cooldownPct, smooth: smoothRemaining } = getCooldownPct(spec, sourceKey, normalizedKey);
+            const isReady = cooldownPct === 0;
+            const isQueued = queuedKey === normalizedKey || queuedKey === sourceKey;
+            const isHovered = hoveredKey === normalizedKey;
+
+            return (
+                <div
+                    key={`reg-${i}`}
+                    className="skill-tile-outer"
+                    onMouseEnter={() => this.setState({ hoveredAbilityKey: normalizedKey })}
+                    onMouseLeave={() => this.setState({ hoveredAbilityKey: null })}
+                >
+                    <div
+                        className={`skill-hover-label${isHovered ? ' visible' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); this.openSkillPopup(spec); }}
+                    >
+                        {spec.name || sourceKey}
+                    </div>
+                    <div className="interaction-tile-wrapper">
+                        <div
+                            className={`interaction-tile special${isReady ? ' available' : ''}${isQueued ? ' queued' : ''}`}
+                            style={{
+                                backgroundImage: iconUrl ? `url("${encodeURI(String(iconUrl).replace(/^['"]|['"]$/g, ''))}")` : 'none',
+                                cursor: 'pointer',
+                                opacity: isReady ? 1 : 0.7,
+                            }}
+                            onClick={() => this.handleQueueSkill(fighterId, normalizedKey)}
+                            onContextMenu={(e) => {
+                                const unitType = String(liveSelectedFighter?.type || liveSelectedFighter?.image || '').toLowerCase();
+                                if (unitType === 'ranger' || unitType === 'soldier') {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    this.openSkillContextMenu(fighterId, normalizedKey, spec, e.clientX, e.clientY);
+                                }
+                            }}
+                        />
+                        <CooldownSvg pct={cooldownPct} />
+                        {!isReady && (
+                            <div className="redux-cd-badge">{Math.ceil(smoothRemaining)}</div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const renderConsumableTile = (a, idx) => {
+            const rawIcon = a.iconUrl || (a.type === 'acid_bomb' ? (images['ranger_acid_bomb'] || '') : '') || (a.type === 'glyph' ? (images[`${a.glyphTier || 'minor'}_glyph`] || images['glyph_inverted'] || '') : '');
+            let resolvedIconUrl = '';
+            if (rawIcon) {
+                if (typeof rawIcon === 'string') {
+                    const mapped = images[rawIcon.trim()];
+                    resolvedIconUrl = mapped ? (mapped.default || mapped) : rawIcon;
+                } else if (typeof rawIcon === 'object') {
+                    resolvedIconUrl = rawIcon.default || String(rawIcon);
+                }
+            }
+            if (!resolvedIconUrl && typeof rawIcon === 'string' && rawIcon.startsWith('data:')) {
+                resolvedIconUrl = rawIcon;
+            }
+
+            const name = a.name || (a.type === 'acid_bomb' ? 'Acid Bomb' : a.type === 'glyph' ? `${a.glyphTier || 'Minor'} Glyph` : 'Spell');
+            const isAcidActive = a.type === 'acid_bomb' && this.state.acidBombMode;
+            const consumableKey = `consumable-${a.type}-${a.glyphTier || a.subtype || idx}`;
+            const isHovered = hoveredKey === consumableKey;
+
+            const fireConsumable = () => {
+                if (a.type === 'acid_bomb') {
+                    this.fireAcidBomb(a);
+                } else if (a.type === 'glyph') {
+                    this.fireGlyph(a);
+                } else if (a.type === 'spell') {
+                    this.fireSpell(a);
+                }
+            };
+
+            return (
+                <div
+                    key={consumableKey}
+                    className="skill-tile-outer"
+                    onMouseEnter={() => this.setState({ hoveredAbilityKey: consumableKey })}
+                    onMouseLeave={() => this.setState({ hoveredAbilityKey: null })}
+                >
+                    <div
+                        className={`skill-hover-label${isHovered ? ' visible' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); this.openSkillPopup({ name, desc: a.desc || a.explanation || '', icon: resolvedIconUrl, type: a.type, cooldown: a.cooldown }); }}
+                    >
+                        {name}
+                    </div>
+                    <div className="interaction-tile-wrapper" style={{ position: 'relative' }}>
+                        <div
+                            className={`interaction-tile special consumable${isAcidActive ? ' acid-bomb-active' : ''}`}
+                            style={{
+                                backgroundImage: resolvedIconUrl ? `url("${encodeURI(String(resolvedIconUrl).replace(/^['"]|['"]$/g, ''))}"), radial-gradient(white 0%, black 60%)` : 'radial-gradient(lime 0%, black 60%)',
+                                cursor: a.type === 'acid_bomb' ? 'crosshair' : 'pointer',
+                                outline: isAcidActive ? '2px solid #7aff36' : 'none',
+                                boxShadow: isAcidActive ? '0 0 8px #7aff36' : 'none'
+                            }}
+                            onClick={fireConsumable}
+                        />
+                        {a.count > 1 && (
+                            <div className="stack-badge small">{a.count > 5 ? '5+' : ['', 'I', 'II', 'III', 'IV', 'V'][a.count]}</div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const consumableGroups = {};
+        consumableActions.forEach(a => {
+            const gKey = a.type === 'glyph' ? `glyph-${a.glyphTier || 'minor'}` : a.type === 'acid_bomb' ? 'acid_bomb' : `spell-${a.subtype || 'generic'}`;
+            if (!consumableGroups[gKey]) consumableGroups[gKey] = [];
+            consumableGroups[gKey].push(a);
+        });
+        const consumableTiles = Object.values(consumableGroups).map((group, idx) => {
+            const rep = { ...group[0], count: group.length };
+            return renderConsumableTile(rep, idx);
+        });
+
+        const invConsumables = (this.props.inventoryManager && Array.isArray(this.props.inventoryManager.inventory))
+            ? this.props.inventoryManager.inventory.filter(e => e && e.type === 'consumable')
+            : [];
+        const invGrouped = {};
+        invConsumables.forEach(item => {
+            const key = item.name;
+            if (!invGrouped[key]) invGrouped[key] = [];
+            invGrouped[key].push(item);
+        });
+
+        const renderInventoryConsumableTile = (itemGroup, idx) => {
+            const rep = itemGroup[0];
+            const count = itemGroup.length;
+            const rawIcon = rep.icon;
+            let resolvedIconUrl = '';
+            if (rawIcon) {
+                if (typeof rawIcon === 'string') {
+                    const mapped = images[rawIcon.trim()];
+                    resolvedIconUrl = mapped ? (mapped.default || mapped) : rawIcon;
+                } else if (typeof rawIcon === 'object') {
+                    resolvedIconUrl = rawIcon.default || String(rawIcon);
+                }
+            }
+            if (!resolvedIconUrl && typeof rawIcon === 'string' && rawIcon.startsWith('data:')) {
+                resolvedIconUrl = rawIcon;
+            }
+
+            const name = rep.name;
+            const consumableKey = `inv-consumable-${name}-${idx}`;
+            const isHovered = hoveredKey === consumableKey;
+
+            return (
+                <div
+                    key={consumableKey}
+                    className="skill-tile-outer"
+                    onMouseEnter={() => this.setState({ hoveredAbilityKey: consumableKey })}
+                    onMouseLeave={() => this.setState({ hoveredAbilityKey: null })}
+                >
+                    <div
+                        className={`skill-hover-label${isHovered ? ' visible' : ''}`}
+                        onClick={(e) => { e.stopPropagation(); this.openSkillPopup({ name, desc: rep.description || rep.desc || '', icon: resolvedIconUrl, type: 'consumable', cooldown: 0 }); }}
+                    >
+                        {name}
+                    </div>
+                    <div className="interaction-tile-wrapper" style={{ position: 'relative' }}>
+                        <div
+                            className="interaction-tile special consumable"
+                            style={{
+                                backgroundImage: resolvedIconUrl ? `url("${encodeURI(String(resolvedIconUrl).replace(/^['"]|['"]$/g, ''))}"), radial-gradient(white 0%, black 60%)` : 'radial-gradient(lime 0%, black 60%)',
+                                cursor: 'pointer'
+                            }}
+                            onClick={() => this.combatInventoryTileClicked(rep)}
+                        />
+                        {count > 1 && (
+                            <div className="stack-badge small">{count > 5 ? '5+' : ['', 'I', 'II', 'III', 'IV', 'V'][count]}</div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const inventoryConsumableTiles = Object.values(invGrouped).map((group, idx) => {
+            return renderInventoryConsumableTile(group, idx);
+        });
+
+        const allConsumableTiles = [...consumableTiles, ...inventoryConsumableTiles];
+        const activeTab = this.state.activeSkillsTab || 'skills';
+
+        return (
+            <>
+                <div className="redux-abilities-tabs" style={{ display: 'flex', borderBottom: '1px solid rgba(255, 255, 255, 0.15)', background: 'rgba(0, 0, 0, 0.15)', flexShrink: 0 }}>
+                    <button
+                        style={{
+                            flex: 1,
+                            padding: '8px 12px',
+                            background: activeTab === 'skills' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                            border: 'none',
+                            color: activeTab === 'skills' ? '#fff' : '#888',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            letterSpacing: '0.5px',
+                            textTransform: 'uppercase',
+                            cursor: 'pointer',
+                            borderBottom: activeTab === 'skills' ? '2px solid #a370f7' : '2px solid transparent',
+                            outline: 'none',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onClick={() => this.setState({ activeSkillsTab: 'skills' })}
+                    >
+                        Skills
+                    </button>
+                    <button
+                        style={{
+                            flex: 1,
+                            padding: '8px 12px',
+                            background: activeTab === 'consumables' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                            border: 'none',
+                            color: activeTab === 'consumables' ? '#fff' : '#888',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            letterSpacing: '0.5px',
+                            textTransform: 'uppercase',
+                            cursor: 'pointer',
+                            borderBottom: activeTab === 'consumables' ? '2px solid #a370f7' : '2px solid transparent',
+                            outline: 'none',
+                            transition: 'all 0.2s ease'
+                        }}
+                        onClick={() => this.setState({ activeSkillsTab: 'consumables' })}
+                    >
+                        Consumables {(consumableActions.length + invConsumables.length) > 0 && `(${consumableActions.length + invConsumables.length})`}
+                    </button>
+                </div>
+                {activeTab === 'consumables' ? (
+                    <div className="redux-regular-skills-wrap">
+                        {allConsumableTiles.length > 0 ? (
+                            allConsumableTiles
+                        ) : (
+                            <div style={{ padding: '20px', color: '#888', fontSize: '11px', textAlign: 'center', fontStyle: 'italic', width: '100%' }}>
+                                No consumables available
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="redux-regular-skills-wrap">
+                        {regularEntries.length > 0 ? (
+                            regularEntries.map(renderRegularTile)
+                        ) : (
+                            <div style={{ padding: '20px', color: '#888', fontSize: '11px', textAlign: 'center', fontStyle: 'italic', width: '100%' }}>
+                                No skills available
+                            </div>
+                        )}
+                    </div>
+                )}
+            </>
+        );
+    }
+
     render() {
+        const currentTileSize = this.getTileSize();
         const selectedPlanObj = [
             { key: 'bunch_up',   symbol: '⬤', title: 'Bunch'  },
             { key: 'spread_out', symbol: '⬡', title: 'Spread' },
@@ -2781,6 +3143,7 @@ class MonsterBattle extends React.Component {
         const liveSelectedFighter = selectedUnit
             ? (this.state.battleData[selectedUnit.id] || selectedUnit)
             : null;
+
         const activeTargetId = liveSelectedFighter?.targetId || null;
         const selectedPortraitUrl = liveSelectedFighter
             ? (images[liveSelectedFighter.portrait] || liveSelectedFighter.portrait || images.avatar)
@@ -2798,184 +3161,309 @@ class MonsterBattle extends React.Component {
         const cooldownRemainingAngle = `${Math.max(0, Math.min(360, (1 - (cooldownElapsedPct / 100)) * 360))}deg`;
 
         return (
-            <div className={`mb-board ${this.state.showCrosshair ? 'show-crosshair' : ''} ${this.state.acidBombMode ? 'acid-bomb-mode' : ''}`}>
-                {/* Monster name in upper left */}
-                <div style={{ position: 'absolute', top: -35, left: 20, color: 'white', fontSize: '18px', zIndex: 1000 }}>
-                    {(() => {
-                        const liveMonster = this.monster();
-                        const name = liveMonster?.name || this.props.monster?.name;
-                        return name ? `Fighting: ${name}` : 'Fighting: Unknown';
-                    })()}
-                </div>
-                {/* Game speed / Round clock readout in upper right */}
-                <div style={{ position: 'absolute', top: -45, right: 20, display: 'flex', alignItems: 'center', gap: '15px', color: 'white', fontSize: '14px', zIndex: 1000 }}>
-                    {this.props.combatManager && this.props.combatManager.round !== undefined ? (
-                        <>
-                            {/* Fast/Slow selector */}
-                            <div style={{ display: 'flex', gap: '5px' }}>
+            <div className={`mb-board ${this.state.isMobileLandscape ? 'mobile-layout' : ''} ${this.state.greetingInProcess ? 'greeting-in-process' : ''} ${this.state.showCrosshair ? 'show-crosshair' : ''} ${this.state.acidBombMode ? 'acid-bomb-mode' : ''}`}>
+                {/* Mobile Left & Right Panels */}
+                {this.state.isMobileLandscape && (
+                    <div className="mobile-left-panel">
+                        <div className="mobile-monster-name">
+                            {(() => {
+                                const liveMonster = this.monster();
+                                const name = liveMonster?.name || this.props.monster?.name;
+                                return name ? `Fighting: ${name}` : 'Fighting: Unknown';
+                            })()}
+                        </div>
+                        
+                        {this.props.combatManager && this.props.combatManager.round !== undefined && (
+                            <div className="mobile-round-widget">
+                                <div
+                                    style={{
+                                        position: 'relative',
+                                        width: '40px',
+                                        height: '40px',
+                                        borderRadius: '50%',
+                                        background: `conic-gradient(rgba(255,255,255,0.8) 0deg, rgba(255,255,255,0.8) ${this.props.combatManager.roundTimeRemainingRatio * 360}deg, rgba(255,255,255,0.1) ${this.props.combatManager.roundTimeRemainingRatio * 360}deg, rgba(255,255,255,0.1) 360deg)`,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        boxShadow: '0 0 8px rgba(0,0,0,0.5)',
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            width: '32px',
+                                            height: '32px',
+                                            borderRadius: '50%',
+                                            backgroundColor: '#111111',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            color: '#ffffff',
+                                            fontSize: '14px',
+                                            fontWeight: 'bold',
+                                        }}
+                                    >
+                                        {this.props.combatManager.round}
+                                    </div>
+                                </div>
+                                <span className="mobile-round-label">Round {this.props.combatManager.round}</span>
+                            </div>
+                        )}
+
+                        {this.props.combatManager && (
+                            <div className="mobile-speed-toggle">
                                 <button
                                     onClick={() => this.setGameSpeed(INTERVALS[0])}
-                                    style={{
-                                        backgroundColor: this.props.combatManager.gameSpeed === 'slowest' ? '#ffffff' : 'rgba(255,255,255,0.1)',
-                                        color: this.props.combatManager.gameSpeed === 'slowest' ? '#000000' : '#ffffff',
-                                        border: '1px solid rgba(255,255,255,0.3)',
-                                        borderRadius: '4px',
-                                        padding: '4px 8px',
-                                        cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: 'bold',
-                                        transition: 'all 0.2s'
-                                    }}
+                                    className={this.props.combatManager.gameSpeed === 'slowest' ? 'active' : ''}
                                 >
                                     Slowest
                                 </button>
                                 <button
                                     onClick={() => this.setGameSpeed(INTERVALS[1])}
-                                    style={{
-                                        backgroundColor: this.props.combatManager.gameSpeed === 'slow' ? '#ffffff' : 'rgba(255,255,255,0.1)',
-                                        color: this.props.combatManager.gameSpeed === 'slow' ? '#000000' : '#ffffff',
-                                        border: '1px solid rgba(255,255,255,0.3)',
-                                        borderRadius: '4px',
-                                        padding: '4px 8px',
-                                        cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: 'bold',
-                                        transition: 'all 0.2s'
-                                    }}
+                                    className={this.props.combatManager.gameSpeed === 'slow' ? 'active' : ''}
                                 >
                                     Slow
                                 </button>
                                 <button
                                     onClick={() => this.setGameSpeed(INTERVALS[2])}
-                                    style={{
-                                        backgroundColor: this.props.combatManager.gameSpeed === 'fast' ? '#ffffff' : 'rgba(255,255,255,0.1)',
-                                        color: this.props.combatManager.gameSpeed === 'fast' ? '#000000' : '#ffffff',
-                                        border: '1px solid rgba(255,255,255,0.3)',
-                                        borderRadius: '4px',
-                                        padding: '4px 8px',
-                                        cursor: 'pointer',
-                                        fontSize: '12px',
-                                        fontWeight: 'bold',
-                                        transition: 'all 0.2s'
-                                    }}
+                                    className={this.props.combatManager.gameSpeed === 'fast' ? 'active' : ''}
                                 >
                                     Fast
                                 </button>
                             </div>
+                        )}
 
-                            {/* Round Clock Widget */}
-                            <div
-                                style={{
-                                    position: 'relative',
-                                    width: '40px',
-                                    height: '40px',
-                                    borderRadius: '50%',
-                                    background: `conic-gradient(rgba(255,255,255,0.8) 0deg, rgba(255,255,255,0.8) ${this.props.combatManager.roundTimeRemainingRatio * 360}deg, rgba(255,255,255,0.1) ${this.props.combatManager.roundTimeRemainingRatio * 360}deg, rgba(255,255,255,0.1) 360deg)`,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 0 8px rgba(0,0,0,0.5)',
-                                }}
-                            >
-                                <div
-                                    style={{
-                                        width: '32px',
-                                        height: '32px',
-                                        borderRadius: '50%',
-                                        backgroundColor: '#111111',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        color: '#ffffff',
-                                        fontSize: '14px',
-                                        fontWeight: 'bold',
-                                    }}
-                                >
-                                    {this.props.combatManager.round}
+                        {(() => {
+                            const meta = getMeta();
+                            const resolve = (meta && typeof meta.resolve === 'number') ? meta.resolve : 100;
+                            const pct = Math.max(0, Math.min(100, resolve));
+                            const isCritical = resolve < 20;
+                            const isLow = resolve >= 20 && resolve < 40;
+                            const barColor = isCritical
+                                ? 'linear-gradient(90deg, #7f1d1d, #ef4444)'
+                                : isLow
+                                    ? 'linear-gradient(90deg, #78350f, #f59e0b)'
+                                    : 'linear-gradient(90deg, #14532d, #22c55e)';
+                            const labelColor = isCritical ? '#fca5a5' : isLow ? '#fcd34d' : '#86efac';
+                            return (
+                                <div className="mobile-resolve-meter" title="Party Resolve">
+                                    <div className="resolve-label" style={{ color: labelColor }}>
+                                        {isCritical && <span role="img" aria-label="warning" style={{ marginRight: '2px' }}>⚠️</span>}
+                                        Resolve: <span className="resolve-val">{Math.round(resolve)}</span>
+                                    </div>
+                                    <div className="resolve-bar-track">
+                                        <div className="resolve-bar-fill" style={{ width: `${pct}%`, background: barColor }} />
+                                    </div>
                                 </div>
-                            </div>
-                        </>
-                    ) : (
-                        <div>
-                            Game Speed: {
-                                (() => {
-                                    const intervalDisplayNames = INTERVAL_DISPLAY_NAMES;
-                                    const intervals = INTERVALS;
-                                    const current = this.getGameSpeed();
-                                    const idx = intervals.indexOf(current);
-                                    return idx !== -1 ? intervalDisplayNames[idx] : `${current} ms`;
-                                })()
-                            }
+                            );
+                        })()}
+                    </div>
+                )}
+
+                {this.state.isMobileLandscape && (
+                    <div className="mobile-right-panel">
+                        {this.renderAbilitiesTabContent(liveSelectedFighter)}
+                    </div>
+                )}
+
+                {/* Desktop Top Bars (Only if not mobile landscape) */}
+                {!this.state.isMobileLandscape && (
+                    <>
+                        {/* Monster name in upper left */}
+                        <div style={{
+                            position: 'absolute',
+                            top: -35,
+                            left: 20,
+                            color: 'white',
+                            fontSize: '18px',
+                            fontWeight: 'normal',
+                            zIndex: 1000
+                        }}>
+                            {(() => {
+                                const liveMonster = this.monster();
+                                const name = liveMonster?.name || this.props.monster?.name;
+                                return name ? `Fighting: ${name}` : 'Fighting: Unknown';
+                            })()}
                         </div>
-                    )}
+                        {/* Game speed / Round clock readout in upper right */}
+                        <div style={{
+                            position: 'absolute',
+                            top: -45,
+                            right: 20,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '15px',
+                            color: 'white',
+                            fontSize: '14px',
+                            zIndex: 1000
+                        }}>
+                            {this.props.combatManager && this.props.combatManager.round !== undefined ? (
+                                <>
+                                    {/* Fast/Slow selector */}
+                                    <div style={{ display: 'flex', gap: '5px' }}>
+                                        <button
+                                            onClick={() => this.setGameSpeed(INTERVALS[0])}
+                                            style={{
+                                                backgroundColor: this.props.combatManager.gameSpeed === 'slowest' ? '#ffffff' : 'rgba(255,255,255,0.1)',
+                                                color: this.props.combatManager.gameSpeed === 'slowest' ? '#000000' : '#ffffff',
+                                                border: '1px solid rgba(255,255,255,0.3)',
+                                                borderRadius: '4px',
+                                                padding: '4px 8px',
+                                                cursor: 'pointer',
+                                                fontSize: '12px',
+                                                fontWeight: 'bold',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            Slowest
+                                        </button>
+                                        <button
+                                            onClick={() => this.setGameSpeed(INTERVALS[1])}
+                                            style={{
+                                                backgroundColor: this.props.combatManager.gameSpeed === 'slow' ? '#ffffff' : 'rgba(255,255,255,0.1)',
+                                                color: this.props.combatManager.gameSpeed === 'slow' ? '#000000' : '#ffffff',
+                                                border: '1px solid rgba(255,255,255,0.3)',
+                                                borderRadius: '4px',
+                                                padding: '4px 8px',
+                                                cursor: 'pointer',
+                                                fontSize: '12px',
+                                                fontWeight: 'bold',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            Slow
+                                        </button>
+                                        <button
+                                            onClick={() => this.setGameSpeed(INTERVALS[2])}
+                                            style={{
+                                                backgroundColor: this.props.combatManager.gameSpeed === 'fast' ? '#ffffff' : 'rgba(255,255,255,0.1)',
+                                                color: this.props.combatManager.gameSpeed === 'fast' ? '#000000' : '#ffffff',
+                                                border: '1px solid rgba(255,255,255,0.3)',
+                                                borderRadius: '4px',
+                                                padding: '4px 8px',
+                                                cursor: 'pointer',
+                                                fontSize: '12px',
+                                                fontWeight: 'bold',
+                                                transition: 'all 0.2s'
+                                            }}
+                                        >
+                                            Fast
+                                        </button>
+                                    </div>
 
-                    {/* ── Party Resolve Meter ── */}
-                    {(() => {
-                        const meta = getMeta();
-                        const resolve = (meta && typeof meta.resolve === 'number') ? meta.resolve : 100;
-                        const pct = Math.max(0, Math.min(100, resolve));
-                        const isCritical = resolve < 20;
-                        const isLow = resolve >= 20 && resolve < 40;
-                        const barColor = isCritical
-                            ? 'linear-gradient(90deg, #7f1d1d, #ef4444)'
-                            : isLow
-                                ? 'linear-gradient(90deg, #78350f, #f59e0b)'
-                                : 'linear-gradient(90deg, #14532d, #22c55e)';
-                        const labelColor = isCritical ? '#fca5a5' : isLow ? '#fcd34d' : '#86efac';
-                        return (
-                            <div
-                                title="Party Resolve — below 20: fighters may refuse to act (10% chance/turn). Below 40: reduced morale. 80+: high morale bonus."
-                                style={{
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: '3px',
-                                    cursor: 'default',
-                                    userSelect: 'none',
-                                }}
-                            >
-                                <div style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: '5px',
-                                    fontSize: '10px',
-                                    color: labelColor,
-                                    fontWeight: 700,
-                                    letterSpacing: '0.5px',
-                                    textTransform: 'uppercase',
-                                }}>
-                                    {isCritical && <span role="img" aria-label="warning" style={{ fontSize: '11px' }}>⚠️</span>}
-                                    Resolve
-                                    <span style={{ color: '#fff', fontWeight: 400 }}>{Math.round(resolve)}</span>
+                                    {/* Round Clock Widget */}
+                                    <div
+                                        style={{
+                                            position: 'relative',
+                                            width: '40px',
+                                            height: '40px',
+                                            borderRadius: '50%',
+                                            background: `conic-gradient(rgba(255,255,255,0.8) 0deg, rgba(255,255,255,0.8) ${this.props.combatManager.roundTimeRemainingRatio * 360}deg, rgba(255,255,255,0.1) ${this.props.combatManager.roundTimeRemainingRatio * 360}deg, rgba(255,255,255,0.1) 360deg)`,
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            boxShadow: '0 0 8px rgba(0,0,0,0.5)',
+                                        }}
+                                    >
+                                        <div
+                                            style={{
+                                                width: '32px',
+                                                height: '32px',
+                                                borderRadius: '50%',
+                                                backgroundColor: '#111111',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#ffffff',
+                                                fontSize: '14px',
+                                                fontWeight: 'bold',
+                                            }}
+                                        >
+                                            {this.props.combatManager.round}
+                                        </div>
+                                    </div>
+                                </>
+                            ) : (
+                                <div>
+                                    Game Speed: {
+                                        (() => {
+                                            const intervalDisplayNames = INTERVAL_DISPLAY_NAMES;
+                                            const intervals = INTERVALS;
+                                            const current = this.getGameSpeed();
+                                            const idx = intervals.indexOf(current);
+                                            return idx !== -1 ? intervalDisplayNames[idx] : `${current} ms`;
+                                        })()
+                                    }
                                 </div>
-                                <div style={{
-                                    width: '80px',
-                                    height: '6px',
-                                    background: 'rgba(255,255,255,0.1)',
-                                    borderRadius: '3px',
-                                    overflow: 'hidden',
-                                    border: isCritical ? '1px solid rgba(239,68,68,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                                }}>
-                                    <div style={{
-                                        width: `${pct}%`,
-                                        height: '100%',
-                                        background: barColor,
-                                        borderRadius: '3px',
-                                        transition: 'width 0.5s ease, background 0.5s ease',
-                                    }} />
-                                </div>
-                            </div>
-                        );
-                    })()}
+                            )}
 
-                </div>
+                            {/* ── Party Resolve Meter ── */}
+                            {(() => {
+                                const meta = getMeta();
+                                const resolve = (meta && typeof meta.resolve === 'number') ? meta.resolve : 100;
+                                const pct = Math.max(0, Math.min(100, resolve));
+                                const isCritical = resolve < 20;
+                                const isLow = resolve >= 20 && resolve < 40;
+                                const barColor = isCritical
+                                    ? 'linear-gradient(90deg, #7f1d1d, #ef4444)'
+                                    : isLow
+                                        ? 'linear-gradient(90deg, #78350f, #f59e0b)'
+                                        : 'linear-gradient(90deg, #14532d, #22c55e)';
+                                const labelColor = isCritical ? '#fca5a5' : isLow ? '#fcd34d' : '#86efac';
+                                return (
+                                    <div
+                                        title="Party Resolve — below 20: fighters may refuse to act (10% chance/turn). Below 40: reduced morale. 80+: high morale bonus."
+                                        style={{
+                                            display: 'flex',
+                                            flexDirection: 'column',
+                                            alignItems: 'center',
+                                            gap: '3px',
+                                            cursor: 'default',
+                                            userSelect: 'none',
+                                        }}
+                                    >
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '5px',
+                                            fontSize: '10px',
+                                            color: labelColor,
+                                            fontWeight: 700,
+                                            letterSpacing: '0.5px',
+                                            textTransform: 'uppercase',
+                                        }}>
+                                            {isCritical && <span role="img" aria-label="warning" style={{ fontSize: '11px' }}>⚠️</span>}
+                                            Resolve
+                                            <span style={{ color: '#fff', fontWeight: 400 }}>{Math.round(resolve)}</span>
+                                        </div>
+                                        <div style={{
+                                            width: '80px',
+                                            height: '6px',
+                                            background: 'rgba(255,255,255,0.1)',
+                                            borderRadius: '3px',
+                                            overflow: 'hidden',
+                                            border: isCritical ? '1px solid rgba(239,68,68,0.5)' : '1px solid rgba(255,255,255,0.1)',
+                                        }}>
+                                            <div style={{
+                                                width: `${pct}%`,
+                                                height: '100%',
+                                                background: barColor,
+                                                borderRadius: '3px',
+                                                transition: 'width 0.5s ease, background 0.5s ease',
+                                            }} />
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </>
+                )}
                 {this.state.navToDeathScene && <Redirect to='/death' />}
                 <div className="combat-grid-container"
                     ref={this.boardContainerRef}
                     style={{
                         position: 'relative',
-                        width: TILE_SIZE * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0) + 'px',
-                        height: TILE_SIZE * MAX_ROWS + (SHOW_TILE_BORDERS ? MAX_ROWS * 2 : 0) + 'px',
+                        width: currentTileSize * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0) + 'px',
+                        height: currentTileSize * MAX_ROWS + (SHOW_TILE_BORDERS ? MAX_ROWS * 2 : 0) + 'px',
                         background: '#161618',
                         borderRadius: '16px',
                         border: '2px solid rgba(255, 255, 255, 0.08)',
@@ -3224,15 +3712,15 @@ class MonsterBattle extends React.Component {
                                 const middleCol = mx + hDir;
                                 const topRow = my - 2;
 
-                                bubbleCenterX = middleCol * TILE_SIZE + TILE_SIZE / 2;
-                                bubbleCenterY = topRow * TILE_SIZE;
+                                bubbleCenterX = middleCol * currentTileSize + currentTileSize / 2;
+                                bubbleCenterY = topRow * currentTileSize;
                             } else {
                                 // 2x2 footprint
-                                const hOffset = (mx >= 4) ? -TILE_SIZE : 0;
-                                const leftPos = mx * TILE_SIZE + hOffset;
-                                const topPos = my * TILE_SIZE - TILE_SIZE; // Top row of the 2x2
+                                const hOffset = (mx >= 4) ? -currentTileSize : 0;
+                                const leftPos = mx * currentTileSize + hOffset;
+                                const topPos = my * currentTileSize - currentTileSize; // Top row of the 2x2
 
-                                bubbleCenterX = leftPos + TILE_SIZE;
+                                bubbleCenterX = leftPos + currentTileSize;
                                 bubbleCenterY = topPos; // Directly above the top row
                             }
 
@@ -3340,6 +3828,8 @@ class MonsterBattle extends React.Component {
                                     onDrop={() => { this.onDrop(i) }}
                                     onClick={isAcidBombTarget ? () => this.handleAcidBombPlacement(t) : undefined}
                                     style={{
+                                        width: currentTileSize + 'px',
+                                        height: currentTileSize + 'px',
                                         border: isDragTarget
                                             ? (dragEnemy ? '2px solid rgba(231, 76, 60, 0.9)' : '2px solid rgba(255, 183, 3, 0.8)')
                                             : isAcidBombTarget
@@ -3430,11 +3920,11 @@ class MonsterBattle extends React.Component {
                             return allWalls.map((wall) => {
                                 if (!wall.lanesAffected || !wall.lanesAffected.length) return null;
                                 const minLane = Math.min(...wall.lanesAffected);
-                                const topPx = minLane * TILE_SIZE;
-                                const heightPx = wall.lanesAffected.length * TILE_SIZE;
+                                const topPx = minLane * currentTileSize;
+                                const heightPx = wall.lanesAffected.length * currentTileSize;
                                 const leftPx = wall.isFacingRight
-                                    ? wall.x * TILE_SIZE - 3
-                                    : (wall.x + 1) * TILE_SIZE - 3;
+                                    ? wall.x * currentTileSize - 3
+                                    : (wall.x + 1) * currentTileSize - 3;
                                 return (
                                     <div
                                         key={wall.id}
@@ -3460,7 +3950,7 @@ class MonsterBattle extends React.Component {
 
                         {/* /// ENTROPIC KINDRED — column expansion flash strips */}
                         {this.state.entropicKindredNewCols && this.state.entropicKindredNewCols.map((strip, i) => {
-                            const colPx = strip.colIndex * (TILE_SIZE + (SHOW_TILE_BORDERS ? 2 : 0));
+                            const colPx = strip.colIndex * (currentTileSize + (SHOW_TILE_BORDERS ? 2 : 0));
                             return (
                                 <div
                                     key={`ek-col-${i}`}
@@ -3469,7 +3959,7 @@ class MonsterBattle extends React.Component {
                                         position: 'absolute',
                                         left: `${colPx}px`,
                                         top: 0,
-                                        width: `${TILE_SIZE}px`,
+                                        width: `${currentTileSize}px`,
                                         height: '100%',
                                         animationDelay: `${strip.delay}ms`,
                                         zIndex: 80,
@@ -3508,15 +3998,16 @@ class MonsterBattle extends React.Component {
                             greetingInProcess={this.state.greetingInProcess}
                             SHOW_MONSTER_IDS={SHOW_MONSTER_IDS}
                             activeAnimations={this.state.activeAnimations}
-                            TILE_SIZE={TILE_SIZE}
+                            TILE_SIZE={currentTileSize}
                             SHOW_TILE_BORDERS={SHOW_TILE_BORDERS}
+                            isMobileLandscape={this.state.isMobileLandscape}
                         />
 
                         {/* ── Manual Input drag arc SVG overlay ──────────────────────── */}
                         {(() => {
-                            const CELL = TILE_SIZE + (SHOW_TILE_BORDERS ? 2 : 0);
-                            const boardW = TILE_SIZE * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0);
-                            const boardH = TILE_SIZE * MAX_ROWS + (SHOW_TILE_BORDERS ? MAX_ROWS * 2 : 0);
+                            const CELL = currentTileSize + (SHOW_TILE_BORDERS ? 2 : 0);
+                            const boardW = currentTileSize * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0);
+                            const boardH = currentTileSize * MAX_ROWS + (SHOW_TILE_BORDERS ? MAX_ROWS * 2 : 0);
 
                             // ── Committed (persistent ghost) arc ───────────────────────────
                             const committed = !this.state.dragSource && this.state.committedArc;
@@ -3686,9 +4177,10 @@ class MonsterBattle extends React.Component {
                     {/* ── Redux AI Mode: read-only status panel ───────────────────────── */}
                     {this.props.combatManager && this.props.combatManager.round !== undefined ? (
                         <div className="interaction-row redux-status-panel">
+                            <div className="redux-left-group">
 
-                            {/* LEFT COLUMN: stat bars + current target */}
-                            <div className="redux-stats-col">
+                                {/* LEFT COLUMN: stat bars + current target */}
+                                <div className="redux-stats-col">
 
                                 {/* ── Active Battle Tactic badge ──────────────── */}
                                 {(() => {
@@ -3996,365 +4488,8 @@ class MonsterBattle extends React.Component {
                                         {selectedPlanObj.symbol}
                                     </div>
                                 )}
-                                {liveSelectedFighter && (() => {
-                                    const cm = this.props.combatManager;
-                                    const fighterId = liveSelectedFighter.id;
-
-                                    // ── Icon resolution helper ─────────────────────────────────
-                                    const resolveIcon = (candidate) => {
-                                        if (!candidate) return '';
-                                        if (typeof candidate === 'string') {
-                                            if (candidate.trim().startsWith('url(')) return candidate.replace(/^url\((.*)?\/\)$/i, '$1').replace(/^['"]|['"]$/g, '');
-                                            const mapped = images[candidate.trim()];
-                                            if (mapped) return mapped.default || mapped;
-                                            return candidate;
-                                        }
-                                        if (typeof candidate === 'object' && candidate.default) return candidate.default;
-                                        return '';
-                                    };
-
-                                    // ── Spec resolution helper ─────────────────────────────────
-                                    const resolveSpec = (a) => {
-                                        const sourceKey = typeof a === 'string' ? a : (a?.key || a?.name || '');
-                                        const normalizedKey = String(sourceKey).toLowerCase().replaceAll(' ', '_');
-                                        const canonical = cm
-                                            ? ((cm.specialsMatrix && (cm.specialsMatrix[sourceKey] || cm.specialsMatrix[normalizedKey])) ||
-                                                (cm.attacksMatrix && (cm.attacksMatrix[sourceKey] || cm.attacksMatrix[normalizedKey])) || {})
-                                            : {};
-                                        const runtime = (cm?.resolveSpecial && liveSelectedFighter)
-                                            ? (cm.resolveSpecial(liveSelectedFighter, sourceKey) || {})
-                                            : {};
-                                        const spec = { ...canonical, ...(typeof a === 'object' ? a : {}), ...runtime };
-                                        if (!spec.name) spec.name = String(sourceKey).replaceAll('_', ' ');
-                                        return { spec, sourceKey, normalizedKey };
-                                    };
-
-                                    // ── Build consumable list from specialActions ──────────────
-                                    const consumableTypes = new Set(['glyph', 'acid_bomb', 'spell']);
-                                    const consumableActions = (liveSelectedFighter.specialActions || []).filter(
-                                        a => a && consumableTypes.has(a.type) && a.available
-                                    );
-
-                                    // ── Build regular skills (specials + attacks, de-duped, no consumables) ──
-                                    const allSpecials = [
-                                        ...(liveSelectedFighter.specials || []),
-                                        ...(liveSelectedFighter.attacks || []),
-                                    ];
-                                    const seenKeys = new Set();
-                                    const regularEntries = allSpecials.filter(entry => {
-                                        const key = typeof entry === 'string' ? entry : (entry?.key || entry?.name || '');
-                                        const nk = String(key).trim().toLowerCase().replaceAll(' ', '_');
-                                        if (!nk || seenKeys.has(nk)) return false;
-                                        seenKeys.add(nk);
-                                        return true;
-                                    });
-
-                                    const hoveredKey = this.state.hoveredAbilityKey;
-                                    const queuedKey = this.state.queuedSkillMap[fighterId] || null;
-
-                                    // ── Cooldown helper ────────────────────────────────────────
-                                    const getCooldownPct = (spec, sourceKey, normalizedKey) => {
-                                        const remaining = liveSelectedFighter?.cooldowns?.[spec.id]
-                                            || liveSelectedFighter?.cooldowns?.[sourceKey]
-                                            || liveSelectedFighter?.cooldowns?.[normalizedKey] || 0;
-                                        if (remaining <= 0) return { pct: 0, smooth: 0 };
-                                        const baseCd = spec.cooldown || 5;
-                                        const ratio = cm?.roundTimeRemainingRatio ?? 1.0;
-                                        const smooth = Math.max(0, remaining - (1 - ratio));
-                                        return { pct: (smooth / baseCd) * 100, smooth };
-                                    };
-
-                                    // ── Cooldown SVG overlay ───────────────────────────────────
-                                    const CooldownSvg = ({ pct }) => pct <= 0 ? null : (
-                                        <svg
-                                            style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', transform: 'rotate(-90deg)', pointerEvents: 'none', zIndex: 10 }}
-                                            viewBox="0 0 20 20"
-                                        >
-                                            <circle cx="10" cy="10" r="10" fill="none" stroke="rgba(0,0,0,0.75)" strokeWidth="20" strokeDasharray="62.83" strokeDashoffset={(1 - (pct / 100)) * 62.83} />
-                                        </svg>
-                                    );
-
-                                    // ─────────────────────────────────────────────────────────────
-                                    // REGULAR SKILL TILE
-                                    // ─────────────────────────────────────────────────────────────
-                                    const renderRegularTile = (a, i) => {
-                                        const { spec, sourceKey, normalizedKey } = resolveSpec(a);
-                                        const iconUrl = resolveIcon(spec.iconUrl || spec.icon);
-                                        const { pct: cooldownPct, smooth: smoothRemaining } = getCooldownPct(spec, sourceKey, normalizedKey);
-                                        const isReady = cooldownPct === 0;
-                                        const isQueued = queuedKey === normalizedKey || queuedKey === sourceKey;
-                                        const isHovered = hoveredKey === normalizedKey;
-
-                                        return (
-                                            <div
-                                                key={`reg-${i}`}
-                                                className="skill-tile-outer"
-                                                onMouseEnter={() => this.setState({ hoveredAbilityKey: normalizedKey })}
-                                                onMouseLeave={() => this.setState({ hoveredAbilityKey: null })}
-                                            >
-                                                {/* Label — always takes 18px; visible on hover. Click = popup */}
-                                                <div
-                                                    className={`skill-hover-label${isHovered ? ' visible' : ''}`}
-                                                    onClick={(e) => { e.stopPropagation(); this.openSkillPopup(spec); }}
-                                                >
-                                                    {spec.name || sourceKey}
-                                                </div>
-                                                {/* Icon wrapper */}
-                                                <div className="interaction-tile-wrapper">
-                                                                                    <div
-                                                        className={`interaction-tile special${isReady ? ' available' : ''}${isQueued ? ' queued' : ''}`}
-                                                        style={{
-                                                            backgroundImage: iconUrl ? `url("${encodeURI(String(iconUrl).replace(/^['"]|['"]$/g, ''))}")` : 'none',
-                                                            cursor: 'pointer',
-                                                            opacity: isReady ? 1 : 0.7,
-                                                        }}
-                                                        onClick={() => this.handleQueueSkill(fighterId, normalizedKey)}
-                                                        onContextMenu={(e) => {
-                                                            const unitType = String(liveSelectedFighter?.type || liveSelectedFighter?.image || '').toLowerCase();
-                                                            if (unitType === 'ranger' || unitType === 'soldier') {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
-                                                                this.openSkillContextMenu(fighterId, normalizedKey, spec, e.clientX, e.clientY);
-                                                            }
-                                                        }}
-                                                    />
-                                                    <CooldownSvg pct={cooldownPct} />
-                                                    {!isReady && (
-                                                        <div className="redux-cd-badge">{Math.ceil(smoothRemaining)}</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    };
-
-                                    // ─────────────────────────────────────────────────────────────
-                                    // CONSUMABLE TILE (glyph, acid_bomb, legacy spell)
-                                    // ─────────────────────────────────────────────────────────────
-                                    const renderConsumableTile = (a, idx) => {
-                                        // Resolve icon
-                                        const rawIcon = a.iconUrl || (a.type === 'acid_bomb' ? (images['ranger_acid_bomb'] || '') : '') || (a.type === 'glyph' ? (images[`${a.glyphTier || 'minor'}_glyph`] || images['glyph_inverted'] || '') : '');
-                                        let resolvedIconUrl = '';
-                                        if (rawIcon) {
-                                            if (typeof rawIcon === 'string') {
-                                                const mapped = images[rawIcon.trim()];
-                                                resolvedIconUrl = mapped ? (mapped.default || mapped) : rawIcon;
-                                            } else if (typeof rawIcon === 'object') {
-                                                resolvedIconUrl = rawIcon.default || String(rawIcon);
-                                            }
-                                        }
-                                        if (!resolvedIconUrl && typeof rawIcon === 'string' && rawIcon.startsWith('data:')) {
-                                            resolvedIconUrl = rawIcon;
-                                        }
-
-                                        const name = a.name || (a.type === 'acid_bomb' ? 'Acid Bomb' : a.type === 'glyph' ? `${a.glyphTier || 'Minor'} Glyph` : 'Spell');
-                                        const isAcidActive = a.type === 'acid_bomb' && this.state.acidBombMode;
-                                        const consumableKey = `consumable-${a.type}-${a.glyphTier || a.subtype || idx}`;
-                                        const isHovered = hoveredKey === consumableKey;
-
-                                        // Determine fire action based on type
-                                        const fireConsumable = () => {
-                                            if (a.type === 'acid_bomb') {
-                                                this.fireAcidBomb(a);
-                                            } else if (a.type === 'glyph') {
-                                                this.fireGlyph(a);
-                                            } else if (a.type === 'spell') {
-                                                this.fireSpell(a);
-                                            }
-                                        };
-
-                                        return (
-                                            <div
-                                                key={consumableKey}
-                                                className="skill-tile-outer"
-                                                onMouseEnter={() => this.setState({ hoveredAbilityKey: consumableKey })}
-                                                onMouseLeave={() => this.setState({ hoveredAbilityKey: null })}
-                                            >
-                                                {/* Label — click = popup */}
-                                                <div
-                                                    className={`skill-hover-label${isHovered ? ' visible' : ''}`}
-                                                    onClick={(e) => { e.stopPropagation(); this.openSkillPopup({ name, desc: a.desc || a.explanation || '', icon: resolvedIconUrl, type: a.type, cooldown: a.cooldown }); }}
-                                                >
-                                                    {name}
-                                                </div>
-                                                {/* Icon wrapper — click = fire */}
-                                                <div className="interaction-tile-wrapper" style={{ position: 'relative' }}>
-                                                    <div
-                                                        className={`interaction-tile special consumable${isAcidActive ? ' acid-bomb-active' : ''}`}
-                                                        style={{
-                                                            backgroundImage: resolvedIconUrl ? `url("${encodeURI(String(resolvedIconUrl).replace(/^['"]|['"]$/g, ''))}"), radial-gradient(white 0%, black 60%)` : 'radial-gradient(lime 0%, black 60%)',
-                                                            cursor: a.type === 'acid_bomb' ? 'crosshair' : 'pointer',
-                                                            outline: isAcidActive ? '2px solid #7aff36' : 'none',
-                                                            boxShadow: isAcidActive ? '0 0 8px #7aff36' : 'none'
-                                                        }}
-                                                        onClick={fireConsumable}
-                                                    />
-                                                    {/* Stack count badge */}
-                                                    {a.count > 1 && (
-                                                        <div className="stack-badge small">{a.count > 5 ? '5+' : ['', 'I', 'II', 'III', 'IV', 'V'][a.count]}</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    };
-
-                                    // Group consumables by type/tier and pick representative + count
-                                    const consumableGroups = {};
-                                    consumableActions.forEach(a => {
-                                        const gKey = a.type === 'glyph' ? `glyph-${a.glyphTier || 'minor'}` : a.type === 'acid_bomb' ? 'acid_bomb' : `spell-${a.subtype || 'generic'}`;
-                                        if (!consumableGroups[gKey]) consumableGroups[gKey] = [];
-                                        consumableGroups[gKey].push(a);
-                                    });
-                                    const consumableTiles = Object.values(consumableGroups).map((group, idx) => {
-                                        const rep = { ...group[0], count: group.length };
-                                        return renderConsumableTile(rep, idx);
-                                    });
-
-                                    // ── Build inventory consumables list ──────────────────────────
-                                    const invConsumables = (this.props.inventoryManager && Array.isArray(this.props.inventoryManager.inventory))
-                                        ? this.props.inventoryManager.inventory.filter(e => e && e.type === 'consumable')
-                                        : [];
-                                    const invGrouped = {};
-                                    invConsumables.forEach(item => {
-                                        const key = item.name;
-                                        if (!invGrouped[key]) invGrouped[key] = [];
-                                        invGrouped[key].push(item);
-                                    });
-
-                                    const renderInventoryConsumableTile = (itemGroup, idx) => {
-                                        const rep = itemGroup[0];
-                                        const count = itemGroup.length;
-                                        const rawIcon = rep.icon;
-                                        let resolvedIconUrl = '';
-                                        if (rawIcon) {
-                                            if (typeof rawIcon === 'string') {
-                                                const mapped = images[rawIcon.trim()];
-                                                resolvedIconUrl = mapped ? (mapped.default || mapped) : rawIcon;
-                                            } else if (typeof rawIcon === 'object') {
-                                                resolvedIconUrl = rawIcon.default || String(rawIcon);
-                                            }
-                                        }
-                                        if (!resolvedIconUrl && typeof rawIcon === 'string' && rawIcon.startsWith('data:')) {
-                                            resolvedIconUrl = rawIcon;
-                                        }
-
-                                        const name = rep.name;
-                                        const consumableKey = `inv-consumable-${name}-${idx}`;
-                                        const isHovered = hoveredKey === consumableKey;
-
-                                        return (
-                                            <div
-                                                key={consumableKey}
-                                                className="skill-tile-outer"
-                                                onMouseEnter={() => this.setState({ hoveredAbilityKey: consumableKey })}
-                                                onMouseLeave={() => this.setState({ hoveredAbilityKey: null })}
-                                            >
-                                                {/* Label — click = popup */}
-                                                <div
-                                                    className={`skill-hover-label${isHovered ? ' visible' : ''}`}
-                                                    onClick={(e) => { e.stopPropagation(); this.openSkillPopup({ name, desc: rep.description || rep.desc || '', icon: resolvedIconUrl, type: 'consumable', cooldown: 0 }); }}
-                                                >
-                                                    {name}
-                                                </div>
-                                                {/* Icon wrapper — click = fire */}
-                                                <div className="interaction-tile-wrapper" style={{ position: 'relative' }}>
-                                                    <div
-                                                        className="interaction-tile special consumable"
-                                                        style={{
-                                                            backgroundImage: resolvedIconUrl ? `url("${encodeURI(String(resolvedIconUrl).replace(/^['"]|['"]$/g, ''))}"), radial-gradient(white 0%, black 60%)` : 'radial-gradient(lime 0%, black 60%)',
-                                                            cursor: 'pointer'
-                                                        }}
-                                                        onClick={() => this.combatInventoryTileClicked(rep)}
-                                                    />
-                                                    {/* Stack count badge */}
-                                                    {count > 1 && (
-                                                        <div className="stack-badge small">{count > 5 ? '5+' : ['', 'I', 'II', 'III', 'IV', 'V'][count]}</div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        );
-                                    };
-
-                                    const inventoryConsumableTiles = Object.values(invGrouped).map((group, idx) => {
-                                        return renderInventoryConsumableTile(group, idx);
-                                    });
-
-                                    const allConsumableTiles = [...consumableTiles, ...inventoryConsumableTiles];
-                                    const activeTab = this.state.activeSkillsTab || 'skills';
-
-                                    const selectedPlanObj = [
-                                        { key: 'bunch_up',   symbol: '⬤', title: 'Bunch'  },
-                                        { key: 'spread_out', symbol: '⬡', title: 'Spread' },
-                                        { key: 'corner',     symbol: '◣', title: 'Corner'     },
-                                    ].find(p => p.key === this.state.groupPlan);
-
-                                    return (
-                                        <>
-                                            <div className="redux-abilities-tabs" style={{ display: 'flex', borderBottom: '1px solid rgba(255, 255, 255, 0.15)', background: 'rgba(0, 0, 0, 0.15)', flexShrink: 0 }}>
-                                                <button
-                                                    style={{
-                                                        flex: 1,
-                                                        padding: '8px 12px',
-                                                        background: activeTab === 'skills' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                                                        border: 'none',
-                                                        color: activeTab === 'skills' ? '#fff' : '#888',
-                                                        fontSize: '10px',
-                                                        fontWeight: 'bold',
-                                                        letterSpacing: '0.5px',
-                                                        textTransform: 'uppercase',
-                                                        cursor: 'pointer',
-                                                        borderBottom: activeTab === 'skills' ? '2px solid #a370f7' : '2px solid transparent',
-                                                        outline: 'none',
-                                                        transition: 'all 0.2s ease'
-                                                    }}
-                                                    onClick={() => this.setState({ activeSkillsTab: 'skills' })}
-                                                >
-                                                    Skills
-                                                </button>
-                                                <button
-                                                    style={{
-                                                        flex: 1,
-                                                        padding: '8px 12px',
-                                                        background: activeTab === 'consumables' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-                                                        border: 'none',
-                                                        color: activeTab === 'consumables' ? '#fff' : '#888',
-                                                        fontSize: '10px',
-                                                        fontWeight: 'bold',
-                                                        letterSpacing: '0.5px',
-                                                        textTransform: 'uppercase',
-                                                        cursor: 'pointer',
-                                                        borderBottom: activeTab === 'consumables' ? '2px solid #a370f7' : '2px solid transparent',
-                                                        outline: 'none',
-                                                        transition: 'all 0.2s ease'
-                                                    }}
-                                                    onClick={() => this.setState({ activeSkillsTab: 'consumables' })}
-                                                >
-                                                    Consumables {(consumableActions.length + invConsumables.length) > 0 && `(${consumableActions.length + invConsumables.length})`}
-                                                </button>
-                                            </div>
-                                            {activeTab === 'consumables' ? (
-                                                <div className="redux-regular-skills-wrap">
-                                                    {allConsumableTiles.length > 0 ? (
-                                                        allConsumableTiles
-                                                    ) : (
-                                                        <div style={{ padding: '20px', color: '#888', fontSize: '11px', textAlign: 'center', fontStyle: 'italic', width: '100%' }}>
-                                                            No consumables available
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="redux-regular-skills-wrap">
-                                                    {regularEntries.length > 0 ? (
-                                                        regularEntries.map(renderRegularTile)
-                                                    ) : (
-                                                        <div style={{ padding: '20px', color: '#888', fontSize: '11px', textAlign: 'center', fontStyle: 'italic', width: '100%' }}>
-                                                            No skills available
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </>
-                                    );
-                                })()}
+                                {this.renderAbilitiesTabContent(liveSelectedFighter)}
+                            </div>
                             </div>
 
                             {/* RIGHT COLUMN: event log */}
