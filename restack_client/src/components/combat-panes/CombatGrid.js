@@ -653,6 +653,7 @@ export default function CombatGrid(props) {
         monsterCombatPortraitClicked,
         onDragStart,
         onFighterMouseDown,
+        onFighterTouchStart,
         onFighterShiftClick,
         onFighterRightClick,
         groupSelectedIds = [],
@@ -1263,15 +1264,7 @@ export default function CombatGrid(props) {
                 ref={el => { portraitWrapperRefs.current[fighter.id] = el; }}
             >
                 {renderEffectIcons(details || fighter)}
-                {selectedFighter?.id === fighter.id && !fighter.dead && (
-                    <div className="portrait-overlay" style={{ overflow: 'visible', zIndex: 0 }}>
-                        <div className="circular-progress selected" style={{
-                            background: `conic-gradient(${getManualMovementArcColor(getFighterDetails(fighter))} ${getManualMovementArc(getFighterDetails(fighter))}deg, transparent 0deg)`,
-                        }}>
-                            <div className="inner-circle" />
-                        </div>
-                    </div>
-                )}
+
                 <div
                     className="portrait-relative-container"
                     style={{
@@ -1344,6 +1337,14 @@ export default function CombatGrid(props) {
                                     onFighterShiftClick(fighter.id);
                                 } else if (onFighterMouseDown) {
                                     onFighterMouseDown(liveDetails, e);
+                                }
+                            }
+                        }}
+                        onTouchStart={(e) => {
+                            if (!details?.dead && !details?.isMonster && !details?.isMinion) {
+                                const liveDetails = getLiveCombatant(fighter.id) || details || fighter;
+                                if (onFighterTouchStart) {
+                                    onFighterTouchStart(liveDetails, e);
                                 }
                             }
                         }}
