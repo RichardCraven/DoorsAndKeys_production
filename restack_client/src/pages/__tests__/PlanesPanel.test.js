@@ -33,7 +33,7 @@ describe('PlanesPanel component tests', () => {
       planes: [
         {
           id: 'plane-1',
-          name: 'dream_0_front',
+          name: 'dream_front',
           valid: true,
           miniboards: [
             { id: 0, tiles: [] }

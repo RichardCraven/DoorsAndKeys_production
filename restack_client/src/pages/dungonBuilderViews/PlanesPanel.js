@@ -209,6 +209,21 @@ class PlanesPanel extends React.Component {
                                         key={idx}
                                         className={`grid-cell ${isFilled ? (isEmptyBoard ? 'empty-board' : 'filled') : 'empty'}`}
                                         style={{ fontSize: '8px' }}
+                                        onDoubleClick={(e) => {
+                                            e.stopPropagation();
+                                            if (isFilled && !isEmptyBoard && mb) {
+                                                const fullBoard = (this.props.boards || []).find(
+                                                    (b) => b.id === mb.id || b.name === mb.name || b._id === mb.id
+                                                );
+                                                const boardToLoad = fullBoard || mb;
+                                                if (typeof this.props.loadBoard === 'function') {
+                                                    this.props.loadBoard(boardToLoad);
+                                                }
+                                                if (typeof this.props.setViewState === 'function') {
+                                                    this.props.setViewState('board');
+                                                }
+                                            }
+                                        }}
                                     >
                                         {mb && !isEmptyBoard && (mb.displayName || mb.name) ? (mb.displayName || mb.name).slice(0, 3) : ''}
                                     </div>
