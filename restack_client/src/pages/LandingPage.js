@@ -56,6 +56,7 @@ export default function LandingPage(props) {
   const [navToUsermanager, setNavUsermanager] = useState(false);
   const [navToDungeon, setNavDungeon] = useState(false);
   const [navToSandbox, setNavToSandbox] = useState(false);
+  const [navToTutorials, setNavToTutorials] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
   const [validDungeons, setValidDungeons] = useState([])
@@ -350,6 +351,7 @@ export default function LandingPage(props) {
       {navToUsermanager && <Redirect to='/usermanager' />}
       {navToCombatSimulator && <Redirect to='/combatSimulator' />}
       {navToSandbox && <Redirect to='/sandbox' />}
+      {navToTutorials && <Redirect to='/tutorials' />}
 
       <header className="landing-header">
         <div className="header-logo">
@@ -580,6 +582,15 @@ export default function LandingPage(props) {
               <span className="card-desc">Simulate battle scenarios, adjust speed constants, and balance combatant parameters.</span>
             </div>
             <span className="card-arrow">Simulate →</span>
+          </div>
+
+          {/* Tutorials Card */}
+          <div className="menu-card" onClick={() => setNavToTutorials(true)}>
+            <div className="card-top">
+              <span className="card-title">Tutorials</span>
+              <span className="card-desc">Master the mechanics of exploration, combat, card dueling, and unlock new secrets.</span>
+            </div>
+            <span className="card-arrow">Learn →</span>
           </div>
 
           {/* Admin Cards */}
