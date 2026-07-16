@@ -210,11 +210,12 @@ export const LANDING_REDUX_CSS = `
   height: 100vh;
   background: url(${homepageBg}) no-repeat center center;
   background-size: cover;
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   z-index: 10;
-  overflow: auto;
+  overflow: hidden;
+  overscroll-behavior: none;
   box-sizing: border-box;
   padding: 40px;
 }
@@ -296,6 +297,11 @@ export const LANDING_REDUX_CSS = `
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 @media (max-width: 900px) {
