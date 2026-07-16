@@ -29,7 +29,7 @@ export default function LandingPage(props) {
     // Check if iOS and not standalone
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
-    
+
     if (isIOS && !isStandalone) {
       const dismissed = sessionStorage.getItem('ios-pwa-prompt-dismissed');
       if (!dismissed) {
@@ -331,7 +331,7 @@ export default function LandingPage(props) {
             <span className="pwa-icon" role="img" aria-label="apple">🍎</span>
             <div className="pwa-text-group">
               <div className="pwa-title">Install on iPhone / iPad</div>
-              <div className="pwa-desc">Tap the <strong style={{color:'#e5b54f'}}>Share button</strong> (square with up arrow) in Safari, then select <strong style={{color:'#e5b54f'}}>"Add to Home Screen"</strong>.</div>
+              <div className="pwa-desc">Tap the <strong style={{ color: '#e5b54f' }}>Share button</strong> (square with up arrow) in Safari, then select <strong style={{ color: '#e5b54f' }}>"Add to Home Screen"</strong>.</div>
             </div>
           </div>
           <div className="pwa-banner-actions">
@@ -356,7 +356,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.1.9 BETA</span>
+          <span className="logo-subtitle">v 0.2.1 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">

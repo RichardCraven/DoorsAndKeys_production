@@ -1,3 +1,33 @@
+@property --manual-cooldown-angle {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 360deg;
+}
+
+@property --cooldown-remaining {
+    syntax: '<number>';
+    inherits: false;
+    initial-value: 100;
+}
+
+@property --energy-fill-pct {
+    syntax: '<percentage>';
+    inherits: false;
+    initial-value: 0%;
+}
+
+@property --energy-ring-fill {
+    syntax: '<number>';
+    inherits: false;
+    initial-value: 0;
+}
+
+@property --movement-arc-deg {
+    syntax: '<angle>';
+    inherits: false;
+    initial-value: 360deg;
+}
+
 // Only disable transitions for the teleporting fighter
 .lane-wrapper.teleporting,
 .fighter-wrapper.teleporting,
@@ -4333,6 +4363,8 @@
             &.selected {
                 /* keep selected for potential highlight effects */
                 box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.06) inset;
+                background: conic-gradient(var(--movement-arc-color, rgba(255, 255, 255, 0.8)) var(--movement-arc-deg, 360deg), transparent 0deg) !important;
+                transition: --movement-arc-deg 0.15s linear;
             }
 
             .inner-circle {
@@ -5674,6 +5706,7 @@
                         inset 0 0 8px rgba(0, 0, 0, 0.75),
                         0 0 6px rgba(90, 210, 255, 0.45);
                     border: 1px solid rgba(120, 230, 255, 0.7);
+                    transition: --manual-cooldown-angle 0.15s linear;
                 }
 
                 .manual-cooldown-label {
@@ -5850,7 +5883,7 @@
                                 -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
                                 mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
                                 filter: drop-shadow(0 0 2px rgba(255, 220, 60, 0.75));
-                                transition: background 0.2s linear;
+                                transition: --energy-ring-fill 0.15s linear;
                             }
                         }
 
@@ -10346,6 +10379,8 @@
             display: flex !important;
             flex-direction: column !important;
             width: 100% !important;
+            max-width: 90px !important;
+            margin: 0 auto !important;
             gap: 4px !important;
 
             button {

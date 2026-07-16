@@ -31,6 +31,54 @@ function App(props) {
   const [loggedIn, setLoggedIn] = useState(!!getUserId())
   const [menuTrayExpanded, setMenuTrayExpanded] = useState(false)
   const [hoveredMenuItem, setHoveredMenuItem] = useState(null)
+  
+  const [isMobileWidth, setIsMobileWidth] = useState(window.innerWidth <= 1024);
+  const [mobileMenuExpanded, setMobileMenuExpanded] = useState(false);
+  const [isCombatActive, setIsCombatActive] = useState(document.body.classList.contains('combat-active'));
+
+  useEffect(() => {
+    const handleResize = () => setIsMobileWidth(window.innerWidth <= 1024);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsCombatActive(document.body.classList.contains('combat-active'));
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
+
+  const desktopMenuItemStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '6px 8px',
+    borderRadius: '12px',
+    border: 'none',
+    background: 'transparent',
+    color: '#fff',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    outline: 'none'
+  };
+
+  const mobileMenuItemStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
+    borderRadius: '50%',
+    border: 'none',
+    background: 'rgba(255, 255, 255, 0.15)',
+    color: '#fff',
+    fontSize: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    outline: 'none'
+  };
   const [isAdmin, setIsAdmin] = useState(sessionStorage.getItem('isAdmin') === 'true' ? true : false)
   const [showCoordinates, setShowCoordinates] = useState(false)
   const [allUsers, setAllUsers] = useState([])
@@ -262,143 +310,156 @@ function App(props) {
         {loggedIn === true && showToolbar === true && location.pathname !== '/landing' && location.pathname !== '/' && (
           <div className="horizontal-menu-wrapper" style={{
             position: 'fixed',
-            top: '12px',
-            left: '12px',
+            top: isMobileWidth ? '36px' : '12px',
+            left: isMobileWidth ? '10px' : '12px',
             zIndex: 9999,
             display: 'flex',
-            flexDirection: isMapmaker ? 'row' : 'column',
-            alignItems: isMapmaker ? 'center' : 'flex-start',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
             gap: '6px'
           }}>
-            <div className="horizontal-menu-container" style={{
-              display: 'flex',
-              flexDirection: isMapmaker ? 'column' : 'row',
-              alignItems: 'center',
-              gap: '4px',
-              background: 'rgba(0, 0, 0, 0.75)',
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)',
-              padding: isMapmaker ? '8px 4px' : '4px 8px',
-              borderRadius: '18px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
-              pointerEvents: 'auto'
-            }}>
-              <button
-                className="menu-buttons logout-button"
-                onClick={logout}
-                onMouseEnter={() => setHoveredMenuItem('Logout')}
-                onMouseLeave={() => setHoveredMenuItem(null)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '6px 8px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  outline: 'none'
-                }}
-                title="Logout"
-              >
-                <span style={{ fontSize: '15px' }}>🚪</span>
-              </button>
-
-              {location.pathname !== '/userProfilePage' && (
+            {isMobileWidth ? (
+              // Mobile View: Single toggle button with dropdown
+              <div style={{ position: 'relative' }}>
                 <button
-                  className="menu-buttons save-button"
-                  onClick={saveUserData}
-                  onMouseEnter={() => setHoveredMenuItem('Save Game')}
-                  onMouseLeave={() => setHoveredMenuItem(null)}
+                  onClick={() => setMobileMenuExpanded(!mobileMenuExpanded)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '6px 8px',
-                    borderRadius: '12px',
+                    width: '24px',
+                    height: '24px',
                     border: 'none',
                     background: 'transparent',
                     color: '#fff',
+                    fontSize: '14px',
                     cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    outline: 'none'
+                    outline: 'none',
+                    boxShadow: 'none'
                   }}
-                  title="Save Game"
+                  title="Menu"
                 >
-                  <span style={{ fontSize: '15px' }}>💾</span>
+                  {mobileMenuExpanded ? '✕' : '☰'}
                 </button>
-              )}
-
-              <button
-                className="menu-buttons go-home-button"
-                onClick={goHome}
-                onMouseEnter={() => setHoveredMenuItem('Home')}
-                onMouseLeave={() => setHoveredMenuItem(null)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '6px 8px',
-                  borderRadius: '12px',
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  outline: 'none'
-                }}
-                title="Home"
-              >
-                <span style={{ fontSize: '15px' }}>🏠</span>
-              </button>
-
-              {/* {isAdmin && (
-                <button 
-                  className="menu-buttons show-coordinates-button" 
-                  onClick={toggleShowCoordinates}
-                  onMouseEnter={() => setHoveredMenuItem('Toggle Coordinates')}
-                  onMouseLeave={() => setHoveredMenuItem(null)}
-                  style={{
+                {mobileMenuExpanded && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '28px',
+                    left: '0',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '6px 8px',
-                    borderRadius: '12px',
-                    border: 'none',
-                    background: 'transparent',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    outline: 'none'
-                  }}
-                  title="Toggle Coordinates"
+                    flexDirection: 'column',
+                    gap: '4px',
+                    background: 'rgba(0, 0, 0, 0.9)',
+                    backdropFilter: 'blur(10px)',
+                    WebkitBackdropFilter: 'blur(10px)',
+                    padding: '6px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.8)',
+                    zIndex: 10000
+                  }}>
+                    <button
+                      className="menu-buttons logout-button"
+                      onClick={() => { setMobileMenuExpanded(false); logout(); }}
+                      style={mobileMenuItemStyle}
+                      title="Logout"
+                    >
+                      <span>🚪</span>
+                    </button>
+                    {location.pathname !== '/userProfilePage' && location.pathname !== '/combatSimulator' && !isCombatActive && (
+                      <button
+                        className="menu-buttons save-button"
+                        onClick={() => { setMobileMenuExpanded(false); saveUserData(); }}
+                        style={mobileMenuItemStyle}
+                        title="Save Game"
+                      >
+                        <span>💾</span>
+                      </button>
+                    )}
+                    <button
+                      className="menu-buttons go-home-button"
+                      onClick={() => { setMobileMenuExpanded(false); goHome(); }}
+                      style={mobileMenuItemStyle}
+                      title="Home"
+                    >
+                      <span>🏠</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              // Desktop View: Original horizontal menu
+              <div className="horizontal-menu-container" style={{
+                display: 'flex',
+                flexDirection: isMapmaker ? 'column' : 'row',
+                alignItems: 'center',
+                gap: '4px',
+                background: 'rgba(0, 0, 0, 0.75)',
+                backdropFilter: 'blur(10px)',
+                WebkitBackdropFilter: 'blur(10px)',
+                padding: isMapmaker ? '8px 4px' : '4px 8px',
+                borderRadius: '18px',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
+                pointerEvents: 'auto'
+              }}>
+                <button
+                  className="menu-buttons logout-button"
+                  onClick={logout}
+                  onMouseEnter={() => setHoveredMenuItem('Logout')}
+                  onMouseLeave={() => setHoveredMenuItem(null)}
+                  style={desktopMenuItemStyle}
+                  title="Logout"
                 >
-                  <span style={{ fontSize: '15px' }}>🧭</span>
+                  <span style={{ fontSize: '15px' }}>🚪</span>
                 </button>
-              )} */}
-            </div>
 
-            {/* Hover display label */}
-            <div style={{
-              height: '16px',
-              paddingLeft: isMapmaker ? '0' : '8px',
-              fontSize: '11px',
-              fontWeight: 'bold',
-              color: '#f9b115',
-              textTransform: 'uppercase',
-              letterSpacing: '0.8px',
-              textShadow: '0 1px 4px rgba(0,0,0,0.8)',
-              pointerEvents: 'none',
-              textAlign: 'left',
-              transition: 'opacity 0.15s ease',
-              opacity: hoveredMenuItem ? 1 : 0,
-              whiteSpace: 'nowrap'
-            }}>
-              {hoveredMenuItem || ''}
-            </div>
+                {location.pathname !== '/userProfilePage' && location.pathname !== '/combatSimulator' && !isCombatActive && (
+                  <button
+                    className="menu-buttons save-button"
+                    onClick={saveUserData}
+                    onMouseEnter={() => setHoveredMenuItem('Save Game')}
+                    onMouseLeave={() => setHoveredMenuItem(null)}
+                    style={desktopMenuItemStyle}
+                    title="Save Game"
+                  >
+                    <span style={{ fontSize: '15px' }}>💾</span>
+                  </button>
+                )}
+
+                <button
+                  className="menu-buttons go-home-button"
+                  onClick={goHome}
+                  onMouseEnter={() => setHoveredMenuItem('Home')}
+                  onMouseLeave={() => setHoveredMenuItem(null)}
+                  style={desktopMenuItemStyle}
+                  title="Home"
+                >
+                  <span style={{ fontSize: '15px' }}>🏠</span>
+                </button>
+              </div>
+            )}
+
+            {/* Hover display label (Only in desktop view) */}
+            {!isMobileWidth && (
+              <div style={{
+                height: '16px',
+                paddingLeft: isMapmaker ? '0' : '8px',
+                fontSize: '11px',
+                fontWeight: 'bold',
+                color: '#f9b115',
+                textTransform: 'uppercase',
+                letterSpacing: '0.8px',
+                textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+                pointerEvents: 'none',
+                textAlign: 'left',
+                transition: 'opacity 0.15s ease',
+                opacity: hoveredMenuItem ? 1 : 0,
+                whiteSpace: 'nowrap'
+              }}>
+                {hoveredMenuItem || ''}
+              </div>
+            )}
           </div>
         )}
         <Switch>

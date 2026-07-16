@@ -335,6 +335,8 @@ class MonsterBattle extends React.Component {
         // Bound drag handlers — stored so we can remove them from window
         this._boundDragMouseMove = this._handleDragMouseMove.bind(this);
         this._boundDragMouseUp = this._handleDragMouseUp.bind(this);
+        this._boundDragTouchMove = this._handleDragTouchMove.bind(this);
+        this._boundDragTouchEnd = this._handleDragTouchEnd.bind(this);
         // Bound context-menu dismiss handler
         this._boundContextMenuDismiss = this._handleContextMenuDismiss.bind(this);
     }
@@ -727,6 +729,9 @@ class MonsterBattle extends React.Component {
         // Clean up any lingering drag listeners
         try { window.removeEventListener('mousemove', this._boundDragMouseMove); } catch (e) { }
         try { window.removeEventListener('mouseup', this._boundDragMouseUp); } catch (e) { }
+        try { window.removeEventListener('touchmove', this._boundDragTouchMove); } catch (e) { }
+        try { window.removeEventListener('touchend', this._boundDragTouchEnd); } catch (e) { }
+        try { window.removeEventListener('touchstart', this._boundContextMenuDismiss); } catch (e) { }
     }
     monster = () => {
         // console.log('monster: ', this.state.battleData[this.props.monster.id]);
@@ -2359,6 +2364,104 @@ class MonsterBattle extends React.Component {
         window.addEventListener('mouseup', this._boundDragMouseUp);
     }
 
+    onFighterTouchStart = (fighter, event) => {
+        if (!fighter || !fighter.coordinates) return;
+        const details = this.state.battleData[fighter.id];
+        if (!details || details.dead) return;
+
+        const now = Date.now();
+        const lastTap = this._lastFighterTapTime?.[fighter.id] || 0;
+        this._lastFighterTapTime = {
+            ...(this._lastFighterTapTime || {}),
+            [fighter.id]: now
+        };
+        if (now - lastTap < 300) {
+            // Double tap detected! Open the context menu!
+            const touch = event.touches[0];
+            const clientX = touch ? touch.clientX : 0;
+            const clientY = touch ? touch.clientY : 0;
+            this.onFighterRightClick(fighter.id, clientX, clientY);
+            
+            // Prevent further drag behavior
+            this.setState({ dragSource: null, dragTargetTile: null, dragTargetIsEnemy: false });
+            return;
+        }
+
+        // Store whether combat was already paused so we can restore it on mouseup
+        const wasPaused = !!(this.props.combatManager?.combatPaused || this.props.paused);
+        if (this.props.combatManager && typeof this.props.combatManager.pauseCombat === 'function') {
+            this.props.combatManager.pauseCombat(true);
+        }
+        // Cache the board rect at drag-start
+        const boardEl = this.boardContainerRef && this.boardContainerRef.current;
+        this._dragBoardRect = boardEl ? boardEl.getBoundingClientRect() : null;
+        this.setState({
+            dragSource: { id: fighter.id, x: fighter.coordinates.x, y: fighter.coordinates.y },
+            dragTargetTile: null,
+            dragTargetIsEnemy: false,
+            _preDragPaused: wasPaused,
+            committedArc: null, // clear any previous committed arc when starting a new drag
+        });
+        // Reset synchronous tracking vars
+        this._lastDragTarget = null;
+        this._lastDragTargetIsEnemy = false;
+        window.addEventListener('touchmove', this._boundDragTouchMove, { passive: false });
+        window.addEventListener('touchend', this._boundDragTouchEnd);
+    }
+
+    _handleDragTouchMove = (event) => {
+        if (!this.state.dragSource) return;
+        const touch = event.touches[0];
+        if (!touch) return;
+        
+        const rect = this._dragBoardRect;
+        if (!rect) return;
+        const EFFECTIVE_CELL = this.getTileSize() + (SHOW_TILE_BORDERS ? 2 : 0);
+        const rawX = Math.floor((touch.clientX - rect.left) / EFFECTIVE_CELL);
+        const rawY = Math.floor((touch.clientY - rect.top) / EFFECTIVE_CELL);
+        const numCols = this.state.numBoardColumns;
+        // Clamp to valid grid bounds
+        const gridX = Math.max(0, Math.min(numCols - 1, rawX));
+        const gridY = Math.max(0, Math.min(MAX_ROWS - 1, rawY));
+        // Off-board: check boundaries
+        const offBoard = touch.clientX < rect.left || touch.clientX > rect.right ||
+                         touch.clientY < rect.top  || touch.clientY > rect.bottom;
+        if (offBoard) {
+            this.setState({ dragTargetTile: null, dragTargetIsEnemy: false });
+            this._lastDragTarget = null;
+            this._lastDragTargetIsEnemy = false;
+            return;
+        }
+        // Suppress highlight when on the source tile
+        const onSource = gridX === this.state.dragSource.x && gridY === this.state.dragSource.y;
+        if (onSource) {
+            this.setState({ dragTargetTile: null, dragTargetIsEnemy: false });
+            this._lastDragTarget = null;
+            this._lastDragTargetIsEnemy = false;
+            return;
+        }
+        // Detect enemy at this grid position
+        const isEnemy = Object.values(this.state.battleData).some(u =>
+            u && !u.dead && (u.isMonster || u.isMinion) &&
+            u.coordinates && u.coordinates.x === gridX && u.coordinates.y === gridY
+        );
+        // Keep sync instance vars
+        this._lastDragTarget = { x: gridX, y: gridY };
+        this._lastDragTargetIsEnemy = isEnemy;
+        this.setState({ dragTargetTile: { x: gridX, y: gridY }, dragTargetIsEnemy: isEnemy });
+        
+        // Prevent scrolling while dragging on touch screens
+        if (event.cancelable) {
+            event.preventDefault();
+        }
+    }
+
+    _handleDragTouchEnd = (event) => {
+        window.removeEventListener('touchmove', this._boundDragTouchMove);
+        window.removeEventListener('touchend', this._boundDragTouchEnd);
+        this._handleDragMouseUp(event);
+    }
+
     /**
      * Window mousemove handler — converts cursor to grid coords, detects enemies,
      * and updates highlight state. Arc only appears once cursor leaves source tile.
@@ -2624,6 +2727,7 @@ class MonsterBattle extends React.Component {
             showNotchPicker: isRanger ? true : false,
         });
         window.addEventListener('mousedown', this._boundContextMenuDismiss);
+        window.addEventListener('touchstart', this._boundContextMenuDismiss);
     }
 
     _handleContextMenuDismiss = (e) => {
@@ -2633,6 +2737,7 @@ class MonsterBattle extends React.Component {
         const skillMenu = document.querySelector('.skill-context-menu');
         if ((menu && menu.contains(e.target)) || (picker && picker.contains(e.target)) || (skillMenu && skillMenu.contains(e.target))) return;
         window.removeEventListener('mousedown', this._boundContextMenuDismiss);
+        window.removeEventListener('touchstart', this._boundContextMenuDismiss);
         this.setState({
             unitContextMenu: null,
             showPlanPicker: false,
@@ -3984,6 +4089,7 @@ class MonsterBattle extends React.Component {
                             monsterCombatPortraitClicked={this.monsterCombatPortraitClicked}
                             onDragStart={this.onDragStart}
                             onFighterMouseDown={this.onFighterMouseDown}
+                            onFighterTouchStart={this.onFighterTouchStart}
                             onFighterShiftClick={this.onFighterShiftClick}
                             onFighterRightClick={this.onFighterRightClick}
                             groupSelectedIds={this.state.groupSelectedIds}
@@ -4725,6 +4831,7 @@ class MonsterBattle extends React.Component {
                                                             strokeWidth="20"
                                                             strokeDasharray="62.83"
                                                             strokeDashoffset={(1 - (specialCooldownRemaining / 100)) * 62.83}
+                                                            style={{ transition: 'stroke-dashoffset 0.15s linear' }}
                                                         />
                                                     </svg>
                                                 )}
@@ -4965,6 +5072,7 @@ class MonsterBattle extends React.Component {
                                                                 strokeWidth="20"
                                                                 strokeDasharray="62.83"
                                                                 strokeDashoffset={(1 - (cooldownRemaining / 100)) * 62.83}
+                                                                style={{ transition: 'stroke-dashoffset 0.15s linear' }}
                                                             />
                                                         </svg>
                                                     )}
@@ -5558,41 +5666,6 @@ class MonsterBattle extends React.Component {
                         );
                     }
                 })()}
-
-                {/* Visual debug indicator dot */}
-                <div style={{
-                    position: 'fixed',
-                    bottom: '10px',
-                    right: '10px',
-                    padding: '6px 10px',
-                    borderRadius: '8px',
-                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-                    border: `2px solid ${this.state.isMobileLandscape ? 'orange' : 'green'}`,
-                    color: 'white',
-                    fontFamily: 'monospace',
-                    fontSize: '11px',
-                    zIndex: 99999,
-                    boxShadow: '0 0 8px rgba(0,0,0,0.8)',
-                    textAlign: 'left',
-                    lineHeight: '1.4'
-                }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{
-                            display: 'inline-block',
-                            width: '10px',
-                            height: '10px',
-                            borderRadius: '50%',
-                            backgroundColor: this.state.isMobileLandscape ? 'orange' : 'green'
-                        }} />
-                        <strong>{this.state.isMobileLandscape ? 'MOBILE VIEW' : 'DESKTOP VIEW'}</strong>
-                    </div>
-                    <div style={{ marginTop: '4px' }}>
-                        Size: {window.innerWidth}x{window.innerHeight}<br />
-                        orientation: {window.screen?.orientation?.type || 'unknown'}<br />
-                        mq-width: {window.matchMedia("(max-width: 950px)").matches ? 'YES' : 'NO'}<br />
-                        mq-landscape: {window.matchMedia("(orientation: landscape)").matches ? 'YES' : 'NO'}
-                    </div>
-                </div>
 
             </div>
         );
