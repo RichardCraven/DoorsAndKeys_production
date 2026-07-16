@@ -174,6 +174,12 @@ const clone = (val) => {
     return JSON.parse(JSON.stringify(val))
 }
 
+const formatRosterSkillName = (e) => {
+    const name = typeof e === 'object' && e !== null ? e.name : String(e || '');
+    const stripped = name.replace(/^(monk|wizard|ranger|soldier|barbarian|sage|priest|rogue|summoner|engineer)_/, '');
+    return stripped.replace(/_/g, ' ');
+};
+
 class CrewManagerPage extends React.Component {
     // The available speed intervals (should match combat-manager.js)
     intervals = INTERVALS;
@@ -384,20 +390,24 @@ class CrewManagerPage extends React.Component {
     }
     selectCrewMember = (event, crewMember) => {
         clearTimeout(this.timer);
-        if (event.detail === 1) {
-            this.timer = setTimeout(this.singleClick(crewMember), 200)
-        } else if (event.detail === 2) {
+        const now = Date.now();
+        const isDoubleTap = this._lastCrewTap === crewMember.id && (now - this._lastCrewTapTime < 300);
+        this._lastCrewTap = crewMember.id;
+        this._lastCrewTapTime = now;
+
+        if (event.detail === 2 || isDoubleTap) {
             let crew = this.state.selectedCrew;
-            if (crew.length === 4) return
-            if (!crew.includes(crewMember)) crew.push(crewMember)
+            if (crew.length === 4) return;
+            if (!crew.includes(crewMember)) crew.push(crewMember);
             this.setState({
                 selectedCrew: crew
-            })
+            });
+        } else {
+            this.timer = setTimeout(() => this.singleClick(crewMember), 200);
         }
         this.setState({
             selectedCrewMember: crewMember
-        })
-
+        });
     }
     addMember = (index) => {
         let member = this.state.selectedCrewMember
@@ -1105,7 +1115,7 @@ class CrewManagerPage extends React.Component {
                                      {this.state.selectedCrewMember.skills ? (
                                          <div className="specials">Skills: &nbsp;
                                              {this.state.selectedCrewMember.skills.map((e, i) => {
-                                                 const name = typeof e === 'object' && e !== null ? e.name : e;
+                                                 const name = formatRosterSkillName(e);
                                                  return <div key={i}>{name}{i !== this.state.selectedCrewMember.skills.length - 1 ? ',' : ''} &nbsp; </div>
                                              })}
                                          </div>
@@ -1113,13 +1123,13 @@ class CrewManagerPage extends React.Component {
                                          <>
                                              <div className="attacks">Attacks: &nbsp;
                                                  {this.state.selectedCrewMember.attacks.map((e, i) => {
-                                                     const name = typeof e === 'object' && e !== null ? e.name : e;
+                                                     const name = formatRosterSkillName(e);
                                                      return <div key={i}>{name}{i !== this.state.selectedCrewMember.attacks.length - 1 ? ',' : ''} &nbsp; </div>
                                                  })}
                                              </div>
                                              <div className="specials">Specials: &nbsp;
                                                  {this.state.selectedCrewMember.specials.map((e, i) => {
-                                                     const name = typeof e === 'object' && e !== null ? e.name : e;
+                                                     const name = formatRosterSkillName(e);
                                                      return <div key={i}>{name}{i !== this.state.selectedCrewMember.specials.length - 1 ? ',' : ''} &nbsp; </div>
                                                  })}
                                              </div>
@@ -1127,7 +1137,7 @@ class CrewManagerPage extends React.Component {
                                      )}
                                     <div className="passives">Passives: &nbsp;
                                         {this.state.selectedCrewMember.passives.map((e, i) => {
-                                            const name = typeof e === 'object' && e !== null ? e.name : e;
+                                            const name = formatRosterSkillName(e);
                                             return <div key={i}>{name}{i !== this.state.selectedCrewMember.passives.length - 1 ? ',' : ''} &nbsp; </div>
                                         })}
                                     </div>
@@ -1146,7 +1156,15 @@ class CrewManagerPage extends React.Component {
                                             className="portrait"
                                             style={{ backgroundImage: "url(" + this.state.selectedCrew[i].portrait + ")" }}
                                             title="Double-click to remove"
-                                            onDoubleClick={() => this.removeMember(i)}
+                                            onClick={(e) => {
+                                                const now = Date.now();
+                                                const isDoubleTap = this._lastCrewRemoveTap === i && (now - this._lastCrewRemoveTapTime < 300);
+                                                this._lastCrewRemoveTap = i;
+                                                this._lastCrewRemoveTapTime = now;
+                                                if (e.detail === 2 || isDoubleTap) {
+                                                    this.removeMember(i);
+                                                }
+                                            }}
                                         ></div>}
 
                                         {this.state.selectedCrew[i] && <div className="sim-level-control" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '4px' }}>
@@ -1174,6 +1192,7 @@ class CrewManagerPage extends React.Component {
                                         </div>}
                                     </div>
                                 })}
+                             </div>
                                 <div className="sim-gear-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
                                     <input
                                         id="outfit-equipment-cb"
@@ -1183,16 +1202,6 @@ class CrewManagerPage extends React.Component {
                                     />
                                     <label htmlFor="outfit-equipment-cb">Outfit with equipment</label>
                                 </div>
-                                <div className="sim-redux-combat-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
-                                    <input
-                                        id="redux-combat-cb"
-                                        type="checkbox"
-                                        checked={this.state.useReduxCombat}
-                                        onChange={e => this.setState({ useReduxCombat: e.target.checked })}
-                                    />
-                                    <label htmlFor="redux-combat-cb">Use Rounds System (Redux Combat)</label>
-                                </div>
-                            </div>
                         </div>
 
                         {/* ── Enemy Selection Section ── */}
@@ -1209,7 +1218,7 @@ class CrewManagerPage extends React.Component {
                             </div>
 
                             {/* Main monster + 4 minion slots + Info panel */}
-                            <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', gap: '24px', flexWrap: 'wrap', marginBottom: '14px' }}>
+                            <div className="enemy-selection-container">
                                 <div className="enemy-slots-row" style={{ margin: 0, flexWrap: 'nowrap' }}>
                                     {/* Main monster slot */}
                                     <div className="enemy-slot-group">
@@ -1217,9 +1226,14 @@ class CrewManagerPage extends React.Component {
                                         <div
                                             className={`enemy-slot ${!this.state.selectedMonsterKey ? 'empty' : ''}`}
                                             title={this.state.selectedMonsterKey ? 'Double-click to remove' : 'Select from roster below'}
-                                            onDoubleClick={() => this.removeEnemySlot('monster', 0)}
-                                            onClick={() => {
-                                                if (this.state.selectedMonsterKey) {
+                                            onClick={(e) => {
+                                                const now = Date.now();
+                                                const isDoubleTap = this._lastMonsterRemoveTap && (now - this._lastMonsterRemoveTapTime < 300);
+                                                this._lastMonsterRemoveTap = true;
+                                                this._lastMonsterRemoveTapTime = now;
+                                                if (e.detail === 2 || isDoubleTap) {
+                                                    this.removeEnemySlot('monster', 0);
+                                                } else if (this.state.selectedMonsterKey) {
                                                     const m = this.props.monsterManager.getMonster(this.state.selectedMonsterKey);
                                                     this.setState({ selectedEnemyForInfo: m });
                                                 }
@@ -1261,8 +1275,17 @@ class CrewManagerPage extends React.Component {
                                                 <div
                                                     className={`enemy-slot ${!key ? 'empty' : ''}`}
                                                     title={key ? 'Double-click to remove' : 'Select from roster below'}
-                                                    onDoubleClick={() => this.removeEnemySlot('minion', i)}
-                                                    onClick={() => { if (m) this.setState({ selectedEnemyForInfo: m }); }}
+                                                    onClick={(e) => {
+                                                        const now = Date.now();
+                                                        const isDoubleTap = this._lastMinionRemoveTap === i && (now - this._lastMinionRemoveTapTime < 300);
+                                                        this._lastMinionRemoveTap = i;
+                                                        this._lastMinionRemoveTapTime = now;
+                                                        if (e.detail === 2 || isDoubleTap) {
+                                                            this.removeEnemySlot('minion', i);
+                                                        } else if (m) {
+                                                            this.setState({ selectedEnemyForInfo: m });
+                                                        }
+                                                    }}
                                                 >
                                                     {m && <div className="enemy-slot-portrait" style={{ backgroundImage: `url(${m.portrait})` }}></div>}
                                                     {!key && <span className="enemy-slot-placeholder">＋</span>}
@@ -1280,14 +1303,14 @@ class CrewManagerPage extends React.Component {
                                     {this.state.selectedEnemyForInfo && (<>
                                         <div className="enemy-info-portrait" style={{ backgroundImage: `url(${this.state.selectedEnemyForInfo.portrait})` }}></div>
                                         <div className="enemy-info-details">
-                                            <div className="enemy-info-columns" style={{ display: 'flex', flexDirection: 'row', gap: '16px', width: '100%' }}>
+                                            <div className="enemy-info-columns">
                                                 {/* Left Column: Type, Level and Stats */}
-                                                <div className="enemy-info-col-left" style={{ minWidth: '160px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <div className="enemy-info-col-left">
                                                     <div className="enemy-info-type">{formatMonsterType(this.state.selectedEnemyForInfo.type)}</div>
                                                     <div className="enemy-info-stat" style={{ whiteSpace: 'nowrap' }}>Level: {this.state.selectedEnemyForInfo.level} &nbsp;|&nbsp; HP: {this.state.selectedEnemyForInfo.stats?.hp} &nbsp;|&nbsp; ATK: {this.state.selectedEnemyForInfo.stats?.atk} &nbsp;|&nbsp; DEF: {this.state.selectedEnemyForInfo.stats?.def}</div>
                                                 </div>
                                                 {/* Right Column: Skills and Weaknesses */}
-                                                <div className="enemy-info-col-right" style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                                <div className="enemy-info-col-right">
                                                     {((this.state.selectedEnemyForInfo.skills?.length > 0) || (this.state.selectedEnemyForInfo.specials?.length > 0)) && (
                                                         <div className="enemy-info-stat">Skills: {((this.state.selectedEnemyForInfo.skills || this.state.selectedEnemyForInfo.specials) || []).map(s => s.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')).join(', ')}</div>
                                                     )}
@@ -1391,11 +1414,13 @@ class CrewManagerPage extends React.Component {
                             </div>
                         </div>
 
-                        <div className="button-row-bottom-left">
-                            <button onClick={() => this.clear()}>Clear</button>
-                        </div>
-                        <div className="button-row">
-                            <button onClick={() => this.submit()}>Submit</button>
+                        <div className="simulator-bottom-actions">
+                            <div className="button-row-bottom-left">
+                                <button onClick={() => this.clear()}>Clear</button>
+                            </div>
+                            <div className="button-row">
+                                <button onClick={() => this.submit()}>Submit</button>
+                            </div>
                         </div>
                     </div>
                 </div>}

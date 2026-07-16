@@ -537,7 +537,7 @@ const formatDamageValue = (value) => {
 const DEBUG_FORCE_BIG_BULGE = true;
 const MINION_DEBUG_FACTOR = 0.3;
 
-const computeHitVars = (combatant, getHitAnimation) => {
+const computeHitVars = (combatant, getHitAnimation, isMobileLandscape) => {
     // CombatGrid portraits fill their container via width:100%/height:100%,
     // so --portrait-base-scale should always be 1 (container is already 200px for large monsters).
     const baseScale = '1';
@@ -545,7 +545,24 @@ const computeHitVars = (combatant, getHitAnimation) => {
     const flip = isFighter
         ? (combatant.facing === 'left' ? '-1' : '1')
         : (combatant.facing === 'right' ? '-1' : '1');
-    if (!combatant || !combatant.wounded) return { '--portrait-base-scale': baseScale, '--portrait-flip': flip };
+
+    let scaleVal = combatant && (combatant.isShrineGuardian ? '1' : (combatant.type === 'spider_minion' ? '0.5' : ((combatant.isMinion && combatant.tier !== 3 && combatant.tier !== 4) ? '1' : '2')));
+    if (isMobileLandscape && combatant && !combatant.isMonster && !combatant.isMinion && !combatant.isShrineGuardian) {
+        scaleVal = '1';
+    }
+
+    if (!combatant || !combatant.wounded) {
+        let healthyScale = '2';
+        if (combatant) {
+            healthyScale = combatant.isShrineGuardian ? '1' : (combatant.type === 'spider_minion' ? '0.5' : ((combatant.isMinion && combatant.tier !== 3 && combatant.tier !== 4) ? '1' : '2'));
+            if (isMobileLandscape && !combatant.isMonster && !combatant.isMinion && !combatant.isShrineGuardian) {
+                healthyScale = '1';
+            }
+        } else {
+            healthyScale = baseScale;
+        }
+        return { '--portrait-base-scale': healthyScale, '--portrait-flip': flip };
+    }
     const hc = (getHitAnimation && getHitAnimation(combatant)) || '';
     let severity = 'minor';
     if (hc.indexOf('severe') !== -1) severity = 'severe';
@@ -590,7 +607,7 @@ const computeHitVars = (combatant, getHitAnimation) => {
         '--portrait-bulge-x': bulgeX,
         '--portrait-bulge-y': bulgeY,
         '--portrait-transform-origin': transformOrigin,
-        '--portrait-base-scale': combatant.isShrineGuardian ? '1' : (combatant.type === 'spider_minion' ? '0.5' : ((combatant.isMinion && combatant.tier !== 3 && combatant.tier !== 4) ? '1' : '2')),
+        '--portrait-base-scale': scaleVal,
         '--portrait-flip': combatant.facing === 'right' ? '-1' : '1',
         '--portrait-animation-duration': (combatant.isMinion && combatant.tier !== 3 && combatant.tier !== 4) ? '520ms' : '420ms',
         '--portrait-animation-timing': (combatant.isMinion && combatant.tier !== 3 && combatant.tier !== 4) ? 'cubic-bezier(.18,.9,.22,1)' : 'cubic-bezier(.2,.8,.2,1)'
@@ -614,12 +631,14 @@ const resolvePortrait = (portraitVal) => {
     return res;
 };
 
-// Compute pixel position for a tile coordinate
-const tilePos = (coord) => coord * TILE_SIZE + (SHOW_TILE_BORDERS ? coord * 2 : 0);
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function CombatGrid(props) {
+    const TILE_SIZE = props.TILE_SIZE !== undefined ? props.TILE_SIZE : 100;
+    const SHOW_TILE_BORDERS = props.SHOW_TILE_BORDERS !== undefined ? props.SHOW_TILE_BORDERS : false;
+    const CELL_SIZE = TILE_SIZE + (SHOW_TILE_BORDERS ? 2 : 0);
+    const tilePos = (coord) => coord * TILE_SIZE + (SHOW_TILE_BORDERS ? coord * 2 : 0);
+
     const {
         crew = [],
         combatManager,
@@ -1239,7 +1258,7 @@ export default function CombatGrid(props) {
                             ? `transform ${riftPushbackAnim.duration}ms ease-out`
                             : `transform ${isEthereal ? 500 : 1000}ms cubic-bezier(0.25, 1, 0.5, 1)`,
                     opacity: isBatFlying ? 0 : 1,
-                    ...computeHitVars(details || fighter, getHitAnimation),
+                    ...computeHitVars(details || fighter, getHitAnimation, props.isMobileLandscape),
                 }}
                 ref={el => { portraitWrapperRefs.current[fighter.id] = el; }}
             >
@@ -1776,9 +1795,9 @@ export default function CombatGrid(props) {
                 )}
 
                 {(() => {
-                    const hasPerceiveActive = details && activeAnimations.some(anim => anim.type === 'perceive_anim' && Math.floor(anim.srcPx.x / 102) === details.coordinates.x && Math.floor(anim.srcPx.y / 102) === details.coordinates.y);
-                    const hasEnergyDrainActive = details && activeAnimations.some(anim => anim.type === 'energy_drain_beam' && Math.floor(anim.tgtPx.x / 102) === details.coordinates.x && Math.floor(anim.tgtPx.y / 102) === details.coordinates.y);
-                    const hasMeditateActive = details && activeAnimations.some(anim => anim.type === 'monk_meditate' && anim.srcPx && Math.floor(anim.srcPx.x / 102) === details.coordinates.x && Math.floor(anim.srcPx.y / 102) === details.coordinates.y);
+                    const hasPerceiveActive = details && activeAnimations.some(anim => anim.type === 'perceive_anim' && Math.floor(anim.srcPx.x / CELL_SIZE) === details.coordinates.x && Math.floor(anim.srcPx.y / CELL_SIZE) === details.coordinates.y);
+                    const hasEnergyDrainActive = details && activeAnimations.some(anim => anim.type === 'energy_drain_beam' && Math.floor(anim.tgtPx.x / CELL_SIZE) === details.coordinates.x && Math.floor(anim.tgtPx.y / CELL_SIZE) === details.coordinates.y);
+                    const hasMeditateActive = details && activeAnimations.some(anim => anim.type === 'monk_meditate' && anim.srcPx && Math.floor(anim.srcPx.x / CELL_SIZE) === details.coordinates.x && Math.floor(anim.srcPx.y / CELL_SIZE) === details.coordinates.y);
                     const hasHeartbeatActive = Object.values(battleData).some(m =>
                         m && m.isMonster && !m.dead && m.activeBuffs && m.activeBuffs.some(b => b.name === 'Crimson Sight')
                     );
@@ -1910,7 +1929,13 @@ export default function CombatGrid(props) {
             ? -TILE_SIZE * 2 - (SHOW_TILE_BORDERS ? 4 : 0) 
             : (isLarge ? -TILE_SIZE - (SHOW_TILE_BORDERS ? 2 : 0) : 0);
 
-        const leftPos = xPos + hOffset;
+        const isMainMonster = unit.isMainMonster || (isMonster && !isMinion);
+        const showEnlarged = greetingInProcess && isMainMonster && !props.isMobileLandscape;
+        const numCols = props.numColumns || combatManager?.numColumns || 8;
+        const boardWidth = numCols * TILE_SIZE + (SHOW_TILE_BORDERS ? numCols * 2 : 0);
+        const centeredLeft = (boardWidth - width) / 2;
+
+        const leftPos = showEnlarged ? centeredLeft : (xPos + hOffset);
         const topPos = yPos + vOffset;
 
         const isFirstRender = !prevCoordsRef.current[unit.id];
@@ -1964,7 +1989,7 @@ export default function CombatGrid(props) {
             'portrait',
             isMinion ? 'minion-portrait' : 'monster-portrait',
             isHuge ? 'huge-portrait' : (isLarge ? 'large-portrait' : ''),
-            greetingInProcess ? 'enlarged' : '',
+            showEnlarged ? 'enlarged' : '',
             unit.active ? 'active' : '',
             portraitHoveredId === unit.id ? 'hover-linked-target' : '',
             unit.bifurcating ? 'bifurcatingAnimation' : (isDead ? (unit.type === 'mummy' || unit.key === 'mummy' || isLarge || isHuge ? 'dead mummyDeadAnimation' : 'dead monsterDeadAnimation') : ''),
@@ -2032,7 +2057,7 @@ export default function CombatGrid(props) {
                             ? `transform ${riftPushbackAnim.duration}ms ease-out`
                             : `transform ${isEthereal ? 500 : 1000}ms cubic-bezier(0.25, 1, 0.5, 1)`,
                     opacity: typeof unit.opacity === 'number' ? unit.opacity : (isBatFlying ? 0 : 1),
-                    ...computeHitVars(unit, getHitAnimation),
+                    ...computeHitVars(unit, getHitAnimation, props.isMobileLandscape),
                 }}
             >
                 {renderEffectIcons(unit)}
@@ -2080,11 +2105,14 @@ export default function CombatGrid(props) {
                             position: 'relative',
                             width: '100%',
                             height: '100%',
-                            transform: (isLarge || isHuge)
-                                ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} ${unit.facing === 'right' ? 'scaleX(-1)' : ''} ${greetingInProcess ? 'scale(1.5)' : ''}`.trim() || 'none'
-                                : (unit.isUpsideDown 
-                                    ? 'rotate(180deg)' 
-                                    : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined)),
+                            transform: showEnlarged
+                                ? `scale(3) ${unit.facing === 'right' ? 'scaleX(-1)' : ''}`.trim()
+                                : ((isLarge || isHuge)
+                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} ${unit.facing === 'right' ? 'scaleX(-1)' : ''} ${(greetingInProcess && !props.isMobileLandscape) ? 'scale(1.5)' : ''}`.trim() || 'none'
+                                    : (unit.isUpsideDown 
+                                        ? 'rotate(180deg)' 
+                                        : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined))),
+                            transformOrigin: showEnlarged ? 'center' : undefined,
                             boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                             borderRadius: '0',
                             transition: 'filter 0.25s ease-in-out',
@@ -2502,8 +2530,8 @@ export default function CombatGrid(props) {
                     <Overlay key={i} animationType={overlay.type} data={{ ...overlay.data, dead: isDead }} />
                 ))}
                 {(() => {
-                    const hasPerceiveActive = activeAnimations.some(anim => anim.type === 'perceive_anim' && Math.floor(anim.srcPx.x / 102) === unit.coordinates.x && Math.floor(anim.srcPx.y / 102) === unit.coordinates.y);
-                    const hasEnergyDrainActive = activeAnimations.some(anim => anim.type === 'energy_drain_beam' && Math.floor(anim.tgtPx.x / 102) === unit.coordinates.x && Math.floor(anim.tgtPx.y / 102) === unit.coordinates.y);
+                    const hasPerceiveActive = activeAnimations.some(anim => anim.type === 'perceive_anim' && Math.floor(anim.srcPx.x / CELL_SIZE) === unit.coordinates.x && Math.floor(anim.srcPx.y / CELL_SIZE) === unit.coordinates.y);
+                    const hasEnergyDrainActive = activeAnimations.some(anim => anim.type === 'energy_drain_beam' && Math.floor(anim.tgtPx.x / CELL_SIZE) === unit.coordinates.x && Math.floor(anim.tgtPx.y / CELL_SIZE) === unit.coordinates.y);
                     const hasHeartbeatActive = Object.values(battleData).some(f =>
                         f && !f.isMonster && !f.dead && f.activeBuffs && f.activeBuffs.some(b => b.name === 'Crimson Sight')
                     );

@@ -711,32 +711,16 @@ export function CombatManager() {
         this.combatants[monster.id] = monster;
         try { this._setCombatantOccupiedCoords(this.combatants[monster.id], this.combatants); } catch (err) { }
 
-        if (this.data.minions) {
-            const monsterLane = this.data.monster.coordinates.y; // e.g. 2
-            // The main monster is always 2x scale — it virtually occupies the tile
-            // directly above it (monsterLane - 1) as well. Exclude both tiles so
-            // no minion is placed inside the monster's virtual space.
-            const monsterVirtualLane = monsterLane - 1; // tile above (may be -1 if monster is at row 0, handled below)
-            // All valid lanes 0..MAX_LANES-1, excluding the main monster's lane and its virtual tile above
-            const availableLanes = [];
-            for (let i = MAX_LANES - 1; i >= 0; i--) {
-                if (i !== monsterLane && i !== monsterVirtualLane) availableLanes.push(i);
-            }
-            // availableLanes has MAX_LANES-1 slots. If there are more minions than that,
-            // overflow minions are placed one column behind (MAX_DEPTH-1) to avoid overlap.
-            this.data.minions.forEach((e, i) => {
-                e.isMinion = true;
-                e.coordinates = { x: 0, y: 0 }
-                const laneIndex = i % availableLanes.length;
-                const columnOffset = Math.floor(i / availableLanes.length); // 0 for first batch, 1 for overflow
-                e.coordinates.y = availableLanes[laneIndex];
-                e.coordinates.x = MAX_DEPTH - columnOffset;
-                let m = createFighter(e, callbacks, this.FIGHT_INTERVAL)
-                m.isMinion = true;
-                this.combatants[m.id] = m;
-                try { this._setCombatantOccupiedCoords(this.combatants[m.id], this.combatants); } catch (err) { }
-            })
+        if (process.env.NODE_ENV === 'test') {
+            this.populateMinions();
         }
+
+        // Set up minions deferred until beginGreeting completes
+        /*
+        if (this.data.minions) {
+            ...
+        }
+        */
 
         // Start cooldowns for any formatted specials now that fighters are created
         // Ensure combatants' specials reflect the canonical matrix to avoid
@@ -937,8 +921,39 @@ export function CombatManager() {
                 break;
         }
     }
+    this.minionsPopulated = false;
+    this.populateMinions = () => {
+        if (this.minionsPopulated) return;
+        this.minionsPopulated = true;
+        if (this.data && this.data.minions) {
+            const callbacks = this._callbacks;
+            const monsterLane = this.data.monster.coordinates.y; // e.g. 2
+            const monsterVirtualLane = monsterLane - 1;
+            const availableLanes = [];
+            for (let i = MAX_LANES - 1; i >= 0; i--) {
+                if (i !== monsterLane && i !== monsterVirtualLane) availableLanes.push(i);
+            }
+            this.data.minions.forEach((e, i) => {
+                e.isMinion = true;
+                e.coordinates = { x: 0, y: 0 }
+                const laneIndex = i % availableLanes.length;
+                const columnOffset = Math.floor(i / availableLanes.length);
+                e.coordinates.y = availableLanes[laneIndex];
+                e.coordinates.x = MAX_DEPTH - columnOffset;
+                let m = createFighter(e, callbacks, this.FIGHT_INTERVAL)
+                m.isMinion = true;
+                this.combatants[m.id] = m;
+                try { this._setCombatantOccupiedCoords(this.combatants[m.id], this.combatants); } catch (err) { }
+                try { this.overlayManager.addCombatant(m); } catch (err) { }
+                
+                const ai = this.monsterAI.roster[m.type];
+                if (ai && ai.initialize) ai.initialize(m);
+            })
+        }
+    }
     this.beginGreeting = () => {
         this.triggerMonsterGreeting().then(e => {
+            this.populateMinions();
             this.greetingComplete();
             this.kickOffTurnCycles();
             this.broadcastDataUpdate();

@@ -316,7 +316,7 @@
 
         &.enlarged {
             transform: scale(3);
-            transform-origin: 86px 68px;
+            transform-origin: center;
         }
 
         &.rocked {
@@ -5220,7 +5220,7 @@
 
                     &.monster-portrait.enlarged {
                         transform: scale(3);
-                        transform-origin: 86px 68px;
+                        transform-origin: center;
                     }
 
                     // &.monster-portrait{
@@ -6483,6 +6483,18 @@
 
         .event-log-container {
             max-height: calc(100% - 30px);
+        }
+
+        @media (max-width: 950px) {
+            position: fixed !important;
+            right: 12px !important;
+            left: auto !important;
+            top: 12px !important;
+            height: calc(100vh - 24px) !important;
+            width: 280px !important;
+            min-width: 250px !important;
+            z-index: 99999 !important;
+            box-shadow: -5px 0 25px rgba(0, 0, 0, 0.9);
         }
     }
 }
@@ -10245,5 +10257,285 @@
         text-align: center;
         line-height: 1.1;
         transition: color 0.15s ease;
+    }
+}
+
+// ── Redux Left Group Desktop default ──────────────────────────────────────────
+.redux-left-group {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    flex: 1 1 auto;
+}
+
+// ── Mobile Combat Layout overrides ───────────────────────────────────────────
+.mb-board.mobile-layout {
+    display: grid !important;
+    grid-template-columns: 140px 1fr 160px !important;
+    grid-template-rows: 100vh !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    gap: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: radial-gradient(circle at center, #14141d 0%, #08080c 100%) !important;
+
+    .combat-grid-container {
+        grid-column: 2 !important;
+        grid-row: 1 !important;
+        align-self: center !important;
+        justify-self: center !important;
+        margin: 0 auto !important;
+        height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+
+    .mb-interaction-pane {
+        display: none !important;
+    }
+
+    .redux-status-panel {
+        display: none !important;
+    }
+
+    .mobile-left-panel {
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: flex-start !important;
+        align-items: center !important;
+        gap: 12px !important;
+        padding: 10px !important;
+        background: rgba(10, 10, 15, 0.95) !important;
+        border-right: 1px solid rgba(255, 255, 255, 0.1) !important;
+        box-sizing: border-box !important;
+        color: white !important;
+        z-index: 101 !important;
+        height: 100% !important;
+
+        .mobile-monster-name {
+            font-size: 11px !important;
+            font-weight: bold !important;
+            text-align: center !important;
+            word-break: break-word !important;
+            color: #ff5400 !important;
+        }
+
+        .mobile-round-widget {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 4px !important;
+            
+            .mobile-round-label {
+                font-size: 10px !important;
+                color: #aaa !important;
+                font-weight: bold !important;
+            }
+        }
+
+        .mobile-speed-toggle {
+            display: flex !important;
+            flex-direction: column !important;
+            width: 100% !important;
+            gap: 4px !important;
+
+            button {
+                width: 100% !important;
+                background: rgba(255, 255, 255, 0.1) !important;
+                color: white !important;
+                border: 1px solid rgba(255, 255, 255, 0.2) !important;
+                border-radius: 4px !important;
+                padding: 4px 6px !important;
+                font-size: 10px !important;
+                font-weight: bold !important;
+                cursor: pointer !important;
+                transition: all 0.2s !important;
+
+                &.active {
+                    background: white !important;
+                    color: black !important;
+                }
+            }
+        }
+
+        .mobile-resolve-meter {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            width: 100% !important;
+            gap: 4px !important;
+
+            .resolve-label {
+                font-size: 10px !important;
+                font-weight: bold !important;
+                
+                .resolve-val {
+                    color: white !important;
+                }
+            }
+
+            .resolve-bar-track {
+                width: 100% !important;
+                height: 6px !important;
+                background: rgba(255, 255, 255, 0.1) !important;
+                border-radius: 3px !important;
+                overflow: hidden !important;
+            }
+
+            .resolve-bar-fill {
+                height: 100% !important;
+                border-radius: 3px !important;
+            }
+        }
+    }
+
+    .mobile-right-panel {
+        grid-column: 3 !important;
+        grid-row: 1 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        background: rgba(10, 10, 15, 0.95) !important;
+        border-left: 1px solid rgba(255, 255, 255, 0.1) !important;
+        box-sizing: border-box !important;
+        height: 100% !important;
+        z-index: 101 !important;
+        overflow: hidden !important;
+
+        .redux-abilities-tabs {
+            background: rgba(0, 0, 0, 0.3) !important;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+
+        .redux-regular-skills-wrap {
+            padding: 8px !important;
+            gap: 8px !important;
+            overflow-y: auto !important;
+            flex: 1 !important;
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            align-content: start !important;
+            justify-items: center !important;
+
+            .skill-tile-outer {
+                width: 50px !important;
+                height: 50px !important;
+                margin: 0 !important;
+
+                .skill-hover-label {
+                    display: none !important;
+                }
+
+                .interaction-tile-wrapper {
+                    width: 50px !important;
+                    height: 50px !important;
+
+                    .interaction-tile {
+                        width: 50px !important;
+                        height: 50px !important;
+                        border-radius: 6px !important;
+                        background-size: cover !important;
+                        background-repeat: no-repeat !important;
+                        background-position: center !important;
+                    }
+                }
+            }
+        }
+    }
+
+    // Collapse Layout during Greeting Phase on mobile landscape
+    &.greeting-in-process {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: 1fr !important;
+
+        .mobile-left-panel,
+        .mobile-right-panel {
+            display: none !important;
+        }
+
+        .combat-grid-container {
+            grid-column: 1 !important;
+            grid-row: 1 !important;
+        }
+    }
+
+    // Unit tile responsive scaling for mobile layout
+    .unit-tile {
+        .portrait.fighter-portrait,
+        .portrait.monster-portrait,
+        .portrait.minion-portrait {
+            width: 100% !important;
+            height: 100% !important;
+        }
+
+        .circular-progress {
+            width: 100% !important;
+            height: 100% !important;
+
+            .inner-circle {
+                width: calc(100% - 6px) !important;
+                height: calc(100% - 6px) !important;
+            }
+        }
+    }
+}
+
+// ── Summary Panel responsive styling on mobile devices ────────────────────────
+@media (max-width: 1024px) {
+    .summary-panel {
+        padding: 10px !important;
+        border-radius: 12px !important;
+        width: calc(100% - 16px) !important;
+        height: calc(100% - 16px) !important;
+
+        .summary-header {
+            margin-bottom: 8px !important;
+            h1 {
+                font-size: 20px !important;
+            }
+            .summary-subtitle {
+                font-size: 11px !important;
+            }
+        }
+
+        .summary-content-grid {
+            grid-template-columns: 1fr !important;
+            gap: 8px !important;
+            overflow-y: auto !important;
+            margin-bottom: 8px !important;
+        }
+
+        .summary-section {
+            padding: 8px !important;
+            border-radius: 8px !important;
+
+            .section-title {
+                font-size: 10px !important;
+                margin-bottom: 8px !important;
+            }
+        }
+
+        .spoils-grid {
+            gap: 6px !important;
+        }
+
+        .spoil-card {
+            padding: 6px !important;
+            border-radius: 6px !important;
+            min-height: 40px !important;
+        }
+
+        .confirm-btn-premium {
+            padding: 6px 12px !important;
+            font-size: 12px !important;
+        }
     }
 }

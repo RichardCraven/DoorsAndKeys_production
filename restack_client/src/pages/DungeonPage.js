@@ -2466,6 +2466,16 @@ class DungeonPage extends React.Component {
             , shrineData: null
             , inShrineScreen: false
             , contextMenu: { visible: false, x: 0, y: 0, slotName: '' }
+            , mobileLeftPortraitCollapsed: false
+            , mobileLeftStatsCollapsed: false
+            , mobileLeftActionsCollapsed: false
+            , mobileLeftEquipmentCollapsed: false
+            , mobileRightMinimapCollapsed: false
+            , mobileRightQuicklookCollapsed: false
+            , mobileRightCrewCollapsed: false
+            , mobileRightActionsCollapsed: false
+            , mobileRightPoiCollapsed: false
+            , isMobileLandscape: window.innerWidth <= 1024 && window.innerHeight < window.innerWidth
         }
     // Native browser tooltip will be used for death-tracker; no custom tooltip state required.
         // Track timers/intervals created by this component so we can clear on unmount
@@ -2512,6 +2522,13 @@ class DungeonPage extends React.Component {
             }
             if (this.state.inMonsterBattle && !prevState.inMonsterBattle) {
                 this.wireMonsterBattleRefToWizardAI();
+            }
+            if (this.state.inMonsterBattle !== prevState.inMonsterBattle || this.state.inTowerSiege !== prevState.inTowerSiege) {
+                if (this.state.inMonsterBattle || this.state.inTowerSiege) {
+                    document.body.classList.add('combat-active');
+                } else {
+                    document.body.classList.remove('combat-active');
+                }
             }
     }
     UNSAFE_componentWillMount(){
@@ -4412,6 +4429,7 @@ class DungeonPage extends React.Component {
         }
     }
     componentWillUnmount(){
+        try { document.body.classList.remove('combat-active'); } catch (e) {}
         this._isMounted = false;
         if (typeof this.props.registerMessaging === 'function') {
             try { this.props.registerMessaging(null); } catch (e) {}
@@ -6086,6 +6104,10 @@ class DungeonPage extends React.Component {
         })
     }
     getTileSize(){
+        const isMobileLandscape = window.innerWidth <= 1024 && window.innerHeight < window.innerWidth;
+        if (isMobileLandscape) {
+            return Math.floor(window.innerHeight / 13.5);
+        }
         const h = Math.floor((window.innerHeight/17));
         const w = Math.floor((window.innerWidth/17));
         let tsize = 0;
@@ -6098,13 +6120,15 @@ class DungeonPage extends React.Component {
     }
 
     handleResize() {
+        const isMobileLandscape = window.innerWidth <= 1024 && window.innerHeight < window.innerWidth;
         let tileSize = this.getTileSize(),
             boardSize = tileSize*15;
 
         this.setState((state, props) => {
             return {
                 tileSize,
-                boardSize
+                boardSize,
+                isMobileLandscape
             }
         }, () => {
             try {
@@ -6664,7 +6688,105 @@ class DungeonPage extends React.Component {
         })
     }
     handleClick = (tile) => {
-        // nothing
+        if (!tile || !tile.coordinates) return;
+        if (this.state.keysLocked || this.state.inMonsterBattle || this.state.playerAnimating) return;
+
+        const bm = this.props.boardManager;
+        if (!bm || !bm.playerTile) return;
+
+        const startCoords = bm.playerTile.location;
+        const endCoords = tile.coordinates;
+
+        // If clicked on the tile the player is already on, do nothing
+        if (startCoords[0] === endCoords[0] && startCoords[1] === endCoords[1]) return;
+
+        const bfsPathfind = (start, end) => {
+            const queue = [[start, []]];
+            const visited = new Set();
+            visited.add(`${start[0]},${start[1]}`);
+
+            const getIndexFromCoords = (coords) => {
+                return (coords[0] % 15) * 15 + (coords[1] % 15);
+            };
+
+            const isTileBlocked = (coords, isTarget) => {
+                const r = coords[0];
+                const c = coords[1];
+                if (r < 15 || r > 29 || c < 15 || c > 29) return true;
+
+                const idx = getIndexFromCoords(coords);
+                const t = bm.tiles[idx];
+                if (!t) return true;
+
+                if (t.blockedByLargeMonster) return true;
+
+                const type = bm.getContainsType(t.contains);
+                if (type === 'void' || type === 'inscription') return true;
+
+                const gateType = bm.getGateTypeFromTile(t);
+                if (gateType && bm.isLockedGateTile(t)) {
+                    if (!bm.hasActiveUnlockSpell()) {
+                        return true;
+                    }
+                }
+
+                if (!isTarget) {
+                    if (type === 'monster' || type === 'vendor' || type === 'narrative' || type === 'door' || type === 'way_up' || type === 'way_down' || type === 'spell' || type === 'dream den' || type === 'dream_den' || t.isLoot) {
+                        return true;
+                    }
+                    const subtype = bm.getContainsSubtype(t.contains);
+                    if (type === 'item' && bm.isChest(subtype)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            };
+
+            while (queue.length > 0) {
+                const [curr, path] = queue.shift();
+                if (curr[0] === end[0] && curr[1] === end[1]) {
+                    return path;
+                }
+
+                const neighbors = [
+                    [[curr[0] - 1, curr[1]], 'up'],
+                    [[curr[0] + 1, curr[1]], 'down'],
+                    [[curr[0], curr[1] - 1], 'left'],
+                    [[curr[0], curr[1] + 1], 'right']
+                ];
+
+                for (const [nextCoords, dir] of neighbors) {
+                    const key = `${nextCoords[0]},${nextCoords[1]}`;
+                    if (!visited.has(key)) {
+                        const isTarget = nextCoords[0] === end[0] && nextCoords[1] === end[1];
+                        const fromIdx = getIndexFromCoords(curr);
+                        const toIdx = getIndexFromCoords(nextCoords);
+
+                        let passageBlocked = false;
+                        if (nextCoords[0] >= 15 && nextCoords[0] <= 29 && nextCoords[1] >= 15 && nextCoords[1] <= 29) {
+                            if (bm.isPassageWallBlockingBetween(fromIdx, toIdx)) {
+                                passageBlocked = true;
+                            }
+                        } else {
+                            passageBlocked = true;
+                        }
+
+                        if (!passageBlocked && !isTileBlocked(nextCoords, isTarget)) {
+                            visited.add(key);
+                            queue.push([nextCoords, [...path, dir]]);
+                        }
+                    }
+                }
+            }
+            return null;
+        };
+
+        const pathDirections = bfsPathfind(startCoords, endCoords);
+        if (pathDirections && pathDirections.length > 0) {
+            this._movementQueue = pathDirections;
+            this.processMovementQueue();
+        }
     }
     handleOverlayClick = (tile, event) => {
         if(!this.state.minimapPlaceMapMarkerStarted) return
@@ -11660,202 +11782,205 @@ class DungeonPage extends React.Component {
                                 return null;
                             })()}
 
-                            <div className="camp-map-scene-wrap" onClick={(e) => e.stopPropagation()}>
-                                <div className={`camp-map-scene ${hasZoomedLevel ? 'zoomed' : ''} ${hasPendingZoomLevel ? 'pre-zoom' : ''} ${isPreUnzoom ? 'pre-unzoom' : ''} ${revealAfterUnzoom ? 'reveal-others' : ''}`} role="list" aria-label="Dungeon tower floors">
-                                    {levelIds.map((levelId, index) => {
-                                        const isCurrent = levelId === currentLevelId;
-                                        const isSelected = levelId === selectedLevelId;
-                                        const isZoomed = zoomedLevelId === levelId;
-                                        const showBoardHighlight = isCurrent && isZoomed && !!boardHighlightImage;
-                                        const isUnzooming = unzoomingLevelId === levelId;
-                                        const isPendingZoom = pendingZoomLevelId === levelId;
-                                        const isBoardDetailFading = showBoardHighlight && mapBoardDetailStage === 'fading' && mapBoardDetailBoardIndex === activeMinimapIndex;
-                                        const isBoardDetailActive = showBoardHighlight && mapBoardDetailStage === 'detail' && mapBoardDetailBoardIndex === activeMinimapIndex;
-                                        const holdOthersHidden = hasZoomedLevel || hasPendingZoomLevel || (hasUnzoomingLevel && !revealAfterUnzoom);
-                                        const depthOffset = index * 52;
-                                        const slabZIndex = (isZoomed || isUnzooming) ? 1000 : (levelIds.length - index);
-                                        return (
-                                            <button
-                                                key={levelId}
-                                                role="listitem"
-                                                className={`tower-floor-slab ${isSelected ? 'active' : ''} ${isZoomed ? 'zoomed-in' : ''} ${showBoardHighlight ? 'show-board-highlight' : ''} ${isUnzooming ? 'zooming-out' : ''} ${isPendingZoom ? 'pending-zoom' : ''} ${isBoardDetailFading ? 'board-detail-fading' : ''} ${isBoardDetailActive ? 'board-detail-active' : ''} ${holdOthersHidden && !isZoomed && !isUnzooming && !isPendingZoom ? 'faded' : ''}`}
-                                                style={{
-                                                    '--tower-offset': `${depthOffset}px`,
-                                                    '--tower-zoom-shift': `${124 - depthOffset}px`,
-                                                    '--fade-in-delay': `${index * 90}ms`,
-                                                    '--fade-out-delay': `${index * 90}ms`,
-                                                    animationDelay: `${index * 70}ms`,
-                                                    zIndex: slabZIndex
-                                                }}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    // If this level is already selected in map view
-                                                    if (isSelected) {
-                                                        // If already zoomed, unzoom
-                                                        if (isZoomed) {
-                                                            this.handleMapZoomClose();
-                                                        } else {
-                                                            // If selected but not zoomed, zoom in
-                                                            this.handleMapZoomInStart(levelId, levelIds.length, index);
-                                                        }
-                                                    } else {
-                                                        // If not selected, select this level in map view only
-                                                        this.handleMapLevelSelect(levelId);
-                                                    }
-                                                }}
-                                                title={`Go to level ${levelId}`}
-                                            >
-                                                <span className="slab-shadow"></span>
-                                                <span className="slab-face slab-top"></span>
-                                                <span className="slab-face slab-grid"></span>
-                                                <span
-                                                    className="slab-face slab-board-highlight"
-                                                    style={showBoardHighlight ? { backgroundImage: boardHighlightImage } : undefined}
-                                                    onClick={(event) => {
-                                                        if (!showBoardHighlight) return;
-                                                        event.preventDefault();
-                                                        event.stopPropagation();
-                                                        if (!isBoardDetailFading) this.handleMapCurrentBoardLayerOpen(activeMinimapIndex);
-                                                    }}
-                                                >
-                                                    {showBoardHighlight && slabVendorMarkers.map((marker) => (
-                                                        <span
-                                                            key={marker.key}
-                                                            className={`slab-vendor-icon ${marker.markerType}`}
-                                                            style={{ left: marker.left, top: marker.top, backgroundImage: marker.icon }}
-                                                        />
-                                                    ))}
-                                                    {showBoardHighlight && playerSlabDot && (
-                                                        <span className="slab-player-dot" style={playerSlabDot} />
-                                                    )}
-                                                    {showBoardHighlight && (isBoardDetailFading || isBoardDetailActive) && (
-                                                        <span className={`slab-board-plane-layer ${isBoardDetailFading ? 'is-fading' : ''} ${isBoardDetailActive ? 'is-detail' : ''}`}>
-                                                            <svg className="slab-board-cells-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                                                                {boardCells.map((cell) => {
-                                                                    const isCurrentBoardCell = cell.boardIndex === activeMinimapIndex;
-                                                                    const isFadedCell = (isBoardDetailFading || isBoardDetailActive) && !isCurrentBoardCell;
-                                                                    let isScouted = false;
-                                                                    try {
-                                                                        const meta = getMeta() || {};
-                                                                        if (meta.scoutActive && meta.scoutActive.scoutedArea) {
-                                                                            const now = new Date();
-                                                                            const start = new Date(meta.scoutActive.endDate);
-                                                                            const end = new Date(meta.scoutActive.scoutedArea.revealUntil);
-                                                                            if (now >= start && now < end &&
-                                                                                levelId === meta.scoutActive.scoutedArea.levelId &&
-                                                                                cell.boardIndex === meta.scoutActive.scoutedArea.boardIndex) {
-                                                                                isScouted = true;
-                                                                            }
-                                                                        }
-                                                                    } catch (e) {}
 
-                                                                    return (
-                                                                        <polygon
-                                                                            key={`cell_${cell.boardIndex}`}
-                                                                            points={cell.points}
-                                                                            className={`board-cell ${isCurrentBoardCell ? 'current' : ''} ${isFadedCell ? 'faded' : ''}`}
-                                                                            style={isScouted ? { fill: 'rgba(92, 194, 255, 0.35)', stroke: '#52a3ff', strokeWidth: 1.2 } : undefined}
-                                                                        />
-                                                                    );
-                                                                })}
-                                                            </svg>
-                                                            {(() => {
-                                                                try {
-                                                                    const meta = getMeta() || {};
-                                                                    if (meta.scoutActive && meta.scoutActive.scoutedArea) {
-                                                                        const now = new Date();
-                                                                        const start = new Date(meta.scoutActive.endDate);
-                                                                        const end = new Date(meta.scoutActive.scoutedArea.revealUntil);
-                                                                        if (now >= start && now < end && levelId === meta.scoutActive.scoutedArea.levelId) {
-                                                                            const scoutedIdx = meta.scoutActive.scoutedArea.boardIndex;
-                                                                            const cell = boardCells.find(c => c.boardIndex === scoutedIdx);
-                                                                            if (cell) {
-                                                                                return (
-                                                                                    <span
-                                                                                        className="slab-scout-marker"
-                                                                                        role="img"
-                                                                                        aria-label="eagle"
-                                                                                        style={{
-                                                                                            position: 'absolute',
-                                                                                            left: `${cell.center.x}%`,
-                                                                                            top: `${cell.center.y}%`,
-                                                                                            transform: 'translate(-50%, -50%)',
-                                                                                            fontSize: '15px',
-                                                                                            zIndex: 10,
-                                                                                            pointerEvents: 'none'
-                                                                                        }}
-                                                                                    >
-                                                                                        🦅
-                                                                                    </span>
-                                                                                );
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                } catch (e) {}
-                                                                return null;
-                                                            })()}
-                                                            <span className={`slab-board-detail-2d ${isBoardDetailActive ? 'visible' : ''}`} onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
-                                                                <span className="board-detail-grid"></span>
-                                                                {boardDetailPathSegments.length > 0 && (
-                                                                    <svg className="board-detail-path-svg" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-                                                                        {boardDetailPathSegments.map((segmentPoints, segmentIdx) => (
-                                                                            <polyline key={`bd_path_${segmentIdx}`} points={segmentPoints} />
-                                                                        ))}
-                                                                    </svg>
-                                                                )}
-                                                                {boardDetailEnemyTiles.map((marker) => (
-                                                                    <span
-                                                                        key={marker.key}
-                                                                        className="board-detail-enemy-tile"
-                                                                        style={{ left: marker.left, top: marker.top }}
-                                                                    />
-                                                                ))}
-                                                                {boardDetailPlayerTile && (
-                                                                    <span
-                                                                        className="board-detail-player-tile"
-                                                                        style={{ left: boardDetailPlayerTile.left, top: boardDetailPlayerTile.top }}
-                                                                    />
-                                                                )}
-                                                                {boardDetailDiscoveryDots.map((dot) => (
-                                                                    <span
-                                                                        key={dot.key}
-                                                                        className="board-detail-discovery-dot"
-                                                                        style={{ left: dot.left, top: dot.top }}
-                                                                    />
-                                                                ))}
-                                                                {boardDetailMarkers2D.map((marker) => (
-                                                                    <span
-                                                                        key={marker.key}
-                                                                        className={`board-detail-location-icon ${marker.markerType}`}
-                                                                        style={{ left: marker.left, top: marker.top, backgroundImage: marker.icon }}
-                                                                    />
-                                                                ))}
-                                                            </span>
-                                                        </span>
-                                                    )}
-                                                </span>
-                                                <span className="slab-face slab-left"></span>
-                                                <span className="slab-face slab-right"></span>
-                                                <span className="slab-label">L{levelId}</span>
-                                                {isCurrent && <span className="slab-active-badge">Current</span>}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </div>
-                    );
-                })()}
-            </CModal>
 
-            {/* Skill Tree popup */}
-            <CModal size="xl" className="skill-tree-modal" alignment="center" visible={this.state.showSkillTreePopup} onClose={this.handleCloseSkillTree} backdrop={true}>
-                {this.state.selectedSkillTreeCrewMember && (
-                    <SkillTree crewMember={this.state.selectedSkillTreeCrewMember} onClose={this.handleCloseSkillTree} />
-                )}
-            </CModal>
-            {/* <ExpositionPane></ExpositionPane> */}
-            {this.props.boardManager.currentOrientation === 'B' && <div className="dark-mask"></div>}
+                                                            <div className="camp-map-scene-wrap" onClick={(e) => e.stopPropagation()}>
+                                                                <div className={`camp-map-scene ${hasZoomedLevel ? 'zoomed' : ''} ${hasPendingZoomLevel ? 'pre-zoom' : ''} ${isPreUnzoom ? 'pre-unzoom' : ''} ${revealAfterUnzoom ? 'reveal-others' : ''}`} role="list" aria-label="Dungeon tower floors">
+                                                                    {levelIds.map((levelId, index) => {
+                                                                        const isCurrent = levelId === currentLevelId;
+                                                                        const isSelected = levelId === selectedLevelId;
+                                                                        const isZoomed = zoomedLevelId === levelId;
+                                                                        const showBoardHighlight = isCurrent && isZoomed && !!boardHighlightImage;
+                                                                        const isUnzooming = unzoomingLevelId === levelId;
+                                                                        const isPendingZoom = pendingZoomLevelId === levelId;
+                                                                        const isBoardDetailFading = showBoardHighlight && mapBoardDetailStage === 'fading' && mapBoardDetailBoardIndex === activeMinimapIndex;
+                                                                        const isBoardDetailActive = showBoardHighlight && mapBoardDetailStage === 'detail' && mapBoardDetailBoardIndex === activeMinimapIndex;
+                                                                        const holdOthersHidden = hasZoomedLevel || hasPendingZoomLevel || (hasUnzoomingLevel && !revealAfterUnzoom);
+                                                                        const depthOffset = index * 52;
+                                                                        const slabZIndex = (isZoomed || isUnzooming) ? 1000 : (levelIds.length - index);
+                                                                        return (
+                                                                            <button
+                                                                                key={levelId}
+                                                                                role="listitem"
+                                                                                className={`tower-floor-slab ${isSelected ? 'active' : ''} ${isZoomed ? 'zoomed-in' : ''} ${showBoardHighlight ? 'show-board-highlight' : ''} ${isUnzooming ? 'zooming-out' : ''} ${isPendingZoom ? 'pending-zoom' : ''} ${isBoardDetailFading ? 'board-detail-fading' : ''} ${isBoardDetailActive ? 'board-detail-active' : ''} ${holdOthersHidden && !isZoomed && !isUnzooming && !isPendingZoom ? 'faded' : ''}`}
+                                                                                style={{
+                                                                                    '--tower-offset': `${depthOffset}px`,
+                                                                                    '--tower-zoom-shift': `${124 - depthOffset}px`,
+                                                                                    '--fade-in-delay': `${index * 90}ms`,
+                                                                                    '--fade-out-delay': `${index * 90}ms`,
+                                                                                    animationDelay: `${index * 70}ms`,
+                                                                                    zIndex: slabZIndex
+                                                                                }}
+                                                                                onClick={(e) => {
+                                                                                    e.stopPropagation();
+                                                                                    // If this level is already selected in map view
+                                                                                    if (isSelected) {
+                                                                                        // If already zoomed, unzoom
+                                                                                        if (isZoomed) {
+                                                                                            this.handleMapZoomClose();
+                                                                                        } else {
+                                                                                            // If selected but not zoomed, zoom in
+                                                                                            this.handleMapZoomInStart(levelId, levelIds.length, index);
+                                                                                        }
+                                                                                    } else {
+                                                                                        // If not selected, select this level in map view only
+                                                                                        this.handleMapLevelSelect(levelId);
+                                                                                    }
+                                                                                }}
+                                                                                title={`Go to level ${levelId}`}
+                                                                            >
+                                                                                <span className="slab-shadow"></span>
+                                                                                <span className="slab-face slab-top"></span>
+                                                                                <span className="slab-face slab-grid"></span>
+                                                                                <span
+                                                                                    className="slab-face slab-board-highlight"
+                                                                                    style={showBoardHighlight ? { backgroundImage: boardHighlightImage } : undefined}
+                                                                                    onClick={(event) => {
+                                                                                        if (!showBoardHighlight) return;
+                                                                                        event.preventDefault();
+                                                                                        event.stopPropagation();
+                                                                                        if (!isBoardDetailFading) this.handleMapCurrentBoardLayerOpen(activeMinimapIndex);
+                                                                                    }}
+                                                                                >
+                                                                                    {showBoardHighlight && slabVendorMarkers.map((marker) => (
+                                                                                        <span
+                                                                                            key={marker.key}
+                                                                                            className={`slab-vendor-icon ${marker.markerType}`}
+                                                                                            style={{ left: marker.left, top: marker.top, backgroundImage: marker.icon }}
+                                                                                        />
+                                                                                    ))}
+                                                                                    {showBoardHighlight && playerSlabDot && (
+                                                                                        <span className="slab-player-dot" style={playerSlabDot} />
+                                                                                    )}
+                                                                                    {showBoardHighlight && (isBoardDetailFading || isBoardDetailActive) && (
+                                                                                        <span className={`slab-board-plane-layer ${isBoardDetailFading ? 'is-fading' : ''} ${isBoardDetailActive ? 'is-detail' : ''}`}>
+                                                                                            <svg className="slab-board-cells-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                                                                                                {boardCells.map((cell) => {
+                                                                                                    const isCurrentBoardCell = cell.boardIndex === activeMinimapIndex;
+                                                                                                    const isFadedCell = (isBoardDetailFading || isBoardDetailActive) && !isCurrentBoardCell;
+                                                                                                    let isScouted = false;
+                                                                                                    try {
+                                                                                                        const meta = getMeta() || {};
+                                                                                                        if (meta.scoutActive && meta.scoutActive.scoutedArea) {
+                                                                                                            const now = new Date();
+                                                                                                            const start = new Date(meta.scoutActive.endDate);
+                                                                                                            const end = new Date(meta.scoutActive.scoutedArea.revealUntil);
+                                                                                                            if (now >= start && now < end &&
+                                                                                                                levelId === meta.scoutActive.scoutedArea.levelId &&
+                                                                                                                cell.boardIndex === meta.scoutActive.scoutedArea.boardIndex) {
+                                                                                                                isScouted = true;
+                                                                                                            }
+                                                                                                        }
+                                                                                                    } catch (e) {}
+
+                                                                                                    return (
+                                                                                                        <polygon
+                                                                                                            key={`cell_${cell.boardIndex}`}
+                                                                                                            points={cell.points}
+                                                                                                            className={`board-cell ${isCurrentBoardCell ? 'current' : ''} ${isFadedCell ? 'faded' : ''}`}
+                                                                                                            style={isScouted ? { fill: 'rgba(92, 194, 255, 0.35)', stroke: '#52a3ff', strokeWidth: 1.2 } : undefined}
+                                                                                                        />
+                                                                                                    );
+                                                                                                })}
+                                                                                            </svg>
+                                                                                            {(() => {
+                                                                                                try {
+                                                                                                    const meta = getMeta() || {};
+                                                                                                    if (meta.scoutActive && meta.scoutActive.scoutedArea) {
+                                                                                                        const now = new Date();
+                                                                                                        const start = new Date(meta.scoutActive.endDate);
+                                                                                                        const end = new Date(meta.scoutActive.scoutedArea.revealUntil);
+                                                                                                        if (now >= start && now < end && levelId === meta.scoutActive.scoutedArea.levelId) {
+                                                                                                            const scoutedIdx = meta.scoutActive.scoutedArea.boardIndex;
+                                                                                                            const cell = boardCells.find(c => c.boardIndex === scoutedIdx);
+                                                                                                            if (cell) {
+                                                                                                                return (
+                                                                                                                    <span
+                                                                                                                        className="slab-scout-marker"
+                                                                                                                        role="img"
+                                                                                                                        aria-label="eagle"
+                                                                                                                        style={{
+                                                                                                                            position: 'absolute',
+                                                                                                                            left: `${cell.center.x}%`,
+                                                                                                                            top: `${cell.center.y}%`,
+                                                                                                                            transform: 'translate(-50%, -50%)',
+                                                                                                                            fontSize: '15px',
+                                                                                                                            zIndex: 10,
+                                                                                                                            pointerEvents: 'none'
+                                                                                                                        }}
+                                                                                                                    >
+                                                                                                                        🦅
+                                                                                                                    </span>
+                                                                                                                );
+                                                                                                            }
+                                                                                                        }
+                                                                                                    }
+                                                                                                } catch (e) {}
+                                                                                                return null;
+                                                                                            })()}
+                                                                                            <span className={`slab-board-detail-2d ${isBoardDetailActive ? 'visible' : ''}`} onClick={(event) => { event.preventDefault(); event.stopPropagation(); }}>
+                                                                                                <span className="board-detail-grid"></span>
+                                                                                                {boardDetailPathSegments.length > 0 && (
+                                                                                                    <svg className="board-detail-path-svg" viewBox="0 0 100 100" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+                                                                                                        {boardDetailPathSegments.map((segmentPoints, segmentIdx) => (
+                                                                                                            <polyline key={`bd_path_${segmentIdx}`} points={segmentPoints} />
+                                                                                                        ))}
+                                                                                                    </svg>
+                                                                                                )}
+                                                                                                {boardDetailEnemyTiles.map((marker) => (
+                                                                                                    <span
+                                                                                                        key={marker.key}
+                                                                                                        className="board-detail-enemy-tile"
+                                                                                                        style={{ left: marker.left, top: marker.top }}
+                                                                                                    />
+                                                                                                ))}
+                                                                                                {boardDetailPlayerTile && (
+                                                                                                    <span
+                                                                                                        className="board-detail-player-tile"
+                                                                                                        style={{ left: boardDetailPlayerTile.left, top: boardDetailPlayerTile.top }}
+                                                                                                    />
+                                                                                                )}
+                                                                                                {boardDetailDiscoveryDots.map((dot) => (
+                                                                                                    <span
+                                                                                                        key={dot.key}
+                                                                                                        className="board-detail-discovery-dot"
+                                                                                                        style={{ left: dot.left, top: dot.top }}
+                                                                                                    />
+                                                                                                ))}
+                                                                                                {boardDetailMarkers2D.map((marker) => (
+                                                                                                    <span
+                                                                                                        key={marker.key}
+                                                                                                        className={`board-detail-location-icon ${marker.markerType}`}
+                                                                                                        style={{ left: marker.left, top: marker.top, backgroundImage: marker.icon }}
+                                                                                                    />
+                                                                                                ))}
+                                                                                            </span>
+                                                                                        </span>
+                                                                                    )}
+                                                                                </span>
+                                                                                <span className="slab-face slab-left"></span>
+                                                                                <span className="slab-face slab-right"></span>
+                                                                                <span className="slab-label">L{levelId}</span>
+                                                                                {isCurrent && <span className="slab-active-badge">Current</span>}
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </CModal>
+
+                                            {/* Skill Tree popup */}
+                                            <CModal size="xl" className="skill-tree-modal" alignment="center" visible={this.state.showSkillTreePopup} onClose={this.handleCloseSkillTree} backdrop={true}>
+                                                {this.state.selectedSkillTreeCrewMember && (
+                                                    <SkillTree crewMember={this.state.selectedSkillTreeCrewMember} onClose={this.handleCloseSkillTree} />
+                                                )}
+                                            </CModal>
+                                            {/* <ExpositionPane></ExpositionPane> */}
+                                            {this.props.boardManager.currentOrientation === 'B' && <div className="dark-mask"></div>}
+                                            {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
             <div className={`left-side-panel ${this.state.leftPanelExpanded ? 'expanded' : ''}`}>
                 <div className="expand-collapse-button icon-container" onClick={this.toggleLeftSidePanel}>
                     <CIcon icon={cilCaretRight} className={`expand-icon ${this.state.leftPanelExpanded ? 'expanded' : ''}`} size="sm"/>
@@ -11864,8 +11989,16 @@ class DungeonPage extends React.Component {
 
                 </div> */}
                 {/* crew-container moved to right-side panel */}
-                {this.state.selectedCrewMember.name && <div className="crew-info-section">
-                        <div className="portrait-wrapper">
+                {this.state.selectedCrewMember.name && (
+                    <div className="crew-info-section">
+                        {this.state.isMobileLandscape && (
+                            <div className="mobile-section-header" onClick={() => this.setState({ mobileLeftPortraitCollapsed: !this.state.mobileLeftPortraitCollapsed })}>
+                                Character {this.state.mobileLeftPortraitCollapsed ? '[+]' : '[-]'}
+                            </div>
+                        )}
+                        {(!this.state.isMobileLandscape || !this.state.mobileLeftPortraitCollapsed) && (
+                            <>
+                            <div className="portrait-wrapper">
                             <div className="status-container">
                                 <div className="member-level-indicator">Lvl {this.state.selectedCrewMember.level}</div>
                             </div>
@@ -12066,7 +12199,16 @@ class DungeonPage extends React.Component {
                                 </div>
                             );
                         })()}
-                        {/* HP bar (hp-line-container) - shows current HP proportion */}
+                        </>
+                        )}
+                        {this.state.isMobileLandscape && (
+                            <div className="mobile-section-header" onClick={() => this.setState({ mobileLeftStatsCollapsed: !this.state.mobileLeftStatsCollapsed })}>
+                                Stats {this.state.mobileLeftStatsCollapsed ? '[+]' : '[-]'}
+                            </div>
+                        )}
+                        {(!this.state.isMobileLandscape || !this.state.mobileLeftStatsCollapsed) && (
+                            <>
+                            {/* HP bar (hp-line-container) - shows current HP proportion */}
                         {(() => {
                             const selected = this.state.selectedCrewMember || {};
                             const maxHp = (selected.stats && selected.stats.hp) ? selected.stats.hp : 0;
@@ -12097,7 +12239,16 @@ class DungeonPage extends React.Component {
                         <div className="stat-line">Intelligence <span className='stat-value'>{this.state.selectedCrewMember.stats?.int} </span></div>
                         {/* Vitality removed */}
                         <div className="stat-line">Fortitude <span className='stat-value'> {this.state.selectedCrewMember.stats?.fort} </span></div>
-                        <div className="icon-container menu" onClick={this.toggleActionsTray}>
+                        </>
+                        )}
+                        {this.state.isMobileLandscape && (
+                            <div className="mobile-section-header" onClick={() => this.setState({ mobileLeftActionsCollapsed: !this.state.mobileLeftActionsCollapsed })}>
+                                Actions {this.state.mobileLeftActionsCollapsed ? '[+]' : '[-]'}
+                            </div>
+                        )}
+                        {(!this.state.isMobileLandscape || !this.state.mobileLeftActionsCollapsed) && (
+                            <>
+                            <div className="icon-container menu" onClick={this.toggleActionsTray}>
                             <CIcon icon={cilMenu} className={`menu-icon ${this.state.leftPanelExpanded ? 'expanded' : ''}`} size="sm"/>
                             Actions
                         </div>
@@ -12105,7 +12256,15 @@ class DungeonPage extends React.Component {
                         (this.state.actionsTrayExpanded ? 'expanded' : '')}`}>
                             {this.getCharacterActions(this.state.selectedCrewMember)}
                         </div>
-                        <div className="equipment-panel">
+                        </>
+                        )}
+                        {this.state.isMobileLandscape && (
+                            <div className="mobile-section-header" onClick={() => this.setState({ mobileLeftEquipmentCollapsed: !this.state.mobileLeftEquipmentCollapsed })}>
+                                Equipment {this.state.mobileLeftEquipmentCollapsed ? '[+]' : '[-]'}
+                            </div>
+                        )}
+                        {(!this.state.isMobileLandscape || !this.state.mobileLeftEquipmentCollapsed) && (
+                            <div className="equipment-panel">
                             {/* Replaced with a direct copy of the `.crew-body` from the inventory popup */}
                             <div className='crew-body' style={{marginTop: '-16px'}}>
                                 <div className='crew-body-image' style={{backgroundImage: `url(${images.body_male})`}} />
@@ -12175,11 +12334,14 @@ class DungeonPage extends React.Component {
                             <div className='left-body-preview' style={{backgroundImage: `url(${images.body_male})`, backgroundSize: '130%'}}></div>
                             {/* stats display area removed from left panel (kept only in inventory popup) */}
                         </div>
+                        )}
                         <div className="description-panel">
                             {this.state.descriptionText}
                         </div>
-                </div>}
+                </div>
+                )}
             </div>
+            )}
             {/* Dev console panel (toggled with Shift+Space) */}
             {this.state.devConsoleOpen && (
                 <div className="dev-console">
@@ -12206,8 +12368,15 @@ class DungeonPage extends React.Component {
                     </div>
                 </div>
             )}
+            {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
             <div className={`right-side-panel ${this.state.rightPanelExpanded ? 'expanded' : ''}`}>
-                <div className="minimap-container">
+                {this.state.isMobileLandscape && (
+                    <div className="mobile-section-header" onClick={() => this.setState({ mobileRightMinimapCollapsed: !this.state.mobileRightMinimapCollapsed })}>
+                        Minimap {this.state.mobileRightMinimapCollapsed ? '[+]' : '[-]'}
+                    </div>
+                )}
+                {(!this.state.isMobileLandscape || !this.state.mobileRightMinimapCollapsed) && (
+                    <div className="minimap-container">
                     <div className="map-wrapper">
                         <div className="level-indicator">
                             {this.state.levelTracker && this.state.levelTracker.map((e,i)=>{
@@ -12393,7 +12562,15 @@ class DungeonPage extends React.Component {
                         </div>
                     )}
                 </div>
+                )}
                 <div className="crew-container">
+                    {this.state.isMobileLandscape && (
+                        <div className="mobile-section-header" onClick={() => this.setState({ mobileRightQuicklookCollapsed: !this.state.mobileRightQuicklookCollapsed })}>
+                            Status Summary {this.state.mobileRightQuicklookCollapsed ? '[+]' : '[-]'}
+                        </div>
+                    )}
+                    {(!this.state.isMobileLandscape || !this.state.mobileRightQuicklookCollapsed) && (
+                        <>
                     {/* <div className="title">Crew</div> */}
 
                     {/* Death tracker: shows skull icons for recent group deaths (meta.deathTracker) */}
@@ -12445,7 +12622,15 @@ class DungeonPage extends React.Component {
                             </div>
                         );
                     })()}
-                    <div className="crew-tile-container">
+                        </>
+                    )}
+                    {this.state.isMobileLandscape && (
+                        <div className="mobile-section-header" onClick={() => this.setState({ mobileRightCrewCollapsed: !this.state.mobileRightCrewCollapsed })}>
+                            Crew List {this.state.mobileRightCrewCollapsed ? '[+]' : '[-]'}
+                        </div>
+                    )}
+                    {(!this.state.isMobileLandscape || !this.state.mobileRightCrewCollapsed) && (
+                        <div className="crew-tile-container">
                         {   this.props.crewManager.crew &&
                             this.props.crewManager.crew.map((member, i) => {
                                 const isSelectedTile = this.state.selectedCrewMember && this.state.selectedCrewMember.id === member.id;
@@ -12472,8 +12657,15 @@ class DungeonPage extends React.Component {
                             })
                         }
                     </div>
+                    )}
                     {/* Quick Actions — always-visible strip */}
-                    <div className="quick-actions-strip">
+                    {this.state.isMobileLandscape && (
+                        <div className="mobile-section-header" onClick={() => this.setState({ mobileRightActionsCollapsed: !this.state.mobileRightActionsCollapsed })}>
+                            Quick Actions {this.state.mobileRightActionsCollapsed ? '[+]' : '[-]'}
+                        </div>
+                    )}
+                    {(!this.state.isMobileLandscape || !this.state.mobileRightActionsCollapsed) && (
+                        <div className="quick-actions-strip">
                         {(() => {
                             const meta = getMeta() || {};
                             const camping = meta.camping;
@@ -12571,9 +12763,16 @@ class DungeonPage extends React.Component {
                             );
                         })()}
                     </div>
+                    )}
 
                     {/* ── Points of Interest panel ─────────────────────────────── */}
-                    <div className="poi-panel">
+                    {this.state.isMobileLandscape && (
+                        <div className="mobile-section-header" onClick={() => this.setState({ mobileRightPoiCollapsed: !this.state.mobileRightPoiCollapsed })}>
+                            Points of Interest {this.state.mobileRightPoiCollapsed ? '[+]' : '[-]'}
+                        </div>
+                    )}
+                    {(!this.state.isMobileLandscape || !this.state.mobileRightPoiCollapsed) && (
+                        <div className="poi-panel">
                         {/* Toggle button: open eye = visible, closed eye = collapsed */}
                         <button
                             className="poi-toggle-btn"
@@ -12873,6 +13072,7 @@ class DungeonPage extends React.Component {
                             );
                         })()}
                     </div>
+                    )}
                     {/* ── /Points of Interest panel ───────────────────────────── */}
 
                 </div>
@@ -12880,8 +13080,9 @@ class DungeonPage extends React.Component {
                     <CIcon icon={cilCaretLeft} className={`expand-icon ${this.state.rightPanelExpanded ? 'expanded' : ''}`} size="sm"/>
                 </div>
             </div>
-            {this.state.currentBoard && <div className="info-panel">{this.props.boardManager.currentBoard.name}</div>}
-            {this.state.inMonsterBattle === false && <div style={{
+            )}
+            {this.state.currentBoard && !(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && <div className="info-panel">{this.props.boardManager.currentBoard.name}</div>}
+            {this.state.inMonsterBattle === false && this.state.inTowerSiege === false && <div style={{
                     opacity: this.state.tiles.length > 0 ? 1 : 0,
                     transition: 'opacity 1s'
                     }} className={`center-board-wrapper ${this.state.minimapPlaceMapMarkerStarted ? 'show-map-marker-cursor' : ''}`}>

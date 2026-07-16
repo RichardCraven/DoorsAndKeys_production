@@ -69,6 +69,7 @@ class TowerSiege extends React.Component {
             activeAnimations: [],
             animationOverlays: {},
             localPaused: false,
+            isMobileLandscape: window.matchMedia("(max-width: 1024px) and (orientation: landscape)").matches,
         };
     }
 
@@ -142,7 +143,7 @@ class TowerSiege extends React.Component {
         }
         if (combatManager && animationManager) {
             combatManager.connectAnimationManager(animationManager);
-            animationManager.TILE_SIZE = SIEGE_TILE_SIZE;
+            animationManager.TILE_SIZE = this.getTileSize();
             animationManager.TILE_BORDER = SIEGE_TILE_BORDER;
             animationManager.isSiegeMode = true;
             if (typeof animationManager.establishAnimationCallback === 'function') {
@@ -157,7 +158,7 @@ class TowerSiege extends React.Component {
         
         // Instantiate and connect Sandbox-style AnimationManagerRedux (used by combatManager)
         this._animManagerRedux = new AnimationManagerRedux();
-        this._animManagerRedux.TILE_SIZE = SIEGE_TILE_SIZE;
+        this._animManagerRedux.TILE_SIZE = this.getTileSize();
         this._animManagerRedux.TILE_BORDER = SIEGE_TILE_BORDER;
         this._animManagerRedux.isSiegeMode = true;
         this._animManagerRedux.connect(this.updateAnimationData);
@@ -222,13 +223,43 @@ class TowerSiege extends React.Component {
         this.setState({ combatTiles: tiles });
     };
 
+    getTileSize = () => {
+        return this.state.isMobileLandscape ? 32 : 56;
+    };
+
+    getBoardWidth = () => {
+        return SIEGE_COLS * (this.getTileSize() + SIEGE_TILE_BORDER);
+    };
+
+    getBoardHeight = () => {
+        return SIEGE_ROWS * (this.getTileSize() + SIEGE_TILE_BORDER);
+    };
+
     _updateBoardScale = () => {
+        const isMobileLandscape = window.matchMedia("(max-width: 1024px) and (orientation: landscape)").matches;
+        const currentTileSize = isMobileLandscape ? 32 : 56;
+        const currentBoardWidth = SIEGE_COLS * (currentTileSize + SIEGE_TILE_BORDER);
+        const currentBoardHeight = SIEGE_ROWS * (currentTileSize + SIEGE_TILE_BORDER);
+
         const vw = window.innerWidth;
         const vh = window.innerHeight;
-        const scaleX = vw < BOARD_WIDTH  ? vw  / BOARD_WIDTH  : 1;
-        const scaleY = vh < BOARD_HEIGHT ? vh  / BOARD_HEIGHT : 1;
+        const scaleX = vw < currentBoardWidth  ? vw  / currentBoardWidth  : 1;
+        const scaleY = vh < currentBoardHeight ? vh  / currentBoardHeight : 1;
         const scale  = Math.min(scaleX, scaleY);
-        if (this._isMounted) this.setState({ boardScale: scale });
+
+        if (this._isMounted) {
+            this.setState({
+                boardScale: scale,
+                isMobileLandscape
+            });
+            const { animationManager } = this.props;
+            if (animationManager) {
+                animationManager.TILE_SIZE = currentTileSize;
+            }
+            if (this._animManagerRedux) {
+                this._animManagerRedux.TILE_SIZE = currentTileSize;
+            }
+        }
     };
 
     // ── Fade-in sequence ─────────────────────────────────────────────────────
@@ -335,7 +366,7 @@ class TowerSiege extends React.Component {
 
     // ── Tile position helper ─────────────────────────────────────────────────
 
-    tilePos = (coord) => coord * (SIEGE_TILE_SIZE + SIEGE_TILE_BORDER);
+    tilePos = (coord) => coord * (this.getTileSize() + SIEGE_TILE_BORDER);
 
     // ── Render ───────────────────────────────────────────────────────────────
 
@@ -354,15 +385,15 @@ class TowerSiege extends React.Component {
                     style={{ transform: `scale(${boardScale})`, transformOrigin: 'top left' }}
                 >
                     {/* ── Background tile grid ── */}
-                    <div className="ts-board" style={{ width: BOARD_WIDTH, height: BOARD_HEIGHT }}>
+                    <div className="ts-board" style={{ width: this.getBoardWidth(), height: this.getBoardHeight() }}>
                         <div className="ts-tile-grid">
                             {combatTiles.map((t) => (
                                 <div
                                     key={t.id}
                                     className={`ts-tile ${(t.x + t.y) % 2 === 0 ? 'ts-tile--light' : 'ts-tile--dark'}`}
                                     style={{
-                                        width: SIEGE_TILE_SIZE,
-                                        height: SIEGE_TILE_SIZE,
+                                        width: this.getTileSize(),
+                                        height: this.getTileSize(),
                                         left: this.tilePos(t.x),
                                         top: this.tilePos(t.y),
                                     }}
@@ -371,15 +402,15 @@ class TowerSiege extends React.Component {
                         </div>
 
                         {/* ── Faction zone overlays ── */}
-                        <div className="ts-zone ts-zone--player" style={{ width: this.tilePos(2), height: BOARD_HEIGHT }} />
-                        <div className="ts-zone ts-zone--enemy"  style={{ width: this.tilePos(3), height: BOARD_HEIGHT, left: this.tilePos(17) }} />
+                        <div className="ts-zone ts-zone--player" style={{ width: this.tilePos(2), height: this.getBoardHeight() }} />
+                        <div className="ts-zone ts-zone--enemy"  style={{ width: this.tilePos(3), height: this.getBoardHeight(), left: this.tilePos(17) }} />
 
                         {/* ── Unit portraits ── */}
                         <SiegeCombatGrid
                             crew={this.props.crew}
                             combatManager={this.props.combatManager}
                             battleData={battleData}
-                            tileSize={SIEGE_TILE_SIZE}
+                            tileSize={this.getTileSize()}
                             tileBorder={SIEGE_TILE_BORDER}
                             siegeCols={SIEGE_COLS}
                             siegeRows={SIEGE_ROWS}
@@ -390,6 +421,7 @@ class TowerSiege extends React.Component {
                             activeAnimations={this.state.activeAnimations}
                             animationOverlays={this.state.animationOverlays}
                             getAllOverlaysById={this.getAllOverlaysById}
+                            isMobileLandscape={this.state.isMobileLandscape}
                         />
 
                         {/* ── Phase label (during fade-in only) ── */}
