@@ -1148,7 +1148,7 @@ class CrewManagerPage extends React.Component {
                             </div>
                             <div className="crew-tray">
                                 {this.state.crewSlots.map((slot, i) => {
-                                    return <div key={i} className="selected-crew-portrait-container">
+                                    return <div key={i} className={`selected-crew-portrait-container ${!this.state.selectedCrew[i] ? 'empty' : 'filled'}`}>
 
                                         <div className={`add-button ${!this.state.selectedCrewMember ? 'disabled' : ''}`} onClick={() => this.addMember(i)}>&oplus;</div>
 

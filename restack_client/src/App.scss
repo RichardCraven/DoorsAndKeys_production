@@ -1787,11 +1787,18 @@ canvas.spell-animation {
           justify-content: flex-start !important;
           gap: 15px !important;
           margin-top: 5px !important;
+          margin-left: 20px !important;
           
           .selected-crew-portrait-container {
             height: 96px !important;
             width: 60px !important;
-            border: none !important;
+            
+            &.empty {
+              border: 1px dashed #cccccc !important;
+            }
+            &.filled {
+              border: 1px solid #cccccc !important;
+            }
             
             .portrait {
               height: 60px !important;
@@ -1843,6 +1850,7 @@ canvas.spell-animation {
           display: flex !important;
           justify-content: flex-start !important;
           margin-top: 10px !important;
+          margin-left: 20px !important;
           width: 100% !important;
         }
       }
