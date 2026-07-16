@@ -5559,6 +5559,41 @@ class MonsterBattle extends React.Component {
                     }
                 })()}
 
+                {/* Visual debug indicator dot */}
+                <div style={{
+                    position: 'fixed',
+                    bottom: '10px',
+                    right: '10px',
+                    padding: '6px 10px',
+                    borderRadius: '8px',
+                    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                    border: `2px solid ${this.state.isMobileLandscape ? 'orange' : 'green'}`,
+                    color: 'white',
+                    fontFamily: 'monospace',
+                    fontSize: '11px',
+                    zIndex: 99999,
+                    boxShadow: '0 0 8px rgba(0,0,0,0.8)',
+                    textAlign: 'left',
+                    lineHeight: '1.4'
+                }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{
+                            display: 'inline-block',
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
+                            backgroundColor: this.state.isMobileLandscape ? 'orange' : 'green'
+                        }} />
+                        <strong>{this.state.isMobileLandscape ? 'MOBILE VIEW' : 'DESKTOP VIEW'}</strong>
+                    </div>
+                    <div style={{ marginTop: '4px' }}>
+                        Size: {window.innerWidth}x{window.innerHeight}<br />
+                        orientation: {window.screen?.orientation?.type || 'unknown'}<br />
+                        mq-width: {window.matchMedia("(max-width: 950px)").matches ? 'YES' : 'NO'}<br />
+                        mq-landscape: {window.matchMedia("(orientation: landscape)").matches ? 'YES' : 'NO'}
+                    </div>
+                </div>
+
             </div>
         );
     }

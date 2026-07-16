@@ -11,6 +11,7 @@ import UserProfilePage from './pages/UserProfilePage'
 import CrewManagerPage from './pages/CrewManagerPage'
 import CombatSimulator from './pages/CombatSimulator'
 import SandboxPage from './pages/SandboxPage'
+import TutorialsPage from './pages/TutorialsPage'
 
 
 import { Route, Switch, Redirect, useLocation } from "react-router-dom";
@@ -437,6 +438,10 @@ function App(props) {
           <Route exact path="/landing" render={() => (
             !loggedIn ? <Redirect to="/login" /> :
               <LandingPage {...props} setNarrativeSequence={setNarrativeSequence} beginIntroSequence={beginIntroSequence} endIntroSequence={endIntroSequence} />
+          )} />
+          <Route exact path="/tutorials" render={() => (
+            !loggedIn ? <Redirect to="/login" /> :
+              <TutorialsPage {...props} />
           )} />
 
           {/* <Route exact path="/landing" component={LandingPage}>
