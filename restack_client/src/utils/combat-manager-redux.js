@@ -566,6 +566,7 @@ export function CombatManagerRedux() {
     this.beginGreeting = () => {
         const monster = this.data?.monster;
         if (!monster) {
+            this.showBars = true;
             if (typeof this.greetingComplete === 'function') this.greetingComplete();
             this.appendCombatLog('Combat started. Round 1 begins.');
             this.startRoundTimer();
@@ -578,6 +579,7 @@ export function CombatManagerRedux() {
         const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
         Promise.resolve().then(async () => {
+            // --- Stage 1: Main Monster Greeting Stage ---
             await delay(500);
             if (typeof this.setMessage === 'function') {
                 this.setMessage({ message: greetingMsg, source: 'monster' });
@@ -598,15 +600,30 @@ export function CombatManagerRedux() {
             }
             await delay(500);
 
-            this.populateMinions();
-
+            // --- Stage 2: Main Monster Goes Back to Combat Size ---
             if (typeof this.greetingComplete === 'function') {
                 this.greetingComplete();
             }
+            if (typeof this.updateData === 'function') {
+                this.updateData(clone(this.combatants));
+            }
+            await delay(800);
 
-            // Pause combat briefly (1200ms) to allow health and stamina bars to animate filling up
+            // --- Stage 3: Minions Appear ---
+            this.populateMinions();
+            if (typeof this.updateData === 'function') {
+                this.updateData(clone(this.combatants));
+            }
+            await delay(800);
+
+            // --- Stage 4: HP and Stamina Bars Fill Up ---
+            this.showBars = true;
+            if (typeof this.updateData === 'function') {
+                this.updateData(clone(this.combatants));
+            }
             await delay(1200);
 
+            // --- Stage 5: Combat Starts ---
             this.appendCombatLog('Combat started. Round 1 begins.');
             this.startRoundTimer();
             this.processRoundTurns();
@@ -726,6 +743,7 @@ export function CombatManagerRedux() {
         this.roundTimeElapsedMs = 0;
         this.combatOver = false;
         this.combatPaused = false;
+        this.showBars = false;
 
         const callbacks = {
             broadcastDataUpdate: (c) => {
@@ -1475,6 +1493,43 @@ export function CombatManagerRedux() {
         } else if (clampedY !== oy) {
             unit.facing = clampedY > oy ? 'down' : 'up';
         }
+
+        if (!unit.isMonster && !unit.isMinion) {
+            // Revert back to default 'right' facing after the movement transition completes (500ms)
+            if (this._movementFacingTimeouts === undefined) {
+                this._movementFacingTimeouts = {};
+            }
+            if (this._movementFacingTimeouts[unit.id]) {
+                clearTimeout(this._movementFacingTimeouts[unit.id]);
+            }
+            this._movementFacingTimeouts[unit.id] = setTimeout(() => {
+                const liveUnit = this.combatants[unit.id];
+                if (liveUnit && !liveUnit.dead) {
+                    liveUnit.facing = 'right';
+                    if (typeof this.updateData === 'function') {
+                        this.updateData(clone(this.combatants));
+                    }
+                }
+            }, 550); // 50ms buffer past the 500ms CSS transition
+        } else {
+            // Revert monsters/minions back to default 'left' facing after the movement transition completes (500ms)
+            if (this._movementFacingTimeouts === undefined) {
+                this._movementFacingTimeouts = {};
+            }
+            if (this._movementFacingTimeouts[unit.id]) {
+                clearTimeout(this._movementFacingTimeouts[unit.id]);
+            }
+            this._movementFacingTimeouts[unit.id] = setTimeout(() => {
+                const liveUnit = this.combatants[unit.id];
+                if (liveUnit && !liveUnit.dead) {
+                    liveUnit.facing = 'left';
+                    if (typeof this.updateData === 'function') {
+                        this.updateData(clone(this.combatants));
+                    }
+                }
+            }, 550);
+        }
+
         this._setCombatantOccupiedCoords(unit, this.combatants);
         this.syncVCTs();
 
@@ -7347,6 +7402,11 @@ export function CombatManagerRedux() {
     this.useAbility = (unit, ability, target) => {
         if (!ability || !target) return;
 
+        if (unit && typeof unit.inTrial === 'number') {
+            this.appendCombatLog(`${this.getCombatantLogName(unit)} is in a Sphinx trial and cannot act!`);
+            return;
+        }
+
         const _aid = ability.id || ability.key || (ability.name && ability.name.replace(/\s+/g, '_').toLowerCase()) || 'ability';
         if (_aid === 'shield_slam') {
             const hasShield = (unit.inventory || []).some(i => i && i.subtype === 'shield' && (i.equippedSlot === 'left' || i.equippedSlot === 'right' || i.equippedBy === unit.id));
@@ -11684,6 +11744,10 @@ export function CombatManagerRedux() {
         return 1;
     };
     this.shutdown = () => {
+        if (this._movementFacingTimeouts) {
+            Object.values(this._movementFacingTimeouts).forEach(clearTimeout);
+            this._movementFacingTimeouts = {};
+        }
         if (this.roundTimerInterval) {
             clearInterval(this.roundTimerInterval);
             this.roundTimerInterval = null;

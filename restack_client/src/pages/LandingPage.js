@@ -421,102 +421,33 @@ export default function LandingPage(props) {
             </div>
 
             {/* Leave space for future dungeon graphic/previews */}
-            <div className="dungeon-preview-space" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', margin: '20px 0' }}>
+            <div className="dungeon-preview-space">
               {(() => {
                 const crew = getMeta()?.crew || [];
                 if (crew.length === 0) {
                   return (
-                    <div style={{
-                      color: '#78716c',
-                      fontSize: '0.9rem',
-                      fontStyle: 'italic',
-                      textAlign: 'center',
-                      border: '1px dashed rgba(212, 168, 68, 0.2)',
-                      borderRadius: '8px',
-                      padding: '20px',
-                      width: '100%',
-                      boxSizing: 'border-box'
-                    }}>
+                    <div className="no-crew-warning">
                       No crew recruited. Visit the Crew Manager to recruit party members.
                     </div>
                   );
                 }
                 return (
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '12px',
-                    width: '100%',
-                    background: 'rgba(12, 10, 9, 0.4)',
-                    border: '1px solid rgba(212, 168, 68, 0.15)',
-                    borderRadius: '8px',
-                    padding: '16px',
-                    boxSizing: 'border-box'
-                  }}>
-                    <span style={{
-                      fontFamily: "'Cinzel', serif",
-                      fontSize: '0.85rem',
-                      color: '#e5b54f',
-                      textTransform: 'uppercase',
-                      letterSpacing: '2px',
-                      fontWeight: '700',
-                      textShadow: '0 0 8px rgba(229, 181, 79, 0.2)'
-                    }}>Selected Crew</span>
-                    <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
+                  <div className="selected-crew-preview-card">
+                    <span className="selected-crew-title">Selected Crew</span>
+                    <div className="selected-crew-list">
                       {crew.map((member, i) => (
-                        <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '70px' }}>
-                          <div style={{
-                            width: '52px',
-                            height: '52px',
-                            borderRadius: '50%',
-                            backgroundImage: `url(${member.portrait || member.image})`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                            border: '2px solid rgba(212, 168, 68, 0.5)',
-                            boxShadow: '0 4px 10px rgba(0,0,0,0.6)',
-                            position: 'relative'
+                        <div key={i} className="selected-crew-member-item">
+                          <div className="selected-crew-avatar-wrapper" style={{
+                            backgroundImage: `url(${member.portrait || member.image})`
                           }}>
-                            <span style={{
-                              position: 'absolute',
-                              bottom: '-2px',
-                              right: '-6px',
-                              background: '#1c1917',
-                              color: '#e5b54f',
-                              border: '1px solid rgba(212, 168, 68, 0.3)',
-                              borderRadius: '3px',
-                              padding: '1px 4px',
-                              fontSize: '8px',
-                              fontWeight: '700',
-                              fontFamily: "'Outfit', sans-serif"
-                            }}>
+                            <span className="selected-crew-badge">
                               Lvl {member.level || 1}
                             </span>
                           </div>
-                          <span style={{
-                            fontSize: '0.8rem',
-                            color: '#f5f5f7',
-                            fontWeight: '600',
-                            textAlign: 'center',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            width: '100%',
-                            textShadow: '0 1px 3px rgba(0,0,0,0.8)'
-                          }} title={member.name}>
+                          <span className="selected-crew-name" title={member.name}>
                             {member.name}
                           </span>
-                          <span style={{
-                            fontSize: '0.65rem',
-                            color: '#a8a29e',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.5px',
-                            textAlign: 'center',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            width: '100%'
-                          }}>
+                          <span className="selected-crew-type">
                             {member.type || ''}
                           </span>
                         </div>

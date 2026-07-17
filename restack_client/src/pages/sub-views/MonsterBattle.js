@@ -4102,6 +4102,7 @@ class MonsterBattle extends React.Component {
                             teleportingFighterId={this.state.teleportingFighterId}
                             fearCastingActive={this.state.fearCastingActive}
                             greetingInProcess={this.state.greetingInProcess}
+                            showBars={this.props.combatManager ? this.props.combatManager.showBars : false}
                             SHOW_MONSTER_IDS={SHOW_MONSTER_IDS}
                             activeAnimations={this.state.activeAnimations}
                             TILE_SIZE={currentTileSize}

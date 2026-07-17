@@ -660,6 +660,7 @@ export default function SiegeCombatGrid(props) {
         combatStarted = false,
     } = props;
     const crewIds = new Set(crew.map(f => f.id));
+    const hideBars = props.showBars === false || greetingInProcess;
 
     const checkHuge = (unit) => {
         if (!unit || unit.isShrineGuardian) return false;
@@ -1635,12 +1636,12 @@ export default function SiegeCombatGrid(props) {
                             display: 'flex',
                             flexDirection: 'column-reverse',
                             pointerEvents: 'none',
-                            opacity: greetingInProcess ? 0 : 1,
+                            opacity: hideBars ? 0 : 1,
                             transition: 'opacity 0.5s ease-in-out'
                         }}>
                             <div className="hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
                                 <div className="red-fill" style={{
-                                    width: greetingInProcess ? '0%' : `${(getFighterDetails(fighter)?.hp / fighter.stats.hp) * 100}%`,
+                                    width: hideBars ? '0%' : `${(getFighterDetails(fighter)?.hp / fighter.stats.hp) * 100}%`,
                                     transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                 }} />
                             </div>
@@ -1649,7 +1650,7 @@ export default function SiegeCombatGrid(props) {
                                     <div className="white-fill" style={{
                                         height: '100%',
                                         backgroundColor: '#ffffff',
-                                        width: greetingInProcess ? '0%' : `${(getFighterDetails(fighter)?.endurance / getFighterDetails(fighter)?.maxEndurance) * 100}%`,
+                                        width: hideBars ? '0%' : `${(getFighterDetails(fighter)?.endurance / getFighterDetails(fighter)?.maxEndurance) * 100}%`,
                                         transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                     }} />
                                 </div>
@@ -2616,12 +2617,12 @@ export default function SiegeCombatGrid(props) {
                         left: 0,
                         width: '100%',
                         pointerEvents: 'none',
-                        opacity: greetingInProcess ? 0 : 1,
+                        opacity: hideBars ? 0 : 1,
                         transition: 'opacity 0.5s ease-in-out'
                     }}>
                         <div className="monster-hp-bar hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
                             <div className="red-fill" style={{
-                                width: greetingInProcess ? '0%' : `${(unit.hp / (unit.stats?.hp || unit.starting_hp || 1)) * 100}%`,
+                                width: hideBars ? '0%' : `${(unit.hp / (unit.stats?.hp || unit.starting_hp || 1)) * 100}%`,
                                 transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                             }} />
                         </div>
@@ -2631,7 +2632,7 @@ export default function SiegeCombatGrid(props) {
                                     <div className="white-fill" style={{
                                         height: '100%',
                                         backgroundColor: '#ffffff',
-                                        width: greetingInProcess ? '0%' : `${(unit.endurance / unit.maxEndurance) * 100}%`,
+                                        width: hideBars ? '0%' : `${(unit.endurance / unit.maxEndurance) * 100}%`,
                                         transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                     }} />
                                 </div>
@@ -2639,13 +2640,13 @@ export default function SiegeCombatGrid(props) {
                                 <>
                                     <div className="monster-energy-bar energy-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
                                         <div className="yellow-fill" style={{
-                                            width: greetingInProcess ? '0%' : `calc(${unit.energy}%)`,
+                                            width: hideBars ? '0%' : `calc(${unit.energy}%)`,
                                             transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                         }} />
                                     </div>
-                                    <div className="tempo-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px', opacity: greetingInProcess ? 0 : 1, transition: 'opacity 0.5s ease-in-out' }}>
+                                    <div className="tempo-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px', opacity: hideBars ? 0 : 1, transition: 'opacity 0.5s ease-in-out' }}>
                                         <div className="tempo-indicator" style={{
-                                            left: greetingInProcess ? '0%' : `calc(${unit.tempo}% - 4px)`,
+                                            left: hideBars ? '0%' : `calc(${unit.tempo}% - 4px)`,
                                             transition: 'left 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                         }} />
                                     </div>

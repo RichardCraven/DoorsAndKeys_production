@@ -1,5 +1,6 @@
 import React from 'react';
-import loadingGif from '../assets/highres-gifs/gifOne.gif';
+import gifOne from '../assets/highres-gifs/gifOne.gif';
+import gifTwo from '../assets/highres-gifs/gifTwo.gif';
 
 import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../utils/shared-constants';
 import '../styles/dungeon-board.scss'
@@ -2347,6 +2348,7 @@ class DungeonPage extends React.Component {
         this._wasPoiPanelExpanded = !!((getMeta() || {}).camping);
         this.state = {
             isLoadingDungeon: true,
+            currentLoadingGif: Math.random() < 0.5 ? gifOne : gifTwo,
             tileSize: 0,
             boardSize: 0,
             tiles: [],
@@ -10026,7 +10028,7 @@ class DungeonPage extends React.Component {
                     <div className="server-waking-card">
                         <h2 className="server-waking-title">Entering the Dungeon</h2>
                         <div className="server-waking-gif-container">
-                            <img src={loadingGif} className="server-waking-gif" alt="Loading..." />
+                            <img src={this.state.currentLoadingGif} className="server-waking-gif" alt="Loading..." />
                         </div>
                         <p className="server-waking-desc">
                             Delving into the depths, preparing the layout...

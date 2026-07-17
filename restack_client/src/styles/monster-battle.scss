@@ -915,8 +915,11 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
+    align-items: center;
     position: relative;
     border: 1px solid rgb(91, 110, 91);
+    height: 100%;
+    width: 100%;
 
     .overlay-content {
         position: absolute;
@@ -1851,6 +1854,7 @@
         flex-direction: row;
         justify-content: space-between;
         position: relative;
+        margin: auto;
 
         .message-container {
             width: 100%;
@@ -4134,19 +4138,19 @@
         }
 
         60% {
-            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1.15)) scaleY(calc(var(--portrait-base-scale, 1) * 1.15)) translateY(10px);
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(10px);
             opacity: 0.85;
             filter: blur(1.5px);
         }
 
         80% {
-            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1.5)) scaleY(calc(var(--portrait-base-scale, 1) * 1.5)) translateY(40px);
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(40px);
             opacity: 0.5;
             filter: blur(3px);
         }
 
         100% {
-            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 2.2)) scaleY(calc(var(--portrait-base-scale, 1) * 2.2)) translateY(80px);
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(80px);
             opacity: 0;
             filter: blur(8px);
         }
@@ -4160,19 +4164,19 @@
         }
 
         60% {
-            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1.15)) scaleY(calc(var(--portrait-base-scale, 1) * 1.15)) translateY(10px);
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(10px);
             opacity: 0.85;
             -webkit-filter: blur(1.5px);
         }
 
         80% {
-            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1.5)) scaleY(calc(var(--portrait-base-scale, 1) * 1.5)) translateY(40px);
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(40px);
             opacity: 0.5;
             -webkit-filter: blur(3px);
         }
 
         100% {
-            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 2.2)) scaleY(calc(var(--portrait-base-scale, 1) * 2.2)) translateY(80px);
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(80px);
             opacity: 0;
             -webkit-filter: blur(8px);
         }
@@ -4186,19 +4190,19 @@
         }
 
         60% {
-            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1.15)) scaleY(calc(var(--portrait-base-scale, 1) * 1.15)) translateY(10px);
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(10px);
             opacity: 0.85;
             -moz-filter: blur(1.5px);
         }
 
         80% {
-            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1.5)) scaleY(calc(var(--portrait-base-scale, 1) * 1.5)) translateY(40px);
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(40px);
             opacity: 0.5;
             -moz-filter: blur(3px);
         }
 
         100% {
-            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 2.2)) scaleY(calc(var(--portrait-base-scale, 1) * 2.2)) translateY(80px);
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(80px);
             opacity: 0;
             -moz-filter: blur(8px);
         }

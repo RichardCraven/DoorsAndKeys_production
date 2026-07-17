@@ -22,10 +22,12 @@ import { updateUserRequest } from '../src/utils/api-handler'
 import { getAllUsersRequest } from './utils/api-handler';
 import { storeSessionData, getUserId, getMeta } from './utils/session-handler';
 import { useHistory } from "react-router";
-import loadingGif from './assets/highres-gifs/gifOne.gif';
+import gifOne from './assets/highres-gifs/gifOne.gif';
+import gifTwo from './assets/highres-gifs/gifTwo.gif';
 
 
 function App(props) {
+  const [currentLoadingGif] = useState(() => Math.random() < 0.5 ? gifOne : gifTwo);
   const location = useLocation();
   const isMapmaker = location.pathname === '/mapmaker';
   const [loggedIn, setLoggedIn] = useState(!!getUserId())
@@ -90,9 +92,11 @@ function App(props) {
   const saveUserDataRef = React.useRef(null)
   const history = useHistory();
   useEffect(() => {
-    // Pre-load the high-res loading animation GIF so it is ready in cache
-    const img = new Image();
-    img.src = loadingGif;
+    // Pre-load the high-res loading animation GIFs so they are ready in cache
+    const img1 = new Image();
+    img1.src = gifOne;
+    const img2 = new Image();
+    img2.src = gifTwo;
 
     window.pickRandom = (array) => {
       let index = Math.floor(Math.random() * array.length)
@@ -328,7 +332,7 @@ function App(props) {
           <div className="server-waking-card">
             <h2 className="server-waking-title">Arising from Slumber</h2>
             <div className="server-waking-gif-container">
-              <img src={loadingGif} className="server-waking-gif" alt="Waking up..." />
+              <img src={currentLoadingGif} className="server-waking-gif" alt="Waking up..." />
             </div>
             <p className="server-waking-desc">
               The game server is waking up...

@@ -4,7 +4,8 @@ import { storeMeta, getMeta } from '../utils/session-handler';
 import { CrewManager } from '../utils/crew-manager'
 import { Redirect } from "react-router-dom";
 import MonsterBattle from './sub-views/MonsterBattle';
-import loadingGif from '../assets/highres-gifs/gifOne.gif';
+import gifOne from '../assets/highres-gifs/gifOne.gif';
+import gifTwo from '../assets/highres-gifs/gifTwo.gif';
 import { CombatManagerRedux } from '../utils/combat-manager-redux';
 import skillsMatrix from '../utils/skills-matrix';
 
@@ -219,6 +220,7 @@ class CrewManagerPage extends React.Component {
             lord: false,
             loadingSimulator: false,
             randomTierPoints: 6,
+            currentLoadingGif: Math.random() < 0.5 ? gifOne : gifTwo,
         }
     }
     timer = null;
@@ -699,7 +701,10 @@ class CrewManagerPage extends React.Component {
     }
 
     submit = async () => {
-        this.setState({ loadingSimulator: true });
+        this.setState({
+            loadingSimulator: true,
+            currentLoadingGif: Math.random() < 0.5 ? gifOne : gifTwo
+        });
 
         // Create a fresh clone of selectedCrew to keep original intact when returning or displaying
         const clonedCrew = clone(this.state.selectedCrew);
@@ -1051,7 +1056,7 @@ class CrewManagerPage extends React.Component {
                         fontFamily: "'Inter', system-ui, -apple-system, sans-serif"
                     }}>
                         <img 
-                            src={loadingGif} 
+                            src={this.state.currentLoadingGif} 
                             alt="Loading..." 
                             style={{
                                 width: '280px',
