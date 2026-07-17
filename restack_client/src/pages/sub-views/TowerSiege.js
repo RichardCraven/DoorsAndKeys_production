@@ -418,6 +418,7 @@ class TowerSiege extends React.Component {
                             showHashmallim={showHashmallim}
                             showArmies={showArmies}
                             combatStarted={combatStarted}
+                            showBars={this.props.combatManager ? this.props.combatManager.showBars : false}
                             activeAnimations={this.state.activeAnimations}
                             animationOverlays={this.state.animationOverlays}
                             getAllOverlaysById={this.getAllOverlaysById}
