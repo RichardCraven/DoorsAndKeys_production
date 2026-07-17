@@ -329,6 +329,19 @@ class CrewManagerPage extends React.Component {
         if (!prevState.crewSelected && this.state.crewSelected) {
             this.wireMonsterBattleRefToWizardAI();
         }
+        if (prevState.crewSelected !== this.state.crewSelected) {
+            if (this.state.crewSelected) {
+                document.body.classList.add('combat-active');
+            } else {
+                document.body.classList.remove('combat-active');
+            }
+        }
+    }
+
+    componentWillUnmount() {
+        try {
+            document.body.classList.remove('combat-active');
+        } catch (e) {}
     }
 
     wireMonsterBattleRefToWizardAI = () => {
@@ -1426,7 +1439,7 @@ class CrewManagerPage extends React.Component {
                 </div>}
 
 
-                {this.state.crewSelected && <div>
+                {this.state.crewSelected && <div style={{ height: '100%', width: '100%', overflow: 'hidden' }}>
                     <MonsterBattle
                         isSimulation={true}
                         exitSimulator={this.exitSimulator}

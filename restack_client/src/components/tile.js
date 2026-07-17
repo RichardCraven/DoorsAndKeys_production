@@ -85,7 +85,7 @@ function Tile(props) {
     }
     const foregroundPortalImages = ['archway', 'gryphon_gate_opened', 'bat_gate_opened', 'evil_gate_opened', 'dungeon_door_opened'];
     const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
-    const isVendorCell = !!(containsObj && containsObj.type === 'vendor');
+    const isVendorCell = !!(containsObj && containsObj.type === 'vendor') && !props.isPreview;
 
     const getVendorCellRole = () => {
         if (!isVendorCell) return null;
