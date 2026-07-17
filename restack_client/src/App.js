@@ -136,6 +136,39 @@ function App(props) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [])
 
+  useEffect(() => {
+    let touchStartY = 0;
+    const handleTouchStart = (e) => {
+      if (e.touches.length > 0) {
+        touchStartY = e.touches[0].pageY;
+      }
+    };
+    const handleTouchMove = (e) => {
+      if (e.touches.length === 0) return;
+      const y = e.touches[0].pageY;
+      if (y > touchStartY) {
+        let el = e.target;
+        let canScrollUp = false;
+        while (el && el !== document) {
+          if (el.scrollTop > 0) {
+            canScrollUp = true;
+            break;
+          }
+          el = el.parentNode;
+        }
+        if (!canScrollUp) {
+          if (e.cancelable) e.preventDefault();
+        }
+      }
+    };
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
+
 
   const logout = () => {
     saveUserData();
