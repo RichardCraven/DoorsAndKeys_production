@@ -1475,6 +1475,26 @@ export function CombatManagerRedux() {
         } else if (clampedY !== oy) {
             unit.facing = clampedY > oy ? 'down' : 'up';
         }
+
+        if (!unit.isMonster && !unit.isMinion) {
+            // Revert back to default 'right' facing after the movement transition completes (500ms)
+            if (this._movementFacingTimeouts === undefined) {
+                this._movementFacingTimeouts = {};
+            }
+            if (this._movementFacingTimeouts[unit.id]) {
+                clearTimeout(this._movementFacingTimeouts[unit.id]);
+            }
+            this._movementFacingTimeouts[unit.id] = setTimeout(() => {
+                const liveUnit = this.combatants[unit.id];
+                if (liveUnit && !liveUnit.dead) {
+                    liveUnit.facing = 'right';
+                    if (typeof this.updateData === 'function') {
+                        this.updateData(clone(this.combatants));
+                    }
+                }
+            }, 550); // 50ms buffer past the 500ms CSS transition
+        }
+
         this._setCombatantOccupiedCoords(unit, this.combatants);
         this.syncVCTs();
 
@@ -11684,6 +11704,10 @@ export function CombatManagerRedux() {
         return 1;
     };
     this.shutdown = () => {
+        if (this._movementFacingTimeouts) {
+            Object.values(this._movementFacingTimeouts).forEach(clearTimeout);
+            this._movementFacingTimeouts = {};
+        }
         if (this.roundTimerInterval) {
             clearInterval(this.roundTimerInterval);
             this.roundTimerInterval = null;
