@@ -1662,10 +1662,16 @@ export default function CombatGrid(props) {
                         const powerVal = Math.min(100, liveFtr?.power ?? 0);
                         const isReady = powerVal >= 100 || liveFtr?.ultimateActive;
                         return (
-                            <div
-                                className={`power-ring${isReady ? ' power-ring--ready' : ''}`}
-                                style={{ '--power-ring-fill': powerVal }}
-                            />
+                            <>
+                                <div
+                                    className="power-ring-underlay"
+                                    style={{ '--power-ring-fill': powerVal }}
+                                />
+                                <div
+                                    className={`power-ring${isReady ? ' power-ring--ready' : ''}`}
+                                    style={{ '--power-ring-fill': powerVal }}
+                                />
+                            </>
                         );
                     })()}
                     {details?.stunned && !isAsleepFighter && !details?.dead && !details?.paradoxEngineActive && (
@@ -2115,10 +2121,10 @@ export default function CombatGrid(props) {
                                     : (unit.isUpsideDown 
                                         ? 'rotate(180deg)' 
                                         : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined))),
-                            transformOrigin: showEnlarged ? 'right center' : undefined,
+                            transformOrigin: showEnlarged ? 'right center' : 'bottom',
                             boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                             borderRadius: '0',
-                            transition: 'filter 0.25s ease-in-out',
+                            transition: 'filter 0.25s ease-in-out, transform 0.5s ease-in-out, transform-origin 0.5s ease-in-out',
                             maskImage: unit.type === 'darkness_sphere' ? 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 72%)' : undefined,
                             WebkitMaskImage: unit.type === 'darkness_sphere' ? 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 72%)' : undefined,
                             animation: unit.isSinisterReflection

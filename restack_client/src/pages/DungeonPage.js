@@ -3802,7 +3802,7 @@ class DungeonPage extends React.Component {
                     // Check if an ambush was triggered within the last 2 minutes (120,000 ms)
                     let baseAmbushChance = 0.3;
                     try {
-                        const lastAmbushTime = sessionStorage.getItem('lastObscuredAmbushTime');
+                        const lastAmbushTime = localStorage.getItem('lastObscuredAmbushTime');
                         if (lastAmbushTime) {
                             const elapsed = Date.now() - parseInt(lastAmbushTime, 10);
                             if (elapsed < 120000) {
@@ -3810,15 +3810,15 @@ class DungeonPage extends React.Component {
                             }
                         }
                     } catch (e) {
-                        console.warn("Failed to check lastObscuredAmbushTime from sessionStorage:", e);
+                        console.warn("Failed to check lastObscuredAmbushTime from localStorage:", e);
                     }
 
                     if (Math.random() < baseAmbushChance) {
                         ambushTriggered = true;
                         try {
-                            sessionStorage.setItem('lastObscuredAmbushTime', String(Date.now()));
+                            localStorage.setItem('lastObscuredAmbushTime', String(Date.now()));
                         } catch (e) {
-                            console.warn("Failed to save lastObscuredAmbushTime to sessionStorage:", e);
+                            console.warn("Failed to save lastObscuredAmbushTime to localStorage:", e);
                         }
                         let ambushMonsterTier = 1;
                         const tracker = this.state.levelTracker || [];
@@ -4983,7 +4983,7 @@ class DungeonPage extends React.Component {
                             this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Error: no current board loaded'], devConsoleInput: '' }));
                         } else {
                             // Persist handoff data so MapmakerPage picks it up on mount
-                            sessionStorage.setItem('devConsoleHandoff', JSON.stringify({
+                            localStorage.setItem('devConsoleHandoff', JSON.stringify({
                                 boardId: board.id,
                                 returnTo: 'dungeon',
                                 consoleOpen: true

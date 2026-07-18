@@ -1,9 +1,9 @@
 function storeSessionData(id, token, isAdmin, username, metadata){
-    sessionStorage.setItem('userId', id)
-    sessionStorage.setItem('userName', username)
-    sessionStorage.setItem('isAdmin', isAdmin.toString())
-    try { if (token) sessionStorage.setItem('token', token); } catch (e) {}
-    try { storeMeta(metadata); } catch (e) { try { sessionStorage.setItem('metadata', '{}'); } catch (ie) {} }
+    localStorage.setItem('userId', id)
+    localStorage.setItem('userName', username)
+    localStorage.setItem('isAdmin', isAdmin.toString())
+    try { if (token) localStorage.setItem('token', token); } catch (e) {}
+    try { storeMeta(metadata); } catch (e) { try { localStorage.setItem('metadata', '{}'); } catch (ie) {} }
 }
 
 function storeMeta(metadata){
@@ -19,7 +19,7 @@ function storeMeta(metadata){
             }
         }
         const serialized = JSON.stringify(metaObject);
-        sessionStorage.setItem('metadata', serialized);
+        localStorage.setItem('metadata', serialized);
         return;
     } catch (err) {
         // QuotaExceededError or circular structure could cause failure.
@@ -28,7 +28,7 @@ function storeMeta(metadata){
         try {
             console.warn('storeMeta: initial save failed, attempting sanitized save', err && err.message ? err.message : err);
             const sanitized = sanitizeMeta(metadata);
-            sessionStorage.setItem('metadata', JSON.stringify(sanitized));
+            localStorage.setItem('metadata', JSON.stringify(sanitized));
             console.info('storeMeta: saved sanitized metadata');
             return;
         } catch (err2) {
@@ -36,10 +36,10 @@ function storeMeta(metadata){
             // repeated quota errors; preserve nothing large.
             try {
                 console.error('storeMeta: sanitized save failed, storing minimal metadata', err2 && err2.message ? err2.message : err2);
-                sessionStorage.setItem('metadata', JSON.stringify({}));
+                localStorage.setItem('metadata', JSON.stringify({}));
             } catch (err3) {
                 // If even this fails, there's nothing more we can do client-side.
-                console.error('storeMeta: unable to persist metadata to sessionStorage', err3 && err3.message ? err3.message : err3);
+                console.error('storeMeta: unable to persist metadata to localStorage', err3 && err3.message ? err3.message : err3);
             }
         }
     }
@@ -94,7 +94,7 @@ function sanitizeMeta(metadata){
     return safe;
 }
 function getMeta(){
-    const raw = sessionStorage.getItem('metadata');
+    const raw = localStorage.getItem('metadata');
     if (raw) {
         try {
             let parsed = JSON.parse(raw);
@@ -104,17 +104,17 @@ function getMeta(){
             }
             return parsed;
         } catch (e) {
-            console.warn('getMeta: failed to parse metadata from sessionStorage, returning minimal meta', e && e.message ? e.message : e);
+            console.warn('getMeta: failed to parse metadata from localStorage, returning minimal meta', e && e.message ? e.message : e);
             return { dungeonId: null, boardIndex: null, tileIndex: null, crew: null, inventory: null };
         }
     }
     return { dungeonId: null, boardIndex: null, tileIndex: null, crew: null, inventory: null };
 }
 function getUserId(){
-    return sessionStorage.getItem('userId')
+    return localStorage.getItem('userId')
 }
 function getUserName(){
-    return sessionStorage.getItem('userName')
+    return localStorage.getItem('userName')
 }
 function setEditorPreference(key, val){
     let meta = getMeta();
@@ -132,7 +132,7 @@ function setEditorPreference(key, val){
 }
 
 function setUserName(username){
-    sessionStorage.setItem('userName', username)
+    localStorage.setItem('userName', username)
 }
 
 function getResolvePenaltyReduction() {
