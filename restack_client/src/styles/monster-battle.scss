@@ -10609,11 +10609,31 @@
     -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
     mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
     filter: drop-shadow(0 0 2px rgba(255, 220, 60, 0.75));
-    transition: --power-ring-fill 0.3s ease-out;
+    transition: --power-ring-fill 0.8s ease-out;
 
     &.power-ring--ready {
         animation: powerRingReady 0.8s ease-in-out infinite;
     }
+}
+
+.power-ring-underlay {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 314;
+    background: conic-gradient(from -90deg,
+            rgba(255, 255, 255, 0.85) 0deg,
+            rgba(255, 255, 255, 0.85) calc(var(--power-ring-fill, 0) * 3.6deg),
+            rgba(0, 0, 0, 0) calc(var(--power-ring-fill, 0) * 3.6deg),
+            rgba(0, 0, 0, 0) 360deg);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px));
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.5));
+    transition: none;
 }
 
 // ── Power Boost Tile (glowing board tile overlay) ────────────────────────────

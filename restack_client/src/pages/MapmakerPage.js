@@ -500,7 +500,7 @@ class MapMakerPage extends React.Component {
     this.setLoadedDungeonDropdownValue('Dungeon Selector');
 
     // update user
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     setEditorPreference('loadedDungeon', null);
     const meta = getMeta();
 
@@ -576,7 +576,7 @@ class MapMakerPage extends React.Component {
 
     if (currentlyLoadedDungeonWillBeDeleted) {
       setEditorPreference('loadedDungeon', null);
-      const userId = sessionStorage.getItem('userId');
+      const userId = localStorage.getItem('userId');
       const meta = getMeta();
       if (userId) updateUserRequest(userId, meta);
       storeMeta(meta);
@@ -1860,7 +1860,7 @@ class MapMakerPage extends React.Component {
     }
 
     // update user
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     setEditorPreference('selectedView', state);
     setEditorPreference('dungeonOverlayOn', currentOverlayOn);
     const meta = getMeta();
@@ -1876,7 +1876,7 @@ class MapMakerPage extends React.Component {
 
     // Persist only folder UI expansion state.
     setEditorPreference('boardsFoldersExpanded', matrix);
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     const meta = getMeta();
     if (userId) updateUserRequest(userId, meta)
     storeMeta(meta);
@@ -1885,7 +1885,7 @@ class MapMakerPage extends React.Component {
   collapseAllBoardFolders = () => {
     this.setState({ boardsFoldersExpanded: {} });
     setEditorPreference('boardsFoldersExpanded', {});
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     const meta = getMeta();
     if (userId) updateUserRequest(userId, meta);
     storeMeta(meta);
@@ -1894,7 +1894,7 @@ class MapMakerPage extends React.Component {
   collapseAllPlaneFolders = () => {
     this.setState({ planesFoldersExpanded: {} });
     setEditorPreference('planesFoldersExpanded', {});
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     const meta = getMeta();
     if (userId) updateUserRequest(userId, meta);
     storeMeta(meta);
@@ -1907,7 +1907,7 @@ class MapMakerPage extends React.Component {
 
     // Persist only folder UI expansion state.
     setEditorPreference('planesFoldersExpanded', matrix);
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     const meta = getMeta();
     if (userId) updateUserRequest(userId, meta)
     storeMeta(meta);
@@ -2369,7 +2369,7 @@ class MapMakerPage extends React.Component {
 
     // Persist only selected board identity. Never persist tile/content edits here.
     setEditorPreference('loadedBoardId', boardRef.id || null);
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     const meta = getMeta();
     if (userId) updateUserRequest(userId, meta)
     storeMeta(meta);
@@ -2514,7 +2514,7 @@ class MapMakerPage extends React.Component {
 
     storeMeta(meta);
 
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     if (userId) {
       updateUserRequest(userId, meta).catch(() => { });
     }
@@ -3706,10 +3706,10 @@ class MapMakerPage extends React.Component {
       }, () => {
         // Check for cross-page dev console handoff
         try {
-          const handoffRaw = sessionStorage.getItem('devConsoleHandoff');
+          const handoffRaw = localStorage.getItem('devConsoleHandoff');
           if (handoffRaw) {
             const handoff = JSON.parse(handoffRaw);
-            sessionStorage.removeItem('devConsoleHandoff');
+            localStorage.removeItem('devConsoleHandoff');
             if (handoff.consoleOpen) {
               this.setState({ devConsoleOpen: true }, () => {
                 try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (_) { }
@@ -3838,7 +3838,7 @@ class MapMakerPage extends React.Component {
 
       // Clear persisted selected board identity when board is unloaded.
       setEditorPreference('loadedBoardId', null);
-      const userId = sessionStorage.getItem('userId');
+      const userId = localStorage.getItem('userId');
       const meta = getMeta();
       if (userId) updateUserRequest(userId, meta)
       storeMeta(meta);
@@ -4073,8 +4073,8 @@ class MapMakerPage extends React.Component {
   //   console.warn('this update user block NEEDS to be abstracted. you can search "update user" to find all instances of it')
   //   console.log('HELLO??? MCFLY???????');
   //   // update user
-  //   const meta = JSON.parse(sessionStorage.getItem('metadata'))
-  //   const userId = sessionStorage.getItem('userId');
+  //   const meta = JSON.parse(localStorage.getItem('metadata'))
+  //   const userId = localStorage.getItem('userId');
 
   //   // NEED TO ABSTRACT THIS INTO A USER SERVICE
   //   if(meta.preferences && meta.preferences.editor){
@@ -4239,7 +4239,7 @@ class MapMakerPage extends React.Component {
     }
     this.setState({ dungeonHasUnsavedChanges: false });
     // update user
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     setEditorPreference('loadedDungeon', this.state.loadedDungeon);
     const meta = getMeta();
     if (userId) updateUserRequest(userId, meta)
@@ -4521,7 +4521,7 @@ class MapMakerPage extends React.Component {
       planeHasUnsavedChanges: false,
     })
     setEditorPreference('loadedPlaneId', plane.id || null);
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     const meta = getMeta();
     if (userId) updateUserRequest(userId, meta);
     storeMeta(meta);
@@ -5723,7 +5723,7 @@ class MapMakerPage extends React.Component {
     // Persist overlay preference
     setEditorPreference('dungeonOverlayOn', newOverlayState);
     const meta = getMeta();
-    const userId = sessionStorage.getItem('userId');
+    const userId = localStorage.getItem('userId');
     if (userId) {
       updateUserRequest(userId, meta);
     }
@@ -5933,7 +5933,7 @@ class MapMakerPage extends React.Component {
 
   dungeonSelectOnChange = (e) => {
     let dungeon;
-    const userId = sessionStorage.getItem('userId')
+    const userId = localStorage.getItem('userId')
     if (e.target && e.target.value === CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE) {
       this.openClearUniqueDungeonInstancesModal();
       return;

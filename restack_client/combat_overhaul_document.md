@@ -44,6 +44,23 @@ This document outlines the detailed specifications and itemized task list for th
 - **Dodge Chance**: The `dexterity`/`speed` stat is standardized across all fighters and monsters. Speed/Dexterity now exclusively dictates the chance for opponents to miss.
 - **Summoner Integration**: Wired into `CrewManager` with custom stats and level-up scaling. (Engineer is omitted for now).
 
+### 1.5 Power & Ultimate System
+- **Power Resource**: A PC-specific resource that starts at 0 and maxes at 100.
+- **Power Accumulation**:
+  - **Damage Dealt**: Deals damage to gain power. Grants **1 Power per 5%** of the target's max HP damaged.
+  - **Minimum Threshold Gain**: If damage dealt is $> 10$ but doesn't meet the $5\%$ threshold, **1 Power** is still awarded (preventing zero gain against high-HP bosses).
+  - **Killing Blows**: Landing the final, fatal hit on a monster awards a flat bonus of **+20 Power** (20% of the maximum pool).
+  - **Power Boost Tiles (PBTs)**: Pick up a PBT to gain **+90 Power**.
+- **Power Boost Tiles (PBT) Lifecycle**:
+  - **Spawn**: 20% chance per round to spawn a PBT on a random unoccupied board tile.
+  - **Lifetime**: PBTs last for 2 rounds unconditionally. Starting from the 3rd round, they have a 50% chance to decay and disappear each round.
+  - **Pickup**: Stepping on a PBT awards +90 Power, removes the tile, and triggers a premium expanding visual pulse and concentric ring animation.
+- **Ultimate Skill Activation**:
+  - Triggered automatically when a PC unit reaches **100 Power**.
+  - Pauses/freezes all combat rounds for **2 rounds** (`combatPaused = true`).
+  - Displays a fullscreen golden glow warning ("ULTIMATE!") and the character's name.
+  - Resets the unit's Power to 0 and resumes combat after the 2-round freeze.
+
 ---
 
 ## 2. Itemized Implementation Tasks

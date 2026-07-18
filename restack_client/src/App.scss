@@ -1023,6 +1023,7 @@ button{
           width: 101px;
           border: 1px solid white;
           position: relative;
+          flex-shrink: 0;
           &.closed{
             border: 1px solid rgb(124, 122, 122);
           }
@@ -1808,6 +1809,7 @@ canvas.spell-animation {
           .selected-crew-portrait-container {
             height: 60px !important;
             width: 60px !important;
+            flex-shrink: 0 !important;
             
             &.empty {
               border: 1px dashed #cccccc !important;

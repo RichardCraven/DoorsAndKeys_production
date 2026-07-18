@@ -33,7 +33,7 @@ function App(props) {
   const [loggedIn, setLoggedIn] = useState(!!getUserId())
   const [menuTrayExpanded, setMenuTrayExpanded] = useState(false)
   const [hoveredMenuItem, setHoveredMenuItem] = useState(null)
-  
+
   const [isMobileWidth, setIsMobileWidth] = useState(window.innerWidth <= 1024);
   const [mobileMenuExpanded, setMobileMenuExpanded] = useState(false);
   const [isCombatActive, setIsCombatActive] = useState(document.body.classList.contains('combat-active'));
@@ -81,7 +81,7 @@ function App(props) {
     transition: 'all 0.2s ease',
     outline: 'none'
   };
-  const [isAdmin, setIsAdmin] = useState(sessionStorage.getItem('isAdmin') === 'true' ? true : false)
+  const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true' ? true : false)
   const [showCoordinates, setShowCoordinates] = useState(false)
   const [allUsers, setAllUsers] = useState([])
   const [showToolbar, setShowToolbar] = useState(true)
@@ -176,7 +176,7 @@ function App(props) {
 
   const logout = () => {
     saveUserData();
-    sessionStorage.clear()
+    localStorage.clear()
     refreshAllUsers()
     setLoggedIn(false)
     return <Redirect to="/login" />
@@ -188,7 +188,7 @@ function App(props) {
       // ...existing code...
       storeSessionData(user._id, user.token, user.isAdmin, user.username, user.metadata)
       setLoggedIn(true)
-      setIsAdmin(JSON.parse(sessionStorage.getItem('isAdmin') === 'true'))
+      setIsAdmin(JSON.parse(localStorage.getItem('isAdmin') === 'true'))
       navToLanding()
     }, 500)
   }
@@ -213,7 +213,7 @@ function App(props) {
       setTimeout(() => {
         storeSessionData(validUser._id, validUser.token, validUser.isAdmin, validUser.username, validUser.metadata)
         setLoggedIn(true)
-        setIsAdmin(JSON.parse(sessionStorage.getItem('isAdmin') === 'true'))
+        setIsAdmin(JSON.parse(localStorage.getItem('isAdmin') === 'true'))
         history.push({
           pathname: '/landing'
         })
@@ -266,7 +266,7 @@ function App(props) {
     }
     try {
       await updateUserRequest(userId, meta);
-      sessionStorage.setItem('metadata', JSON.stringify(meta));
+      localStorage.setItem('metadata', JSON.stringify(meta));
       if (dungeonMessagingRef.current) {
         try {
           dungeonMessagingRef.current('Progress saved');
@@ -330,7 +330,7 @@ function App(props) {
       {showWakingOverlay && (
         <div className={`server-waking-overlay ${!serverLoading ? 'fade-out' : ''}`}>
           <div className="server-waking-card">
-            <h2 className="server-waking-title">Arising from Slumber</h2>
+            <h2 className="server-waking-title">Abide</h2>
             <div className="server-waking-gif-container">
               <img src={currentLoadingGif} className="server-waking-gif" alt="Waking up..." />
             </div>

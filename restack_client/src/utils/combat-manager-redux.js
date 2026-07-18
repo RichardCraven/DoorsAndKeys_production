@@ -1853,10 +1853,20 @@ export function CombatManagerRedux() {
         if (!caller || caller.isMonster || caller.dead) return;
         const targetMaxHp = target.starting_hp || target.stats?.hp || 1;
         const pctDamaged = (finalDamage / targetMaxHp) * 100;
-        const powerGain = Math.floor(pctDamaged / 5);
+        let powerGain = Math.floor(pctDamaged / 5);
+        if (powerGain <= 0 && finalDamage > 10) {
+            powerGain = 1;
+        }
+        const isKillingBlow = target.hp > 0 && finalDamage >= target.hp;
+        if (isKillingBlow) {
+            powerGain += 20;
+        }
         if (powerGain <= 0) return;
         caller.power = Math.min(100, (caller.power || 0) + powerGain);
-        this.appendCombatLog(`${this.getCombatantLogName(caller)} gains ${powerGain} Power! (${caller.power}/100)`);
+        const logMsg = isKillingBlow
+            ? `💀 ${this.getCombatantLogName(caller)} lands a killing blow and gains ${powerGain} Power! (${caller.power}/100)`
+            : `${this.getCombatantLogName(caller)} gains ${powerGain} Power! (${caller.power}/100)`;
+        this.appendCombatLog(logMsg);
         if (caller.power >= 100) {
             this._triggerUltimate(caller);
         }
@@ -11751,7 +11761,7 @@ export function CombatManagerRedux() {
             this.powerBoostTiles.forEach(tile => {
                 if (tile.x === fx && tile.y === fy && !toRemove.has(tile.id)) {
                     toRemove.add(tile.id);
-                    fighter.power = Math.min(100, (fighter.power || 0) + 20);
+                    fighter.power = Math.min(100, (fighter.power || 0) + 90);
                     this.appendCombatLog(`⚡ ${this.getCombatantLogName(fighter)} picks up a Power Boost! (${fighter.power}/100)`);
                     
                     if (this.animManagerRedux && typeof this.animManagerRedux.triggerPowerBoostPickup === 'function') {

@@ -31,7 +31,7 @@ export default function LandingPage(props) {
     const isStandalone = window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches;
 
     if (isIOS && !isStandalone) {
-      const dismissed = sessionStorage.getItem('ios-pwa-prompt-dismissed');
+      const dismissed = localStorage.getItem('ios-pwa-prompt-dismissed');
       if (!dismissed) {
         setShowIOSPrompt(true);
       }
@@ -64,7 +64,7 @@ export default function LandingPage(props) {
   const [selectedDungeonTemplateId, setSelectedDungeonTemplateId] = useState(null)
   const [skipIntro, setSkipIntro] = useState(() => {
     try {
-      const isAdminUser = sessionStorage.getItem('isAdmin') === 'true';
+      const isAdminUser = localStorage.getItem('isAdmin') === 'true';
       if (!isAdminUser) return false;
       return !!(getMeta() || {}).skipIntro;
     } catch (e) {
@@ -195,7 +195,7 @@ export default function LandingPage(props) {
       pathname: '/landing'
     })
     if (mounted) {
-      const isAdminUser = sessionStorage.getItem('isAdmin') === 'true';
+      const isAdminUser = localStorage.getItem('isAdmin') === 'true';
       if (isAdminUser) {
         setIsAdmin(true)
       } else {
@@ -300,12 +300,12 @@ export default function LandingPage(props) {
   };
 
   const handleLogout = () => {
-    sessionStorage.clear();
+    localStorage.clear();
     history.push('/login');
     window.location.reload();
   };
 
-  const username = sessionStorage.getItem('userName') || sessionStorage.getItem('username') || 'Adventurer';
+  const username = localStorage.getItem('userName') || localStorage.getItem('username') || 'Adventurer';
 
   return (
     <div className="redux-landing-container">
@@ -337,7 +337,7 @@ export default function LandingPage(props) {
           <div className="pwa-banner-actions">
             <button className="pwa-btn pwa-btn-close" onClick={() => {
               setShowIOSPrompt(false);
-              sessionStorage.setItem('ios-pwa-prompt-dismissed', 'true');
+              localStorage.setItem('ios-pwa-prompt-dismissed', 'true');
             }}>Got it</button>
           </div>
         </div>
@@ -356,7 +356,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.2.2 BETA</span>
+          <span className="logo-subtitle">v 0.2.3 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">

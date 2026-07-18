@@ -91,3 +91,16 @@ This document defines terminology and visual concepts used in the combat simulat
 - **Definition**: The specific crew member attempting to concentrate/commune on the ancestral shrine to gain a global upgrade in the Shrine screen.
 - **Behavior**: This unit starts at the bottom-center of the map, walks up to the shrine during the intro cinematic, and must concentrate for 6 rounds without dying. If the Shriner takes lethal damage and dies, the combat pauses and plays the Shriner's death animation in full before ending the communion event with a failure message.
 
+### Power Ring
+- **Definition**: A circular gold and white meter surrounding a PC's portrait tile on the combat board.
+- **Behavior**: Indicates current Power resource. The white underlay instantly snaps to the target power level, and the gold overlay smoothly grows/transitions to overlap it. When at 100 Power, it pulses to indicate Ultimate readiness.
+
+### Power Bar
+- **Definition**: A linear gold/yellow status bar displayed in the selected unit's stats pane (under Endurance).
+
+### Power Boost Tile (PBT)
+- **Definition**: A glowing tile overlay on the combat board with rotating golden borders and a central floating lightning emoji (`⚡`). 
+
+### Ultimate Overlay
+- **Definition**: A fullscreen golden glowing visual overlay ("ULTIMATE!") that activates when a PC reaches 100 power, freeze-locking combat for 2 rounds.
+
