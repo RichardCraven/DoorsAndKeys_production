@@ -62,6 +62,7 @@ export function CombatManagerRedux() {
     this.bombardWarnings = null;
     this.meteorWarnings = null;
     this.activeWebs = [];
+    this.powerBoostTiles = [];  // { id, x, y, roundSpawned } — Power Boost Tiles
 
     // Mummy status change logging/diagnostic helper removed
 
@@ -840,6 +841,8 @@ export function CombatManagerRedux() {
             fighter.cooldowns = {};
             fighter.movesTakenThisRound = 0;
             fighter.actionsTakenThisRound = 0;
+            fighter.power = 0;  // Power resource: 0→100 triggers Ultimate
+            fighter.ultimateActive = false;
 
             this.combatants[e.id] = fighter;
             this._initializeInitialCooldowns(fighter);
@@ -1830,7 +1833,49 @@ export function CombatManagerRedux() {
             finalDamage = Math.max(1, Math.round(finalDamage * 0.85));
         }
 
+        // Award power to PC callers for damage dealt
+        if (caller && !caller.isMonster && !caller.isVCT && target && target.isMonster !== false) {
+            this._awardPower(caller, target, Math.max(1, finalDamage));
+        }
+
         return Math.max(1, finalDamage);
+    };
+
+    /**
+     * Award power points to a PC fighter based on damage dealt as a % of target max HP.
+     * 1 power per 5% of max HP dealt (remainder dropped).
+     * Triggers Ultimate at 100 power.
+     */
+    this._awardPower = (caller, target, finalDamage) => {
+        if (!caller || caller.isMonster || caller.dead) return;
+        const targetMaxHp = target.starting_hp || target.stats?.hp || 1;
+        const pctDamaged = (finalDamage / targetMaxHp) * 100;
+        const powerGain = Math.floor(pctDamaged / 5);
+        if (powerGain <= 0) return;
+        caller.power = Math.min(100, (caller.power || 0) + powerGain);
+        this.appendCombatLog(`${this.getCombatantLogName(caller)} gains ${powerGain} Power! (${caller.power}/100)`);
+        if (caller.power >= 100) {
+            this._triggerUltimate(caller);
+        }
+    };
+
+    /**
+     * Trigger a PC's Ultimate: freeze combat for 2 rounds, play a visual flag,
+     * then reset power to 0 and resume.
+     */
+    this._triggerUltimate = (caller) => {
+        if (!caller || caller.ultimateActive) return;
+        caller.ultimateActive = true;
+        caller.power = 0;
+        this.combatPaused = true;
+        this.appendCombatLog(`⚡ ${this.getCombatantLogName(caller)} unleashes their ULTIMATE!`);
+        if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+        const resumeMs = (this.roundDurationMs || 2000) * 2;
+        setTimeout(() => {
+            if (caller) caller.ultimateActive = false;
+            this.combatPaused = false;
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+        }, resumeMs);
     };
 
     this.checkShrinerConcentrationDamage = (attacker, target, damage) => {
@@ -11628,8 +11673,14 @@ export function CombatManagerRedux() {
 
         this.appendCombatLog(`Round ${this.round} begins.`);
 
+        // ── Power Boost Tiles: spawn & despawn ─────────────────────────────
+        this._processPowerBoostTiles();
+
         // Execute AI turns
         this.processRoundTurns();
+
+        // ── Power Boost Tiles: step-on detection (after movement resolves) ─
+        this._checkPowerBoostTilePickup();
 
         // Process trials (Sphinx ability): phase schedule & off-board checks
         this._processTrialRound();
@@ -11637,6 +11688,81 @@ export function CombatManagerRedux() {
         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
     };
 
+
+    /**
+     * Each round: 20% chance to spawn a Power Boost Tile (PBT) on a random unoccupied tile.
+     * PBTs live at least 2 rounds, then have a 50% chance to despawn each round.
+     */
+    this._processPowerBoostTiles = () => {
+        if (!Array.isArray(this.powerBoostTiles)) this.powerBoostTiles = [];
+
+        // Despawn: tick age and apply 50% chance for tiles older than 2 rounds
+        this.powerBoostTiles = this.powerBoostTiles.filter(tile => {
+            const age = this.round - tile.roundSpawned;
+            if (age <= 2) return true;   // keep for first 2 rounds unconditionally
+            return Math.random() >= 0.5; // 50% chance to survive each subsequent round
+        });
+
+        // Spawn: 20% chance to add a new PBT on an unoccupied tile
+        if (Math.random() < 0.20) {
+            const numCols = this._numBoardColumns || 8;
+            const numRows = this._maxRows || 6;
+
+            // Build set of occupied coordinates
+            const occupiedSet = new Set();
+            Object.values(this.combatants).forEach(c => {
+                if (!c || c.dead) return;
+                if (c.coordinates) occupiedSet.add(`${c.coordinates.x},${c.coordinates.y}`);
+                if (Array.isArray(c.occupiedCoords)) {
+                    c.occupiedCoords.forEach(oc => occupiedSet.add(`${oc.x},${oc.y}`));
+                }
+            });
+            // Also exclude tiles already holding a PBT
+            this.powerBoostTiles.forEach(t => occupiedSet.add(`${t.x},${t.y}`));
+
+            const freeTiles = [];
+            for (let x = 0; x < numCols; x++) {
+                for (let y = 0; y < numRows; y++) {
+                    if (!occupiedSet.has(`${x},${y}`)) freeTiles.push({ x, y });
+                }
+            }
+            if (freeTiles.length > 0) {
+                const chosen = freeTiles[Math.floor(Math.random() * freeTiles.length)];
+                this.powerBoostTiles.push({ id: Date.now() + Math.random(), x: chosen.x, y: chosen.y, roundSpawned: this.round });
+                this.appendCombatLog(`✨ A Power Boost Tile appears at (${chosen.x},${chosen.y})!`);
+            }
+        }
+    };
+
+    /**
+     * Check if any PC fighter is standing on a Power Boost Tile and award 20 power.
+     */
+    this._checkPowerBoostTilePickup = () => {
+        if (!Array.isArray(this.powerBoostTiles) || this.powerBoostTiles.length === 0) return;
+        const toRemove = new Set();
+        Object.values(this.combatants).forEach(fighter => {
+            if (!fighter || fighter.dead || fighter.isMonster || fighter.isVCT) return;
+            if (!fighter.coordinates) return;
+            const fx = fighter.coordinates.x;
+            const fy = fighter.coordinates.y;
+            this.powerBoostTiles.forEach(tile => {
+                if (tile.x === fx && tile.y === fy && !toRemove.has(tile.id)) {
+                    toRemove.add(tile.id);
+                    fighter.power = Math.min(100, (fighter.power || 0) + 20);
+                    this.appendCombatLog(`⚡ ${this.getCombatantLogName(fighter)} picks up a Power Boost! (${fighter.power}/100)`);
+                    
+                    if (this.animManagerRedux && typeof this.animManagerRedux.triggerPowerBoostPickup === 'function') {
+                        this.animManagerRedux.triggerPowerBoostPickup(tile);
+                    }
+
+                    if (fighter.power >= 100) this._triggerUltimate(fighter);
+                }
+            });
+        });
+        if (toRemove.size > 0) {
+            this.powerBoostTiles = this.powerBoostTiles.filter(t => !toRemove.has(t.id));
+        }
+    };
 
     // Legacy callbacks & interfaces mapping
     this.attacksMatrix = attacksMatrix;

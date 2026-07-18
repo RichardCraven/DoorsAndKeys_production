@@ -546,21 +546,10 @@ const computeHitVars = (combatant, getHitAnimation, isMobileLandscape) => {
         ? (combatant.facing === 'left' ? '-1' : '1')
         : (combatant.facing === 'right' ? '-1' : '1');
 
-    let scaleVal = combatant && (combatant.isShrineGuardian ? '1' : (combatant.type === 'spider_minion' ? '0.5' : ((combatant.isMinion && combatant.tier !== 3 && combatant.tier !== 4) ? '1' : '2')));
-    if (isMobileLandscape && combatant && !combatant.isMonster && !combatant.isMinion && !combatant.isShrineGuardian) {
-        scaleVal = '1';
-    }
+    let scaleVal = combatant && (combatant.type === 'spider_minion' ? '0.5' : '1');
 
     if (!combatant || !combatant.wounded) {
-        let healthyScale = '2';
-        if (combatant) {
-            healthyScale = combatant.isShrineGuardian ? '1' : (combatant.type === 'spider_minion' ? '0.5' : ((combatant.isMinion && combatant.tier !== 3 && combatant.tier !== 4) ? '1' : '2'));
-            if (isMobileLandscape && !combatant.isMonster && !combatant.isMinion && !combatant.isShrineGuardian) {
-                healthyScale = '1';
-            }
-        } else {
-            healthyScale = baseScale;
-        }
+        let healthyScale = combatant ? (combatant.type === 'spider_minion' ? '0.5' : '1') : baseScale;
         return { '--portrait-base-scale': healthyScale, '--portrait-flip': flip };
     }
     const hc = (getHitAnimation && getHitAnimation(combatant)) || '';
@@ -1657,6 +1646,18 @@ export default function SiegeCombatGrid(props) {
                             ) : null}
                         </div>
                     )}
+                    {/* Power Ring — always visible for all PC fighters in round-based combat */}
+                    {!details?.dead && fighter.type !== 'darkness_sphere' && combatManager && combatManager.round !== undefined && (() => {
+                        const liveFtr = getFighterDetails(fighter);
+                        const powerVal = Math.min(100, liveFtr?.power ?? 0);
+                        const isReady = powerVal >= 100 || liveFtr?.ultimateActive;
+                        return (
+                            <div
+                                className={`power-ring${isReady ? ' power-ring--ready' : ''}`}
+                                style={{ '--power-ring-fill': powerVal }}
+                            />
+                        );
+                    })()}
                     {details?.stunned && !isAsleepFighter && !details?.dead && !details?.paradoxEngineActive && (
                         <div style={{
                             position: 'absolute',
@@ -1927,7 +1928,7 @@ export default function SiegeCombatGrid(props) {
         const boardWidth = numCols * TILE_SIZE + (SHOW_TILE_BORDERS ? numCols * 2 : 0);
         const centeredLeft = (boardWidth - width) / 2;
 
-        const leftPos = showEnlarged ? centeredLeft : (xPos + hOffset);
+        const leftPos = showEnlarged ? (boardWidth - width) : (xPos + hOffset);
         const topPos = yPos + vOffset;
 
         const isFirstRender = !prevCoordsRef.current[unit.id];
@@ -2098,15 +2099,15 @@ export default function SiegeCombatGrid(props) {
                             width: '100%',
                             height: '100%',
                             transform: showEnlarged
-                                ? `scale(3) ${unit.facing === 'right' ? 'scaleX(-1)' : ''}`.trim()
+                                ? `scale(1.5) ${unit.facing === 'right' ? 'scaleX(-1)' : ''}`.trim()
                                 : ((isLarge || isHuge)
-                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} ${unit.facing === 'right' ? 'scaleX(-1)' : ''} ${(greetingInProcess && !props.isMobileLandscape) ? 'scale(1.5)' : ''}`.trim() || 'none'
+                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} ${unit.facing === 'right' ? 'scaleX(-1)' : ''} ${(greetingInProcess && !props.isMobileLandscape) ? 'scale(1.2)' : ''}`.trim() || 'none'
                                     : (unit.isUpsideDown 
                                         ? 'rotate(180deg)' 
                                         : ((!unit.isMonster && unit.isSiegeArmy)
                                             ? 'scaleX(-1)'
                                             : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined)))),
-                            transformOrigin: showEnlarged ? 'center' : undefined,
+                            transformOrigin: showEnlarged ? 'right center' : undefined,
                             boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                             borderRadius: '0',
                             transition: 'filter 0.25s ease-in-out',
@@ -2677,6 +2678,69 @@ export default function SiegeCombatGrid(props) {
                     zIndex: 3500,
                     animation: 'scaleUpFadeOut 1.5s ease-out forwards',
                 }} />
+            );
+        }
+
+        if (anim.type === 'power_boost_pickup' && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.tgtPx.x}px`,
+                    top: `${anim.tgtPx.y}px`,
+                    width: '100px',
+                    height: '100px',
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                    zIndex: 4500,
+                    overflow: 'visible'
+                }}>
+                    {/* Ring 1 - Premium Double-bordered golden ring */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: '90px',
+                        height: '90px',
+                        borderRadius: '50%',
+                        animation: 'powerPickupRingPremium 0.95s cubic-bezier(0.15, 0.85, 0.35, 1) forwards',
+                        boxSizing: 'border-box'
+                    }} />
+                    {/* Ring 2 - Expanding solid */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        animation: 'powerPickupRing2 0.9s cubic-bezier(0.1, 0.8, 0.3, 1) forwards',
+                        boxSizing: 'border-box'
+                    }} />
+                    {/* Premium Pulse Wave effect (expanding glow/blur wave) */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: '70px',
+                        height: '70px',
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, rgba(255, 220, 60, 0.8) 0%, rgba(255, 140, 0, 0.35) 55%, transparent 80%)',
+                        animation: 'powerPickupPulse 1.1s cubic-bezier(0.15, 0.85, 0.35, 1) forwards',
+                        boxSizing: 'border-box'
+                    }} />
+                    {/* Center Column Flare */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: '24px',
+                        height: '120px',
+                        background: 'linear-gradient(to top, transparent, #ffd700, transparent)',
+                        borderRadius: '12px',
+                        animation: 'powerPickupColumn 0.7s ease-out forwards',
+                        filter: 'blur(3px)'
+                    }} />
+                </div>
             );
         }
 
@@ -7041,6 +7105,28 @@ export default function SiegeCombatGrid(props) {
                                     maskImage: 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 90%)',
                                     WebkitMaskImage: 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 90%)',
                                     animation: 'pulse 2s ease-in-out infinite'
+                                }}
+                            />
+                        );
+                    })}
+                </div>
+            )}
+            {/* --- Power Boost Tiles (PBTs) --- */}
+            {combatManager && Array.isArray(combatManager.powerBoostTiles) && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }}>
+                    {combatManager.powerBoostTiles.map((tile) => {
+                        const top = tilePos(tile.y);
+                        const left = tilePos(tile.x);
+                        return (
+                            <div
+                                key={`pbt-${tile.id}`}
+                                className="power-boost-tile"
+                                style={{
+                                    position: 'absolute',
+                                    left: `${left}px`,
+                                    top: `${top}px`,
+                                    width: `${TILE_SIZE}px`,
+                                    height: `${TILE_SIZE}px`,
                                 }}
                             />
                         );

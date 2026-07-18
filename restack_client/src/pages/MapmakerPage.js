@@ -5753,6 +5753,12 @@ class MapMakerPage extends React.Component {
         const newName = this.state.dungeonNameInput.current.value.trim();
         const isNewDungeon = this.state.modalType === 'name dungeon';
 
+        if (newName.includes('_')) {
+          this.toast('Error: Dungeon name cannot contain underscores (_).');
+          alert('Error: Dungeon name cannot contain underscores (_).');
+          return;
+        }
+
         dungeon.name = newName;
 
         this.setState({ showModal: false });

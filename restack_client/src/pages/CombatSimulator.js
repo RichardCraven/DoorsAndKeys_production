@@ -1210,7 +1210,6 @@ class CrewManagerPage extends React.Component {
                                         </div>}
                                     </div>
                                 })}
-                             </div>
                                 <div className="sim-gear-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
                                     <input
                                         id="outfit-equipment-cb"
@@ -1220,6 +1219,16 @@ class CrewManagerPage extends React.Component {
                                     />
                                     <label htmlFor="outfit-equipment-cb">Outfit with equipment</label>
                                 </div>
+                                <div className="sim-redux-combat-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
+                                    <input
+                                        id="redux-combat-cb"
+                                        type="checkbox"
+                                        checked={this.state.useReduxCombat}
+                                        onChange={e => this.setState({ useReduxCombat: e.target.checked })}
+                                    />
+                                    <label htmlFor="redux-combat-cb">Use Rounds System (Redux Combat)</label>
+                                </div>
+                             </div>
                         </div>
 
                         {/* ── Enemy Selection Section ── */}

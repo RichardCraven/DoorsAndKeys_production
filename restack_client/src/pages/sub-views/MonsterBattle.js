@@ -339,6 +339,8 @@ class MonsterBattle extends React.Component {
         this._boundDragTouchEnd = this._handleDragTouchEnd.bind(this);
         // Bound context-menu dismiss handler
         this._boundContextMenuDismiss = this._handleContextMenuDismiss.bind(this);
+        // Track whether active dragging was initiated by touch events
+        this._isTouchDragging = false;
     }
 
     // Public method to force sync battleData from combatManager (including VCT positions)
@@ -2339,6 +2341,8 @@ class MonsterBattle extends React.Component {
      * Saves pre-drag pause state, pauses combat, and attaches window listeners.
      */
     onFighterMouseDown = (fighter, event) => {
+        // Prevent simulated mouse down from starting a second drag when touch-dragging
+        if (this._isTouchDragging) return;
         if (!fighter || !fighter.coordinates) return;
         const details = this.state.battleData[fighter.id];
         if (!details || details.dead) return;
@@ -2366,6 +2370,7 @@ class MonsterBattle extends React.Component {
 
     onFighterTouchStart = (fighter, event) => {
         if (!fighter || !fighter.coordinates) return;
+        this._isTouchDragging = true;
         const details = this.state.battleData[fighter.id];
         if (!details || details.dead) return;
 
@@ -2460,6 +2465,10 @@ class MonsterBattle extends React.Component {
         window.removeEventListener('touchmove', this._boundDragTouchMove);
         window.removeEventListener('touchend', this._boundDragTouchEnd);
         this._handleDragMouseUp(event);
+        // Clean up touch dragging flag after the simulated browser mouse clicks / events fire
+        setTimeout(() => {
+            this._isTouchDragging = false;
+        }, 50);
     }
 
     /**
@@ -3245,6 +3254,7 @@ class MonsterBattle extends React.Component {
         ].find(p => p.key === this.state.groupPlan);
 
         const selectedUnit = this.state.selectedFighter || this.state.selectedMonster;
+        const ultimateFighter = Object.values(this.state.battleData || {}).find(c => c && c.ultimateActive);
         const liveSelectedFighter = selectedUnit
             ? (this.state.battleData[selectedUnit.id] || selectedUnit)
             : null;
@@ -3376,7 +3386,7 @@ class MonsterBattle extends React.Component {
                         {/* Monster name in upper left */}
                         <div style={{
                             position: 'absolute',
-                            top: -35,
+                            top: 20,
                             left: 20,
                             color: 'white',
                             fontSize: '18px',
@@ -3392,7 +3402,7 @@ class MonsterBattle extends React.Component {
                         {/* Game speed / Round clock readout in upper right */}
                         <div style={{
                             position: 'absolute',
-                            top: -45,
+                            top: 20,
                             right: 20,
                             display: 'flex',
                             alignItems: 'center',
@@ -4284,7 +4294,6 @@ class MonsterBattle extends React.Component {
                     {/* ── Redux AI Mode: read-only status panel ───────────────────────── */}
                     {this.props.combatManager && this.props.combatManager.round !== undefined ? (
                         <div className="interaction-row redux-status-panel">
-                            <div className="redux-left-group">
 
                                 {/* LEFT COLUMN: stat bars + current target */}
                                 <div className="redux-stats-col">
@@ -4345,6 +4354,20 @@ class MonsterBattle extends React.Component {
                                                     <div
                                                         className="redux-bar-fill endurance-fill"
                                                         style={{ width: `${Math.max(0, Math.min(100, ((liveSelectedFighter.endurance ?? 100) / (liveSelectedFighter.maxEndurance || 100)) * 100))}%` }}
+                                                    />
+                                                </div>
+
+                                                {/* Power Bar */}
+                                                <div className="redux-stat-label">
+                                                    <span>Power</span>
+                                                    <span className="redux-stat-value">
+                                                        {Math.round(liveSelectedFighter.power ?? 0)} / 100
+                                                    </span>
+                                                </div>
+                                                <div className="redux-bar-track">
+                                                    <div
+                                                        className="redux-bar-fill power-fill"
+                                                        style={{ width: `${Math.max(0, Math.min(100, liveSelectedFighter.power ?? 0))}%` }}
                                                     />
                                                 </div>
                                             </>
@@ -4596,7 +4619,6 @@ class MonsterBattle extends React.Component {
                                     </div>
                                 )}
                                 {this.renderAbilitiesTabContent(liveSelectedFighter)}
-                            </div>
                             </div>
 
                             {/* RIGHT COLUMN: event log */}
@@ -5668,6 +5690,12 @@ class MonsterBattle extends React.Component {
                     }
                 })()}
 
+                {ultimateFighter && (
+                    <div className="ultimate-overlay">
+                        <div className="ultimate-text">Ultimate!</div>
+                        <div className="ultimate-name">{ultimateFighter.name}</div>
+                    </div>
+                )}
             </div>
         );
     }
