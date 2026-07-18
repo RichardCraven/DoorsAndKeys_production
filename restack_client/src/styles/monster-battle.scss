@@ -22,6 +22,12 @@
     initial-value: 0;
 }
 
+@property --power-ring-fill {
+    syntax: '<number>';
+    inherits: false;
+    initial-value: 0;
+}
+
 @property --movement-arc-deg {
     syntax: '<angle>';
     inherits: false;
@@ -915,11 +921,10 @@
     display: flex;
     flex-direction: column;
     justify-content: center;
-    align-items: center;
     position: relative;
     border: 1px solid rgb(91, 110, 91);
-    height: 100%;
-    width: 100%;
+    width: fit-content;
+    margin: auto;
 
     .overlay-content {
         position: absolute;
@@ -1854,7 +1859,7 @@
         flex-direction: row;
         justify-content: space-between;
         position: relative;
-        margin: auto;
+        margin: 80px auto 20px auto;
 
         .message-container {
             width: 100%;
@@ -5425,7 +5430,7 @@
                 .monster-pane .monster-wrapper.hit .monster-portrait,
                 .combat-units-layer .monster-wrapper.hit .monster-portrait,
                 .combat-units-layer .unit-tile.hit .monster-portrait {
-                    --portrait-base-scale: 2;
+                    --portrait-base-scale: 1;
                 }
 
                 /* Reversed wrappers: set flip to -1 so all scaleX values in the animation are negated */
@@ -10297,14 +10302,6 @@
     }
 }
 
-// ── Redux Left Group Desktop default ──────────────────────────────────────────
-.redux-left-group {
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-    flex: 1 1 auto;
-}
-
 // ── Mobile Combat Layout overrides ───────────────────────────────────────────
 .mb-board.mobile-layout {
     display: grid !important;
@@ -10577,4 +10574,160 @@
             font-size: 12px !important;
         }
     }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// POWER SYSTEM
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Power Ring (always-visible arc around all PC portrait tiles) ─────────────
+@keyframes powerRingPulse {
+    0%   { filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.8))  brightness(1.0); }
+    100% { filter: drop-shadow(0 0 8px rgba(255, 215, 0, 1.0))  brightness(1.3); }
+}
+
+@keyframes powerRingReady {
+    0%   { filter: drop-shadow(0 0 6px rgba(255, 255, 100, 0.9)) brightness(1.2); }
+    50%  { filter: drop-shadow(0 0 18px rgba(255, 220, 0, 1.0))  brightness(1.8); }
+    100% { filter: drop-shadow(0 0 6px rgba(255, 255, 100, 0.9)) brightness(1.2); }
+}
+
+.power-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 0;
+    pointer-events: none;
+    z-index: 315;
+    background: conic-gradient(
+        from -90deg,
+        rgba(255, 215, 0, 0.95)    0deg,
+        rgba(255, 215, 0, 0.95)    calc(var(--power-ring-fill, 0) * 3.6deg),
+        rgba(0, 0, 0, 0)           calc(var(--power-ring-fill, 0) * 3.6deg),
+        rgba(0, 0, 0, 0)           360deg
+    );
+    -webkit-mask:
+        radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    mask:
+        radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px));
+    filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.7));
+    transition: --power-ring-fill 0.3s ease-out;
+
+    &.power-ring--ready {
+        animation: powerRingReady 0.8s ease-in-out infinite;
+    }
+}
+
+// ── Power Boost Tile (glowing board tile overlay) ────────────────────────────
+@keyframes powerTileGlow {
+    0%   {
+        box-shadow: inset 0 0 12px 4px rgba(255, 215, 0, 0.5),
+                    0 0 14px 4px rgba(255, 200, 0, 0.35);
+        opacity: 0.85;
+    }
+    50%  {
+        box-shadow: inset 0 0 24px 10px rgba(255, 230, 0, 0.85),
+                    0 0 28px 10px rgba(255, 215, 0, 0.65);
+        opacity: 1.0;
+    }
+    100% {
+        box-shadow: inset 0 0 12px 4px rgba(255, 215, 0, 0.5),
+                    0 0 14px 4px rgba(255, 200, 0, 0.35);
+        opacity: 0.85;
+    }
+}
+
+@keyframes powerTileRotate {
+    from { transform: rotate(0deg);   }
+    to   { transform: rotate(360deg); }
+}
+
+.power-boost-tile {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: powerTileGlow 1.4s ease-in-out infinite;
+    background: radial-gradient(
+        ellipse at center,
+        rgba(255, 245, 0, 0.28) 0%,
+        rgba(255, 215, 0, 0.12) 55%,
+        transparent 80%
+    );
+
+    &::before {
+        content: '';
+        position: absolute;
+        inset: 20%;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 220, 0, 0.75);
+        animation: powerTileRotate 2.5s linear infinite;
+        box-shadow: 0 0 8px 2px rgba(255, 220, 0, 0.5);
+    }
+
+    &::after {
+        content: '⚡';
+        font-size: 18px;
+        text-shadow: 0 0 10px rgba(255, 220, 0, 1.0), 0 0 20px rgba(255, 180, 0, 0.7);
+        animation: powerRingPulse 0.8s ease-in-out infinite alternate;
+        z-index: 2;
+    }
+}
+
+// ── Ultimate Overlay (full-board flash when a PC triggers their Ultimate) ─────
+@keyframes ultimateFlash {
+    0%   { opacity: 0;    transform: scale(0.85); }
+    20%  { opacity: 1.0;  transform: scale(1.08); }
+    80%  { opacity: 0.9;  transform: scale(1.0);  }
+    100% { opacity: 0;    transform: scale(0.95); }
+}
+
+@keyframes ultimateSpark {
+    0%   { box-shadow: 0 0 0px  rgba(255, 220, 0, 0.0); }
+    30%  { box-shadow: 0 0 60px rgba(255, 220, 0, 0.9); }
+    100% { box-shadow: 0 0 0px  rgba(255, 220, 0, 0.0); }
+}
+
+.ultimate-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 600;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    animation: ultimateSpark 1.8s ease-out forwards;
+
+    .ultimate-text {
+        font-size: clamp(28px, 5vw, 52px);
+        font-weight: 900;
+        letter-spacing: 6px;
+        text-transform: uppercase;
+        color: #fff700;
+        text-shadow:
+            0 0 10px #ffe000,
+            0 0 30px #ffa500,
+            0 0 60px rgba(255, 100, 0, 0.6);
+        animation: ultimateFlash 1.8s ease-out forwards;
+    }
+
+    .ultimate-name {
+        margin-top: 8px;
+        font-size: clamp(14px, 2.5vw, 22px);
+        font-weight: 700;
+        letter-spacing: 3px;
+        color: rgba(255, 255, 200, 0.9);
+        text-shadow: 0 0 8px rgba(255, 200, 0, 0.8);
+        animation: ultimateFlash 1.8s ease-out forwards;
+        animation-delay: 0.1s;
+    }
+}
+
+// ── Power Bar (interaction panel) ────────────────────────────────────────────
+.power-fill {
+    background: linear-gradient(to right, #b8860b, #ffd700);
+    box-shadow: 0 0 6px rgba(255, 215, 0, 0.5);
 }
