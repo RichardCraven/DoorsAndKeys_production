@@ -356,7 +356,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.2.1 BETA</span>
+          <span className="logo-subtitle">v 0.2.2 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">

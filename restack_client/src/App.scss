@@ -1799,14 +1799,14 @@ canvas.spell-animation {
         }
         
         .crew-tray {
-          height: 96px !important;
+          height: 110px !important;
           justify-content: flex-start !important;
           gap: 15px !important;
           margin-top: 5px !important;
           margin-left: 20px !important;
           
           .selected-crew-portrait-container {
-            height: 96px !important;
+            height: 60px !important;
             width: 60px !important;
             
             &.empty {

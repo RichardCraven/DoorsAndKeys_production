@@ -1536,6 +1536,9 @@ export function CombatManagerRedux() {
         this._setCombatantOccupiedCoords(unit, this.combatants);
         this.syncVCTs();
 
+        // Check PBT pickup immediately when coordinates are updated
+        this._checkPowerBoostTilePickup();
+
         // If Sage has Circle active and actually moved/repositioned, end the Circles immediately
         if (unit.type === 'sage' && (ox !== nx || oy !== ny)) {
             const hasCircle = unit.activeBuffs && unit.activeBuffs.some(b => b.name === 'circle_of_protection' || b.name === 'circle_of_deflection' || b.name === 'invigorate');
