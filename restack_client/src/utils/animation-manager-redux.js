@@ -80,6 +80,17 @@ export class AnimationManagerRedux {
     }, duration);
   }
 
+  /** Trigger a golden flash and rising "+20 POWER" text at specific grid coordinates */
+  triggerPowerBoostPickup(coords) {
+    if (!coords) return;
+    const tgtPx = this._px(coords);
+    this._emit({
+      type: 'power_boost_pickup',
+      tgtPx,
+      duration: 1200
+    });
+  }
+
   /**
    * Main entry point — called by combat-manager-redux for every ability
    * @param {object} sourceCoords  { x, y }

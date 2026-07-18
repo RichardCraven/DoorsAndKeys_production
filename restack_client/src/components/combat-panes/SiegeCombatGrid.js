@@ -2681,6 +2681,69 @@ export default function SiegeCombatGrid(props) {
             );
         }
 
+        if (anim.type === 'power_boost_pickup' && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.tgtPx.x}px`,
+                    top: `${anim.tgtPx.y}px`,
+                    width: '100px',
+                    height: '100px',
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                    zIndex: 4500,
+                    overflow: 'visible'
+                }}>
+                    {/* Ring 1 - Premium Double-bordered golden ring */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: '90px',
+                        height: '90px',
+                        borderRadius: '50%',
+                        animation: 'powerPickupRingPremium 0.95s cubic-bezier(0.15, 0.85, 0.35, 1) forwards',
+                        boxSizing: 'border-box'
+                    }} />
+                    {/* Ring 2 - Expanding solid */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        animation: 'powerPickupRing2 0.9s cubic-bezier(0.1, 0.8, 0.3, 1) forwards',
+                        boxSizing: 'border-box'
+                    }} />
+                    {/* Premium Pulse Wave effect (expanding glow/blur wave) */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: '70px',
+                        height: '70px',
+                        borderRadius: '50%',
+                        background: 'radial-gradient(circle, rgba(255, 220, 60, 0.8) 0%, rgba(255, 140, 0, 0.35) 55%, transparent 80%)',
+                        animation: 'powerPickupPulse 1.1s cubic-bezier(0.15, 0.85, 0.35, 1) forwards',
+                        boxSizing: 'border-box'
+                    }} />
+                    {/* Center Column Flare */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        width: '24px',
+                        height: '120px',
+                        background: 'linear-gradient(to top, transparent, #ffd700, transparent)',
+                        borderRadius: '12px',
+                        animation: 'powerPickupColumn 0.7s ease-out forwards',
+                        filter: 'blur(3px)'
+                    }} />
+                </div>
+            );
+        }
+
         if (anim.type === 'paradox_warp_source' && anim.srcPx) {
             return (
                 <div key={key} style={{

@@ -11750,6 +11750,11 @@ export function CombatManagerRedux() {
                     toRemove.add(tile.id);
                     fighter.power = Math.min(100, (fighter.power || 0) + 20);
                     this.appendCombatLog(`⚡ ${this.getCombatantLogName(fighter)} picks up a Power Boost! (${fighter.power}/100)`);
+                    
+                    if (this.animManagerRedux && typeof this.animManagerRedux.triggerPowerBoostPickup === 'function') {
+                        this.animManagerRedux.triggerPowerBoostPickup(tile);
+                    }
+
                     if (fighter.power >= 100) this._triggerUltimate(fighter);
                 }
             });
