@@ -947,6 +947,8 @@ export default function SiegeCombatGrid(props) {
     const portraitWrapperRefs = React.useRef({});
     // Track previous coordinates to prevent animation from top-left on spawn/mount
     const prevCoordsRef = React.useRef({});
+    // Track minion spawn times for reverse-melt transition
+    const minionSpawnTimesRef = React.useRef({});
     // fighterWrapperRefs no longer needed (no fighter-wrapper element) but kept
     // so any ref captures still get a no-op assignment
     const fighterWrapperRefs = React.useRef({}); // eslint-disable-line no-unused-vars
@@ -1969,6 +1971,13 @@ export default function SiegeCombatGrid(props) {
             (a.sourceUnitId === unit.id || (Math.abs(a.tgtPx.x - (leftPos + width / 2)) < 5 && Math.abs(a.tgtPx.y - (topPos + height / 2)) < 5))
         );
 
+        if (isMinion && !isDead) {
+            if (!minionSpawnTimesRef.current[unit.id]) {
+                minionSpawnTimesRef.current[unit.id] = Date.now();
+            }
+        }
+        const isSpawningMinion = isMinion && !isDead && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
+
         // All state classes go on unit-tile — not on any full-width wrapper
         const unitTileClasses = [
             'unit-tile',
@@ -2005,6 +2014,7 @@ export default function SiegeCombatGrid(props) {
             liveMonster.frozen ? 'frozen' : '',
             liveMonster.activeDebuffs?.some(d => d && d.name === 'shadow_curse') ? 'shadow-cursed' : '',
             unit.fadingIn ? 'minion-fade-in' : '',
+            isSpawningMinion ? 'minion-spawn-reverse-melt' : '',
             unit.image === 'witch_transformed' ? 'witch-demon-portrait' : '',
             liveMonster?.beholderInvisible ? 'beholder-invisible' : '',
         ].filter(Boolean).join(' ');

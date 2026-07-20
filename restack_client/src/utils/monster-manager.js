@@ -692,7 +692,7 @@ export function MonsterManager() {
             },
             level: 14,
             portrait: images['beholder_portrait'],
-            greetings: ['Klo. Vudandi modu... hahaha'],
+            greetings: ['Klo. Vudandi modu'],
             deathCries: ['Urdu meklak milnaurku...'],
             skills: ['chainbolt', 'mind_swap', 'displacement_ray', 'invisibility', 'voidbite', 'greater_magic_missile'],
             weaknesses: ['arcane', 'holy'],

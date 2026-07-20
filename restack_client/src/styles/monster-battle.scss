@@ -4262,6 +4262,94 @@
         }
     }
 
+    @keyframes reverseMeltSpawn {
+        0% {
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(80px);
+            opacity: 0;
+            filter: blur(8px);
+        }
+
+        60% {
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(40px);
+            opacity: 0.5;
+            filter: blur(3px);
+        }
+
+        80% {
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(10px);
+            opacity: 0.85;
+            filter: blur(1.5px);
+        }
+
+        100% {
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(0);
+            opacity: 1;
+            filter: blur(0px);
+        }
+    }
+
+    @-webkit-keyframes reverseMeltSpawn {
+        0% {
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(80px);
+            opacity: 0;
+            -webkit-filter: blur(8px);
+        }
+
+        60% {
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(40px);
+            opacity: 0.5;
+            -webkit-filter: blur(3px);
+        }
+
+        80% {
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(10px);
+            opacity: 0.85;
+            -webkit-filter: blur(1.5px);
+        }
+
+        100% {
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(0);
+            opacity: 1;
+            -webkit-filter: blur(0px);
+        }
+    }
+
+    @-moz-keyframes reverseMeltSpawn {
+        0% {
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(80px);
+            opacity: 0;
+            -moz-filter: blur(8px);
+        }
+
+        60% {
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(40px);
+            opacity: 0.5;
+            -moz-filter: blur(3px);
+        }
+
+        80% {
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(10px);
+            opacity: 0.85;
+            -moz-filter: blur(1.5px);
+        }
+
+        100% {
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(0);
+            opacity: 1;
+            -moz-filter: blur(0px);
+        }
+    }
+
+    .minion-spawn-reverse-melt {
+        animation: reverseMeltSpawn 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+        -webkit-animation: reverseMeltSpawn 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+        -moz-animation: reverseMeltSpawn 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+        animation-fill-mode: forwards !important;
+        -webkit-animation-fill-mode: forwards !important;
+        -moz-animation-fill-mode: forwards !important;
+        will-change: transform, opacity, filter;
+    }
+
     @keyframes meltDownDeathFighter {
         0% {
             transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(0);
