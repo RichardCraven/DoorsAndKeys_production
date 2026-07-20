@@ -2115,12 +2115,12 @@ export default function CombatGrid(props) {
                             width: '100%',
                             height: '100%',
                             transform: showEnlarged
-                                ? `scale(1.5) ${unit.facing === 'right' ? 'scaleX(-1)' : ''}`.trim()
+                                ? `scale(1.5) perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px)`
                                 : ((isLarge || isHuge)
-                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} ${unit.facing === 'right' ? 'scaleX(-1)' : ''} ${(greetingInProcess && !props.isMobileLandscape) ? 'scale(1.2)' : ''}`.trim() || 'none'
+                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px) ${(greetingInProcess && !props.isMobileLandscape) ? 'scale(1.2)' : ''}`.trim() || 'none'
                                     : (unit.isUpsideDown 
                                         ? 'rotate(180deg)' 
-                                        : (unit.type === 'spider_minion' ? 'scale(0.5)' : undefined))),
+                                        : (unit.type === 'spider_minion' ? `scale(0.5) perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px)` : undefined))),
                             transformOrigin: showEnlarged ? 'right center' : 'bottom',
                             boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                             borderRadius: '0',

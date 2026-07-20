@@ -85,7 +85,7 @@ function Tile(props) {
     }
     const foregroundPortalImages = ['archway', 'gryphon_gate_opened', 'bat_gate_opened', 'evil_gate_opened', 'dungeon_door_opened'];
     const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
-    const isVendorCell = !!(containsObj && containsObj.type === 'vendor') && !props.isPreview;
+    const isVendorCell = !!(containsObj && containsObj.type === 'vendor');
 
     const getVendorCellRole = () => {
         if (!isVendorCell) return null;
@@ -93,6 +93,14 @@ function Tile(props) {
         if (explicitRole && explicitRole !== 'footprint') return explicitRole;
         if (containsObj.vendorAnchorId !== null && containsObj.vendorAnchorId !== undefined && props.id !== null && props.id !== undefined) {
             const delta = props.id - containsObj.vendorAnchorId;
+            if (delta === 0) return 'anchor';
+            if (delta === 1) return 'top_right';
+            if (delta === 15) return 'bottom_left';
+            if (delta === 16) return 'bottom_right';
+        }
+        if (props.hoveredTileFootprint && props.hoveredTileFootprint.length === 4 && props.id !== null && props.id !== undefined) {
+            const anchorId = props.hoveredTileFootprint[0];
+            const delta = props.id - anchorId;
             if (delta === 0) return 'anchor';
             if (delta === 1) return 'top_right';
             if (delta === 15) return 'bottom_left';

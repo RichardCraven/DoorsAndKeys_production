@@ -376,6 +376,7 @@ class BoardView extends React.Component {
                                 type={tile.type}
                                 hovered={isHovered && !tileMatchesPreview}
                                 isPreview={showPreview}
+                                hoveredTileFootprint={hoveredTileFootprint}
                                 inscriptions={tile.inscriptions}
                                 combatManager={this.props.combatManager}
                             />
