@@ -2846,12 +2846,12 @@ class DungeonPage extends React.Component {
                             // Trigger final death
                             this.triggerFinalDeath();
                         } else {
-                            this.setState({ toastMessage: 'You lost the duel. 25% gold forfeit, and a death marker added.' });
+                            this.setState({ toastMessage: result.forfeited ? 'You forfeited the Card Duel. 500 gold penalty, and a death marker added.' : 'You lost the duel. 25% gold forfeit, and a death marker added.' });
                             this.battleOver('respawn');
                         }
                     } else {
                         // Player lost the duel triggered by clicking an existing skull: just tax gold
-                        this.setState({ toastMessage: 'You lost the duel. 25% of your gold is forfeit.' });
+                        this.setState({ toastMessage: result.forfeited ? 'You forfeited the Card Duel. 500 gold penalty applied.' : 'You lost the duel. 25% of your gold is forfeit.' });
                         if (this.props.saveUserData) this.props.saveUserData();
                     }
                 }
@@ -11036,6 +11036,10 @@ class DungeonPage extends React.Component {
                             <span className="camp-btn-icon"><span role="img" aria-label="map">🗺️</span></span>
                             <span>Map</span>
                         </button>
+                        <button className="camp-action-btn" onClick={() => { this.handleCloseCampPopup(); this.setState({ showInventoryPopup: true }); }}>
+                            <span className="camp-btn-icon"><span role="img" aria-label="backpack">🎒</span></span>
+                            <span>Inventory</span>
+                        </button>
                         {this.getScroungingRatLevel() > 0 && (
                             <button
                                 className="camp-action-btn"
@@ -12484,6 +12488,17 @@ class DungeonPage extends React.Component {
                             <CIcon icon={cilMenu} className={`menu-icon ${this.state.leftPanelExpanded ? 'expanded' : ''}`} size="sm"/>
                             Actions
                         </div>
+                        {this.state.isMobileLandscape && (
+                            <div style={{ padding: '4px 8px 8px 8px' }}>
+                                <button 
+                                    className="quick-action-btn"
+                                    onClick={() => this.setState({ showInventoryPopup: true })}
+                                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                >
+                                    <span>🎒 Shared Inventory</span>
+                                </button>
+                            </div>
+                        )}
                         <div className={`actions-tray ${this.state.actionsTrayExpanded && (Array.isArray(this.state.actionMenuTypeExpanded) ? this.state.actionMenuTypeExpanded.length > 0 : !!this.state.actionMenuTypeExpanded) ? 'double-expanded' : 
                         (this.state.actionsTrayExpanded ? 'expanded' : '')}`}>
                             {this.getCharacterActions(this.state.selectedCrewMember)}
