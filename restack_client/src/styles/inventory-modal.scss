@@ -130,6 +130,8 @@
         color: rgba(255,255,255,0.3);
         font-size: 0.8em;
         font-style: italic;
+        text-align: center;
+        width: 100%;
     }
 
     .idp-content {
@@ -161,6 +163,7 @@
         flex: 1;
         display: flex;
         flex-direction: column;
+        justify-content: center;
         gap: 4px;
         min-width: 0;
         min-height: 56px;
@@ -675,5 +678,179 @@
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
         z-index: 30;
         pointer-events: none;
+    }
+}
+
+@media (max-width: 1024px) and (orientation: landscape) {
+    .inventory-modal {
+        left: 2% !important;
+        top: 2% !important;
+        width: 96% !important;
+        min-width: 0 !important;
+        min-height: 0 !important;
+        height: 96vh !important;
+        padding: 8px !important;
+
+        .modal-dialog {
+            max-width: 98% !important;
+            margin: 1vh auto !important;
+            height: 94vh !important;
+        }
+
+        .inventory-content {
+            min-height: 0 !important;
+            height: 94vh !important;
+            padding: 6px 12px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+        }
+
+        .inventory-body-container {
+            flex: 1 !important;
+            min-height: 0 !important;
+            height: calc(100% - 40px) !important;
+            flex-direction: column !important;
+            
+            &.expanded {
+                flex-direction: row !important;
+                height: calc(100% - 40px) !important;
+                gap: 12px !important;
+                
+                .inventory-main-column {
+                    flex: 0 0 270px !important;
+                    display: flex !important;
+                    flex-direction: column !important;
+                    justify-content: space-between !important;
+                    height: 100% !important;
+                    gap: 4px !important;
+                    
+                    .crew-panels {
+                        height: 240px !important;
+                        padding-top: 4px !important;
+                        align-items: center !important;
+                        justify-content: center !important;
+                    }
+                }
+            }
+        }
+
+        .inventory-main-column {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: space-between !important;
+            height: 100% !important;
+        }
+
+        .crew-panels {
+            min-height: 0 !important;
+            height: 240px !important;
+            overflow-y: hidden !important;
+            overflow-x: auto !important;
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 10px !important;
+            padding-bottom: 0 !important;
+            margin-bottom: 4px !important;
+        }
+
+        .crew-panel {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-start !important;
+            height: 230px !important;
+            width: 250px !important;
+            flex: 0 0 250px !important;
+            min-height: 0 !important;
+            padding: 4px !important;
+            gap: 8px !important;
+            transform: none !important;
+            box-shadow: none !important;
+            
+            .crew-portrait {
+                width: 72px !important;
+                height: 72px !important;
+                flex: 0 0 72px !important;
+                margin-bottom: 0 !important;
+                cursor: pointer !important;
+            }
+            
+            .crew-body {
+                width: 210px !important;
+                height: 350px !important;
+                margin: 0 !important;
+                transform: scale(0.55) !important;
+                transform-origin: center center !important;
+                flex: 0 0 210px !important;
+                margin-left: -48px !important;
+                margin-right: -48px !important;
+            }
+            
+            .stats-display {
+                display: none !important;
+            }
+        }
+
+        .inventory-descriptor-panel {
+            height: 52px !important;
+            padding: 4px 8px !important;
+            margin-bottom: 4px !important;
+
+            .idp-icon {
+                width: 32px !important;
+                height: 32px !important;
+                flex: 0 0 32px !important;
+                img {
+                    width: 24px !important;
+                    height: 24px !important;
+                }
+            }
+            .idp-name {
+                font-size: 0.8em !important;
+            }
+            .idp-description {
+                font-size: 0.65em !important;
+                margin-top: 0 !important;
+            }
+            .idp-meta {
+                display: none !important;
+            }
+        }
+
+        .inventory-strip {
+            height: 65px !important;
+        }
+
+        .inventory-strip .strip-item {
+            width: 50px !important;
+            height: 60px !important;
+        }
+
+        .inventory-strip .tile.inventory-tile {
+            width: 44px !important;
+            height: 44px !important;
+        }
+
+        .inventory-strip .sub-container .hover-message-container {
+            display: none !important;
+        }
+
+        .inventory-expanded-panel {
+            height: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            min-height: 0 !important;
+        }
+
+        .expanded-categories-container {
+            flex: 1 !important;
+            overflow-y: auto !important;
+            min-height: 0 !important;
+            padding-right: 4px !important;
+        }
     }
 }

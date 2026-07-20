@@ -2351,6 +2351,10 @@ class DungeonPage extends React.Component {
             currentLoadingGif: Math.random() < 0.5 ? gifOne : gifTwo,
             tileSize: 0,
             boardSize: 0,
+            mobileViewX: null,
+            mobileViewY: null,
+            currentBoardIndex: null,
+            isRecentering: false,
             tiles: [],
             overlayTiles: [],
             spawn: {},
@@ -2532,6 +2536,17 @@ class DungeonPage extends React.Component {
                     document.body.classList.remove('combat-active');
                 }
             }
+            if (
+                (prevState.leftPanelExpanded !== this.state.leftPanelExpanded ||
+                 prevState.rightPanelExpanded !== this.state.rightPanelExpanded) &&
+                this.props.boardManager &&
+                this.props.boardManager.playerTile
+            ) {
+                const coords = this.props.boardManager.playerTile.location;
+                if (coords) {
+                    this.checkMobileViewportCentering(coords, true);
+                }
+            }
     }
     UNSAFE_componentWillMount(){
         let tileSize = this.getTileSize(),
@@ -2543,9 +2558,91 @@ class DungeonPage extends React.Component {
         for(let i = 0; i < 9; i++){
             arr.push([])
         }
-        const meta = getMeta();
-        // meta.crew[0].stats.hp = 1000;
-        // remove this after debugging ^
+        const meta = getMeta() || {};
+
+        if (meta.cardDuelActive) {
+            meta.cardDuelActive = false;
+            const tileId = meta.cardDuelTileId || 'combat_loss';
+            delete meta.cardDuelTileId;
+            storeMeta(meta);
+
+            const isCombatLoss = tileId === 'combat_loss';
+            if (isCombatLoss) {
+                let deaths = (meta.deathTracker || 0) + 1;
+                meta.deathTracker = deaths;
+                storeMeta(meta);
+
+                if (deaths >= 3) {
+                    this.triggerFinalDeath();
+                    return;
+                } else {
+                    if (Array.isArray(meta.crew)) {
+                        meta.crew.forEach(c => {
+                            if (!c) return;
+                            c.hp = 1;
+                            c.dead = false;
+                        });
+                    }
+                    if (meta.inventory) {
+                        const gold = meta.inventory.gold || 0;
+                        meta.inventory.gold = Math.max(0, Math.floor(gold * 0.75));
+                    }
+                    
+                    const selectedDungeon = meta.selectedDungeon || (this.props.boardManager && this.props.boardManager.dungeon);
+                    const resolvedRespawnPoints = this.getResolvedSpawnPoints(selectedDungeon);
+                    const spawnPoint = resolvedRespawnPoints[0] || meta.spawnPoint;
+                    if (spawnPoint && selectedDungeon) {
+                        const levelId = spawnPoint.level;
+                        const level = Array.isArray(selectedDungeon.levels)
+                            ? selectedDungeon.levels.find(e => Number(e.id) === Number(levelId))
+                            : null;
+                        const miniboardIndex = spawnPoint.miniboardIndex != null ? spawnPoint.miniboardIndex : 0;
+                        const orientation = this.getSpawnOrientationCode(spawnPoint);
+                        const spawnTileIndex = spawnPoint.id != null ? spawnPoint.id : 112;
+                        const board = level
+                            ? (orientation === 'F'
+                                ? level.front && level.front.miniboards && level.front.miniboards[miniboardIndex]
+                                : (orientation === 'B' ? level.back && level.back.miniboards && level.back.miniboards[miniboardIndex] : null))
+                            : null;
+
+                        if (level && board) {
+                            meta.spawnPoint = spawnPoint;
+                            meta.location = {
+                                boardIndex: miniboardIndex,
+                                tileIndex: spawnTileIndex,
+                                levelId,
+                                orientation
+                            };
+                        }
+                    }
+                    storeMeta(meta);
+                    try { updateUserRequest(getUserId(), meta).catch(()=>{}); } catch(e){}
+                    this.setState({ toastMessage: 'You forfeited the Card Duel by reloading. 25% gold forfeit, and a death marker added.' });
+                }
+            } else {
+                if (meta.inventory) {
+                    const gold = meta.inventory.gold || 0;
+                    meta.inventory.gold = Math.max(0, Math.floor(gold * 0.75));
+                }
+                storeMeta(meta);
+                try { updateUserRequest(getUserId(), meta).catch(()=>{}); } catch(e){}
+                this.setState({ toastMessage: 'You forfeited the Card Duel by reloading. 25% of your gold is forfeit.' });
+            }
+        }
+
+        // Fail-safe: if all crew members have 0 hp or are dead, revive them to 1 hp
+        if (meta && Array.isArray(meta.crew) && meta.crew.length > 0) {
+            const allDeadOrZeroHp = meta.crew.every(c => !c || c.hp <= 0 || c.dead);
+            if (allDeadOrZeroHp) {
+                meta.crew.forEach(c => {
+                    if (c) {
+                        c.hp = 1;
+                        c.dead = false;
+                    }
+                });
+                try { storeMeta(meta); } catch(e) {}
+            }
+        }
 
         // Restore persisted combat speed for dungeon battles.
         if (meta && this.props.combatManager && INTERVALS.includes(meta.combatSpeed)) {
@@ -2694,10 +2791,22 @@ class DungeonPage extends React.Component {
     // --- Card Duel modal helpers ---
     openCardDuel = (tileId) => {
         this.setState({ showCardDuelModal: true, cardDuelTileId: tileId, toastMessage: null });
+        const meta = getMeta() || {};
+        meta.cardDuelActive = true;
+        meta.cardDuelTileId = tileId;
+        try { storeMeta(meta); } catch(e) {}
+        try { updateUserRequest(getUserId(), meta).catch(()=>{}); } catch(e){}
+        try { if (this.props.saveUserData) this.props.saveUserData(); } catch(e){}
     }
 
     closeCardDuel = () => {
         this.setState({ showCardDuelModal: false, cardDuelTileId: null });
+        const meta = getMeta() || {};
+        meta.cardDuelActive = false;
+        delete meta.cardDuelTileId;
+        try { storeMeta(meta); } catch(e) {}
+        try { updateUserRequest(getUserId(), meta).catch(()=>{}); } catch(e){}
+        try { if (this.props.saveUserData) this.props.saveUserData(); } catch(e){}
     }
 
     handleCardDuelFinish = (result) => {
@@ -3631,9 +3740,102 @@ class DungeonPage extends React.Component {
                     transform: 'translate3d(0px, 0px, 0px)',
                     backgroundImage: `url(${images[playerImgKey]})`
                 }
+            }, () => {
+                this.checkMobileViewportCentering(coords);
             });
         } catch (e) {
             console.warn('updateFloatingPlayerPosition failed', e);
+        }
+    }
+
+    checkMobileViewportCentering = (coords, force = false) => {
+        const isMobileLandscape = window.innerWidth <= 1024 && window.innerHeight < window.innerWidth;
+        if (!isMobileLandscape) return;
+        if (this.state.inMonsterBattle || this.state.inTowerSiege) return;
+
+        const bm = this.props.boardManager;
+        if (!bm || !bm.playerTile) return;
+
+        const currentBoardIndex = bm.playerTile.boardIndex;
+        if (currentBoardIndex !== this.state.currentBoardIndex) {
+            this.setState({
+                currentBoardIndex,
+                mobileViewX: null,
+                mobileViewY: null
+            }, () => {
+                this.checkMobileViewportCentering(coords);
+            });
+            return;
+        }
+
+        const playerCol = coords[1] % 15;
+        const playerRow = coords[0] % 15;
+
+        // Side panel width adjustments
+        const leftPanelExpanded = this.state.leftPanelExpanded;
+        const rightPanelExpanded = this.state.rightPanelExpanded;
+        const panelWidth = 200; // side panels are 200px wide
+        const leftPadding = leftPanelExpanded ? panelWidth : 0;
+        const rightPadding = rightPanelExpanded ? panelWidth : 0;
+
+        const wrapper = document.querySelector('.center-board-wrapper');
+        const rawWidth = wrapper ? wrapper.clientWidth : (window.innerWidth - 80);
+        const vWidth = Math.max(1, rawWidth - leftPadding - rightPadding);
+        const vHeight = wrapper ? wrapper.clientHeight : (window.innerHeight - 30);
+
+        const tileSize = this.state.tileSize || 1;
+        const widthInTiles = vWidth / tileSize;
+        const heightInTiles = vHeight / tileSize;
+
+        // If not initialized yet, initialize instantly
+        if (this.state.mobileViewX === undefined || this.state.mobileViewX === null || this.state.mobileViewY === undefined || this.state.mobileViewY === null) {
+            let targetViewX = playerCol - widthInTiles / 2;
+            let targetViewY = playerRow - heightInTiles / 2;
+            targetViewX = Math.max(0, Math.min(15 - widthInTiles, targetViewX));
+            targetViewY = Math.max(0, Math.min(15 - heightInTiles, targetViewY));
+
+            this.setState({
+                mobileViewX: targetViewX,
+                mobileViewY: targetViewY
+            });
+            return;
+        }
+
+        const currentViewX = this.state.mobileViewX || 0;
+        const currentViewY = this.state.mobileViewY || 0;
+
+        const reachedLeft = playerCol <= currentViewX + 1 && currentViewX > 0;
+        const reachedRight = playerCol >= currentViewX + widthInTiles - 2 && currentViewX + widthInTiles < 15;
+        const reachedTop = playerRow <= currentViewY + 1 && currentViewY > 0;
+        const reachedBottom = playerRow >= currentViewY + heightInTiles - 2 && currentViewY + heightInTiles < 15;
+
+        if (force || reachedLeft || reachedRight || reachedTop || reachedBottom) {
+            let targetViewX = playerCol - widthInTiles / 2;
+            let targetViewY = playerRow - heightInTiles / 2;
+            targetViewX = Math.max(0, Math.min(15 - widthInTiles, targetViewX));
+            targetViewY = Math.max(0, Math.min(15 - heightInTiles, targetViewY));
+
+            if (Math.abs(targetViewX - currentViewX) > 0.1 || Math.abs(targetViewY - currentViewY) > 0.1) {
+                this.setState({
+                    mobileViewX: targetViewX,
+                    mobileViewY: targetViewY,
+                    keysLocked: true,
+                    isRecentering: true
+                });
+
+                if (this._mobileRecenterTimeout) {
+                    clearTimeout(this._mobileRecenterTimeout);
+                }
+                this._mobileRecenterTimeout = this._setTimeout(() => {
+                    this.setState((state) => {
+                        const shouldKeepLocked = state.inMonsterBattle || state.inTowerSiege;
+                        return {
+                            keysLocked: shouldKeepLocked ? true : false,
+                            isRecentering: false
+                        };
+                    });
+                }, 500);
+            }
         }
     }
 
@@ -6108,7 +6310,7 @@ class DungeonPage extends React.Component {
     getTileSize(){
         const isMobileLandscape = window.innerWidth <= 1024 && window.innerHeight < window.innerWidth;
         if (isMobileLandscape) {
-            return Math.floor(window.innerHeight / 13.5);
+            return Math.floor(window.innerHeight / 13.5) * 2;
         }
         const h = Math.floor((window.innerHeight/17));
         const w = Math.floor((window.innerWidth/17));
@@ -6696,6 +6898,14 @@ class DungeonPage extends React.Component {
         const bm = this.props.boardManager;
         if (!bm || !bm.playerTile) return;
 
+        const tileIndex = tile.index !== undefined ? tile.index : (tile.id !== undefined ? tile.id : null);
+        if (tileIndex !== null && bm.tiles[tileIndex]) {
+            const actualTile = bm.tiles[tileIndex];
+            const isVoid = bm.getContainsType(actualTile.contains) === 'void';
+            const isFogged = actualTile.color === 'black';
+            if (isVoid || isFogged) return;
+        }
+
         const startCoords = bm.playerTile.location;
         const endCoords = tile.coordinates;
 
@@ -7085,6 +7295,26 @@ class DungeonPage extends React.Component {
             }
             return;
         }
+
+        // On mobile view, we want a two-click process:
+        // 1. First click selects the item and displays its description.
+        // 2. Second click on the already selected item equips it.
+        if (this.state.isMobileLandscape) {
+            const isCurrentlySelected = this.state.activeInventoryItem && 
+                                        (this.state.activeInventoryItem.id === index || 
+                                         this.state.activeInventoryItem.name === item.name);
+            if (!isCurrentlySelected) {
+                // First click: select and display description
+                const selectedItemWithId = { ...item, id: index };
+                this.setState({
+                    activeInventoryItem: selectedItemWithId,
+                    hoveredInventoryItem: item,
+                    descriptionText: this.buildItemSummaryDescription(item)
+                });
+                return;
+            }
+        }
+
         const selected = this.state.selectedCrewMember;
         if(!selected || selected.id === undefined || selected.id === null){
             // nothing to equip to
@@ -7205,7 +7435,7 @@ class DungeonPage extends React.Component {
 
             // update state so UI refreshes
             this.setState({
-                activeInventoryItem: item,
+                activeInventoryItem: this.state.isMobileLandscape ? null : item,
                 selectedCrewMember: selected,
                 inventoryHoverMatrix: nextHoverMatrix,
                 hoveredInventoryItem: shiftedItem,
@@ -13106,7 +13336,13 @@ class DungeonPage extends React.Component {
                 <div className={`dungeon-board-container ${this.state.portalTransitionClass || ''}`} style={{
                     position: 'relative',
                     width: this.state.boardSize + 'px',
-                    height: this.state.boardSize + 'px'
+                    height: this.state.boardSize + 'px',
+                    transform: this.state.isMobileLandscape
+                        ? `translate3d(${- (this.state.mobileViewX || 0) * this.state.tileSize + (this.state.leftPanelExpanded ? 200 : 0)}px, ${- (this.state.mobileViewY || 0) * this.state.tileSize}px, 0px)`
+                        : 'none',
+                    transition: this.state.isMobileLandscape
+                        ? 'transform 0.5s ease-in-out'
+                        : 'none'
                 }}>
                     <div  className="overlay-board" style={{
                         width: this.state.boardSize+'px', height: this.state.boardSize+ 'px',
@@ -13373,7 +13609,20 @@ class DungeonPage extends React.Component {
                                                     border: isSelected ? '3px solid lightgreen' : '3px solid transparent',
                                                     boxSizing: 'border-box',
                                                     position: 'relative',
-                                                    overflow: 'hidden'
+                                                    overflow: 'hidden',
+                                                    cursor: 'pointer'
+                                                }}
+                                                onClick={() => {
+                                                    this.setState({ selectedCrewMember: member });
+                                                    if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
+                                                        this.props.crewManager.crew.forEach(c => {
+                                                            c.selected = (c.id === member.id);
+                                                        });
+                                                        const meta = getMeta() || {};
+                                                        meta.crew = this.props.crewManager.crew;
+                                                        storeMeta(meta);
+                                                        if (this.props.saveUserData) this.props.saveUserData();
+                                                    }
                                                 }}
                                             >
                                                 {/* HP Bar overlay at the bottom of the portrait */}
@@ -13799,7 +14048,12 @@ class DungeonPage extends React.Component {
                                             )}
                                             <div className="idp-details">
                                                 {!item && !slotInfo
-                                                    ? <span className="idp-placeholder">Hover over an item to see details</span>
+                                                    ? <span className="idp-placeholder">
+                                                        {this.state.isMobileLandscape
+                                                            ? 'Click an item to see its description. Click again to equip it to the selected unit.'
+                                                            : 'Hover over an item to see details'
+                                                        }
+                                                      </span>
                                                     : slotInfo
                                                         ? <>
                                                             <div className="idp-name">{slotInfo.name}</div>

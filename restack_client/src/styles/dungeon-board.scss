@@ -3429,9 +3429,9 @@
     }
 
     .center-board-wrapper {
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
+        display: block !important;
+        position: relative !important;
+        overflow: hidden !important;
         margin: 0 auto !important;
         max-width: calc(100vw - 80px) !important;
         max-height: calc(100vh - 10px) !important;

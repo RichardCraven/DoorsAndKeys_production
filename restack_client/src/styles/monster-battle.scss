@@ -262,27 +262,37 @@
         top: 0;
         left: 0;
         cursor: pointer;
-        transition: filter 1s, box-shadow 1s;
+        
+        --portrait-perspective: 400px;
+        --portrait-rotateY: 15deg; // default facing right
+        --portrait-translateX: 3px;
+        --portrait-flip: 1; // force no 2D flipping
+        --portrait-base-scale: 1;
+
+        transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
+        transition: filter 1s, box-shadow 1s, transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
         z-index: 1;
 
         &.reversed {
-            transform: scaleX(-1);
+            --portrait-rotateY: -15deg; // facing left
+            --portrait-translateX: -3px;
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
         }
 
         &.facing-up {
-            transform: rotate(-45deg);
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(-3px);
         }
 
         &.facing-up.reversed {
-            transform: scaleX(-1) rotate(45deg);
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(-3px);
         }
 
         &.facing-down {
-            transform: rotate(45deg);
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(3px);
         }
 
         &.facing-down.reversed {
-            transform: scaleX(-1) rotate(-45deg);
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(3px);
         }
 
         &.locked {
@@ -328,15 +338,44 @@
         position: absolute;
         top: 0;
         left: 0;
-        transform: scale(2);
+        
+        --portrait-perspective: 400px;
+        --portrait-rotateY: -15deg; // default facing left
+        --portrait-translateX: -3px;
+        --portrait-flip: 1; // force no 2D flipping
+        --portrait-base-scale: 2;
+
+        transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
         transform-origin: bottom;
-        transition: all 0.5s;
+        transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
         pointer-events: initial;
         cursor: pointer;
         z-index: 1;
 
         &.reversed {
-            transform: scale(-2, 2);
+            --portrait-rotateY: 15deg; // facing right
+            --portrait-translateX: 3px;
+            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
+            transform-origin: bottom;
+        }
+
+        &.facing-up {
+            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(-3px);
+            transform-origin: bottom;
+        }
+
+        &.facing-up.reversed {
+            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(-3px);
+            transform-origin: bottom;
+        }
+
+        &.facing-down {
+            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(3px);
+            transform-origin: bottom;
+        }
+
+        &.facing-down.reversed {
+            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(3px);
             transform-origin: bottom;
         }
 
@@ -370,29 +409,39 @@
         position: absolute;
         top: 0;
         left: 0;
-        transition: all 0.5s;
+        
+        --portrait-perspective: 400px;
+        --portrait-rotateY: -15deg; // default facing left
+        --portrait-translateX: -3px;
+        --portrait-flip: 1; // force no 2D flipping
+        --portrait-base-scale: 1;
+
+        transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
+        transition: all 0.5s cubic-bezier(0.25, 1, 0.5, 1);
         pointer-events: initial;
         cursor: pointer;
         z-index: 2;
 
         &.reversed {
-            transform: scaleX(-1);
+            --portrait-rotateY: 15deg; // facing right
+            --portrait-translateX: 3px;
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
         }
 
         &.facing-up {
-            transform: rotate(45deg);
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(-3px);
         }
 
         &.facing-up.reversed {
-            transform: scaleX(-1) rotate(-45deg);
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(-3px);
         }
 
         &.facing-down {
-            transform: rotate(-45deg);
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(3px);
         }
 
         &.facing-down.reversed {
-            transform: scaleX(-1) rotate(45deg);
+            transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(3px);
         }
 
         &.rocked {
@@ -4213,6 +4262,94 @@
         }
     }
 
+    @keyframes reverseMeltSpawn {
+        0% {
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(80px);
+            opacity: 0;
+            filter: blur(8px);
+        }
+
+        60% {
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(40px);
+            opacity: 0.5;
+            filter: blur(3px);
+        }
+
+        80% {
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(10px);
+            opacity: 0.85;
+            filter: blur(1.5px);
+        }
+
+        100% {
+            transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(0);
+            opacity: 1;
+            filter: blur(0px);
+        }
+    }
+
+    @-webkit-keyframes reverseMeltSpawn {
+        0% {
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(80px);
+            opacity: 0;
+            -webkit-filter: blur(8px);
+        }
+
+        60% {
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(40px);
+            opacity: 0.5;
+            -webkit-filter: blur(3px);
+        }
+
+        80% {
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(10px);
+            opacity: 0.85;
+            -webkit-filter: blur(1.5px);
+        }
+
+        100% {
+            -webkit-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(0);
+            opacity: 1;
+            -webkit-filter: blur(0px);
+        }
+    }
+
+    @-moz-keyframes reverseMeltSpawn {
+        0% {
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(80px);
+            opacity: 0;
+            -moz-filter: blur(8px);
+        }
+
+        60% {
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(40px);
+            opacity: 0.5;
+            -moz-filter: blur(3px);
+        }
+
+        80% {
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(10px);
+            opacity: 0.85;
+            -moz-filter: blur(1.5px);
+        }
+
+        100% {
+            -moz-transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(0);
+            opacity: 1;
+            -moz-filter: blur(0px);
+        }
+    }
+
+    .minion-spawn-reverse-melt {
+        animation: reverseMeltSpawn 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+        -webkit-animation: reverseMeltSpawn 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+        -moz-animation: reverseMeltSpawn 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
+        animation-fill-mode: forwards !important;
+        -webkit-animation-fill-mode: forwards !important;
+        -moz-animation-fill-mode: forwards !important;
+        will-change: transform, opacity, filter;
+    }
+
     @keyframes meltDownDeathFighter {
         0% {
             transform: perspective(var(--portrait-perspective, 600px)) rotateY(var(--portrait-rotateY, 0deg)) translateX(var(--portrait-translateX, 0px)) scaleX(calc(var(--portrait-flip, 1) * var(--portrait-base-scale, 1) * 1)) scaleY(calc(var(--portrait-base-scale, 1) * 1)) translateY(0);
@@ -5181,60 +5318,50 @@
                     transition: all 0.5s;
 
                     &.monster-portrait {
-                        transform: scale(2);
-                        transform-origin: bottom;
-                    }
-
-                    // Vertical facing: rotate 45° toward the target.
-                    // Monster default = facing left, so facing-up tilts top toward enemy (CW).
-                    // When also reversed (facing right) the tilt mirrors.
-                    // NOTE: 2× scaled monster-portraits skip the tilt — it looks bad at that size.
-                    &.facing-up {
-                        transform: rotate(45deg);
-                    }
-
-                    &.facing-up.monster-portrait {
-                        // No tilt for 2× portraits — keep only scale.
-                        transform: scale(2);
-                        transform-origin: bottom;
-                    }
-
-                    &.facing-down {
-                        transform: rotate(-45deg);
-                    }
-
-                    &.facing-down.monster-portrait {
-                        // No tilt for 2× portraits — keep only scale.
-                        transform: scale(2);
-                        transform-origin: bottom;
-                    }
-
-                    // When monster is reversed (facing right), mirror the tilt direction.
-                    &.facing-up.reversed {
-                        transform: scaleX(-1) rotate(-45deg);
-                    }
-
-                    &.facing-up.reversed.monster-portrait {
-                        // No tilt for 2× portraits — keep only horizontal flip + scale.
-                        transform: scale(-2, 2);
-                        transform-origin: bottom;
-                    }
-
-                    &.facing-down.reversed {
-                        transform: scaleX(-1) rotate(45deg);
-                    }
-
-                    &.facing-down.reversed.monster-portrait {
-                        // No tilt for 2× portraits — keep only horizontal flip + scale.
-                        transform: scale(-2, 2);
+                        --portrait-base-scale: 2;
+                        transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
                         transform-origin: bottom;
                     }
 
                     &.reversed {
-                        transform: scaleX(-1);
+                        --portrait-rotateY: 15deg; // facing right
+                        --portrait-translateX: 3px;
+                        transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
 
                         &.monster-portrait {
-                            transform: scale(-2, 2);
+                            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
+                        }
+                    }
+
+                    &.facing-up {
+                        transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(-3px);
+
+                        &.monster-portrait {
+                            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(-3px);
+                        }
+                    }
+
+                    &.facing-up.reversed {
+                        transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(-3px);
+
+                        &.monster-portrait {
+                            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(-3px);
+                        }
+                    }
+
+                    &.facing-down {
+                        transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(3px);
+
+                        &.monster-portrait {
+                            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(-15deg) translateY(3px);
+                        }
+                    }
+
+                    &.facing-down.reversed {
+                        transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(3px);
+
+                        &.monster-portrait {
+                            transform: scale(2) perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) rotateZ(15deg) translateY(3px);
                         }
                     }
 
