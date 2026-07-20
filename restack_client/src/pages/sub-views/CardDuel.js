@@ -2046,7 +2046,11 @@ CardDuel.prototype.renderForfeitModal = function() {
                                 this.props.inventoryManager.gold = Math.max(0, (this.props.inventoryManager.gold || 0) - 500);
                                 if (this.props.saveUserData) this.props.saveUserData();
                             }
-                            if (this.props.onClose) this.props.onClose();
+                            if (isScrimmage) {
+                                if (this.props.onClose) this.props.onClose();
+                            } else {
+                                if (this.props.onFinish) this.props.onFinish({ winner: 'reaper', forfeited: true });
+                            }
                         }}
                     >
                         {isScrimmage ? 'Leave' : 'Forfeit'}
