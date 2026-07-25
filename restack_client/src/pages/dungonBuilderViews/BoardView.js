@@ -226,7 +226,7 @@ class BoardView extends React.Component {
         }
 
         return (
-            <div className="board-view-container">
+            <div className="board-view-container" ref={this.props.boardContainerRef || null}>
                 <div className="center-board-container" style={{flexDirection: 'column'}}>
                     <div className="level-buttons-container plane-action-buttons">
                         <div className="icon-container" title="Save Board" onClick={() => this.props.writeBoard && this.props.writeBoard()}>

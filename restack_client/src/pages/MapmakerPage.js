@@ -218,6 +218,7 @@ class MapMakerPage extends React.Component {
       dungeonHasUnsavedChanges: false,
       planeHasUnsavedChanges: false,
       generatingDungeon: false,
+      showUnstagedBoards: false,
       imagesMatrix: {},
       selectedThingTitle: '',
       leftReadoutFlashMessage: null,
@@ -226,10 +227,20 @@ class MapMakerPage extends React.Component {
       // Dev console
       devConsoleOpen: false,
       devConsoleInput: '',
-      devConsoleOutput: []
+      devConsoleOutput: [],
+      // ── Mobile / touch state ────────────────────────────────────────
+      isMobile: typeof window !== 'undefined' && window.innerWidth <= 768,
+      mobileZoom: 1,
+      mobilePanX: 0,
+      mobilePanY: 0,
+      mobilePaletteOpen: false,
     };
     this.devConsoleInputRef = React.createRef();
     this.devConsoleOutputRef = React.createRef();
+    // Ref for the touch-intercept viewport wrapper on mobile
+    this.boardViewportRef = React.createRef();
+    // Mutable gesture state — stored on instance to avoid render churn
+    this._touchState = null;
   }
 
 
@@ -1585,8 +1596,102 @@ class MapMakerPage extends React.Component {
     }
     this.setState({
       tileSize: tsize,
-      boardSize: tsize * 15
-    })
+      boardSize: tsize * 15,
+      isMobile: window.innerWidth <= 768,
+    });
+  }
+
+  // ── Mobile pinch-to-zoom & pan helpers ────────────────────────────────────
+
+  _pinchDist(t1, t2) {
+    return Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+  }
+
+  _handleTouchStart = (e) => {
+    const touches = e.touches;
+    if (touches.length === 2) {
+      const t1 = touches[0], t2 = touches[1];
+      this._touchState = {
+        mode: 'pinch',
+        startDist: this._pinchDist(t1, t2),
+        startZoom: this.state.mobileZoom,
+        startPanX: this.state.mobilePanX,
+        startPanY: this.state.mobilePanY,
+        midX: (t1.clientX + t2.clientX) / 2,
+        midY: (t1.clientY + t2.clientY) / 2,
+      };
+      e.preventDefault();
+    } else if (touches.length === 1) {
+      this._touchState = {
+        mode: 'pan',
+        startX: touches[0].clientX,
+        startY: touches[0].clientY,
+        startPanX: this.state.mobilePanX,
+        startPanY: this.state.mobilePanY,
+      };
+      // Don't preventDefault on single-touch so tile clicks still fire
+    }
+  }
+
+  _handleTouchMove = (e) => {
+    if (!this._touchState) return;
+    const touches = e.touches;
+    if (this._touchState.mode === 'pinch' && touches.length === 2) {
+      e.preventDefault();
+      const t1 = touches[0], t2 = touches[1];
+      const newDist = this._pinchDist(t1, t2);
+      const scaleRatio = newDist / this._touchState.startDist;
+      const newZoom = Math.min(Math.max(this._touchState.startZoom * scaleRatio, 0.4), 5);
+
+      // Zoom toward the pinch midpoint (viewport-relative)
+      const rect = this.boardViewportRef.current
+        ? this.boardViewportRef.current.getBoundingClientRect()
+        : { left: 0, top: 0 };
+      const vpX = this._touchState.midX - rect.left;
+      const vpY = this._touchState.midY - rect.top;
+
+      // Content coordinates at the pinch centre in the START state
+      const contentX = (vpX - this._touchState.startPanX) / this._touchState.startZoom;
+      const contentY = (vpY - this._touchState.startPanY) / this._touchState.startZoom;
+
+      // New pan so that content point stays at the pinch centre
+      const newPanX = vpX - contentX * newZoom;
+      const newPanY = vpY - contentY * newZoom;
+
+      this.setState({ mobileZoom: newZoom, mobilePanX: newPanX, mobilePanY: newPanY });
+    } else if (this._touchState.mode === 'pan' && touches.length === 1) {
+      e.preventDefault();
+      const dx = touches[0].clientX - this._touchState.startX;
+      const dy = touches[0].clientY - this._touchState.startY;
+      this.setState({
+        mobilePanX: this._touchState.startPanX + dx,
+        mobilePanY: this._touchState.startPanY + dy,
+      });
+    }
+  }
+
+  _handleTouchEnd = (e) => {
+    if (!this._touchState) return;
+    if (e.touches.length === 1 && this._touchState.mode === 'pinch') {
+      // Finger lifted during pinch — transition to pan
+      this._touchState = {
+        mode: 'pan',
+        startX: e.touches[0].clientX,
+        startY: e.touches[0].clientY,
+        startPanX: this.state.mobilePanX,
+        startPanY: this.state.mobilePanY,
+      };
+    } else if (e.touches.length === 0) {
+      this._touchState = null;
+    }
+  }
+
+  _resetMobileZoom = () => {
+    this.setState({ mobileZoom: 1, mobilePanX: 0, mobilePanY: 0 });
+  }
+
+  _toggleMobilePalette = () => {
+    this.setState(prev => ({ mobilePaletteOpen: !prev.mobilePaletteOpen }));
   }
 
   handleClick = (tile) => {
@@ -1916,8 +2021,8 @@ class MapMakerPage extends React.Component {
   // Board CRUD methods
   writeBoard = async () => {
 
-    if (!this.state.loadedBoard || !this.state.loadedBoard.id) {
-      console.warn('Cannot write board: no loadedBoard or loadedBoard.id');
+    if (!this.state.loadedBoard) {
+      console.warn('Cannot write board: no loadedBoard');
       return;
     }
     // let planesToUpdate = [];
@@ -2532,6 +2637,23 @@ class MapMakerPage extends React.Component {
   //     tiles: board.tiles
   //   })
   // }
+  isBoardStaged = (board) => {
+    if (!board) return false;
+    if (board.folderPath && board.folderPath.trim() !== '') {
+      return true;
+    }
+    if (board.name && board.name.includes('_')) {
+      const parts = board.name.split('_');
+      if (parts.length > 1) {
+        const levelPart = parts[1];
+        const isLevelInt = /^-?\d+$/.test(levelPart);
+        if (isLevelInt) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
   getBoardFolderInfo = (board) => {
     if (!board) return { displayName: '', folderPath: '' };
     if (board.folderPath !== undefined) {
@@ -2540,7 +2662,8 @@ class MapMakerPage extends React.Component {
         folderPath: board.folderPath || ''
       };
     }
-    if (board.name && board.name.includes('_')) {
+    const staged = this.isBoardStaged(board);
+    if (staged && board.name && board.name.includes('_')) {
       const parts = board.name.split('_');
       if (parts.length > 1) {
         return {
@@ -3098,6 +3221,7 @@ class MapMakerPage extends React.Component {
       let newBoard = {
         name: `${this.state.loadedPlane.name}_${slotName}`,
         folderPath: folderPath,
+        isEmptyBoard: true,
         tiles: Array(15*15).fill(null).map((_, i) => ({
           id: i,
           type: 'void',
@@ -3202,6 +3326,7 @@ class MapMakerPage extends React.Component {
           let newBoard = {
             name: `${loadedPlane.name}_${slotName}`,
             folderPath: folderPath,
+            isEmptyBoard: true,
             tiles: Array(15*15).fill(null).map((_, i) => ({
               id: i,
               type: 'void',
@@ -3942,6 +4067,67 @@ class MapMakerPage extends React.Component {
       }
     }
   }
+  clearAllUnassignedBoards = async () => {
+    // 1. Gather all referenced board IDs from all planes in this.state.planes
+    const referencedBoardIds = new Set();
+    if (Array.isArray(this.state.planes)) {
+      this.state.planes.forEach(plane => {
+        if (plane && Array.isArray(plane.miniboards)) {
+          plane.miniboards.forEach(mb => {
+            if (mb) {
+              const id = mb.id || mb._id;
+              if (id) referencedBoardIds.add(id.toString());
+            }
+          });
+        }
+      });
+    }
+
+    // 2. Filter this.state.boards to find all boards that are NOT in referencedBoardIds
+    const unassignedBoards = (this.state.boards || []).filter(board => {
+      if (!board) return false;
+      const boardId = board.id || board._id;
+      if (!boardId) return false;
+      return !referencedBoardIds.has(boardId.toString());
+    });
+
+    if (unassignedBoards.length === 0) {
+      this.toast('No unassigned boards found.');
+      return;
+    }
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete ${unassignedBoards.length} unassigned board(s)? This action cannot be undone.`);
+    if (!confirmDelete) return;
+
+    // 3. Delete them from the database
+    for (const board of unassignedBoards) {
+      const boardId = board.id || board._id;
+      try {
+        await deleteBoardRequest(boardId);
+      } catch (err) {
+        console.error(`Failed to delete board ${boardId}:`, err);
+      }
+    }
+
+    // 4. Reload all boards to refresh local state/sidebar
+    await this.loadAllBoards();
+
+    // 5. If the current loaded board was one of the deleted boards, clear it
+    if (this.state.loadedBoard) {
+      const currentId = this.state.loadedBoard.id || this.state.loadedBoard._id;
+      const wasDeleted = unassignedBoards.some(b => (b.id || b._id) === currentId);
+      if (wasDeleted) {
+        await this.clearLoadedBoard();
+      }
+    }
+
+    this.toast(`Deleted ${unassignedBoards.length} unassigned board(s).`);
+  }
+  toggleShowUnstagedBoards = () => {
+    this.setState(prev => ({ showUnstagedBoards: !prev.showUnstagedBoards }), () => {
+      this.loadAllBoards();
+    });
+  }
   planesContainingBoard = (board) => {
     let planesToUpdate = [];
     if (!board || !board.id) return planesToUpdate;
@@ -4619,20 +4805,37 @@ class MapMakerPage extends React.Component {
     return false;
   }
 
-  boardBelongsToDungeon = (board, dungeon) => {
+  boardBelongsToDungeon = (board, dungeon, referencedBoardIds = null) => {
     if (!dungeon || !board) return false;
-    if (board.folderPath && board.folderPath.toLowerCase().startsWith((dungeon.name + '/').toLowerCase())) {
-      return true;
-    }
+
+    // Check if explicitly assigned to active dungeon planes/levels
     if (Array.isArray(dungeon.levels)) {
-      return dungeon.levels.some(lvl => {
+      const isAssigned = dungeon.levels.some(lvl => {
         const checkPlane = (plane) => {
-          return plane && Array.isArray(plane.miniboards) && plane.miniboards.some(mb => mb && (mb.id === board.id || mb.name === board.name));
+          return plane && Array.isArray(plane.miniboards) && plane.miniboards.some(mb => mb && (mb.id === board.id || mb._id === board.id || mb.id === board._id || mb._id === board._id || mb.name === board.name));
         };
         return checkPlane(lvl.front) || checkPlane(lvl.back);
       });
+      if (isAssigned) return true;
     }
-    return false;
+
+    // Check if staged
+    const staged = this.isBoardStaged(board);
+    if (staged) {
+      if (board.folderPath && board.folderPath.toLowerCase().startsWith((dungeon.name + '/').toLowerCase())) {
+        return true;
+      }
+      if (board.name && board.name.includes('_')) {
+        const parts = board.name.split('_');
+        if (parts[0].toLowerCase() === dungeon.name.toLowerCase()) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Unstaged boards belong to staging area only if showUnstagedBoards is enabled
+    return !!this.state.showUnstagedBoards;
   }
 
   addDungeonPlanesAndBoardsToState = (dungeon) => {
@@ -5141,6 +5344,7 @@ class MapMakerPage extends React.Component {
         const newBoard = {
           name: boardName,
           folderPath: '',
+          isEmptyBoard: true,
           tiles: Array(15*15).fill(null).map((_, i) => ({
             id: i,
             type: 'void',
@@ -5154,6 +5358,7 @@ class MapMakerPage extends React.Component {
         const createdEmpty = {
           id: boardRes.data._id,
           name: boardName,
+          isEmptyBoard: true,
           tiles: newBoard.tiles,
           config: newBoard.config,
           folderPath: newBoard.folderPath
@@ -5808,6 +6013,7 @@ class MapMakerPage extends React.Component {
                 const newBoard = {
                   name: boardName,
                   folderPath,
+                  isEmptyBoard: true,
                   tiles: Array(15*15).fill(null).map((_, i) => ({
                     id: i,
                     type: 'void',
@@ -5821,6 +6027,7 @@ class MapMakerPage extends React.Component {
                 frontMiniboards.push({
                   id: boardRes.data._id,
                   name: boardName,
+                  isEmptyBoard: true,
                   tiles: newBoard.tiles,
                   config: newBoard.config
                 });
@@ -5844,6 +6051,7 @@ class MapMakerPage extends React.Component {
               const newBoard = {
                 name: boardName,
                 folderPath,
+                isEmptyBoard: true,
                 tiles: Array(15*15).fill(null).map((_, i) => ({
                   id: i,
                   type: 'void',
@@ -5857,6 +6065,7 @@ class MapMakerPage extends React.Component {
               backMiniboards.push({
                 id: boardRes.data._id,
                 name: boardName,
+                isEmptyBoard: true,
                 tiles: newBoard.tiles,
                 config: newBoard.config
               });
@@ -6890,10 +7099,86 @@ class MapMakerPage extends React.Component {
               getBoardFolderInfo={this.getBoardFolderInfo}
               onSyncLevelToPlane={this.onSyncLevelToPlane}
               collapseAllBoardFolders={this.collapseAllBoardFolders}
+              clearAllUnassignedBoards={this.clearAllUnassignedBoards}
+              showUnstagedBoards={this.state.showUnstagedBoards}
+              toggleShowUnstagedBoards={this.toggleShowUnstagedBoards}
             >
             </BoardsPanel>
 
-            {this.state.selectedView === 'board' && <BoardView
+            {this.state.selectedView === 'board' && (
+              <div
+                className="mobile-board-viewport"
+                ref={this.boardViewportRef}
+                onTouchStart={this._handleTouchStart}
+                onTouchMove={this._handleTouchMove}
+                onTouchEnd={this._handleTouchEnd}
+              >
+                <div
+                  className="mobile-board-transform"
+                  style={this.state.isMobile ? {
+                    transform: `translate(${this.state.mobilePanX}px, ${this.state.mobilePanY}px) scale(${this.state.mobileZoom})`,
+                    transformOrigin: '0 0',
+                    willChange: 'transform',
+                  } : undefined}
+                >
+                  <BoardView
+                    tileSize={this.state.tileSize}
+                    loadedBoard={this.state.loadedBoard}
+                    boardSize={this.state.boardSize}
+                    boardsFolders={this.state.boardsFolders}
+                    boardsFoldersExpanded={this.state.boardsFoldersExpanded}
+                    boards={this.state.boards}
+                    tiles={this.state.tiles}
+                    compatibilityMatrix={this.state.compatibilityMatrix}
+                    pinnedOption={this.state.pinnedOption}
+                    hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
+                    hoveredTileIdx={this.state.hoveredTileIdx}
+                    hoveredTileFootprint={this.state.hoveredTileFootprint}
+                    hoveredTileId={this.state.hoveredTileIdx}
+                    optionClickedIdx={this.state.optionClickedIdx}
+                    selectedView={this.state.selectedView}
+                    showCoordinates={this.state.showCoordinates}
+                    mapMaker={this.props.mapMaker}
+                    floorTexture={this.state.floorTexture}
+
+                    setViewState={this.setViewState}
+                    addNewBoard={this.addNewBoard}
+                    cloneBoard={this.cloneBoard}
+                    clearLoadedBoard={this.clearLoadedBoard}
+                    writeBoard={this.writeBoard}
+                    deleteBoard={this.deleteBoard}
+                    renameBoard={this.renameBoard}
+                    adjacencyFilterClicked={this.adjacencyFilterClicked}
+                    nameFilterClicked={this.nameFilterClicked}
+                    expandCollapseBoardFolders={this.expandCollapseBoardFolders}
+                    collapseFilterHeader={this.collapseFilterHeader}
+                    setHover={this.setHover}
+                    handleClick={this.handleClick}
+                    handleHover={this.handleHover}
+                    setPaletteHover={this.setPaletteHover}
+                    loadBoard={this.loadBoard}
+                    monsterManager={this.props.monsterManager}
+                    gates={GATES}
+                    keys={KEYS}
+                    handleContextMenu={this.handleContextMenu}
+                  />
+                </div>
+                {/* Floating zoom-reset button — mobile only */}
+                {this.state.isMobile && (
+                  <button
+                    className="mobile-zoom-reset"
+                    onClick={this._resetMobileZoom}
+                    title="Reset zoom"
+                    aria-label="Reset board zoom"
+                  >
+                    ⟳
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Desktop right palette — hidden on mobile via CSS */}
+            {this.state.selectedView === 'board' && !this.state.isMobile && <BoardsPalette
               tileSize={this.state.tileSize}
               loadedBoard={this.state.loadedBoard}
               boardSize={this.state.boardSize}
@@ -6905,13 +7190,11 @@ class MapMakerPage extends React.Component {
               pinnedOption={this.state.pinnedOption}
               hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
               hoveredTileIdx={this.state.hoveredTileIdx}
-              hoveredTileFootprint={this.state.hoveredTileFootprint}
               hoveredTileId={this.state.hoveredTileIdx}
               optionClickedIdx={this.state.optionClickedIdx}
               selectedView={this.state.selectedView}
               showCoordinates={this.state.showCoordinates}
               mapMaker={this.props.mapMaker}
-              floorTexture={this.state.floorTexture}
 
               setViewState={this.setViewState}
               addNewBoard={this.addNewBoard}
@@ -6932,48 +7215,7 @@ class MapMakerPage extends React.Component {
               monsterManager={this.props.monsterManager}
               gates={GATES}
               keys={KEYS}
-              handleContextMenu={this.handleContextMenu}
-            ></BoardView>}
-
-            {this.state.selectedView === 'board' && <BoardsPalette
-              tileSize={this.state.tileSize}
-              loadedBoard={this.state.loadedBoard}
-              boardSize={this.state.boardSize}
-              boardsFolders={this.state.boardsFolders}
-              boardsFoldersExpanded={this.state.boardsFoldersExpanded}
-              boards={this.state.boards}
-              tiles={this.state.tiles}
-              compatibilityMatrix={this.state.compatibilityMatrix}
-              pinnedOption={this.state.pinnedOption}
-              hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
-              hoveredTileIdx={this.state.hoveredTileIdx}
-              hoveredTileId={this.state.hoveredTileIdx}
-              optionClickedIdx={this.state.optionClickedIdx}
-              selectedView={this.state.selectedView}
-              showCoordinates={this.state.showCoordinates}
-              mapMaker={this.props.mapMaker}
-
-              setViewState={this.setViewState}
-              addNewBoard={this.addNewBoard}
-              cloneBoard={this.cloneBoard}
-              clearLoadedBoard={this.clearLoadedBoard}
-              writeBoard={this.writeBoard}
-              deleteBoard={this.deleteBoard}
-              renameBoard={this.renameBoard}
-              adjacencyFilterClicked={this.adjacencyFilterClicked}
-              nameFilterClicked={this.nameFilterClicked}
-              expandCollapseBoardFolders={this.expandCollapseBoardFolders}
-              collapseFilterHeader={this.collapseFilterHeader}
-              setHover={this.setHover}
-              handleClick={this.handleClick}
-              handleHover={this.handleHover}
-              setPaletteHover={this.setPaletteHover}
-              loadBoard={this.loadBoard}
-              monsterManager={this.props.monsterManager}
-              gates={GATES}
-              keys={KEYS}
-            >
-            </BoardsPalette>}
+            />}
 
 
             {this.state.selectedView === 'plane' && <PlaneView
@@ -7197,6 +7439,121 @@ class MapMakerPage extends React.Component {
 
           </div>
         </div>
+
+        {/* ── Mobile bottom-sheet palette drawer (Board View only) ─────── */}
+        {this.state.isMobile && this.state.selectedView === 'board' && (
+          <div className={`mobile-palette-drawer${this.state.mobilePaletteOpen ? ' open' : ''}`}>
+            <div
+              className="palette-handle"
+              onClick={this._toggleMobilePalette}
+              role="button"
+              aria-label={this.state.mobilePaletteOpen ? 'Close tile palette' : 'Open tile palette'}
+            >
+              {this.state.mobilePaletteOpen ? 'Close Palette ▼' : '▲  Tile Palette'}
+            </div>
+            <div className="palette-drawer-content">
+              <BoardsPalette
+                tileSize={this.state.tileSize}
+                loadedBoard={this.state.loadedBoard}
+                boardSize={this.state.boardSize}
+                boardsFolders={this.state.boardsFolders}
+                boardsFoldersExpanded={this.state.boardsFoldersExpanded}
+                boards={this.state.boards}
+                tiles={this.state.tiles}
+                compatibilityMatrix={this.state.compatibilityMatrix}
+                pinnedOption={this.state.pinnedOption}
+                hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
+                hoveredTileIdx={this.state.hoveredTileIdx}
+                hoveredTileId={this.state.hoveredTileIdx}
+                optionClickedIdx={this.state.optionClickedIdx}
+                selectedView={this.state.selectedView}
+                showCoordinates={this.state.showCoordinates}
+                mapMaker={this.props.mapMaker}
+
+                setViewState={this.setViewState}
+                addNewBoard={this.addNewBoard}
+                cloneBoard={this.cloneBoard}
+                clearLoadedBoard={this.clearLoadedBoard}
+                writeBoard={this.writeBoard}
+                deleteBoard={this.deleteBoard}
+                renameBoard={this.renameBoard}
+                adjacencyFilterClicked={this.adjacencyFilterClicked}
+                nameFilterClicked={this.nameFilterClicked}
+                expandCollapseBoardFolders={this.expandCollapseBoardFolders}
+                collapseFilterHeader={this.collapseFilterHeader}
+                setHover={this.setHover}
+                handleClick={(tile) => {
+                  this.handleClick(tile);
+                  // Auto-close palette after picking a tile on mobile
+                  if (tile && tile.type === 'palette-tile') {
+                    this.setState({ mobilePaletteOpen: false });
+                  }
+                }}
+                handleHover={this.handleHover}
+                setPaletteHover={this.setPaletteHover}
+                loadBoard={this.loadBoard}
+                monsterManager={this.props.monsterManager}
+                gates={GATES}
+                keys={KEYS}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Mobile action strip (Board View only) ────────────────────── */}
+        {this.state.isMobile && this.state.selectedView === 'board' && (
+          <div className="mobile-action-strip">
+            <button
+              onClick={() => this.writeBoard && this.writeBoard()}
+              title="Save Board"
+              aria-label="Save board"
+            >
+              <span>💾</span>
+              <span>Save</span>
+            </button>
+            <button
+              onClick={() => this.addNewBoard && this.addNewBoard()}
+              title="New Board"
+              aria-label="New board"
+            >
+              <span>➕</span>
+              <span>New</span>
+            </button>
+            <button
+              onClick={() => this.state.loadedBoard && this.renameBoard && this.renameBoard()}
+              title="Rename Board"
+              aria-label="Rename board"
+            >
+              <span>✏️</span>
+              <span>Rename</span>
+            </button>
+            <button
+              onClick={() => this.state.loadedBoard && this.deleteBoard && this.deleteBoard(this.state.loadedBoard.id)}
+              title="Delete Board"
+              aria-label="Delete board"
+            >
+              <span>🗑️</span>
+              <span>Delete</span>
+            </button>
+            <button
+              onClick={this._toggleMobilePalette}
+              title="Toggle Palette"
+              aria-label="Toggle tile palette"
+              style={{ color: this.state.mobilePaletteOpen ? '#f9b115' : undefined }}
+            >
+              <span>🎨</span>
+              <span>Palette</span>
+            </button>
+            <button
+              onClick={this._resetMobileZoom}
+              title="Reset Zoom"
+              aria-label="Reset zoom to 1x"
+            >
+              <span>⟳</span>
+              <span>Reset</span>
+            </button>
+          </div>
+        )}
 
         {/* Dev console panel — toggle with Shift+Space */}
         {this.state.devConsoleOpen && (
