@@ -28,6 +28,7 @@ class BoardsPanel extends React.Component {
             nextProps.tileSize !== this.props.tileSize ||
             nextProps.boardSize !== this.props.boardSize ||
             nextProps.draggedBoard !== this.props.draggedBoard ||
+            nextProps.showUnstagedBoards !== this.props.showUnstagedBoards ||
             nextState.hoveredSlot !== this.state.hoveredSlot
         );
     }
@@ -58,6 +59,9 @@ class BoardsPanel extends React.Component {
     parseBoardPlacement = (board) => {
         let folderPath = board.folderPath;
         let name = board.name || '';
+        const isBack = (folderPath && (folderPath.toLowerCase().includes('/back') || folderPath.toLowerCase().includes('_back'))) || 
+                       name.toLowerCase().includes('_back') || 
+                       name.includes('_B_');
         
         if (folderPath) {
             const parts = folderPath.split('/');
@@ -65,7 +69,6 @@ class BoardsPanel extends React.Component {
                 const dungeon = parts[0];
                 const level = parts[1];
                 const slot = parts.slice(2).join('/');
-                const isBack = folderPath.toLowerCase().includes('/back') || folderPath.toLowerCase().includes('_back') || name.toLowerCase().includes('_back');
                 return {
                     dungeon,
                     level,
@@ -81,11 +84,16 @@ class BoardsPanel extends React.Component {
             const level = parts[1];
             
             const lastPart = parts[parts.length - 1].toLowerCase();
-            const isBack = lastPart === 'back';
+            const endsWithBack = lastPart === 'back';
             
-            const endIdx = isBack ? parts.length - 1 : parts.length;
+            const endIdx = endsWithBack ? parts.length - 1 : parts.length;
             const slotParts = parts.slice(2, endIdx);
-            const slot = slotParts.join('/');
+            
+            let slotPartsFiltered = [...slotParts];
+            if (slotPartsFiltered[0] === 'F' || slotPartsFiltered[0] === 'B') {
+                slotPartsFiltered = slotPartsFiltered.slice(1);
+            }
+            const slot = slotPartsFiltered.join('/');
             
             return {
                 dungeon,
@@ -158,6 +166,46 @@ class BoardsPanel extends React.Component {
     renderLevelGrids = (subfolder, folderTitle) => {
         const { front, back } = this.getLevelGrids(subfolder);
         
+        const isBoardEmpty = (b) => {
+            if (!b) return true;
+            if (b.isEmptyBoard) return true;
+            const name = b.displayName || b.name || '';
+            if (name === 'empty') return true;
+            
+            // Normalize name to handle orientation suffixes
+            const normalizedName = name.replace(/_back$/, '').replace(/_B$/, '').replace(/_F$/, '');
+            
+            const slotSuffixes = [
+                '_top_left', '_top_mid', '_top_right',
+                '_middle_left', '_middle_mid', '_middle_right',
+                '_bottom_left', '_bottom_mid', '_bottom_right'
+            ];
+            if (slotSuffixes.some(suffix => normalizedName.endsWith(suffix))) {
+                const checkTilesEmpty = (tilesArray) => {
+                    if (!Array.isArray(tilesArray)) return true;
+                    return !tilesArray.some(t => {
+                        if (!t) return false;
+                        const containsType = typeof t.contains === 'object' && t.contains ? t.contains.type : t.contains;
+                        return containsType && containsType !== 'void' && containsType !== 'empty';
+                    });
+                };
+
+                if (Array.isArray(b.tiles)) {
+                    return checkTilesEmpty(b.tiles);
+                }
+                
+                // Look up full board in props.boards to check its tiles
+                const fullBoard = (this.props.boards || []).find(
+                    (item) => item.id === b.id || item._id === b.id || item.name === b.name || item._id === b._id || item.id === b._id
+                );
+                if (fullBoard && Array.isArray(fullBoard.tiles)) {
+                    return checkTilesEmpty(fullBoard.tiles);
+                }
+                return false;
+            }
+            return false;
+        };
+        
         const renderGrid = (gridData, orientation) => {
             return (
                 <div className="plane-mini-grid">
@@ -166,7 +214,7 @@ class BoardsPanel extends React.Component {
                         {gridData.map((board, idx) => {
                             const isHovered = this.state.hoveredSlot === `${folderTitle}_${subfolder.title}_${orientation}_${idx}`;
                             const isSelected = this.props.loadedBoard && board && (board.id === this.props.loadedBoard.id);
-                            const isEmptyBoard = board && (board.name === 'empty' || board.displayName === 'empty');
+                            const isEmptyBoard = isBoardEmpty(board);
                             return (
                                 <div
                                     key={idx}
@@ -236,7 +284,23 @@ class BoardsPanel extends React.Component {
                             <CDropdownItem onClick={() => this.props.adjacencyFilterClicked()}>Filter: Adjacency</CDropdownItem>
                             <CDropdownItem onClick={() => this.props.nameFilterClicked()}>Filter: Name</CDropdownItem>
                             <CDropdownItem onClick={() => this.props.collapseAllBoardFolders && this.props.collapseAllBoardFolders()}>Collapse All Folders</CDropdownItem>
-                        </CDropdownMenu>
+                            <CDropdownItem onClick={() => this.props.clearAllUnassignedBoards && this.props.clearAllUnassignedBoards()}>Clear All Unassigned Boards</CDropdownItem>
+                             <div onClick={(e) => {
+                                 e.preventDefault();
+                                 e.stopPropagation();
+                                 if (this.props.toggleShowUnstagedBoards) {
+                                     this.props.toggleShowUnstagedBoards();
+                                 }
+                             }} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', padding: '6px 20px' }} className="dropdown-item">
+                                 <input 
+                                     type="checkbox" 
+                                     checked={!!this.props.showUnstagedBoards} 
+                                     onChange={() => {}} 
+                                     style={{ pointerEvents: 'none' }}
+                                 />
+                                 <span>Show Unstaged Boards</span>
+                             </div>
+                         </CDropdownMenu>
                         </CDropdown>
                     </div>
                     <div className="board-previews-container previews-container"

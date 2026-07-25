@@ -157,6 +157,46 @@ class PlanesPanel extends React.Component {
         let frontPlane = null;
         let backPlane = null;
 
+        const isBoardEmpty = (b) => {
+            if (!b) return true;
+            if (b.isEmptyBoard) return true;
+            const name = b.displayName || b.name || '';
+            if (name === 'empty') return true;
+            
+            // Normalize name to handle orientation suffixes
+            const normalizedName = name.replace(/_back$/, '').replace(/_B$/, '').replace(/_F$/, '');
+            
+            const slotSuffixes = [
+                '_top_left', '_top_mid', '_top_right',
+                '_middle_left', '_middle_mid', '_middle_right',
+                '_bottom_left', '_bottom_mid', '_bottom_right'
+            ];
+            if (slotSuffixes.some(suffix => normalizedName.endsWith(suffix))) {
+                const checkTilesEmpty = (tilesArray) => {
+                    if (!Array.isArray(tilesArray)) return true;
+                    return !tilesArray.some(t => {
+                        if (!t) return false;
+                        const containsType = typeof t.contains === 'object' && t.contains ? t.contains.type : t.contains;
+                        return containsType && containsType !== 'void' && containsType !== 'empty';
+                    });
+                };
+
+                if (Array.isArray(b.tiles)) {
+                    return checkTilesEmpty(b.tiles);
+                }
+                
+                // Look up full board in props.boards to check its tiles
+                const fullBoard = (this.props.boards || []).find(
+                    (item) => item.id === b.id || item._id === b.id || item.name === b.name || item._id === b._id || item.id === b._id
+                );
+                if (fullBoard && Array.isArray(fullBoard.tiles)) {
+                    return checkTilesEmpty(fullBoard.tiles);
+                }
+                return false;
+            }
+            return false;
+        };
+
         if (Array.isArray(subfolder.contents)) {
             subfolder.contents.forEach(plane => {
                 const lastPart = plane.name.split('_').pop().toLowerCase();
@@ -203,7 +243,7 @@ class PlanesPanel extends React.Component {
                         >
                             {plane.miniboards.map((mb, idx) => {
                                 const isFilled = mb && (mb.id || mb._id || (mb.tiles && mb.tiles.length > 0) || mb.name);
-                                const isEmptyBoard = mb && (mb.name === 'empty' || mb.displayName === 'empty');
+                                const isEmptyBoard = isBoardEmpty(mb);
                                 return (
                                     <div
                                         key={idx}
