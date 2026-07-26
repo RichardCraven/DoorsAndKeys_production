@@ -229,7 +229,7 @@ class MapMakerPage extends React.Component {
       devConsoleInput: '',
       devConsoleOutput: [],
       // ── Mobile / touch state ────────────────────────────────────────
-      isMobile: typeof window !== 'undefined' && window.innerWidth <= 768,
+      isMobile: typeof window !== 'undefined' && window.innerWidth <= 1024,
       mobileZoom: 1,
       mobilePanX: 0,
       mobilePanY: 0,
@@ -1597,7 +1597,7 @@ class MapMakerPage extends React.Component {
     this.setState({
       tileSize: tsize,
       boardSize: tsize * 15,
-      isMobile: window.innerWidth <= 768,
+      isMobile: window.innerWidth <= 1024,
     });
   }
 

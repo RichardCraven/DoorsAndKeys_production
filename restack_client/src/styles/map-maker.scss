@@ -1532,18 +1532,23 @@ ul.dropdown-menu.show{
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   MOBILE LAYOUT  (≤ 768 px)
+   MOBILE LAYOUT  (≤ 1024 px)
    All rules below are gated to narrow viewports so the desktop experience
    is completely unaffected.
    ═══════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
 
-  /* ── Root app shell ────────────────────────────────────────────────── */
   .mapmaker-container {
-    /* Prevent any page-level horizontal scroll */
+    /* Prevent any page-level horizontal scroll and pin to top */
     overflow-x: hidden;
     width: 100vw;
     max-width: 100vw;
+    height: 100vh;
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   /* ── Hide desktop-only chrome ──────────────────────────────────────── */
@@ -1563,6 +1568,7 @@ ul.dropdown-menu.show{
     flex-wrap: wrap;
     gap: 4px;
     padding: 6px 8px;
+    padding-left: 36px; /* Leave space for the fixed hamburger menu button */
     background: #111;
     border-bottom: 1px solid rgba(249, 177, 21, 0.15);
     min-height: 44px;
@@ -1597,14 +1603,14 @@ ul.dropdown-menu.show{
     height: auto;
     flex: 1 1 auto;
     position: relative;
+    display: flex;
   }
 
   /* ── Mobile board viewport (pinch/zoom/pan container) ─────────────── */
   .mobile-board-viewport {
     width:  100vw;
-    /* Fill remaining height: 100vh minus top-bar (44px), action strip (60px),
-       palette handle (48px — always visible) */
-    height: calc(100vh - 44px - 60px - 48px);
+    flex: 1 1 auto;
+    height: auto;
     min-height: 200px;
     overflow: hidden;
     position: relative;
@@ -1741,13 +1747,91 @@ ul.dropdown-menu.show{
     max-height: 52vh;
     overflow-y: auto;
     overflow-x: hidden;
-    /* Give the inner palette room to show items */
-    .palette {
+    padding: 12px 16px 40px;
+
+    /* Turn parent palette container into a horizontal wrapping flex container */
+    .palette.right-palette {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+      margin-left: 0 !important;
+      background-color: transparent !important;
+      border: none !important;
       overflow: visible !important;
-      .previews-container {
-        max-height: 50vh;
-        overflow-y: auto;
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      gap: 10px !important;
+      justify-content: flex-start !important;
+      align-items: flex-start !important;
+    }
+
+    /* Redesign option container into vertical grid cells */
+    .palette-options-pane {
+      width: calc(20% - 8px) !important; /* 5 columns grid layout */
+      min-width: 90px !important;
+      flex: 0 1 auto !important;
+      border: 1px solid rgba(255, 255, 255, 0.12) !important;
+      border-radius: 8px !important;
+      background: #131211 !important;
+      overflow: visible !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    .palette-option-container {
+      border: none !important;
+      border-radius: 8px !important;
+      height: auto !important;
+      min-height: 80px !important; /* taller height to house vertical layouts */
+      background: linear-gradient(135deg, #1d1c1a 0%, #131211 100%) !important;
+      width: 100% !important;
+      display: flex !important;
+      flex-direction: column !important; /* stack elements vertically */
+      align-items: center !important;
+      justify-content: center !important;
+      padding: 8px 4px !important;
+      box-sizing: border-box;
+      position: relative !important;
+
+      /* Make tile icons bigger inside the container */
+      .tile {
+        width: 40px !important;
+        height: 40px !important;
+        margin-bottom: 6px !important;
+        border-radius: 6px !important;
       }
+
+      /* Center labels underneath the icon */
+      .text-container {
+        font-size: 10px !important;
+        padding-left: 0 !important;
+        text-align: center !important;
+        white-space: normal !important; /* wrap if label is long */
+        word-break: break-word !important;
+        line-height: 1.2 !important;
+        flex: none !important;
+        color: #ccc;
+      }
+
+      /* Float the dropdown navigation arrows in top-right of mobile cards */
+      > div:not(.tile):not(.text-container) {
+        position: absolute !important;
+        top: 6px !important;
+        right: 6px !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+    }
+
+    /* Keep expanded options confined within columns */
+    .palette-option-expandable-container {
+      width: 100% !important;
+      background-color: #0b0a09 !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+      border-radius: 0 0 8px 8px !important;
+      overflow-y: auto !important;
+      max-height: 220px !important;
     }
   }
 
