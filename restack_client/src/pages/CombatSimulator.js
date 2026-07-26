@@ -6,6 +6,7 @@ import { Redirect } from "react-router-dom";
 import MonsterBattle from './sub-views/MonsterBattle';
 import gifOne from '../assets/highres-gifs/gifOne.gif';
 import gifTwo from '../assets/highres-gifs/gifTwo.gif';
+import gifThree from '../assets/highres-gifs/gifThree.gif';
 import { CombatManagerRedux } from '../utils/combat-manager-redux';
 import skillsMatrix from '../utils/skills-matrix';
 
@@ -220,7 +221,12 @@ class CrewManagerPage extends React.Component {
             lord: false,
             loadingSimulator: false,
             randomTierPoints: 6,
-            currentLoadingGif: Math.random() < 0.5 ? gifOne : gifTwo,
+            currentLoadingGif: (() => {
+                const rand = Math.random();
+                if (rand < 0.33) return gifOne;
+                if (rand < 0.66) return gifTwo;
+                return gifThree;
+            })(),
         }
     }
     timer = null;
@@ -703,7 +709,12 @@ class CrewManagerPage extends React.Component {
     submit = async () => {
         this.setState({
             loadingSimulator: true,
-            currentLoadingGif: Math.random() < 0.5 ? gifOne : gifTwo
+            currentLoadingGif: (() => {
+                const rand = Math.random();
+                if (rand < 0.33) return gifOne;
+                if (rand < 0.66) return gifTwo;
+                return gifThree;
+            })()
         });
 
         // Create a fresh clone of selectedCrew to keep original intact when returning or displaying

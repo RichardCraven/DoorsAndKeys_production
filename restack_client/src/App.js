@@ -24,10 +24,16 @@ import { storeSessionData, getUserId, getMeta } from './utils/session-handler';
 import { useHistory } from "react-router";
 import gifOne from './assets/highres-gifs/gifOne.gif';
 import gifTwo from './assets/highres-gifs/gifTwo.gif';
+import gifThree from './assets/highres-gifs/gifThree.gif';
 
 
 function App(props) {
-  const [currentLoadingGif] = useState(() => Math.random() < 0.5 ? gifOne : gifTwo);
+  const [currentLoadingGif] = useState(() => {
+    const rand = Math.random();
+    if (rand < 0.33) return gifOne;
+    if (rand < 0.66) return gifTwo;
+    return gifThree;
+  });
   const location = useLocation();
   const isMapmaker = location.pathname === '/mapmaker';
   const [loggedIn, setLoggedIn] = useState(!!getUserId())
@@ -93,10 +99,10 @@ function App(props) {
   const history = useHistory();
   useEffect(() => {
     // Pre-load the high-res loading animation GIFs so they are ready in cache
-    const img1 = new Image();
-    img1.src = gifOne;
-    const img2 = new Image();
-    img2.src = gifTwo;
+    [gifOne, gifTwo, gifThree].forEach(gif => {
+      const img = new Image();
+      img.src = gif;
+    });
 
     window.pickRandom = (array) => {
       let index = Math.floor(Math.random() * array.length)
@@ -347,7 +353,7 @@ function App(props) {
         {loggedIn === true && showToolbar === true && location.pathname !== '/landing' && location.pathname !== '/' && (
           <div className="horizontal-menu-wrapper" style={{
             position: 'fixed',
-            top: isMobileWidth ? '36px' : '12px',
+            top: isMobileWidth ? (isMapmaker ? '10px' : '36px') : '12px',
             left: isMobileWidth ? '10px' : '12px',
             zIndex: 9999,
             display: 'flex',

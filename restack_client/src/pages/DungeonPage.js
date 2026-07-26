@@ -1,6 +1,7 @@
 import React from 'react';
 import gifOne from '../assets/highres-gifs/gifOne.gif';
 import gifTwo from '../assets/highres-gifs/gifTwo.gif';
+import gifThree from '../assets/highres-gifs/gifThree.gif';
 
 import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../utils/shared-constants';
 import '../styles/dungeon-board.scss'
@@ -2348,7 +2349,12 @@ class DungeonPage extends React.Component {
         this._wasPoiPanelExpanded = !!((getMeta() || {}).camping);
         this.state = {
             isLoadingDungeon: true,
-            currentLoadingGif: Math.random() < 0.5 ? gifOne : gifTwo,
+            currentLoadingGif: (() => {
+                const rand = Math.random();
+                if (rand < 0.33) return gifOne;
+                if (rand < 0.66) return gifTwo;
+                return gifThree;
+            })(),
             tileSize: 0,
             boardSize: 0,
             mobileViewX: null,
