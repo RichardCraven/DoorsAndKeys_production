@@ -131,7 +131,7 @@ describe('Tabard stats and resistances', () => {
 
   test('session-handler resolve penalty reduction is increased by equipped resolveResist', () => {
     // Clear metadata first to be clean
-    sessionStorage.clear();
+    localStorage.clear();
 
     const mockMeta = {
       crew: [
@@ -143,7 +143,7 @@ describe('Tabard stats and resistances', () => {
         ]
       }
     };
-    sessionStorage.setItem('metadata', JSON.stringify(mockMeta));
+    localStorage.setItem('metadata', JSON.stringify(mockMeta));
 
     // getResolvePenaltyReduction should find the equipped Wayfair Tabard (25% resolveResist)
     const reduction = getResolvePenaltyReduction();

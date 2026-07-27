@@ -3,8 +3,8 @@ import * as images from '../utils/images'
 import { SPELLS, RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES } from './spells-table'
 
 // eslint-disable-next-line no-extend-native
-Date.prototype.addHours= function(h){
-    this.setHours(this.getHours()+h);
+Date.prototype.addHours = function (h) {
+    this.setHours(this.getHours() + h);
     return this;
 }
 
@@ -25,7 +25,7 @@ const EXP_TABLE = [
     1000000
 ]
 
-export function CrewManager(){
+export function CrewManager() {
     // this.tiles = [];
     this.memberTypes = [
         'monk',
@@ -39,7 +39,7 @@ export function CrewManager(){
         'soldier'
     ]
     this.crew = [];
-    
+
     this.initializeCrew = (crew) => {
         //called everytime game loads, not just first time
         this.crew = [];
@@ -55,7 +55,7 @@ export function CrewManager(){
             });
         };
 
-        crew.forEach((member, index)=> { 
+        crew.forEach((member, index) => {
             // Ensure specialActions exists; some persisted meta may omit this field.
             // Default to an empty array so initialization doesn't skip the member.
             member.specialActions = member.specialActions || [];
@@ -97,23 +97,23 @@ export function CrewManager(){
                 }
             }
 
-            member.specialActions.forEach(a=>{
+            member.specialActions.forEach(a => {
                 let end = new Date(a.endDate),
-                now = new Date();
-                if(end - now < 0){
+                    now = new Date();
+                if (end - now < 0) {
                     a.available = true;
                 }
             })
             // assign a display color to the crew member (fall back to a repeating palette)
-            try{
+            try {
                 if (member.color === '#b710d5') member.color = '#7b5e8c';
                 else if (member.color === '#6495ed') member.color = '#506e86';
                 else if (member.color === '#73b746') member.color = '#5f7055';
                 else if (member.color === '#f4d013') member.color = '#b88d4c';
 
                 member.color = member.color || colors[index % colors.length];
-            } catch(e){}
-            if(this.memberTypes.includes(member.image) || this.memberTypes.includes(member.type)){
+            } catch (e) { }
+            if (this.memberTypes.includes(member.image) || this.memberTypes.includes(member.type)) {
                 // Ensure base stats are present and normalized to the four main stats
                 member.stats = member.stats || {};
                 member.stats.str = typeof member.stats.str === 'number' ? member.stats.str : (member.stats.str || 1);
@@ -128,7 +128,7 @@ export function CrewManager(){
                     member.stats.baseHp = (cls === 'barbarian') ? 12 : 10;
                 }
                 // compute derived/substats from base stats
-                try { this.computeDerivedStats(member); } catch(e) { console.warn('computeDerivedStats failed', e, member); }
+                try { this.computeDerivedStats(member); } catch (e) { console.warn('computeDerivedStats failed', e, member); }
                 this.crew.push(member)
             } else {
                 console.warn('initializeCrew: REJECTED member — image:', member.image, 'type:', member.type, 'name:', member.name, 'full object:', JSON.stringify(member).slice(0, 300));
@@ -140,24 +140,24 @@ export function CrewManager(){
     // stat constituent matrix and derivation rules
     this.statConstituents = {
         attack: {
-            monk: ['dex','str'],
+            monk: ['dex', 'str'],
             barbarian: ['str'],
-            soldier: ['str','fort'],
+            soldier: ['str', 'fort'],
             wizard: ['int'],
-            engineer: ['dex','int'],
+            engineer: ['dex', 'int'],
             summoner: ['int'],
-            ranger: ['dex','str'],
+            ranger: ['dex', 'str'],
             sage: ['fort']
         },
         defense: {
             monk: ['dex'],
-            barbarian: ['str','fort'],
-            soldier: ['str','dex'],
-            wizard: ['dex','str'],
-            engineer: ['dex','fort'],
-            summoner: ['int','fort'],
-            ranger: ['str','fort'],
-            sage: ['str','fort']
+            barbarian: ['str', 'fort'],
+            soldier: ['str', 'dex'],
+            wizard: ['dex', 'str'],
+            engineer: ['dex', 'fort'],
+            summoner: ['int', 'fort'],
+            ranger: ['str', 'fort'],
+            sage: ['str', 'fort']
         },
         hp: { all: ['fort'] },
         energy: { all: ['fort'] },
@@ -168,7 +168,7 @@ export function CrewManager(){
 
     // Compute derived substats for a crew member based on their base stats and class
     this.computeDerivedStats = (member) => {
-        if(!member || !member.stats) return;
+        if (!member || !member.stats) return;
         const s = member.stats;
         const get = (k) => (typeof s[k] === 'number' ? s[k] : 0);
         const combine = (primaryKey, secondaryKey) => {
@@ -182,8 +182,8 @@ export function CrewManager(){
 
         // Attack
         let atkCon = this.statConstituents.attack[member.type];
-        if(!atkCon) atkCon = ['str'];
-        if(atkCon.length === 2){
+        if (!atkCon) atkCon = ['str'];
+        if (atkCon.length === 2) {
             s.atk = combine(atkCon[0], atkCon[1]);
         } else {
             s.atk = combine(atkCon[0]);
@@ -191,8 +191,8 @@ export function CrewManager(){
 
         // Defense (rename will be 'def')
         let defCon = this.statConstituents.defense[member.type];
-        if(!defCon) defCon = ['fort'];
-        if(defCon.length === 2){
+        if (!defCon) defCon = ['fort'];
+        if (defCon.length === 2) {
             s.def = combine(defCon[0], defCon[1]);
         } else {
             s.def = combine(defCon[0]);
@@ -253,14 +253,14 @@ export function CrewManager(){
         } catch (e) {
             console.warn('addCrewMember: failed to ensure baseHp', e, member);
         }
-        try { this.computeDerivedStats(member); } catch(e) { console.warn('addCrewMember: computeDerivedStats failed', e, member); }
+        try { this.computeDerivedStats(member); } catch (e) { console.warn('addCrewMember: computeDerivedStats failed', e, member); }
         this.crew.push(member)
     }
 
     this.addExperience = (memberArray, experienceValue) => {
-        memberArray.forEach(m=>{
+        memberArray.forEach(m => {
             // const nextLevelExp = EXP_TABLE[m.level]
-            let member = this.crew.find(c=>c.type === m.type)
+            let member = this.crew.find(c => c.type === m.type)
             member.stats.experience += experienceValue
         })
         // After awarding experience, immediately check for level-up so stats
@@ -363,13 +363,13 @@ export function CrewManager(){
         crewMember.pendingLevelUpPicks = crewMember.pendingLevelUpPicks || [];
         crewMember.pendingLevelUpPicks.push(crewMember.level);
         // Increase baseHp by 5 on level-up, then recompute derived stats
-    try {
-        crewMember.stats.baseHp = (typeof crewMember.stats.baseHp === 'number') ? crewMember.stats.baseHp + 5 : ((crewMember.type === 'barbarian') ? 12 + 5 : 10 + 5);
-        if (typeof crewMember.stats.rawBaseHp === 'number') crewMember.stats.rawBaseHp += 5;
-    } catch (e) {
-        console.warn('levelUp: failed to increment baseHp', e, crewMember);
-    }
-    try { this.computeDerivedStats(crewMember); } catch (e) { console.warn('levelUp: computeDerivedStats failed', e, crewMember); }
+        try {
+            crewMember.stats.baseHp = (typeof crewMember.stats.baseHp === 'number') ? crewMember.stats.baseHp + 5 : ((crewMember.type === 'barbarian') ? 12 + 5 : 10 + 5);
+            if (typeof crewMember.stats.rawBaseHp === 'number') crewMember.stats.rawBaseHp += 5;
+        } catch (e) {
+            console.warn('levelUp: failed to increment baseHp', e, crewMember);
+        }
+        try { this.computeDerivedStats(crewMember); } catch (e) { console.warn('levelUp: computeDerivedStats failed', e, crewMember); }
         return gains;
     }
 
@@ -456,9 +456,9 @@ export function CrewManager(){
     this.calculateExpPercentage = (crewMember) => {
 
         try {
-            if(!crewMember) return 0;
+            if (!crewMember) return 0;
             let foundMember = this.crew.find(e => e && (e.name === crewMember.name || e.id === crewMember.id));
-            if(!foundMember || !foundMember.stats) return 0;
+            if (!foundMember || !foundMember.stats) return 0;
             const level = (typeof foundMember.level === 'number' && foundMember.level >= 0) ? foundMember.level : 0;
             const nextLevelExp = (typeof EXP_TABLE[level] !== 'undefined') ? EXP_TABLE[level] : EXP_TABLE[EXP_TABLE.length - 1];
             const prevLevelExp = level > 0 ? EXP_TABLE[level - 1] : 0;
@@ -478,7 +478,7 @@ export function CrewManager(){
         const startDate = new Date();
         let endDate;
         // Flat structure for special actions
-        switch(actionType.type){
+        switch (actionType.type) {
             case 'glyph':
             case 'spell':
                 // ── New tiered glyph system ──────────────────────────────────────
@@ -508,7 +508,7 @@ export function CrewManager(){
                 }
 
                 // Legacy: magic missile (kept for backward compat with any persisted data)
-                switch(actionSubtype.type){
+                switch (actionSubtype.type) {
                     case 'magic missile': {
                         const prepareTime = SPELLS.magicMissile.prepareTime || 10000;
                         endDate = new Date(Date.now() + prepareTime);
@@ -524,11 +524,11 @@ export function CrewManager(){
                             notified: false
                         });
                     }
-                    break;
+                        break;
                     default:
                         break;
                 }
-            break;
+                break;
             case 'ritual': {
                 const ritualDef = RITUALS[actionSubtype.ritualKey];
                 const prepareTime = ritualDef ? ritualDef.prepareTime : 60 * 60 * 1000;
@@ -545,7 +545,7 @@ export function CrewManager(){
                     notified: false
                 });
             }
-            break;
+                break;
             case 'compound': {
                 const potion = actionSubtype.potion;
                 const recipe = actionSubtype.recipe;
@@ -563,7 +563,7 @@ export function CrewManager(){
                     notified: false
                 });
             }
-            break;
+                break;
             case 'brew': {
                 const brew = actionSubtype.brew;
                 const recipe = actionSubtype.recipe;
@@ -581,7 +581,7 @@ export function CrewManager(){
                     notified: false
                 });
             }
-            break;
+                break;
             case 'tactics': {
                 const tacticDef = BATTLE_TACTICS[actionSubtype.tacticKey];
                 if (!tacticDef) break;
@@ -599,7 +599,7 @@ export function CrewManager(){
                     notified: false,
                 });
             }
-            break;
+                break;
             case 'sharpen_blades': {
                 const prepTime = 2 * 60 * 60 * 1000; // 2 hours
                 endDate = new Date(Date.now() + prepTime);
@@ -613,7 +613,7 @@ export function CrewManager(){
                     notified: false,
                 });
             }
-            break;
+                break;
             case 'inner_discipline': {
                 const discDef = INNER_DISCIPLINES[actionSubtype.disciplineKey];
                 if (!discDef) break;
@@ -655,7 +655,7 @@ export function CrewManager(){
                 }
                 member.specialActions.push(entry);
             }
-            break;
+                break;
             case 'prepare_poison':
                 if (actionSubtype.bombType === 'acid_bomb') {
                     const prepTime = 2 * 60 * 60 * 1000; // 2 hours
@@ -709,6 +709,7 @@ export function CrewManager(){
             weaknesses: ['ice', 'fire', 'electricity', 'blood_magic'],
             description: "Hailing from the magister's college, Zildjikan was the dean of transmutation. A powerful magic user, he has been known to linger for long periods in the silent realm, searching for secret truths.",
             specialActions: [],
+            defaultUltimate: 'magic_missile>'
             actionsTrayExpanded: false,
             actionMenuTypeExpanded: false
         },

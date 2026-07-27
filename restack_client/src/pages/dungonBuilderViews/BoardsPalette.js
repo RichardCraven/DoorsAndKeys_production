@@ -44,7 +44,7 @@ class BoardsPalette extends React.Component {
             >
                 {this.props.mapMaker.paletteTiles && this.props.mapMaker.paletteTiles.map((tile, i) => {
                     return (
-                    <div key={i} className="palette-options-pane">
+                    <div key={i} className={`palette-options-pane${this.props.optionClickedIdx === i ? ' expanded-pane' : ''}`}>
                         <div className="palette-option-container"
                         style={{
                             backgroundImage: this.props.optionClickedIdx === i ? 'linear-gradient(90deg, transparent, rgba(249, 177, 21, 0.15))' : 'none'

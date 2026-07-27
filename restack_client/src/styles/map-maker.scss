@@ -1768,7 +1768,7 @@ ul.dropdown-menu.show{
 
     /* Redesign option container into vertical grid cells */
     .palette-options-pane {
-      width: calc(20% - 8px) !important; /* 5 columns grid layout */
+      width: calc(20% - 8px) !important; /* 5 columns grid layout by default */
       min-width: 90px !important;
       flex: 0 1 auto !important;
       border: 1px solid rgba(255, 255, 255, 0.12) !important;
@@ -1777,6 +1777,13 @@ ul.dropdown-menu.show{
       overflow: visible !important;
       display: flex !important;
       flex-direction: column !important;
+      transition: width 0.2s ease, flex-basis 0.2s ease;
+
+      /* When expanded, let it take up the full row width inline */
+      &.expanded-pane {
+        width: 100% !important;
+        flex: 1 1 100% !important;
+      }
     }
 
     .palette-option-container {
@@ -1826,12 +1833,56 @@ ul.dropdown-menu.show{
 
     /* Keep expanded options confined within columns */
     .palette-option-expandable-container {
+      display: none !important;
       width: 100% !important;
       background-color: #0b0a09 !important;
       border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
       border-radius: 0 0 8px 8px !important;
-      overflow-y: auto !important;
-      max-height: 220px !important;
+      box-sizing: border-box;
+
+      /* Expand horizontally when open */
+      &.expanded {
+        display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        padding: 10px !important;
+        gap: 10px !important;
+        -webkit-overflow-scrolling: touch;
+      }
+
+      /* Style sub-items inside scrollable submenu row as horizontal pills */
+      .palette-option-subcontainer {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        background: #1d1c1a !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 6px !important;
+        padding: 4px 10px !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+        width: auto !important;
+        box-sizing: border-box;
+
+        .tile {
+          width: 28px !important;
+          height: 28px !important;
+          flex-shrink: 0 !important;
+          margin-bottom: 0 !important;
+        }
+
+        .text-container {
+          padding-left: 8px !important;
+          flex: none !important;
+          text-align: left !important;
+
+          span {
+            font-size: 10px !important;
+            font-weight: 500 !important;
+          }
+        }
+      }
     }
   }
 

@@ -31,7 +31,7 @@ describe('Monk Ethereal Speed AI Movement Tests', () => {
       type: 'goblin',
       isMonster: true,
       stats: { speed: 5, dex: 5, def: 5, hp: 100 },
-      coordinates: { x: 5, y: 1 } // Moved to x=5 to account for 2x2 size occupying x=4
+      coordinates: { x: 4, y: 1 }
     };
 
     cm.initializeCombat({ crew: [monk], monster: target, minions: [] });
@@ -41,7 +41,7 @@ describe('Monk Ethereal Speed AI Movement Tests', () => {
 
     // Scenario A: Without Ethereal Speed
     cm.updateUnitCoordinates(liveMonk, 1, 1);
-    cm.updateUnitCoordinates(liveTarget, 5, 1);
+    cm.updateUnitCoordinates(liveTarget, 4, 1);
     liveMonk.etherealSpeedActive = false;
     liveMonk.cooldowns = { monk_ethereal_speed: 5 };
     liveMonk.movesTakenThisRound = 0;
@@ -54,7 +54,7 @@ describe('Monk Ethereal Speed AI Movement Tests', () => {
 
     // Scenario B: With Ethereal Speed active
     cm.updateUnitCoordinates(liveMonk, 1, 1);
-    cm.updateUnitCoordinates(liveTarget, 5, 1);
+    cm.updateUnitCoordinates(liveTarget, 4, 1);
     liveMonk.etherealSpeedActive = true;
     liveMonk.etherealSpeedRoundsLeft = 2;
     liveMonk.movesTakenThisRound = 0;

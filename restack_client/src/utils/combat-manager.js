@@ -796,6 +796,8 @@ export function CombatManager() {
             const dx = Math.abs(cc.x - tc.x);
             const dy = Math.abs(cc.y - tc.y);
             switch (caller.pendingAttack.range) {
+                case 'unlimited':
+                    return true;
                 case 'self':
                     return true;
                 case 'close':

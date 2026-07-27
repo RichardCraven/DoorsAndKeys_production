@@ -230,6 +230,8 @@ class MonsterBattle extends React.Component {
             popupOpenedWhilePaused: false,
             // Skill panel UX: queued skill per fighter and hover-label tracking
             queuedSkillMap: {},   // fighterId → skillKey
+            queuedSkillTargetMap: {}, // fighterId → { monsterId, monsterName }
+            mobileSkillDrag: null,   // drag-to-queue gesture state (mobile only)
             hoveredAbilityKey: null,
             message: '',
             combatStarted: false,
@@ -1161,6 +1163,228 @@ class MonsterBattle extends React.Component {
         this.setState(prev => ({
             queuedSkillMap: { ...prev.queuedSkillMap, [fighterId]: newKey }
         }));
+    }
+
+    // ── Drag-to-queue: mobile (touch) skill icon → enemy tile ───────────────
+    // Called from onTouchStart on skill icons in the mobile right panel.
+    _handleSkillDragStart = (e, fighterId, normalizedKey, skillName, iconUrl, isUltimate = false) => {
+        if (!this.state.isMobileLandscape) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const t = e.touches[0];
+        const dragState = {
+            fighterId,
+            normalizedKey,
+            skillName,
+            iconUrl,
+            isUltimate,
+            ghostX: t.clientX,
+            ghostY: t.clientY,
+            overMonsterId: null,
+            overMonsterName: null,
+            overEl: null,
+        };
+        this._skillDragMoveHandler = this._handleSkillDragMove;
+        this._skillDragEndHandler  = this._handleSkillDragEnd;
+        window.addEventListener('touchmove',  this._skillDragMoveHandler, { passive: false });
+        window.addEventListener('touchend',   this._skillDragEndHandler,  { passive: false });
+        window.addEventListener('touchcancel',this._skillDragEndHandler,  { passive: false });
+        // Mark the board as dragging so CSS can show drop-zone highlights
+        const board = document.querySelector('.mb-board');
+        if (board) board.classList.add('skill-drag-active');
+        this.setState({ mobileSkillDrag: dragState });
+    }
+
+    // ── Drag-to-queue: desktop (mouse) skill icon → enemy tile ───────────────
+    // Called from onMouseDown on skill icons in the desktop abilities panel.
+    _handleSkillMouseDragStart = (e, fighterId, normalizedKey, skillName, iconUrl, isUltimate = false) => {
+        // Only fire on left mouse button, and only when there IS a target to drag to
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const dragState = {
+            fighterId,
+            normalizedKey,
+            skillName,
+            iconUrl,
+            isUltimate,
+            ghostX: e.clientX,
+            ghostY: e.clientY,
+            overMonsterId: null,
+            overMonsterName: null,
+            overEl: null,
+        };
+        this._mouseSkillDragMoveHandler = this._handleSkillMouseDragMove;
+        this._mouseSkillDragEndHandler  = this._handleSkillMouseDragEnd;
+        window.addEventListener('mousemove', this._mouseSkillDragMoveHandler);
+        window.addEventListener('mouseup',   this._mouseSkillDragEndHandler);
+        const board = document.querySelector('.mb-board');
+        if (board) board.classList.add('skill-drag-active');
+        this.setState({ mobileSkillDrag: dragState });
+    }
+
+    _handleSkillMouseDragMove = (e) => {
+        if (!this.state.mobileSkillDrag) return;
+
+        const x = e.clientX;
+        const y = e.clientY;
+
+        // Walk up from the element under the cursor to find a data-monster-id node
+        // (temporarily hide the ghost so elementFromPoint works through it)
+        let el = document.elementFromPoint(x, y);
+        let monsterId   = null;
+        let monsterName = null;
+        let monsterEl   = null;
+        while (el && el !== document.body) {
+            if (el.dataset && el.dataset.monsterId) {
+                monsterId   = el.dataset.monsterId;
+                monsterName = el.dataset.monsterName || monsterId;
+                monsterEl   = el;
+                break;
+            }
+            el = el.parentElement;
+        }
+
+        const prev = this.state.mobileSkillDrag;
+        if (prev.overEl && prev.overEl !== monsterEl) {
+            prev.overEl.classList.remove('drag-over');
+        }
+        if (monsterEl && monsterEl !== prev.overEl) {
+            monsterEl.classList.add('drag-over');
+        }
+
+        this.setState(prevState => ({
+            mobileSkillDrag: {
+                ...prevState.mobileSkillDrag,
+                ghostX: x,
+                ghostY: y,
+                overMonsterId:   monsterId,
+                overMonsterName: monsterName,
+                overEl:          monsterEl,
+            }
+        }));
+    }
+
+    _handleSkillMouseDragEnd = (e) => {
+        const drag = this.state.mobileSkillDrag;
+        if (!drag) return;
+
+        window.removeEventListener('mousemove', this._mouseSkillDragMoveHandler);
+        window.removeEventListener('mouseup',   this._mouseSkillDragEndHandler);
+
+        const board = document.querySelector('.mb-board');
+        if (board) board.classList.remove('skill-drag-active');
+
+        if (drag.overEl) drag.overEl.classList.remove('drag-over');
+
+        if (drag.overMonsterId) {
+            this._commitSkillQueue(
+                drag.fighterId,
+                drag.normalizedKey,
+                drag.overMonsterId,
+                drag.overMonsterName,
+                drag.skillName,
+                drag.isUltimate
+            );
+        }
+
+        this.setState({ mobileSkillDrag: null });
+    }
+
+    _handleSkillDragMove = (e) => {
+        if (!this.state.mobileSkillDrag) return;
+        e.preventDefault();
+        const t = e.touches[0];
+        const x = t.clientX;
+        const y = t.clientY;
+
+        // Walk up from the element under the finger to find a data-monster-id node
+        let el = document.elementFromPoint(x, y);
+        let monsterId   = null;
+        let monsterName = null;
+        let monsterEl   = null;
+        while (el && el !== document.body) {
+            if (el.dataset && el.dataset.monsterId) {
+                monsterId   = el.dataset.monsterId;
+                monsterName = el.dataset.monsterName || monsterId;
+                monsterEl   = el;
+                break;
+            }
+            el = el.parentElement;
+        }
+
+        // Remove drag-over class from previous target, add to new one
+        const prev = this.state.mobileSkillDrag;
+        if (prev.overEl && prev.overEl !== monsterEl) {
+            prev.overEl.classList.remove('drag-over');
+        }
+        if (monsterEl && monsterEl !== prev.overEl) {
+            monsterEl.classList.add('drag-over');
+        }
+
+        this.setState(prevState => ({
+            mobileSkillDrag: {
+                ...prevState.mobileSkillDrag,
+                ghostX: x,
+                ghostY: y,
+                overMonsterId:   monsterId,
+                overMonsterName: monsterName,
+                overEl:          monsterEl,
+            }
+        }));
+    }
+
+    _handleSkillDragEnd = (e) => {
+        const drag = this.state.mobileSkillDrag;
+        if (!drag) return;
+
+        window.removeEventListener('touchmove',  this._skillDragMoveHandler);
+        window.removeEventListener('touchend',   this._skillDragEndHandler);
+        window.removeEventListener('touchcancel',this._skillDragEndHandler);
+
+        // Remove board-level class
+        const board = document.querySelector('.mb-board');
+        if (board) board.classList.remove('skill-drag-active');
+
+        // Remove drag-over from the last tile
+        if (drag.overEl) drag.overEl.classList.remove('drag-over');
+
+        if (drag.overMonsterId) {
+            this._commitSkillQueue(
+                drag.fighterId,
+                drag.normalizedKey,
+                drag.overMonsterId,
+                drag.overMonsterName,
+                drag.skillName,
+                drag.isUltimate
+            );
+        }
+
+        this.setState({ mobileSkillDrag: null });
+    }
+
+    _commitSkillQueue = (fighterId, skillKey, targetMonsterId, targetMonsterName, skillName, isUltimate = false) => {
+        const cm = this.props.combatManager;
+        if (cm && cm.combatants && cm.combatants[fighterId]) {
+            cm.combatants[fighterId].queuedSkill = skillKey;
+            cm.combatants[fighterId].queuedSkillTargetId = targetMonsterId;
+        }
+        this.setState(prev => ({
+            queuedSkillMap: { ...prev.queuedSkillMap, [fighterId]: skillKey },
+            queuedSkillTargetMap: {
+                ...prev.queuedSkillTargetMap,
+                [fighterId]: { monsterId: targetMonsterId, monsterName: targetMonsterName }
+            }
+        }));
+        // Toast feedback — distinguish ultimate drags with a special message
+        const label = skillName || skillKey || 'Skill';
+        const target = targetMonsterName || 'target';
+        const toastMsg = isUltimate
+            ? `⚡ ULTIMATE: ${label} → ${target}`
+            : `Queued: ${label} → ${target}`;
+        this.setState({ toastMsg });
+        if (this._toastTimeout) clearTimeout(this._toastTimeout);
+        this._toastTimeout = setTimeout(() => this.setState({ toastMsg: null }), 2500);
     }
 
 
@@ -2987,6 +3211,10 @@ class MonsterBattle extends React.Component {
             </svg>
         );
 
+        // Detect if this fighter currently has an active Ultimate ready to use
+        const liveFighterRef = cm ? (cm.getCombatant?.(fighterId) || liveSelectedFighter) : liveSelectedFighter;
+        const fighterUltimateActive = !!(liveFighterRef?.ultimateActive);
+
         const renderRegularTile = (a, i) => {
             const { spec, sourceKey, normalizedKey } = resolveSpec(a);
             const iconUrl = resolveIcon(spec.iconUrl || spec.icon);
@@ -2994,6 +3222,10 @@ class MonsterBattle extends React.Component {
             const isReady = cooldownPct === 0;
             const isQueued = queuedKey === normalizedKey || queuedKey === sourceKey;
             const isHovered = hoveredKey === normalizedKey;
+            const queuedTarget = this.state.queuedSkillTargetMap?.[fighterId];
+            const queuedTargetName = (isQueued && queuedTarget) ? queuedTarget.monsterName : null;
+            // Ultimate shimmer: skill has an `ultimate` field AND the fighter's ultimate is ready
+            const isUltimateSkill = fighterUltimateActive && !!(spec.ultimate);
 
             return (
                 <div
@@ -3006,29 +3238,49 @@ class MonsterBattle extends React.Component {
                         className={`skill-hover-label${isHovered ? ' visible' : ''}`}
                         onClick={(e) => { e.stopPropagation(); this.openSkillPopup(spec); }}
                     >
-                        {spec.name || sourceKey}
+                        {isUltimateSkill ? `⚡ ${spec.name || sourceKey} [ULTIMATE]` : (spec.name || sourceKey)}
                     </div>
-                    <div className="interaction-tile-wrapper">
+                    <div className="interaction-tile-wrapper" style={{ position: 'relative' }}>
                         <div
-                            className={`interaction-tile special${isReady ? ' available' : ''}${isQueued ? ' queued' : ''}`}
+                            className={`interaction-tile special${isReady ? ' available' : ''}${isQueued ? ' queued' : ''}${isUltimateSkill ? ' ultimate-shimmer' : ''}`}
                             style={{
-                                backgroundImage: iconUrl ? `url("${encodeURI(String(iconUrl).replace(/^['"]|['"]$/g, ''))}")` : 'none',
-                                cursor: 'pointer',
+                                backgroundImage: iconUrl ? `url("${encodeURI(String(iconUrl).replace(/^['"]/g, '').replace(/['"]/g, ''))}")` : 'none',
+                                // Grab cursor on ultimate-ready skills to hint drag-to-target
+                                cursor: isUltimateSkill ? 'grab' : 'pointer',
                                 opacity: isReady ? 1 : 0.7,
                             }}
                             onClick={() => this.handleQueueSkill(fighterId, normalizedKey)}
+                            onMouseDown={!this.state.isMobileLandscape
+                                ? (e) => this._handleSkillMouseDragStart(e, fighterId, normalizedKey, spec.name || sourceKey, iconUrl, isUltimateSkill)
+                                : undefined
+                            }
+                            onTouchStart={this.state.isMobileLandscape
+                                ? (e) => this._handleSkillDragStart(e, fighterId, normalizedKey, spec.name || sourceKey, iconUrl, isUltimateSkill)
+                                : undefined
+                            }
                             onContextMenu={(e) => {
                                 const unitType = String(liveSelectedFighter?.type || liveSelectedFighter?.image || '').toLowerCase();
-                                if (unitType === 'ranger' || unitType === 'soldier') {
+                                const isWizardUltimate = unitType === 'wizard' && isUltimateSkill;
+                                if (unitType === 'ranger' || unitType === 'soldier' || isWizardUltimate) {
                                     e.preventDefault();
                                     e.stopPropagation();
                                     this.openSkillContextMenu(fighterId, normalizedKey, spec, e.clientX, e.clientY);
                                 }
                             }}
                         />
+                        {/* Ultimate shimmer overlay — sits on top of the icon, pointer-events:none */}
+                        {isUltimateSkill && (
+                            <div className="ultimate-skill-shimmer" aria-hidden="true" />
+                        )}
                         <CooldownSvg pct={cooldownPct} />
                         {!isReady && (
                             <div className="redux-cd-badge">{Math.ceil(smoothRemaining)}</div>
+                        )}
+                        {/* Target chip — shows which enemy this skill is queued against */}
+                        {queuedTargetName && (
+                            <div className="skill-queue-target-chip" title={`Targeting: ${queuedTargetName}`}>
+                                {queuedTargetName}
+                            </div>
                         )}
                     </div>
                 </div>
@@ -3277,6 +3529,38 @@ class MonsterBattle extends React.Component {
 
         return (
             <div className={`mb-board ${this.state.isMobileLandscape ? 'mobile-layout' : ''} ${this.state.greetingInProcess ? 'greeting-in-process' : ''} ${this.state.showCrosshair ? 'show-crosshair' : ''} ${this.state.acidBombMode ? 'acid-bomb-mode' : ''}`}>
+                {/* ── Skill-queue toast (mobile and desktop) ──────────────────── */}
+                {this.state.toastMsg && (
+                    <div className={`skill-queue-toast${this.state.toastMsg.startsWith('⚡') ? ' ultimate-toast' : ''}`}>{this.state.toastMsg}</div>
+                )}
+                {/* ── Skill-drag ghost overlay (mobile touch + desktop mouse) ─────── */}
+                {(() => {
+                    const drag = this.state.mobileSkillDrag;
+                    if (!drag) return null;
+                    return (
+                        <div
+                            className={`skill-drag-ghost${drag.overMonsterId ? ' on-target' : ''}${drag.isUltimate ? ' ultimate-drag' : ''}`}
+                            style={{
+                                left: drag.ghostX,
+                                top:  drag.ghostY,
+                                backgroundImage: drag.iconUrl
+                                    ? `url("${encodeURI(String(drag.iconUrl).replace(/^['"]/g, '').replace(/['"]/g, ''))}")` 
+                                    : 'none',
+                            }}
+                        >
+                            {drag.isUltimate && (
+                                <div className="skill-drag-ghost-ultimate-shimmer" aria-hidden="true" />
+                            )}
+                            {drag.isUltimate && (
+                                <div className="skill-drag-ghost-ultimate-badge">⚡ ULTIMATE</div>
+                            )}
+                            {drag.overMonsterName && (
+                                <div className="skill-drag-ghost-label">{drag.overMonsterName}</div>
+                            )}
+                        </div>
+                    );
+                })()}
+
                 {/* Mobile Left & Right Panels */}
                 {this.state.isMobileLandscape && (
                     <div className="mobile-left-panel">
@@ -5643,8 +5927,21 @@ class MonsterBattle extends React.Component {
                             fighterRef.type === 'ranger' || fighterRef.image === 'ranger' ||
                             fighterRef.type === 'soldier' || fighterRef.image === 'soldier'
                         );
+                        const isUltimateContextMenu = !!(fighterRef?.ultimateActive && spec.ultimate);
                         return (
                             <div className="unit-context-menu skill-context-menu" style={{ left: x, top: y, position: 'fixed', zIndex: 10000 }}>
+                                {isUltimateContextMenu && (
+                                    <div
+                                        className="ucm-option ucm-option--ultimate"
+                                        onClick={(evt) => {
+                                            evt.stopPropagation();
+                                            this.fireSpecial(spec);
+                                            this.setState({ skillContextMenu: null });
+                                        }}
+                                    >
+                                        ⚡ Use Ultimate!
+                                    </div>
+                                )}
                                 {isRangerOrSoldier ? (
                                     <div
                                         className="ucm-option"

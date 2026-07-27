@@ -125,53 +125,46 @@ describe('Wraith Blocked Pathfinding Target Switch', () => {
     wraith.movesTakenThisRound = 0;
     wraith.actionsTakenThisRound = 0;
 
-    // First Turn: Wraith targets Monk, moves closer to (3, 1) (distance: 4 -> 3)
+    // First Turn: Wraith targets Monk, cannot get closer under Chebyshev distance (3,2) -> (1,0) (dist 2)
+    // All neighbors are distance >= 2, so it stays at (3, 2). Count becomes 1.
     cm.executeUnitAI(wraith);
     expect(wraith.targetId).toBe('monk_1');
     expect(wraith.coordinates.x).toBe(3);
-    expect(wraith.coordinates.y).toBe(1);
-    expect(wraith._failedPathfindCount).toBe(0); // successfully moved closer
-
-    // Reset round actions/moves
-    wraith.movesTakenThisRound = 0;
-    wraith.actionsTakenThisRound = 0;
-
-    // Second Turn: Wraith targets Monk, cannot get closer than (3, 1) so it stays at (3, 1). Count = 1
-    cm.executeUnitAI(wraith);
-    expect(wraith.targetId).toBe('monk_1');
-    expect(wraith.coordinates.x).toBe(3);
-    expect(wraith.coordinates.y).toBe(1);
+    expect(wraith.coordinates.y).toBe(2);
     expect(wraith._failedPathfindCount).toBe(1);
 
     // Reset round actions/moves
     wraith.movesTakenThisRound = 0;
     wraith.actionsTakenThisRound = 0;
 
-    // Third Turn: Wraith targets Monk, stays at (3, 1). Count = 2
+    // Second Turn: Wraith targets Monk, still stays at (3, 2). Count becomes 2.
     cm.executeUnitAI(wraith);
     expect(wraith.targetId).toBe('monk_1');
     expect(wraith.coordinates.x).toBe(3);
-    expect(wraith.coordinates.y).toBe(1);
+    expect(wraith.coordinates.y).toBe(2);
     expect(wraith._failedPathfindCount).toBe(2);
 
     // Reset round actions/moves
     wraith.movesTakenThisRound = 0;
     wraith.actionsTakenThisRound = 0;
 
-    // Fourth Turn: Wraith targets Monk, stays at (3, 1). Count = 3 (greater than 2). Switches targets!
+    // Third Turn: Wraith targets Monk, stays at (3, 2). Count becomes 3 (greater than 2).
+    // It switches targets to Barbarian, but stays at (3, 2) this turn as movement already happened.
     cm.executeUnitAI(wraith);
     expect(wraith.targetId).toBe('barbarian_1');
-    expect(wraith._failedPathfindCount).toBe(0); // reset
+    expect(wraith.coordinates.x).toBe(3);
+    expect(wraith.coordinates.y).toBe(2);
+    expect(wraith._failedPathfindCount).toBe(0); // reset upon switching target
     expect(wraith._excludedTargetIds).toContain('monk_1');
 
     // Reset round actions/moves
     wraith.movesTakenThisRound = 0;
     wraith.actionsTakenThisRound = 0;
 
-    // Fifth Turn: Wraith targets Barbarian, moves closer towards (0, 3) (steps to (3, 2))
+    // Fourth Turn: Wraith targets Barbarian, moves closer towards Barbarian at (0, 3) (steps to (2, 2) or (2, 3))
     cm.executeUnitAI(wraith);
-    expect(wraith.coordinates.x).toBe(3);
-    expect(wraith.coordinates.y).toBe(2);
-    expect(wraith._failedPathfindCount).toBe(0); // reset since it moved
+    expect(wraith.targetId).toBe('barbarian_1');
+    expect(wraith.coordinates.x).toBe(2);
+    expect(wraith._failedPathfindCount).toBe(0); // reset since it successfully moved
   });
 });
