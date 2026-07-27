@@ -694,6 +694,7 @@ class ShrineScreen extends React.Component {
                             greetingInProcess={this.state.message !== ''}
                             SHOW_MONSTER_IDS={false}
                             activeAnimations={this.state.activeAnimations}
+                            isPaused={!!(this.props.paused || this.combatManager?.combatPaused)}
                             TILE_SIZE={TILE_SIZE}
                             SHOW_TILE_BORDERS={true}
                         />

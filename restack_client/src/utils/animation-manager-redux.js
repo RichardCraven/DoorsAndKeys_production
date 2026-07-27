@@ -29,7 +29,8 @@ import {
   fear,
   soldier_fist_of_honor,
   death_missile,
-  death_missile_hit
+  death_missile_hit,
+  food
 } from './images';
 
 export class AnimationManagerRedux {
@@ -39,6 +40,13 @@ export class AnimationManagerRedux {
     this.USE_TILE_BORDERS = true;
     this.activeAnimations = [];
     this.onAnimationEvent = null; // callback(animations[]) wired by MonsterBattle
+
+    // Pause support
+    this.isPaused = false;
+    this._pausedAt = null;
+    // Map<id, { handle, fn, remaining, startedAt }>
+    this._pendingDelays = new Map();
+    this._delayIdCounter = 0;
   }
 
   /** Wire the React setState callback from MonsterBattle */
@@ -66,6 +74,49 @@ export class AnimationManagerRedux {
     return { x, y };
   }
 
+  /**
+   * Pause-aware delay wrapper — replaces all raw setTimeout calls.
+   * Stores the pending callback so pause()/resume() can freeze/thaw it.
+   */
+  _delay(fn, ms) {
+    const delayId = ++this._delayIdCounter;
+    const handle = setTimeout(() => {
+      this._pendingDelays.delete(delayId);
+      fn();
+    }, ms);
+    this._pendingDelays.set(delayId, { handle, fn, remaining: ms, startedAt: Date.now() });
+    return delayId;
+  }
+
+  /** Freeze all in-flight JS timers. Called by combat-manager-redux.pauseCombat(true). */
+  pause() {
+    if (this.isPaused) return;
+    this.isPaused = true;
+    this._pausedAt = Date.now();
+    this._pendingDelays.forEach((entry, delayId) => {
+      clearTimeout(entry.handle);
+      const elapsed = Date.now() - entry.startedAt;
+      entry.remaining = Math.max(0, entry.remaining - elapsed);
+    });
+  }
+
+  /** Thaw all in-flight JS timers with their remaining time. Called by pauseCombat(false). */
+  resume() {
+    if (!this.isPaused) return;
+    this.isPaused = false;
+    this._pausedAt = null;
+    this._pendingDelays.forEach((entry, delayId) => {
+      const { fn, remaining } = entry;
+      const handle = setTimeout(() => {
+        this._pendingDelays.delete(delayId);
+        fn();
+      }, remaining);
+      entry.handle = handle;
+      entry.startedAt = Date.now();
+      entry.remaining = remaining;
+    });
+  }
+
   /** Emit an animation event and auto-remove it after duration */
   _emit(anim) {
     const id = `anim_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -74,7 +125,7 @@ export class AnimationManagerRedux {
     if (this.onAnimationEvent) this.onAnimationEvent([...this.activeAnimations]);
 
     const duration = anim.duration || 1000;
-    setTimeout(() => {
+    this._delay(() => {
       this.activeAnimations = this.activeAnimations.filter(a => a.id !== id);
       if (this.onAnimationEvent) this.onAnimationEvent([...this.activeAnimations]);
     }, duration);
@@ -97,7 +148,7 @@ export class AnimationManagerRedux {
    * @param {object} targetCoords  { x, y }
    * @param {string} abilityName   e.g. 'claw_strike', 'energy_drain'
    */
-   triggerAbility(sourceCoords, targetCoords, abilityName, isTargetLarge = false, targetOccupiedCoords = null, sourceUnitId = null, arrowType = null, customDuration = null, hitResults = null, sphereCoords = null, negatedByBarrier = false, casterId = null) {
+   triggerAbility(sourceCoords, targetCoords, abilityName, isTargetLarge = false, targetOccupiedCoords = null, sourceUnitId = null, arrowType = null, customDuration = null, hitResults = null, sphereCoords = null, negatedByBarrier = false, casterId = null, isUltimate = false) {
     if (!sourceCoords || !targetCoords) return;
     const name = String(abilityName || '').toLowerCase().replace(/\s+/g, '_');
     this._currentTargetCoords = targetCoords;
@@ -132,7 +183,7 @@ export class AnimationManagerRedux {
           angle,
           duration: 700
         });
-        setTimeout(() => {
+        this._delay(() => {
           this._overloadSuccess(targetCoords, sourceUnitId, isTargetLarge, targetOccupiedCoords, casterId);
         }, 700);
         break;
@@ -150,7 +201,7 @@ export class AnimationManagerRedux {
           angle,
           duration: 700
         });
-        setTimeout(() => {
+        this._delay(() => {
           this._overloadFail(targetCoords, sourceUnitId, isTargetLarge, targetOccupiedCoords, casterId);
         }, 700);
         break;
@@ -233,7 +284,8 @@ export class AnimationManagerRedux {
       case 'minor_magic_missile':
       case 'major_magic_missile':
       case 'greater_magic_missile':
-        this._magicMissile(sourceCoords, targetCoords, hitResults, name, spherePx);
+      case 'magic_missile_ultimate':
+        this._magicMissile(sourceCoords, targetCoords, hitResults, name, spherePx, isUltimate);
         break;
       case 'lightning_strike':
       case 'lightning':
@@ -417,6 +469,9 @@ export class AnimationManagerRedux {
       case 'paradox_engine_fail':
         this._paradoxEngineFail(sourceCoords, targetCoords);
         break;
+      case 'feed_the_masses':
+        this._feedTheMasses(sourceCoords, targetCoords);
+        break;
       default:
         // Generic melee hit for unknown abilities
         this._genericHit(sourceCoords, targetCoords);
@@ -570,7 +625,7 @@ export class AnimationManagerRedux {
     });
 
     // Phase 2: Area fracture burst at the 2x2 center
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'madness_cast_overlay',
         tgtPx,
@@ -615,7 +670,7 @@ export class AnimationManagerRedux {
     });
 
     // Phase 2: claw_hit overlay on target, staggered after swipe
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'claw_hit',
         tgtPx,
@@ -648,7 +703,7 @@ export class AnimationManagerRedux {
     });
 
     // Phase 2: claw_hit overlay on target, staggered after swipe
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'claw_hit',
         tgtPx,
@@ -667,7 +722,7 @@ export class AnimationManagerRedux {
       duration: 1000
     });
 
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'stomp_shockwave',
         centerPx: srcPx,
@@ -754,27 +809,28 @@ export class AnimationManagerRedux {
     const didHit = !Array.isArray(hitResults) || hitResults.length === 0 || hitResults[0] === true;
     if (!this._negatedByBarrier) {
       if (didHit) {
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'explosion', tgtPx, duration: 600 });
         }, 900);
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'fire_secondary_ring', tgtPx, duration: 500 });
         }, 980);
       } else {
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'projectile_drip', tgtPx, variant: 'fireball', duration: 1000 });
         }, 900);
       }
     }
   }
 
-  _magicMissile(src, tgt, hitResults = null, abilityName = 'magic_missile', spherePx = null) {
+  _magicMissile(src, tgt, hitResults = null, abilityName = 'magic_missile', spherePx = null, isUltimate = false) {
     const srcPx = this._px(src);
     const occupiedCoords = this._currentTargetOccupiedCoords;
     const hasComplex = Array.isArray(occupiedCoords) && occupiedCoords.length > 0;
+    const isUlt = isUltimate || abilityName === 'magic_missile_ultimate' || (typeof abilityName === 'string' && abilityName.includes('ultimate'));
 
     const fireMissile = (delayTime, offsetY, index) => {
-      setTimeout(() => {
+      this._delay(() => {
         let currentTgtPx;
         if (hasComplex && occupiedCoords) {
           const randomIndex = Math.floor(Math.random() * occupiedCoords.length);
@@ -800,35 +856,38 @@ export class AnimationManagerRedux {
           duration: 400,
           spherePx,
           abilityName,
+          isUltimate: isUlt
         });
 
         const isHit = Array.isArray(hitResults) ? hitResults[index] !== false : true;
 
         // Emit hit sigil at impact (400ms later)
-        setTimeout(() => {
+        this._delay(() => {
           if (isHit && !this._negatedByBarrier) {
             this._emit({
               type: 'magic_missile_hit_sigil',
               tgtPx: adjustedTgtPx,
-              duration: 350
+              duration: 350,
+              isUltimate: isUlt
             });
           } else {
             this._emit({
               type: 'magic_missile_miss_dot',
               tgtPx: finalTgtPx,
-              duration: 350
+              duration: 350,
+              isUltimate: isUlt
             });
           }
         }, 400);
       }, delayTime);
     };
 
-    if (abilityName === 'greater_magic_missile') {
-      fireMissile(0, -20, 0);
-      fireMissile(150, -10, 1);
-      fireMissile(300, 0, 2);
-      fireMissile(450, 10, 3);
-      fireMissile(600, 20, 4);
+    if (abilityName === 'greater_magic_missile' || isUlt) {
+      const count = isUlt ? 7 : 5;
+      for (let i = 0; i < count; i++) {
+        const offset = (i - (count - 1) / 2) * 8;
+        fireMissile(i * 120, offset, i);
+      }
     } else if (abilityName === 'nether_bolt' || abilityName === 'minor_magic_missile') {
       fireMissile(0, 0, 0);
     } else {
@@ -847,7 +906,7 @@ export class AnimationManagerRedux {
       duration: 700
     });
     // Emit lightning hit burst (or background flash overlays)
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'lightning_hit',
         tgtPx,
@@ -873,11 +932,11 @@ export class AnimationManagerRedux {
     const didHit = !Array.isArray(hitResults) || hitResults.length === 0 || hitResults[0] === true;
     if (!this._negatedByBarrier) {
       if (didHit) {
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'ice_burst', tgtPx, duration: 500 });
         }, 600);
       } else {
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'projectile_drip', tgtPx, variant: 'ice_blast', duration: 1000 });
         }, 600);
       }
@@ -903,14 +962,14 @@ export class AnimationManagerRedux {
 
     if (!this._negatedByBarrier) {
       if (isHit) {
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'poison_burst', tgtPx, duration: 500 });
         }, 600);
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'acid_secondary_ring', tgtPx, duration: 450 });
         }, 690);
       } else {
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'projectile_drip', tgtPx, variant: 'acid_blast', duration: 1000 });
         }, 600);
       }
@@ -1028,15 +1087,15 @@ export class AnimationManagerRedux {
       sourceUnitId,
     });
     if (activeArrow === 'ice') {
-      setTimeout(() => {
+      this._delay(() => {
         this._emit({ type: 'ice_burst', tgtPx, duration: 500 });
       }, 600);
     } else if (activeArrow === 'poison') {
-      setTimeout(() => {
+      this._delay(() => {
         this._emit({ type: 'poison_burst', tgtPx, duration: 500 });
       }, 600);
     } else if (activeArrow === 'force') {
-      setTimeout(() => {
+      this._delay(() => {
         this._emit({ type: 'force_burst', tgtPx, duration: 500 });
       }, 600);
     }
@@ -1061,6 +1120,24 @@ export class AnimationManagerRedux {
     });
   }
 
+  _feedTheMasses(src, tgt) {
+    const srcPx = this._px(src);
+    let tgtPx = this._getImpactTargetPx(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    this._emit({
+      type: 'generic_projectile',
+      subtype: 'feed_the_masses',
+      srcPx,
+      tgtPx,
+      angle,
+      isLob: true,
+      icon: food,
+      duration: 1000,
+    });
+  }
+
   _executeMultiShots(src, tgt, name, arrowType = null, spherePx = null) {
     const srcPx = this._px(src);
     let tgtPx = this._getImpactTargetPx(tgt);
@@ -1082,23 +1159,23 @@ export class AnimationManagerRedux {
         spherePx,
       });
       if (activeArrow === 'ice') {
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'ice_burst', tgtPx, duration: 500 });
         }, 600);
       } else if (activeArrow === 'poison') {
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'poison_burst', tgtPx, duration: 500 });
         }, 600);
       } else if (activeArrow === 'force') {
-        setTimeout(() => {
+        this._delay(() => {
           this._emit({ type: 'force_burst', tgtPx, duration: 500 });
         }, 600);
       }
     };
 
     fireArrow();
-    setTimeout(fireArrow, 250);
-    setTimeout(fireArrow, 500);
+    this._delay(fireArrow, 250);
+    this._delay(fireArrow, 500);
   }
 
   _heal(src, tgt) {
@@ -1121,7 +1198,7 @@ export class AnimationManagerRedux {
     });
 
     // Impact pop target heal glow at 400ms delay
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'heal_glow',
         srcPx,
@@ -1312,7 +1389,7 @@ export class AnimationManagerRedux {
     });
 
     // Phase 2: Concentric ring explosion on target (triggers at 150ms when beam makes contact)
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'annihilation_burst',
         tgtPx,
@@ -1321,7 +1398,7 @@ export class AnimationManagerRedux {
     }, 150);
 
     // Phase 3: Hit effect annihilation_portal on target (triggers at 150ms when beam makes contact)
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'annihilation_portal',
         tgtPx,
@@ -1391,6 +1468,20 @@ export class AnimationManagerRedux {
 
   triggerSummon(coords, summonType, transitionIcon) {
     this._summon(coords, summonType, transitionIcon);
+  }
+
+  triggerFamiliarSummon(coords, runeKey = 'archaic') {
+    this._familiarSummon(coords, runeKey);
+  }
+
+  _familiarSummon(tgt, runeKey = 'archaic') {
+    const tgtPx = this._px(tgt);
+    this._emit({
+      type: 'familiar_summon_rune',
+      tgtPx,
+      runeKey: (runeKey || 'archaic').replace('_rune', ''),
+      duration: 1500
+    });
   }
 
   _summon(tgt, summonType, transitionIcon) {
@@ -1480,7 +1571,7 @@ export class AnimationManagerRedux {
       duration: 600
     });
 
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'bind_hit_ropes',
         tgtPx,
@@ -1509,7 +1600,7 @@ export class AnimationManagerRedux {
       duration: 800,
     });
 
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'death_missile_burst',
         tgtPx,
@@ -1539,7 +1630,7 @@ export class AnimationManagerRedux {
     });
 
     // Phase 2: Burst on target
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'trials_burst',
         tgtPx,
@@ -1573,7 +1664,7 @@ export class AnimationManagerRedux {
     // Phase 2: sweep 2 tile-widths toward enemies (to the left, same as forwardDir = -1 for monsters)
     const sweepDelay = Math.round(dur * 0.8);
     const sweepDuration = Math.round(dur * 0.25);
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'rift_line_sweep',
         spawnPx,
@@ -1745,7 +1836,7 @@ export class AnimationManagerRedux {
       centerPx,
       duration: 1500
     });
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'dragon_dispel_wave',
         centerPx,
@@ -1797,7 +1888,7 @@ export class AnimationManagerRedux {
       sourceUnitId,
     });
 
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'claw_hit',
         tgtPx,
@@ -1836,7 +1927,7 @@ export class AnimationManagerRedux {
       angle,
       duration: 1000,
     });
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'silence_hit',
         tgtPx,
@@ -1907,7 +1998,7 @@ export class AnimationManagerRedux {
       sourceUnitId,
       duration: duration,
     });
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'chainbolt_hit',
         tgtPx,
@@ -1935,7 +2026,7 @@ export class AnimationManagerRedux {
       variant,
       duration: duration,
     });
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'mind_swap_hit',
         tgtPx,
@@ -1963,7 +2054,7 @@ export class AnimationManagerRedux {
       length,
       duration: duration,
     });
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'displacement_ray_hit',
         tgtPx,
@@ -2005,7 +2096,7 @@ export class AnimationManagerRedux {
       sourceUnitId,
       duration: 700,
     });
-    setTimeout(() => {
+    this._delay(() => {
       this._emit({
         type: 'voidbite_hit',
         tgtPx: midPx,

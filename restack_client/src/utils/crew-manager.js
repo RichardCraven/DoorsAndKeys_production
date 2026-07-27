@@ -709,7 +709,7 @@ export function CrewManager() {
             weaknesses: ['ice', 'fire', 'electricity', 'blood_magic'],
             description: "Hailing from the magister's college, Zildjikan was the dean of transmutation. A powerful magic user, he has been known to linger for long periods in the silent realm, searching for secret truths.",
             specialActions: [],
-            defaultUltimate: 'magic_missile>'
+            defaultUltimate: 'magic_missile',
             actionsTrayExpanded: false,
             actionMenuTypeExpanded: false
         },

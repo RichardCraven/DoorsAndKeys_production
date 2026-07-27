@@ -10,10 +10,119 @@
 import React from 'react';
 import * as images from '../../utils/images';
 import Overlay from '../Overlay';
+import { runesData } from '../../utils/rune-data';
 
 
 const TILE_SIZE = 100;
 const SHOW_TILE_BORDERS = false;
+
+
+function FamiliarSummonRuneAnimation({ animKey, tgtPx, runeKey = 'archaic' }) {
+    const rKey = (runeKey || 'archaic').replace('_rune', '').toLowerCase();
+    const data = runesData[rKey] || runesData['archaic'];
+    const baseImg = data?.assembledImg || data?.baseImg;
+    const pieces = data?.pieces || {};
+
+    const [phase, setPhase] = React.useState(1);
+
+    React.useEffect(() => {
+        const t1 = setTimeout(() => setPhase(2), 400);  // Step 2: replace base icon with 5 assembled shards
+        const t2 = setTimeout(() => setPhase(3), 520);  // Step 3: shards move outward to disassembled state
+        const t3 = setTimeout(() => setPhase(4), 1150); // Step 4: shards fade out
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+        };
+    }, []);
+
+    const requiredPieces = ['top left', 'top right', 'bottom left', 'bottom right', 'top center'];
+
+    const getShardTransform = (pieceName, isDisassembled, distance = 45) => {
+        if (!isDisassembled) return 'translate(0px, 0px)';
+        const normalized = pieceName.toLowerCase().replace(/[^a-z]/g, '');
+        switch(normalized) {
+            case 'bottomleft': return `translate(-${distance}px, ${distance}px)`;
+            case 'bottomright': return `translate(${distance}px, ${distance}px)`;
+            case 'topcenter': return `translate(0px, -${distance * 1.25}px)`;
+            case 'topleft': return `translate(-${distance}px, -${distance}px)`;
+            case 'topright': return `translate(${distance}px, -${distance}px)`;
+            default: return 'translate(0px, 0px)';
+        }
+    };
+
+    return (
+        <div
+            key={animKey}
+            style={{
+                position: 'absolute',
+                left: `${tgtPx.x}px`,
+                top: `${tgtPx.y}px`,
+                width: '90px',
+                height: '90px',
+                transform: 'translate(-50%, -50%)',
+                pointerEvents: 'none',
+                zIndex: 4100,
+            }}
+        >
+            {/* Background glowing golden aura */}
+            <div style={{
+                position: 'absolute',
+                inset: '-15px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(255, 215, 0, 0.5) 0%, rgba(255, 140, 0, 0.25) 50%, transparent 75%)',
+                opacity: phase >= 4 ? 0 : 1,
+                transition: 'opacity 0.4s ease-out',
+                filter: 'drop-shadow(0 0 15px #ffd700)'
+            }} />
+
+            {/* Step 1: Fully assembled rune base icon fades in */}
+            {baseImg && (
+                <img
+                    src={baseImg}
+                    alt="assembled rune"
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        opacity: phase === 1 ? 1 : 0,
+                        transition: 'opacity 0.15s ease-out',
+                        filter: 'drop-shadow(0 0 10px #ffd700) brightness(1.25)'
+                    }}
+                />
+            )}
+
+            {/* Step 2 & 3: 5 Shards Layer */}
+            {requiredPieces.map((pieceName) => {
+                const pieceSrc = pieces[pieceName];
+                if (!pieceSrc) return null;
+                const isDisassembled = phase >= 3;
+                const isFading = phase >= 4;
+
+                return (
+                    <img
+                        key={pieceName}
+                        src={pieceSrc}
+                        alt={pieceName}
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            transform: getShardTransform(pieceName, isDisassembled, 45),
+                            opacity: (phase >= 2 && !isFading) ? 1 : 0,
+                            transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.35s ease-out',
+                            filter: 'drop-shadow(0 0 8px #ffb703) brightness(1.2)'
+                        }}
+                    />
+                );
+            })}
+        </div>
+    );
+}
 
 
 function CurvedProjectile({ srcPx, tgtPx, spherePx, duration = 400, onComplete, color = '#d946ef', shadowColor = '#701a75', isNetherBolt = false }) {
@@ -656,6 +765,7 @@ export default function CombatGrid(props) {
         SHOW_MONSTER_IDS = false,
         // Sandbox-style CSS animation events from AnimationManagerRedux
         activeAnimations = [],
+        isPaused = false,
     } = props;
     const crewIds = new Set(crew.map(f => f.id));
     const hideBars = props.showBars === false || greetingInProcess;
@@ -1257,6 +1367,71 @@ export default function CombatGrid(props) {
         }
         const activeGlowImg = eyesGlowImg || resolvePortrait('wizard_eyes_glow_white');
 
+        // Barbarian glowing eyes logic
+        const barbarianAnims = activeAnimations.filter(a => a.sourceUnitId === fighter.id);
+        const hasBarbarianAnim = fighter.type === 'barbarian' && barbarianAnims.length > 0;
+        let barbarianEyesImg = null;
+        if (hasBarbarianAnim) {
+            const hasRed = barbarianAnims.some(a => 
+                ['barbarian_berserker', 'berserker', 'berserk', 'barbarian_leap_attack', 'leap_attack', 'leap attack'].includes(a.abilityName?.toLowerCase())
+            );
+            const hasGold = barbarianAnims.some(a => 
+                ['barbarian_whirlwind', 'whirlwind', 'barbarian_axe_throw', 'axe_throw', 'axe throw'].includes(a.abilityName?.toLowerCase())
+            );
+            
+            if (hasRed) {
+                barbarianEyesImg = resolvePortrait('barbarian_eyes_glow_red');
+            } else if (hasGold) {
+                barbarianEyesImg = resolvePortrait('barbarian_eyes_glow_gold');
+            } else {
+                barbarianEyesImg = resolvePortrait('barbarian_eyes_glow_white');
+            }
+        }
+        const activeBarbarianGlowImg = barbarianEyesImg || resolvePortrait('barbarian_eyes_glow_white');
+
+        // Monk glowing eyes logic
+        const monkAnims = activeAnimations.filter(a => a.sourceUnitId === fighter.id);
+        const hasMonkAnim = fighter.type === 'monk' && monkAnims.length > 0;
+        let monkEyesImg = null;
+        if (hasMonkAnim) {
+            const hasBlue = monkAnims.some(a => 
+                ['monk_astral_focus', 'astral_focus', 'monk_astral_projection', 'astral_projection', 'monk_third_eye', 'third_eye'].includes(a.abilityName?.toLowerCase())
+            );
+            const hasGold = monkAnims.some(a => 
+                ['monk_inner_fire', 'inner_fire', 'monk_meditate', 'meditate'].includes(a.abilityName?.toLowerCase())
+            );
+            
+            if (hasBlue) {
+                monkEyesImg = resolvePortrait('monk_eyes_glow_blue');
+            } else if (hasGold) {
+                monkEyesImg = resolvePortrait('monk_eyes_glow_gold');
+            } else {
+                monkEyesImg = resolvePortrait('monk_eyes_glow_white');
+            }
+        }
+        const activeMonkGlowImg = monkEyesImg || resolvePortrait('monk_eyes_glow_white');
+
+        // Ranger glowing eyes logic
+        const rangerAnims = activeAnimations.filter(a => a.sourceUnitId === fighter.id);
+        const hasRangerAnim = fighter.type === 'ranger' && rangerAnims.length > 0;
+        let rangerEyesImg = null;
+        if (hasRangerAnim) {
+            const hasAcid = rangerAnims.some(a => a.arrowType === 'poison');
+            const hasCelestial = rangerAnims.some(a => a.arrowType === 'celestial');
+            const hasIce = rangerAnims.some(a => a.arrowType === 'ice');
+            
+            if (hasAcid) {
+                rangerEyesImg = resolvePortrait('ranger_eyes_glow_green');
+            } else if (hasCelestial) {
+                rangerEyesImg = resolvePortrait('ranger_eyes_glow_gold');
+            } else if (hasIce) {
+                rangerEyesImg = resolvePortrait('ranger_eyes_glow_blue');
+            } else {
+                rangerEyesImg = resolvePortrait('ranger_eyes_glow_white');
+            }
+        }
+        const activeRangerGlowImg = rangerEyesImg || resolvePortrait('ranger_eyes_glow_white');
+
         return (
             <div
                 key={fighter.id}
@@ -1423,6 +1598,66 @@ export default function CombatGrid(props) {
                                     opacity: eyesGlowImg ? 1 : 0,
                                     transition: 'opacity 0.2s ease-in-out',
                                     animation: eyesGlowImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
+                                }}
+                            />
+                        )}
+                        {fighter.type === 'barbarian' && (
+                            <div
+                                className="barbarian-eyes-glow-overlay"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: `url("${activeBarbarianGlowImg}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    pointerEvents: 'none',
+                                    zIndex: 310,
+                                    opacity: barbarianEyesImg ? 1 : 0,
+                                    transition: 'opacity 0.2s ease-in-out',
+                                    animation: barbarianEyesImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
+                                }}
+                            />
+                        )}
+                        {fighter.type === 'monk' && (
+                            <div
+                                className="monk-eyes-glow-overlay"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: `url("${activeMonkGlowImg}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    pointerEvents: 'none',
+                                    zIndex: 310,
+                                    opacity: monkEyesImg ? 1 : 0,
+                                    transition: 'opacity 0.2s ease-in-out',
+                                    animation: monkEyesImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
+                                }}
+                            />
+                        )}
+                        {fighter.type === 'ranger' && (
+                            <div
+                                className="ranger-eyes-glow-overlay"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: `url("${activeRangerGlowImg}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    pointerEvents: 'none',
+                                    zIndex: 310,
+                                    opacity: rangerEyesImg ? 1 : 0,
+                                    transition: 'opacity 0.2s ease-in-out',
+                                    animation: rangerEyesImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
                                 }}
                             />
                         )}
@@ -1716,7 +1951,7 @@ export default function CombatGrid(props) {
                                     transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                 }} />
                             </div>
-                            {combatManager && combatManager.round !== undefined ? (
+                            {!getFighterDetails(fighter)?.isFamiliar && !(getFighterDetails(fighter)?.type && String(getFighterDetails(fighter)?.type).includes('familiar')) && combatManager && combatManager.round !== undefined ? (
                                 <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative', bottom: 'auto', top: 'auto' }}>
                                     <div className="white-fill" style={{
                                         height: '100%',
@@ -2011,7 +2246,7 @@ export default function CombatGrid(props) {
             : (isLarge ? -TILE_SIZE - (SHOW_TILE_BORDERS ? 2 : 0) : 0);
 
         const isMainMonster = unit.isMainMonster || (isMonster && !isMinion);
-        const showEnlarged = greetingInProcess && isMainMonster && !props.isMobileLandscape;
+        const showEnlarged = greetingInProcess && isMainMonster && !props.isMobileLandscape && !isDead;
         const numCols = props.numColumns || combatManager?.numColumns || 8;
         const boardWidth = numCols * TILE_SIZE + (SHOW_TILE_BORDERS ? numCols * 2 : 0);
         const centeredLeft = (boardWidth - width) / 2;
@@ -2051,12 +2286,13 @@ export default function CombatGrid(props) {
             (a.sourceUnitId === unit.id || (Math.abs(a.tgtPx.x - (leftPos + width / 2)) < 5 && Math.abs(a.tgtPx.y - (topPos + height / 2)) < 5))
         );
 
-        if (isMinion && !isDead) {
+        const isFamiliar = unit.isFamiliar || unit.type === 'archaic_familiar' || (unit.type && String(unit.type).includes('familiar')) || (unit.key && String(unit.key).includes('familiar'));
+        if (isMinion && !isDead && !isFamiliar) {
             if (!minionSpawnTimesRef.current[unit.id]) {
                 minionSpawnTimesRef.current[unit.id] = Date.now();
             }
         }
-        const isSpawningMinion = isMinion && !isDead && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
+        const isSpawningMinion = isMinion && !isDead && !isFamiliar && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
 
         // All state classes go on unit-tile — not on any full-width wrapper
         const unitTileClasses = [
@@ -2200,7 +2436,7 @@ export default function CombatGrid(props) {
                             transform: showEnlarged
                                 ? `scale(1.5) perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px)`
                                 : ((isLarge || isHuge)
-                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px) ${(greetingInProcess && !props.isMobileLandscape) ? 'scale(1.2)' : ''}`.trim() || 'none'
+                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px) ${(greetingInProcess && !props.isMobileLandscape && !isDead) ? 'scale(1.2)' : ''}`.trim() || 'none'
                                     : (unit.isUpsideDown 
                                         ? 'rotate(180deg)' 
                                         : (unit.type === 'spider_minion' ? `scale(0.5) perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px)` : undefined))),
@@ -2724,7 +2960,7 @@ export default function CombatGrid(props) {
                                 transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                             }} />
                         </div>
-                        {!(unit.type && String(unit.type).includes('spider')) && (
+                        {!(unit.isFamiliar || (unit.type && String(unit.type).includes('familiar')) || (unit.type && String(unit.type).includes('spider'))) && (
                             combatManager && combatManager.round !== undefined ? (
                                 <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative', bottom: 'auto', top: 'auto' }}>
                                     <div className="white-fill" style={{
@@ -4380,6 +4616,7 @@ export default function CombatGrid(props) {
 
         if (anim.type === 'magic_missile_projectile' && anim.srcPx && anim.tgtPx) {
             const isNetherBolt = anim.abilityName === 'nether_bolt';
+            const isUltimate = anim.isUltimate || anim.abilityName === 'magic_missile_ultimate' || (typeof anim.abilityName === 'string' && anim.abilityName.includes('ultimate'));
             if (anim.spherePx) {
                 return (
                     <CurvedProjectile
@@ -4388,13 +4625,17 @@ export default function CombatGrid(props) {
                         tgtPx={anim.tgtPx}
                         spherePx={anim.spherePx}
                         duration={anim.duration}
-                        color={isNetherBolt ? '#a21caf' : '#d946ef'}
-                        shadowColor={isNetherBolt ? '#4a044e' : '#701a75'}
+                        color={isUltimate ? '#f59e0b' : (isNetherBolt ? '#a21caf' : '#d946ef')}
+                        shadowColor={isUltimate ? '#b45309' : (isNetherBolt ? '#4a044e' : '#701a75')}
                         isNetherBolt={isNetherBolt}
                     />
                 );
             }
             const durationS = anim.duration ? anim.duration / 1000 : 0.4;
+            const coreColor = isUltimate ? '#fbbf24' : '#d946ef';
+            const shadowColor = isUltimate ? '#b45309' : '#701a75';
+            const glowColor = isUltimate ? '#fef08a' : '#ffffff';
+
             return (
                 <div key={key} style={{
                     position: 'absolute',
@@ -4429,8 +4670,8 @@ export default function CombatGrid(props) {
                             height: '18px',
                             borderRadius: '50%',
                             border: '2px solid #ffffff',
-                            background: 'radial-gradient(circle, #ffffff 15%, #d946ef 45%, #701a75 80%)',
-                            boxShadow: '0 0 10px #d946ef, 0 0 20px #701a75, inset 0 0 4px #ffffff',
+                            background: `radial-gradient(circle, #ffffff 15%, ${coreColor} 45%, ${shadowColor} 80%)`,
+                            boxShadow: `0 0 12px ${coreColor}, 0 0 24px ${shadowColor}, inset 0 0 4px ${glowColor}`,
                             animation: 'missileGlow 0.15s ease-in-out infinite alternate',
                         }} />
                     )}
@@ -4439,6 +4680,12 @@ export default function CombatGrid(props) {
         }
 
         if (anim.type === 'magic_missile_hit_sigil' && anim.tgtPx) {
+            const isUltimate = anim.isUltimate || anim.abilityName === 'magic_missile_ultimate' || (typeof anim.abilityName === 'string' && anim.abilityName.includes('ultimate'));
+            const strokeOuter = isUltimate ? '#f59e0b' : '#b5179e';
+            const strokeInner = isUltimate ? '#fbbf24' : '#9d4edd';
+            const strokeStar = isUltimate ? '#d97706' : '#7209b7';
+            const dropShadow = isUltimate ? 'drop-shadow(0 0 8px #f59e0b)' : 'drop-shadow(0 0 4px #b5179e)';
+
             return (
                 <div key={key} style={{
                     position: 'absolute',
@@ -4458,21 +4705,23 @@ export default function CombatGrid(props) {
                         width: '100%', 
                         height: '100%', 
                         animation: 'geomSpinClockwise 1.2s linear infinite',
-                        filter: 'drop-shadow(0 0 4px #b5179e)'
+                        filter: dropShadow
                     }}>
                         {/* Outer circle */}
-                        <circle cx="50" cy="50" r="42" fill="none" stroke="#b5179e" strokeWidth="3" />
+                        <circle cx="50" cy="50" r="42" fill="none" stroke={strokeOuter} strokeWidth="3" />
                         {/* Inner dashed circle */}
-                        <circle cx="50" cy="50" r="28" fill="none" stroke="#9d4edd" strokeWidth="2" strokeDasharray="6 6" />
+                        <circle cx="50" cy="50" r="28" fill="none" stroke={strokeInner} strokeWidth="2" strokeDasharray="6 6" />
                         {/* Star / Hexagram double triangle */}
-                        <polygon points="50,15 80,70 20,70" fill="none" stroke="#7209b7" strokeWidth="2.5" />
-                        <polygon points="50,85 80,30 20,30" fill="none" stroke="#7209b7" strokeWidth="2.5" />
+                        <polygon points="50,15 80,70 20,70" fill="none" stroke={strokeStar} strokeWidth="2.5" />
+                        <polygon points="50,85 80,30 20,30" fill="none" stroke={strokeStar} strokeWidth="2.5" />
                     </svg>
                 </div>
             );
         }
 
         if (anim.type === 'magic_missile_miss_dot' && anim.tgtPx) {
+            const isUltimate = anim.isUltimate;
+            const coreColor = isUltimate ? '#fbbf24' : '#d946ef';
             return (
                 <div key={key} style={{
                     position: 'absolute',
@@ -4486,8 +4735,8 @@ export default function CombatGrid(props) {
                     animation: 'explode 0.35s ease-out forwards',
                     borderRadius: '50%',
                     border: '1px solid #ffffff',
-                    background: 'radial-gradient(circle, #ffffff 30%, #d946ef 70%)',
-                    boxShadow: '0 0 6px #d946ef, inset 0 0 2px #ffffff'
+                    background: `radial-gradient(circle, #ffffff 30%, ${coreColor} 70%)`,
+                    boxShadow: `0 0 6px ${coreColor}, inset 0 0 2px #ffffff`
                 }} />
             );
         }
@@ -5099,6 +5348,17 @@ export default function CombatGrid(props) {
             );
         }
 
+        if (anim.type === 'familiar_summon_rune' && anim.tgtPx) {
+            return (
+                <FamiliarSummonRuneAnimation
+                    key={key}
+                    animKey={key}
+                    tgtPx={anim.tgtPx}
+                    runeKey={anim.runeKey || 'archaic'}
+                />
+            );
+        }
+
         if (anim.type === 'summon_portal' && anim.tgtPx) {
             const portalIcon = anim.icon?.default || anim.icon || '';
             return (
@@ -5225,16 +5485,19 @@ export default function CombatGrid(props) {
             }
 
             // Net projectile for Ensnare
-            if (anim.subtype === 'ensnare_net' && anim.isNet) {
-                const netIcon = anim.netIcon?.default || anim.netIcon || '';
-                const durSec = `${(anim.duration || 800) / 1000}s`;
+            if ((anim.subtype === 'ensnare_net' && anim.isNet) || anim.subtype === 'feed_the_masses' || anim.isLob) {
+                const isFood = anim.subtype === 'feed_the_masses' || anim.isLob;
+                const icon = isFood
+                    ? (anim.icon?.default || anim.icon || images.food?.default || images.food || '')
+                    : (anim.netIcon?.default || anim.netIcon || '');
+                const durSec = `${(anim.duration || (isFood ? 1000 : 800)) / 1000}s`;
                 return (
                     <div key={key} style={{
                         position: 'absolute',
                         left: `${anim.srcPx.x}px`,
                         top: `${anim.srcPx.y}px`,
-                        width: '40px',
-                        height: '40px',
+                        width: '44px',
+                        height: '44px',
                         pointerEvents: 'none',
                         zIndex: 4000,
                         animation: `fireballTravel ${durSec} linear forwards`,
@@ -5249,13 +5512,13 @@ export default function CombatGrid(props) {
                             <div style={{
                                 width: '100%',
                                 height: '100%',
-                                backgroundImage: netIcon ? `url(${netIcon})` : 'none',
+                                backgroundImage: icon ? `url(${icon})` : 'none',
                                 backgroundSize: 'contain',
                                 backgroundRepeat: 'no-repeat',
                                 backgroundPosition: 'center',
                                 transform: 'translate(-50%, -50%)',
-                                filter: 'drop-shadow(0 0 6px rgba(139, 195, 74, 0.8))',
-                                animation: 'spinAxis 0.5s linear infinite'
+                                filter: isFood ? 'drop-shadow(0 0 8px rgba(255, 120, 50, 0.9))' : 'drop-shadow(0 0 6px rgba(139, 195, 74, 0.8))',
+                                animation: 'spinAxis 0.6s linear infinite'
                             }} />
                         </div>
                     </div>
@@ -6897,8 +7160,9 @@ export default function CombatGrid(props) {
     };
 
     // ── Main render ───────────────────────────────────────────────────────────
+    const activePaused = isPaused || (combatManager && combatManager.combatPaused);
     return (
-        <div className="combat-units-layer" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
+        <div className={`combat-units-layer ${activePaused ? 'combat-paused' : ''}`} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
             <svg style={{ position: 'absolute', width: 0, height: 0 }}>
                 <defs>
                     {Object.entries(meltScales).map(([unitId, scale]) => (
@@ -7222,6 +7486,42 @@ export default function CombatGrid(props) {
                                     height: `${TILE_SIZE}px`,
                                 }}
                             />
+                        );
+                    })}
+                </div>
+            )}
+            {/* --- Meat Tiles --- */}
+            {combatManager && Array.isArray(combatManager.meatTiles) && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }}>
+                    {combatManager.meatTiles.map((tile) => {
+                        const top = tilePos(tile.y);
+                        const left = tilePos(tile.x);
+                        const foodImg = images.food?.default || images.food || '';
+                        return (
+                            <div
+                                key={`meat-${tile.id}`}
+                                className="meat-tile"
+                                style={{
+                                    position: 'absolute',
+                                    left: `${left}px`,
+                                    top: `${top}px`,
+                                    width: `${TILE_SIZE}px`,
+                                    height: `${TILE_SIZE}px`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <div style={{
+                                    width: '50px',
+                                    height: '50px',
+                                    backgroundImage: foodImg ? `url("${foodImg}")` : 'none',
+                                    backgroundSize: 'contain',
+                                    backgroundRepeat: 'no-repeat',
+                                    backgroundPosition: 'center',
+                                    filter: 'drop-shadow(0 0 6px rgba(255, 100, 50, 0.8))',
+                                }} />
+                            </div>
                         );
                     })}
                 </div>

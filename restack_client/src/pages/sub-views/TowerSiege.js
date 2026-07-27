@@ -420,6 +420,7 @@ class TowerSiege extends React.Component {
                             combatStarted={combatStarted}
                             showBars={this.props.combatManager ? this.props.combatManager.showBars : false}
                             activeAnimations={this.state.activeAnimations}
+                            isPaused={!!(this.props.paused || this.props.combatManager?.combatPaused)}
                             animationOverlays={this.state.animationOverlays}
                             getAllOverlaysById={this.getAllOverlaysById}
                             isMobileLandscape={this.state.isMobileLandscape}
@@ -496,6 +497,7 @@ class TowerSiege extends React.Component {
                             </div>
 
                             <div
+                                onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP' }))}
                                 style={{
                                     position: 'relative',
                                     width: '32px',
@@ -506,6 +508,7 @@ class TowerSiege extends React.Component {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     boxShadow: '0 0 6px rgba(0,0,0,0.5)',
+                                    cursor: 'pointer'
                                 }}
                             >
                                 <div

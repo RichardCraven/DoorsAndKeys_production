@@ -803,12 +803,27 @@ function Tile(props) {
 
            {props.showCoordinates && (() => {
                 const displayCoords = getDisplayCoords(props.coordinates);
-                if (!displayCoords) return null;
+                const tileIndex = (typeof props.id === 'number') ? props.id : (typeof props.index === 'number' ? props.index : null);
+                const xVal = displayCoords ? displayCoords[0] : (tileIndex !== null ? tileIndex % 15 : '?');
+                const yVal = displayCoords ? displayCoords[1] : (tileIndex !== null ? Math.floor(tileIndex / 15) : '?');
                 return (
-                    <div style={{color: 'yellow', userSelect: 'none', position: 'absolute', zIndex: 4}}>
-                        {displayCoords[0]},{displayCoords[1]} <span style={{color: 'red'}}>{props.index}</span>
+                    <div style={{
+                        position: 'absolute',
+                        top: '2px',
+                        left: '2px',
+                        color: '#ffd700',
+                        fontSize: Math.max(9, (props.tileSize || 30) * 0.22) + 'px',
+                        fontWeight: 'bold',
+                        userSelect: 'none',
+                        zIndex: 35,
+                        pointerEvents: 'none',
+                        lineHeight: 1,
+                        textShadow: '0px 1px 3px rgba(0,0,0,0.9), 0px 1px 1px black',
+                        fontFamily: 'monospace, sans-serif'
+                    }}>
+                        {xVal},{yVal}
                     </div>
-                )
+                );
            })()}
 
            {showDelayedHoverLabel && props.delayedHoverLabel && (

@@ -100,7 +100,10 @@ describe('High Priest of the Basilisk Custom Combat Abilities', () => {
       undefined,
       null,
       expect.any(Array),
-      null
+      null,
+      false,
+      null,
+      false
     );
 
     Math.random = origRandom;

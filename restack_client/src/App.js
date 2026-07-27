@@ -427,6 +427,20 @@ function App(props) {
                     >
                       <span>🏠</span>
                     </button>
+                    {(location.pathname === '/dungeon' || location.pathname === '/mapmaker') && (
+                      <button
+                        className="menu-buttons show-coordinates-button"
+                        onClick={() => { setMobileMenuExpanded(false); toggleShowCoordinates(); }}
+                        style={{
+                          ...mobileMenuItemStyle,
+                          border: showCoordinates ? '1px solid #f9b115' : 'none',
+                          background: showCoordinates ? 'rgba(249, 177, 21, 0.3)' : 'rgba(255, 255, 255, 0.15)'
+                        }}
+                        title={showCoordinates ? 'Hide Coordinates' : 'Show Coordinates'}
+                      >
+                        <span>📍</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -480,6 +494,24 @@ function App(props) {
                 >
                   <span style={{ fontSize: '15px' }}>🏠</span>
                 </button>
+
+                {(location.pathname === '/dungeon' || location.pathname === '/mapmaker') && (
+                  <button
+                    className="menu-buttons show-coordinates-button"
+                    onClick={toggleShowCoordinates}
+                    onMouseEnter={() => setHoveredMenuItem(showCoordinates ? 'Hide Coordinates' : 'Show Coordinates')}
+                    onMouseLeave={() => setHoveredMenuItem(null)}
+                    style={{
+                      ...desktopMenuItemStyle,
+                      border: showCoordinates ? '1px solid #f9b115' : 'none',
+                      background: showCoordinates ? 'rgba(249, 177, 21, 0.25)' : 'transparent',
+                      boxShadow: showCoordinates ? '0 0 8px rgba(249, 177, 21, 0.5)' : 'none'
+                    }}
+                    title={showCoordinates ? 'Hide Coordinates' : 'Show Coordinates'}
+                  >
+                    <span style={{ fontSize: '15px' }}>📍</span>
+                  </button>
+                )}
               </div>
             )}
 
@@ -530,12 +562,12 @@ function App(props) {
             !loggedIn ? <Redirect to="/login" /> :
               <CombatSimulator {...props} navToLanding={navToLanding} />
           )} />
-          <Route exact path="/dungeon" render={() => {
+          <Route exact path="/dungeon" render={(routeProps) => {
             if (!loggedIn) return <Redirect to="/login" />;
             const meta = getMeta();
             const hasCrew = Array.isArray(meta && meta.crew) && meta.crew.length > 0;
             if (!hasCrew) return <Redirect to="/crewManager" />;
-            return <DungeonPage {...props} saveUserData={saveUserData} setNarrativeSequence={setNarrativeSequence} showCoordinates={showCoordinates} registerMessaging={(fn) => { dungeonMessagingRef.current = fn }} />;
+            return <DungeonPage {...props} {...routeProps} saveUserData={saveUserData} setNarrativeSequence={setNarrativeSequence} showCoordinates={showCoordinates} registerMessaging={(fn) => { dungeonMessagingRef.current = fn }} />;
           }} />
 
 

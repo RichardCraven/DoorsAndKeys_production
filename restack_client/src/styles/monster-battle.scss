@@ -4,6 +4,11 @@
     initial-value: 360deg;
 }
 
+.combat-paused * {
+    animation-play-state: paused !important;
+}
+
+
 @property --cooldown-remaining {
     syntax: '<number>';
     inherits: false;
@@ -10900,10 +10905,10 @@
 // ── Ultimate Casting Portrait Animations (Golden Glow & Shake) ────────────────
 @keyframes ultimatePortraitShake {
     0%, 100% { transform: translate(0, 0) rotate(0deg); }
-    20%      { transform: translate(-4px, 3px) rotate(-3deg); }
-    40%      { transform: translate(4px, -3px) rotate(3deg); }
-    60%      { transform: translate(-3px, -4px) rotate(-2deg); }
-    80%      { transform: translate(3px, 4px) rotate(2deg); }
+    20%      { transform: translate(-1.5px, 1px) rotate(-1deg); }
+    40%      { transform: translate(1.5px, -1px) rotate(1deg); }
+    60%      { transform: translate(-1px, -1.5px) rotate(-0.5deg); }
+    80%      { transform: translate(1px, 1.5px) rotate(0.5deg); }
 }
 
 @keyframes ultimatePortraitGlow {

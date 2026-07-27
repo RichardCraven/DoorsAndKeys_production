@@ -45,7 +45,7 @@ export default function TutorialsPage(props) {
           boxSizing: 'border-box'
         }}>
           {/* Dungeon Card */}
-          <div className="menu-card" style={{ minHeight: '160px' }}>
+          <div className="menu-card" style={{ minHeight: '160px', cursor: 'pointer' }} onClick={() => history.push('/dungeon?tutorial=dungeon')}>
             <div className="card-top">
               <span className="card-title">Dungeon</span>
               <span className="card-desc">Learn how to move, explore dark corridors, trigger secret passages, and reveal maps.</span>

@@ -532,7 +532,7 @@ class CrewManagerPage extends React.Component {
     startRandomCombat = async () => {
         const { monsterManager } = this.props;
         const budget = this.state.randomTierPoints;
-        const allRosterKeys = ['skeleton', 'goblin', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok'];
+        const allRosterKeys = ['skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok'];
         const rosterMonsters = allRosterKeys
             .map(k => monsterManager.getMonster(k))
             .filter(m => m && m.tier && !m.isMinion);
@@ -1431,7 +1431,7 @@ class CrewManagerPage extends React.Component {
                             <div className="monster-roster-label">Monster Roster — click to select, click again to add to slot</div>
                             <div className="monster-roster">
                                 {Object.values(this.props.monsterManager.monsters)
-                                    .filter(m => ['skeleton', 'goblin', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'beholder_minion', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'horned_pet', 'high_priest_of_the_basilisk', 'basilisk_cultists', 'shade', 'hashmallim', 'hagigah', 'blalok'].includes(m.key))
+                                    .filter(m => ['skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'beholder_minion', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'horned_pet', 'high_priest_of_the_basilisk', 'basilisk_cultists', 'shade', 'hashmallim', 'hagigah', 'blalok'].includes(m.key))
                                     .map((m, i) => (
                                         <div
                                             key={i}

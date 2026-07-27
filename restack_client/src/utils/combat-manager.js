@@ -347,7 +347,7 @@ export function CombatManager() {
         try {
             combatant.occupiedCoords = [];
             if (combatant.coordinates) combatant.occupiedCoords.push({ x: combatant.coordinates.x, y: combatant.coordinates.y });
-            const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy'];
+            const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
             const isLarge = (
                 (typeof combatant.large === 'boolean' && combatant.large === true)
                 || (combatant.type && LARGE_COMBAT_KEYS.includes(combatant.type))
@@ -417,7 +417,7 @@ export function CombatManager() {
     // Returns true if combatant is a large (2-tile-tall) creature.
     this._isLargeCombatant = (combatant) => {
         if (!combatant) return false;
-        const LARGE_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt'];
+        const LARGE_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief'];
         return (
             (typeof combatant.large === 'boolean' && combatant.large === true)
             || (combatant.type && LARGE_KEYS.includes(combatant.type))
@@ -929,20 +929,47 @@ export function CombatManager() {
         this.minionsPopulated = true;
         if (this.data && this.data.minions) {
             const callbacks = this._callbacks;
-            const monsterLane = this.data.monster.coordinates.y; // e.g. 2
-            const monsterVirtualLane = monsterLane - 1;
-            const availableLanes = [];
-            for (let i = MAX_LANES - 1; i >= 0; i--) {
-                if (i !== monsterLane && i !== monsterVirtualLane) availableLanes.push(i);
-            }
+            const getCurrentlyOccupied = () => {
+                const occupied = [];
+                Object.values(this.combatants).forEach(c => {
+                    if (!c || c.dead) return;
+                    if (Array.isArray(c.occupiedCoords)) {
+                        c.occupiedCoords.forEach(coord => {
+                            if (!occupied.some(o => o.x === coord.x && o.y === coord.y)) {
+                                occupied.push({ x: coord.x, y: coord.y });
+                            }
+                        });
+                    } else if (c.coordinates) {
+                        if (!occupied.some(o => o.x === c.coordinates.x && o.y === c.coordinates.y)) {
+                            occupied.push({ x: c.coordinates.x, y: c.coordinates.y });
+                        }
+                    }
+                });
+                return occupied;
+            };
+
             this.data.minions.forEach((e, i) => {
                 e.isMinion = true;
-                e.coordinates = { x: 0, y: 0 }
-                const laneIndex = i % availableLanes.length;
-                const columnOffset = Math.floor(i / availableLanes.length);
-                e.coordinates.y = availableLanes[laneIndex];
-                e.coordinates.x = MAX_DEPTH - columnOffset;
-                let m = createFighter(e, callbacks, this.FIGHT_INTERVAL)
+                const currentlyOccupied = getCurrentlyOccupied();
+                let assignedCoord = null;
+
+                for (let colOffset = 0; colOffset < 5; colOffset++) {
+                    const targetX = MAX_DEPTH - colOffset;
+                    for (let targetY = 0; targetY < MAX_LANES; targetY++) {
+                        if (!currentlyOccupied.some(o => o.x === targetX && o.y === targetY)) {
+                            assignedCoord = { x: targetX, y: targetY };
+                            break;
+                        }
+                    }
+                    if (assignedCoord) break;
+                }
+
+                if (!assignedCoord) {
+                    assignedCoord = { x: MAX_DEPTH, y: 0 };
+                }
+
+                e.coordinates = assignedCoord;
+                let m = createFighter(e, callbacks, this.FIGHT_INTERVAL);
                 m.isMinion = true;
                 this.combatants[m.id] = m;
                 try { this._setCombatantOccupiedCoords(this.combatants[m.id], this.combatants); } catch (err) { }
@@ -950,7 +977,7 @@ export function CombatManager() {
                 
                 const ai = this.monsterAI.roster[m.type];
                 if (ai && ai.initialize) ai.initialize(m);
-            })
+            });
         }
     }
     this.beginGreeting = () => {

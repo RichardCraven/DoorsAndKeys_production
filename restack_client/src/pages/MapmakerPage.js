@@ -97,6 +97,10 @@ class MapMakerPage extends React.Component {
       outputDiv.scrollTop = outputDiv.scrollHeight;
     }
 
+    if (prevProps.showCoordinates !== this.props.showCoordinates && this.state.showCoordinates !== this.props.showCoordinates) {
+      this.setState({ showCoordinates: this.props.showCoordinates });
+    }
+
     // Keep dungeon overlay data in sync with the latest loaded dungeon shape.
     const overlayRelevantChange =
       prevState.loadedDungeon !== this.state.loadedDungeon ||

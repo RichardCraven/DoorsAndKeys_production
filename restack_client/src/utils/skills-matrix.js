@@ -1438,6 +1438,18 @@ const skillsMatrix = {
         type: 'damage',
         effect: { type: 'bleed', chance: 100, duration: 'short' }
     },
+    feed_the_masses: {
+        id: 'feed_the_masses',
+        tier: 1,
+        name: 'Feed the Masses',
+        desc: 'Lob a piece of meat to an adjacent tile. Friendly monster units stepping on it consume it to heal up to 30 HP.',
+        icon: images.food,
+        cooldown: 2,
+        initialCooldown: 2,
+        duration: 'instant',
+        range: 'medium',
+        type: 'utility'
+    },
     claw_strike: {
         id: 'claw_strike',
         tier: 1,
