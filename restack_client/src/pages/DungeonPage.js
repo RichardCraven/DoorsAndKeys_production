@@ -7945,9 +7945,11 @@ class DungeonPage extends React.Component {
             await moveStep('right', 600); // Walks onto (9, 6)
             await moveStep('right', 600); // Walks onto (10, 6)
 
-            // 9. Move to Chest at (10, 7)
-            await pauseStep('Tutorial: Moving to Chest at (10,7)...', 500);
-            await moveStep('down', 600);  // (10, 7) - Opens Wooden Chest!
+            // 9. Move to Chest at (10, 7) via (11, 6) to pick up the jewel shards
+            await pauseStep('Tutorial: Pathfinding to Chest at (10,7)...', 500);
+            await moveStep('right', 600); // (11, 6) - Picks up jewel shards!
+            await moveStep('down', 600);  // (11, 7)
+            await moveStep('left', 600);  // (10, 7) - Opens Wooden Chest!
 
             if (this.props.boardManager) {
                 try {
@@ -7959,12 +7961,16 @@ class DungeonPage extends React.Component {
             await pauseStep('📦 Opened Chest at (10,7)!', 1800);
 
             // 10. Move to Lockbox at (10, 8) - Locked!
-            await moveStep('down', 600);  // Bumps into locked Lockbox at (10, 8), blocked!
+            await moveStep('right', 600); // (11, 7)
+            await moveStep('down', 600);  // (11, 8)
+            await moveStep('left', 600);  // Bumps into locked Lockbox at (10, 8), blocked!
             await pauseStep('🔒 Lockbox at (10,8) is LOCKED! Requires a Lockbox Key.', 2500);
 
             // 11. Move to (10, 5) to collect Lockbox Key
             await pauseStep('Tutorial: Moving to (10,5) to collect the Lockbox Key...', 500);
-            await moveStep('up', 600);    // (10, 6)
+            await moveStep('up', 600);    // (11, 7)
+            await moveStep('up', 600);    // (11, 6)
+            await moveStep('left', 600);  // (10, 6)
             await moveStep('up', 600);    // (10, 5) - Collects Lockbox Key!
 
             // 12. Pause & display Lockbox Key collected message
@@ -7972,8 +7978,10 @@ class DungeonPage extends React.Component {
 
             // 13. Move back to Lockbox at (10, 8) and open it
             await moveStep('down', 600);  // (10, 6)
-            await moveStep('down', 600);  // (10, 7)
-            await moveStep('down', 600);  // (10, 8) - Uses Lockbox Key, unlocks and opens Lockbox!
+            await moveStep('right', 600); // (11, 6)
+            await moveStep('down', 600);  // (11, 7)
+            await moveStep('down', 600);  // (11, 8)
+            await moveStep('left', 600);  // Bumps into Lockbox at (10, 8) - Uses Lockbox Key, unlocks and opens Lockbox!
 
             if (this.props.boardManager) {
                 try {
@@ -7986,8 +7994,7 @@ class DungeonPage extends React.Component {
 
             // 14. Move to (13, 7)
             await pauseStep('Tutorial: Moving to (13,7)...', 500);
-            await moveStep('right', 600); // (11, 8)
-            await moveStep('right', 600); // (12, 8)
+            await moveStep('right', 600); // (12, 8) [from 11,8]
             await moveStep('right', 600); // (13, 8)
             await moveStep('up', 600);    // (13, 7)
 

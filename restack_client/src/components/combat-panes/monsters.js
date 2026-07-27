@@ -458,7 +458,7 @@ const MonstersCombatGrid = ({
                     >
                         {/* Damage indicators — inside vct-portrait-wrapper so they're centered over the tile */}
                         <div className="portrait-overlay" style={{ zIndex: 301, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'visible' }}>
-                            <div className="damage-indicator-container" style={{ overflow: 'visible' }}>
+                            <div className="damage-indicator-container" style={{ overflow: 'visible', userSelect: 'none', WebkitUserSelect: 'none' }}>
                                 {(visibleDamageIndicators[vct.id] || []).map((indicator, idx, arr) => {
                                     const isStatDebuff = !indicator.isCrit && !indicator.isMiss && typeof indicator.value === 'string' && indicator.type !== 'robbed' && isNaN(indicator.value);
                                     const yOffset = typeof indicator.yOffset === 'number' ? indicator.yOffset : 0;
@@ -474,6 +474,8 @@ const MonstersCombatGrid = ({
                                                 right: 0,
                                                 margin: '0 auto',
                                                 pointerEvents: 'none',
+                                                userSelect: 'none',
+                                                WebkitUserSelect: 'none'
                                             }}
                                         >
                                             {formatDamageIndicatorValue(indicator.value)}
@@ -662,7 +664,7 @@ const MonstersCombatGrid = ({
                                 )}
                                 {/* Overlay and indicators above portrait */
 }                                <div className={`portrait-overlay ${battleData[monster.id]?.frozen ? 'frozen' : ''}`} style={{zIndex: 2, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%'}}>
-                                    <div className="damage-indicator-container" style={{ overflow: 'visible' }}>
+                                    <div className="damage-indicator-container" style={{ overflow: 'visible', userSelect: 'none', WebkitUserSelect: 'none' }}>
                                         {(visibleDamageIndicators[monster.id] || []).map((indicator, idx, arr) => {
                                             const yOffset = typeof indicator.yOffset === 'number' ? indicator.yOffset : 0;
                                             const isStatDebuff = !indicator.isCrit && !indicator.isMiss && typeof indicator.value === 'string' && indicator.type !== 'robbed' && isNaN(indicator.value);
@@ -678,6 +680,8 @@ const MonstersCombatGrid = ({
                                                         right: 0,
                                                         margin: '0 auto',
                                                         pointerEvents: 'none',
+                                                        userSelect: 'none',
+                                                        WebkitUserSelect: 'none'
                                                     }}
                                                 >
                                                     {formatDamageIndicatorValue(indicator.value)}
@@ -975,7 +979,7 @@ const MonstersCombatGrid = ({
                                     })()}
                                 </div>
                                 <div className={`portrait-overlay ${minion.frozen ? 'frozen' : ''}`}> 
-                                    <div className="damage-indicator-container">
+                                    <div className="damage-indicator-container" style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
                                         {(visibleDamageIndicators[minion.id] || []).map((indicator, idx, arr) => {
                                             const yOffset = typeof indicator.yOffset === 'number' ? indicator.yOffset : 0;
                                             const isStatDebuff = !indicator.isCrit && typeof indicator.value === 'string' && indicator.type !== 'robbed' && isNaN(indicator.value);
@@ -991,6 +995,8 @@ const MonstersCombatGrid = ({
                                                         right: 0,
                                                         margin: '0 auto',
                                                         pointerEvents: 'none',
+                                                        userSelect: 'none',
+                                                        WebkitUserSelect: 'none'
                                                     }}
                                                 >
                                                     {formatDamageIndicatorValue(indicator.value)}

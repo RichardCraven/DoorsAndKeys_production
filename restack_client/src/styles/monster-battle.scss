@@ -4583,27 +4583,14 @@
         left: 0;
         width: 100%;
         height: 50px;
-        left: 0;
-        width: 100%;
         display: flex;
         align-items: flex-end;
         justify-content: center;
-
-        @keyframes FloatUp {
-            0% {
-                transform: translateY(0px);
-                opacity: 1;
-            }
-
-            30% {
-                opacity: 1;
-            }
-
-            100% {
-                transform: translateY(-90px);
-                opacity: 0;
-            }
-        }
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+        pointer-events: none;
 
         .damage-indicator {
             color: #ff0000;
@@ -4618,6 +4605,11 @@
             text-shadow: 0 0 4px rgba(255, 59, 48, 0.6), 0 0 12px rgba(255, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.9);
             letter-spacing: 0.02em;
             opacity: 0;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            pointer-events: none;
             -webkit-animation: FloatUp 1.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
             -moz-animation: FloatUp 1.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
             animation: FloatUp 1.8s cubic-bezier(0.25, 1, 0.5, 1) forwards;
@@ -11252,4 +11244,43 @@
     100% {
         filter: brightness(1.4) contrast(1.2) drop-shadow(0 0 10px rgba(255, 255, 255, 0.95));
     }
+}
+
+// ── Global In-Combat Selection Lockout ────────────────────────────────────────
+// Ensures damage indicators, grid tiles, names, status badges, and all in-combat text cannot be highlighted or selected during drag actions
+.damage-indicator-container,
+.damage-indicator,
+.combat-grid-container,
+.combat-grid,
+.siege-combat-grid,
+.monster-battle-grid,
+.fighter-pane,
+.monsters-pane,
+.grid-tile,
+.unit-tile,
+.tile-coords,
+.tile-label,
+.combatant-name,
+.monster-name,
+.unit-name,
+.indicators-wrapper,
+.hp-bar,
+.endurance-bar,
+.energy-bar,
+.tempo-bar,
+.portrait-overlay {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
+}
+
+.damage-indicator-container *,
+.damage-indicator *,
+.combat-grid *,
+.siege-combat-grid * {
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    user-select: none !important;
 }

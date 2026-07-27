@@ -273,4 +273,111 @@ describe('Goblin Chef & Feed the Masses', () => {
         // Chef should advance from column 7 towards player at column 2 (x < 7)
         expect(cm.combatants.chef.coordinates.x).toBeLessThan(7);
     });
+
+    test('Goblin Chef respects 3 food item max cap and switches to aggressive melee mode', () => {
+        const cm = new CombatManagerRedux();
+        // Pre-fill 3 active meat tiles created by this chef
+        cm.meatTiles = [
+            { id: 'meat_1', x: 5, y: 0, createdBy: 'chef' },
+            { id: 'meat_2', x: 5, y: 4, createdBy: 'chef' },
+            { id: 'meat_3', x: 6, y: 0, createdBy: 'chef' },
+        ];
+        cm.combatants = {
+            chef: {
+                id: 'chef',
+                name: 'Goblin Chef',
+                type: 'goblin_chef',
+                isMonster: true,
+                hp: 40,
+                starting_hp: 40,
+                stats: { speed: 11, hp: 40 },
+                coordinates: { x: 7, y: 2 },
+                skills: ['feed_the_masses', 'bite'],
+                cooldowns: { feed_the_masses: 0, bite: 0 },
+                movesTakenThisRound: 0,
+            },
+            woundedWarrior: {
+                id: 'woundedWarrior',
+                name: 'Wounded Warrior',
+                type: 'goblin_warrior',
+                isMonster: true,
+                hp: 10,
+                starting_hp: 30,
+                stats: { speed: 10, hp: 30 },
+                coordinates: { x: 5, y: 2 },
+            },
+            player: {
+                id: 'player',
+                name: 'Hero',
+                isMonster: false,
+                hp: 100,
+                starting_hp: 100,
+                stats: { speed: 8, hp: 100 },
+                coordinates: { x: 2, y: 2 },
+            }
+        };
+
+        // Chef executes AI with 3 active food tiles
+        cm.executeUnitAI(cm.combatants.chef);
+
+        // Chef cannot throw a 4th food item (meatTiles remains 3)
+        expect(cm.meatTiles.length).toBe(3);
+        // Chef should advance in aggressive melee mode towards player (x < 7)
+        expect(cm.combatants.chef.coordinates.x).toBeLessThan(7);
+    });
+
+    test('Goblin Chef reverts to food-provider mode once a food item is consumed', () => {
+        const cm = new CombatManagerRedux();
+        // 3 food items initially
+        cm.meatTiles = [
+            { id: 'meat_1', x: 5, y: 0, createdBy: 'chef' },
+            { id: 'meat_2', x: 5, y: 4, createdBy: 'chef' },
+            { id: 'meat_3', x: 6, y: 0, createdBy: 'chef' },
+        ];
+        cm.combatants = {
+            chef: {
+                id: 'chef',
+                name: 'Goblin Chef',
+                type: 'goblin_chef',
+                isMonster: true,
+                hp: 40,
+                starting_hp: 40,
+                stats: { speed: 11, hp: 40 },
+                coordinates: { x: 7, y: 2 },
+                skills: ['feed_the_masses', 'bite'],
+                cooldowns: { feed_the_masses: 0, bite: 0 },
+                movesTakenThisRound: 0,
+            },
+            woundedWarrior: {
+                id: 'woundedWarrior',
+                name: 'Wounded Warrior',
+                type: 'goblin_warrior',
+                isMonster: true,
+                hp: 10,
+                starting_hp: 30,
+                stats: { speed: 10, hp: 30 },
+                coordinates: { x: 5, y: 2 },
+            },
+            player: {
+                id: 'player',
+                name: 'Hero',
+                isMonster: false,
+                hp: 100,
+                starting_hp: 100,
+                stats: { speed: 8, hp: 100 },
+                coordinates: { x: 2, y: 2 },
+            }
+        };
+
+        // Simulate 1 food item being consumed (removed from meatTiles)
+        cm.meatTiles = cm.meatTiles.filter(m => m.id !== 'meat_3');
+        expect(cm.meatTiles.length).toBe(2);
+
+        // Chef executes AI with 2 active food tiles
+        cm.executeUnitAI(cm.combatants.chef);
+
+        // Chef reverts to food-provider mode and lobs a new 3rd food tile!
+        expect(cm.meatTiles.length).toBe(3);
+        expect(cm.combatants.chef.cooldowns['feed_the_masses']).toBe(2);
+    });
 });
