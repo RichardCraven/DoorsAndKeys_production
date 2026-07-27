@@ -1185,6 +1185,8 @@ export default function CombatGrid(props) {
             (a.sourceUnitId === fighter.id || (Math.abs(a.tgtPx.x - (xPos + TILE_SIZE / 2)) < 5 && Math.abs(a.tgtPx.y - (yPos + TILE_SIZE / 2)) < 5))
         );
 
+        const isUltimateCasting = !!(liveFighter?.ultimateCasting || details?.ultimateCasting || fighter?.ultimateCasting);
+
         // All visual-state classes go on the unit-tile (100×100) — no full-width ancestors
         const isDisintegrating = activeAnimations.some(a => a.type === 'disintegrate_beam' && a.tgtPx && Math.abs(a.tgtPx.x - xPos - TILE_SIZE/2) < 5 && Math.abs(a.tgtPx.y - yPos - TILE_SIZE/2) < 5);
         const unitTileClasses = [
@@ -1204,6 +1206,7 @@ export default function CombatGrid(props) {
 
         const portraitClasses = [
             'portrait', 'fighter-portrait',
+            isUltimateCasting ? 'ultimate-casting' : '',
             isTelep ? 'teleporting' : '',
             selectedFighter?.id === fighter.id && !fighter.dead ? 'selected' : '',
             details?.dead ? 'dead fighterDeadAnimation' : '',
@@ -1231,6 +1234,28 @@ export default function CombatGrid(props) {
 
         const isBatFlying = activeAnimations.some(a => a.type === 'bat_fly_anim' && a.sourceUnitId === fighter.id);
         const isEthereal = !!(liveFighter?.etherealSpeedActive || details?.etherealSpeedActive || fighter.etherealSpeedActive);
+
+        // Wizard glowing eyes logic
+        const wizardAnims = activeAnimations.filter(a => a.sourceUnitId === fighter.id);
+        const hasWizardAnim = fighter.type === 'wizard' && wizardAnims.length > 0;
+        let eyesGlowImg = null;
+        if (hasWizardAnim) {
+            const hasAcid = wizardAnims.some(a => a.abilityName === 'acid_blast' || a.abilityName === 'acid blast');
+            const hasDisintegrate = wizardAnims.some(a => a.abilityName === 'disintegrate');
+            const hasAnnihilationOrVortex = wizardAnims.some(a => a.abilityName === 'annihilation' || a.abilityName === 'vortex');
+            const hasFireblast = wizardAnims.some(a => a.abilityName === 'fireblast' || a.abilityName === 'fire_blast' || a.abilityName === 'fireball');
+            
+            if (hasAcid) {
+                eyesGlowImg = resolvePortrait('wizard_eyes_glow_green');
+            } else if (hasDisintegrate || hasFireblast) {
+                eyesGlowImg = resolvePortrait('wizard_eyes_glow_gold');
+            } else if (hasAnnihilationOrVortex) {
+                eyesGlowImg = resolvePortrait('wizard_eyes_glow_blue');
+            } else {
+                eyesGlowImg = resolvePortrait('wizard_eyes_glow_white');
+            }
+        }
+        const activeGlowImg = eyesGlowImg || resolvePortrait('wizard_eyes_glow_white');
 
         return (
             <div
@@ -1287,6 +1312,25 @@ export default function CombatGrid(props) {
                         transition: 'opacity 0.25s ease-in-out'
                     }}
                 >
+                    {isUltimateCasting && (
+                        <div
+                            className="ultimate-portrait-aura"
+                            style={{
+                                position: 'absolute',
+                                top: '-12px',
+                                left: '-12px',
+                                right: '-12px',
+                                bottom: '-12px',
+                                borderRadius: '50%',
+                                border: '3px dashed #ffd700',
+                                boxShadow: '0 0 35px 12px rgba(255,215,0,0.9), inset 0 0 20px 8px rgba(255,215,0,0.8)',
+                                background: 'radial-gradient(circle, rgba(255,215,0,0.45) 0%, rgba(255,140,0,0.2) 60%, transparent 100%)',
+                                animation: 'ultimateAuraPulse 0.5s ease-in-out infinite alternate',
+                                pointerEvents: 'none',
+                                zIndex: 390
+                            }}
+                        />
+                    )}
                     <div
                         className={portraitClasses}
                         style={{
@@ -1297,6 +1341,7 @@ export default function CombatGrid(props) {
                             )}")`,
                             opacity: getLiveCombatant(fighter.id)?.astralBeingActive ? 0.55 : 1,
                             filter: [
+                                isUltimateCasting ? 'drop-shadow(0 0 15px #ffd700) brightness(1.35) contrast(1.2)' : null,
                                 details?.chargingUpActive ? "url('#ripple-effect')" : null,
                                 `sepia(${portraitHoveredId === fighter.id ? '2' : '0'})`,
                                 details?.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : '',
@@ -1304,15 +1349,19 @@ export default function CombatGrid(props) {
                                 meltScales[fighter.id] !== undefined ? `url('#melt-effect-${fighter.id}')` : null
                             ].filter(Boolean).join(' '),
                             transform: (getLiveCombatant(fighter.id)?.isUpsideDown || details?.isUpsideDown) ? 'rotate(180deg)' : undefined,
-                            boxShadow: (getLiveCombatant(fighter.id)?.isSinisterReflection || details?.isSinisterReflection) ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
+                            boxShadow: isUltimateCasting
+                                ? '0 0 25px 8px rgba(255, 215, 0, 0.95), 0 0 50px 15px rgba(255, 140, 0, 0.8), inset 0 0 20px rgba(255, 255, 200, 0.9)'
+                                : ((getLiveCombatant(fighter.id)?.isSinisterReflection || details?.isSinisterReflection) ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined),
                             zIndex: 300,
-                            animation: (getLiveCombatant(fighter.id)?.isSinisterReflection || details?.isSinisterReflection)
-                                ? 'sinisterPulse 1.5s ease-in-out infinite alternate'
-                                : ((details?.stunned && !isAsleepFighter && !details?.dead)
-                                    ? 'stunWobble 0.6s ease-in-out infinite'
-                                    : ((details?.wounded && !details?.dead)
-                                        ? 'BulgePortrait var(--portrait-animation-duration, 420ms) var(--portrait-animation-timing, cubic-bezier(.2,.8,.2,1)) forwards'
-                                        : undefined)),
+                            animation: isUltimateCasting
+                                ? 'ultimatePortraitShake 0.12s ease-in-out infinite, ultimatePortraitGlow 1.2s ease-in-out infinite'
+                                : ((getLiveCombatant(fighter.id)?.isSinisterReflection || details?.isSinisterReflection)
+                                    ? 'sinisterPulse 1.5s ease-in-out infinite alternate'
+                                    : ((details?.stunned && !isAsleepFighter && !details?.dead)
+                                        ? 'stunWobble 0.6s ease-in-out infinite'
+                                        : ((details?.wounded && !details?.dead)
+                                            ? 'BulgePortrait var(--portrait-animation-duration, 420ms) var(--portrait-animation-timing, cubic-bezier(.2,.8,.2,1)) forwards'
+                                            : undefined))),
                         }}
 
                         onClick={(e) => {
@@ -1356,7 +1405,28 @@ export default function CombatGrid(props) {
                                 setShowDeathAnimation(prev => ({ ...prev, [fighter.id]: false }));
                             }
                         }}
-                    />
+                    >
+                        {fighter.type === 'wizard' && (
+                            <div
+                                className="wizard-eyes-glow-overlay"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: `url("${activeGlowImg}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    pointerEvents: 'none',
+                                    zIndex: 310,
+                                    opacity: eyesGlowImg ? 1 : 0,
+                                    transition: 'opacity 0.2s ease-in-out',
+                                    animation: eyesGlowImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
+                                }}
+                            />
+                        )}
+                    </div>
                     {details?.marked && !details?.dead && (
                         <div style={{
                             position: 'absolute',
@@ -2062,6 +2132,8 @@ export default function CombatGrid(props) {
             <div
                 key={unit.id}
                 className={unitTileClasses}
+                data-monster-id={unit.id}
+                data-monster-name={unit.name || unit.type || ''}
                 style={{
                     position: 'absolute',
                     transform: `translate3d(${leftPos}px, ${topPos}px, 0px)`,
@@ -2079,6 +2151,7 @@ export default function CombatGrid(props) {
                     ...computeHitVars(unit, getHitAnimation, props.isMobileLandscape),
                 }}
             >
+
                 {renderEffectIcons(unit)}
                 <div
                     className="portrait-relative-container"

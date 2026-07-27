@@ -508,7 +508,7 @@ export function CombatManagerRedux() {
                         || (e.type && LARGE_COMBAT_KEYS.includes(e.type) && (e.isMinion !== true || e.tier === 3 || e.tier === 4))
                         || (typeof e.size === 'number' && e.size >= 2)
                         || (typeof e.scale === 'number' && e.scale >= 2)
-                        || (e.isMonster === true && (e.isMinion !== true || e.tier === 3 || e.tier === 4))
+                        || (e.isMonster === true && e.isMinion !== true && (e.tier === 3 || e.tier === 4))
                         || (e.tier === 3)
                     )
                 );
@@ -841,8 +841,12 @@ export function CombatManagerRedux() {
             fighter.cooldowns = {};
             fighter.movesTakenThisRound = 0;
             fighter.actionsTakenThisRound = 0;
-            fighter.power = 0;  // Power resource: 0→100 triggers Ultimate
-            fighter.ultimateActive = false;
+            const isWizard = e.type === 'wizard' || e.image === 'wizard' || e.class === 'wizard' || String(e.name || '').toLowerCase().includes('wizard') || String(e.id || '').toLowerCase().includes('zildjikan');
+            fighter.power = isWizard ? 100 : 0;  // Power resource: hardwired to 100 for wizard testing
+            fighter.ultimateActive = isWizard;
+            if (isWizard) {
+                console.log(`%c 🧙 HARDWIRED: ${fighter.name || fighter.id} starts with 100 POWER & ULTIMATE READY! 🧙`, 'background: #a370f7; color: #fff; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
+            }
 
             this.combatants[e.id] = fighter;
             this._initializeInitialCooldowns(fighter);
@@ -902,7 +906,7 @@ export function CombatManagerRedux() {
                 || (m.type && LARGE_COMBAT_KEYS.includes(m.type) && (m.isMinion !== true || m.tier === 3 || m.tier === 4))
                 || (typeof m.size === 'number' && m.size >= 2)
                 || (typeof m.scale === 'number' && m.scale >= 2)
-                || (m.isMonster === true && (m.isMinion !== true || m.tier === 3 || m.tier === 4))
+                || (m.isMonster === true && m.isMinion !== true && (m.tier === 3 || m.tier === 4))
                 || (m.tier === 3)
             )
         );
@@ -1069,7 +1073,7 @@ export function CombatManagerRedux() {
                 || (c.type && LARGE_COMBAT_KEYS.includes(c.type) && (c.isMinion !== true || c.tier === 3 || c.tier === 4))
                 || (typeof c.size === 'number' && c.size >= 2)
                 || (typeof c.scale === 'number' && c.scale >= 2)
-                || (c.isMonster === true && (c.isMinion !== true || c.tier === 3 || c.tier === 4))
+                || (c.isMonster === true && c.isMinion !== true && (c.tier === 3 || c.tier === 4))
                 || (c.tier === 3)
             )
         );
@@ -1202,7 +1206,7 @@ export function CombatManagerRedux() {
                 || (combatant.type && LARGE_COMBAT_KEYS.includes(combatant.type) && (combatant.isMinion !== true || combatant.tier === 3 || combatant.tier === 4))
                 || (typeof combatant.size === 'number' && combatant.size >= 2)
                 || (typeof combatant.scale === 'number' && combatant.scale >= 2)
-                || (combatant.isMonster === true && (combatant.isMinion !== true || combatant.tier === 3 || combatant.tier === 4))
+                || (combatant.isMonster === true && combatant.isMinion !== true && (combatant.tier === 3 || combatant.tier === 4))
                 || (combatant.tier === 3)
             )
         );
@@ -1409,7 +1413,7 @@ export function CombatManagerRedux() {
                 || (unit.type && LARGE_COMBAT_KEYS.includes(unit.type) && (unit.isMinion !== true || unit.tier === 3 || unit.tier === 4))
                 || (typeof unit.size === 'number' && unit.size >= 2)
                 || (typeof unit.scale === 'number' && unit.scale >= 2)
-                || (unit.isMonster === true && (unit.isMinion !== true || unit.tier === 3 || unit.tier === 4))
+                || (unit.isMonster === true && unit.isMinion !== true && (unit.tier === 3 || unit.tier === 4))
                 || (unit.tier === 3)
             )
         );
@@ -1471,7 +1475,7 @@ export function CombatManagerRedux() {
                 || (unit.type && LARGE_COMBAT_KEYS.includes(unit.type) && (unit.isMinion !== true || unit.tier === 3 || unit.tier === 4))
                 || (typeof unit.size === 'number' && unit.size >= 2)
                 || (typeof unit.scale === 'number' && unit.scale >= 2)
-                || (unit.isMonster === true && (unit.isMinion !== true || unit.tier === 3 || unit.tier === 4))
+                || (unit.isMonster === true && unit.isMinion !== true && (unit.tier === 3 || unit.tier === 4))
                 || (unit.tier === 3)
             )
         );
@@ -1873,22 +1877,16 @@ export function CombatManagerRedux() {
     };
 
     /**
-     * Trigger a PC's Ultimate: freeze combat for 2 rounds, play a visual flag,
-     * then reset power to 0 and resume.
+     * Trigger a PC's Ultimate: flags ultimateActive=true, keeps power at 100,
+     * and logs the readiness state until player fires an ultimate skill.
      */
     this._triggerUltimate = (caller) => {
-        if (!caller || caller.ultimateActive) return;
+        if (!caller) return;
         caller.ultimateActive = true;
-        caller.power = 0;
-        this.combatPaused = true;
-        this.appendCombatLog(`⚡ ${this.getCombatantLogName(caller)} unleashes their ULTIMATE!`);
+        caller.power = 100;
+        console.log(`%c ⚡ ULTIMATE READY for ${this.getCombatantLogName(caller)} (Power: 100/100) ⚡`, 'background: #ffd700; color: #000; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
+        this.appendCombatLog(`⚡ ULTIMATE READY: ${this.getCombatantLogName(caller)}'s skills are supercharged — choose one now!`);
         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
-        const resumeMs = (this.roundDurationMs || 2000) * 2;
-        setTimeout(() => {
-            if (caller) caller.ultimateActive = false;
-            this.combatPaused = false;
-            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
-        }, resumeMs);
     };
 
     this.checkShrinerConcentrationDamage = (attacker, target, damage) => {
@@ -1910,6 +1908,7 @@ export function CombatManagerRedux() {
 
     this.targetInRange = (caller, target, rangeType) => {
         if (!caller || !target) return false;
+        if (rangeType === 'unlimited') return true; // Special case: unlimited range negates any range check
 
         // Support multi-tile large callers/targets by checking range from every occupied tile
         const targetTiles = (Array.isArray(target.occupiedCoords) && target.occupiedCoords.length > 0)
@@ -3493,20 +3492,45 @@ export function CombatManagerRedux() {
         }
         // ── End Manual Input override ─────────────────────────────────────────────
 
-        // ── Player-queued skill priority ──────────────────────────────────────────
-        // PC units only. If the player has queued a skill and it's ready, fire it
-        // immediately (one-shot: clears queuedSkill after firing). Skips class AI.
         if (!unit.isMonster && !unit.isMinion && unit.queuedSkill) {
             const qKey = unit.queuedSkill;
             if (this._abilityReady(unit, qKey)) {
-                const qSpec = this.resolveSpecial(unit, qKey);
-                if (qSpec && qSpec.type !== 'passive' && !qSpec.isPassive) {
+                let qTarget = this.combatants[unit.queuedSkillTargetId];
+                if (!qTarget || qTarget.dead) {
                     this.acquireTarget(unit, true);
-                    const qTarget = this.combatants[unit.targetId];
-                    if (qTarget && !qTarget.dead) {
-                        unit.queuedSkill = null; // one-shot: consume and clear
-                        this.useAbility(unit, qSpec, qTarget);
-                        return;
+                    qTarget = this.combatants[unit.targetId];
+                }
+                if (qTarget && !qTarget.dead) {
+                    const qSpec = this.resolveSpecial(unit, qKey);
+                    if (qSpec && qSpec.type !== 'passive' && !qSpec.isPassive) {
+                        let actualAbility = qSpec;
+                        if (unit.ultimateActive && qSpec.ultimate) {
+                            actualAbility = { ...qSpec, ...qSpec.ultimate };
+                        }
+                        const rangeType = actualAbility.range;
+                        const inRange = this.targetInRange(unit, qTarget, rangeType);
+                        if (inRange) {
+                            unit.queuedSkill = null; // consume and clear
+                            unit.queuedSkillTargetId = null;
+                            this.useAbility(unit, qSpec, qTarget);
+                            return;
+                        } else {
+                            // Out of range: prioritize moving to be in range
+                            const maxMoves = (unit.etherealSpeedActive || unit.isDemonMode) ? 2 : 1;
+                            if (unit.movesTakenThisRound < maxMoves && !this.isUnitInWeb(unit) && !unit.ensnared && !unit.shieldWallActive) {
+                                this.moveCloser(unit, qTarget);
+                                // Check again after moving
+                                const nowInRange = this.targetInRange(unit, qTarget, rangeType);
+                                if (nowInRange) {
+                                    unit.queuedSkill = null; // consume and clear
+                                    unit.queuedSkillTargetId = null;
+                                    this.useAbility(unit, qSpec, qTarget);
+                                    return;
+                                }
+                            }
+                            // Still out of range or cannot move: keep queued, end turn (do not fall through to default AI)
+                            return;
+                        }
                     }
                 }
             }
@@ -7460,6 +7484,27 @@ export function CombatManagerRedux() {
     this.useAbility = (unit, ability, target) => {
         if (!ability || !target) return;
 
+        // ── Ultimate override ─────────────────────────────────────────────────
+        // If the PC has ultimateActive and this skill has an `ultimate` field,
+        // merge the overrides onto a shallow copy and consume the ultimate flag.
+        let isUltimateActivation = false;
+        if (unit && !unit.isMonster && unit.ultimateActive && ability.ultimate) {
+            ability = { ...ability, ...ability.ultimate };
+            isUltimateActivation = true;
+            unit.ultimateActive = false;
+            unit.power = 0; // Reset power to 0 upon ultimate activation!
+            unit.ultimateCasting = true;
+            console.log(`%c 💥 ULTIMATE ACTIVATED: ${this.getCombatantLogName(unit)} executed ${ability.name || ability.id}! 💥`, 'background: #ff5500; color: #fff; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
+            this.appendCombatLog(`💥 ${this.getCombatantLogName(unit)} ACTIVATES their Ultimate: ${ability.name || ability.id}!`);
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+
+            const animDurationMs = (ability.id === 'magic_missile' || ability.id === 'greater_magic_missile') ? 2200 : 2000;
+            setTimeout(() => {
+                if (unit) unit.ultimateCasting = false;
+                if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            }, animDurationMs);
+        }
+
         if (unit && typeof unit.inTrial === 'number') {
             this.appendCombatLog(`${this.getCombatantLogName(unit)} is in a Sphinx trial and cannot act!`);
             return;
@@ -9422,7 +9467,7 @@ export function CombatManagerRedux() {
             if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
                 const isTargetLarge = target.isLarge
                     || target.size === 2
-                    || (target.isMonster === true && (target.isMinion !== true || target.tier === 3 || target.tier === 4))
+                    || (target.isMonster === true && target.isMinion !== true && (target.tier === 3 || target.tier === 4))
                     || (target.type && ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'].includes(target.type) && (target.isMinion !== true || target.tier === 3 || target.tier === 4))
                     || (target.tier === 3 || target.tier === 4);
                 const callerTiles = (origCallerOccupied && origCallerOccupied.length > 0) ? origCallerOccupied : [origCallerCoords];
@@ -9473,7 +9518,7 @@ export function CombatManagerRedux() {
         if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function' && !['mind_swap', 'displacement_ray', 'chainbolt'].includes(abilityId)) {
             const isTargetLarge = !target.isShrineGuardian && (target.isLarge
                 || target.size === 2
-                || (target.isMonster === true && (target.isMinion !== true || target.tier === 3 || target.tier === 4))
+                || (target.isMonster === true && target.isMinion !== true && (target.tier === 3 || target.tier === 4))
                 || (target.type && ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'].includes(target.type) && (target.isMinion !== true || target.tier === 3 || target.tier === 4))
                 || (target.tier === 3 || target.tier === 4));
             // Find closest tiles between caller and target
@@ -10941,7 +10986,7 @@ export function CombatManagerRedux() {
                 || (unit.type && LARGE_COMBAT_KEYS.includes(unit.type) && (unit.isMinion !== true || unit.tier === 3 || unit.tier === 4))
                 || (typeof unit.size === 'number' && unit.size >= 2)
                 || (typeof unit.scale === 'number' && unit.scale >= 2)
-                || (unit.isMonster === true && (unit.isMinion !== true || unit.tier === 3 || unit.tier === 4))
+                || (unit.isMonster === true && unit.isMinion !== true && (unit.tier === 3 || unit.tier === 4))
                 || (unit.tier === 3)
             )
         );

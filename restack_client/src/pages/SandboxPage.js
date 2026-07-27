@@ -276,8 +276,10 @@ Object.keys(runesData).forEach(runeName => {
 
   // Check if it has all the exact required piece names
   const hasAllPieces = requiredPieces.every(piece => !!data.pieces[piece]);
+  const assembled = data.assembledImg || data.baseImg;
 
-  if (data.assembledImg && hasAllPieces) {
+  if (assembled && hasAllPieces) {
+    data.assembledImg = assembled;
     data.isComplete = true;
 
     // Filter out any "copy" or "edited" backup files that might be in the directory
@@ -13388,54 +13390,76 @@ const SandboxPage = () => {
             {/* Rune Selection Menu */}
             <div style={{
               display: 'flex',
-              gap: '15px',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-              background: '#222',
-              padding: '15px',
-              borderRadius: '8px'
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '12px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              padding: '18px 24px',
+              borderRadius: '12px',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              width: '100%'
             }}>
-              {Object.keys(runesData).map(runeName => {
-                const data = runesData[runeName];
-                const isSelected = selectedRune === runeName;
+              <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffb703', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                SELECT RUNE: {selectedRune ? selectedRune.toUpperCase() : ''}
+              </div>
+              <div style={{
+                display: 'flex',
+                gap: '12px',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+                alignItems: 'center'
+              }}>
+                {Object.keys(runesData).map(runeName => {
+                  const data = runesData[runeName];
+                  const isSelected = selectedRune === runeName;
 
-                return (
-                  <div
-                    key={runeName}
-                    style={{
-                      position: 'relative',
-                      cursor: data.isComplete ? 'pointer' : 'not-allowed',
-                      opacity: data.isComplete ? 1 : 0.4,
-                      border: isSelected ? '2px solid white' : '2px solid transparent',
-                      borderRadius: '4px',
-                      padding: '4px',
-                      transition: 'border 0.2s'
-                    }}
-                    onClick={() => data.isComplete && setSelectedRune(runeName)}
-                    title={runeName}
-                  >
-                    <img src={data.baseImg} alt={runeName} style={{ width: '60px', height: '60px', objectFit: 'contain' }} />
-                    {!data.isComplete && (
-                      <div style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
+                  return (
+                    <div
+                      key={runeName}
+                      style={{
+                        position: 'relative',
+                        cursor: data.isComplete ? 'pointer' : 'not-allowed',
+                        opacity: data.isComplete ? 1 : 0.4,
+                        border: isSelected ? '2px solid #ffb703' : '1px solid rgba(255, 255, 255, 0.1)',
+                        boxShadow: isSelected ? '0 0 12px rgba(255, 183, 3, 0.4)' : 'none',
+                        background: isSelected ? 'rgba(255, 183, 3, 0.08)' : 'rgba(0, 0, 0, 0.3)',
+                        borderRadius: '8px',
+                        padding: '8px',
                         display: 'flex',
+                        flexDirection: 'column',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'rgba(255, 0, 0, 0.8)',
-                        fontSize: '60px',
-                        fontWeight: 'bold',
-                        pointerEvents: 'none'
-                      }}>
-                        X
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                        gap: '6px',
+                        transition: 'all 0.2s'
+                      }}
+                      onClick={() => data.isComplete && setSelectedRune(runeName)}
+                      title={runeName}
+                    >
+                      <img src={data.baseImg} alt={runeName} style={{ width: '56px', height: '56px', objectFit: 'contain' }} />
+                      <span style={{ fontSize: '10px', color: isSelected ? '#ffb703' : '#aaa', textTransform: 'capitalize', fontWeight: 'bold' }}>
+                        {runeName}
+                      </span>
+                      {!data.isComplete && (
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'rgba(255, 0, 0, 0.8)',
+                          fontSize: '50px',
+                          fontWeight: 'bold',
+                          pointerEvents: 'none'
+                        }}>
+                          X
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             <button
@@ -13483,6 +13507,7 @@ const SandboxPage = () => {
                   <AssemblyAnimation
                     pieces={activeData.pieces}
                     isAssembled={isAssembled}
+                    glowingImg={activeData.baseImg || activeData.assembledImg}
                     distance={40}
                   />
                 </div>

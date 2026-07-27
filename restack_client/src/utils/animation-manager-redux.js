@@ -69,7 +69,7 @@ export class AnimationManagerRedux {
   /** Emit an animation event and auto-remove it after duration */
   _emit(anim) {
     const id = `anim_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const entry = { id, sourceUnitId: this._currentSourceUnitId, ...anim };
+    const entry = { id, sourceUnitId: this._currentSourceUnitId, abilityName: this._currentAbilityName, ...anim };
     this.activeAnimations = [...this.activeAnimations, entry];
     if (this.onAnimationEvent) this.onAnimationEvent([...this.activeAnimations]);
 

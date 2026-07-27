@@ -10330,6 +10330,25 @@
     &:active {
         background: rgba(255, 183, 3, 0.22);
     }
+
+    // ── Ultimate option styling ─────────────────────────────────────────────
+    &.ucm-option--ultimate {
+        color: #fff700;
+        font-size: 14px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-shadow:
+            0 0 6px rgba(255, 200, 0, 0.9),
+            0 0 14px rgba(255, 100, 0, 0.6);
+        background: linear-gradient(90deg, rgba(80, 40, 0, 0.6) 0%, rgba(60, 30, 0, 0.4) 100%);
+        border-bottom: 1px solid rgba(255, 180, 0, 0.25);
+        animation: ultimateSkillGlow 1.4s ease-in-out infinite;
+
+        &:hover {
+            background: rgba(255, 200, 0, 0.2);
+            color: #fff;
+        }
+    }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -10878,6 +10897,108 @@
     box-shadow: 0 0 6px rgba(255, 215, 0, 0.5);
 }
 
+// ── Ultimate Casting Portrait Animations (Golden Glow & Shake) ────────────────
+@keyframes ultimatePortraitShake {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    20%      { transform: translate(-4px, 3px) rotate(-3deg); }
+    40%      { transform: translate(4px, -3px) rotate(3deg); }
+    60%      { transform: translate(-3px, -4px) rotate(-2deg); }
+    80%      { transform: translate(3px, 4px) rotate(2deg); }
+}
+
+@keyframes ultimatePortraitGlow {
+    0%, 100% {
+        box-shadow:
+            0 0 22px 8px rgba(255, 215, 0, 0.95),
+            0 0 45px 14px rgba(255, 140, 0, 0.8),
+            inset 0 0 20px rgba(255, 255, 200, 0.9);
+        filter: drop-shadow(0 0 15px #ffd700) brightness(1.35) contrast(1.2);
+    }
+    50% {
+        box-shadow:
+            0 0 35px 14px rgba(255, 240, 60, 1.0),
+            0 0 70px 22px rgba(255, 100, 0, 0.95),
+            inset 0 0 30px rgba(255, 255, 255, 1.0);
+        filter: drop-shadow(0 0 25px #ffe000) brightness(1.5) contrast(1.3);
+    }
+}
+
+@keyframes ultimateAuraPulse {
+    0%   { transform: scale(0.95); opacity: 0.85; }
+    100% { transform: scale(1.15); opacity: 1.0; }
+}
+
+.portrait.ultimate-casting {
+    animation: ultimatePortraitShake 0.12s ease-in-out infinite, ultimatePortraitGlow 1.2s ease-in-out infinite !important;
+    z-index: 400 !important;
+}
+
+// ── Ultimate-ready skill icon shimmer ─────────────────────────────────────────
+// Applied to interaction-tile when the PC's ultimateActive=true AND the skill
+// has an `ultimate` field. A rainbow sweep + pulsing outer glow signals the
+// player they can fire the Ultimate version of this skill.
+
+@keyframes ultimateSkillSweep {
+    0%   { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
+}
+
+@keyframes ultimateSkillGlow {
+    0%   {
+        box-shadow:
+            0 0 6px  2px rgba(255, 200, 0, 0.7),
+            0 0 14px 4px rgba(255, 120, 0, 0.45),
+            inset 0 0 6px rgba(255, 220, 0, 0.25);
+    }
+    50%  {
+        box-shadow:
+            0 0 14px 5px rgba(255, 220, 0, 1.0),
+            0 0 28px 8px rgba(255, 80, 0, 0.7),
+            inset 0 0 12px rgba(255, 200, 0, 0.5);
+    }
+    100% {
+        box-shadow:
+            0 0 6px  2px rgba(255, 200, 0, 0.7),
+            0 0 14px 4px rgba(255, 120, 0, 0.45),
+            inset 0 0 6px rgba(255, 220, 0, 0.25);
+    }
+}
+
+.interaction-tile.ultimate-shimmer {
+    // Vivid pulsing border + glow
+    outline: 2px solid rgba(255, 220, 0, 0.9) !important;
+    outline-offset: 1px;
+    animation: ultimateSkillGlow 1.1s ease-in-out infinite;
+    // Keep the skill at full opacity even when on cooldown
+    opacity: 1 !important;
+    position: relative;
+    z-index: 1;
+}
+
+// Overlay that sweeps a prismatic sheen across the skill icon
+.ultimate-skill-shimmer {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: 5;
+    background: linear-gradient(
+        110deg,
+        transparent      0%,
+        transparent     28%,
+        rgba(255, 255, 200, 0.55) 38%,
+        rgba(255, 215, 0, 0.65)  46%,
+        rgba(255, 130, 0, 0.50)  52%,
+        rgba(200, 100, 255, 0.40) 58%,
+        rgba(100, 200, 255, 0.35) 64%,
+        transparent     74%,
+        transparent    100%
+    );
+    background-size: 200% 100%;
+    animation: ultimateSkillSweep 1.4s linear infinite;
+    mix-blend-mode: screen;
+}
+
 // ── PBT Pickup Animations ────────────────────────────────────────────────────
 @keyframes powerPickupRing1 {
     0% {
@@ -10993,5 +11114,137 @@
         border: 1px double rgba(255, 215, 0, 0);
         outline: 1px solid rgba(255, 140, 0, 0);
         opacity: 0;
+    }
+}
+
+// ── Drag-to-queue: skill icon → enemy tile (mobile) ───────────────────────────
+
+// Ghost icon that follows the finger during a drag gesture
+.skill-drag-ghost {
+    position: fixed;
+    z-index: 9999;
+    width: 54px;
+    height: 54px;
+    border-radius: 8px;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: 2px solid rgba(255, 220, 60, 0.85);
+    box-shadow: 0 0 16px rgba(255, 180, 30, 0.6);
+    opacity: 0.9;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: box-shadow 0.1s ease, border-color 0.1s ease;
+
+    // Intensify glow when hovering over a valid monster tile
+    &.on-target {
+        border-color: rgba(255, 100, 30, 0.95);
+        box-shadow: 0 0 22px rgba(255, 100, 30, 0.85);
+    }
+
+    .skill-drag-ghost-label {
+        position: absolute;
+        bottom: -22px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 0, 0, 0.85);
+        color: #ff7744;
+        font-size: 9px;
+        font-weight: 700;
+        white-space: nowrap;
+        padding: 2px 6px;
+        border-radius: 4px;
+        letter-spacing: 0.3px;
+        pointer-events: none;
+        border: 1px solid rgba(255, 100, 30, 0.5);
+    }
+}
+
+// Drop-zone highlights — applied when a skill drag is active
+.mb-board.skill-drag-active {
+    [data-monster-id] {
+        // All enemy tiles dim slightly to frame the drop zones
+        filter: brightness(0.82);
+        transition: filter 0.12s ease, outline 0.12s ease, box-shadow 0.12s ease;
+        position: relative;
+    }
+
+    [data-monster-id].drag-over {
+        // The tile directly under the finger gets a vivid orange highlight
+        filter: brightness(1.4) !important;
+        outline: 2px solid rgba(255, 100, 30, 0.95) !important;
+        outline-offset: 2px;
+        box-shadow: 0 0 22px rgba(255, 100, 30, 0.8) !important;
+        z-index: 250;
+        border-radius: 8px;
+    }
+}
+
+// Target chip on skill icons — shows which enemy the skill is queued against
+.skill-queue-target-chip {
+    position: absolute;
+    bottom: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(210, 55, 10, 0.92);
+    color: #fff;
+    font-size: 7px;
+    font-weight: 700;
+    white-space: nowrap;
+    max-width: 66px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 1px 4px;
+    border-radius: 3px;
+    letter-spacing: 0.3px;
+    pointer-events: none;
+    z-index: 6;
+    animation: skillChipFadeIn 0.2s ease both;
+    border: 1px solid rgba(255, 100, 30, 0.5);
+}
+
+@keyframes skillChipFadeIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0);   }
+}
+
+// Toast confirmation bar — appears briefly after queuing a skill
+.skill-queue-toast {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9000;
+    background: rgba(0, 0, 0, 0.88);
+    color: #ffcc55;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 200, 60, 0.45);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+    pointer-events: none;
+    animation: skillQueueToastIn 0.25s ease both;
+}
+
+@keyframes skillQueueToastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0);   }
+}
+
+// ── Wizard eyes glow overlays and animations ────────────────────────────────
+.wizard-eyes-glow-overlay {
+    mix-blend-mode: screen; // Enhances the glowing effect over the dark underlying portrait colors
+    filter: drop-shadow(0 0 4px currentColor);
+}
+
+@keyframes wizardEyesPulse {
+    0% {
+        filter: brightness(0.9) contrast(1.1) drop-shadow(0 0 2px rgba(255, 255, 255, 0.45));
+    }
+    100% {
+        filter: brightness(1.4) contrast(1.2) drop-shadow(0 0 10px rgba(255, 255, 255, 0.95));
     }
 }

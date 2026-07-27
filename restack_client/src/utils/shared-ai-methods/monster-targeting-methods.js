@@ -61,7 +61,7 @@ export const MonsterTargetingHelpers = {
             const targetTiles = (Array.isArray(target.occupiedCoords) && target.occupiedCoords.length > 0)
                 ? target.occupiedCoords
                 : [target.coordinates];
-            const hasPath = callerTiles.some(cc => 
+            const hasPath = callerTiles.some(cc =>
                 targetTiles.some(tc => cc && tc && !crossesShieldWall(cc, tc))
             );
             if (!hasPath) return false;

@@ -689,7 +689,13 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 10,
         type: 'damage projectile',
-        flatDamage: 5
+        flatDamage: 5,
+        projectiles: 3,
+        ultimate: {
+            projectiles: 7,
+            flatDamage: 10,
+            range: 'unlimited'
+        }
     },
     lightning_strike: {
         class: 'wizard',
@@ -704,7 +710,14 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 100,
         type: 'damage',
-        flatDamage: 22
+        flatDamage: 22,
+        ultimate: {
+            flatDamage: 45,
+            atkPercentage: 200,
+            effect: {
+                chance: 50, type: 'double-strike'
+            }
+        }
     },
     acid_blast: {
         class: 'wizard',

@@ -579,6 +579,10 @@ import barbarian from '../assets/portraits/crew/barbarian/barbarian_compressed.p
 import monk from '../assets/portraits/crew/monk/monk_compressed.png'
 import soldier from '../assets/portraits/crew/soldier/soldier_compressed.png'
 import wizard from '../assets/portraits/crew/wizard/wizard_compressed.png'
+import wizard_eyes_glow_white from '../assets/portraits/crew/wizard/wizard_eyes_glow_white.png'
+import wizard_eyes_glow_blue from '../assets/portraits/crew/wizard/wizard_eyes_glow_blue.png'
+import wizard_eyes_glow_green from '../assets/portraits/crew/wizard/wizard_eyes_glow_green.png'
+import wizard_eyes_glow_gold from '../assets/portraits/crew/wizard/wizard_eyes_glow_gold.png'
 import ranger from '../assets/portraits/crew/rogue/rogue_compressed.png'
 import sage from '../assets/portraits/crew/sage/sage_compressed.png'
 import sorceress from '../assets/icons/crew_icons/sorceress.png'
@@ -1674,6 +1678,10 @@ export {
     ranger,
     sage,
     wizard,
+    wizard_eyes_glow_white,
+    wizard_eyes_glow_blue,
+    wizard_eyes_glow_green,
+    wizard_eyes_glow_gold,
     sorceress,
     engineer,
     summoner,
