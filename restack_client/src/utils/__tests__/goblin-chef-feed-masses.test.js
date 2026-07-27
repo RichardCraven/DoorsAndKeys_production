@@ -148,7 +148,7 @@ describe('Goblin Chef & Feed the Masses', () => {
                 isMonster: false,
                 hp: 100,
                 starting_hp: 100,
-                stats: { speed: 8, hp: 100 },
+                stats: { speed: 0, dex: 0, hp: 100 },
                 coordinates: { x: 1, y: 2 },
             }
         };

@@ -1087,15 +1087,15 @@ export class AnimationManagerRedux {
       sourceUnitId,
     });
     if (activeArrow === 'ice') {
-      setTimeout(() => {
+      this._delay(() => {
         this._emit({ type: 'ice_burst', tgtPx, duration: 500 });
       }, 600);
     } else if (activeArrow === 'poison') {
-      setTimeout(() => {
+      this._delay(() => {
         this._emit({ type: 'poison_burst', tgtPx, duration: 500 });
       }, 600);
     } else if (activeArrow === 'force') {
-      setTimeout(() => {
+      this._delay(() => {
         this._emit({ type: 'force_burst', tgtPx, duration: 500 });
       }, 600);
     }

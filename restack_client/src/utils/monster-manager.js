@@ -83,7 +83,7 @@ export function MonsterManager() {
             portrait: images['goblin_warrior_portrait'],
             greetings: ['bones for my master!'],
             deathCries: ['nooooooo'],
-            skills: ['claw_strike', 'bite'],
+            skills: ['claw_strike', 'bite', 'sword_swing'],
             minions: ['goblin_thief', 'goblin_thief'],
             weaknesses: ['crushing', 'cutting', 'electricity'],
             drops: [
@@ -115,9 +115,9 @@ export function MonsterManager() {
             },
             level: 2,
             portrait: images['goblin_warchief_portrait'],
-            greetings: ['bones for my master!'],
-            deathCries: ['nooooooo'],
-            skills: ['claw_strike', 'bite'],
+            greetings: ['bow down!'],
+            deathCries: ['arrrghghgh!'],
+            skills: ['claw_strike', 'bite', 'sword_swing'],
             minions: ['goblin_warrior', 'goblin_chef'],
             weaknesses: ['crushing', 'cutting', 'electricity'],
             drops: [

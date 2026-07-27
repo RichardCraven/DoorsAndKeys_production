@@ -497,6 +497,7 @@ class TowerSiege extends React.Component {
                             </div>
 
                             <div
+                                onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP' }))}
                                 style={{
                                     position: 'relative',
                                     width: '32px',
@@ -507,6 +508,7 @@ class TowerSiege extends React.Component {
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     boxShadow: '0 0 6px rgba(0,0,0,0.5)',
+                                    cursor: 'pointer'
                                 }}
                             >
                                 <div

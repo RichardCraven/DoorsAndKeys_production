@@ -3574,7 +3574,7 @@ class MonsterBattle extends React.Component {
                         </div>
                         
                         {this.props.combatManager && this.props.combatManager.round !== undefined && (
-                            <div className="mobile-round-widget">
+                            <div className="mobile-round-widget" onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP' }))} style={{ cursor: 'pointer' }}>
                                 <div
                                     style={{
                                         position: 'relative',
@@ -3752,6 +3752,7 @@ class MonsterBattle extends React.Component {
 
                                     {/* Round Clock Widget */}
                                     <div
+                                        onClick={() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'p', code: 'KeyP' }))}
                                         style={{
                                             position: 'relative',
                                             width: '40px',
@@ -3762,6 +3763,7 @@ class MonsterBattle extends React.Component {
                                             alignItems: 'center',
                                             justifyContent: 'center',
                                             boxShadow: '0 0 8px rgba(0,0,0,0.5)',
+                                            cursor: 'pointer'
                                         }}
                                     >
                                         <div

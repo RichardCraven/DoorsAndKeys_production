@@ -2276,12 +2276,13 @@ export default function SiegeCombatGrid(props) {
             (a.sourceUnitId === unit.id || (Math.abs(a.tgtPx.x - (leftPos + width / 2)) < 5 && Math.abs(a.tgtPx.y - (topPos + height / 2)) < 5))
         );
 
-        if (isMinion && !isDead) {
+        const isFamiliar = unit.isFamiliar || unit.type === 'archaic_familiar' || (unit.type && String(unit.type).includes('familiar')) || (unit.key && String(unit.key).includes('familiar'));
+        if (isMinion && !isDead && !isFamiliar) {
             if (!minionSpawnTimesRef.current[unit.id]) {
                 minionSpawnTimesRef.current[unit.id] = Date.now();
             }
         }
-        const isSpawningMinion = isMinion && !isDead && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
+        const isSpawningMinion = isMinion && !isDead && !isFamiliar && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
 
         // All state classes go on unit-tile — not on any full-width wrapper
         const unitTileClasses = [
