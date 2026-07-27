@@ -765,6 +765,7 @@ export default function CombatGrid(props) {
         SHOW_MONSTER_IDS = false,
         // Sandbox-style CSS animation events from AnimationManagerRedux
         activeAnimations = [],
+        isPaused = false,
     } = props;
     const crewIds = new Set(crew.map(f => f.id));
     const hideBars = props.showBars === false || greetingInProcess;
@@ -2245,7 +2246,7 @@ export default function CombatGrid(props) {
             : (isLarge ? -TILE_SIZE - (SHOW_TILE_BORDERS ? 2 : 0) : 0);
 
         const isMainMonster = unit.isMainMonster || (isMonster && !isMinion);
-        const showEnlarged = greetingInProcess && isMainMonster && !props.isMobileLandscape;
+        const showEnlarged = greetingInProcess && isMainMonster && !props.isMobileLandscape && !isDead;
         const numCols = props.numColumns || combatManager?.numColumns || 8;
         const boardWidth = numCols * TILE_SIZE + (SHOW_TILE_BORDERS ? numCols * 2 : 0);
         const centeredLeft = (boardWidth - width) / 2;
@@ -2434,7 +2435,7 @@ export default function CombatGrid(props) {
                             transform: showEnlarged
                                 ? `scale(1.5) perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px)`
                                 : ((isLarge || isHuge)
-                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px) ${(greetingInProcess && !props.isMobileLandscape) ? 'scale(1.2)' : ''}`.trim() || 'none'
+                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px) ${(greetingInProcess && !props.isMobileLandscape && !isDead) ? 'scale(1.2)' : ''}`.trim() || 'none'
                                     : (unit.isUpsideDown 
                                         ? 'rotate(180deg)' 
                                         : (unit.type === 'spider_minion' ? `scale(0.5) perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px)` : undefined))),
@@ -7158,8 +7159,9 @@ export default function CombatGrid(props) {
     };
 
     // ── Main render ───────────────────────────────────────────────────────────
+    const activePaused = isPaused || (combatManager && combatManager.combatPaused);
     return (
-        <div className="combat-units-layer" style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
+        <div className={`combat-units-layer ${activePaused ? 'combat-paused' : ''}`} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
             <svg style={{ position: 'absolute', width: 0, height: 0 }}>
                 <defs>
                     {Object.entries(meltScales).map(([unitId, scale]) => (

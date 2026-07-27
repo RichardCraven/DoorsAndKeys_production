@@ -4400,6 +4400,7 @@ class MonsterBattle extends React.Component {
                             showBars={this.props.combatManager ? this.props.combatManager.showBars : false}
                             SHOW_MONSTER_IDS={SHOW_MONSTER_IDS}
                             activeAnimations={this.state.activeAnimations}
+                            isPaused={!!(this.props.paused || this.props.combatManager?.combatPaused)}
                             TILE_SIZE={currentTileSize}
                             SHOW_TILE_BORDERS={SHOW_TILE_BORDERS}
                             isMobileLandscape={this.state.isMobileLandscape}

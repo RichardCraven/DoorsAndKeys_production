@@ -4,6 +4,11 @@
     initial-value: 360deg;
 }
 
+.combat-paused * {
+    animation-play-state: paused !important;
+}
+
+
 @property --cooldown-remaining {
     syntax: '<number>';
     inherits: false;

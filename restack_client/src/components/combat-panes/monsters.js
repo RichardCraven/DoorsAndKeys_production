@@ -585,7 +585,7 @@ const MonstersCombatGrid = ({
                                 {/* Portrait at the bottom (lowest z-index) */}
                                 <div
                                     className={`portrait monster-portrait
-                                        ${greetingInProcess ? 'enlarged' : ''}
+                                        ${(greetingInProcess && !battleData[monster.id]?.dead) ? 'enlarged' : ''}
                                         ${battleData[monster.id]?.active ? 'active' : ''}
                                         ${portraitHoveredId === monster.id ? 'hover-linked-target' : ''}
                                         ${battleData[monster.id]?.dead ? 'dead mummyDeadAnimation' : ''}

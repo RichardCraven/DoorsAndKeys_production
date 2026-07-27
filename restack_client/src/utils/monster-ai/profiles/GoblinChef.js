@@ -46,13 +46,14 @@ export function GoblinChef(data, utilMethods, animationManager, overlayManager){
             return (dx + dy) <= 1;
         });
 
-        // Hang back at backline column (MAX_DEPTH) unless no other friendlies alive or adjacent enemy
+        // Hang back at backline column (MAX_DEPTH) if other friendlies are alive and no adjacent enemy
         if (!adjacentEnemy && otherFriendliesAlive) {
             const backlineX = this.MAX_DEPTH || 7;
             if (caller.coordinates.x !== backlineX && data.methods.moveCloserToCoord) {
                 data.methods.moveCloserToCoord(caller, backlineX, caller.coordinates.y, combatants);
             }
         } else {
+            // Revert to doing melee attacks with 'bite' skill (advance forward, do not stay on back line)
             if (data.methods.closeTheGap) {
                 data.methods.closeTheGap(caller, combatants);
             }

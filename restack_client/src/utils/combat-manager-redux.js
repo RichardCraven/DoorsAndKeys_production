@@ -183,33 +183,41 @@ export function CombatManagerRedux() {
         if (val === true) {
             // Record when we paused so we can freeze the effect-icon sweep
             this.pauseStartTimestamp = Date.now();
-        } else if (val === false && this.pauseStartTimestamp) {
-            // Shift all time-based endTimeMs fields forward by the paused duration
-            const pausedDuration = Date.now() - this.pauseStartTimestamp;
-            const END_TIME_KEYS = [
-                'sleepEndTimeMs', 'stunnedEndTimeMs', 'frozenEndTimeMs', 'fearEndTimeMs',
-                'ensnaredEndTimeMs', 'markedEndTimeMs', 'hexEndTimeMs',
-                'weaknessRevealedEndTimeMs', 'bonesEndTimeMs', 'astralBeingEndTimeMs',
-                'etherealSpeedEndTimeMs', 'thirdEyeEndTimeMs', 'arcaneBarrierEndTimeMs',
-                'shieldWallEndTimeMs', 'poisonEndTimeMs', 'bleedEndTimeMs',
-            ];
-            Object.values(this.combatants).forEach(unit => {
-                if (!unit) return;
-                END_TIME_KEYS.forEach(key => {
-                    if (unit[key] && unit[key] > 0) unit[key] += pausedDuration;
+            if (this.animManagerRedux && typeof this.animManagerRedux.pause === 'function') {
+                this.animManagerRedux.pause();
+            }
+        } else if (val === false) {
+            if (this.animManagerRedux && typeof this.animManagerRedux.resume === 'function') {
+                this.animManagerRedux.resume();
+            }
+            if (this.pauseStartTimestamp) {
+                // Shift all time-based endTimeMs fields forward by the paused duration
+                const pausedDuration = Date.now() - this.pauseStartTimestamp;
+                const END_TIME_KEYS = [
+                    'sleepEndTimeMs', 'stunnedEndTimeMs', 'frozenEndTimeMs', 'fearEndTimeMs',
+                    'ensnaredEndTimeMs', 'markedEndTimeMs', 'hexEndTimeMs',
+                    'weaknessRevealedEndTimeMs', 'bonesEndTimeMs', 'astralBeingEndTimeMs',
+                    'etherealSpeedEndTimeMs', 'thirdEyeEndTimeMs', 'arcaneBarrierEndTimeMs',
+                    'shieldWallEndTimeMs', 'poisonEndTimeMs', 'bleedEndTimeMs',
+                ];
+                Object.values(this.combatants).forEach(unit => {
+                    if (!unit) return;
+                    END_TIME_KEYS.forEach(key => {
+                        if (unit[key] && unit[key] > 0) unit[key] += pausedDuration;
+                    });
+                    if (Array.isArray(unit.activeBuffs)) {
+                        unit.activeBuffs.forEach(b => {
+                            if (b && b.endTimeMs && b.endTimeMs > 0) b.endTimeMs += pausedDuration;
+                        });
+                    }
+                    if (Array.isArray(unit.activeDebuffs)) {
+                        unit.activeDebuffs.forEach(d => {
+                            if (d && d.endTimeMs && d.endTimeMs > 0) d.endTimeMs += pausedDuration;
+                        });
+                    }
                 });
-                if (Array.isArray(unit.activeBuffs)) {
-                    unit.activeBuffs.forEach(b => {
-                        if (b && b.endTimeMs && b.endTimeMs > 0) b.endTimeMs += pausedDuration;
-                    });
-                }
-                if (Array.isArray(unit.activeDebuffs)) {
-                    unit.activeDebuffs.forEach(d => {
-                        if (d && d.endTimeMs && d.endTimeMs > 0) d.endTimeMs += pausedDuration;
-                    });
-                }
-            });
-            this.pauseStartTimestamp = null;
+                this.pauseStartTimestamp = null;
+            }
         }
 
         if (typeof this.updateData === 'function') {
@@ -6244,7 +6252,7 @@ export function CombatManagerRedux() {
             return;
         }
 
-        // 5. Bite rule: "it will only use its 'bite' skill if there is an enemy unit adjacent =, or if there are no friendly units alive"
+        // 5. If adjacent enemy exists, bite / basic attack immediately
         if (adjacentEnemy) {
             this.acquireTarget(unit, true);
             const target = this.combatants[unit.targetId] || adjacentEnemy;
@@ -6255,10 +6263,31 @@ export function CombatManagerRedux() {
                 this._basicAttack(unit, target);
             }
             return;
-        } else if (!otherFriendliesAlive) {
-            this.acquireTarget(unit, true);
-            const target = this.combatants[unit.targetId];
-            if (target) {
+        }
+
+        // 6. If other friendlies are alive, hang back at the backline (supporting team)
+        if (otherFriendliesAlive) {
+            const backlineX = MAX_DEPTH;
+            if (unit.coordinates.x < backlineX && unit.movesTakenThisRound === 0) {
+                this.moveCloserToCoord(unit, backlineX, unit.coordinates.y);
+            }
+            return;
+        }
+
+        // 7. No other friendlies alive: NO valid friendly targets for feed_the_masses!
+        // Revert to doing melee attacks with 'bite' skill (will NOT stay on back line anymore)
+        this.acquireTarget(unit, true);
+        const target = this.combatants[unit.targetId];
+        if (target) {
+            if (this.targetInRange(unit, target, 'close')) {
+                const biteSpec = this.resolveSpecial(unit, 'bite');
+                if (biteSpec && this._abilityReady(unit, 'bite')) {
+                    this.useAbility(unit, biteSpec, target);
+                } else {
+                    this._basicAttack(unit, target);
+                }
+            } else if (unit.movesTakenThisRound === 0) {
+                this.moveCloser(unit, target);
                 if (this.targetInRange(unit, target, 'close')) {
                     const biteSpec = this.resolveSpecial(unit, 'bite');
                     if (biteSpec && this._abilityReady(unit, 'bite')) {
@@ -6266,18 +6295,8 @@ export function CombatManagerRedux() {
                     } else {
                         this._basicAttack(unit, target);
                     }
-                } else if (unit.movesTakenThisRound === 0) {
-                    this.moveCloser(unit, target);
                 }
             }
-            return;
-        }
-
-        // 6. Otherwise (no damaged friendly to feed or skill on CD, no adjacent enemy, other friendlies alive):
-        // Hang back at backline (far right column for monsters)
-        const backlineX = MAX_DEPTH;
-        if (unit.coordinates.x < backlineX && unit.movesTakenThisRound === 0) {
-            this.moveCloserToCoord(unit, backlineX, unit.coordinates.y);
         }
     };
 

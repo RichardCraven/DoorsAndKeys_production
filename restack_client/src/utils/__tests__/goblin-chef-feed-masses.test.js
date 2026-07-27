@@ -240,4 +240,37 @@ describe('Goblin Chef & Feed the Masses', () => {
         expect(cm.combatants.goblin.hp).toBeGreaterThan(15);
         expect(cm.meatTiles.length).toBe(0);
     });
+
+    test('Goblin Chef advances and bites when no other friendly units are alive', () => {
+        const cm = new CombatManagerRedux();
+        cm.combatants = {
+            chef: {
+                id: 'chef',
+                name: 'Goblin Chef',
+                type: 'goblin_chef',
+                isMonster: true,
+                hp: 40,
+                starting_hp: 40,
+                stats: { speed: 11, hp: 40 },
+                coordinates: { x: 7, y: 2 },
+                skills: ['feed_the_masses', 'bite'],
+                cooldowns: { feed_the_masses: 0, bite: 0 },
+                movesTakenThisRound: 0,
+            },
+            player: {
+                id: 'player',
+                name: 'Hero',
+                isMonster: false,
+                hp: 100,
+                starting_hp: 100,
+                stats: { speed: 8, hp: 100 },
+                coordinates: { x: 2, y: 2 },
+            }
+        };
+
+        cm.executeUnitAI(cm.combatants.chef);
+
+        // Chef should advance from column 7 towards player at column 2 (x < 7)
+        expect(cm.combatants.chef.coordinates.x).toBeLessThan(7);
+    });
 });

@@ -420,6 +420,7 @@ class TowerSiege extends React.Component {
                             combatStarted={combatStarted}
                             showBars={this.props.combatManager ? this.props.combatManager.showBars : false}
                             activeAnimations={this.state.activeAnimations}
+                            isPaused={!!(this.props.paused || this.props.combatManager?.combatPaused)}
                             animationOverlays={this.state.animationOverlays}
                             getAllOverlaysById={this.getAllOverlaysById}
                             isMobileLandscape={this.state.isMobileLandscape}
