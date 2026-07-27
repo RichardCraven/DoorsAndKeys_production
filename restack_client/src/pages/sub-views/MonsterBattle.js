@@ -1368,6 +1368,7 @@ class MonsterBattle extends React.Component {
         if (cm && cm.combatants && cm.combatants[fighterId]) {
             cm.combatants[fighterId].queuedSkill = skillKey;
             cm.combatants[fighterId].queuedSkillTargetId = targetMonsterId;
+            cm.combatants[fighterId].queuedSkillIsUltimate = isUltimate;
         }
         this.setState(prev => ({
             queuedSkillMap: { ...prev.queuedSkillMap, [fighterId]: skillKey },
@@ -4626,7 +4627,7 @@ class MonsterBattle extends React.Component {
                                         </div>
 
                                         {/* Endurance Bar */}
-                                        {!(liveSelectedFighter.isMonster || liveSelectedFighter.isMinion) && (
+                                        {!(liveSelectedFighter.isMonster || liveSelectedFighter.isMinion || liveSelectedFighter.isFamiliar || (liveSelectedFighter.type && String(liveSelectedFighter.type).includes('familiar'))) && (
                                             <>
                                                 <div className="redux-stat-label">
                                                     <span>Endurance</span>

@@ -394,11 +394,11 @@ export default function FightersCombatGrid(props) {
                                                 <div className="hp-bar" style={{ position: 'relative', height: '4px' }}>
                                                     <div className="red-fill" style={{width: `${(props.getFighterDetails(fighter)?.hp / fighter.stats.hp) * 100}%`}}></div>
                                                 </div>
-                                                {props.combatManager && props.combatManager.round !== undefined ? (
+                                                {!props.getFighterDetails(fighter)?.isFamiliar && !(props.getFighterDetails(fighter)?.type && String(props.getFighterDetails(fighter)?.type).includes('familiar')) && props.combatManager && props.combatManager.round !== undefined ? (
                                                     <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative' }}>
                                                         <div className="white-fill" style={{ height: '100%', backgroundColor: '#ffffff', width: `${(props.getFighterDetails(fighter)?.endurance / props.getFighterDetails(fighter)?.maxEndurance) * 100}%` }}></div>
                                                     </div>
-                                                ) : (
+                                                ) : null}
                                                     <>
                                                         <div className="energy-bar" style={{ position: 'relative', height: '4px' }}>
                                                             <div className="yellow-fill" style={{width: `calc(${props.getFighterDetails(fighter)?.energy}%)`}}></div>

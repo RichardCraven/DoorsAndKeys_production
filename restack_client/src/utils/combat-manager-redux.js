@@ -103,9 +103,14 @@ export function CombatManagerRedux() {
     this.ACTION_ENDURANCE_COST = 2;
     this.MOVE_ENDURANCE_COST = 2;
 
+    this.isFamiliarUnit = (unit) => {
+        if (!unit) return false;
+        return !!(unit.isFamiliar || unit.type === 'archaic_familiar' || (unit.type && String(unit.type).includes('familiar')) || (unit.name && String(unit.name).toLowerCase().includes('familiar')));
+    };
+
     this.applyEnduranceCost = (unit, cost = this.ACTION_ENDURANCE_COST, source = 'action') => {
         if (!unit) return;
-        if (unit.type === 'darkness_sphere' || unit.isMinion || unit.type === 'spider_minion') return;
+        if (unit.type === 'darkness_sphere' || unit.isMinion || unit.type === 'spider_minion' || this.isFamiliarUnit(unit)) return;
         if ((unit.endurance || 0) <= 0 && unit.exhausted) return;
 
         let actualCost = cost;
@@ -282,6 +287,11 @@ export function CombatManagerRedux() {
 
         const applyOverrides = (ability) => {
             if (!ability) return ability;
+            const norm = (ability.id || ability.key || ability.name || '').toLowerCase().replace(/\s+/g, '_');
+            const matrixAbility = specialsMatrix[norm] || attacksMatrix[norm];
+            if (matrixAbility) {
+                ability = { ...matrixAbility, ...ability };
+            }
             if (caller && (caller.type === 'blalok' || caller.key === 'blalok' || caller.image === 'blalok')) {
                 if (ability.id === 'claw_strike' || ability.key === 'claw_strike') ability.icon = images.blalok_claw_strike;
                 if (ability.id === 'bite' || ability.key === 'bite') ability.icon = images.blalok_bite;
@@ -3504,15 +3514,19 @@ export function CombatManagerRedux() {
                     const qSpec = this.resolveSpecial(unit, qKey);
                     if (qSpec && qSpec.type !== 'passive' && !qSpec.isPassive) {
                         let actualAbility = qSpec;
-                        if (unit.ultimateActive && qSpec.ultimate) {
-                            actualAbility = { ...qSpec, ...qSpec.ultimate };
+                        const normKey = (qKey || '').replace(/\s+/g, '_').toLowerCase();
+                        const matrixDef = specialsMatrix[normKey] || attacksMatrix[normKey];
+                        const ultimateDef = qSpec.ultimate || (matrixDef && matrixDef.ultimate);
+                        const isUltReady = !!(unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate);
+                        if (isUltReady && ultimateDef) {
+                            actualAbility = { ...qSpec, ...ultimateDef, isUltimate: true };
                         }
                         const rangeType = actualAbility.range;
                         const inRange = this.targetInRange(unit, qTarget, rangeType);
                         if (inRange) {
                             unit.queuedSkill = null; // consume and clear
                             unit.queuedSkillTargetId = null;
-                            this.useAbility(unit, qSpec, qTarget);
+                            this.useAbility(unit, actualAbility, qTarget);
                             return;
                         } else {
                             // Out of range: prioritize moving to be in range
@@ -3524,7 +3538,7 @@ export function CombatManagerRedux() {
                                 if (nowInRange) {
                                     unit.queuedSkill = null; // consume and clear
                                     unit.queuedSkillTargetId = null;
-                                    this.useAbility(unit, qSpec, qTarget);
+                                    this.useAbility(unit, actualAbility, qTarget);
                                     return;
                                 }
                             }
@@ -5181,6 +5195,7 @@ export function CombatManagerRedux() {
                 type: 'archaic_familiar',
                 name: 'archaic familiar',
                 isMinion: true,
+                isFamiliar: true,
                 isMonster: !!unit.isMonster,
                 summonedBy: unit.id,
                 dead: false,
@@ -5195,8 +5210,6 @@ export function CombatManagerRedux() {
                 cooldowns: {},
                 movesTakenThisRound: 0,
                 actionsTakenThisRound: 0,
-                endurance: 40,
-                maxEndurance: 40,
                 enduranceFrozenRounds: 0,
                 damageIndicators: [],
                 activeBuffs: [],
@@ -5280,20 +5293,30 @@ export function CombatManagerRedux() {
             }
         }
 
-        // Trigger portal animation
-        let transitionIcon = images['summon_icon'];
-        if (ability.tier === 2) {
-            transitionIcon = images['summon2_icon'];
-        } else if (ability.tier >= 3) {
-            transitionIcon = images['summon3_icon'];
-        }
-
-        if (this.animManagerRedux && typeof this.animManagerRedux.triggerSummon === 'function') {
-            this.animManagerRedux.triggerSummon(freeTile, minionType, transitionIcon);
+        // Trigger portal or rune familiar animation
+        if (abilityKey === 'summon_familiar') {
+            const equippedRuneItem = (unit.inventory || []).find(item => item && item.equippedSlot === 'pet');
+            const runeKey = (equippedRuneItem?._im_key || equippedRuneItem?.key || 'archaic_rune').replace('_rune', '');
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerFamiliarSummon === 'function') {
+                this.animManagerRedux.triggerFamiliarSummon(freeTile, runeKey);
+            } else if (this.animManagerRedux && typeof this.animManagerRedux.triggerSummon === 'function') {
+                this.animManagerRedux.triggerSummon(freeTile, minionType, images['summon_icon']);
+            }
+        } else {
+            let transitionIcon = images['summon_icon'];
+            if (ability.tier === 2) {
+                transitionIcon = images['summon2_icon'];
+            } else if (ability.tier >= 3) {
+                transitionIcon = images['summon3_icon'];
+            }
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerSummon === 'function') {
+                this.animManagerRedux.triggerSummon(freeTile, minionType, transitionIcon);
+            }
         }
 
         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
 
+        const summonDelayMs = abilityKey === 'summon_familiar' ? 1400 : 1200;
         setTimeout(() => {
             newMinion.invisible = false;
             newMinion.fadingIn = true;
@@ -5302,7 +5325,7 @@ export function CombatManagerRedux() {
                 newMinion.fadingIn = false;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             }, 500);
-        }, 1200);
+        }, summonDelayMs);
     };
 
     this._duplicateMinion = (unit, ability, isTriplicate) => {
@@ -7487,18 +7510,23 @@ export function CombatManagerRedux() {
         // ── Ultimate override ─────────────────────────────────────────────────
         // If the PC has ultimateActive and this skill has an `ultimate` field,
         // merge the overrides onto a shallow copy and consume the ultimate flag.
-        let isUltimateActivation = false;
-        if (unit && !unit.isMonster && unit.ultimateActive && ability.ultimate) {
-            ability = { ...ability, ...ability.ultimate };
+        let isUltimateActivation = !!ability.isUltimate;
+        const normAbilityId = (ability.id || ability.key || ability.name || '').toLowerCase().replace(/\s+/g, '_');
+        const matrixDef = specialsMatrix[normAbilityId] || attacksMatrix[normAbilityId];
+        const ultimateDef = ability.ultimate || (matrixDef && matrixDef.ultimate);
+        const isUltReady = !!(unit && !unit.isMonster && (unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate || ability.isUltimate));
+        if (isUltReady && ultimateDef) {
+            ability = { ...ability, ...ultimateDef, isUltimate: true };
             isUltimateActivation = true;
             unit.ultimateActive = false;
+            unit.queuedSkillIsUltimate = false;
             unit.power = 0; // Reset power to 0 upon ultimate activation!
             unit.ultimateCasting = true;
-            console.log(`%c 💥 ULTIMATE ACTIVATED: ${this.getCombatantLogName(unit)} executed ${ability.name || ability.id}! 💥`, 'background: #ff5500; color: #fff; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
-            this.appendCombatLog(`💥 ${this.getCombatantLogName(unit)} ACTIVATES their Ultimate: ${ability.name || ability.id}!`);
+            console.log(`%c 💥 ULTIMATE ACTIVATED: ${this.getCombatantLogName(unit)} executed ${ability.name || ability.id || normAbilityId}! 💥`, 'background: #ff5500; color: #fff; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
+            this.appendCombatLog(`💥 ${this.getCombatantLogName(unit)} ACTIVATES their Ultimate: ${ability.name || ability.id || normAbilityId}!`);
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
 
-            const animDurationMs = (ability.id === 'magic_missile' || ability.id === 'greater_magic_missile') ? 2200 : 2000;
+            const animDurationMs = (normAbilityId.includes('magic_missile')) ? 2200 : 2000;
             setTimeout(() => {
                 if (unit) unit.ultimateCasting = false;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
@@ -7604,7 +7632,7 @@ export function CombatManagerRedux() {
         const isMagicMissile = ['magic_missile', 'minor_magic_missile', 'major_magic_missile', 'greater_magic_missile'].includes(abilityId);
         const preRolledHits = [];
         if (isMagicMissile) {
-            const missilesCount = (abilityId === 'greater_magic_missile') ? 5 : (abilityId === 'minor_magic_missile' ? 1 : 3);
+            const missilesCount = (isUltimateActivation || ability.isUltimate) ? 7 : ((abilityId === 'greater_magic_missile') ? 5 : (abilityId === 'minor_magic_missile' ? 1 : 3));
             for (let h = 0; h < missilesCount; h++) {
                 preRolledHits.push((isSelfTarget || isMentalityDebuff) ? true : this.hitCheck(unit, target));
             }
@@ -8433,6 +8461,7 @@ export function CombatManagerRedux() {
             const OVERLOAD_TRAVEL_MS = 700;
             setTimeout(() => {
                 if (hit) {
+                    if (this.isFamiliarUnit(target)) return;
                     const maxStamina = target.maxEndurance || 50;
                     const currStamina = target.endurance !== undefined ? target.endurance : 50;
                     const staminaUsed = Math.max(0, maxStamina - currStamina);
@@ -9279,7 +9308,7 @@ export function CombatManagerRedux() {
             Object.values(this.combatants).forEach(c => {
                 if (!c || c.dead || c.isVCT) return;
                 const isEnemy = (!!unit.isMonster !== !!c.isMonster);
-                if (isEnemy) {
+                if (isEnemy && !this.isFamiliarUnit(c)) {
                     c.endurance = Math.max(0, (c.endurance || 0) - 30);
                     c.damageIndicators = c.damageIndicators || [];
                     c.damageIndicators.push({
@@ -9562,7 +9591,7 @@ export function CombatManagerRedux() {
                 c && !c.dead && c.type === 'darkness_sphere' && !!c.isMonster === !!target.isMonster
             ) : null;
             const sphereCoords = activeDarkSphere ? activeDarkSphere.coordinates : null;
-            this.animManagerRedux.triggerAbility(sourceCoord, targetCoord, abilityId, isTargetLarge, targetTiles, unit.id, activeArrowType, null, preRolledHits, sphereCoords);
+            this.animManagerRedux.triggerAbility(sourceCoord, targetCoord, abilityId, isTargetLarge, targetTiles, unit.id, activeArrowType, null, preRolledHits, sphereCoords, false, null, isUltimateActivation);
         }
 
         if (abilityId === 'loose' || abilityId === 'execute' || abilityId === 'deadeye_shot' || abilityId === 'burst_shot' || abilityId === 'burst_attack') {
@@ -10050,7 +10079,7 @@ export function CombatManagerRedux() {
         }
         const dmgMult = target.weaknessRevealed ? 1.25 : 1.0;
         const arrowType = (abilityId === 'loose' || abilityId === 'execute' || abilityId === 'burst_shot' || abilityId === 'burst_attack') ? (activeArrowType || 'force') : null;
-        const hitCount = (abilityId === 'burst_shot' || abilityId === 'burst_attack') ? 3 : (isMagicMissile ? (abilityId === 'greater_magic_missile' ? 5 : (abilityId === 'minor_magic_missile' ? 1 : 3)) : 1);
+        const hitCount = (abilityId === 'burst_shot' || abilityId === 'burst_attack') ? 3 : (isMagicMissile ? ((isUltimateActivation || ability.isUltimate) ? 7 : (abilityId === 'greater_magic_missile' ? 5 : (abilityId === 'minor_magic_missile' ? 1 : 3))) : 1);
         let hitsSucceeded = 0;
         let anyHitConnected = false;
         const mmResults = isMagicMissile ? [] : null;
@@ -10177,7 +10206,7 @@ export function CombatManagerRedux() {
                         this.appendCombatLog(`${this.getCombatantLogName(unit)} heals for ${healAmt} from Vampiric Bite.`);
                     }
 
-                    if (abilityId === 'voidbite') {
+                    if (abilityId === 'voidbite' && !this.isFamiliarUnit(target)) {
                         const staminaDmg = Math.round(finalDmg * 0.30);
                         target.endurance = Math.max(0, (target.endurance || 0) - staminaDmg);
                         if (staminaDmg > 0) {
@@ -10195,7 +10224,7 @@ export function CombatManagerRedux() {
                         }
                     }
 
-                    if (abilityId === 'energy_drain' || (ability && ability.effect && ability.effect.type === 'drain' && abilityId !== 'voidbite')) {
+                    if ((abilityId === 'energy_drain' || (ability && ability.effect && ability.effect.type === 'drain' && abilityId !== 'voidbite')) && !this.isFamiliarUnit(target)) {
                         const staminaDmg = Math.round(finalDmg * 0.5);
                         target.endurance = Math.max(0, (target.endurance || 0) - staminaDmg);
                         if (staminaDmg > 0) {
@@ -10730,7 +10759,7 @@ export function CombatManagerRedux() {
         } else if (abilityId === 'fireball') {
             setTimeout(() => performHit(0), 900);
         } else if (isMagicMissile) {
-            const count = (abilityId === 'greater_magic_missile') ? 5 : (abilityId === 'minor_magic_missile' ? 1 : 3);
+            const count = (isUltimateActivation || ability.isUltimate) ? 7 : ((abilityId === 'greater_magic_missile') ? 5 : (abilityId === 'minor_magic_missile' ? 1 : 3));
             for (let i = 0; i < count; i++) {
                 setTimeout(() => performHit(i), 400 + i * 200);
             }

@@ -583,6 +583,11 @@ import wizard_eyes_glow_white from '../assets/portraits/crew/wizard/wizard_eyes_
 import wizard_eyes_glow_blue from '../assets/portraits/crew/wizard/wizard_eyes_glow_blue.png'
 import wizard_eyes_glow_green from '../assets/portraits/crew/wizard/wizard_eyes_glow_green.png'
 import wizard_eyes_glow_gold from '../assets/portraits/crew/wizard/wizard_eyes_glow_gold.png'
+import barbarian_eyes_glow_white from '../assets/portraits/crew/barbarian/barbarian_eyes_glow_white.png'
+import barbarian_eyes_glow_blue from '../assets/portraits/crew/barbarian/barbarian_eyes_glow_blue.png'
+import barbarian_eyes_glow_green from '../assets/portraits/crew/barbarian/barbarian_eyes_glow_green.png'
+import barbarian_eyes_glow_gold from '../assets/portraits/crew/barbarian/barbarian_eyes_glow_gold.png'
+import barbarian_eyes_glow_red from '../assets/portraits/crew/barbarian/barbarian_eyes_glow_red.png'
 import ranger from '../assets/portraits/crew/rogue/rogue_compressed.png'
 import sage from '../assets/portraits/crew/sage/sage_compressed.png'
 import sorceress from '../assets/icons/crew_icons/sorceress.png'
@@ -594,6 +599,11 @@ import viking2 from '../assets/icons/crew_icons/viking2.png'
 import viking3 from '../assets/icons/crew_icons/viking3.png'
 
 import monk_portrait from '../assets/portraits/crew/monk/monk_compressed.png'
+import monk_eyes_glow_white from '../assets/portraits/crew/monk/monk_eyes_glow_white.png'
+import monk_eyes_glow_blue from '../assets/portraits/crew/monk/monk_eyes_glow_blue.png'
+import monk_eyes_glow_green from '../assets/portraits/crew/monk/monk_eyes_glow_green.png'
+import monk_eyes_glow_gold from '../assets/portraits/crew/monk/monk_eyes_glow_gold.png'
+import monk_eyes_glow_red from '../assets/portraits/crew/monk/monk_eyes_glow_red.png'
 import sage_portrait from '../assets/portraits/crew/sage/sage_compressed.png'
 import wizard_portrait from '../assets/portraits/crew/wizard/wizard_compressed.png'
 import soldier_portrait from '../assets/portraits/crew/soldier/soldier_compressed.png'
@@ -1682,6 +1692,11 @@ export {
     wizard_eyes_glow_blue,
     wizard_eyes_glow_green,
     wizard_eyes_glow_gold,
+    barbarian_eyes_glow_white,
+    barbarian_eyes_glow_blue,
+    barbarian_eyes_glow_green,
+    barbarian_eyes_glow_gold,
+    barbarian_eyes_glow_red,
     sorceress,
     engineer,
     summoner,
@@ -1693,6 +1708,11 @@ export {
     viking3,
 
     monk_portrait,
+    monk_eyes_glow_white,
+    monk_eyes_glow_blue,
+    monk_eyes_glow_green,
+    monk_eyes_glow_gold,
+    monk_eyes_glow_red,
     sage_portrait,
     wizard_portrait,
     ranger_portrait,

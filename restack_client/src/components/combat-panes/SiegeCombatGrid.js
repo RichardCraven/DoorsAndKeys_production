@@ -10,10 +10,119 @@
 import React from 'react';
 import * as images from '../../utils/images';
 import Overlay from '../Overlay';
+import { runesData } from '../../utils/rune-data';
 
 
 const TILE_SIZE = 56;
 const SHOW_TILE_BORDERS = true;
+
+
+function FamiliarSummonRuneAnimation({ animKey, tgtPx, runeKey = 'archaic' }) {
+    const rKey = (runeKey || 'archaic').replace('_rune', '').toLowerCase();
+    const data = runesData[rKey] || runesData['archaic'];
+    const baseImg = data?.assembledImg || data?.baseImg;
+    const pieces = data?.pieces || {};
+
+    const [phase, setPhase] = React.useState(1);
+
+    React.useEffect(() => {
+        const t1 = setTimeout(() => setPhase(2), 400);  // Step 2: replace base icon with 5 assembled shards
+        const t2 = setTimeout(() => setPhase(3), 520);  // Step 3: shards move outward to disassembled state
+        const t3 = setTimeout(() => setPhase(4), 1150); // Step 4: shards fade out
+        return () => {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+        };
+    }, []);
+
+    const requiredPieces = ['top left', 'top right', 'bottom left', 'bottom right', 'top center'];
+
+    const getShardTransform = (pieceName, isDisassembled, distance = 45) => {
+        if (!isDisassembled) return 'translate(0px, 0px)';
+        const normalized = pieceName.toLowerCase().replace(/[^a-z]/g, '');
+        switch(normalized) {
+            case 'bottomleft': return `translate(-${distance}px, ${distance}px)`;
+            case 'bottomright': return `translate(${distance}px, ${distance}px)`;
+            case 'topcenter': return `translate(0px, -${distance * 1.25}px)`;
+            case 'topleft': return `translate(-${distance}px, -${distance}px)`;
+            case 'topright': return `translate(${distance}px, -${distance}px)`;
+            default: return 'translate(0px, 0px)';
+        }
+    };
+
+    return (
+        <div
+            key={animKey}
+            style={{
+                position: 'absolute',
+                left: `${tgtPx.x}px`,
+                top: `${tgtPx.y}px`,
+                width: '90px',
+                height: '90px',
+                transform: 'translate(-50%, -50%)',
+                pointerEvents: 'none',
+                zIndex: 4100,
+            }}
+        >
+            {/* Background glowing golden aura */}
+            <div style={{
+                position: 'absolute',
+                inset: '-15px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(255, 215, 0, 0.5) 0%, rgba(255, 140, 0, 0.25) 50%, transparent 75%)',
+                opacity: phase >= 4 ? 0 : 1,
+                transition: 'opacity 0.4s ease-out',
+                filter: 'drop-shadow(0 0 15px #ffd700)'
+            }} />
+
+            {/* Step 1: Fully assembled rune base icon fades in */}
+            {baseImg && (
+                <img
+                    src={baseImg}
+                    alt="assembled rune"
+                    style={{
+                        position: 'absolute',
+                        inset: 0,
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        opacity: phase === 1 ? 1 : 0,
+                        transition: 'opacity 0.15s ease-out',
+                        filter: 'drop-shadow(0 0 10px #ffd700) brightness(1.25)'
+                    }}
+                />
+            )}
+
+            {/* Step 2 & 3: 5 Shards Layer */}
+            {requiredPieces.map((pieceName) => {
+                const pieceSrc = pieces[pieceName];
+                if (!pieceSrc) return null;
+                const isDisassembled = phase >= 3;
+                const isFading = phase >= 4;
+
+                return (
+                    <img
+                        key={pieceName}
+                        src={pieceSrc}
+                        alt={pieceName}
+                        style={{
+                            position: 'absolute',
+                            inset: 0,
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'contain',
+                            transform: getShardTransform(pieceName, isDisassembled, 45),
+                            opacity: (phase >= 2 && !isFading) ? 1 : 0,
+                            transition: 'transform 0.6s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.35s ease-out',
+                            filter: 'drop-shadow(0 0 8px #ffb703) brightness(1.2)'
+                        }}
+                    />
+                );
+            })}
+        </div>
+    );
+}
 
 
 function CurvedProjectile({ srcPx, tgtPx, spherePx, duration = 400, onComplete, color = '#d946ef', shadowColor = '#701a75', isNetherBolt = false }) {
@@ -1268,6 +1377,50 @@ export default function SiegeCombatGrid(props) {
         }
         const activeGlowImg = eyesGlowImg || resolvePortrait('wizard_eyes_glow_white');
 
+        // Barbarian glowing eyes logic
+        const barbarianAnims = activeAnimations.filter(a => a.sourceUnitId === fighter.id);
+        const hasBarbarianAnim = fighter.type === 'barbarian' && barbarianAnims.length > 0;
+        let barbarianEyesImg = null;
+        if (hasBarbarianAnim) {
+            const hasRed = barbarianAnims.some(a => 
+                ['barbarian_berserker', 'berserker', 'berserk', 'barbarian_leap_attack', 'leap_attack', 'leap attack'].includes(a.abilityName?.toLowerCase())
+            );
+            const hasGold = barbarianAnims.some(a => 
+                ['barbarian_whirlwind', 'whirlwind', 'barbarian_axe_throw', 'axe_throw', 'axe throw'].includes(a.abilityName?.toLowerCase())
+            );
+            
+            if (hasRed) {
+                barbarianEyesImg = resolvePortrait('barbarian_eyes_glow_red');
+            } else if (hasGold) {
+                barbarianEyesImg = resolvePortrait('barbarian_eyes_glow_gold');
+            } else {
+                barbarianEyesImg = resolvePortrait('barbarian_eyes_glow_white');
+            }
+        }
+        const activeBarbarianGlowImg = barbarianEyesImg || resolvePortrait('barbarian_eyes_glow_white');
+
+        // Monk glowing eyes logic
+        const monkAnims = activeAnimations.filter(a => a.sourceUnitId === fighter.id);
+        const hasMonkAnim = fighter.type === 'monk' && monkAnims.length > 0;
+        let monkEyesImg = null;
+        if (hasMonkAnim) {
+            const hasBlue = monkAnims.some(a => 
+                ['monk_astral_focus', 'astral_focus', 'monk_astral_projection', 'astral_projection', 'monk_third_eye', 'third_eye'].includes(a.abilityName?.toLowerCase())
+            );
+            const hasGold = monkAnims.some(a => 
+                ['monk_inner_fire', 'inner_fire', 'monk_meditate', 'meditate'].includes(a.abilityName?.toLowerCase())
+            );
+            
+            if (hasBlue) {
+                monkEyesImg = resolvePortrait('monk_eyes_glow_blue');
+            } else if (hasGold) {
+                monkEyesImg = resolvePortrait('monk_eyes_glow_gold');
+            } else {
+                monkEyesImg = resolvePortrait('monk_eyes_glow_white');
+            }
+        }
+        const activeMonkGlowImg = monkEyesImg || resolvePortrait('monk_eyes_glow_white');
+
         return (
             <div
                 key={fighter.id}
@@ -1413,6 +1566,46 @@ export default function SiegeCombatGrid(props) {
                                     opacity: eyesGlowImg ? 1 : 0,
                                     transition: 'opacity 0.2s ease-in-out',
                                     animation: eyesGlowImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
+                                }}
+                            />
+                        )}
+                        {fighter.type === 'barbarian' && (
+                            <div
+                                className="barbarian-eyes-glow-overlay"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: `url("${activeBarbarianGlowImg}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    pointerEvents: 'none',
+                                    zIndex: 310,
+                                    opacity: barbarianEyesImg ? 1 : 0,
+                                    transition: 'opacity 0.2s ease-in-out',
+                                    animation: barbarianEyesImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
+                                }}
+                            />
+                        )}
+                        {fighter.type === 'monk' && (
+                            <div
+                                className="monk-eyes-glow-overlay"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: `url("${activeMonkGlowImg}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    pointerEvents: 'none',
+                                    zIndex: 310,
+                                    opacity: monkEyesImg ? 1 : 0,
+                                    transition: 'opacity 0.2s ease-in-out',
+                                    animation: monkEyesImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
                                 }}
                             />
                         )}
@@ -1706,7 +1899,7 @@ export default function SiegeCombatGrid(props) {
                                     transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                 }} />
                             </div>
-                            {combatManager && combatManager.round !== undefined ? (
+                            {!getFighterDetails(fighter)?.isFamiliar && !(getFighterDetails(fighter)?.type && String(getFighterDetails(fighter)?.type).includes('familiar')) && combatManager && combatManager.round !== undefined ? (
                                 <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative', bottom: 'auto', top: 'auto' }}>
                                     <div className="white-fill" style={{
                                         height: '100%',
@@ -2713,7 +2906,7 @@ export default function SiegeCombatGrid(props) {
                                 transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                             }} />
                         </div>
-                        {!(unit.type && String(unit.type).includes('spider')) && (
+                        {!(unit.isFamiliar || (unit.type && String(unit.type).includes('familiar')) || (unit.type && String(unit.type).includes('spider'))) && (
                             combatManager && combatManager.round !== undefined ? (
                                 <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative', bottom: 'auto', top: 'auto' }}>
                                     <div className="white-fill" style={{
@@ -4369,6 +4562,7 @@ export default function SiegeCombatGrid(props) {
 
         if (anim.type === 'magic_missile_projectile' && anim.srcPx && anim.tgtPx) {
             const isNetherBolt = anim.abilityName === 'nether_bolt';
+            const isUltimate = anim.isUltimate || anim.abilityName === 'magic_missile_ultimate' || (typeof anim.abilityName === 'string' && anim.abilityName.includes('ultimate'));
             if (anim.spherePx) {
                 return (
                     <CurvedProjectile
@@ -4377,13 +4571,17 @@ export default function SiegeCombatGrid(props) {
                         tgtPx={anim.tgtPx}
                         spherePx={anim.spherePx}
                         duration={anim.duration}
-                        color={isNetherBolt ? '#a21caf' : '#d946ef'}
-                        shadowColor={isNetherBolt ? '#4a044e' : '#701a75'}
+                        color={isUltimate ? '#f59e0b' : (isNetherBolt ? '#a21caf' : '#d946ef')}
+                        shadowColor={isUltimate ? '#b45309' : (isNetherBolt ? '#4a044e' : '#701a75')}
                         isNetherBolt={isNetherBolt}
                     />
                 );
             }
             const durationS = anim.duration ? anim.duration / 1000 : 0.4;
+            const coreColor = isUltimate ? '#fbbf24' : '#d946ef';
+            const shadowColor = isUltimate ? '#b45309' : '#701a75';
+            const glowColor = isUltimate ? '#fef08a' : '#ffffff';
+
             return (
                 <div key={key} style={{
                     position: 'absolute',
@@ -4418,8 +4616,8 @@ export default function SiegeCombatGrid(props) {
                             height: '18px',
                             borderRadius: '50%',
                             border: '2px solid #ffffff',
-                            background: 'radial-gradient(circle, #ffffff 15%, #d946ef 45%, #701a75 80%)',
-                            boxShadow: '0 0 10px #d946ef, 0 0 20px #701a75, inset 0 0 4px #ffffff',
+                            background: `radial-gradient(circle, #ffffff 15%, ${coreColor} 45%, ${shadowColor} 80%)`,
+                            boxShadow: `0 0 12px ${coreColor}, 0 0 24px ${shadowColor}, inset 0 0 4px ${glowColor}`,
                             animation: 'missileGlow 0.15s ease-in-out infinite alternate',
                         }} />
                     )}
@@ -4428,6 +4626,12 @@ export default function SiegeCombatGrid(props) {
         }
 
         if (anim.type === 'magic_missile_hit_sigil' && anim.tgtPx) {
+            const isUltimate = anim.isUltimate || anim.abilityName === 'magic_missile_ultimate' || (typeof anim.abilityName === 'string' && anim.abilityName.includes('ultimate'));
+            const strokeOuter = isUltimate ? '#f59e0b' : '#b5179e';
+            const strokeInner = isUltimate ? '#fbbf24' : '#9d4edd';
+            const strokeStar = isUltimate ? '#d97706' : '#7209b7';
+            const dropShadow = isUltimate ? 'drop-shadow(0 0 8px #f59e0b)' : 'drop-shadow(0 0 4px #b5179e)';
+
             return (
                 <div key={key} style={{
                     position: 'absolute',
@@ -4447,21 +4651,23 @@ export default function SiegeCombatGrid(props) {
                         width: '100%', 
                         height: '100%', 
                         animation: 'geomSpinClockwise 1.2s linear infinite',
-                        filter: 'drop-shadow(0 0 4px #b5179e)'
+                        filter: dropShadow
                     }}>
                         {/* Outer circle */}
-                        <circle cx="50" cy="50" r="42" fill="none" stroke="#b5179e" strokeWidth="3" />
+                        <circle cx="50" cy="50" r="42" fill="none" stroke={strokeOuter} strokeWidth="3" />
                         {/* Inner dashed circle */}
-                        <circle cx="50" cy="50" r="28" fill="none" stroke="#9d4edd" strokeWidth="2" strokeDasharray="6 6" />
+                        <circle cx="50" cy="50" r="28" fill="none" stroke={strokeInner} strokeWidth="2" strokeDasharray="6 6" />
                         {/* Star / Hexagram double triangle */}
-                        <polygon points="50,15 80,70 20,70" fill="none" stroke="#7209b7" strokeWidth="2.5" />
-                        <polygon points="50,85 80,30 20,30" fill="none" stroke="#7209b7" strokeWidth="2.5" />
+                        <polygon points="50,15 80,70 20,70" fill="none" stroke={strokeStar} strokeWidth="2.5" />
+                        <polygon points="50,85 80,30 20,30" fill="none" stroke={strokeStar} strokeWidth="2.5" />
                     </svg>
                 </div>
             );
         }
 
         if (anim.type === 'magic_missile_miss_dot' && anim.tgtPx) {
+            const isUltimate = anim.isUltimate;
+            const coreColor = isUltimate ? '#fbbf24' : '#d946ef';
             return (
                 <div key={key} style={{
                     position: 'absolute',
@@ -4475,8 +4681,8 @@ export default function SiegeCombatGrid(props) {
                     animation: 'explode 0.35s ease-out forwards',
                     borderRadius: '50%',
                     border: '1px solid #ffffff',
-                    background: 'radial-gradient(circle, #ffffff 30%, #d946ef 70%)',
-                    boxShadow: '0 0 6px #d946ef, inset 0 0 2px #ffffff'
+                    background: `radial-gradient(circle, #ffffff 30%, ${coreColor} 70%)`,
+                    boxShadow: `0 0 6px ${coreColor}, inset 0 0 2px #ffffff`
                 }} />
             );
         }
@@ -5085,6 +5291,17 @@ export default function SiegeCombatGrid(props) {
                     zIndex: 4500,
                     animation: 'scaleUpFadeOut 1.0s ease-out forwards',
                 }} />
+            );
+        }
+
+        if (anim.type === 'familiar_summon_rune' && anim.tgtPx) {
+            return (
+                <FamiliarSummonRuneAnimation
+                    key={key}
+                    animKey={key}
+                    tgtPx={anim.tgtPx}
+                    runeKey={anim.runeKey || 'archaic'}
+                />
             );
         }
 

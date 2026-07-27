@@ -742,7 +742,7 @@ const MonstersCombatGrid = ({
                                     <div className="monster-hp-bar hp-bar" style={{ position: 'relative', height: '4px' }}>
                                         <div className="red-fill" style={{ width: `${(battleData[monster.id]?.hp / battleData[monster.id]?.stats.hp) * 100}%` }}></div>
                                     </div>
-                                    {!(battleData[monster.id]?.type && String(battleData[monster.id]?.type).includes('spider')) && (
+                                    {!(battleData[monster.id]?.isFamiliar || (battleData[monster.id]?.type && String(battleData[monster.id]?.type).includes('familiar')) || (battleData[monster.id]?.type && String(battleData[monster.id]?.type).includes('spider'))) && (
                                         combatManager && combatManager.round !== undefined ? (
                                             <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative' }}>
                                                 <div className="white-fill" style={{ height: '100%', backgroundColor: '#ffffff', width: `${(battleData[monster.id]?.endurance / battleData[monster.id]?.maxEndurance) * 100}%` }}></div>
@@ -1004,7 +1004,7 @@ const MonstersCombatGrid = ({
                                         <div className="monster-hp-bar hp-bar" style={{ position: 'relative', height: '4px' }}>
                                             <div className="red-fill" style={{ width: `${(minion.hp / minion.stats.hp) * 100}%` }}></div>
                                         </div>
-                                        {!(minion.type && String(minion.type).includes('spider')) && (
+                                        {!(minion.isFamiliar || (minion.type && String(minion.type).includes('familiar')) || (minion.type && String(minion.type).includes('spider'))) && (
                                             combatManager && combatManager.round !== undefined ? (
                                                 <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative' }}>
                                                     <div className="white-fill" style={{ height: '100%', backgroundColor: '#ffffff', width: `${(minion.endurance / minion.maxEndurance) * 100}%` }}></div>

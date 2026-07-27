@@ -2676,7 +2676,16 @@ class DungeonPage extends React.Component {
         try { this.restoreBreadcrumbsFromMeta(meta); } catch (e) {}
 
         
-        if(!meta || !meta.dungeonId){
+        const isTutorial = (this.props.location && this.props.location.search && this.props.location.search.includes('tutorial=dungeon')) || (this.props.location && this.props.location.state && this.props.location.state.isTutorial);
+
+        if (isTutorial) {
+            this.props.crewManager.initializeCrew(meta.crew);
+            itemCleanup(null, meta.crew);
+            if (this.props.inventoryManager && typeof this.props.inventoryManager.refreshWeaponStats === 'function') {
+                this.props.crewManager.crew.forEach(m => { if (m && Array.isArray(m.inventory)) m.inventory = this.props.inventoryManager.refreshWeaponStats(m.inventory); });
+            }
+            this.loadTutorialSequence();
+        } else if(!meta || !meta.dungeonId){
             this.props.crewManager.initializeCrew(meta.crew);
             itemCleanup(null, meta.crew);
             if (this.props.inventoryManager && typeof this.props.inventoryManager.refreshWeaponStats === 'function') {
@@ -7797,6 +7806,136 @@ class DungeonPage extends React.Component {
             this.setState({ isLoadingDungeon: false });
         }
     }
+
+    loadTutorialSequence = async () => {
+        try {
+            const tutorialDungeonJson = require('../assets/tutorial-export.json');
+            const dungeon = JSON.parse(JSON.stringify(tutorialDungeonJson));
+            dungeon.id = 'tutorial_dungeon';
+            const resolvedSpawnPoints = this.getResolvedSpawnPoints(dungeon);
+            dungeon.spawn_points = resolvedSpawnPoints;
+
+            keyCleanup(dungeon);
+            const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : [];
+            itemCleanup(dungeon, crew);
+            resolveItemPools(dungeon, (this.props.inventoryManager && this.props.inventoryManager.allItems) ? this.props.inventoryManager.allItems : {});
+            resolveMonsterPools(dungeon, (this.props.monsterManager && this.props.monsterManager.monsters) ? this.props.monsterManager.monsters : {});
+
+            this.props.boardManager.setDungeon(dungeon);
+
+            const spawnPoint = resolvedSpawnPoints[0] || { level: 0, orientation: 'F', miniboardIndex: 0, id: 112 };
+            const levelId = spawnPoint.level !== undefined ? spawnPoint.level : 0;
+            const level = (dungeon.levels && dungeon.levels.find(e => e.id === levelId)) || (dungeon.levels && dungeon.levels[0]);
+            const miniboardIndex = spawnPoint.miniboardIndex || 0;
+            const orientation = this.getSpawnOrientationCode(spawnPoint) || 'F';
+            const spawnTileIndex = spawnPoint.id;
+
+            this.props.boardManager.setCurrentLevel(level);
+            this.props.boardManager.setCurrentOrientation(orientation);
+            this.props.boardManager.initializeTilesFromMap(miniboardIndex, spawnTileIndex);
+
+            const levelTracker = this.state.levelTracker;
+            const minimap = this.state.minimap;
+            if (minimap && minimap[miniboardIndex]) minimap[miniboardIndex].active = true;
+            let foundLevel = levelTracker && levelTracker.find(e => e.id === levelId);
+            if (foundLevel) foundLevel.active = true;
+
+            const location = {
+                levelId,
+                orientation,
+                boardIndex: miniboardIndex,
+                tileIndex: spawnTileIndex
+            };
+
+            this.setState({
+                isLoadingDungeon: false,
+                isTutorialMode: true,
+                keysLocked: true,
+                tutorialBannerText: 'Dungeon Tutorial — Auto-Play Sequence',
+                overlayTiles: this.props.boardManager.overlayTiles,
+                tiles: this.props.boardManager.tiles,
+                minimap,
+                levelTracker,
+                leftPanelExpanded: false,
+                rightPanelExpanded: false
+            }, () => {
+                try {
+                    this.props.boardManager.placePlayer(location);
+                    this.updateFloatingPlayerPosition(location);
+                } catch (e) {
+                    console.warn('Tutorial player position error:', e);
+                }
+                this.runDungeonTutorialSequence();
+            });
+        } catch (e) {
+            console.error('Failed to load tutorial dungeon:', e);
+            this.setState({ isLoadingDungeon: false });
+        }
+    };
+
+    runDungeonTutorialSequence = () => {
+        const moveStep = (direction, ms = 600) => new Promise(resolve => {
+            this._setTimeout(() => {
+                this.handleDirectionalMove(direction, { fromQueue: false });
+                resolve();
+            }, ms);
+        });
+
+        const pauseStep = (bannerText, ms) => new Promise(resolve => {
+            if (bannerText) {
+                this.setState({ tutorialBannerText: bannerText });
+            }
+            this._setTimeout(() => {
+                resolve();
+            }, ms);
+        });
+
+        const executeSequence = async () => {
+            // 1. Initial pause after spawn at spawnpoint (5, 7)
+            await pauseStep('Dungeon Tutorial: Moving to Gate at (8,6)', 1500);
+
+            // 2. Move towards Gate at (8, 6)
+            await moveStep('up', 600);    // (5, 6)
+            await moveStep('right', 600); // (6, 6)
+            await moveStep('right', 600); // (7, 6)
+            await moveStep('right', 600); // (8, 6) - Attempts gate at (8,6)
+
+            // 3. Pause & display locked message
+            await pauseStep('🔒 Gate at (8,6) is LOCKED! Requires a Minor Key.', 2500);
+
+            // 4. Move to pick up Key at (8, 4)
+            await pauseStep('Tutorial: Moving to (8,4) to collect the Minor Key...', 500);
+            await moveStep('left', 600);  // (6, 6)
+            await moveStep('up', 600);    // (6, 5)
+            await moveStep('up', 600);    // (6, 4)
+            await moveStep('right', 600); // (7, 4)
+            await moveStep('right', 600); // (8, 4) - Pick up key!
+
+            // 5. Pause & display key collected message
+            await pauseStep('🔑 Minor Key Acquired! Returning to Gate at (8,6)...', 1800);
+
+            // 6. Move back to Gate at (8, 6)
+            await moveStep('left', 600);  // (7, 4)
+            await moveStep('left', 600);  // (6, 4)
+            await moveStep('down', 600);  // (6, 5)
+            await moveStep('down', 600);  // (6, 6)
+            await moveStep('right', 600); // (7, 6)
+            await moveStep('right', 600); // (8, 6) - Unlock Gate!
+
+            // 7. Pause to show gate becoming unlocked
+            await pauseStep('🔓 Minor Key Used! Gate at (8,6) UNLOCKED!', 2500);
+
+            // 8. End tutorial and return to /tutorials
+            if (this.props.history) {
+                this.props.history.push('/tutorials');
+            } else {
+                window.location.href = '/tutorials';
+            }
+        };
+
+        executeSequence().catch(e => console.error('Tutorial sequence error:', e));
+    };
+
     loadExistingDungeon = async (dungeonId) => {
         const meta = getMeta();
 
@@ -10259,6 +10398,38 @@ class DungeonPage extends React.Component {
 
         return (
         <div className={`dungeon-container ${this.state.ritualWrecked ? 'wrecked' : ''}`}>
+            {this.state.isTutorialMode && (
+                <>
+                    <div style={{
+                        position: 'fixed',
+                        top: 0, left: 0,
+                        width: '100vw', height: '100vh',
+                        zIndex: 9998,
+                        pointerEvents: 'auto',
+                        cursor: 'wait'
+                    }} onClick={e => { e.stopPropagation(); e.preventDefault(); }} />
+                    <div style={{
+                        position: 'fixed',
+                        top: '16px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 10000,
+                        background: 'rgba(0, 0, 0, 0.85)',
+                        border: '1px solid #f9b115',
+                        color: '#f9b115',
+                        padding: '8px 24px',
+                        borderRadius: '20px',
+                        fontWeight: 'bold',
+                        letterSpacing: '1px',
+                        textTransform: 'uppercase',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.8)',
+                        pointerEvents: 'none',
+                        fontFamily: "'Cinzel', 'Outfit', sans-serif"
+                    }}>
+                        {this.state.tutorialBannerText || 'Dungeon Tutorial — Auto-Play Sequence'}
+                    </div>
+                </>
+            )}
             {this.state.isLoadingDungeon && (
                 <div className="server-waking-overlay">
                     <div className="server-waking-card">

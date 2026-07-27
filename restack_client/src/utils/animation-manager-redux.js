@@ -97,7 +97,7 @@ export class AnimationManagerRedux {
    * @param {object} targetCoords  { x, y }
    * @param {string} abilityName   e.g. 'claw_strike', 'energy_drain'
    */
-   triggerAbility(sourceCoords, targetCoords, abilityName, isTargetLarge = false, targetOccupiedCoords = null, sourceUnitId = null, arrowType = null, customDuration = null, hitResults = null, sphereCoords = null, negatedByBarrier = false, casterId = null) {
+   triggerAbility(sourceCoords, targetCoords, abilityName, isTargetLarge = false, targetOccupiedCoords = null, sourceUnitId = null, arrowType = null, customDuration = null, hitResults = null, sphereCoords = null, negatedByBarrier = false, casterId = null, isUltimate = false) {
     if (!sourceCoords || !targetCoords) return;
     const name = String(abilityName || '').toLowerCase().replace(/\s+/g, '_');
     this._currentTargetCoords = targetCoords;
@@ -233,7 +233,8 @@ export class AnimationManagerRedux {
       case 'minor_magic_missile':
       case 'major_magic_missile':
       case 'greater_magic_missile':
-        this._magicMissile(sourceCoords, targetCoords, hitResults, name, spherePx);
+      case 'magic_missile_ultimate':
+        this._magicMissile(sourceCoords, targetCoords, hitResults, name, spherePx, isUltimate);
         break;
       case 'lightning_strike':
       case 'lightning':
@@ -768,10 +769,11 @@ export class AnimationManagerRedux {
     }
   }
 
-  _magicMissile(src, tgt, hitResults = null, abilityName = 'magic_missile', spherePx = null) {
+  _magicMissile(src, tgt, hitResults = null, abilityName = 'magic_missile', spherePx = null, isUltimate = false) {
     const srcPx = this._px(src);
     const occupiedCoords = this._currentTargetOccupiedCoords;
     const hasComplex = Array.isArray(occupiedCoords) && occupiedCoords.length > 0;
+    const isUlt = isUltimate || abilityName === 'magic_missile_ultimate' || (typeof abilityName === 'string' && abilityName.includes('ultimate'));
 
     const fireMissile = (delayTime, offsetY, index) => {
       setTimeout(() => {
@@ -800,6 +802,7 @@ export class AnimationManagerRedux {
           duration: 400,
           spherePx,
           abilityName,
+          isUltimate: isUlt
         });
 
         const isHit = Array.isArray(hitResults) ? hitResults[index] !== false : true;
@@ -810,25 +813,27 @@ export class AnimationManagerRedux {
             this._emit({
               type: 'magic_missile_hit_sigil',
               tgtPx: adjustedTgtPx,
-              duration: 350
+              duration: 350,
+              isUltimate: isUlt
             });
           } else {
             this._emit({
               type: 'magic_missile_miss_dot',
               tgtPx: finalTgtPx,
-              duration: 350
+              duration: 350,
+              isUltimate: isUlt
             });
           }
         }, 400);
       }, delayTime);
     };
 
-    if (abilityName === 'greater_magic_missile') {
-      fireMissile(0, -20, 0);
-      fireMissile(150, -10, 1);
-      fireMissile(300, 0, 2);
-      fireMissile(450, 10, 3);
-      fireMissile(600, 20, 4);
+    if (abilityName === 'greater_magic_missile' || isUlt) {
+      const count = isUlt ? 7 : 5;
+      for (let i = 0; i < count; i++) {
+        const offset = (i - (count - 1) / 2) * 8;
+        fireMissile(i * 120, offset, i);
+      }
     } else if (abilityName === 'nether_bolt' || abilityName === 'minor_magic_missile') {
       fireMissile(0, 0, 0);
     } else {
@@ -1391,6 +1396,20 @@ export class AnimationManagerRedux {
 
   triggerSummon(coords, summonType, transitionIcon) {
     this._summon(coords, summonType, transitionIcon);
+  }
+
+  triggerFamiliarSummon(coords, runeKey = 'archaic') {
+    this._familiarSummon(coords, runeKey);
+  }
+
+  _familiarSummon(tgt, runeKey = 'archaic') {
+    const tgtPx = this._px(tgt);
+    this._emit({
+      type: 'familiar_summon_rune',
+      tgtPx,
+      runeKey: (runeKey || 'archaic').replace('_rune', ''),
+      duration: 1500
+    });
   }
 
   _summon(tgt, summonType, transitionIcon) {
