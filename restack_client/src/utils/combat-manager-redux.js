@@ -3755,10 +3755,19 @@ export function CombatManagerRedux() {
         return null;
     };
 
-    // Scores all ready specials and returns the highest-utility one
+    // Scores all ready specials/skills/attacks and returns the highest-utility one
     this._scoredAbilityPick = (unit, target) => {
-        if (unit.silenced) return null;
-        if (!Array.isArray(unit.specials) || unit.specials.length === 0) return null;
+        if (!unit || unit.silenced) return null;
+        const basicAttack = Array.isArray(unit.attacks) && unit.attacks.length > 0 ? unit.attacks[0] : null;
+        const basicAttackKey = basicAttack ? (typeof basicAttack === 'string' ? basicAttack : (basicAttack.id || basicAttack.key || basicAttack.name)) : null;
+        const normBasicAttackKey = basicAttackKey ? basicAttackKey.replace(/\s+/g, '_').toLowerCase() : null;
+
+        const rawAbilities = [
+            ...(Array.isArray(unit.specials) ? unit.specials : []),
+            ...(Array.isArray(unit.skills) ? unit.skills : []),
+            ...(Array.isArray(unit.attacks) ? unit.attacks : [])
+        ];
+        if (rawAbilities.length === 0) return null;
 
         const selfHpPct = unit.starting_hp > 0 ? unit.hp / unit.starting_hp : 1;
         const enemyCount = this.countEnemies(unit);
@@ -3767,9 +3776,13 @@ export function CombatManagerRedux() {
         let best = null;
         let bestScore = -Infinity;
 
-        unit.specials.forEach(s => {
+        const seenKeys = new Set();
+        rawAbilities.forEach(s => {
             const key = this._resolveAbilityKey(s);
-            if (!key || !this._abilityReady(unit, key)) return;
+            if (!key || seenKeys.has(key) || !this._abilityReady(unit, key)) return;
+            if (normBasicAttackKey && key.replace(/\s+/g, '_').toLowerCase() === normBasicAttackKey) return;
+            seenKeys.add(key);
+
             if (key === 'barbarian_leap_attack' && target && this.targetInRange(unit, target, 'close')) return;
             if (key === 'regenerate' && (selfHpPct >= 0.50 || unit.regenerating)) return;
             const resolved = this.resolveSpecial(unit, key);
@@ -3826,11 +3839,15 @@ export function CombatManagerRedux() {
                 if (minionCount < 3) score += 5;
             }
 
+            // Add small random jitter so ready melee skills (sword_swing, bite, claw_strike) get variety
+            score += Math.random() * 2;
+
             if (score > bestScore) {
                 bestScore = score;
-                best = { resolved, key };
+                best = { ability: key, score, resolved };
             }
         });
+
         return best;
     };
 
@@ -6173,86 +6190,128 @@ export function CombatManagerRedux() {
             c && !c.dead && !c.isMonster && !c.isMinion && !c.isVCT && this.targetInRange(unit, c, 'close')
         );
 
-        // 2. Check if other friendlies are alive
+        // 2. Check active food items created by THIS chef
+        const chefFoodItems = Array.isArray(this.meatTiles) ? this.meatTiles.filter(m => m.createdBy === unit.id) : [];
+        const activeFoodCount = chefFoodItems.length;
+        const hasHitMaxFood = activeFoodCount >= 3;
+
+        // 3. Check if other friendlies are alive
         const otherFriendlies = Object.values(this.combatants).filter(c =>
             c && !c.dead && (c.isMonster || c.isMinion) && c.id !== unit.id
         );
         const otherFriendliesAlive = otherFriendlies.length > 0;
 
-        // 3. Find damaged friendly unit (lost at least 10% of max HP)
-        const damagedFriendly = otherFriendlies.find(f => {
-            const maxHp = f.starting_hp || (f.stats && f.stats.hp) || 100;
-            const lostHp = maxHp - f.hp;
-            return lostHp >= maxHp * 0.1;
-        });
-
-        // 4. Try using 'feed_the_masses' if a friendly has lost >= 10% HP and skill is ready
-        if (damagedFriendly && this._abilityReady(unit, 'feed_the_masses')) {
-            // Find target tile adjacent to the damaged friendly unit that does NOT already contain food
-            const fCoords = damagedFriendly.coordinates;
-            const possibleTiles = [
-                { x: fCoords.x + 1, y: fCoords.y },
-                { x: fCoords.x - 1, y: fCoords.y },
-                { x: fCoords.x, y: fCoords.y + 1 },
-                { x: fCoords.x, y: fCoords.y - 1 },
-                { x: fCoords.x, y: fCoords.y },
-            ];
-
-            const hasFoodAt = (tx, ty) => Array.isArray(this.meatTiles) && this.meatTiles.some(m => m.x === tx && m.y === ty);
-
-            // First priority: adjacent tile within bounds, within range, and NO food currently on it
-            let targetTile = possibleTiles.find(tile => {
-                if (tile.x < 0 || tile.x > MAX_DEPTH || tile.y < 0 || tile.y >= MAX_LANES) return false;
-                if (hasFoodAt(tile.x, tile.y)) return false;
-                const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
-                return dist <= 4;
+        // 4. Food Provider Mode: active when under max food capacity (activeFoodCount < 3) and other friendlies are alive
+        if (!hasHitMaxFood && otherFriendliesAlive) {
+            // Find damaged friendly unit (lost at least 10% of max HP)
+            const damagedFriendly = otherFriendlies.find(f => {
+                const maxHp = f.starting_hp || (f.stats && f.stats.hp) || 100;
+                const lostHp = maxHp - f.hp;
+                return lostHp >= maxHp * 0.1;
             });
 
-            // Second priority: any tile within 2 spaces of damaged friendly without food
-            if (!targetTile) {
-                const radius2Tiles = [];
-                for (let dx = -2; dx <= 2; dx++) {
-                    for (let dy = -2; dy <= 2; dy++) {
-                        const tx = fCoords.x + dx;
-                        const ty = fCoords.y + dy;
-                        if (tx >= 0 && tx <= MAX_DEPTH && ty >= 0 && ty < MAX_LANES && !hasFoodAt(tx, ty)) {
-                            radius2Tiles.push({ x: tx, y: ty });
-                        }
-                    }
-                }
-                targetTile = radius2Tiles.find(tile => {
+            // Try using 'feed_the_masses' if a friendly has lost >= 10% HP and skill is ready
+            if (damagedFriendly && this._abilityReady(unit, 'feed_the_masses')) {
+                // Find target tile adjacent to the damaged friendly unit that does NOT already contain food
+                const fCoords = damagedFriendly.coordinates;
+                const possibleTiles = [
+                    { x: fCoords.x + 1, y: fCoords.y },
+                    { x: fCoords.x - 1, y: fCoords.y },
+                    { x: fCoords.x, y: fCoords.y + 1 },
+                    { x: fCoords.x, y: fCoords.y - 1 },
+                    { x: fCoords.x, y: fCoords.y },
+                ];
+
+                const hasFoodAt = (tx, ty) => Array.isArray(this.meatTiles) && this.meatTiles.some(m => m.x === tx && m.y === ty);
+
+                // First priority: adjacent tile within bounds, within range, and NO food currently on it
+                let targetTile = possibleTiles.find(tile => {
+                    if (tile.x < 0 || tile.x > MAX_DEPTH || tile.y < 0 || tile.y >= MAX_LANES) return false;
+                    if (hasFoodAt(tile.x, tile.y)) return false;
                     const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
                     return dist <= 4;
                 });
+
+                // Second priority: any tile within 2 spaces of damaged friendly without food
+                if (!targetTile) {
+                    const radius2Tiles = [];
+                    for (let dx = -2; dx <= 2; dx++) {
+                        for (let dy = -2; dy <= 2; dy++) {
+                            const tx = fCoords.x + dx;
+                            const ty = fCoords.y + dy;
+                            if (tx >= 0 && tx <= MAX_DEPTH && ty >= 0 && ty < MAX_LANES && !hasFoodAt(tx, ty)) {
+                                radius2Tiles.push({ x: tx, y: ty });
+                            }
+                        }
+                    }
+                    targetTile = radius2Tiles.find(tile => {
+                        const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
+                        return dist <= 4;
+                    });
+                }
+
+                if (!targetTile) targetTile = fCoords;
+
+                // Trigger lob animation
+                if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                    this.animManagerRedux.triggerAbility(unit.coordinates, targetTile, 'feed_the_masses', false, null, unit.id);
+                }
+
+                unit.cooldowns = unit.cooldowns || {};
+                unit.cooldowns['feed_the_masses'] = 2;
+                unit.actionsTakenThisRound = (unit.actionsTakenThisRound || 0) + 1;
+                this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} lobs a piece of meat with Feed the Masses to (${targetTile.x}, ${targetTile.y})!`);
+
+                const delayMs = process.env.NODE_ENV === 'test' ? 0 : 1000;
+                const placeMeat = () => {
+                    this.meatTiles = this.meatTiles || [];
+                    const meatId = `meat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                    this.meatTiles.push({ id: meatId, x: targetTile.x, y: targetTile.y, createdBy: unit.id });
+
+                    // Check if any unit is standing on that tile right now
+                    this._checkMeatTilePickup();
+
+                    if (typeof this.updateData === 'function') {
+                        this.updateData(clone(this.combatants));
+                    }
+                };
+
+                if (delayMs > 0) {
+                    setTimeout(placeMeat, delayMs);
+                } else {
+                    placeMeat();
+                }
+
+                if (typeof this.updateData === 'function') {
+                    this.updateData(clone(this.combatants));
+                }
+                return;
             }
 
-            if (!targetTile) targetTile = fCoords;
-
-            // Trigger lob animation
-            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
-                this.animManagerRedux.triggerAbility(unit.coordinates, targetTile, 'feed_the_masses', false, null, unit.id);
+            // If an adjacent enemy exists, bite / basic attack immediately
+            if (adjacentEnemy) {
+                this.acquireTarget(unit, true);
+                const target = this.combatants[unit.targetId] || adjacentEnemy;
+                const biteSpec = this.resolveSpecial(unit, 'bite');
+                if (biteSpec && this._abilityReady(unit, 'bite')) {
+                    this.useAbility(unit, biteSpec, target);
+                } else {
+                    this._basicAttack(unit, target);
+                }
+                return;
             }
 
-            // Place meat item on tile
-            this.meatTiles = this.meatTiles || [];
-            const meatId = `meat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-            this.meatTiles.push({ id: meatId, x: targetTile.x, y: targetTile.y });
-
-            unit.cooldowns = unit.cooldowns || {};
-            unit.cooldowns['feed_the_masses'] = 2;
-            unit.actionsTakenThisRound = (unit.actionsTakenThisRound || 0) + 1;
-            this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} lobs a piece of meat with Feed the Masses to (${targetTile.x}, ${targetTile.y})!`);
-
-            // Check if any unit is standing on that tile right now
-            this._checkMeatTilePickup();
-
-            if (typeof this.updateData === 'function') {
-                this.updateData(clone(this.combatants));
+            // Hang back at backline while in food-provider mode
+            const backlineX = MAX_DEPTH;
+            if (unit.coordinates.x < backlineX && unit.movesTakenThisRound === 0) {
+                this.moveCloserToCoord(unit, backlineX, unit.coordinates.y);
             }
             return;
         }
 
-        // 5. If adjacent enemy exists, bite / basic attack immediately
+        // 5. Aggressive Melee Attack Mode:
+        // Entered when chef has hit max food limit (3 food items active) OR no other friendlies are alive.
+        // Chef prioritizes melee attacks, advancing toward enemies instead of staying on backline.
         if (adjacentEnemy) {
             this.acquireTarget(unit, true);
             const target = this.combatants[unit.targetId] || adjacentEnemy;
@@ -6265,17 +6324,7 @@ export function CombatManagerRedux() {
             return;
         }
 
-        // 6. If other friendlies are alive, hang back at the backline (supporting team)
-        if (otherFriendliesAlive) {
-            const backlineX = MAX_DEPTH;
-            if (unit.coordinates.x < backlineX && unit.movesTakenThisRound === 0) {
-                this.moveCloserToCoord(unit, backlineX, unit.coordinates.y);
-            }
-            return;
-        }
-
-        // 7. No other friendlies alive: NO valid friendly targets for feed_the_masses!
-        // Revert to doing melee attacks with 'bite' skill (will NOT stay on back line anymore)
+        // Advance toward target enemy and attack
         this.acquireTarget(unit, true);
         const target = this.combatants[unit.targetId];
         if (target) {

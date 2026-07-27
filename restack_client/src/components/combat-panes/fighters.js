@@ -353,11 +353,11 @@ export default function FightersCombatGrid(props) {
                                             };
                                             return <Overlay key={i} animationType={overlay.type} data={overlayData} />;
                                         })}
-                                        <div className={`portrait-overlay${details?.drained ? ' drained' : ''}${details?.frozen ? ' frozen' : ''}`} >
-                                            <div className="damage-indicator-container">
+                                        <div className={`portrait-overlay${details?.drained ? ' drained' : ''}${details?.frozen ? ' frozen' : ''}`} style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
+                                            <div className="damage-indicator-container" style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
                                                 {props.getFighterDetails(fighter)?.damageIndicators.map((e,i)=>{
                                                     const isStatDebuff = !e.isCrit && !e.isMiss && typeof e.value === 'string' && isNaN(e.value);
-                                                    return <div key={e.id || i} className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${e.isCrit ? ' crit' : ''}${e.isMiss ? ' miss' : ''}`}>
+                                                    return <div key={e.id || i} className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${e.isCrit ? ' crit' : ''}${e.isMiss ? ' miss' : ''}`} style={{ userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'none' }}>
                                                         {formatDamageIndicatorValue(e.value)}
                                                     </div>
                                                 })}

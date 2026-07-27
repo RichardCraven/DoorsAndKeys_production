@@ -103,7 +103,7 @@ export function MonsterManager() {
             monster_names: ['Wiggit', 'Miggi', "Gurnak"],
             lordName: 'Glundok the Cruel',
             stats: {
-                hp: 70,
+                hp: 570,
                 atk: 7,
                 def: 7,
                 speed: 11,
@@ -117,7 +117,7 @@ export function MonsterManager() {
             portrait: images['goblin_warchief_portrait'],
             greetings: ['bow down!'],
             deathCries: ['arrrghghgh!'],
-            skills: ['claw_strike', 'bite', 'sword_swing'],
+            skills: ['bite', 'sword_swing'],
             minions: ['goblin_warrior', 'goblin_chef'],
             weaknesses: ['crushing', 'cutting', 'electricity'],
             drops: [

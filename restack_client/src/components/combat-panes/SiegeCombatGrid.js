@@ -1215,7 +1215,7 @@ export default function SiegeCombatGrid(props) {
     const renderDamageIndicators = (unitId) => {
         const indicators = visibleDamageIndicators[unitId] || [];
         return (
-            <div className="damage-indicator-container" style={{ overflow: 'visible' }}>
+            <div className="damage-indicator-container" style={{ overflow: 'visible', userSelect: 'none', WebkitUserSelect: 'none' }}>
                 {indicators.map((indicator, idx, arr) => {
                     const isStatDebuff = !indicator.isCrit && !indicator.isMiss && typeof indicator.value === 'string' && indicator.type !== 'robbed' && isNaN(indicator.value);
                     const xOffset = typeof indicator.xOffset === 'number' ? indicator.xOffset : 0;
@@ -1232,11 +1232,14 @@ export default function SiegeCombatGrid(props) {
                                 margin: '0 auto',
                                 transform: `translate(${xOffset}px, -${yOffset}px)`,
                                 zIndex: 10 + (arr.length - idx),
-                                pointerEvents: 'none'
+                                pointerEvents: 'none',
+                                userSelect: 'none',
+                                WebkitUserSelect: 'none'
                             }}
                         >
                             <div
                                 className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${indicator.isCrit ? ' crit' : ''}${indicator.type === 'heal' ? ' heal' : ''}${indicator.type === 'robbed' ? ' robbed' : ''}${indicator.isMiss ? ' miss' : ''}`}
+                                style={{ userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'none' }}
                             >
                                 {formatDamageValue(indicator.value)}
                             </div>
@@ -1455,11 +1458,11 @@ export default function SiegeCombatGrid(props) {
                     overflow: 'visible',
                     pointerEvents: 'none',
                     zIndex: activeLeapAnim ? 350 : 300,
-                    transition: (isTelep || isBatFlying || activeReturnTrialAnim || activeLeapAnim || liveFighter.attacking || !shouldTransition)
+                    transition: (isTelep || isBatFlying || activeReturnTrialAnim || activeLeapAnim || !shouldTransition)
                         ? 'none'
                         : riftPushbackAnim
                             ? `transform ${riftPushbackAnim.duration}ms ease-out`
-                            : `transform ${isEthereal ? 500 : 1000}ms cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s ease`,
+                            : `transform ${isEthereal ? 250 : 500}ms cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s ease`,
                     opacity: isVisible(details || fighter) ? (isBatFlying ? 0 : 1) : 0,
                     ...computeHitVars(details || fighter, getHitAnimation),
                 }}
@@ -2370,7 +2373,7 @@ export default function SiegeCombatGrid(props) {
                         ? 'none'
                         : riftPushbackAnim
                             ? `transform ${riftPushbackAnim.duration}ms ease-out`
-                            : `transform ${isEthereal ? 500 : 1000}ms cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s ease`,
+                            : `transform ${isEthereal ? 250 : 500}ms cubic-bezier(0.25, 1, 0.5, 1), opacity 0.6s ease`,
                     opacity: isVisible(unit) ? (typeof unit.opacity === 'number' ? unit.opacity : (isBatFlying ? 0 : 1)) : 0,
                     ...computeHitVars(unit, getHitAnimation),
                 }}
