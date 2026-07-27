@@ -252,6 +252,11 @@ export function BoardManager(){
         }
         return null;
     }
+    this.isVoidTile = (tile) => {
+        if (!tile || !tile.contains) return false;
+        const cType = typeof tile.contains === 'string' ? tile.contains : tile.contains.type;
+        return cType === 'void' || cType === 'empty';
+    };
     this.getContainsSubtype = (contains) => {
         if (!contains && contains !== null) return null;
         if (typeof contains === 'object' && contains !== null) return contains.subtype || null;
@@ -333,11 +338,12 @@ export function BoardManager(){
 
     this.getRequiredKeyForChest = (subtype) => {
         switch (subtype) {
-            case 'wooden_chest':
             case 'iron_chest':
             case 'steel_chest':
-            case 'ancient_casket':
                 return { keyName: 'minor key', requiredKeySubtype: 'minor_key' };
+            case 'ancient_casket':
+            case 'lockbox':
+                return { keyName: 'lockbox key', requiredKeySubtype: 'lockbox_key' };
             case 'gilded_casket':
             case 'treasury_chest':
                 return { keyName: 'treasury key', requiredKeySubtype: 'treasury_key' };
@@ -1504,9 +1510,15 @@ export function BoardManager(){
                 // defensive fallback: normalize key-like strings into item objects
                 const raw = tile.contains;
                 const normalized = raw.replace(/\s+/g, '_');
-                if (normalized === 'monster') tile.contains = { type: 'monster', subtype: this.getRandomMonster() };
-                else if (normalized.indexOf('key') !== -1) tile.contains = { type: 'item', subtype: normalized };
-                else tile.contains = { type: normalized, subtype: null };
+                if (normalized === 'void' || normalized === 'empty') {
+                    tile.contains = { type: 'void', subtype: null };
+                } else if (normalized === 'monster') {
+                    tile.contains = { type: 'monster', subtype: this.getRandomMonster() };
+                } else if (normalized.indexOf('key') !== -1) {
+                    tile.contains = { type: 'item', subtype: normalized };
+                } else {
+                    tile.contains = { type: normalized, subtype: null };
+                }
             }
             // for monster entries with missing subtype, assign one
             if (tile.contains && tile.contains.type === 'monster' && !tile.contains.subtype) {
@@ -1746,7 +1758,7 @@ export function BoardManager(){
                             if (chestResult) return chestResult;
                         } else {
                             this.messaging(`This chest is locked. You need a ${keyDetails.keyName} to open it.`);
-                            return null; // behave like empty passable tile
+                            return 'impassable'; // impassable locked chest
                         }
                     } else {
                         // Regular chest (silver, gold, ornate) - no key required
@@ -2599,7 +2611,7 @@ export function BoardManager(){
                     coords[1] >= ratColStart && coords[1] <= ratColEnd;
 
                 // Reveal tiles within radius 2 that are reachable OR within the scouted/rat-reveal area
-                const isVoid = this.getContainsType(e.contains) === 'void';
+                const isVoid = this.isVoidTile(e);
                 const hasInscriptions = e.inscriptions && Object.values(e.inscriptions).some(v => !!v);
                 if ((inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id))) && (!isVoid || hasInscriptions)) {
 

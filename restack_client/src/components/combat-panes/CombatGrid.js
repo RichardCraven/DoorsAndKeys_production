@@ -1410,6 +1410,27 @@ export default function CombatGrid(props) {
         }
         const activeMonkGlowImg = monkEyesImg || resolvePortrait('monk_eyes_glow_white');
 
+        // Ranger glowing eyes logic
+        const rangerAnims = activeAnimations.filter(a => a.sourceUnitId === fighter.id);
+        const hasRangerAnim = fighter.type === 'ranger' && rangerAnims.length > 0;
+        let rangerEyesImg = null;
+        if (hasRangerAnim) {
+            const hasAcid = rangerAnims.some(a => a.arrowType === 'poison');
+            const hasCelestial = rangerAnims.some(a => a.arrowType === 'celestial');
+            const hasIce = rangerAnims.some(a => a.arrowType === 'ice');
+            
+            if (hasAcid) {
+                rangerEyesImg = resolvePortrait('ranger_eyes_glow_green');
+            } else if (hasCelestial) {
+                rangerEyesImg = resolvePortrait('ranger_eyes_glow_gold');
+            } else if (hasIce) {
+                rangerEyesImg = resolvePortrait('ranger_eyes_glow_blue');
+            } else {
+                rangerEyesImg = resolvePortrait('ranger_eyes_glow_white');
+            }
+        }
+        const activeRangerGlowImg = rangerEyesImg || resolvePortrait('ranger_eyes_glow_white');
+
         return (
             <div
                 key={fighter.id}
@@ -1616,6 +1637,26 @@ export default function CombatGrid(props) {
                                     opacity: monkEyesImg ? 1 : 0,
                                     transition: 'opacity 0.2s ease-in-out',
                                     animation: monkEyesImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
+                                }}
+                            />
+                        )}
+                        {fighter.type === 'ranger' && (
+                            <div
+                                className="ranger-eyes-glow-overlay"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: `url("${activeRangerGlowImg}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    pointerEvents: 'none',
+                                    zIndex: 310,
+                                    opacity: rangerEyesImg ? 1 : 0,
+                                    transition: 'opacity 0.2s ease-in-out',
+                                    animation: rangerEyesImg ? 'wizardEyesPulse 0.8s ease-in-out infinite alternate' : 'none'
                                 }}
                             />
                         )}
@@ -5442,16 +5483,19 @@ export default function CombatGrid(props) {
             }
 
             // Net projectile for Ensnare
-            if (anim.subtype === 'ensnare_net' && anim.isNet) {
-                const netIcon = anim.netIcon?.default || anim.netIcon || '';
-                const durSec = `${(anim.duration || 800) / 1000}s`;
+            if ((anim.subtype === 'ensnare_net' && anim.isNet) || anim.subtype === 'feed_the_masses' || anim.isLob) {
+                const isFood = anim.subtype === 'feed_the_masses' || anim.isLob;
+                const icon = isFood
+                    ? (anim.icon?.default || anim.icon || images.food?.default || images.food || '')
+                    : (anim.netIcon?.default || anim.netIcon || '');
+                const durSec = `${(anim.duration || (isFood ? 1000 : 800)) / 1000}s`;
                 return (
                     <div key={key} style={{
                         position: 'absolute',
                         left: `${anim.srcPx.x}px`,
                         top: `${anim.srcPx.y}px`,
-                        width: '40px',
-                        height: '40px',
+                        width: '44px',
+                        height: '44px',
                         pointerEvents: 'none',
                         zIndex: 4000,
                         animation: `fireballTravel ${durSec} linear forwards`,
@@ -5466,13 +5510,13 @@ export default function CombatGrid(props) {
                             <div style={{
                                 width: '100%',
                                 height: '100%',
-                                backgroundImage: netIcon ? `url(${netIcon})` : 'none',
+                                backgroundImage: icon ? `url(${icon})` : 'none',
                                 backgroundSize: 'contain',
                                 backgroundRepeat: 'no-repeat',
                                 backgroundPosition: 'center',
                                 transform: 'translate(-50%, -50%)',
-                                filter: 'drop-shadow(0 0 6px rgba(139, 195, 74, 0.8))',
-                                animation: 'spinAxis 0.5s linear infinite'
+                                filter: isFood ? 'drop-shadow(0 0 8px rgba(255, 120, 50, 0.9))' : 'drop-shadow(0 0 6px rgba(139, 195, 74, 0.8))',
+                                animation: 'spinAxis 0.6s linear infinite'
                             }} />
                         </div>
                     </div>
@@ -7439,6 +7483,42 @@ export default function CombatGrid(props) {
                                     height: `${TILE_SIZE}px`,
                                 }}
                             />
+                        );
+                    })}
+                </div>
+            )}
+            {/* --- Meat Tiles --- */}
+            {combatManager && Array.isArray(combatManager.meatTiles) && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 15 }}>
+                    {combatManager.meatTiles.map((tile) => {
+                        const top = tilePos(tile.y);
+                        const left = tilePos(tile.x);
+                        const foodImg = images.food?.default || images.food || '';
+                        return (
+                            <div
+                                key={`meat-${tile.id}`}
+                                className="meat-tile"
+                                style={{
+                                    position: 'absolute',
+                                    left: `${left}px`,
+                                    top: `${top}px`,
+                                    width: `${TILE_SIZE}px`,
+                                    height: `${TILE_SIZE}px`,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                }}
+                            >
+                                <div style={{
+                                    width: '50px',
+                                    height: '50px',
+                                    backgroundImage: foodImg ? `url("${foodImg}")` : 'none',
+                                    backgroundSize: 'contain',
+                                    backgroundRepeat: 'no-repeat',
+                                    backgroundPosition: 'center',
+                                    filter: 'drop-shadow(0 0 6px rgba(255, 100, 50, 0.8))',
+                                }} />
+                            </div>
                         );
                     })}
                 </div>

@@ -7847,6 +7847,10 @@ class DungeonPage extends React.Component {
                 tileIndex: spawnTileIndex
             };
 
+            if (this.props.inventoryManager && typeof this.props.inventoryManager.initializeItems === 'function') {
+                this.props.inventoryManager.initializeItems({ items: [], gold: 0, shimmering_dust: 0, totems: 0 });
+            }
+
             this.setState({
                 isLoadingDungeon: false,
                 isTutorialMode: true,
@@ -7898,18 +7902,18 @@ class DungeonPage extends React.Component {
             await moveStep('up', 600);    // (5, 6)
             await moveStep('right', 600); // (6, 6)
             await moveStep('right', 600); // (7, 6)
-            await moveStep('right', 600); // (8, 6) - Attempts gate at (8,6)
+            await moveStep('right', 600); // (8, 6) - Bumps into locked gate at (8,6), sets pending
 
             // 3. Pause & display locked message
             await pauseStep('🔒 Gate at (8,6) is LOCKED! Requires a Minor Key.', 2500);
 
             // 4. Move to pick up Key at (8, 4)
             await pauseStep('Tutorial: Moving to (8,4) to collect the Minor Key...', 500);
-            await moveStep('left', 600);  // (6, 6)
+            await moveStep('left', 600);  // (6, 6) [from 7,6]
             await moveStep('up', 600);    // (6, 5)
             await moveStep('up', 600);    // (6, 4)
             await moveStep('right', 600); // (7, 4)
-            await moveStep('right', 600); // (8, 4) - Pick up key!
+            await moveStep('right', 600); // (8, 4) - Picks up Minor Key into inventory!
 
             // 5. Pause & display key collected message
             await pauseStep('🔑 Minor Key Acquired! Returning to Gate at (8,6)...', 1800);
@@ -7920,12 +7924,77 @@ class DungeonPage extends React.Component {
             await moveStep('down', 600);  // (6, 5)
             await moveStep('down', 600);  // (6, 6)
             await moveStep('right', 600); // (7, 6)
-            await moveStep('right', 600); // (8, 6) - Unlock Gate!
+            
+            // Interaction with Gate:
+            // First 'right' bump: Unlocks the gate (transforms tile 98 from minor_gate to archway, consumes key)
+            await moveStep('right', 600); 
+
+            // Force refresh of tiles state to immediately re-render opened gate
+            if (this.props.boardManager) {
+                try {
+                    this.props.boardManager.refreshTiles();
+                    this.setState({ tiles: this.props.boardManager.tiles });
+                } catch (e) {}
+            }
 
             // 7. Pause to show gate becoming unlocked
-            await pauseStep('🔓 Minor Key Used! Gate at (8,6) UNLOCKED!', 2500);
+            await pauseStep('🔓 Minor Key Used! Gate at (8,6) UNLOCKED!', 2000);
 
-            // 8. End tutorial and return to /tutorials
+            // 8. Move through open gate (8,6) -> (9,6) -> (10,6)
+            await moveStep('right', 600); // Walks through open archway onto (8, 6)
+            await moveStep('right', 600); // Walks onto (9, 6)
+            await moveStep('right', 600); // Walks onto (10, 6)
+
+            // 9. Move to Chest at (10, 7)
+            await pauseStep('Tutorial: Moving to Chest at (10,7)...', 500);
+            await moveStep('down', 600);  // (10, 7) - Opens Wooden Chest!
+
+            if (this.props.boardManager) {
+                try {
+                    this.props.boardManager.refreshTiles();
+                    this.setState({ tiles: this.props.boardManager.tiles });
+                } catch (e) {}
+            }
+
+            await pauseStep('📦 Opened Chest at (10,7)!', 1800);
+
+            // 10. Move to Lockbox at (10, 8) - Locked!
+            await moveStep('down', 600);  // Bumps into locked Lockbox at (10, 8), blocked!
+            await pauseStep('🔒 Lockbox at (10,8) is LOCKED! Requires a Lockbox Key.', 2500);
+
+            // 11. Move to (10, 5) to collect Lockbox Key
+            await pauseStep('Tutorial: Moving to (10,5) to collect the Lockbox Key...', 500);
+            await moveStep('up', 600);    // (10, 6)
+            await moveStep('up', 600);    // (10, 5) - Collects Lockbox Key!
+
+            // 12. Pause & display Lockbox Key collected message
+            await pauseStep('🔑 Lockbox Key Acquired! Returning to Lockbox at (10,8)...', 1800);
+
+            // 13. Move back to Lockbox at (10, 8) and open it
+            await moveStep('down', 600);  // (10, 6)
+            await moveStep('down', 600);  // (10, 7)
+            await moveStep('down', 600);  // (10, 8) - Uses Lockbox Key, unlocks and opens Lockbox!
+
+            if (this.props.boardManager) {
+                try {
+                    this.props.boardManager.refreshTiles();
+                    this.setState({ tiles: this.props.boardManager.tiles });
+                } catch (e) {}
+            }
+
+            await pauseStep('🔓 Lockbox Key Used! Lockbox at (10,8) UNLOCKED!', 2000);
+
+            // 14. Move to (13, 7)
+            await pauseStep('Tutorial: Moving to (13,7)...', 500);
+            await moveStep('right', 600); // (11, 8)
+            await moveStep('right', 600); // (12, 8)
+            await moveStep('right', 600); // (13, 8)
+            await moveStep('up', 600);    // (13, 7)
+
+            // 15. Pause at (13, 7) — Tutorial Complete!
+            await pauseStep('🎯 Reached Destination (13,7) — Tutorial Complete!', 2500);
+
+            // 16. End tutorial and return to /tutorials
             if (this.props.history) {
                 this.props.history.push('/tutorials');
             } else {

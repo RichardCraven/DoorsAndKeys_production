@@ -2805,13 +2805,15 @@ export function InventoryManager() {
             }
         }
         this.inventory = [];
-        if (!data) {
+        const itemsArray = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : null);
+        if (!data || itemsArray === null) {
             this.inventory = this.getStarterPack();
-            this.gold = 0
-            this.shimmering_dust = 0
-            this.totems = 0
+            this.gold = 0;
+            this.shimmering_dust = 0;
+            this.totems = 0;
         } else {
-            this.inventory = data.items.map(e => {
+            this.inventory = itemsArray.map(e => {
+                if (!e) return null;
                 const equippedBy = e.equippedBy;
                 // Prefer _im_key (stamped on weapons at initializeItems time) so
                 // dropped weapons survive save/reload. Fall back to name-based lookup
@@ -2828,9 +2830,9 @@ export function InventoryManager() {
                     return null;
                 }
             }).filter(v => v !== null);
-            this.gold = data.gold;
-            this.shimmering_dust = data.shimmering_dust;
-            this.totems = data.totems;
+            this.gold = (data && typeof data.gold === 'number') ? data.gold : 0;
+            this.shimmering_dust = (data && typeof data.shimmering_dust === 'number') ? data.shimmering_dust : 0;
+            this.totems = (data && typeof data.totems === 'number') ? data.totems : 0;
         }
     }
     // Re-hydrate every weapon in an inventory array from the current allItems

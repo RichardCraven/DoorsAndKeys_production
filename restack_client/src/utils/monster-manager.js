@@ -29,12 +29,12 @@ export function MonsterManager() {
     this.battleMonster = null;
     this.monsters = {
         // ── Level 2 ──────────────────────────────────────────────────────
-        goblin: {
-            type: 'goblin',
+        goblin_thief: {
+            type: 'goblin_thief',
             tier: 1,
             subtype: 'brutekin',
-            key: 'goblin',
-            image_names: ['goblin'],
+            key: 'goblin_thief',
+            image_names: ['goblin_thief'],
             monster_names: ['Wiggit', 'Miggi', "Gurnak"],
             lordName: 'Glundok the Cruel',
             stats: {
@@ -49,11 +49,107 @@ export function MonsterManager() {
                 fort: 3
             },
             level: 2,
-            portrait: images['goblin_portrait'],
+            portrait: images['goblin_thief_portrait'],
             greetings: ['bones for my master!'],
             deathCries: ['nooooooo'],
             skills: ['claw_strike', 'bite'],
-            minions: ['goblin', 'goblin', 'goblin'],
+            minions: ['goblin_thief', 'goblin_thief'],
+            weaknesses: ['crushing', 'cutting', 'electricity'],
+            drops: [
+                { item: TIER1_POTION, percentChance: 35 },
+                { itemPool: TIER1_WEAPONS, percentChance: 25 },
+            ]
+        },
+        goblin_warrior: {
+            type: 'goblin_warrior',
+            tier: 1,
+            subtype: 'brutekin',
+            key: 'goblin_warrior',
+            image_names: ['goblin_warrior'],
+            monster_names: ['Wiggit', 'Miggi', "Gurnak"],
+            lordName: 'Glundok the Cruel',
+            stats: {
+                hp: 50,
+                atk: 7,
+                def: 7,
+                speed: 11,
+                willpower: 1,
+                str: 6,
+                int: 2,
+                dex: 8,
+                fort: 4
+            },
+            level: 2,
+            portrait: images['goblin_warrior_portrait'],
+            greetings: ['bones for my master!'],
+            deathCries: ['nooooooo'],
+            skills: ['claw_strike', 'bite'],
+            minions: ['goblin_thief', 'goblin_thief'],
+            weaknesses: ['crushing', 'cutting', 'electricity'],
+            drops: [
+                { item: TIER1_POTION, percentChance: 35 },
+                { itemPool: TIER1_WEAPONS, percentChance: 25 },
+            ]
+        },
+        goblin_warchief: {
+            type: 'goblin_warchief',
+            tier: 1,
+            subtype: 'brutekin',
+            key: 'goblin_warchief',
+            large: true,
+            size: 2,
+            scale: 2,
+            image_names: ['goblin_warchief'],
+            monster_names: ['Wiggit', 'Miggi', "Gurnak"],
+            lordName: 'Glundok the Cruel',
+            stats: {
+                hp: 70,
+                atk: 7,
+                def: 7,
+                speed: 11,
+                willpower: 1,
+                str: 5,
+                int: 2,
+                dex: 9,
+                fort: 5
+            },
+            level: 2,
+            portrait: images['goblin_warchief_portrait'],
+            greetings: ['bones for my master!'],
+            deathCries: ['nooooooo'],
+            skills: ['claw_strike', 'bite'],
+            minions: ['goblin_warrior', 'goblin_chef'],
+            weaknesses: ['crushing', 'cutting', 'electricity'],
+            drops: [
+                { item: TIER1_POTION, percentChance: 35 },
+                { itemPool: TIER1_WEAPONS, percentChance: 25 },
+            ]
+        },
+        goblin_chef: {
+            type: 'goblin_chef',
+            tier: 1,
+            subtype: 'brutekin',
+            key: 'goblin_chef',
+            image_names: ['goblin_chef'],
+            monster_names: ['Wiggit', 'Miggi', "Gurnak"],
+            lordName: 'Glundok the Cruel',
+            stats: {
+                hp: 40,
+                atk: 4,
+                def: 4,
+                speed: 11,
+                willpower: 1,
+                str: 4,
+                int: 2,
+                dex: 8,
+                fort: 3
+            },
+            level: 2,
+            portrait: images['goblin_chef_portrait'],
+            greetings: ['bones for my master!'],
+            deathCries: ['nooooooo'],
+            skills: ['feed_the_masses', 'bite'],
+            minions: ['goblin_thief', 'goblin_thief'],
             weaknesses: ['crushing', 'cutting', 'electricity'],
             drops: [
                 { item: TIER1_POTION, percentChance: 35 },
@@ -995,8 +1091,9 @@ export function MonsterManager() {
             skills: ['gore', 'rake', 'dominate', 'madness', 'overload', 'meteors', 'entropic_kindred'],
             weaknesses: ['holy', 'fire'],
             drops: []
-        },
-    }
+        }
+    };
+    this.monsters.goblin = this.monsters.goblin_thief;
     let count = 50000;
     for (let key in this.monsters) {
         let m = this.monsters[key]

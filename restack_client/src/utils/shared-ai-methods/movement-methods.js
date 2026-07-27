@@ -101,7 +101,7 @@ export const crossesShieldWall = (fromCoords, toCoords) => {
     return false;
 }
 
-const LARGE_MOVER_TYPES = ['beholder','ogre','sphinx','manticore','wyvern','wyvern_alt','mummy','djinn','vampire','summoned_djinn','summoned_mummy','summoned_ogre','summoned_vampire'];
+const LARGE_MOVER_TYPES = ['beholder','ogre','sphinx','manticore','wyvern','wyvern_alt','mummy','djinn','vampire','goblin_warchief','summoned_djinn','summoned_mummy','summoned_ogre','summoned_vampire','summoned_goblin_warchief'];
 
 const isHugeMover = (caller) => {
     if (!caller) return false;

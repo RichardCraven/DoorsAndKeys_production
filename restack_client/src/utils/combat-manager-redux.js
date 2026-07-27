@@ -63,6 +63,7 @@ export function CombatManagerRedux() {
     this.meteorWarnings = null;
     this.activeWebs = [];
     this.powerBoostTiles = [];  // { id, x, y, roundSpawned } — Power Boost Tiles
+    this.meatTiles = [];        // { id, x, y } — Meat items dropped by Goblin Chef
 
     // Mummy status change logging/diagnostic helper removed
 
@@ -410,7 +411,7 @@ export function CombatManagerRedux() {
             const isHuge = this.isHuge;
             const isLarge = this.isLarge;
             const callbacks = this._combatCallbacks;
-            const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'];
+            const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
 
             const occupiedLanes = [monsterY];
             if (isHuge) {
@@ -515,10 +516,11 @@ export function CombatManagerRedux() {
                 const isMinionLarge = !e.isShrineGuardian && (
                     !isMinionHuge && (
                         (typeof e.large === 'boolean' && e.large === true)
-                        || (e.type && LARGE_COMBAT_KEYS.includes(e.type) && (e.isMinion !== true || e.tier === 3 || e.tier === 4))
+                        || (typeof e.isLarge === 'boolean' && e.isLarge === true)
+                        || (e.type && LARGE_COMBAT_KEYS.includes(e.type))
+                        || (e.key && LARGE_COMBAT_KEYS.includes(e.key))
                         || (typeof e.size === 'number' && e.size >= 2)
                         || (typeof e.scale === 'number' && e.scale >= 2)
-                        || (e.isMonster === true && e.isMinion !== true && (e.tier === 3 || e.tier === 4))
                         || (e.tier === 3)
                     )
                 );
@@ -547,9 +549,20 @@ export function CombatManagerRedux() {
                 }
 
                 if (!assignedCoord) {
-                    const laneIndex = i % availableLanes.length;
-                    const columnOffset = Math.floor(i / availableLanes.length);
-                    assignedCoord = { x: MAX_DEPTH - columnOffset, y: availableLanes[laneIndex] };
+                    for (let colOffset = 0; colOffset < 5; colOffset++) {
+                        const targetX = MAX_DEPTH - colOffset;
+                        for (let y = 0; y < MAX_LANES; y++) {
+                            const minionOccupied = getOccupiedCoordsForPos(targetX, y, isMinionHuge, isMinionLarge);
+                            const allInBounds = minionOccupied.every(c => c.x >= 0 && c.x <= MAX_DEPTH && c.y >= 0 && c.y < MAX_LANES);
+                            if (!allInBounds) continue;
+                            const overlaps = minionOccupied.some(c => currentlyOccupied.some(o => o.x === c.x && o.y === c.y));
+                            if (!overlaps) {
+                                assignedCoord = { x: targetX, y: y };
+                                break;
+                            }
+                        }
+                        if (assignedCoord) break;
+                    }
                 }
 
                 e.coordinates = assignedCoord;
@@ -909,7 +922,7 @@ export function CombatManagerRedux() {
             || (typeof m.size === 'number' && m.size === 3)
             || (typeof m.scale === 'number' && m.scale === 3)
         );
-        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'];
+        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
         const isLarge = !m.isShrineGuardian && (
             !isHuge && (
                 (typeof m.large === 'boolean' && m.large === true)
@@ -1076,7 +1089,7 @@ export function CombatManagerRedux() {
             || (typeof c.size === 'number' && c.size === 3)
             || (typeof c.scale === 'number' && c.scale === 3)
         );
-        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'];
+        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
         const isLargeUnit = (c) => !c.isShrineGuardian && (
             !isHugeUnit(c) && (
                 (typeof c.large === 'boolean' && c.large === true)
@@ -1209,7 +1222,7 @@ export function CombatManagerRedux() {
             || (typeof combatant.scale === 'number' && combatant.scale === 3)
         );
 
-        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'];
+        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
         const isLarge = !combatant.isShrineGuardian && (
             !isHuge && (
                 (typeof combatant.large === 'boolean' && combatant.large === true)
@@ -1416,7 +1429,7 @@ export function CombatManagerRedux() {
             || (typeof unit.scale === 'number' && unit.scale === 3)
         );
 
-        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'];
+        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
         const isLarge = !unit.isShrineGuardian && (
             !isHuge && (
                 (typeof unit.large === 'boolean' && unit.large === true)
@@ -1478,7 +1491,7 @@ export function CombatManagerRedux() {
             || (typeof unit.scale === 'number' && unit.scale === 3)
         );
 
-        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'];
+        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
         const isLarge = !unit.isShrineGuardian && (
             !isHuge && (
                 (typeof unit.large === 'boolean' && unit.large === true)
@@ -1552,6 +1565,7 @@ export function CombatManagerRedux() {
 
         // Check PBT pickup immediately when coordinates are updated
         this._checkPowerBoostTilePickup();
+        this._checkMeatTilePickup();
 
         // If Sage has Circle active and actually moved/repositioned, end the Circles immediately
         if (unit.type === 'sage' && (ox !== nx || oy !== ny)) {
@@ -3425,7 +3439,8 @@ export function CombatManagerRedux() {
             }
         }
 
-        const unitType = unit.type || unit.image || '';
+        const rawType = unit.key || unit.type || (Array.isArray(unit.image) ? unit.image[0] : unit.image) || (Array.isArray(unit.image_names) ? unit.image_names[0] : unit.image_names) || '';
+        const unitType = String(rawType).toLowerCase().replace(/\s+/g, '_');
         if (unitType === 'dragon_egg' || unitType === 'trials_icon' || unit.isTrialIcon || unitType === 'darkness_sphere' || unitType === 'spider_minion' || unitType === 'spiders_spawner') {
             return;
         }
@@ -3550,6 +3565,25 @@ export function CombatManagerRedux() {
             }
         }
 
+        // ── Wounded Monster Food Seeking (< 80% HP) ──────────────────────────
+        if ((unit.isMonster || unit.isMinion) && unit.movesTakenThisRound === 0 && Array.isArray(this.meatTiles) && this.meatTiles.length > 0) {
+            const maxHp = unit.starting_hp || (unit.stats && unit.stats.hp) || 100;
+            if (maxHp > 0 && (unit.hp / maxHp < 0.80)) {
+                let nearestMeat = null;
+                let minDist = Infinity;
+                this.meatTiles.forEach(tile => {
+                    const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearestMeat = tile;
+                    }
+                });
+                if (nearestMeat) {
+                    this.moveCloserToCoord(unit, nearestMeat.x, nearestMeat.y);
+                }
+            }
+        }
+
         switch (unitType) {
             case 'monk': return this._aiMonk(unit);
             case 'soldier': return this._aiSoldier(unit);
@@ -3568,6 +3602,7 @@ export function CombatManagerRedux() {
             case 'witch': return this._aiWitch(unit);
             case 'blalok': return this._aiBlalok(unit);
             case 'hashmallim': return this._aiHashmallim(unit);
+            case 'goblin_chef': return this._aiGoblinChef(unit);
             default: return this._aiGeneric(unit);
         }
     };
@@ -3645,8 +3680,13 @@ export function CombatManagerRedux() {
             if (typeof a === 'object' && a) return normalize(a.id || a.key || a.name) === normKey;
             return false;
         });
+        const hasSkill = Array.isArray(unit.skills) && unit.skills.some(s => {
+            if (typeof s === 'string') return normalize(s) === normKey;
+            if (typeof s === 'object' && s) return normalize(s.id || s.key || s.name) === normKey;
+            return false;
+        });
 
-        const isReady = hasSpecial || hasAttack;
+        const isReady = hasSpecial || hasAttack || hasSkill;
         if (!isReady) return false;
 
         // Summoner summon limit
@@ -6116,33 +6156,129 @@ export function CombatManagerRedux() {
         }
     };
 
-    // GENERIC: Used for monsters and unrecognized unit types
-    // BLALOK: Pack-predator that supports aberration allies with Sacrificial Mending
-    this._aiBlalok = (unit) => {
-        const isAberration = (c) => c && !c.dead && !c.isVCT &&
-            c.id !== unit.id &&
-            !!c.isMonster === !!unit.isMonster && // same side
-            (c.type === 'blalok' || c.key === 'blalok' || c.subtype === 'aberration');
+    // GOBLIN CHEF: Support unit that feeds wounded friendly units with Feed the Masses
+    this._aiGoblinChef = (unit) => {
+        if (!unit || unit.dead) return;
 
-        // Priority 1: Sacrificial Mending — only when an aberration ally is adjacent and below 80% HP
-        if (this._abilityReady(unit, 'sacrificial_mending') && unit.hp > 20) {
-            const mendingAbility = this.resolveSpecial(unit, 'sacrificial_mending');
-            if (mendingAbility) {
-                const aberrationAlly = Object.values(this.combatants).find(c => {
-                    if (!isAberration(c)) return false;
-                    const allyHpPct = c.starting_hp > 0 ? c.hp / c.starting_hp : 1;
-                    if (allyHpPct >= 0.80) return false; // only help wounded allies
-                    return this.targetInRange(unit, c, 'close');
-                });
-                if (aberrationAlly) {
-                    this.useAbility(unit, mendingAbility, aberrationAlly);
-                    return;
+        // 1. Check for adjacent enemies
+        const adjacentEnemy = Object.values(this.combatants).find(c =>
+            c && !c.dead && !c.isMonster && !c.isMinion && !c.isVCT && this.targetInRange(unit, c, 'close')
+        );
+
+        // 2. Check if other friendlies are alive
+        const otherFriendlies = Object.values(this.combatants).filter(c =>
+            c && !c.dead && (c.isMonster || c.isMinion) && c.id !== unit.id
+        );
+        const otherFriendliesAlive = otherFriendlies.length > 0;
+
+        // 3. Find damaged friendly unit (lost at least 10% of max HP)
+        const damagedFriendly = otherFriendlies.find(f => {
+            const maxHp = f.starting_hp || (f.stats && f.stats.hp) || 100;
+            const lostHp = maxHp - f.hp;
+            return lostHp >= maxHp * 0.1;
+        });
+
+        // 4. Try using 'feed_the_masses' if a friendly has lost >= 10% HP and skill is ready
+        if (damagedFriendly && this._abilityReady(unit, 'feed_the_masses')) {
+            // Find target tile adjacent to the damaged friendly unit that does NOT already contain food
+            const fCoords = damagedFriendly.coordinates;
+            const possibleTiles = [
+                { x: fCoords.x + 1, y: fCoords.y },
+                { x: fCoords.x - 1, y: fCoords.y },
+                { x: fCoords.x, y: fCoords.y + 1 },
+                { x: fCoords.x, y: fCoords.y - 1 },
+                { x: fCoords.x, y: fCoords.y },
+            ];
+
+            const hasFoodAt = (tx, ty) => Array.isArray(this.meatTiles) && this.meatTiles.some(m => m.x === tx && m.y === ty);
+
+            // First priority: adjacent tile within bounds, within range, and NO food currently on it
+            let targetTile = possibleTiles.find(tile => {
+                if (tile.x < 0 || tile.x > MAX_DEPTH || tile.y < 0 || tile.y >= MAX_LANES) return false;
+                if (hasFoodAt(tile.x, tile.y)) return false;
+                const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
+                return dist <= 4;
+            });
+
+            // Second priority: any tile within 2 spaces of damaged friendly without food
+            if (!targetTile) {
+                const radius2Tiles = [];
+                for (let dx = -2; dx <= 2; dx++) {
+                    for (let dy = -2; dy <= 2; dy++) {
+                        const tx = fCoords.x + dx;
+                        const ty = fCoords.y + dy;
+                        if (tx >= 0 && tx <= MAX_DEPTH && ty >= 0 && ty < MAX_LANES && !hasFoodAt(tx, ty)) {
+                            radius2Tiles.push({ x: tx, y: ty });
+                        }
+                    }
                 }
+                targetTile = radius2Tiles.find(tile => {
+                    const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
+                    return dist <= 4;
+                });
             }
+
+            if (!targetTile) targetTile = fCoords;
+
+            // Trigger lob animation
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, targetTile, 'feed_the_masses', false, null, unit.id);
+            }
+
+            // Place meat item on tile
+            this.meatTiles = this.meatTiles || [];
+            const meatId = `meat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+            this.meatTiles.push({ id: meatId, x: targetTile.x, y: targetTile.y });
+
+            unit.cooldowns = unit.cooldowns || {};
+            unit.cooldowns['feed_the_masses'] = 2;
+            unit.actionsTakenThisRound = (unit.actionsTakenThisRound || 0) + 1;
+            this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} lobs a piece of meat with Feed the Masses to (${targetTile.x}, ${targetTile.y})!`);
+
+            // Check if any unit is standing on that tile right now
+            this._checkMeatTilePickup();
+
+            if (typeof this.updateData === 'function') {
+                this.updateData(clone(this.combatants));
+            }
+            return;
         }
 
-        // Fallback: standard generic AI (claw_strike, bite, regenerate, move)
-        this._aiGeneric(unit);
+        // 5. Bite rule: "it will only use its 'bite' skill if there is an enemy unit adjacent =, or if there are no friendly units alive"
+        if (adjacentEnemy) {
+            this.acquireTarget(unit, true);
+            const target = this.combatants[unit.targetId] || adjacentEnemy;
+            const biteSpec = this.resolveSpecial(unit, 'bite');
+            if (biteSpec && this._abilityReady(unit, 'bite')) {
+                this.useAbility(unit, biteSpec, target);
+            } else {
+                this._basicAttack(unit, target);
+            }
+            return;
+        } else if (!otherFriendliesAlive) {
+            this.acquireTarget(unit, true);
+            const target = this.combatants[unit.targetId];
+            if (target) {
+                if (this.targetInRange(unit, target, 'close')) {
+                    const biteSpec = this.resolveSpecial(unit, 'bite');
+                    if (biteSpec && this._abilityReady(unit, 'bite')) {
+                        this.useAbility(unit, biteSpec, target);
+                    } else {
+                        this._basicAttack(unit, target);
+                    }
+                } else if (unit.movesTakenThisRound === 0) {
+                    this.moveCloser(unit, target);
+                }
+            }
+            return;
+        }
+
+        // 6. Otherwise (no damaged friendly to feed or skill on CD, no adjacent enemy, other friendlies alive):
+        // Hang back at backline (far right column for monsters)
+        const backlineX = MAX_DEPTH;
+        if (unit.coordinates.x < backlineX && unit.movesTakenThisRound === 0) {
+            this.moveCloserToCoord(unit, backlineX, unit.coordinates.y);
+        }
     };
 
     // ── HASHMALLIM AI ──────────────────────────────────────────────────────────
@@ -11008,7 +11144,7 @@ export function CombatManagerRedux() {
             || (typeof unit.scale === 'number' && unit.scale === 3)
         );
 
-        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire'];
+        const LARGE_COMBAT_KEYS = ['dragon', 'beholder', 'ogre', 'sphinx', 'manticore', 'wyvern', 'wyvern_alt', 'mummy', 'djinn', 'vampire', 'goblin_warchief', 'summoned_djinn', 'summoned_mummy', 'summoned_ogre', 'summoned_vampire', 'summoned_goblin_warchief'];
         const isLarge = !unit.isShrineGuardian && (
             !isHuge && (
                 (typeof unit.large === 'boolean' && unit.large === true)
@@ -11848,6 +11984,56 @@ export function CombatManagerRedux() {
         });
         if (toRemove.size > 0) {
             this.powerBoostTiles = this.powerBoostTiles.filter(t => !toRemove.has(t.id));
+        }
+    };
+
+    /**
+     * Check if any monster/minion unit is standing on a Meat Tile and restore up to 30 HP.
+     */
+    this._checkMeatTilePickup = () => {
+        if (!Array.isArray(this.meatTiles) || this.meatTiles.length === 0) return;
+        const toRemove = new Set();
+        Object.values(this.combatants).forEach(unit => {
+            if (!unit || unit.dead || (!unit.isMonster && !unit.isMinion) || unit.isVCT) return;
+            if (!unit.coordinates) return;
+            const coords = typeof this.getCombatantOccupiedCoords === 'function'
+                ? this.getCombatantOccupiedCoords(unit)
+                : [unit.coordinates];
+            this.meatTiles.forEach(tile => {
+                if (coords.some(c => c && c.x === tile.x && c.y === tile.y) && !toRemove.has(tile.id)) {
+                    toRemove.add(tile.id);
+                    const maxHp = unit.starting_hp || (unit.stats && unit.stats.hp) || 100;
+                    const healAmount = Math.min(30, maxHp - unit.hp);
+                    if (healAmount > 0) {
+                        unit.hp = Math.min(maxHp, unit.hp + healAmount);
+                        this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} consumes meat and recovers ${healAmount} HP! (${unit.hp}/${maxHp})`);
+                        unit.damageIndicators = unit.damageIndicators || [];
+                        const indId = Date.now() + Math.random();
+                        unit.damageIndicators.push({
+                            id: indId,
+                            value: `+${healAmount}`,
+                            source: 'Meat',
+                            type: 'heal',
+                            timestamp: Date.now()
+                        });
+                        setTimeout(() => {
+                            if (Array.isArray(unit.damageIndicators)) {
+                                const idx = unit.damageIndicators.findIndex(e => e && e.id === indId);
+                                if (idx !== -1) unit.damageIndicators.splice(idx, 1);
+                                if (typeof this.broadcastDataUpdate === 'function') this.broadcastDataUpdate();
+                            }
+                        }, 2000);
+                    } else {
+                        this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} consumes meat!`);
+                    }
+                }
+            });
+        });
+        if (toRemove.size > 0) {
+            this.meatTiles = this.meatTiles.filter(t => !toRemove.has(t.id));
+            if (typeof this.updateData === 'function') {
+                this.updateData(clone(this.combatants));
+            }
         }
     };
 

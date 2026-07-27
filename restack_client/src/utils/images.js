@@ -41,7 +41,10 @@ import black_vampire from '../assets/icons/monsters/black_vampire.png'
 import black_wraith from '../assets/icons/monsters/black_wraith.png'
 import dragon from '../assets/icons/monsters/dragon.png'
 import giant_scorpion from '../assets/icons/monsters/giant_scorpion.png'
-import goblin from '../assets/portraits/monsters/goblin.png'
+import goblin_thief from '../assets/portraits/monsters/goblin_thief.png'
+import goblin_warrior from '../assets/portraits/monsters/goblin_warrior.png'
+import goblin_warchief from '../assets/portraits/monsters/goblin_warchief.png'
+import goblin_chef from '../assets/portraits/monsters/goblin_chef.png'
 import horror from '../assets/icons/monsters/horror.png'
 import imp_overlord from '../assets/icons/monsters/imp_overlord.png'
 import imp from '../assets/icons/monsters/imp.png'
@@ -608,10 +611,18 @@ import sage_portrait from '../assets/portraits/crew/sage/sage_compressed.png'
 import wizard_portrait from '../assets/portraits/crew/wizard/wizard_compressed.png'
 import soldier_portrait from '../assets/portraits/crew/soldier/soldier_compressed.png'
 import ranger_portrait from '../assets/portraits/crew/rogue/rogue_compressed.png'
+import ranger_eyes_glow_white from '../assets/portraits/crew/rogue/ranger_eyes_glow_white.png'
+import ranger_eyes_glow_blue from '../assets/portraits/crew/rogue/ranger_eyes_glow_blue.png'
+import ranger_eyes_glow_green from '../assets/portraits/crew/rogue/ranger_eyes_glow_green.png'
+import ranger_eyes_glow_gold from '../assets/portraits/crew/rogue/ranger_eyes_glow_gold.png'
+import ranger_eyes_glow_red from '../assets/portraits/crew/rogue/ranger_eyes_glow_red.png'
 import barbarian_portrait from '../assets/portraits/crew/barbarian/barbarian_compressed.png'
 
 import ogre_portrait from '../assets/portraits/monsters/ogre.png'
-import goblin_portrait from '../assets/portraits/monsters/goblin.png'
+import goblin_thief_portrait from '../assets/portraits/monsters/goblin_thief.png'
+import goblin_warrior_portrait from '../assets/portraits/monsters/goblin_warrior.png'
+import goblin_warchief_portrait from '../assets/portraits/monsters/goblin_warchief.png'
+import goblin_chef_portrait from '../assets/portraits/monsters/goblin_chef.png'
 import mummy_portrait from '../assets/portraits/monsters/mummy.png'
 import sphinx_portrait from '../assets/portraits/monsters/sphinx.png'
 import sphinx_portrait2 from '../assets/portraits/monsters/sphinx2.png'
@@ -1215,7 +1226,11 @@ export {
     black_wraith,
     dragon,
     giant_scorpion,
-    goblin,
+    goblin_thief,
+    goblin_warrior,
+    goblin_warchief,
+    goblin_chef,
+    goblin_thief as goblin,
     horror,
     imp,
     imp_overlord,
@@ -1716,11 +1731,20 @@ export {
     sage_portrait,
     wizard_portrait,
     ranger_portrait,
+    ranger_eyes_glow_white,
+    ranger_eyes_glow_blue,
+    ranger_eyes_glow_green,
+    ranger_eyes_glow_gold,
+    ranger_eyes_glow_red,
     barbarian_portrait,
     soldier_portrait,
 
     ogre_portrait,
-    goblin_portrait,
+    goblin_thief_portrait,
+    goblin_warrior_portrait,
+    goblin_warchief_portrait,
+    goblin_chef_portrait,
+    goblin_thief_portrait as goblin_portrait,
     mummy_portrait,
     sphinx_portrait,
     sphinx_portrait2,

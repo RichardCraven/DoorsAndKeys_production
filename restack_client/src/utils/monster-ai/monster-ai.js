@@ -5,6 +5,7 @@ import { Goblin } from './profiles/Goblin'
 import { Mummy } from './profiles/Mummy'
 import { BeholderMinion } from './profiles/BeholderMinion'
 import { Troll } from './profiles/Troll'
+import { GoblinChef } from './profiles/GoblinChef'
 import {Methods, getSurroundings} from '../shared-ai-methods/basic-methods';
 import {MovementMethods} from '../shared-ai-methods/movement-methods';
 
@@ -53,6 +54,7 @@ export function MonsterAI(MAX_DEPTH, MAX_LANES, INTERVAL_TIME){
             mummy: new Mummy(data, this.utilMethods, this.animationManager, this.overlayManager),
             beholder_minion: new BeholderMinion(data, this.utilMethods, this.animationManager, this.overlayManager),
             troll: new Troll(data, this.utilMethods, this.animationManager, this.overlayManager),
+            goblin_chef: new GoblinChef(data, this.utilMethods, this.animationManager, this.overlayManager),
         }
     }
 

@@ -29,7 +29,8 @@ import {
   fear,
   soldier_fist_of_honor,
   death_missile,
-  death_missile_hit
+  death_missile_hit,
+  food
 } from './images';
 
 export class AnimationManagerRedux {
@@ -417,6 +418,9 @@ export class AnimationManagerRedux {
         break;
       case 'paradox_engine_fail':
         this._paradoxEngineFail(sourceCoords, targetCoords);
+        break;
+      case 'feed_the_masses':
+        this._feedTheMasses(sourceCoords, targetCoords);
         break;
       default:
         // Generic melee hit for unknown abilities
@@ -1063,6 +1067,24 @@ export class AnimationManagerRedux {
       isNet: true,
       netIcon: ranger_net_throw,
       duration: 1200,
+    });
+  }
+
+  _feedTheMasses(src, tgt) {
+    const srcPx = this._px(src);
+    let tgtPx = this._getImpactTargetPx(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    this._emit({
+      type: 'generic_projectile',
+      subtype: 'feed_the_masses',
+      srcPx,
+      tgtPx,
+      angle,
+      isLob: true,
+      icon: food,
+      duration: 1000,
     });
   }
 
