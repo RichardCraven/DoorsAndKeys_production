@@ -1430,11 +1430,12 @@ class CrewManagerPage extends React.Component {
                             {/* Monster roster */}
                             <div className="monster-roster-label">Monster Roster — click to select, click again to add to slot</div>
                             <div className="monster-roster">
-                                {Object.values(this.props.monsterManager.monsters)
-                                    .filter(m => ['skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'beholder_minion', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'horned_pet', 'high_priest_of_the_basilisk', 'basilisk_cultists', 'shade', 'hashmallim', 'hagigah', 'blalok', 'qlippoth'].includes(m.key))
+                                {['goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
+                                    .map(k => this.props.monsterManager.getMonster(k))
+                                    .filter(Boolean)
                                     .map((m, i) => (
                                         <div
-                                            key={i}
+                                            key={m.key || i}
                                             className="monster-roster-portrait"
                                             style={{ backgroundImage: `url(${m.portrait})` }}
                                             title={formatMonsterType(m.type)}

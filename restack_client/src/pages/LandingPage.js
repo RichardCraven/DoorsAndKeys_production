@@ -415,7 +415,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.2.6 BETA</span>
+          <span className="logo-subtitle">v 0.2.7 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">
@@ -648,7 +648,7 @@ export default function LandingPage(props) {
             overflow: 'hidden',
             color: '#f5f5f7'
           }} onClick={e => e.stopPropagation()}>
-            
+
             {/* Modal Header */}
             <div style={{
               padding: '20px 24px',

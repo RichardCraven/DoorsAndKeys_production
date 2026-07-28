@@ -6392,6 +6392,20 @@ export function CombatManagerRedux() {
         this._aiGeneric(unit);
     };
 
+    // ── BLALOK AI ──────────────────────────────────────────────────────────────
+    this._aiBlalok = (unit) => {
+        const selfHpPct = unit.starting_hp > 0 ? unit.hp / unit.starting_hp : 1;
+        const mendReady = this._abilityReady(unit, 'sacrificial_mending');
+        if (selfHpPct < 0.5 && mendReady) {
+            const pick = this.resolveSpecial(unit, 'sacrificial_mending');
+            if (pick) {
+                this.useAbility(unit, pick, unit);
+                return;
+            }
+        }
+        return this._aiGeneric(unit);
+    };
+
 
     this._aiGeneric = (unit) => {
         const getMinDistance = (u, t) => {

@@ -12,6 +12,7 @@ import CrewManagerPage from './pages/CrewManagerPage'
 import CombatSimulator from './pages/CombatSimulator'
 import SandboxPage from './pages/SandboxPage'
 import TutorialsPage from './pages/TutorialsPage'
+import SettingsModal from './components/SettingsModal'
 
 
 import { Route, Switch, Redirect, useLocation } from "react-router-dom";
@@ -89,6 +90,7 @@ function App(props) {
   };
   const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true' ? true : false)
   const [showCoordinates, setShowCoordinates] = useState(false)
+  const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [allUsers, setAllUsers] = useState([])
   const [showToolbar, setShowToolbar] = useState(true)
   const [narrativeSequenceType, setNarrativeSequenceType] = useState('')
@@ -441,6 +443,14 @@ function App(props) {
                         <span>📍</span>
                       </button>
                     )}
+                    <button
+                      className="menu-buttons settings-button"
+                      onClick={() => { setMobileMenuExpanded(false); setShowSettingsModal(true); }}
+                      style={mobileMenuItemStyle}
+                      title="Settings"
+                    >
+                      <span>⚙️</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -512,6 +522,17 @@ function App(props) {
                     <span style={{ fontSize: '15px' }}>📍</span>
                   </button>
                 )}
+
+                <button
+                  className="menu-buttons settings-button"
+                  onClick={() => setShowSettingsModal(true)}
+                  onMouseEnter={() => setHoveredMenuItem('Settings')}
+                  onMouseLeave={() => setHoveredMenuItem(null)}
+                  style={desktopMenuItemStyle}
+                  title="Settings"
+                >
+                  <span style={{ fontSize: '15px' }}>⚙️</span>
+                </button>
               </div>
             )}
 
@@ -600,6 +621,7 @@ function App(props) {
               <Redirect to="/login" />}
           </Route>
         </Switch>
+        <SettingsModal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} />
       </div>
     </div>
   );
