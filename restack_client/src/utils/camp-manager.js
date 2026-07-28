@@ -3,7 +3,7 @@
 // reuse existing component state and helpers without heavy refactors.
 
 import { storeMeta, getMeta, getUserId, applyResolvePenalty } from './session-handler';
-import { updateUserRequest } from './api-handler';
+import { updateUserRequest, updateDungeonRequest } from './api-handler';
 
 export async function setUpCamp(component, maybeDuration) {
     let durationSeconds = 10;
@@ -298,6 +298,39 @@ export async function endCamp(component) {
                 component.updateFloatingPlayerPosition(component.props.boardManager.playerTile.location);
             }
         } catch (e) {}
+
+        // Permanently place dead_campfire tile object at player tile location
+        try {
+            const activeDungeon = (component.props && component.props.boardManager && component.props.boardManager.dungeon) || component.dungeon || null;
+            const bm = component.props && component.props.boardManager;
+            if (bm && bm.playerTile && bm.playerTile.location) {
+                const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+                const currentLevel = bm.currentLevel;
+                const currentBoard = bm.currentBoard;
+                if (currentLevel && currentBoard && playerIdx !== null && activeDungeon) {
+                    const levelEntry = activeDungeon.levels?.find(e => e.id === currentLevel.id);
+                    if (levelEntry) {
+                        const orientation = bm.currentOrientation || 'F';
+                        const miniboards = orientation === 'F' ? levelEntry.front?.miniboards : levelEntry.back?.miniboards;
+                        const b = miniboards?.find(bi => bi.id === currentBoard.id);
+                        if (b && b.tiles && b.tiles[playerIdx]) {
+                            b.tiles[playerIdx].contains = { type: 'structure', subtype: 'dead_campfire' };
+                            b.tiles[playerIdx].image = 'dead_campfire';
+                        }
+                    }
+                    if (bm.tiles && bm.tiles[playerIdx]) {
+                        bm.tiles[playerIdx].contains = { type: 'structure', subtype: 'dead_campfire' };
+                        bm.tiles[playerIdx].image = 'dead_campfire';
+                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                    }
+                    if (activeDungeon.id) {
+                        updateDungeonRequest(activeDungeon.id, activeDungeon).catch(err => console.error('Error saving dead campfire structure:', err));
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Error placing dead campfire tile object:', e);
+        }
         try {
             // Re-read the selectedCrewMember from the freshly-restored crew array so the
             // dead overlay and HP bar reflect the restored state immediately.

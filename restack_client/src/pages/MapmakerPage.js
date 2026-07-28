@@ -7577,9 +7577,15 @@ class MapMakerPage extends React.Component {
               <div className="dev-console-divider" />
               <div className="dev-console-right">
                 <div className="dev-console-output" ref={this.devConsoleOutputRef}>
-                  {this.state.devConsoleOutput.map((line, idx) => (
-                    <div key={idx} className="dev-console-line">{line}</div>
-                  ))}
+                  {this.state.devConsoleOutput.map((line, idx) => {
+                    const isPrompt = typeof line === 'string' && line.startsWith('>');
+                    const isError = typeof line === 'string' && line.toLowerCase().includes('error');
+                    return (
+                      <div key={idx} className={`dev-console-line ${isPrompt ? 'prompt-line' : isError ? 'error-line' : 'info-line'}`}>
+                        {line}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

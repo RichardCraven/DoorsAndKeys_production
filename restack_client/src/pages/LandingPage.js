@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
 import { getMeta, storeMeta } from '../utils/session-handler';
-import { loadAllDungeonsRequest } from '../utils/api-handler';
+import { loadAllDungeonsRequest, deleteDungeonRequest } from '../utils/api-handler';
 
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 
@@ -57,6 +57,66 @@ export default function LandingPage(props) {
   const [navToDungeon, setNavDungeon] = useState(false);
   const [navToSandbox, setNavToSandbox] = useState(false);
   const [navToTutorials, setNavToTutorials] = useState(false);
+
+  const [showInstanceManager, setShowInstanceManager] = useState(false);
+  const [instancesList, setInstancesList] = useState([]);
+  const [isLoadingInstances, setIsLoadingInstances] = useState(false);
+  const [deletingInstanceId, setDeletingInstanceId] = useState(null);
+  const [instanceFeedbackMsg, setInstanceFeedbackMsg] = useState(null);
+
+  const fetchInstances = async () => {
+    setIsLoadingInstances(true);
+    try {
+      const res = await loadAllDungeonsRequest();
+      const all = (res?.data || []).map((row) => {
+        if (!row || !row.content) return null;
+        try {
+          const d = JSON.parse(row.content);
+          d.id = row._id;
+          return d;
+        } catch (e) {
+          return null;
+        }
+      }).filter(Boolean);
+
+      const instances = all.filter((d) => isInstanceDungeonName(d.name) || (d.name && d.name.includes('_')));
+      setInstancesList(instances);
+    } catch (e) {
+      console.error('Failed to fetch instances:', e);
+    } finally {
+      setIsLoadingInstances(false);
+    }
+  };
+
+  const openInstanceManager = () => {
+    setShowInstanceManager(true);
+    setInstanceFeedbackMsg(null);
+    fetchInstances();
+  };
+
+  const handleDeleteInstance = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete dungeon instance "${name}"?`)) {
+      return;
+    }
+    setDeletingInstanceId(id);
+    try {
+      await deleteDungeonRequest(id);
+      const meta = getMeta() || {};
+      if (meta.dungeonId === id) {
+        delete meta.dungeonId;
+        storeMeta(meta);
+      }
+      setInstanceFeedbackMsg(`Deleted instance "${name}".`);
+      await fetchInstances();
+      await refreshValidDungeons();
+    } catch (e) {
+      console.error('Failed to delete instance:', e);
+      setInstanceFeedbackMsg(`Failed to delete instance "${name}".`);
+    } finally {
+      setDeletingInstanceId(null);
+    }
+  };
+
   const [isAdmin, setIsAdmin] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
   const [validDungeons, setValidDungeons] = useState([])
@@ -79,9 +139,8 @@ export default function LandingPage(props) {
 
   const isInstanceDungeonName = (name) => {
     const raw = `${name || ''}`;
-    // Instance names are created as: <base>_<username>_<last4UserId>
-    // Keep dropdown focused on base templates only.
-    return /_[^_]+_[a-z0-9]{4}$/i.test(raw);
+    // Matches new format like BigDungeon_3467 or old format like BigDungeon_richardcraven_3467
+    return /_\d+$/i.test(raw) || /_[^_]+_[a-z0-9]{4}$/i.test(raw);
   };
 
   const findSpawnPointDiagnostic = (dungeon) => {
@@ -356,7 +415,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.2.5 BETA</span>
+          <span className="logo-subtitle">v 0.2.6 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">
@@ -550,10 +609,229 @@ export default function LandingPage(props) {
                 </div>
                 <span className="card-arrow">Test →</span>
               </div>
+
+              <div className="menu-card" onClick={openInstanceManager}>
+                <div className="card-top">
+                  <span className="card-title">Instance Manager</span>
+                  <span className="card-desc">Review active dungeon instances and manage obsolete session records.</span>
+                </div>
+                <span className="card-arrow">Manage →</span>
+              </div>
             </>
           )}
         </div>
       </main>
+
+      {/* Instance Manager Modal */}
+      {showInstanceManager && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          backdropFilter: 'blur(8px)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }} onClick={() => setShowInstanceManager(false)}>
+          <div style={{
+            width: '100%',
+            maxWidth: '680px',
+            maxHeight: '85vh',
+            backgroundColor: '#161311',
+            border: '2px solid rgba(212, 168, 68, 0.4)',
+            borderRadius: '8px',
+            boxShadow: '0 20px 50px rgba(0,0,0,0.9), 0 0 20px rgba(212, 168, 68, 0.15)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            color: '#f5f5f7'
+          }} onClick={e => e.stopPropagation()}>
+            
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid rgba(212, 168, 68, 0.2)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'rgba(12, 10, 9, 0.6)'
+            }}>
+              <div>
+                <h2 style={{
+                  margin: 0,
+                  fontFamily: "'Cinzel Decorative', 'Cinzel', serif",
+                  color: '#e5b54f',
+                  fontSize: '1.4rem',
+                  letterSpacing: '1px'
+                }}>
+                  Instance Manager
+                </h2>
+                <span style={{ fontSize: '0.8rem', color: '#a8a29e' }}>
+                  Manage active dungeon instances ({instancesList.length} total)
+                </span>
+              </div>
+              <button
+                onClick={() => setShowInstanceManager(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#a8a29e',
+                  fontSize: '1.6rem',
+                  cursor: 'pointer',
+                  padding: '4px 8px',
+                  lineHeight: 1
+                }}
+                onMouseEnter={e => e.target.style.color = '#e5b54f'}
+                onMouseLeave={e => e.target.style.color = '#a8a29e'}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Modal Body / Instance List */}
+            <div style={{
+              padding: '20px 24px',
+              overflowY: 'auto',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}>
+              {instanceFeedbackMsg && (
+                <div style={{
+                  background: 'rgba(46, 204, 113, 0.15)',
+                  border: '1px solid rgba(46, 204, 113, 0.4)',
+                  color: '#2ecc71',
+                  padding: '10px 14px',
+                  borderRadius: '4px',
+                  fontSize: '0.85rem',
+                  textAlign: 'center',
+                  fontWeight: '600'
+                }}>
+                  {instanceFeedbackMsg}
+                </div>
+              )}
+
+              {isLoadingInstances ? (
+                <div style={{ textAlign: 'center', padding: '30px', color: '#a8a29e' }}>
+                  Loading dungeon instances...
+                </div>
+              ) : instancesList.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px', color: '#78716c', fontStyle: 'italic' }}>
+                  No dungeon instances found.
+                </div>
+              ) : (
+                instancesList.map((inst) => {
+                  const isCurrentActive = getMeta()?.dungeonId === inst.id;
+                  return (
+                    <div
+                      key={inst.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: 'rgba(12, 10, 9, 0.6)',
+                        border: isCurrentActive ? '1px solid #e5b54f' : '1px solid rgba(120, 113, 108, 0.25)',
+                        borderRadius: '6px',
+                        padding: '14px 18px',
+                        gap: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflow: 'hidden' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{
+                            fontWeight: 'bold',
+                            fontSize: '0.95rem',
+                            color: '#ffffff',
+                            fontFamily: "'Outfit', sans-serif"
+                          }}>
+                            🏰 {inst.name}
+                          </span>
+                          {isCurrentActive && (
+                            <span style={{
+                              background: 'rgba(229, 181, 79, 0.2)',
+                              border: '1px solid rgba(229, 181, 79, 0.4)',
+                              color: '#e5b54f',
+                              fontSize: '0.65rem',
+                              padding: '2px 6px',
+                              borderRadius: '3px',
+                              fontWeight: 'bold',
+                              textTransform: 'uppercase'
+                            }}>
+                              Active Session
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: '#78716c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          ID: {inst.id} {inst.lastRelockIso ? `• Relocked: ${new Date(inst.lastRelockIso).toLocaleString()}` : ''}
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleDeleteInstance(inst.id, inst.name)}
+                        disabled={deletingInstanceId === inst.id}
+                        style={{
+                          backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          color: '#ef4444',
+                          padding: '8px 14px',
+                          borderRadius: '4px',
+                          fontSize: '0.85rem',
+                          fontWeight: 'bold',
+                          cursor: deletingInstanceId === inst.id ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                          whiteSpace: 'nowrap'
+                        }}
+                        onMouseEnter={e => {
+                          if (deletingInstanceId !== inst.id) {
+                            e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+                            e.target.style.borderColor = '#ef4444';
+                          }
+                        }}
+                        onMouseLeave={e => {
+                          if (deletingInstanceId !== inst.id) {
+                            e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+                            e.target.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                          }
+                        }}
+                      >
+                        {deletingInstanceId === inst.id ? 'Deleting...' : 'Delete 🗑️'}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '14px 24px',
+              borderTop: '1px solid rgba(212, 168, 68, 0.15)',
+              background: 'rgba(12, 10, 9, 0.4)',
+              display: 'flex',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => setShowInstanceManager(false)}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: 'rgba(120, 113, 108, 0.2)',
+                  border: '1px solid rgba(120, 113, 108, 0.3)',
+                  color: '#a8a29e',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

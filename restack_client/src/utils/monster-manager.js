@@ -881,7 +881,7 @@ export function MonsterManager() {
             portrait: images['qlippoth'],
             greetings: ['*chilling whispers*', 'the shadows consume you'],
             deathCries: ['*shrieks and fades*'],
-            skills: ['undead_grasp', 'despair', 'induce_fear'],
+            skills: ['undead_grasp', 'despair', 'induce_fear', 'displacement_ray'],
             weaknesses: ['fire', 'holy'],
             minions: ['shade'],
             drops: [

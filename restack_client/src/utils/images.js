@@ -1155,6 +1155,33 @@ import shimmering_dust from '../assets/icons/loot/Enchantment_07_magicdust.png';
 import monadic_nugget from '../assets/icons/loot/monadic_nugget.png';
 import tattoo_ink from '../assets/icons/items/potions/Res_42_ink.png';
 
+// ── Buildings & Buildables ──────────────────────────────────────────────────
+import campfire from '../assets/icons/buildings/campfire.png';
+import dead_campfire from '../assets/icons/buildings/dead campfire.png';
+import hut from '../assets/icons/buildings/hut.png';
+
+import buildable_blacksmith_camp from '../assets/icons/buildings/buildable/blacksmith camp.png';
+import buildable_builders_house from '../assets/icons/buildings/buildable/builders house.png';
+import building from '../assets/icons/buildings/buildable/building.png';
+import buildable_camp from '../assets/icons/buildings/buildable/camp.png';
+import buildable_captains_tower from '../assets/icons/buildings/buildable/captains tower.png';
+import buildable_fort from '../assets/icons/buildings/buildable/fort.png';
+import buildable_house from '../assets/icons/buildings/buildable/house.png';
+import buildable_hut from '../assets/icons/buildings/buildable/hut.png';
+import buildable_observer_platform from '../assets/icons/buildings/buildable/observer platform.png';
+import buildable_outpost from '../assets/icons/buildings/buildable/outpost.png';
+import buildable_stone_tower from '../assets/icons/buildings/buildable/stone tower.png';
+import buildable_storage from '../assets/icons/buildings/buildable/storage.png';
+import buildable_temple from '../assets/icons/buildings/buildable/temple.png';
+import buildable_war_camp from '../assets/icons/buildings/buildable/war camp.png';
+import buildable_war_fort from '../assets/icons/buildings/buildable/war fort.png';
+// ── Pygmies Denizens ────────────────────────────────────────────────────────
+import mud_pygmies from '../assets/portraits/pygmies/mud-pygmies.png';
+import cave_pygmies from '../assets/portraits/pygmies/cave-pygmies.png';
+import woodland_pygmies from '../assets/portraits/pygmies/woodland-pygmies.png';
+const save_pygmies = cave_pygmies;
+const pygmies = woodland_pygmies;
+
 const tattoo_placeholder = tattoo_ink; // placeholder until real tattoo art is added
 const _terrainBase = [terrain_1, terrain_2, terrain_3, terrain_4, terrain_5, terrain_6, terrain_7, terrain_8, terrain_9, terrain_10, terrain_11, terrain_12, terrain_13, terrain_14, terrain_15, terrain_16];
 const _terrainLight = [terrain_1_light, terrain_2_light, terrain_3_light, terrain_4_light, terrain_5_light, terrain_6_light, terrain_7_light, terrain_8_light, terrain_9_light, terrain_10_light, terrain_11_light, terrain_12_light, terrain_13_light, terrain_14_light, terrain_15_light, terrain_16_light];
@@ -2247,4 +2274,31 @@ export {
     eldritch_wind,
     paradox_engine,
     voidbite,
+
+    // ── Buildings & Buildables ──────────────────────────────────────────────────
+    campfire,
+    dead_campfire,
+    hut,
+    building,
+    buildable_blacksmith_camp,
+    buildable_builders_house,
+    buildable_camp,
+    buildable_captains_tower,
+    buildable_fort,
+    buildable_house,
+    buildable_hut,
+    buildable_observer_platform,
+    buildable_outpost,
+    buildable_stone_tower,
+    buildable_storage,
+    buildable_temple,
+    buildable_war_camp,
+    buildable_war_fort,
+
+    // ── Pygmies Denizens ────────────────────────────────────────────────────────
+    mud_pygmies,
+    save_pygmies,
+    cave_pygmies,
+    woodland_pygmies,
+    pygmies,
 };
