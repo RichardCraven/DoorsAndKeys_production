@@ -317,7 +317,8 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: props.connectedEdge ? 'visible' : 'hidden',
+            overflow: (props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v))) ? 'visible' : 'hidden',
+            zIndex: (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : undefined,
             border: vctBorder,
             borderLeft: isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
                 (props.type === 'palette-tile' && props.hovered ? '2px solid red' : '1px solid transparent'))))),

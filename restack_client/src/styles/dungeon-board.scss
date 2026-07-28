@@ -46,10 +46,13 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: white;
-    border-top: 1px solid #ddd;
+    background: linear-gradient(180deg, #161311 0%, #0d0b0a 100%);
+    border-top: 1px solid rgba(229, 181, 79, 0.4);
     z-index: 3000;
-    box-shadow: 0 -2px 8px rgba(0,0,0,0.12);
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.85), 0 0 15px rgba(229, 181, 79, 0.15);
+    backdrop-filter: blur(12px);
+    color: #f5efe6;
+    animation: smoothCardScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .dev-console-inner {
     display: flex;
@@ -58,33 +61,67 @@
 }
 .dev-console-left, .dev-console-right {
     flex: 1 1 50%;
-    padding: 12px;
-    overflow: auto;
+    padding: 14px 18px;
+    overflow-y: auto;
 }
 .dev-console-divider {
     width: 1px;
-    background: #e6e6e6;
+    background: linear-gradient(180deg, rgba(229, 181, 79, 0.3) 0%, rgba(229, 181, 79, 0.05) 100%);
 }
 .dev-console-input {
     width: 100%;
-    border: none;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(229, 181, 79, 0.3);
+    border-radius: 6px;
     outline: none;
-    font-size: 14px;
-    padding: 6px 8px;
+    font-size: 13.5px;
+    color: #e5b54f;
+    caret-color: #e5b54f;
+    font-family: 'Fira Code', 'Consolas', 'Courier New', monospace;
+    padding: 8px 12px;
     box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+    &:focus {
+        border-color: #e5b54f;
+        box-shadow: 0 0 10px rgba(229, 181, 79, 0.3);
+    }
+
+    &::placeholder {
+        color: rgba(229, 181, 79, 0.4);
+    }
 }
 .dev-console-typed {
-    margin-top: 8px;
-    color: #333;
-    font-family: monospace;
+    margin-top: 10px;
+    color: #a8a29e;
+    font-family: 'Fira Code', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
     white-space: pre-wrap;
+    opacity: 0.8;
 }
 .dev-console-output {
-    font-family: monospace;
-    color: #111;
+    font-family: 'Fira Code', 'Consolas', 'Courier New', monospace;
+    font-size: 13px;
+    color: #4ade80;
     white-space: pre-wrap;
+    line-height: 1.5;
 }
-.dev-console-line { margin-bottom: 4px; }
+.dev-console-line {
+    margin-bottom: 4px;
+
+    &.prompt-line {
+        color: #e5b54f;
+        font-weight: bold;
+    }
+
+    &.error-line {
+        color: #ef4444;
+    }
+
+    &.info-line {
+        color: #4ade80;
+    }
+}
 
 // Resume remaining .dungeon-container child rules
 .dungeon-container {
@@ -2244,7 +2281,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: fadeIn 0.3s ease-out;
+    animation: smoothOverlayFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: opacity;
 }
 
 .ambush-popup-card {
@@ -2257,7 +2295,8 @@
     border-radius: 16px;
     width: 380px;
     max-width: 90%;
-    animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    animation: smoothCardScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity;
     position: relative;
     overflow: hidden;
 
@@ -2421,8 +2460,18 @@
 }
 
 @keyframes scaleIn {
-    from { transform: scale(0.9); opacity: 0; }
+    from { transform: scale(0.94); opacity: 0; }
     to { transform: scale(1); opacity: 1; }
+}
+
+@keyframes smoothOverlayFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes smoothCardScaleIn {
+    from { opacity: 0; transform: scale(0.93) translateY(8px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
 /* Trap Popup */
@@ -2438,7 +2487,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: fadeIn 0.3s ease-out;
+    animation: smoothOverlayFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: opacity;
 }
 
 .trap-popup-card {
@@ -2451,7 +2501,8 @@
     border-radius: 16px;
     width: 420px;
     max-width: 90%;
-    animation: scaleIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    animation: smoothCardScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    will-change: transform, opacity;
     position: relative;
     overflow: hidden;
 
@@ -3478,6 +3529,98 @@
             font-size: 11px !important;
             color: #f9b115 !important;
             font-weight: 600 !important;
+        }
+    }
+}
+
+/* Pygmies Attack Overlay */
+.pygmies-attack-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(8, 6, 4, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pygmies-attack-card {
+    background: linear-gradient(180deg, #1c150d 0%, #0d0a06 100%);
+    border: 2px solid #e5b54f;
+    border-radius: 12px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.9), 0 0 20px rgba(229, 181, 79, 0.3);
+    width: 380px;
+    max-width: 90vw;
+    padding: 24px;
+    text-align: center;
+    color: #f5efe6;
+
+    .pygmies-attack-header {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        margin-bottom: 15px;
+
+        .pygmies-attack-icon {
+            font-size: 24px;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: 22px;
+            color: #e5b54f;
+            font-family: 'Cinzel', serif, Georgia;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+        }
+    }
+
+    .pygmies-portrait-container {
+        width: 140px;
+        height: 140px;
+        margin: 0 auto 15px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 2px solid rgba(229, 181, 79, 0.5);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.6);
+
+        .pygmies-portrait-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+    }
+
+    .pygmies-attack-text {
+        font-size: 14px;
+        line-height: 1.5;
+        color: #d1c7bd;
+        margin-bottom: 20px;
+
+        strong {
+            color: #ef4444;
+        }
+    }
+
+    .pygmies-attack-btn {
+        background: linear-gradient(180deg, #e5b54f 0%, #b8860b 100%);
+        color: #120c06;
+        font-weight: bold;
+        font-size: 15px;
+        padding: 10px 24px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        transition: transform 0.15s ease, filter 0.15s ease;
+
+        &:hover {
+            transform: scale(1.04);
+            filter: brightness(1.15);
         }
     }
 }

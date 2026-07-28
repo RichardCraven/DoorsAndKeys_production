@@ -483,7 +483,7 @@ export const LANDING_REDUX_CSS = `
 
 .redux-landing-container .hero-card .dungeon-selector-group .custom-select-menu {
   position: absolute;
-  bottom: 105%;
+  top: calc(100% + 4px);
   left: 0;
   width: 100%;
   background: #181513;

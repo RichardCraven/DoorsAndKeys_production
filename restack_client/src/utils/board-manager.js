@@ -253,8 +253,10 @@ export function BoardManager(){
         return null;
     }
     this.isVoidTile = (tile) => {
-        if (!tile || !tile.contains) return false;
-        const cType = typeof tile.contains === 'string' ? tile.contains : tile.contains.type;
+        if (!tile) return false;
+        const contains = tile.contains;
+        if (!contains) return false;
+        const cType = typeof contains === 'string' ? contains : contains.type;
         return cType === 'void' || cType === 'empty';
     };
     this.getContainsSubtype = (contains) => {
@@ -269,6 +271,12 @@ export function BoardManager(){
         if (!type) return null;
         if (type === 'vendor') {
             return this.getImage(subtype);
+        }
+        if (type === 'pygmies') {
+            const pySubtype = subtype || 'woodland';
+            if (pySubtype === 'mud') return this.getImage('mud_pygmies');
+            if (pySubtype === 'cave' || pySubtype === 'save') return this.getImage('save_pygmies');
+            return this.getImage('woodland_pygmies');
         }
         // monsters should render subtype image
         if (type === 'monster') {
@@ -436,6 +444,11 @@ export function BoardManager(){
             const fromTile = (boardTiles && boardTiles[fromIdx]) ? boardTiles[fromIdx] : this.tiles[fromIdx];
             const toTile = (boardTiles && boardTiles[toIdx]) ? boardTiles[toIdx] : this.tiles[toIdx];
 
+            // If one tile is void and the other is non-void, there is a solid wall between them
+            const fromIsVoid = this.isVoidTile(fromTile);
+            const toIsVoid = this.isVoidTile(toTile);
+            if (fromIsVoid !== toIsVoid) return true;
+
             return this.hasSolidBorder(fromTile, fromSide) || this.hasSolidBorder(toTile, toSide);
         } catch (e) {
             return false;
@@ -475,8 +488,9 @@ export function BoardManager(){
                 const tile = this.tiles[nextIdx] || (boardTiles && boardTiles[nextIdx]);
                 if (!tile) return;
 
+                if (this.isVoidTile(tile)) return;
                 const containsType = this.getContainsType(tile.contains);
-                if (containsType === 'void' || containsType === 'inscription') return;
+                if (containsType === 'inscription') return;
 
                 visited.set(nextIdx, steps + 1);
 
@@ -1367,13 +1381,14 @@ export function BoardManager(){
         // Normalize the board tiles in-place (backwards-compatibility)
         try { this.normalizeBoardTiles(board); } catch (e) {}
 
-        // Ensure board has traps rolled
+        // Ensure board has traps rolled (unless it's a tutorial dungeon)
+        const isTutorialDungeon = !!(this.dungeon && (this.dungeon.id === 'tutorial_dungeon' || this.dungeon.name === 'tutorial' || this.dungeon.isTutorial));
         if (board && !board.trapsRolled) {
-            const trapChance = 65; // 65% chance to spawn traps on a board
+            const trapChance = isTutorialDungeon ? 0 : 65; // 0% chance for tutorial dungeons, 65% otherwise
             const roll = Math.floor(Math.random() * 100);
             console.log(`[Trap Spawn Roll] Checking trap spawn for Board ${boardIndex} (ID: ${board.id}). Roll: ${roll}, Threshold: < ${trapChance}`);
             
-            if (roll < trapChance) {
+            if (roll < trapChance && !isTutorialDungeon) {
                 // Succeeded! Determine trap count (2 to 4 traps)
                 const trapCount = Math.floor(Math.random() * 3) + 2;
                 
@@ -1441,6 +1456,66 @@ export function BoardManager(){
             const count = board.tiles.filter(t => t.hasTrap).length;
             console.log(`[Trap Load] Board ${boardIndex} (ID: ${board.id}) has already rolled traps. Active trap count: ${count}`);
         }
+
+    this.ensurePygmiesSpawned = (board, spawnTileIndex = -1) => {
+        if (!board || !Array.isArray(board.tiles)) return;
+        const isTutorialDungeon = !!(this.dungeon && (this.dungeon.id === 'tutorial_dungeon' || this.dungeon.name === 'tutorial' || this.dungeon.isTutorial));
+        if (isTutorialDungeon) return;
+
+        const isDebugMode = !!(this.debugMode || (typeof window !== 'undefined' && window.debugMode === true));
+
+        // Check if pygmies are already present on this board
+        const existingPygmiesCount = board.tiles.filter(t => {
+            const type = t.contains ? (typeof t.contains === 'string' ? t.contains : t.contains.type) : null;
+            return type === 'pygmies';
+        }).length;
+
+        // If pygmies already exist, nothing more to do
+        if (existingPygmiesCount > 0) {
+            board.pygmiesRolled = true;
+            return;
+        }
+
+        // If not already rolled OR in debug mode with 0 existing pygmies:
+        if (!board.pygmiesRolled || isDebugMode) {
+            const pygmiesChance = isDebugMode ? 100 : 50;
+            const rollPygmies = Math.floor(Math.random() * 100);
+            console.log(`[Pygmies Spawn Roll] Checking pygmies spawn for Board (ID: ${board.id}). Roll: ${rollPygmies}, Threshold: < ${pygmiesChance} (Debug: ${isDebugMode})`);
+
+            if (rollPygmies < pygmiesChance) {
+                const pygmySubtypes = ['woodland', 'mud', 'cave'];
+                // Find all interior empty tiles
+                const emptyTiles = board.tiles.filter(t => {
+                    const type = t.contains ? (typeof t.contains === 'string' ? t.contains : t.contains.type) : null;
+                    const isEmpty = !type || type === 'empty_space' || type === 'obscured_space';
+                    const isSpawn = t.id === spawnTileIndex;
+                    let row = Math.floor(t.id / 15);
+                    let col = t.id % 15;
+                    const isInterior = row > 0 && row < 14 && col > 0 && col < 14;
+                    return isEmpty && !isSpawn && isInterior;
+                });
+
+                const shuffled = [...emptyTiles].sort(() => Math.random() - 0.5);
+                const spawnCount = Math.min(2, shuffled.length);
+
+                for (let i = 0; i < spawnCount; i++) {
+                    const chosenSubtype = pygmySubtypes[Math.floor(Math.random() * pygmySubtypes.length)];
+                    shuffled[i].contains = { type: 'pygmies', subtype: chosenSubtype };
+                    shuffled[i].image = this.getImageForContains(shuffled[i].contains, shuffled[i]);
+                    // If in-memory tiles array exists, sync to it as well
+                    if (Array.isArray(this.tiles) && this.tiles[shuffled[i].id]) {
+                        this.tiles[shuffled[i].id].contains = { type: 'pygmies', subtype: chosenSubtype };
+                        this.tiles[shuffled[i].id].image = this.getImageForContains(shuffled[i].contains, shuffled[i]);
+                    }
+                }
+                console.log(`[Pygmies Spawn Roll] SUCCESS: Spawned ${spawnCount} pygmies unit(s) on Board (ID: ${board.id}).`);
+            }
+            board.pygmiesRolled = true;
+        }
+    };
+
+        // Ensure board has pygmies rolled
+        this.ensurePygmiesSpawned(board, spawnTileIndex);
 
         // Cleanup malformed monster tile shapes that may have been saved in
         // older formats. Ensure every monster tile has the canonical object
@@ -1548,13 +1623,41 @@ export function BoardManager(){
             if (hasTrapFlag) {
                 this.trapTileIds.add(tile.id);
             }
+
+            // User-unique overrides for narrative and shrine markers
+            let tileContains = tile.contains;
+            let tileImage = imageKey;
+            try {
+                const rawType = this.getContainsType(tileContains);
+                const tileKey = `${this.currentLevel.id}_${this.currentBoard.id}_${tile.id}`;
+                const meta = getMeta() || {};
+                
+                if (rawType === 'narrative') {
+                    const narrativeVisited = Array.isArray(meta.narrativeVisited) ? meta.narrativeVisited : [];
+                    const narrativeKey = (tileContains && tileContains.key) || tileKey;
+                    if (narrativeVisited.includes(narrativeKey)) {
+                        tileContains = { type: 'narrative_visited', subtype: null };
+                        tileImage = 'narrative_visited';
+                    }
+                } else if (rawType === 'shrine') {
+                    const shrinesUsed = Array.isArray(meta.shrinesUsed) ? meta.shrinesUsed : [];
+                    const shrineKey = (tileContains && tileContains.key) || tileKey;
+                    if (shrinesUsed.includes(shrineKey)) {
+                        tileContains = null;
+                        tileImage = null;
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to apply shared instance overrides during initializeTilesFromMap', e);
+            }
+
             this.tiles.push({
                 type: 'board-tile',
                 id: tile.id,
                 color: tile.color,
                 showCoordinates: false,
-                contains: tile.contains,
-                image: imageKey,
+                contains: tileContains,
+                image: tileImage,
                 inscriptions: tile.inscriptions || null,
                 borders: null,
                 hasTrap: hasTrapFlag,
@@ -1641,6 +1744,29 @@ export function BoardManager(){
         return this.monstersArr.includes(c);
     })
     this.handleInteraction = (destinationTile) => {
+        // Intercept visited/used narrative and shrines for the current user to bypass interactions
+        try {
+            const rawType = this.getContainsType(destinationTile.contains);
+            const tileKey = `${this.currentLevel.id}_${this.currentBoard.id}_${destinationTile.id}`;
+            const meta = getMeta() || {};
+
+            if (rawType === 'narrative') {
+                const narrativeVisited = Array.isArray(meta.narrativeVisited) ? meta.narrativeVisited : [];
+                const narrativeKey = (destinationTile.contains && destinationTile.contains.key) || tileKey;
+                if (narrativeVisited.includes(narrativeKey)) {
+                    return null; // Already visited, no interaction
+                }
+            } else if (rawType === 'shrine') {
+                const shrinesUsed = Array.isArray(meta.shrinesUsed) ? meta.shrinesUsed : [];
+                const shrineKey = (destinationTile.contains && destinationTile.contains.key) || tileKey;
+                if (shrinesUsed.includes(shrineKey)) {
+                    return null; // Already communed, no interaction
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to intercept handleInteraction for shared overrides', e);
+        }
+
         // Defensive normalization: ensure destinationTile.contains has the
         // canonical shape { type: 'monster'|'item'|..., subtype: 'key'|null }
         try {
@@ -2408,40 +2534,33 @@ export function BoardManager(){
 
         if (interaction === 'narrative') {
             try {
+                const tileKey = `${this.currentLevel.id}_${this.currentBoard.id}_${destinationTile.id}`;
+                const meta = getMeta() || {};
+                const narrativeVisited = Array.isArray(meta.narrativeVisited) ? meta.narrativeVisited : [];
+                const narrativeKey = (destinationTile.contains && destinationTile.contains.key) || tileKey;
+                
+                if (!narrativeVisited.includes(narrativeKey)) {
+                    narrativeVisited.push(narrativeKey);
+                }
+                meta.narrativeVisited = narrativeVisited;
+                storeMeta(meta);
+                
+                if (this.saveCrew) {
+                    this.saveCrew();
+                }
+
+                // Update local tiles list so it immediately shows visited
                 destinationTile.contains = { type: 'narrative_visited', subtype: null };
                 destinationTile.image = 'narrative_visited';
                 this.tiles[destinationTile.id] = destinationTile;
-                if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[destinationTile.id]) {
-                    this.currentBoard.tiles[destinationTile.id].contains = { type: 'narrative_visited', subtype: null };
-                    this.currentBoard.tiles[destinationTile.id].image = 'narrative_visited';
+
+                if (this.triggerNarrativeEncounter) {
+                    this.triggerNarrativeEncounter(destinationTile);
                 }
-                const levelEntry = this.dungeon.levels.find(e => e.id === this.currentLevel.id);
-                if (levelEntry) {
-                    if (this.currentOrientation === 'F' && levelEntry.front && levelEntry.front.miniboards) {
-                        const b = levelEntry.front.miniboards.find(bi => bi.id === this.currentBoard.id);
-                        if (b && b.tiles && b.tiles[destinationTile.id]) {
-                            b.tiles[destinationTile.id].contains = { type: 'narrative_visited', subtype: null };
-                            b.tiles[destinationTile.id].image = 'narrative_visited';
-                        }
-                    } else if (this.currentOrientation === 'B' && levelEntry.back && levelEntry.back.miniboards) {
-                        const b = levelEntry.back.miniboards.find(bi => bi.id === this.currentBoard.id);
-                        if (b && b.tiles && b.tiles[destinationTile.id]) {
-                            b.tiles[destinationTile.id].contains = { type: 'narrative_visited', subtype: null };
-                            b.tiles[destinationTile.id].image = 'narrative_visited';
-                        }
-                    }
-                }
-                if (this.updateDungeon) this.updateDungeon(this.dungeon);
                 if (this.refreshTiles) this.refreshTiles();
             } catch (err) {
                 console.error("Failed to mark narrative visited:", err);
             }
-
-            try {
-                if (this.triggerNarrativeEncounter) {
-                    this.triggerNarrativeEncounter(destinationTile);
-                }
-            } catch (e) {}
         }
     }
     this.moveUp = () => {
@@ -2611,9 +2730,14 @@ export function BoardManager(){
                     coords[1] >= ratColStart && coords[1] <= ratColEnd;
 
                 // Reveal tiles within radius 2 that are reachable OR within the scouted/rat-reveal area
+                // Debug mode: Pygmies tiles are always visible (unaffected by fog of war)
+                const isPygmies = this.getContainsType(e.contains) === 'pygmies';
+                const isDebugMode = !!(this.debugMode || (typeof window !== 'undefined' && window.debugMode === true));
+                const revealByDebugPygmies = isDebugMode && isPygmies;
+
                 const isVoid = this.isVoidTile(e);
                 const hasInscriptions = e.inscriptions && Object.values(e.inscriptions).some(v => !!v);
-                if ((inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id))) && (!isVoid || hasInscriptions)) {
+                if ((revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id))) && (!isVoid || hasInscriptions)) {
 
                     const persistedColor = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].color);
                     const persistedBorders = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].borders);
