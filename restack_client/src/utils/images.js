@@ -1175,6 +1175,10 @@ import buildable_storage from '../assets/icons/buildings/buildable/storage.png';
 import buildable_temple from '../assets/icons/buildings/buildable/temple.png';
 import buildable_war_camp from '../assets/icons/buildings/buildable/war camp.png';
 import buildable_war_fort from '../assets/icons/buildings/buildable/war fort.png';
+// ── Card Duel Health Orbs ──────────────────────────────────────────────────
+import reaper_health_orb from '../assets/icons/reaper-health-orb.png';
+import crew_health_orb from '../assets/icons/crew-health-orb.png';
+
 // ── Pygmies Denizens ────────────────────────────────────────────────────────
 import cave_individual from '../assets/portraits/pygmies/cave-individual.png';
 import cave_squad from '../assets/portraits/pygmies/cave-squad.png';
@@ -2303,6 +2307,9 @@ export {
     buildable_temple,
     buildable_war_camp,
     buildable_war_fort,
+
+    reaper_health_orb,
+    crew_health_orb,
 
     // ── Pygmies Denizens ────────────────────────────────────────────────────────
     cave_individual,

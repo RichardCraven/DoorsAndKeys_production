@@ -2207,75 +2207,55 @@ export function BoardManager(){
         const requiredKeySubtype = config.requires;
         const openedVersion = config.opened;
         
-        if(this.pending && this.pending.type && this.pending.type !== gateType){
-            // If the player switched to a different gate, update pending so
-            // every gate can show/resolve its own requirement.
+        let hasKey = false, key;
+        const inventory = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || [];
+        key = inventory.find(e => 
+            e.name === keyName || 
+            e.subtype === requiredKeySubtype || 
+            e.name === requiredKeySubtype ||
+            (e.name && e.name.replace(/_/g, ' ') === keyName)
+        );
+        
+        if (!key) {
+            key = inventory.find(e =>
+                e.name === 'master key' ||
+                e.subtype === 'master_key' ||
+                e._im_key === 'master_key'
+            );
+        }
+        
+        if (key) {
+            hasKey = true;
+        }
+        
+        if (hasKey) {
+            this.messaging('The gate rattles open');
+            tile.contains = openedVersion;
+            tile.image = openedVersion;
+            this.activeInteractionTile = tile;
+            this.broadcastUseConsumableFromInventory(key);
+            this.refreshTiles();
+            this.tiles[tile.id] = tile;
+            
+            // Persist the opened gate to dungeon structure
+            if (this.currentOrientation === 'F') {
+                this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
+                this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
+            } else {
+                this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
+                this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
+            }
+            this.updateDungeon(this.dungeon);
+            
+            // Clear pending state
+            this.pending = null;
+            if (this.setPending) this.setPending(null);
+        } else {
             tile.color = 'lightyellow';
             this.messaging(`This gate requires a ${keyName}`);
             const p = { type: gateType };
             this.pending = p;
             if (this.setPending) this.setPending(p);
-            return;
-        }
-
-        if(this.pending && this.pending.type === gateType){
-            this.messaging(`This gate requires a ${keyName}`);
-            let hasKey = false, key;
-            
-            // Check for key by name or subtype
-            const inventory = this.getCurrentInventory();
-            key = inventory.find(e => 
-                e.name === keyName || 
-                e.subtype === requiredKeySubtype || 
-                e.name === requiredKeySubtype ||
-                (e.name && e.name.replace(/_/g, ' ') === keyName)
-            );
-            
-            if (!key) {
-                key = inventory.find(e =>
-                    e.name === 'master key' ||
-                    e.subtype === 'master_key' ||
-                    e._im_key === 'master_key'
-                );
-            }
-            
-            if(key){
-                hasKey = true;
-            }
-            
-            if(hasKey){
-                this.messaging('The gate rattles open')
-                tile.contains = openedVersion;
-                tile.image = openedVersion;
-                this.activeInteractionTile = tile;
-                this.broadcastUseConsumableFromInventory(key);
-                this.refreshTiles();
-                this.tiles[tile.id] = tile;
-                
-                // Persist the opened gate to dungeon structure
-                if(this.currentOrientation === 'F'){
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
-                } else {
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
-                }
-                this.updateDungeon(this.dungeon);
-                
-                // Clear pending state
-                this.pending = null;
-                if (this.setPending) this.setPending(null);
-            } else {
-                tile.color = 'lightyellow';
-            }
-        } else if(this.pending === null){
-            tile.color = 'lightyellow'
-            this.messaging(`This gate requires a ${keyName}`)
-            let p = {
-                type: gateType
-            }
-            this.pending = p;
-            this.setPending(p)
         }
     }
     this.handlePassingThroughDoor = () => {

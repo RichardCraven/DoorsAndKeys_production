@@ -7386,7 +7386,7 @@ class DungeonPage extends React.Component {
 
                 const gateType = bm.getGateTypeFromTile(t);
                 if (gateType && bm.isLockedGateTile(t)) {
-                    if (!bm.hasActiveUnlockSpell()) {
+                    if (!bm.hasActiveUnlockSpell() && !isTarget) {
                         return true;
                     }
                 }
