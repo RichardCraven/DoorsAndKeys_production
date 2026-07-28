@@ -273,10 +273,11 @@ export function BoardManager(){
             return this.getImage(subtype);
         }
         if (type === 'pygmies') {
-            const pySubtype = subtype || 'woodland';
-            if (pySubtype === 'mud') return this.getImage('mud_pygmies');
-            if (pySubtype === 'cave' || pySubtype === 'save') return this.getImage('save_pygmies');
-            return this.getImage('woodland_pygmies');
+            const pySubtype = subtype || 'woodland_warband';
+            if (pySubtype === 'mud') return this.getImage('mud_group');
+            if (pySubtype === 'cave' || pySubtype === 'save') return this.getImage('cave_squad');
+            if (pySubtype === 'woodland') return this.getImage('woodland_warband');
+            return this.getImage(pySubtype) || this.getImage('woodland_warband');
         }
         // monsters should render subtype image
         if (type === 'monster') {
@@ -452,6 +453,34 @@ export function BoardManager(){
             return this.hasSolidBorder(fromTile, fromSide) || this.hasSolidBorder(toTile, toSide);
         } catch (e) {
             return false;
+        }
+    }
+
+    this.isDiagonalPassageBlocked = (fromIdx, toIdx) => {
+        try {
+            if (fromIdx === toIdx) return false;
+            if (fromIdx == null || toIdx == null) return false;
+
+            const fromRow = Math.floor(fromIdx / 15);
+            const fromCol = fromIdx % 15;
+            const toRow = Math.floor(toIdx / 15);
+            const toCol = toIdx % 15;
+            const rowDelta = toRow - fromRow;
+            const colDelta = toCol - fromCol;
+
+            // If it's not a diagonal neighbor, it's not diagonally blocked
+            if (Math.abs(rowDelta) !== 1 || Math.abs(colDelta) !== 1) return false;
+
+            // Two diagonal options: (fromRow, toCol) and (toRow, fromCol)
+            const n1Idx = fromRow * 15 + toCol;
+            const n2Idx = toRow * 15 + fromCol;
+
+            const path1Blocked = this.isPassageWallBlockingBetween(fromIdx, n1Idx) || this.isPassageWallBlockingBetween(n1Idx, toIdx);
+            const path2Blocked = this.isPassageWallBlockingBetween(fromIdx, n2Idx) || this.isPassageWallBlockingBetween(n2Idx, toIdx);
+
+            return path1Blocked && path2Blocked;
+        } catch (e) {
+            return true;
         }
     }
 
@@ -1483,7 +1512,16 @@ export function BoardManager(){
             console.log(`[Pygmies Spawn Roll] Checking pygmies spawn for Board (ID: ${board.id}). Roll: ${rollPygmies}, Threshold: < ${pygmiesChance} (Debug: ${isDebugMode})`);
 
             if (rollPygmies < pygmiesChance) {
-                const pygmySubtypes = ['woodland', 'mud', 'cave'];
+                const pygmySubtypes = [
+                    'cave_individual',
+                    'cave_squad',
+                    'mud_group',
+                    'mud_individual',
+                    'mud_warband',
+                    'woodland_warband',
+                    'woodland_group',
+                    'woodland_individual'
+                ];
                 // Find all interior empty tiles
                 const emptyTiles = board.tiles.filter(t => {
                     const type = t.contains ? (typeof t.contains === 'string' ? t.contains : t.contains.type) : null;
@@ -2169,75 +2207,55 @@ export function BoardManager(){
         const requiredKeySubtype = config.requires;
         const openedVersion = config.opened;
         
-        if(this.pending && this.pending.type && this.pending.type !== gateType){
-            // If the player switched to a different gate, update pending so
-            // every gate can show/resolve its own requirement.
+        let hasKey = false, key;
+        const inventory = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || [];
+        key = inventory.find(e => 
+            e.name === keyName || 
+            e.subtype === requiredKeySubtype || 
+            e.name === requiredKeySubtype ||
+            (e.name && e.name.replace(/_/g, ' ') === keyName)
+        );
+        
+        if (!key) {
+            key = inventory.find(e =>
+                e.name === 'master key' ||
+                e.subtype === 'master_key' ||
+                e._im_key === 'master_key'
+            );
+        }
+        
+        if (key) {
+            hasKey = true;
+        }
+        
+        if (hasKey) {
+            this.messaging('The gate rattles open');
+            tile.contains = openedVersion;
+            tile.image = openedVersion;
+            this.activeInteractionTile = tile;
+            this.broadcastUseConsumableFromInventory(key);
+            this.refreshTiles();
+            this.tiles[tile.id] = tile;
+            
+            // Persist the opened gate to dungeon structure
+            if (this.currentOrientation === 'F') {
+                this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
+                this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
+            } else {
+                this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
+                this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
+            }
+            this.updateDungeon(this.dungeon);
+            
+            // Clear pending state
+            this.pending = null;
+            if (this.setPending) this.setPending(null);
+        } else {
             tile.color = 'lightyellow';
             this.messaging(`This gate requires a ${keyName}`);
             const p = { type: gateType };
             this.pending = p;
             if (this.setPending) this.setPending(p);
-            return;
-        }
-
-        if(this.pending && this.pending.type === gateType){
-            this.messaging(`This gate requires a ${keyName}`);
-            let hasKey = false, key;
-            
-            // Check for key by name or subtype
-            const inventory = this.getCurrentInventory();
-            key = inventory.find(e => 
-                e.name === keyName || 
-                e.subtype === requiredKeySubtype || 
-                e.name === requiredKeySubtype ||
-                (e.name && e.name.replace(/_/g, ' ') === keyName)
-            );
-            
-            if (!key) {
-                key = inventory.find(e =>
-                    e.name === 'master key' ||
-                    e.subtype === 'master_key' ||
-                    e._im_key === 'master_key'
-                );
-            }
-            
-            if(key){
-                hasKey = true;
-            }
-            
-            if(hasKey){
-                this.messaging('The gate rattles open')
-                tile.contains = openedVersion;
-                tile.image = openedVersion;
-                this.activeInteractionTile = tile;
-                this.broadcastUseConsumableFromInventory(key);
-                this.refreshTiles();
-                this.tiles[tile.id] = tile;
-                
-                // Persist the opened gate to dungeon structure
-                if(this.currentOrientation === 'F'){
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
-                } else {
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
-                }
-                this.updateDungeon(this.dungeon);
-                
-                // Clear pending state
-                this.pending = null;
-                if (this.setPending) this.setPending(null);
-            } else {
-                tile.color = 'lightyellow';
-            }
-        } else if(this.pending === null){
-            tile.color = 'lightyellow'
-            this.messaging(`This gate requires a ${keyName}`)
-            let p = {
-                type: gateType
-            }
-            this.pending = p;
-            this.setPending(p)
         }
     }
     this.handlePassingThroughDoor = () => {
@@ -2433,6 +2451,19 @@ export function BoardManager(){
             }
             return;
         }
+
+        const isDiagonal = Math.abs(destinationCoords[0] - this.playerTile.location[0]) === 1 && Math.abs(destinationCoords[1] - this.playerTile.location[1]) === 1;
+        if (isDiagonal && this.isDiagonalPassageBlocked(tile.id, destinationIndex)) {
+            if (destTileInscription) {
+                try { if (this.messaging) this.messaging(`✍ ${destTileInscription}`); } catch (e) {}
+            } else if (currentTileInscription) {
+                try { if (this.messaging) this.messaging(`✍ ${currentTileInscription}`); } catch (e) {}
+            } else {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+            }
+            return;
+        }
+
                 // Prevent movement into tiles that are logically occupied by a large monster
                 try {
                     if (destinationTile && destinationTile.blockedByLargeMonster) {
@@ -2454,22 +2485,7 @@ export function BoardManager(){
         // they return to the correct (safe) position. On victory, removeDefeatedMonsterTile
         // clears the monster tile and the player is already adjacent.
         if (interaction !== 'monster' && interaction !== 'vendor') {
-            switch(direction){
-                case 'up':
-                    this.playerTile.location[0] = (this.playerTile.location[0]- 1)
-                break;
-                case 'down':
-                    this.playerTile.location[0] = (this.playerTile.location[0]+ 1)
-                break;
-                case 'left':
-                    this.playerTile.location[1] = (this.playerTile.location[1]- 1)
-                break;
-                case 'right':
-                    this.playerTile.location[1] = (this.playerTile.location[1]+ 1)
-                break;
-                default:
-                break;
-            }
+            this.playerTile.location = [destinationCoords[0], destinationCoords[1]];
         }
         // Check for adjacent locked chests
         try {

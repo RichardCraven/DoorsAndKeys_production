@@ -714,7 +714,7 @@ export const LANDING_REDUX_CSS = `
 /* ==========================================
    MOBILE & VIEWPORT HEIGHT REDESIGN OVERRIDES
    ========================================== */
-@media (max-width: 1024px) {
+@media (max-width: 1200px), (max-height: 850px) {
   .redux-landing-container {
     padding: 8px 12px !important;
   }
@@ -800,7 +800,7 @@ export const LANDING_REDUX_CSS = `
   }
 }
 
-@media (max-width: 1024px) and (orientation: landscape) {
+@media (max-width: 1200px) and (orientation: landscape), (max-height: 850px) and (orientation: landscape) {
   .redux-landing-container .landing-main-grid {
     grid-template-columns: 1.15fr 1fr !important;
     gap: 8px !important;

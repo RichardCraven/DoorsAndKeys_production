@@ -1175,12 +1175,25 @@ import buildable_storage from '../assets/icons/buildings/buildable/storage.png';
 import buildable_temple from '../assets/icons/buildings/buildable/temple.png';
 import buildable_war_camp from '../assets/icons/buildings/buildable/war camp.png';
 import buildable_war_fort from '../assets/icons/buildings/buildable/war fort.png';
+// ── Card Duel Health Orbs ──────────────────────────────────────────────────
+import reaper_health_orb from '../assets/icons/reaper-health-orb.png';
+import crew_health_orb from '../assets/icons/crew-health-orb.png';
+
 // ── Pygmies Denizens ────────────────────────────────────────────────────────
-import mud_pygmies from '../assets/portraits/pygmies/mud-pygmies.png';
-import cave_pygmies from '../assets/portraits/pygmies/cave-pygmies.png';
-import woodland_pygmies from '../assets/portraits/pygmies/woodland-pygmies.png';
-const save_pygmies = cave_pygmies;
-const pygmies = woodland_pygmies;
+import cave_individual from '../assets/portraits/pygmies/cave-individual.png';
+import cave_squad from '../assets/portraits/pygmies/cave-squad.png';
+import mud_group from '../assets/portraits/pygmies/mud-group.png';
+import mud_individual from '../assets/portraits/pygmies/mud-individual.png';
+import mud_warband from '../assets/portraits/pygmies/mud-warband.png';
+import woodland_warband from '../assets/portraits/pygmies/woodland warband.png';
+import woodland_group from '../assets/portraits/pygmies/woodland-group.png';
+import woodland_individual from '../assets/portraits/pygmies/woodland-individual.png';
+
+const mud_pygmies = mud_group;
+const cave_pygmies = cave_squad;
+const save_pygmies = cave_squad;
+const woodland_pygmies = woodland_warband;
+const pygmies = woodland_warband;
 
 const tattoo_placeholder = tattoo_ink; // placeholder until real tattoo art is added
 const _terrainBase = [terrain_1, terrain_2, terrain_3, terrain_4, terrain_5, terrain_6, terrain_7, terrain_8, terrain_9, terrain_10, terrain_11, terrain_12, terrain_13, terrain_14, terrain_15, terrain_16];
@@ -2295,7 +2308,18 @@ export {
     buildable_war_camp,
     buildable_war_fort,
 
+    reaper_health_orb,
+    crew_health_orb,
+
     // ── Pygmies Denizens ────────────────────────────────────────────────────────
+    cave_individual,
+    cave_squad,
+    mud_group,
+    mud_individual,
+    mud_warband,
+    woodland_warband,
+    woodland_group,
+    woodland_individual,
     mud_pygmies,
     save_pygmies,
     cave_pygmies,

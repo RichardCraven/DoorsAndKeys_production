@@ -1,1699 +1,945 @@
 import React from 'react';
-import {
-    buildReserveZone,
-    buildArcaneDeck,
-    buildReaperDeck,
-    reaperStartingSoul,
-    shuffle,
-} from '../../utils/card-manager';
 import * as images from '../../utils/images';
 import '../../styles/CardDuel.css';
 
-// ─── Sphinx riddle pool ───────────────────────────────────────────────────────
-const RIDDLES = [
-    { q: 'I have cities but no houses, mountains but no trees, and water but no fish. What am I?', choices: ['A map', 'A dream', 'A mirror', 'A cloud'], answer: 0 },
-    { q: 'The more you take, the more you leave behind. What am I?', choices: ['Shadows', 'Footsteps', 'Time', 'Regrets'], answer: 1 },
-    { q: 'I speak without a mouth and hear without ears. I have no body but come alive with the wind. What am I?', choices: ['Fire', 'Water', 'An echo', 'A spirit'], answer: 2 },
-    { q: 'I can be cracked, made, told, and played. What am I?', choices: ['A joke', 'An egg', 'A spell', 'A promise'], answer: 0 },
-    { q: 'What has hands but cannot clap?', choices: ['A ghost', 'A statue', 'A clock', 'A door'], answer: 2 },
-    { q: 'What gets wetter as it dries?', choices: ['Sand', 'Stone', 'A towel', 'Paper'], answer: 2 },
-    { q: 'I am always hungry. I must always be fed. The finger I touch will soon turn red. What am I?', choices: ['A blade', 'Fire', 'Acid', 'A curse'], answer: 1 },
-    { q: 'The more of me there is, the less you see. What am I?', choices: ['Rain', 'Darkness', 'Fog', 'Silence'], answer: 1 },
-    { q: 'I have a head and a tail but no body. What am I?', choices: ['A coin', 'A snake', 'A comet', 'A key'], answer: 0 },
-    { q: 'What runs but never walks, has a mouth but never talks?', choices: ['A ghost', 'Wind', 'A river', 'A shadow'], answer: 2 },
+// ─── Tactical Hearthstone-style 5-Lane Card Duel Component ────────────────────
+
+const CREW_STAT_PROFILES = [
+    { atk: 0, hp: 3 },
+    { atk: 1, hp: 2 },
+    { atk: 2, hp: 1 }
 ];
 
-function pickRiddle() {
-    return RIDDLES[Math.floor(Math.random() * RIDDLES.length)];
-}
-
-// ─── Global skill helpers ─────────────────────────────────────────────────────
-function hasGlobalSkill(crew, skillKey, minLevel = 1) {
-    if (!Array.isArray(crew)) return false;
-    return crew.some(m => {
-        if (!m || !Array.isArray(m.globalSkills)) return false;
-        const skill = m.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === skillKey);
-        if (!skill) return false;
-        const lvl = typeof skill === 'string' ? 1 : (skill.level || 1);
-        return lvl >= minLevel;
-    });
-}
-
-// ─── Card art icon map ────────────────────────────────────────────────────────
-const ARCANE_ICON = {
-    damage: '⚡', piercing_damage: '🗡️', chain_damage: '⛓️',
-    field_damage: '🔥', burn: '🔥', blood_pact: '🩸',
-    lifesteal: '💜', last_rites: '💀', heal: '💚',
-    rallying_cry: '📣', field_amplify: '⚔️', war_drums: '🥁',
-    dodge_all: '💨', phase_shift: '🌀', bone_armor: '🦴',
-    champion_armor: '🛡️', void_trap: '🔮', hex_ward: '🔯',
-    death_mark: '☠️', mana_surge: '💫', sprint: '⚡',
-    temporal_rift: '📚', weaken_reaper: '🌑', stun_reaper: '❄️',
-    discard_reaper_card: '🚫', block_damage: '🛡️', riddle: '❓',
-    damage_and_shield: '⚔️',
-};
-
-const CLASS_EMOJI = {
-    soldier: '🛡', barbarian: '🪓', monk: '🥋', ranger: '🏹',
-    wizard: '🔮', sage: '📖', summoner: '💀', engineer: '⚙️',
-};
-
-const RARITY_COLOR = {
-    common: '#888',
-    uncommon: '#48b0c8',
-    rare: '#c9a84c',
-};
-
-// ─── Main CardDuel Component ──────────────────────────────────────────────────
-class CardDuel extends React.Component {
+export default class CardDuel extends React.Component {
     constructor(props) {
         super(props);
 
-        const rawCrew      = props.crew || [];
-        const isCombatLoss = !!props.isCombatLoss;
-        const crew         = isCombatLoss ? rawCrew.map(c => ({ ...c, dead: false })) : rawCrew;
-        const meta         = props.meta || {};
-        const depth        = props.dungeonDepth || 1;
-        const activeEchoIds = (meta.echoCards || []).slice(0, 4);
-
-        // Global skill passives (computed once)
-        const extraSoul      = hasGlobalSkill(crew, 'strong_resolve') ? 5 : 0;
-        const baseEnergy     = hasGlobalSkill(crew, 'focused_rest')   ? 5 : 4;
-        const drawBonusGlobal = hasGlobalSkill(crew, 'awake_refreshed') ? 1 : 0;
-
-        const reserveZone  = buildReserveZone(crew);
-        const playerDeck   = buildArcaneDeck(activeEchoIds);
-        const reaperDeck   = buildReaperDeck(depth);
-        const reaperSoul   = reaperStartingSoul(depth);
-        const playerSoul   = 20 + (crew.filter(m => m && !m.dead).length * 2) + extraSoul;
-
         this.state = {
-            // ── Player resources ──
-            playerSoul,
-            playerMaxSoul: playerSoul,
-            playerEnergy: baseEnergy,
-            playerBaseEnergy: baseEnergy,
-            playerEnergyPenaltyNextTurn: 0,
+            // Player & Reaper Health
+            playerHP: 20,
+            playerMaxHP: 20,
+            reaperHP: 20,
+            reaperMaxHP: 20,
 
-            // ── Reserve & field ──
-            reserveZone,
-            fieldChampions: [],      // max 2 summoned champions
-            championHP: {},          // { [id]: currentHP }
-            championMaxHP: {},       // { [id]: maxHP }
-            fallenChampions: [],     // ids of champions killed this duel
-            championSummonedThisTurn: false,
-            playerField: [],
+            // Spirit Resource (increments every round)
+            roundNumber: 1,
+            maxSpirit: 1,
+            playerSpirit: 1,
+            reaperSpirit: 1,
 
-            // ── Champion buffs ──
-            warDrumsTurns: 0,
-            warDrumsBonus: 0,
-            fieldAmplifyThisTurn: 0, // bonus ATK from Battlecry this turn
-            persistentBlockAmount: 0,// from Iron Skin: block X per attack
-            persistentBlockTurns: 0,
+            // Turn Control
+            currentTurn: 'reaper', // Reaper ALWAYS goes first
+            isAiThinking: false,
+            gameOver: null, // 'victory' or 'defeat'
 
-            // ── Arcane deck ──
-            playerDeck,
+            // Decks, Hands, Discards (12 cards each)
+            playerDeck: [],
             playerHand: [],
             playerDiscard: [],
 
-            // ── Player status effects ──
-            playerDodgeTurns: 0,
-            playerBoneArmor: 0,      // absorbs next attack damage
-            hasVoidTrap: false,      // reflects 50% of next reaper attack
-            hasHexWard: false,       // nullifies next debuff + destroys threats
-            hasDeathMark: false,     // doubles next damage source
-
-            // ── Burn (damage over time on Reaper) ──
-            activeBurns: [],         // [{ dmgPerTurn, turnsLeft }]
-
-            // ── Reaper ──
-            reaperDeck,
+            reaperDeck: [],
             reaperHand: [],
             reaperDiscard: [],
-            reaperSoul,
-            reaperMaxSoul: reaperSoul,
-            reaperEnergy: 3,
-            reaperStunTurns: 0,
-            reaperSkipNextCard: false,
-            reaperEnergyPenaltyNextTurn: 0,
-            reaperBonusDmg: 0,       // from Dark Ritual (accumulates)
-            reaperSpectralSurge: false, // doubles next Reaper damage card
-            reaperShieldNextAtk: 0,
-            reaperLastPlayedCard: null,
 
-            // ── Reaper field units ──
-            reaperField: [],         // [{ id, name, atk, hp, maxHp }]
-            reaperFieldRallyBonus: 0,// ATK bonus this turn from Rally Undead
+            // 5x5 Tactical Grid state
+            // Key: `${row}_${col}` where row: 0..4 (0=Reaper Home, 4=Player Home), col: 0..4 (Lanes 1..5)
+            grid: {},
 
-            // ── Reaper threats ──
-            reaperThreats: [],       // [{ id, name, damage, turnsLeft }]
+            // Selection, Interaction & Attack Animation
+            selectedCard: null,      // Card in player hand selected/held to play
+            selectedUnitKey: null,   // `${row}_${col}` of player unit selected on board for move/attack
+            draggedCardId: null,     // Id of card currently being dragged
+            attackAnim: null,        // { attackerKey, defenderKey, direction, damageToDefender, damageToAttacker }
 
-            // ── Turn state ──
-            turn: 'player',
-            phase: 'play',
-            turnNumber: 1,
-
-            // ── UI ──
-            duelStarted: false,
-            message: '',
-            log: ['The duel begins. Face the Reaper...'],
-            gameOver: null,
-            shakePlayer: false,
-            shakeReaper: false,
-            isAiThinking: false,
-            attackFlash: false,
-            riddleActive: null,
+            // Confirm modals & log
             showForfeitModal: false,
-            engineerDiscountUsed: false,
-
-            // ── Global skill flags ──
-            ironWillUsed: false,
-            hasIronWill:      hasGlobalSkill(crew, 'iron_will'),
-            hasMendBonus:     hasGlobalSkill(crew, 'mend'),
-            hasRevive:        hasGlobalSkill(crew, 'revive'),
-            hasAwakeRefreshed: drawBonusGlobal > 0,
-            hasBloodhound:    hasGlobalSkill(crew, 'bloodhound'),
-            hasSoulTithe:     hasGlobalSkill(crew, 'soul_tithe'),
-            hasSpiritSight:   hasGlobalSkill(crew, 'spirit_sight'),
-            hasKeenEye:       hasGlobalSkill(crew, 'keen_eye'),
-            reviveUsed:       false,
-            bloodhoundReveal: null,
+            log: []
         };
 
         this.logRef = React.createRef();
     }
 
     componentDidMount() {
-        // Do not call beginTurn() until the player clicks BEGIN
+        this.initializeDuel();
     }
 
-    startCardDuel = () => {
-        this.setState({ duelStarted: true }, () => {
-            this.beginTurn();
-        });
-    }
-
-    // ─── Logging ──────────────────────────────────────────────────────────────
-    addLog = (msg) => {
-        this.setState(prev => ({ log: [...prev.log.slice(-80), msg], message: msg }));
-    }
-
-    componentDidUpdate(_, prevState) {
+    componentDidUpdate(prevProps, prevState) {
         if (prevState.log.length !== this.state.log.length && this.logRef.current) {
             this.logRef.current.scrollTop = this.logRef.current.scrollHeight;
         }
     }
 
-    // ─── Phase helper ─────────────────────────────────────────────────────────
-    getReaperPhase = () => {
-        const { reaperSoul, reaperMaxSoul } = this.state;
-        const pct = reaperSoul / reaperMaxSoul;
-        if (pct > 0.6) return 'aggressive';
-        if (pct > 0.4) return 'tactical';
-        if (pct > 0.2) return 'desperate';
-        return 'enrage';
-    }
+    // ─── Duel Initialization ──────────────────────────────────────────────────
+    initializeDuel = () => {
+        const rawCrew = this.props.crew || [];
+        const activeCrew = rawCrew.filter(c => c && !c.dead);
 
-    hasFieldChampion = (type) => this.state.fieldChampions.some(c => c.memberType === type);
-
-    // ─── Begin player turn ────────────────────────────────────────────────────
-    beginTurn = () => {
-        const prev = this.state;
-        const turnLogs = [];
-
-        // 1. Tick burns on the Reaper
-        let reaperSoul = prev.reaperSoul;
-        const newBurns = [];
-        for (const burn of prev.activeBurns) {
-            reaperSoul = Math.max(0, reaperSoul - burn.dmgPerTurn);
-            turnLogs.push(`🔥 Ember Blast ticks — ${burn.dmgPerTurn} burn damage to the Reaper.`);
-            if (burn.turnsLeft > 1) newBurns.push({ ...burn, turnsLeft: burn.turnsLeft - 1 });
-        }
-
-        // 2. Tick and fire Reaper threats
-        let playerSoul = prev.playerSoul;
-        let playerBoneArmor = prev.playerBoneArmor;
-        const newThreats = [];
-        for (const threat of prev.reaperThreats) {
-            if (threat.turnsLeft <= 1) {
-                let dmg = threat.damage;
-                if (prev.playerDodgeTurns > 0) {
-                    turnLogs.push(`☠️ ${threat.name} fires — you dodge it!`);
-                    dmg = 0;
-                } else {
-                    if (prev.persistentBlockTurns > 0) dmg = Math.max(0, dmg - prev.persistentBlockAmount);
-                    const absorbed = Math.min(playerBoneArmor, dmg);
-                    dmg -= absorbed;
-                    playerBoneArmor -= absorbed;
-                    playerSoul = Math.max(0, playerSoul - dmg);
-                    turnLogs.push(`☠️ ${threat.name} fires for ${dmg} damage! ${absorbed > 0 ? `(${absorbed} absorbed by armor)` : ''}`);
-                }
-            } else {
-                newThreats.push({ ...threat, turnsLeft: threat.turnsLeft - 1 });
-            }
-        }
-
-        // 3. Passive effects from field champions
-        let playerEnergy = Math.max(0, prev.playerBaseEnergy - prev.playerEnergyPenaltyNextTurn);
-        if (prev.fieldChampions.some(c => c.memberType === 'monk')) {
-            playerEnergy = playerEnergy + 1;
-            turnLogs.push('⚡ Inner Focus: the Monk grants +1 Energy.');
-        }
-        if (prev.fieldChampions.some(c => c.memberType === 'sage')) {
-            playerSoul = Math.min(prev.playerMaxSoul, playerSoul + 1);
-            turnLogs.push('💚 Mending Presence: the Sage restores 1 Soul.');
-        }
-
-        // 4. Draw arcane cards
-        let deck    = prev.playerDeck.slice();
-        let discard = prev.playerDiscard.slice();
-        let hand    = prev.playerHand.slice();
-
-        const summDraw  = prev.fieldChampions.some(c => c.memberType === 'summoner') ? 1 : 0;
-        const drawTarget = 4 + (prev.hasAwakeRefreshed ? 1 : 0) + summDraw;
-        const toDraw    = Math.max(0, drawTarget - hand.length);
-
-        for (let i = 0; i < toDraw; i++) {
-            if (deck.length === 0) {
-                if (discard.length > 0) {
-                    deck    = shuffle(discard);
-                    discard = [];
-                } else break;
-            }
-            hand.push(deck.splice(0, 1)[0]);
-        }
-
-        // 5. Decay time-based buffs
-        const warDrumsTurns      = Math.max(0, prev.warDrumsTurns - 1);
-        const persistentBlockTurns = Math.max(0, prev.persistentBlockTurns - 1);
-
-        this.setState({
-            playerSoul,
-            reaperSoul,
-            playerEnergy,
-            playerEnergyPenaltyNextTurn: 0,
-            playerBoneArmor,
-            playerDeck: deck,
-            playerHand: hand,
-            playerDiscard: discard,
-            activeBurns: newBurns,
-            reaperThreats: newThreats,
-            warDrumsTurns,
-            warDrumsBonus: warDrumsTurns > 0 ? prev.warDrumsBonus : 0,
-            persistentBlockTurns,
-            fieldAmplifyThisTurn: 0,
-            championSummonedThisTurn: false,
-            engineerDiscountUsed: false,
-            phase: 'play',
-            turn: 'player',
-            attackFlash: false,
-            playerDodgeTurns: Math.max(0, prev.playerDodgeTurns - 1),
-        }, () => {
-            this.addLog(`─── Turn ${this.state.turnNumber} ───`);
-            turnLogs.forEach(l => this.addLog(l));
-
-            if (this.state.hasBloodhound && this.state.reaperHand.length > 0) {
-                const topCard = this.state.reaperHand[0];
-                if (topCard) this.setState({ bloodhoundReveal: topCard.name });
-            }
-
-            this.checkVictory();
-        });
-    }
-
-    // ─── Summon a champion from reserve ──────────────────────────────────────
-    summonChampion = (champion) => {
-        if (this.state.phase !== 'play' || this.state.gameOver) return;
-        if (this.state.championSummonedThisTurn) return;
-        if (this.state.fieldChampions.length >= 2) return;
-        if (this.state.fallenChampions.includes(champion.id)) return;
-        if (this.state.fieldChampions.some(c => c.id === champion.id)) return;
-        if (this.state.playerEnergy < champion.summonCost) return;
-
-        const newHP = champion.maxHP;
-
-        this.setState(prev => ({
-            fieldChampions: [...prev.fieldChampions, champion],
-            championHP: { ...prev.championHP, [champion.id]: newHP },
-            championMaxHP: { ...prev.championMaxHP, [champion.id]: champion.maxHP },
-            playerEnergy: prev.playerEnergy - champion.summonCost,
-            championSummonedThisTurn: true,
-        }), () => {
-            this.addLog(`⚔️ ${champion.name} enters the field! (${champion.atk} ATK · ${newHP} HP)`);
-            this.addLog(`✨ ${champion.ability.name}: ${champion.ability.desc}`);
-        });
-    }
-
-    // ─── End player turn — field champions attack ─────────────────────────────
-    endPlayerTurn = () => {
-        if (this.state.phase !== 'play' || this.state.gameOver) return;
-
-        const { fieldChampions, playerField, warDrumsTurns, warDrumsBonus,
-                fieldAmplifyThisTurn, playerSoul, hasDeathMark } = this.state;
-
-        // Calculate field champion total ATK
-        let totalATK = 0;
-        const breakdown = [];
-        fieldChampions.forEach(c => {
-            let atk = c.atk;
-            if (warDrumsTurns > 0) atk += warDrumsBonus;
-            if (fieldAmplifyThisTurn > 0) atk += fieldAmplifyThisTurn;
-            if (c.memberType === 'barbarian' && playerSoul <= 15) atk += 2;
-            totalATK += atk;
-            breakdown.push(`${c.name} (${atk})`);
-        });
-
-        // Add basic units from army to total ATK
-        if (playerField && playerField.length > 0) {
-            playerField.forEach(u => {
-                totalATK += u.atk;
-                breakdown.push(`${u.name} (${u.atk})`);
+        // Build Reaper Deck: 12 Pygmies (1 ATK / 1 HP, Cost 1)
+        const reaperDeck = [];
+        for (let i = 0; i < 12; i++) {
+            reaperDeck.push({
+                id: `reaper_pygmy_${i}_${Math.random().toString(36).substring(2, 7)}`,
+                name: 'Cave Pygmy',
+                type: 'pygmy',
+                owner: 'reaper',
+                cost: 1,
+                atk: 1,
+                hp: 1,
+                maxHp: 1,
+                art: images.cave_individual || images.pygmies
             });
         }
 
-        // Apply death mark to field attack
-        let finalATK = totalATK;
-        let deathMarkUsed = false;
-        if (hasDeathMark && totalATK > 0) {
-            finalATK = totalATK * 2;
-            deathMarkUsed = true;
+        // Build Player Deck: 10 Pygmies + Crew Member Cards (total 12 cards)
+        const playerDeck = [];
+
+        // Add Crew Cards (Cost 2, random 0/3, 1/2, or 2/1 stats)
+        const crewCardsToAdd = [];
+        if (activeCrew.length > 0) {
+            activeCrew.forEach((member, idx) => {
+                const profile = CREW_STAT_PROFILES[Math.floor(Math.random() * CREW_STAT_PROFILES.length)];
+                crewCardsToAdd.push({
+                    id: `player_crew_${idx}_${Math.random().toString(36).substring(2, 7)}`,
+                    name: member.name || `Crew Champion #${idx + 1}`,
+                    type: 'crew',
+                    owner: 'player',
+                    cost: 2,
+                    atk: profile.atk,
+                    hp: profile.hp,
+                    maxHp: profile.hp,
+                    art: member.portrait || images.avatar,
+                    memberType: member.type || 'soldier'
+                });
+            });
         }
 
-        if (breakdown.length > 0) {
-            this.addLog(`⚔️ Field attack: ${breakdown.join(', ')} → ${finalATK} ATK${deathMarkUsed ? ' (☠️ DEATH MARK ×2!)' : ''}`);
-        } else {
-            this.addLog('Player ends turn (no units on field).');
+        // If crew has fewer than 2 members, fill up to 2 crew cards
+        while (crewCardsToAdd.length < 2) {
+            const profile = CREW_STAT_PROFILES[Math.floor(Math.random() * CREW_STAT_PROFILES.length)];
+            crewCardsToAdd.push({
+                id: `player_crew_dummy_${crewCardsToAdd.length}_${Math.random().toString(36).substring(2, 7)}`,
+                name: `Veteran Crew`,
+                type: 'crew',
+                owner: 'player',
+                cost: 2,
+                atk: profile.atk,
+                hp: profile.hp,
+                maxHp: profile.hp,
+                art: images.avatar,
+                memberType: 'soldier'
+            });
         }
+
+        // Limit crew cards to 2 max if crew is larger, or include all crew members
+        const finalCrewCards = crewCardsToAdd.slice(0, Math.min(6, crewCardsToAdd.length));
+        const pygmiesNeeded = Math.max(0, 12 - finalCrewCards.length);
+
+        finalCrewCards.forEach(c => playerDeck.push(c));
+
+        for (let i = 0; i < pygmiesNeeded; i++) {
+            playerDeck.push({
+                id: `player_pygmy_${i}_${Math.random().toString(36).substring(2, 7)}`,
+                name: 'Cave Pygmy',
+                type: 'pygmy',
+                owner: 'player',
+                cost: 1,
+                atk: 1,
+                hp: 1,
+                maxHp: 1,
+                art: images.cave_individual || images.pygmies
+            });
+        }
+
+        // Shuffle decks
+        const shuffledPlayerDeck = this.shuffleArray([...playerDeck]);
+        const shuffledReaperDeck = this.shuffleArray([...reaperDeck]);
+
+        // Draw initial 4 cards for both players
+        const playerHand = shuffledPlayerDeck.splice(0, 4);
+        const reaperHand = shuffledReaperDeck.splice(0, 4);
 
         this.setState({
-            attackFlash: totalATK > 0,
-            fieldAmplifyThisTurn: 0,
-            hasDeathMark: deathMarkUsed ? false : hasDeathMark,
-            bloodhoundReveal: null,
+            playerHP: 20,
+            playerMaxHP: 20,
+            reaperHP: 20,
+            reaperMaxHP: 20,
+            roundNumber: 1,
+            maxSpirit: 1,
+            playerSpirit: 1,
+            reaperSpirit: 1,
+            currentTurn: 'reaper',
+            isAiThinking: true,
+            gameOver: null,
+            playerDeck: shuffledPlayerDeck,
+            playerHand,
+            playerDiscard: [],
+            reaperDeck: shuffledReaperDeck,
+            reaperHand,
+            reaperDiscard: [],
+            grid: {},
+            selectedCard: null,
+            selectedUnitKey: null,
+            log: [
+                '⚔️ Card Duel Overhaul Started!',
+                '💀 The Reaper goes first (Round 1 · 1 Spirit).'
+            ]
+        }, () => {
+            // Execute Reaper First Turn after initial render delay
+            setTimeout(() => {
+                this.executeReaperTurn();
+            }, 800);
+        });
+    }
+
+    shuffleArray = (array) => {
+        const arr = [...array];
+        for (let i = arr.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+    }
+
+    addLog = (msg) => {
+        this.setState(prev => ({
+            log: [...prev.log, msg]
+        }));
+    }
+
+    // ─── Turn Management ──────────────────────────────────────────────────────
+    executeReaperTurn = () => {
+        if (this.state.gameOver) return;
+
+        const { roundNumber, reaperHand, grid, reaperSpirit } = this.state;
+
+        // Step 1: AI unit actions on the grid (Move / Attack)
+        let updatedGrid = { ...grid };
+        let currentReaperHP = this.state.reaperHP;
+        let currentPlayerHP = this.state.playerHP;
+        let reaperDiscard = [...this.state.reaperDiscard];
+        let playerDiscard = [...this.state.playerDiscard];
+
+        // Refresh existing Reaper units for action
+        Object.keys(updatedGrid).forEach(key => {
+            const unit = updatedGrid[key];
+            if (unit && unit.owner === 'reaper') {
+                unit.actionsLeft = unit.turnPlayed === roundNumber ? 0 : 1;
+            }
+        });
+
+        // AI Move & Attack Phase for Reaper units (processed from Row 4 up to Row 0)
+        for (let r = 4; r >= 0; r--) {
+            for (let c = 0; c < 5; c++) {
+                const key = `${r}_${c}`;
+                const unit = updatedGrid[key];
+                if (unit && unit.owner === 'reaper' && unit.actionsLeft > 0) {
+                    // Check if unit is in Row 4 (Player Home Row) -> Attack Player Directly!
+                    if (r === 4) {
+                        currentPlayerHP = Math.max(0, currentPlayerHP - unit.atk);
+                        unit.actionsLeft = 0;
+                        this.addLog(`💀 ${unit.name} attacked YOU directly in Lane ${c + 1} for ${unit.atk} damage!`);
+                        if (currentPlayerHP <= 0) break;
+                    } else {
+                        // Check for adjacent player units (down, left, right, up)
+                        const neighbors = [
+                            { r: r + 1, c },
+                            { r, c: c - 1 },
+                            { r, c: c + 1 },
+                            { r: r - 1, c }
+                        ].filter(pos => pos.r >= 0 && pos.r <= 4 && pos.c >= 0 && pos.c <= 4);
+
+                        const targetPos = neighbors.find(pos => {
+                            const target = updatedGrid[`${pos.r}_${pos.c}`];
+                            return target && target.owner === 'player';
+                        });
+
+                        if (targetPos) {
+                            // Execute Attack
+                            const targetKey = `${targetPos.r}_${targetPos.c}`;
+                            const targetUnit = updatedGrid[targetKey];
+
+                            targetUnit.hp -= unit.atk;
+                            unit.hp -= targetUnit.atk;
+                            unit.actionsLeft = 0;
+
+                            this.addLog(`💀 ${unit.name} attacked your ${targetUnit.name} in Lane ${targetPos.c + 1}! (${unit.atk} vs ${targetUnit.atk} dmg)`);
+
+                            if (targetUnit.hp <= 0) {
+                                delete updatedGrid[targetKey];
+                                playerDiscard.push(targetUnit);
+                                this.addLog(`💀 Your ${targetUnit.name} was defeated!`);
+                            }
+                            if (unit.hp <= 0) {
+                                delete updatedGrid[key];
+                                reaperDiscard.push(unit);
+                                this.addLog(`💀 Reaper's ${unit.name} fell in combat!`);
+                            }
+                        } else {
+                            // Try to move forward towards Player (down to r + 1)
+                            const forwardKey = `${r + 1}_${c}`;
+                            if (r + 1 <= 4 && !updatedGrid[forwardKey]) {
+                                updatedGrid[forwardKey] = { ...unit, actionsLeft: 0 };
+                                delete updatedGrid[key];
+                                this.addLog(`💀 ${unit.name} advanced to Row ${r + 2}, Lane ${c + 1}.`);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Check if player died from direct attacks
+        if (currentPlayerHP <= 0) {
+            this.setState({
+                grid: updatedGrid,
+                playerHP: 0,
+                gameOver: 'defeat',
+                isAiThinking: false
+            });
+            this.addLog('💀 DEFEAT! Your crew health was depleted.');
+            return;
+        }
+
+        // Step 2: AI Card Play Phase from Reaper Hand with Flight & Flip Animation
+        this.playReaperCardsSequentially(
+            updatedGrid,
+            reaperSpirit,
+            [...reaperHand],
+            reaperDiscard,
+            (finalGrid, finalSpirit, finalHand) => {
+                // Finish Reaper Turn & Pass to Player
+                this.setState({
+                    grid: finalGrid,
+                    playerHP: currentPlayerHP,
+                    reaperHP: currentReaperHP,
+                    reaperHand: finalHand,
+                    reaperSpirit: finalSpirit,
+                    reaperDiscard,
+                    playerDiscard,
+                    isAiThinking: false
+                }, () => {
+                    setTimeout(() => {
+                        this.startPlayerTurn();
+                    }, 600);
+                });
+            }
+        );
+    }
+
+    // Sequentially plays Reaper cards with flight and 3D flip animation
+    playReaperCardsSequentially = (grid, spirit, hand, discard, onComplete) => {
+        const getValidNodes = (g) => {
+            const nodes = [];
+            [0, 1].forEach(r => {
+                for (let c = 0; c < 5; c++) {
+                    if (!g[`${r}_${c}`]) nodes.push({ r, c });
+                }
+            });
+            return nodes;
+        };
+
+        const validSpawns = getValidNodes(grid);
+        const playableIndex = hand.findIndex(c => c.cost <= spirit);
+
+        if (playableIndex === -1 || validSpawns.length === 0) {
+            onComplete(grid, spirit, hand);
+            return;
+        }
+
+        const card = hand[playableIndex];
+        const spawnNode = validSpawns[Math.floor(Math.random() * validSpawns.length)];
+        const targetNodeKey = `${spawnNode.r}_${spawnNode.c}`;
+
+        // Phase 1: Flying animation (Card back glides from hand to board node)
+        this.setState({
+            reaperPlayAnim: {
+                card,
+                nodeKey: targetNodeKey,
+                phase: 'flying'
+            }
         });
 
         setTimeout(() => {
-            this.setState({ attackFlash: false, phase: 'reaper' }, () => {
-                this.reaperTurn(finalATK);
+            // Phase 2: Flipping animation (3D Card flip reveals card face and stats)
+            this.setState({
+                reaperPlayAnim: {
+                    card,
+                    nodeKey: targetNodeKey,
+                    phase: 'flipping'
+                }
             });
-        }, totalATK > 0 ? 750 : 50);
-    }
 
-    // ─── Play a card from hand ────────────────────────────────────────────────
-    playCard = (card) => {
-        if (this.state.phase !== 'play' || this.state.gameOver) return;
-
-        const { playerEnergy, fieldChampions, fallenChampions,
-                playerSoul, playerMaxSoul, reaperSoul, reaperMaxSoul,
-                engineerDiscountUsed, playerDeck, playerDiscard, playerHand,
-                hasDeathMark, hasSoulTithe, hasMendBonus } = this.state;
-
-        // Engineer passive: first arcane/echo card each turn costs 0
-        const isEngineerFirst = !engineerDiscountUsed &&
-            fieldChampions.some(c => c.memberType === 'engineer') &&
-            (card.type === 'arcane' || card.type === 'echo');
-        const effectiveCost = isEngineerFirst ? 0 : card.energyCost;
-
-        if (playerEnergy < effectiveCost) return;
-
-        const eff = card.effect || {};
-        if (eff.type === 'summon_player_unit') {
-            const limit = 3;
-            const pf = this.state.playerField || [];
-            if (pf.length >= limit) {
-                this.setState({ message: `${card.name}: Cannot summon — your army is at full capacity (${limit} units).` });
-                return;
-            }
-        }
-
-        // Soul Tithe: playing an echo restores 1 Soul
-        let newSoul = playerSoul;
-        if (card.type === 'echo' && hasSoulTithe) {
-            newSoul = Math.min(playerMaxSoul, newSoul + 1);
-        }
-
-        const newHand    = playerHand.filter(c => c.id !== card.id);
-        let newEnergy    = playerEnergy - effectiveCost;
-        let newReaperSoul = reaperSoul;
-        let reaperStun   = this.state.reaperStunTurns;
-        let reaperSkip   = this.state.reaperSkipNextCard;
-        let reaperEPenalty = this.state.reaperEnergyPenaltyNextTurn;
-        let newDeck      = playerDeck.slice();
-        let newHand2     = newHand.slice();
-        let newDiscard   = playerDiscard.slice();
-        let shakeReaper  = false;
-        let newDodgeTurns  = this.state.playerDodgeTurns;
-        let newBoneArmor   = this.state.playerBoneArmor;
-        let newVoidTrap    = this.state.hasVoidTrap;
-        let newHexWard     = this.state.hasHexWard;
-        let newDeathMark   = hasDeathMark;
-        let newFieldAmplify = this.state.fieldAmplifyThisTurn;
-        let newWarDrumsTurns = this.state.warDrumsTurns;
-        let newWarDrumsBonus = this.state.warDrumsBonus;
-        let newPersistBlockAmt = this.state.persistentBlockAmount;
-        let newPersistBlockTurns = this.state.persistentBlockTurns;
-        let newActiveBurns = this.state.activeBurns.slice();
-        let newReaperThreats = this.state.reaperThreats.slice();
-        let newEngineerDiscount = engineerDiscountUsed || isEngineerFirst;
-        let logMsg = `You play ${card.name}.`;
-
-        // Wizard passive: +1 to arcane damage cards
-        const wizardBonus = fieldChampions.some(c => c.memberType === 'wizard') ? 1 : 0;
-
-        // Apply death mark to a damage amount (consumes it)
-        const withDeathMark = (dmg) => {
-            if (newDeathMark) { newDeathMark = false; return dmg * 2; }
-            return dmg;
-        };
-
-        switch (eff.type) {
-            case 'summon_player_unit': {
-                const limit = 3;
-                const pf = this.state.playerField || [];
-                if (pf.length >= limit) {
-                    logMsg = `${card.name}: cannot summon — your army is at full capacity (${limit} units).`;
-                } else {
-                    const template = eff.unit || { name: 'Recruit', atk: 1, hp: 4 };
-                    const newUnit = {
-                        id: `player_unit_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
-                        name: template.name,
-                        atk: template.atk,
-                        hp: template.hp,
-                        maxHp: template.hp,
-                        art: template.art || 'recruit'
-                    };
-                    this.setState(prev => ({ playerField: [...(prev.playerField || []), newUnit] }));
-                    logMsg = `${card.name}: summoned a ${newUnit.name} (${newUnit.atk} ATK, ${newUnit.hp} HP) to your army.`;
-                }
-                break;
-            }
-            case 'damage': {
-                const dmg = withDeathMark((eff.amount || 0) + wizardBonus);
-                newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                shakeReaper = true;
-                logMsg = `${card.name} deals ${dmg} damage to the Reaper!`;
-                break;
-            }
-            case 'piercing_damage': {
-                const dmg = withDeathMark((eff.amount || 0) + wizardBonus);
-                newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                shakeReaper = true;
-                logMsg = `${card.name} pierces through — ${dmg} damage (ignores defenses)!`;
-                break;
-            }
-            case 'chain_damage': {
-                const hits = eff.hits || [3, 2, 1];
-                const rawTotal = hits.reduce((s, h) => s + h, 0) + wizardBonus;
-                const dmg = withDeathMark(rawTotal);
-                newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                shakeReaper = true;
-                logMsg = `${card.name} chains for ${hits.join(' + ')} = ${dmg} total damage!`;
-                break;
-            }
-            case 'field_damage': {
-                const champs = fieldChampions.length;
-                if (champs === 0) {
-                    logMsg = `${card.name} — no champions on field. No effect.`;
-                } else {
-                    const dmg = withDeathMark(champs * (eff.amountPerChampion || 3) + wizardBonus);
-                    newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                    shakeReaper = true;
-                    logMsg = `${card.name}: ${champs} × ${eff.amountPerChampion} = ${dmg} damage!`;
-                }
-                break;
-            }
-            case 'burn': {
-                const initialDmg = withDeathMark((eff.damage || 2) + wizardBonus);
-                newReaperSoul = Math.max(0, newReaperSoul - initialDmg);
-                newActiveBurns = [...newActiveBurns, { dmgPerTurn: eff.dmgPerTurn || 2, turnsLeft: eff.turns || 2 }];
-                shakeReaper = true;
-                logMsg = `${card.name}: ${initialDmg} damage now + ${eff.dmgPerTurn || 2}/turn for ${eff.turns || 2} turns!`;
-                break;
-            }
-            case 'blood_pact': {
-                newSoul = Math.max(1, newSoul - (eff.soulCost || 3));
-                const dmg = withDeathMark((eff.damage || 7) + wizardBonus);
-                newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                shakeReaper = true;
-                logMsg = `${card.name}: sacrifice ${eff.soulCost || 3} Soul — deal ${dmg} damage!`;
-                break;
-            }
-            case 'lifesteal': {
-                const dmg = withDeathMark((eff.damage || 4) + wizardBonus);
-                newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                newSoul = Math.min(playerMaxSoul, newSoul + (eff.heal || 2));
-                shakeReaper = true;
-                logMsg = `${card.name}: drain ${dmg} from Reaper, restore ${eff.heal || 2} Soul.`;
-                break;
-            }
-            case 'last_rites': {
-                const fallen = fallenChampions.length;
-                if (fallen === 0) {
-                    logMsg = `${card.name} — no fallen champions. No damage.`;
-                } else {
-                    const dmg = withDeathMark(fallen * (eff.dmgPerFallen || 3) + wizardBonus);
-                    newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                    shakeReaper = true;
-                    logMsg = `${card.name}: ${fallen} fallen × ${eff.dmgPerFallen || 3} = ${dmg} damage!`;
-                }
-                break;
-            }
-            case 'heal': {
-                const healAmt = (eff.amount || 3) + (hasMendBonus ? 2 : 0);
-                newSoul = Math.min(playerMaxSoul, newSoul + healAmt);
-                logMsg = `${card.name} restores ${healAmt} Soul.`;
-                break;
-            }
-            case 'rallying_cry': {
-                const champs = fieldChampions.length;
-                const healAmt = champs * (eff.healPerChampion || 2);
-                newSoul = Math.min(playerMaxSoul, newSoul + healAmt);
-                logMsg = healAmt > 0
-                    ? `${card.name}: ${champs} champions → +${healAmt} Soul!`
-                    : `${card.name}: no champions on field — no healing.`;
-                break;
-            }
-            case 'field_amplify': {
-                newFieldAmplify += (eff.atkBonus || 2);
-                logMsg = `${card.name}: champions deal +${eff.atkBonus || 2} ATK this turn!`;
-                break;
-            }
-            case 'war_drums': {
-                newWarDrumsTurns = eff.turns || 3;
-                newWarDrumsBonus = eff.atkBonus || 1;
-                logMsg = `${card.name}: +${eff.atkBonus || 1} ATK to all field champions for ${eff.turns || 3} turns!`;
-                break;
-            }
-            case 'block_damage':
-            case 'dodge_all':
-            case 'phase_shift': {
-                newDodgeTurns = Math.max(newDodgeTurns, eff.turns || 1);
-                logMsg = `${card.name}: dodge all Reaper damage for ${eff.turns || 1} turn(s).`;
-                break;
-            }
-            case 'bone_armor': {
-                newBoneArmor += (eff.block || 5);
-                logMsg = `${card.name}: +${eff.block || 5} bone armor (absorbs incoming damage).`;
-                break;
-            }
-            case 'champion_armor': {
-                newPersistBlockAmt   = eff.armor || 2;
-                newPersistBlockTurns = eff.turns || 2;
-                logMsg = `${card.name}: block ${eff.armor || 2} from each Reaper attack for ${eff.turns || 2} turns.`;
-                break;
-            }
-            case 'void_trap': {
-                newVoidTrap = true;
-                logMsg = `${card.name}: void trap set — next Reaper attack is reflected 50%!`;
-                break;
-            }
-            case 'hex_ward': {
-                newHexWard       = true;
-                newReaperThreats = [];
-                logMsg = `${card.name}: all Reaper threats banished! Next debuff nullified.`;
-                break;
-            }
-            case 'death_mark': {
-                newDeathMark = true;
-                logMsg = `${card.name}: DEATH MARK set — your next damage source deals double!`;
-                break;
-            }
-            case 'mana_surge': {
-                newEnergy = Math.min(newEnergy + (eff.bonus || 2), 12);
-                logMsg = `${card.name}: arcane surge! +${eff.bonus || 2} Energy this turn.`;
-                break;
-            }
-            case 'sprint': {
-                newEnergy = Math.min(newEnergy + (eff.energyRefund || 1), 12);
-                if (newDeck.length === 0 && newDiscard.length > 0) {
-                    newDeck    = shuffle(newDiscard.filter(c => c.id !== card.id));
-                    newDiscard = [];
-                }
-                if (newDeck.length > 0) newHand2 = [...newHand2, newDeck.splice(0, 1)[0]];
-                logMsg = `${card.name}: +${eff.energyRefund || 1} Energy, draw 1 card.`;
-                break;
-            }
-            case 'temporal_rift': {
-                const reshuffled = shuffle(newDiscard);
-                newDeck    = shuffle([...newDeck, ...reshuffled]);
-                newDiscard = [];
-                const drawCount = eff.draw || 2;
-                for (let i = 0; i < drawCount; i++) {
-                    if (newDeck.length > 0) newHand2 = [...newHand2, newDeck.splice(0, 1)[0]];
-                }
-                logMsg = `${card.name}: draw ${drawCount}, discard shuffled back into deck.`;
-                break;
-            }
-            case 'weaken_reaper': {
-                if (newHexWard) {
-                    newHexWard = false;
-                    logMsg = `${card.name} — Hex Ward deflects!`;
-                } else {
-                    reaperEPenalty += (eff.energyLoss || 1);
-                    logMsg = `${card.name}: Reaper loses ${eff.energyLoss || 1} Energy next turn.`;
-                }
-                break;
-            }
-            case 'stun_reaper': {
-                reaperStun += (eff.turns || 1);
-                logMsg = `${card.name} stuns the Reaper for ${eff.turns || 1} turn(s)!`;
-                break;
-            }
-            case 'discard_reaper_card': {
-                reaperSkip = true;
-                logMsg = `${card.name}: Reaper's next card is discarded!`;
-                break;
-            }
-            case 'damage_and_shield': {
-                const dmg = withDeathMark((eff.damage || 4) + wizardBonus);
-                newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                shakeReaper = true;
-                // Shield reduces Reaper's next attack
-                this.setState(prev => ({ reaperShieldNextAtk: Math.max(prev.reaperShieldNextAtk, eff.shield || 2) }));
-                logMsg = `${card.name}: ${dmg} damage, Reaper's next attack -${eff.shield || 2}.`;
-                break;
-            }
-            case 'banish_unit': {
-                const rf = this.state.reaperField.slice();
-                if (rf.length === 0) {
-                    const dmg = withDeathMark(4 + wizardBonus);
-                    newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                    shakeReaper = true;
-                    logMsg = `${card.name}: no field units — deal ${dmg} damage to the Reaper instead!`;
-                } else {
-                    // Remove weakest HP unit
-                    const weakest = rf.reduce((w, u) => u.hp < w.hp ? u : w, rf[0]);
-                    const newField = rf.filter(u => u.id !== weakest.id);
-                    this.setState({ reaperField: newField });
-                    logMsg = `${card.name}: ${weakest.name} is banished!`;
-                }
-                break;
-            }
-            case 'smite_unit': {
-                const rf = this.state.reaperField.slice();
-                if (rf.length === 0) {
-                    const dmg = withDeathMark(2 + wizardBonus);
-                    newReaperSoul = Math.max(0, newReaperSoul - dmg);
-                    shakeReaper = true;
-                    logMsg = `${card.name}: no field units — deal ${dmg} damage to the Reaper.`;
-                } else {
-                    // Damage highest ATK unit
-                    const target = rf.reduce((s, u) => u.atk > s.atk ? u : s, rf[0]);
-                    const smiteDmg = eff.damage || 4;
-                    const newHp = target.hp - smiteDmg;
-                    let newField;
-                    if (newHp <= 0) {
-                        newField = rf.filter(u => u.id !== target.id);
-                        logMsg = `${card.name}: ${target.name} takes ${smiteDmg} damage and is destroyed!`;
-                    } else {
-                        newField = rf.map(u => u.id === target.id ? { ...u, hp: newHp } : u);
-                        logMsg = `${card.name}: ${target.name} takes ${smiteDmg} damage (${newHp}/${target.maxHp} HP left).`;
-                    }
-                    this.setState({ reaperField: newField });
-                }
-                break;
-            }
-            case 'nova_clear': {
-                const rf = this.state.reaperField.slice();
-                const novaDmg = eff.unitDamage || 3;
-                const newField = rf.reduce((survivors, u) => {
-                    const remaining = u.hp - novaDmg;
-                    if (remaining > 0) survivors.push({ ...u, hp: remaining });
-                    else logMsg += ` ${u.name} destroyed!`;
-                    return survivors;
-                }, []);
-                this.setState({ reaperField: newField });
-                const reaperHit = withDeathMark((eff.reaperDamage || 2) + wizardBonus);
-                newReaperSoul = Math.max(0, newReaperSoul - reaperHit);
-                shakeReaper = true;
-                logMsg = `${card.name}: ${novaDmg} to all field units + ${reaperHit} to Reaper!`;
-                break;
-            }
-            case 'riddle': {
-                // Open riddle modal — resolve on answer
-                this.setState({
-                    playerHand: newHand2,
-                    playerEnergy: newEnergy,
-                    playerDiscard: [...newDiscard, card],
-                    playerDeck: newDeck,
-                    playerSoul: newSoul,
-                    reaperSoul: newReaperSoul,
-                    reaperStunTurns: reaperStun,
-                    reaperSkipNextCard: reaperSkip,
-                    reaperEnergyPenaltyNextTurn: reaperEPenalty,
-                    hasVoidTrap: newVoidTrap,
-                    hasHexWard: newHexWard,
-                    hasDeathMark: newDeathMark,
-                    playerDodgeTurns: newDodgeTurns,
-                    playerBoneArmor: newBoneArmor,
-                    fieldAmplifyThisTurn: newFieldAmplify,
-                    warDrumsTurns: newWarDrumsTurns,
-                    warDrumsBonus: newWarDrumsBonus,
-                    persistentBlockAmount: newPersistBlockAmt,
-                    persistentBlockTurns: newPersistBlockTurns,
-                    activeBurns: newActiveBurns,
-                    reaperThreats: newReaperThreats,
-                    engineerDiscountUsed: newEngineerDiscount,
-                    riddleActive: { riddle: pickRiddle(), card },
-                });
-                this.addLog(`${card.name} — a riddle appears...`);
-                return;
-            }
-            default:
-                logMsg = `${card.name} is played.`;
-        }
-
-        newDiscard = [...newDiscard, card];
-
-        this.setState({
-            playerHand: newHand2,
-            playerEnergy: newEnergy,
-            playerDiscard: newDiscard,
-            playerDeck: newDeck,
-            playerSoul: newSoul,
-            reaperSoul: newReaperSoul,
-            reaperStunTurns: reaperStun,
-            reaperSkipNextCard: reaperSkip,
-            reaperEnergyPenaltyNextTurn: reaperEPenalty,
-            hasVoidTrap: newVoidTrap,
-            hasHexWard: newHexWard,
-            hasDeathMark: newDeathMark,
-            playerDodgeTurns: newDodgeTurns,
-            playerBoneArmor: newBoneArmor,
-            fieldAmplifyThisTurn: newFieldAmplify,
-            warDrumsTurns: newWarDrumsTurns,
-            warDrumsBonus: newWarDrumsBonus,
-            persistentBlockAmount: newPersistBlockAmt,
-            persistentBlockTurns: newPersistBlockTurns,
-            activeBurns: newActiveBurns,
-            reaperThreats: newReaperThreats,
-            engineerDiscountUsed: newEngineerDiscount,
-            shakeReaper,
-        }, () => {
-            if (shakeReaper) setTimeout(() => this.setState({ shakeReaper: false }), 400);
-            this.addLog(logMsg);
-            this.checkVictory();
-        });
-    }
-
-    // ─── Sphinx riddle resolution ─────────────────────────────────────────────
-    resolveRiddle = (choiceIdx) => {
-        const { riddleActive } = this.state;
-        if (!riddleActive) return;
-        const { riddle, card } = riddleActive;
-        const correct = choiceIdx === riddle.answer;
-        let dmg = correct ? (card.effect.successDamage || 8) : (card.effect.failDamage || 2);
-        if (this.state.fieldChampions.some(c => c.memberType === 'wizard')) dmg += 1;
-        if (this.state.hasDeathMark) { dmg *= 2; }
-
-        const newReaperSoul = Math.max(0, this.state.reaperSoul - dmg);
-        const msg = correct
-            ? `✅ Correct! The Sphinx Riddle deals ${dmg} damage!`
-            : `❌ Wrong! The Sphinx Riddle deals only ${dmg} damage.`;
-
-        this.setState({
-            riddleActive: null,
-            reaperSoul: newReaperSoul,
-            shakeReaper: true,
-            hasDeathMark: false,
-        }, () => {
-            setTimeout(() => this.setState({ shakeReaper: false }), 400);
-            this.addLog(msg);
-            this.checkVictory();
-        });
-    }
-
-    // ─── Reaper AI turn ───────────────────────────────────────────────────────
-    reaperTurn = async (pendingPlayerATK) => {
-        this.setState({ isAiThinking: true, reaperLastPlayedCard: null });
-
-        let reaperSoul = this.state.reaperSoul;
-        const reaperShieldAtStart = this.state.reaperShieldNextAtk;
-
-        // Apply player field ATK
-        if (pendingPlayerATK > 0) {
-            const blocked   = Math.min(reaperShieldAtStart, pendingPlayerATK);
-            const actualDmg = pendingPlayerATK - blocked;
-            reaperSoul = Math.max(0, reaperSoul - actualDmg);
-            if (actualDmg > 0) this.addLog(`💥 Your champions deal ${actualDmg} damage! (Reaper: ${reaperSoul} Soul)`);
-            if (blocked > 0)   this.addLog(`🛡️ Reaper's Death Shroud absorbs ${blocked} damage.`);
-        }
-
-        await new Promise(r => setTimeout(r, 650));
-        this.setState({ reaperSoul, reaperShieldNextAtk: 0 });
-
-        if (reaperSoul <= 0) {
-            this.setState({ isAiThinking: false });
-            this.checkVictory();
-            return;
-        }
-
-        if (this.state.reaperStunTurns > 0) {
-            this.addLog('❄️ The Reaper is stunned — they skip their turn!');
-            await new Promise(r => setTimeout(r, 600));
-            this.setState(prev => ({ reaperStunTurns: Math.max(0, prev.reaperStunTurns - 1), isAiThinking: false }));
-            this.beginNextTurn();
-            return;
-        }
-
-        // Draw Reaper cards
-        let reaperHand    = this.state.reaperHand.slice();
-        let reaperDeck    = this.state.reaperDeck.slice();
-        let reaperDiscard = this.state.reaperDiscard.slice();
-
-        for (let i = 0; i < 2; i++) {
-            if (reaperDeck.length === 0 && reaperDiscard.length > 0) {
-                reaperDeck    = shuffle(reaperDiscard);
-                reaperDiscard = [];
-            }
-            if (reaperDeck.length > 0) reaperHand.push(reaperDeck.splice(0, 1)[0]);
-        }
-
-        const baseEnergy = Math.max(0, 3 - this.state.reaperEnergyPenaltyNextTurn);
-        let reaperEnergy = baseEnergy;
-        this.setState({ reaperHand, reaperDeck, reaperDiscard, reaperEnergy, reaperEnergyPenaltyNextTurn: 0 });
-        await new Promise(r => setTimeout(r, 500));
-
-        // Phase-based card priority
-        const phase      = this.getReaperPhase();
-        const fieldCount = this.state.fieldChampions.length;
-
-        const cardPriority = (card) => {
-            const t = card.effect?.type;
-            if (phase === 'aggressive') return (t === 'damage' || t === 'scythe_strike') ? 0 : (t === 'summon_unit' ? 1 : 2);
-            if (phase === 'tactical') {
-                if (t === 'scythe_strike' && fieldCount > 0) return 0;
-                if (t === 'summon_unit') return 0;  // prioritise field presence
-                if (t === 'rally_undead' && this.state.reaperField.length > 0) return 0;
-                if (t === 'spectral_surge' || t === 'dark_ritual') return 1;
-                if (t === 'drain_energy' || t === 'reaper_threat') return 1;
-                return 2;
-            }
-            if (phase === 'desperate') {
-                if (t === 'heal' || t === 'gravedigger') return 0;
-                if (t === 'damage') return 1;
-                if (t === 'summon_unit') return 1;
-                return 2;
-            }
-            // enrage: play everything
-            return 0;
-        };
-
-        const sortedHand = [...reaperHand].sort((a, b) => cardPriority(a) - cardPriority(b));
-
-        // Local tracking vars (resolved at end)
-        let playerSoul          = this.state.playerSoul;
-        let playerBoneArmor     = this.state.playerBoneArmor;
-        let hasVoidTrap         = this.state.hasVoidTrap;
-        let hasHexWard          = this.state.hasHexWard;
-        let skipNextCard         = this.state.reaperSkipNextCard;
-        let reaperBonusDmg       = this.state.reaperBonusDmg;
-        let reaperSpectralSurge  = this.state.reaperSpectralSurge;
-        let persistBlockTurns    = this.state.persistentBlockTurns;
-        let persistBlockAmt      = this.state.persistentBlockAmount;
-        let fieldChampions       = this.state.fieldChampions.slice();
-        let championHP           = { ...this.state.championHP };
-        let fallenChampions      = [...this.state.fallenChampions];
-        let reaperThreats        = this.state.reaperThreats.slice();
-        let playerEPenalty       = this.state.playerEnergyPenaltyNextTurn;
-        let reaperShieldNextAtk  = 0;
-        let reaperField          = this.state.reaperField.slice();
-        let playerField          = (this.state.playerField || []).slice();
-        let reaperFieldRallyBonus = 0;  // resets each reaper turn
-        let shookPlayer          = false;
-        let enrageBonus          = phase === 'enrage' ? 2 : 0;
-
-        // Helper: apply player defenses to raw damage, returns { final, reflected, dodged }
-        const resolvePlayerDamage = (rawDmg) => {
-            // Full dodge
-            if (this.state.playerDodgeTurns > 0) return { final: 0, reflected: 0, dodged: true };
-
-            // Ranger passive dodge or KeenEye global
-            const hasRanger = fieldChampions.some(c => c.memberType === 'ranger');
-            if ((hasRanger || this.state.hasKeenEye) && Math.random() < 0.1) {
-                return { final: 0, reflected: 0, dodged: true };
-            }
-
-            let dmg = rawDmg;
-            let reflected = 0;
-
-            // Void trap: reflect 50%, take 50%
-            if (hasVoidTrap) {
-                reflected = Math.floor(dmg * 0.5);
-                dmg       = Math.ceil(dmg * 0.5);
-                hasVoidTrap = false;
-            }
-
-            // Soldier passive: -1 per attack
-            if (fieldChampions.some(c => c.memberType === 'soldier')) {
-                dmg = Math.max(0, dmg - 1);
-            }
-
-            // Persistent block (Iron Skin)
-            if (persistBlockTurns > 0) dmg = Math.max(0, dmg - persistBlockAmt);
-
-            // Bone armor
-            if (playerBoneArmor > 0) {
-                const absorbed = Math.min(playerBoneArmor, dmg);
-                dmg -= absorbed;
-                playerBoneArmor -= absorbed;
-            }
-
-            return { final: dmg, reflected, dodged: false };
-        };
-
-        // ── Play Reaper cards ────────────────────────────────────────────────
-        for (const card of sortedHand) {
-            if (reaperEnergy < (card.energyCost || 1)) continue;
-
-            if (skipNextCard) {
-                skipNextCard = false;
-                this.addLog(`🚫 ${card.name} is intercepted — discarded before play!`);
-                reaperDiscard.push(card);
-                reaperHand = reaperHand.filter(c => c.id !== card.id);
-                continue;
-            }
-
-            reaperEnergy -= (card.energyCost || 1);
-            reaperHand    = reaperHand.filter(c => c.id !== card.id);
-            reaperDiscard.push(card);
-
-            this.setState({ reaperLastPlayedCard: card });
-            this.addLog(`💀 Reaper plays ${card.name}…`);
-            await new Promise(r => setTimeout(r, 750));
-
-            const eff = card.effect || {};
-
-            switch (eff.type) {
-                case 'damage': {
-                    let rawDmg = (eff.amount || 0) + reaperBonusDmg + enrageBonus;
-                    if (reaperSpectralSurge) {
-                        rawDmg *= 2;
-                        reaperSpectralSurge = false;
-                        this.addLog('⚡ Spectral Surge doubles the damage!');
-                    }
-                    const res = resolvePlayerDamage(rawDmg);
-                    playerSoul = Math.max(0, playerSoul - res.final);
-                    if (res.reflected > 0) {
-                        reaperSoul = Math.max(0, reaperSoul - res.reflected);
-                        this.addLog(`🔮 Void Trap reflects ${res.reflected} back at the Reaper!`);
-                    }
-                    if (res.dodged) { this.addLog(`💨 ${card.name} — you dodge!`); }
-                    else if (res.final > 0) { shookPlayer = true; this.addLog(`💀 Reaper deals ${res.final} damage! Soul: ${playerSoul}`); }
-                    break;
-                }
-                case 'scythe_strike': {
-                    let rawDmg = (eff.damage || 3) + reaperBonusDmg + enrageBonus;
-                    const res  = resolvePlayerDamage(rawDmg);
-                    playerSoul = Math.max(0, playerSoul - res.final);
-                    if (res.final > 0) shookPlayer = true;
-
-                    if (fieldChampions.length > 0) {
-                        const weakest = fieldChampions.reduce((w, c) =>
-                            (championHP[c.id] || 0) <= (championHP[w.id] || 0) ? c : w
-                        , fieldChampions[0]);
-                        fieldChampions  = fieldChampions.filter(c => c.id !== weakest.id);
-                        fallenChampions = [...fallenChampions, weakest.id];
-                        delete championHP[weakest.id];
-                        this.addLog(`☠️ Scythe Strike! ${weakest.name} is cut down! (+${res.final} dmg to you)`);
-                    } else {
-                        if (res.dodged)      this.addLog(`💨 Scythe Strike — you dodge!`);
-                        else if (res.final > 0) this.addLog(`☠️ Scythe Strike deals ${res.final} damage!`);
-                    }
-                    break;
-                }
-                case 'dark_ritual': {
-                    reaperBonusDmg += (eff.atkBonus || 1);
-                    this.addLog(`🩸 Dark Ritual! Reaper gains +${eff.atkBonus || 1} permanent ATK (total: +${reaperBonusDmg})`);
-                    break;
-                }
-                case 'gravedigger': {
-                    const fallen  = fallenChampions.length;
-                    const healAmt = fallen * (eff.healPerFallen || 3);
-                    if (fallen > 0) {
-                        reaperSoul = Math.min(this.state.reaperMaxSoul, reaperSoul + healAmt);
-                        this.addLog(`🪦 Gravedigger! Reaper feasts on ${fallen} fallen champions. +${healAmt} Soul (now ${reaperSoul})`);
-                    } else {
-                        this.addLog(`🪦 Gravedigger: no fallen champions — ritual fails.`);
-                    }
-                    break;
-                }
-                case 'spectral_surge': {
-                    reaperSpectralSurge = true;
-                    this.addLog(`⚡ Spectral Surge: the Reaper's next damage card will be doubled…`);
-                    break;
-                }
-                case 'reaper_threat': {
-                    reaperThreats = [...reaperThreats, {
-                        id:       `threat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-                        name:     eff.name || 'Reaper Threat',
-                        damage:   eff.damage || 4,
-                        turnsLeft: 2,
-                    }];
-                    this.addLog(`☠️ ${eff.name || 'Corpse Wall'} rises! Deals ${eff.damage} damage at start of your next turn!`);
-                    break;
-                }
-                case 'shield': {
-                    reaperShieldNextAtk += (eff.amount || 3);
-                    this.addLog(`🛡️ Reaper raises a Death Shroud — blocks ${eff.amount || 3} from your next attack.`);
-                    break;
-                }
-                case 'drain_energy': {
-                    if (hasHexWard) {
-                        hasHexWard = false;
-                        this.addLog(`🔯 Hex Ward deflects the energy drain!`);
-                    } else {
-                        playerEPenalty += (eff.amount || 1);
-                        this.addLog(`🌑 Wither! You lose ${eff.amount || 1} Energy next turn.`);
-                    }
-                    break;
-                }
-                case 'damage_per_discard': {
-                    const discardCount = reaperDiscard.length - 1;
-                    let rawDmg = discardCount * (eff.amountPerCard || 2) + reaperBonusDmg + enrageBonus;
-                    if (rawDmg <= 0) break;
-                    if (reaperSpectralSurge) { rawDmg *= 2; reaperSpectralSurge = false; }
-                    const res  = resolvePlayerDamage(rawDmg);
-                    playerSoul = Math.max(0, playerSoul - res.final);
-                    if (res.dodged)       this.addLog(`💨 Spectral Army — you dodge!`);
-                    else if (res.final > 0) { shookPlayer = true; this.addLog(`👻 Spectral Army deals ${res.final} damage!`); }
-                    break;
-                }
-                case 'heal': {
-                    const healAmt = eff.amount || 5;
-                    reaperSoul = Math.min(this.state.reaperMaxSoul, reaperSoul + healAmt);
-                    this.addLog(`💀 Reaper harvests souls — +${healAmt} Soul (now ${reaperSoul}).`);
-                    break;
-                }
-                case 'skip_player_card': {
-                    if (hasHexWard) {
-                        hasHexWard = false;
-                        this.addLog(`🔯 Hex Ward deflects the Curse of Binding!`);
-                    } else {
-                        playerEPenalty += 1;
-                        this.addLog(`🔗 Curse of Binding! You lose 1 Energy next turn.`);
-                    }
-                    break;
-                }
-                case 'rally_undead': {
-                    if (reaperField.length > 0) {
-                        reaperFieldRallyBonus = eff.atkBonus || 2;
-                        this.addLog(`💀 Rally Undead! All Reaper field units gain +${reaperFieldRallyBonus} ATK this turn.`);
-                    } else {
-                        this.addLog(`💀 Rally Undead — no field units to rally.`);
-                    }
-                    break;
-                }
-                case 'summon_unit': {
-                    const unit = eff.unit || {};
-                    if (reaperField.length < 3) {
-                        const newUnit = {
-                            id: `rfield_${Date.now()}_${Math.random().toString(36).substr(2,4)}`,
-                            name: unit.name || 'Undead',
-                            atk:  unit.atk  || 2,
-                            hp:   unit.maxHp || 6,
-                            maxHp: unit.maxHp || 6,
-                            art:  unit.art  || 'skeleton',
-                        };
-                        reaperField.push(newUnit);
-                        this.addLog(`💀 ${newUnit.name} rises on the Reaper's field! (${newUnit.atk} ATK · ${newUnit.hp} HP)`);
-                    } else {
-                        this.addLog(`💀 Reaper's field is full — ${eff.unit?.name || 'unit'} cannot be summoned.`);
-                    }
-                    break;
-                }
-                default: break;
-            }
-        }
-
-        // Shake player if they took damage
-        if (shookPlayer) {
-            this.setState({ shakePlayer: true });
-            setTimeout(() => this.setState({ shakePlayer: false }), 400);
-        }
-
-        // ── Field unit attacks ───────────────────────────────────────────────
-        // Each Reaper field unit attacks the player's army (if any) or player soul
-        for (const unit of reaperField) {
-            const unitAtk = unit.atk + reaperFieldRallyBonus + enrageBonus;
-            if (playerField.length > 0) {
-                const targetUnit = playerField[0];
-                const finalDmg = Math.max(0, unitAtk - (playerBoneArmor > 0 ? 1 : 0));
-                if (playerBoneArmor > 0) {
-                    playerBoneArmor = Math.max(0, playerBoneArmor - 1);
-                }
-                const newHp = targetUnit.hp - finalDmg;
-                if (newHp <= 0) {
-                    playerField = playerField.filter(u => u.id !== targetUnit.id);
-                    this.addLog(`⚔️ ${unit.name} attacks and destroys your ${targetUnit.name}!`);
-                } else {
-                    playerField = playerField.map(u => u.id === targetUnit.id ? { ...u, hp: newHp } : u);
-                    this.addLog(`⚔️ ${unit.name} attacks your ${targetUnit.name} for ${finalDmg} damage! (${newHp}/${targetUnit.maxHp} HP remaining)`);
-                }
-            } else {
-                const res = resolvePlayerDamage(unitAtk);
-                playerSoul = Math.max(0, playerSoul - res.final);
-                if (res.reflected > 0) {
-                    reaperSoul = Math.max(0, reaperSoul - res.reflected);
-                    this.addLog(`🔮 Void Trap reflects ${res.reflected} back at the Reaper!`);
-                }
-                if (res.dodged) {
-                    this.addLog(`💨 ${unit.name} attacks — you dodge!`);
-                } else if (res.final > 0) {
-                    shookPlayer = true;
-                    this.addLog(`⚔️ ${unit.name} strikes for ${res.final} damage! (Soul: ${playerSoul})`);
-                }
-            }
-        }
-
-        if (shookPlayer) {
-            this.setState({ shakePlayer: true });
-            setTimeout(() => this.setState({ shakePlayer: false }), 400);
-        }
-
-        this.setState({
-            playerSoul,
-            playerBoneArmor,
-            hasVoidTrap,
-            hasHexWard,
-            reaperSoul,
-            reaperHand: [],
-            reaperDeck,
-            reaperDiscard,
-            reaperEnergy,
-            reaperSkipNextCard: skipNextCard,
-            reaperBonusDmg,
-            reaperSpectralSurge,
-            persistentBlockTurns: persistBlockTurns,
-            fieldChampions,
-            championHP,
-            fallenChampions,
-            reaperThreats,
-            reaperField,
-            playerField,
-            reaperFieldRallyBonus: 0,
-            playerEnergyPenaltyNextTurn: playerEPenalty,
-            reaperShieldNextAtk,
-            isAiThinking: false,
-        }, () => {
-            // Iron Will passive
-            if (this.state.playerSoul <= 0 && this.state.hasIronWill && !this.state.ironWillUsed) {
-                this.setState({ playerSoul: 1, ironWillUsed: true });
-                this.addLog('💪 Iron Will activates! You survive at 1 Soul!');
-            }
-            this.checkVictory();
-            if (this.state.gameOver !== 'defeat') {
-                this.beginNextTurn();
-            }
-        });
-    }
-
-    // ─── Advance to next turn ─────────────────────────────────────────────────
-    beginNextTurn = () => {
-        this.setState(prev => ({
-            turnNumber: prev.turnNumber + 1,
-        }), () => {
-            // Revive global skill: restore one fallen champion to reserve
-            if (this.state.hasRevive && !this.state.reviveUsed && this.state.fallenChampions.length > 0) {
-                const reviveId = this.state.fallenChampions[0];
-                const revived  = this.state.reserveZone.find(c => c.id === reviveId);
-                this.setState(prev => ({
-                    fallenChampions: prev.fallenChampions.filter(id => id !== reviveId),
-                    reviveUsed: true,
-                }));
-                if (revived) this.addLog(`✨ Revive! ${revived.name} returns to the reserve.`);
-            }
-            this.beginTurn();
-        });
-    }
-
-    // ─── Victory check ────────────────────────────────────────────────────────
-    checkVictory = () => {
-        if (this.state.reaperSoul <= 0 && !this.state.gameOver) {
-            this.setState({ gameOver: 'victory' });
-            this.addLog('✨ The Reaper crumbles! Your crew stands victorious!');
-        } else if (this.state.playerSoul <= 0 && !this.state.gameOver) {
-            this.setState({ gameOver: 'defeat' });
-            this.addLog('💀 Your Soul is extinguished. The Reaper triumphs.');
-            if (!this.props.scrimmage && this.props.inventoryManager) {
-                this.props.inventoryManager.gold = Math.floor((this.props.inventoryManager.gold || 0) * 0.75);
-                if (this.props.saveUserData) this.props.saveUserData();
-            }
             setTimeout(() => {
-                if (this.props.onFinish) this.props.onFinish({ winner: 'reaper' });
-            }, 2000);
+                // Phase 3: Place on board grid and trigger next card play
+                const nextGrid = { ...grid };
+                nextGrid[targetNodeKey] = {
+                    ...card,
+                    row: spawnNode.r,
+                    col: spawnNode.c,
+                    actionsLeft: 0,
+                    turnPlayed: this.state.roundNumber
+                };
+
+                const nextHand = [...hand];
+                nextHand.splice(playableIndex, 1);
+                const nextSpirit = spirit - card.cost;
+
+                this.addLog(`💀 Reaper played ${card.name} into Row ${spawnNode.r + 1}, Lane ${spawnNode.c + 1}.`);
+
+                this.setState({
+                    grid: nextGrid,
+                    reaperHand: nextHand,
+                    reaperSpirit: nextSpirit,
+                    reaperPlayAnim: null
+                }, () => {
+                    this.playReaperCardsSequentially(nextGrid, nextSpirit, nextHand, discard, onComplete);
+                });
+            }, 400);
+        }, 350);
+    }
+
+    startPlayerTurn = () => {
+        if (this.state.gameOver) return;
+
+        const { roundNumber, playerDeck, playerHand, grid } = this.state;
+
+        // Player Turn Draw: Draw 1 card at start of player turn (unless deck empty)
+        let updatedPlayerDeck = [...playerDeck];
+        let updatedPlayerHand = [...playerHand];
+
+        if (updatedPlayerDeck.length > 0 && updatedPlayerHand.length < 7) {
+            const drawnCard = updatedPlayerDeck.shift();
+            updatedPlayerHand.push(drawnCard);
+            this.addLog(`🎴 You drew ${drawnCard.name}.`);
+        }
+
+        // Regenerate Spirit to Round Max
+        const currentMaxSpirit = roundNumber;
+        const updatedGrid = { ...grid };
+
+        // Refresh all Player units on grid: actionsLeft = 1
+        Object.keys(updatedGrid).forEach(key => {
+            const unit = updatedGrid[key];
+            if (unit && unit.owner === 'player') {
+                unit.actionsLeft = unit.turnPlayed === roundNumber ? 0 : 1;
+            }
+        });
+
+        this.setState({
+            currentTurn: 'player',
+            playerSpirit: currentMaxSpirit,
+            maxSpirit: currentMaxSpirit,
+            playerDeck: updatedPlayerDeck,
+            playerHand: updatedPlayerHand,
+            grid: updatedGrid,
+            selectedCard: null,
+            selectedUnitKey: null
+        });
+        this.addLog(`⚔️ YOUR TURN (Round ${roundNumber} · ${currentMaxSpirit} Spirit)`);
+    }
+
+    handleEndTurn = () => {
+        if (this.state.currentTurn !== 'player' || this.state.isAiThinking || this.state.gameOver) return;
+
+        // Increment Round Number for next Reaper turn
+        const nextRoundNumber = this.state.roundNumber + 1;
+        const nextMaxSpirit = nextRoundNumber;
+
+        // Reaper draws 1 card at start of Reaper turn (except turn 1)
+        let updatedReaperDeck = [...this.state.reaperDeck];
+        let updatedReaperHand = [...this.state.reaperHand];
+
+        if (updatedReaperDeck.length > 0 && updatedReaperHand.length < 7) {
+            const drawn = updatedReaperDeck.shift();
+            updatedReaperHand.push(drawn);
+        }
+
+        this.setState({
+            currentTurn: 'reaper',
+            isAiThinking: true,
+            roundNumber: nextRoundNumber,
+            maxSpirit: nextMaxSpirit,
+            reaperSpirit: nextMaxSpirit,
+            reaperDeck: updatedReaperDeck,
+            reaperHand: updatedReaperHand,
+            selectedCard: null,
+            selectedUnitKey: null
+        }, () => {
+            this.addLog(`💀 REAPER'S TURN (Round ${nextRoundNumber} · ${nextMaxSpirit} Spirit)`);
+            setTimeout(() => {
+                this.executeReaperTurn();
+            }, 700);
+        });
+    }
+
+    // ─── Player Card & Board Interaction Handlers ────────────────────────────
+
+    // Card Selection in Hand
+    handleSelectCardInHand = (card) => {
+        if (this.state.currentTurn !== 'player' || this.state.isAiThinking || this.state.gameOver) return;
+
+        if (card.cost > this.state.playerSpirit) {
+            this.addLog(`⚠️ Not enough Spirit to play ${card.name} (Requires ${card.cost} Spirit).`);
+            return;
+        }
+
+        if (this.state.selectedCard && this.state.selectedCard.id === card.id) {
+            this.setState({ selectedCard: null });
+        } else {
+            this.setState({ selectedCard: card, selectedUnitKey: null });
         }
     }
 
-    // ─── ATK helpers ──────────────────────────────────────────────────────────
-    getChampionCurrentATK = (champion) => {
-        const { warDrumsTurns, warDrumsBonus, fieldAmplifyThisTurn, playerSoul } = this.state;
-        let atk = champion.atk;
-        if (warDrumsTurns > 0) atk += warDrumsBonus;
-        if (fieldAmplifyThisTurn > 0) atk += fieldAmplifyThisTurn;
-        if (champion.memberType === 'barbarian' && playerSoul <= 15) atk += 2;
-        return atk;
+    // Drag-and-Drop Handlers
+    handleCardDragStart = (e, card) => {
+        if (this.state.currentTurn !== 'player' || this.state.isAiThinking || this.state.gameOver) return;
+        if (card.cost > this.state.playerSpirit) {
+            e.preventDefault();
+            return;
+        }
+        e.dataTransfer.setData('text/plain', card.id);
+        this.setState({ draggedCardId: card.id, selectedCard: card, selectedUnitKey: null });
     }
 
-    computeTotalFieldATK = () => {
-        const champAtk = this.state.fieldChampions.reduce((sum, c) => sum + this.getChampionCurrentATK(c), 0);
-        const unitAtk = (this.state.playerField || []).reduce((sum, u) => sum + u.atk, 0);
-        return champAtk + unitAtk;
+    handleDragOverNode = (e, r, c) => {
+        // Player can only play into Row 3 or Row 4 if empty
+        if ((r === 3 || r === 4) && !this.state.grid[`${r}_${c}`]) {
+            e.preventDefault();
+        }
     }
 
-    // ─── Rendering helpers ────────────────────────────────────────────────────
-    renderSoulBar = (current, max, isPlayer) => {
-        const pct   = Math.max(0, (current / max) * 100);
-        const color = isPlayer ? `hsl(${(pct * 1.2).toFixed(0)}, 70%, 50%)` : '#c94040';
-        return (
-            <div className="pe-soul-bar-wrap">
-                <div className="pe-soul-bar-bg">
-                    <div className="pe-soul-bar-fill" style={{ width: `${pct}%`, background: color }} />
-                </div>
-                <div className="pe-soul-label">{current} / {max}</div>
-            </div>
-        );
+    handleDropOnNode = (e, r, c) => {
+        e.preventDefault();
+        const { selectedCard, playerSpirit, grid } = this.state;
+        if (!selectedCard || (r !== 3 && r !== 4) || grid[`${r}_${c}`]) return;
+        if (selectedCard.cost > playerSpirit) return;
+
+        this.playCardToNode(selectedCard, r, c);
     }
 
-    renderFieldChampion = (champion) => {
-        const hp    = this.state.championHP[champion.id] || 0;
-        const maxHP = this.state.championMaxHP[champion.id] || champion.maxHP;
-        const hpPct = Math.max(0, (hp / maxHP) * 100);
-        const hpColor = `hsl(${(hpPct * 1.2).toFixed(0)}, 70%, 45%)`;
-        const atk   = this.getChampionCurrentATK(champion);
+    // Playing a card to a specific node (Row 3 or Row 4)
+    playCardToNode = (card, r, c) => {
+        const key = `${r}_${c}`;
+        const updatedGrid = { ...this.state.grid };
 
-        return (
-            <div key={champion.id} className="pe-field-champion">
-                <div
-                    className="pe-field-champion-portrait"
-                    style={champion.portrait ? { backgroundImage: `url(${champion.portrait})` } : {}}
-                >
-                    {!champion.portrait && (
-                        <span className="pe-field-class-emoji" role="img" aria-label="class">{CLASS_EMOJI[champion.memberType] || '⚔'}</span>
-                    )}
-                </div>
-                <div className="pe-field-champion-info">
-                    <div className="pe-field-champion-name">{champion.name}</div>
-                    <div className="pe-field-hp-bar-wrap">
-                        <div className="pe-field-hp-bar-bg">
-                            <div className="pe-field-hp-bar-fill" style={{ width: `${hpPct}%`, background: hpColor }} />
-                        </div>
-                        <span className="pe-field-hp-label">{hp}/{maxHP}</span>
-                    </div>
-                    <div className="pe-field-atk">⚔ {atk} ATK</div>
-                    <div className="pe-field-passive">{champion.ability?.desc}</div>
-                </div>
-            </div>
-        );
-    }
-
-    renderReserveCard = (champion) => {
-        const { fieldChampions, fallenChampions, championSummonedThisTurn,
-                playerEnergy, phase, gameOver } = this.state;
-
-        const isOnField  = fieldChampions.some(c => c.id === champion.id);
-        const isFallen   = fallenChampions.includes(champion.id);
-        const canSummon  = !isOnField && !isFallen &&
-            fieldChampions.length < 2 &&
-            !championSummonedThisTurn &&
-            playerEnergy >= champion.summonCost &&
-            phase === 'play' && !gameOver;
-        const notAfford  = !isOnField && !isFallen && !canSummon && !championSummonedThisTurn &&
-            playerEnergy < champion.summonCost && phase === 'play';
-
-        const art = champion.portrait || null;
-
-        return (
-            <div
-                key={champion.id}
-                className={`pe-card pe-card--champion
-                    ${isOnField  ? 'pe-reserve-card--onfield'   : ''}
-                    ${isFallen   ? 'pe-reserve-card--fallen'    : ''}
-                    ${canSummon  ? 'pe-card--playable'          : ''}
-                    ${notAfford  ? 'pe-reserve-card--afford'    : ''}`}
-                onClick={() => canSummon && this.summonChampion(champion)}
-                title={champion.ability?.desc || ''}
-            >
-                {!isOnField && !isFallen && (
-                    <div className="pe-card-cost">{champion.summonCost}</div>
-                )}
-                <div
-                    className="pe-card-portrait"
-                    style={art ? { backgroundImage: `url(${art})` } : {}}
-                >
-                    {!art && (
-                        <span className="pe-card-class-emoji" role="img" aria-label="class">{CLASS_EMOJI[champion.memberType] || '⚔'}</span>
-                    )}
-                </div>
-                <div className="pe-card-body">
-                    <div className="pe-card-name">{champion.name}</div>
-                    <div
-                        className="pe-card-class-badge"
-                        style={{ color: '#c9a84c', borderColor: 'rgba(201,168,76,0.4)', background: 'rgba(201,168,76,0.06)' }}
-                    >
-                        ⚔ {champion.atk} &nbsp;&nbsp; ♥ {champion.maxHP}
-                    </div>
-                    <div className="pe-card-text">
-                        {champion.ability?.desc}
-                    </div>
-                    {isOnField  && <div className="pe-reserve-status pe-reserve-status--field" style={{ marginTop: 'auto' }}>ON FIELD</div>}
-                    {isFallen   && <div className="pe-reserve-status pe-reserve-status--fallen" style={{ marginTop: 'auto' }}>FALLEN</div>}
-                    {canSummon  && <div className="pe-reserve-action" style={{ marginTop: 'auto' }}>SUMMON</div>}
-                </div>
-            </div>
-        );
-    }
-
-    getGroupedDeck = (deck) => {
-        const groups = {};
-        (deck || []).forEach(card => {
-            if (!groups[card.name]) {
-                groups[card.name] = { card, count: 0 };
-            }
-            groups[card.name].count += 1;
-        });
-        const list = Object.values(groups);
-        const rarityWeights = {
-            common: 1,
-            uncommon: 2,
-            rare: 3,
-            epic: 4,
-            legendary: 5
+        updatedGrid[key] = {
+            ...card,
+            row: r,
+            col: c,
+            actionsLeft: 0, // Summoning sickness on turn played
+            turnPlayed: this.state.roundNumber
         };
-        list.sort((a, b) => {
-            const costA = a.card.energyCost || 0;
-            const costB = b.card.energyCost || 0;
-            if (costA !== costB) {
-                return costA - costB;
-            }
-            const rarityA = rarityWeights[a.card.rarity || 'common'] || 1;
-            const rarityB = rarityWeights[b.card.rarity || 'common'] || 1;
-            if (rarityA !== rarityB) {
-                return rarityA - rarityB;
-            }
-            return (a.card.name || '').localeCompare(b.card.name || '');
+
+        const updatedHand = this.state.playerHand.filter(item => item.id !== card.id);
+        const updatedSpirit = this.state.playerSpirit - card.cost;
+
+        this.setState({
+            grid: updatedGrid,
+            playerHand: updatedHand,
+            playerSpirit: updatedSpirit,
+            selectedCard: null,
+            draggedCardId: null
         });
-        return list;
+
+        this.addLog(`⚔️ Played ${card.name} to Row ${r + 1}, Lane ${c + 1} (Summoning Sickness: 1 Turn).`);
     }
 
-    renderDeckCard = (card, count) => {
-        if (!card) return null;
-        const art       = card.art ? (images[card.art] || null) : null;
-        const isEcho    = card.type === 'echo';
-        const rarity    = card.rarity || 'common';
-        const rarityClr = RARITY_COLOR[rarity] || '#888';
-        const icon      = ARCANE_ICON[card.effect?.type] || '✨';
+    // Board Node / Unit Click Handler
+    handleNodeClick = (r, c) => {
+        if (this.state.currentTurn !== 'player' || this.state.isAiThinking || this.state.gameOver) return;
 
-        const mainCard = (
-            <div
-                key={card.id}
-                className={`pe-card ${isEcho ? 'pe-card--echo' : 'pe-card--arcane'}`}
-                style={{ position: 'relative', zIndex: 10 }}
-            >
-                <div className="pe-card-cost">{card.energyCost}</div>
-                <div className={`pe-card-portrait ${isEcho ? 'pe-card-portrait--echo' : 'pe-card-portrait--arcane'}`}
-                    style={art ? { backgroundImage: `url(${art})` } : {}}>
-                    {!art && <span className="pe-card-icon" role="img" aria-label="card icon">{icon}</span>}
-                </div>
-                <div className="pe-card-body">
-                    <div className="pe-card-name">{card.name}</div>
-                    <div
-                        className={`pe-card-class-badge ${isEcho ? 'pe-badge--echo' : 'pe-badge--arcane'}`}
-                        style={!isEcho ? { color: rarityClr, borderColor: rarityClr } : {}}
-                    >
-                        {isEcho ? 'ECHO' : rarity.toUpperCase()}
-                    </div>
-                    <div className="pe-card-text">{card.text}</div>
-                </div>
+        const targetKey = `${r}_${c}`;
+        const targetUnit = this.state.grid[targetKey];
+        const { selectedCard, selectedUnitKey, grid } = this.state;
+
+        // Case A: Playing a selected card from hand into an empty node in Row 3 or 4
+        if (selectedCard) {
+            if ((r === 3 || r === 4) && !targetUnit) {
+                this.playCardToNode(selectedCard, r, c);
+            } else if (r === 2) {
+                this.addLog(`⚠️ Cannot play cards directly into Row 3 (Center Row). Play in Row 4 or 5.`);
+            } else {
+                this.addLog(`⚠️ You can only play cards into Row 4 or Row 5.`);
+            }
+            return;
+        }
+
+        // Case B: A Player unit on the board is currently selected
+        if (selectedUnitKey) {
+            if (selectedUnitKey === targetKey) {
+                // Deselect unit
+                this.setState({ selectedUnitKey: null });
+                return;
+            }
+
+            const [srcR, srcC] = selectedUnitKey.split('_').map(Number);
+            const sourceUnit = grid[selectedUnitKey];
+
+            if (!sourceUnit || sourceUnit.owner !== 'player' || sourceUnit.actionsLeft <= 0) {
+                this.setState({ selectedUnitKey: null });
+                return;
+            }
+
+            // Check adjacency (distance === 1 in cardinal directions)
+            const isAdjacent = Math.abs(srcR - r) + Math.abs(srcC - c) === 1;
+
+            if (isAdjacent) {
+                if (!targetUnit) {
+                    // Move Unit to empty node
+                    const updatedGrid = { ...grid };
+                    updatedGrid[targetKey] = {
+                        ...sourceUnit,
+                        row: r,
+                        col: c,
+                        actionsLeft: 0
+                    };
+                    delete updatedGrid[selectedUnitKey];
+
+                    this.setState({
+                        grid: updatedGrid,
+                        selectedUnitKey: null
+                    });
+                    this.addLog(`⚔️ Your ${sourceUnit.name} moved to Row ${r + 1}, Lane ${c + 1}.`);
+                    return;
+                } else if (targetUnit.owner === 'reaper') {
+                    // Attack adjacent Reaper Unit
+                    this.executeUnitCombat(selectedUnitKey, targetKey);
+                    return;
+                }
+            }
+        }
+
+        // Case C: Selecting a Player unit on the board
+        if (targetUnit && targetUnit.owner === 'player') {
+            if (targetUnit.actionsLeft > 0) {
+                this.setState({ selectedUnitKey: targetKey, selectedCard: null });
+            } else {
+                this.addLog(`⚠️ ${targetUnit.name} has already acted or has Summoning Sickness this turn.`);
+            }
+        }
+    }
+
+    // Helper to compute directional lunge
+    getAttackDirection = (srcKey, targetKey) => {
+        if (targetKey === 'reaper_orb') return 'up';
+        if (targetKey === 'player_orb') return 'down';
+
+        const [r1, c1] = srcKey.split('_').map(Number);
+        const [r2, c2] = targetKey.split('_').map(Number);
+
+        if (r2 < r1) return 'up';
+        if (r2 > r1) return 'down';
+        if (c2 < c1) return 'left';
+        if (c2 > c1) return 'right';
+        return 'up';
+    }
+
+    // Execute combat between adjacent units with animation
+    executeUnitCombat = (attackerKey, defenderKey) => {
+        const attacker = this.state.grid[attackerKey];
+        const defender = this.state.grid[defenderKey];
+        if (!attacker || !defender) return;
+
+        const direction = this.getAttackDirection(attackerKey, defenderKey);
+
+        // 1. Trigger Attack Animation
+        this.setState({
+            attackAnim: {
+                attackerKey,
+                defenderKey,
+                direction,
+                damageToDefender: attacker.atk,
+                damageToAttacker: defender.atk
+            }
+        });
+
+        // 2. Resolve Combat after lunge impact (450ms)
+        setTimeout(() => {
+            const grid = { ...this.state.grid };
+            const att = grid[attackerKey];
+            const def = grid[defenderKey];
+            let reaperDiscard = [...this.state.reaperDiscard];
+            let playerDiscard = [...this.state.playerDiscard];
+
+            if (att && def) {
+                def.hp -= att.atk;
+                att.hp -= def.atk;
+                att.actionsLeft = 0;
+
+                this.addLog(`⚔️ ${att.name} attacked Reaper's ${def.name}! (${att.atk} vs ${def.atk} dmg)`);
+
+                if (def.hp <= 0) {
+                    delete grid[defenderKey];
+                    reaperDiscard.push(def);
+                    this.addLog(`💥 Reaper's ${def.name} was destroyed!`);
+                }
+
+                if (att.hp <= 0) {
+                    delete grid[attackerKey];
+                    playerDiscard.push(att);
+                    this.addLog(`💥 Your ${att.name} was defeated in combat!`);
+                }
+            }
+
+            this.setState({
+                grid,
+                reaperDiscard,
+                playerDiscard,
+                selectedUnitKey: null,
+                attackAnim: null
+            });
+        }, 450);
+    }
+
+    // Direct Attack on Reaper (from Row 0) with animation
+    handleDirectAttackReaper = () => {
+        if (this.state.currentTurn !== 'player' || !this.state.selectedUnitKey || this.state.attackAnim) return;
+
+        const attackerKey = this.state.selectedUnitKey;
+        const sourceUnit = this.state.grid[attackerKey];
+
+        if (!sourceUnit || sourceUnit.owner !== 'player' || sourceUnit.row !== 0 || sourceUnit.actionsLeft <= 0) {
+            return;
+        }
+
+        // 1. Trigger Attack Animation
+        this.setState({
+            attackAnim: {
+                attackerKey,
+                defenderKey: 'reaper_orb',
+                direction: 'up',
+                damageToDefender: sourceUnit.atk,
+                damageToAttacker: 0
+            }
+        });
+
+        // 2. Resolve Direct Attack damage after 450ms
+        setTimeout(() => {
+            const grid = { ...this.state.grid };
+            const att = grid[attackerKey];
+            if (att) {
+                att.actionsLeft = 0;
+            }
+
+            const newReaperHP = Math.max(0, this.state.reaperHP - sourceUnit.atk);
+            const isVictory = newReaperHP <= 0;
+
+            this.setState({
+                grid,
+                reaperHP: newReaperHP,
+                selectedUnitKey: null,
+                attackAnim: null,
+                gameOver: isVictory ? 'victory' : null
+            });
+
+            this.addLog(`⚔️ ${sourceUnit.name} attacked the REAPER directly for ${sourceUnit.atk} damage!`);
+
+            if (isVictory) {
+                this.addLog('✨ VICTORY! The Reaper\'s health has been shattered!');
+            }
+        }, 450);
+    }
+
+    // ─── Render Helpers ───────────────────────────────────────────────────────
+    renderFannedPlayerHand = () => {
+        const { playerHand, playerSpirit, selectedCard, currentTurn, isAiThinking } = this.state;
+        const totalCards = playerHand.length;
+
+        return (
+            <div className="pe-fanned-hand-container">
+                {playerHand.map((card, idx) => {
+                    const canAfford = card.cost <= playerSpirit && currentTurn === 'player' && !isAiThinking;
+                    const isSelected = selectedCard && selectedCard.id === card.id;
+
+                    // Calculate rotation and elevation fan offsets
+                    const middleIndex = (totalCards - 1) / 2;
+                    const offset = idx - middleIndex;
+                    const rotationDeg = offset * 6;
+                    const translateYPx = Math.abs(offset) * 5;
+
+                    return (
+                        <div
+                            key={card.id}
+                            draggable={canAfford}
+                            onDragStart={(e) => this.handleCardDragStart(e, card)}
+                            onClick={() => this.handleSelectCardInHand(card)}
+                            className={`pe-fanned-card ${isSelected ? 'pe-fanned-card--selected' : ''} ${canAfford ? 'pe-fanned-card--playable' : 'pe-fanned-card--disabled'}`}
+                            style={{
+                                transform: isSelected
+                                    ? `translateY(-30px) scale(1.15) rotate(0deg)`
+                                    : `rotate(${rotationDeg}deg) translateY(${translateYPx}px)`,
+                                zIndex: isSelected ? 100 : idx + 10
+                            }}
+                        >
+                            <div className="pe-card-cost-gem">{card.cost}</div>
+                            <div
+                                className="pe-card-portrait-area"
+                                style={card.art ? { backgroundImage: `url(${card.art})` } : {}}
+                            />
+                            <div className="pe-card-footer">
+                                <div className="pe-card-title">{card.name}</div>
+                                <div className="pe-card-badge">{card.type.toUpperCase()}</div>
+                                <div className="pe-card-stats-line">
+                                    <span className="pe-card-atk">⚔ {card.atk}</span>
+                                    <span className="pe-card-hp">♥ {card.hp}</span>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+                {totalCards === 0 && <div className="pe-empty-hand-msg">No cards in hand</div>}
             </div>
         );
+    }
 
-        if (count === 1) return mainCard;
-
-        const bgCardsCount = Math.min(4, count - 1);
-        const bgCards = [];
-        for (let i = bgCardsCount; i > 0; i--) {
-            bgCards.push(
-                <div 
-                    key={`back-${i}`}
-                    className={`pe-card-stack-back pe-card-stack-back--${i}`}
-                    style={{ borderColor: rarityClr }}
+    renderReaperHandFanned = () => {
+        const count = this.state.reaperHand.length;
+        const cards = [];
+        for (let i = 0; i < count; i++) {
+            const middle = (count - 1) / 2;
+            const rot = (i - middle) * 5;
+            cards.push(
+                <div
+                    key={i}
+                    className="pe-reaper-fanned-card"
+                    style={{
+                        transform: `rotate(${rot}deg)`,
+                        backgroundImage: images.reaper_card_back ? `url(${images.reaper_card_back})` : undefined
+                    }}
                 />
             );
         }
-
         return (
-            <div className="pe-card-stack-container" key={card.id}>
-                {bgCards}
-                {mainCard}
+            <div className="pe-reaper-hand-fanned-container">
+                {cards}
+                {count === 0 && <span className="pe-no-cards-reaper">No Cards</span>}
             </div>
         );
     }
 
-    renderCardPile = () => {
-        const deckCount = this.state.playerDeck.length;
-        const discardCount = this.state.playerDiscard.length;
+    renderGridNodes = () => {
+        const { grid, selectedCard, selectedUnitKey, attackAnim, reaperPlayAnim } = this.state;
+        const rows = [0, 1, 2, 3, 4];
+        const cols = [0, 1, 2, 3, 4];
+
+        // Parse selected unit coordinates
+        let selR = null, selC = null;
+        if (selectedUnitKey) {
+            [selR, selC] = selectedUnitKey.split('_').map(Number);
+        }
 
         return (
-            <div className="pe-piles-row">
-                <div className="pe-pile pe-pile--deck" title={`${deckCount} cards remaining in deck`}>
-                    <div className="pe-pile-card" style={images.reaper_card_back ? { backgroundImage: `url(${images.reaper_card_back})` } : {}} />
-                    {deckCount > 0 && <div className="pe-pile-badge">{deckCount}</div>}
-                    <div className="pe-pile-label">DECK</div>
-                </div>
-                <div className="pe-pile pe-pile--discard" title={`${discardCount} cards in discard pile`}>
-                    <div className="pe-pile-card pe-pile-card--discard" />
-                    {discardCount > 0 && <div className="pe-pile-badge">{discardCount}</div>}
-                    <div className="pe-pile-label">DISCARD</div>
-                </div>
-            </div>
-        );
-    }
+            <div className="pe-tactical-grid">
+                {rows.map(r => (
+                    <div key={`row_${r}`} className={`pe-grid-row pe-grid-row--${r}`}>
+                        {cols.map(c => {
+                            const nodeKey = `${r}_${c}`;
+                            const unit = grid[nodeKey];
+                            const isSelectedUnit = selectedUnitKey === nodeKey;
 
-    renderDeckPile = () => {
-        const deckCount = this.state.playerDeck.length;
-        return (
-            <div className="pe-pile pe-pile--deck" title={`${deckCount} cards remaining in deck`}>
-                <div className="pe-pile-card" style={images.reaper_card_back ? { backgroundImage: `url(${images.reaper_card_back})` } : {}} />
-                {deckCount > 0 && <div className="pe-pile-badge">{deckCount}</div>}
-                <div className="pe-pile-label">DECK</div>
-            </div>
-        );
-    }
+                            // Determine highlight states
+                            let isSpawnEligible = false;
+                            if (selectedCard && (r === 3 || r === 4) && !unit) {
+                                isSpawnEligible = true;
+                            }
 
-    renderDiscardPile = () => {
-        const discardCount = this.state.playerDiscard.length;
-        return (
-            <div className="pe-pile pe-pile--discard" title={`${discardCount} cards in discard pile`}>
-                <div className="pe-pile-card pe-pile-card--discard" />
-                {discardCount > 0 && <div className="pe-pile-badge">{discardCount}</div>}
-                <div className="pe-pile-label">DISCARD</div>
-            </div>
-        );
-    }
+                            let isMoveEligible = false;
+                            let isAttackEligible = false;
 
-    renderCard = (card) => {
-        if (!card) return null;
-        const { playerEnergy, phase, gameOver, engineerDiscountUsed, fieldChampions } = this.state;
-        const isEngineerFirst = !engineerDiscountUsed &&
-            fieldChampions.some(c => c.memberType === 'engineer') &&
-            (card.type === 'arcane' || card.type === 'echo');
-        const effectiveCost = isEngineerFirst ? 0 : card.energyCost;
-        const canPlay = playerEnergy >= effectiveCost && phase === 'play' && !gameOver;
+                            if (selR !== null && selC !== null) {
+                                const isAdj = Math.abs(selR - r) + Math.abs(selC - c) === 1;
+                                if (isAdj) {
+                                    if (!unit) {
+                                        isMoveEligible = true;
+                                    } else if (unit.owner === 'reaper') {
+                                        isAttackEligible = true;
+                                    }
+                                }
+                            }
 
-        const art       = card.art ? (images[card.art] || null) : null;
-        const isEcho    = card.type === 'echo';
-        const rarity    = card.rarity || 'common';
-        const rarityClr = RARITY_COLOR[rarity] || '#888';
-        const icon      = ARCANE_ICON[card.effect?.type] || '✨';
+                            // Attack animation state flags
+                            const isAttacker = attackAnim && attackAnim.attackerKey === nodeKey;
+                            const isDefender = attackAnim && attackAnim.defenderKey === nodeKey;
+                            const lungeClass = isAttacker ? `pe-unit--lunge-${attackAnim.direction}` : '';
+                            const hitClass = isDefender ? 'pe-unit--hit-impact' : '';
 
-        return (
-            <div
-                key={card.id}
-                className={`pe-card ${isEcho ? 'pe-card--echo' : 'pe-card--arcane'} ${canPlay ? 'pe-card--playable' : ''}`}
-                onClick={() => canPlay && this.playCard(card)}
-                title={card.text}
-            >
-                <div className="pe-card-cost">{effectiveCost}{isEngineerFirst && effectiveCost === 0 ? ' ✓' : ''}</div>
-                <div className={`pe-card-portrait ${isEcho ? 'pe-card-portrait--echo' : 'pe-card-portrait--arcane'}`}
-                    style={art ? { backgroundImage: `url(${art})` } : {}}>
-                    {!art && <span className="pe-card-icon" role="img" aria-label="card icon">{icon}</span>}
-                </div>
-                <div className="pe-card-body">
-                    <div className="pe-card-name">{card.name}</div>
-                    <div
-                        className={`pe-card-class-badge ${isEcho ? 'pe-badge--echo' : 'pe-badge--arcane'}`}
-                        style={!isEcho ? { color: rarityClr, borderColor: rarityClr } : {}}
-                    >
-                        {isEcho ? 'ECHO' : rarity.toUpperCase()}
-                    </div>
-                    <div className="pe-card-text">{card.text}</div>
-                </div>
-            </div>
-        );
-    }
+                            // Reaper Play Animation state
+                            const isReaperPlayNode = reaperPlayAnim && reaperPlayAnim.nodeKey === nodeKey;
 
-    renderReaperCard = (card) => {
-        if (!card) return null;
-        const art = card.art ? (images[card.art] || null) : null;
-        return (
-            <div className="pe-card pe-card--reaper" title={card.text}>
-                <div className="pe-card-cost pe-card-cost--reaper">{card.energyCost}</div>
-                <div className="pe-card-portrait pe-card-portrait--reaper"
-                    style={art ? { backgroundImage: `url(${art})` } : {}}>
-                    {!art && <span className="pe-card-icon" role="img" aria-label="reaper card icon">💀</span>}
-                </div>
-                <div className="pe-card-body">
-                    <div className="pe-card-name pe-card-name--reaper">{card.name}</div>
-                    <div className="pe-card-class-badge pe-badge--reaper">REAPER</div>
-                    <div className="pe-card-text pe-card-text--reaper">{card.text}</div>
-                </div>
-            </div>
-        );
-    }
+                            return (
+                                <div
+                                    key={nodeKey}
+                                    className={`pe-grid-node 
+                                        ${isSpawnEligible ? 'pe-node--valid-spawn' : ''}
+                                        ${isMoveEligible ? 'pe-node--valid-move' : ''}
+                                        ${isAttackEligible ? 'pe-node--valid-attack' : ''}
+                                        ${isSelectedUnit ? 'pe-node--selected' : ''}
+                                        ${r === 2 ? 'pe-node--center-buffer' : ''}
+                                    `}
+                                    onDragOver={(e) => this.handleDragOverNode(e, r, c)}
+                                    onDrop={(e) => this.handleDropOnNode(e, r, c)}
+                                    onClick={() => this.handleNodeClick(r, c)}
+                                >
+                                    {/* Row label watermark for clarity */}
+                                    <div className="pe-node-coord-watermark">
+                                        R{r + 1}:L{c + 1}
+                                    </div>
 
-    renderSetupDeckColumns = () => {
-        const grouped = this.getGroupedDeck(this.state.playerDeck);
-        const byCost = {};
-        grouped.forEach(item => {
-            const cost = item.card.energyCost || 0;
-            if (!byCost[cost]) byCost[cost] = [];
-            byCost[cost].push(item);
-        });
+                                    {/* Slash & Damage Flash Overlays */}
+                                    {isDefender && (
+                                        <>
+                                            <div className="pe-slash-overlay">⚔️</div>
+                                            <div className="pe-damage-float">-{attackAnim.damageToDefender}</div>
+                                        </>
+                                    )}
 
-        return (
-            <div className="pe-setup-cols">
-                {Object.keys(byCost).sort((a, b) => Number(a) - Number(b)).map(cost => (
-                    <div key={cost} className="pe-setup-col">
-                        <div className="pe-setup-col-title">{cost} Energy</div>
-                        <div className="pe-setup-col-list">
-                            {byCost[cost].map(group => this.renderDeckCard(group.card, group.count))}
-                        </div>
+                                    {isAttacker && attackAnim.damageToAttacker > 0 && (
+                                        <div className="pe-damage-float">-{attackAnim.damageToAttacker}</div>
+                                    )}
+
+                                    {/* Reaper Animated Card Flight & 3D Flip Reveal */}
+                                    {isReaperPlayNode && (
+                                        <div className={`pe-reaper-play-anim-container pe-anim-phase--${reaperPlayAnim.phase}`}>
+                                            <div className="pe-reaper-card-flip-inner">
+                                                <div className="pe-reaper-card-back">
+                                                    {images.reaper_card_back ? (
+                                                        <div style={{ width: '100%', height: '100%', backgroundImage: `url(${images.reaper_card_back})`, backgroundSize: 'cover' }} />
+                                                    ) : '💀'}
+                                                </div>
+                                                <div className="pe-reaper-card-front">
+                                                    <div className="pe-unit-portrait" style={reaperPlayAnim.card.art ? { backgroundImage: `url(${reaperPlayAnim.card.art})` } : {}} />
+                                                    <div className="pe-unit-name">{reaperPlayAnim.card.name}</div>
+                                                    <div className="pe-unit-stats">
+                                                        <span className="pe-unit-atk">⚔ {reaperPlayAnim.card.atk}</span>
+                                                        <span className="pe-unit-hp">♥ {reaperPlayAnim.card.hp}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Unit on Node */}
+                                    {unit && (
+                                        <div className={`pe-board-unit pe-board-unit--${unit.owner} ${unit.actionsLeft > 0 ? 'pe-unit--ready' : 'pe-unit--exhausted'} ${lungeClass} ${hitClass}`}>
+                                            <div
+                                                className="pe-unit-portrait"
+                                                style={unit.art ? { backgroundImage: `url(${unit.art})` } : {}}
+                                            />
+                                            <div className="pe-unit-name">{unit.name}</div>
+                                            <div className="pe-unit-stats">
+                                                <span className="pe-unit-atk">⚔ {unit.atk}</span>
+                                                <span className="pe-unit-hp">♥ {unit.hp}/{unit.maxHp}</span>
+                                            </div>
+                                            {unit.actionsLeft <= 0 && unit.owner === 'player' && (
+                                                <div className="pe-unit-sickness-badge" title="Summoning Sickness / Exhausted">💤</div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
                 ))}
-            </div>
-        );
-    }
-
-    renderCombatantStatuses = (isPlayer) => {
-        if (isPlayer) {
-            const {
-                playerBoneArmor, playerDodgeTurns, hasVoidTrap, hasHexWard,
-                hasDeathMark, warDrumsTurns, warDrumsBonus, fieldAmplifyThisTurn,
-                persistentBlockTurns, persistentBlockAmount
-            } = this.state;
-
-            const list = [];
-            if (playerBoneArmor > 0) {
-                list.push(<div key="armor" className="pe-status-icon pe-status-icon--positive" title={`Bone Armor: Absorbs next ${playerBoneArmor} damage`}>🦴 {playerBoneArmor}</div>);
-            }
-            if (playerDodgeTurns > 0) {
-                list.push(<div key="dodge" className="pe-status-icon pe-status-icon--positive" title={`Dodge: Immune to damage for ${playerDodgeTurns} turn(s)`}>💨 {playerDodgeTurns}t</div>);
-            }
-            if (hasVoidTrap) {
-                list.push(<div key="void" className="pe-status-icon pe-status-icon--positive" title="Void Trap: Reflects 50% of next attack">🔮 Trap</div>);
-            }
-            if (hasHexWard) {
-                list.push(<div key="hex" className="pe-status-icon pe-status-icon--positive" title="Hex Ward: Nullifies next debuff/threat">🔯 Ward</div>);
-            }
-            if (hasDeathMark) {
-                list.push(<div key="mark" className="pe-status-icon pe-status-icon--negative" title="Death Mark: Next damage dealt is doubled">☠️ Mark</div>);
-            }
-            if (warDrumsTurns > 0) {
-                list.push(<div key="drums" className="pe-status-icon pe-status-icon--positive" title={`War Drums: +${warDrumsBonus} ATK to all champions`}>🥁 {warDrumsTurns}t</div>);
-            }
-            if (fieldAmplifyThisTurn > 0) {
-                list.push(<div key="bc" className="pe-status-icon pe-status-icon--positive" title={`Battlecry: +${fieldAmplifyThisTurn} ATK this turn`}>⚔️ +{fieldAmplifyThisTurn}</div>);
-            }
-            if (persistentBlockTurns > 0) {
-                list.push(<div key="skin" className="pe-status-icon pe-status-icon--positive" title={`Iron Skin: Reduces incoming damage by ${persistentBlockAmount} for ${persistentBlockTurns} turn(s)`}>🛡️ {persistentBlockAmount} ({persistentBlockTurns}t)</div>);
-            }
-
-            if (list.length === 0) return null;
-            return <div className="pe-combatant-statuses">{list}</div>;
-        } else {
-            const {
-                reaperShieldNextAtk, reaperStunTurns, reaperSpectralSurge,
-                reaperBonusDmg, reaperThreats
-            } = this.state;
-
-            const list = [];
-            if (reaperShieldNextAtk > 0) {
-                list.push(<div key="shield" className="pe-status-icon pe-status-icon--positive" title={`Death Shroud: Blocks next ${reaperShieldNextAtk} damage`}>🛡️ {reaperShieldNextAtk}</div>);
-            }
-            if (reaperStunTurns > 0) {
-                list.push(<div key="stun" className="pe-status-icon pe-status-icon--negative" title={`Stunned: Stunned for ${reaperStunTurns} turn(s)`}>❄️ {reaperStunTurns}t</div>);
-            }
-            if (reaperSpectralSurge) {
-                list.push(<div key="surge" className="pe-status-icon pe-status-icon--positive" title="Spectral Surge: Next damage card deals double damage">⚡ Surge</div>);
-            }
-            if (reaperBonusDmg > 0) {
-                list.push(<div key="bonus" className="pe-status-icon pe-status-icon--positive" title={`Empowered: +${reaperBonusDmg} damage to all attacks`}>🩸 +{reaperBonusDmg} ATK</div>);
-            }
-            // Threats
-            reaperThreats.forEach(t => {
-                list.push(
-                    <div key={t.id} className="pe-status-icon pe-status-icon--negative" title={`${t.name}: Deals ${t.damage} damage in ${t.turnsLeft} turn(s)`}>
-                        🧱 {t.name} ({t.damage} dmg, {t.turnsLeft}t)
-                    </div>
-                );
-            });
-
-            if (list.length === 0) return null;
-            return <div className="pe-combatant-statuses">{list}</div>;
-        }
-    }
-
-    renderRiddleModal = () => {
-        const { riddleActive } = this.state;
-        if (!riddleActive) return null;
-        const { riddle } = riddleActive;
-        return (
-            <div className="pe-riddle-backdrop">
-                <div className="pe-riddle-modal">
-                    <div className="pe-riddle-header">
-                        <span className="pe-riddle-sphinx" role="img" aria-label="sphinx">🦁</span>
-                        <h2>The Sphinx Speaks</h2>
-                    </div>
-                    <div className="pe-riddle-question">{riddle.q}</div>
-                    <div className="pe-riddle-choices">
-                        {riddle.choices.map((choice, idx) => (
-                            <button
-                                key={idx}
-                                className="pe-riddle-choice"
-                                onClick={() => this.resolveRiddle(idx)}
-                            >
-                                {choice}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    renderVictoryScreen = () => {
-        const { gameOver } = this.state;
-        if (!gameOver) return null;
-        const isVictory = gameOver === 'victory';
-        return (
-            <div className={`pe-end-screen ${isVictory ? 'pe-end--victory' : 'pe-end--defeat'}`}>
-                <div className="pe-end-modal">
-                    <div className="pe-end-icon">
-                        {isVictory ? <span role="img" aria-label="victory">✨</span> : <span role="img" aria-label="defeat">💀</span>}
-                    </div>
-                    <h2>{isVictory ? 'VICTORY' : 'DEFEATED'}</h2>
-                    <p>{isVictory
-                        ? 'The Reaper crumbles. Your crew lives to delve deeper.'
-                        : (this.props.scrimmage ? 'The Reaper wins this scrimmage.' : 'You lost. 25% of your gold is forfeit.')}
-                    </p>
-                    <button
-                        className="pe-btn pe-btn--primary"
-                        onClick={() => this.props.onFinish && this.props.onFinish({ winner: isVictory ? 'player' : 'reaper' })}
-                    >
-                        {isVictory ? 'Return' : 'Accept Defeat'}
-                    </button>
-                </div>
             </div>
         );
     }
@@ -1701,364 +947,218 @@ class CardDuel extends React.Component {
     // ─── Main Render ──────────────────────────────────────────────────────────
     render() {
         const {
-            playerHand, playerSoul, playerMaxSoul, playerEnergy, playerBaseEnergy,
-            reaperSoul, reaperMaxSoul, reaperHand, reaperField,
-            phase, turnNumber, log, shakePlayer, shakeReaper,
-            gameOver, isAiThinking, bloodhoundReveal,
-            playerDodgeTurns, reaperStunTurns, reaperSkipNextCard,
-            hasVoidTrap, hasDeathMark, hasHexWard,
-            playerBoneArmor, warDrumsTurns, warDrumsBonus,
-            persistentBlockTurns, persistentBlockAmount,
-            reaperBonusDmg, reaperThreats, activeBurns, fallenChampions,
-            fieldChampions, reserveZone, attackFlash, fieldAmplifyThisTurn,
+            playerHP, playerMaxHP, reaperHP, reaperMaxHP,
+            roundNumber, maxSpirit, playerSpirit,
+            currentTurn, isAiThinking, gameOver, log,
+            playerDeck, playerDiscard, reaperDeck, reaperDiscard,
+            selectedUnitKey, grid
         } = this.state;
 
-        const canEndTurn = this.state.duelStarted && phase === 'play' && !gameOver && !isAiThinking;
+        // Check if selected player unit can perform a Direct Attack on Reaper (Row 0)
+        let canDirectAttackReaper = false;
+        if (selectedUnitKey) {
+            const [selR] = selectedUnitKey.split('_').map(Number);
+            const unit = grid[selectedUnitKey];
+            if (selR === 0 && unit && unit.owner === 'player' && unit.actionsLeft > 0) {
+                canDirectAttackReaper = true;
+            }
+        }
+
         const bgImg = images.card_game_background ? `url(${images.card_game_background})` : undefined;
-        const totalATK = this.computeTotalFieldATK();
-        const reaperPhase = this.getReaperPhase();
-        const PHASE_COLORS = { aggressive: '#c94040', tactical: '#c9a84c', desperate: '#9b64c9', enrage: '#ff4444' };
 
         return (
             <div className="pe-root" style={bgImg ? { backgroundImage: bgImg } : {}}>
                 <div className="pe-overlay" />
-                <div className={`pe-layout ${this.state.duelStarted ? 'pe-layout--battle' : 'pe-layout--setup'}`}>
+                <div className="pe-layout pe-layout--tactical">
 
-                    {/* ── LEFT: Reserve + Hand ── */}
-                    <div className="pe-right-panel">
-
-                        {/* Reserve zone */}
-                        <div className="pe-reserve-zone">
-                            <div className="pe-reserve-title">
-                                RESERVE
-                                <span className="pe-reserve-subtitle">
-                                    {reserveZone.length - fieldChampions.length - fallenChampions.length} ready
-                                </span>
-                            </div>
-                            <div className="pe-reserve-list">
-                                {reserveZone.map(c => this.renderReserveCard(c))}
-                                {reserveZone.length === 0 && <div className="pe-reserve-empty">No crew members.</div>}
-                            </div>
-                        </div>
-
-                        {/* Hand panel (Only render when not duelStarted) */}
-                        {!this.state.duelStarted && (
-                            <div className="pe-hand-panel">
-                                <div className="pe-hand-title">
-                                    Your Deck ({this.state.playerDeck.length})
-                                </div>
-                                <div className="pe-setup-cols-container">
-                                    {this.state.playerDeck.length === 0 ? (
-                                        <div className="pe-empty-hand">No cards in deck.</div>
-                                    ) : (
-                                        this.renderSetupDeckColumns()
-                                    )}
-                                </div>
-                                <div className="pe-deck-info">
-                                    <span>Deck: {this.state.playerDeck.length}</span>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* ── CENTER: Arena ── */}
-                    <div className="pe-arena">
-                        {!this.state.duelStarted ? (
-                            <div className="pe-prebattle-panel">
-                                <div className="pe-prebattle-header">
-                                    <span className="pe-prebattle-icon" role="img" aria-label="crossed swords">⚔️</span>
-                                    <h2>Card Duel Setup</h2>
-                                </div>
-                                <div className="pe-prebattle-body">
-                                    <p>Your deck is ready. Check your deck composition on the left panel and click the button below to draw your starting hand and begin the combat.</p>
-                                    <button
-                                        className="pe-btn pe-btn--begin-duel"
-                                        onClick={this.startCardDuel}
-                                    >
-                                        BEGIN
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <>
-                                {/* Reaper zone */}
-                                <div className={`pe-combatant pe-combatant--reaper ${shakeReaper ? 'pe-shake' : ''}`}>
-                                    <div className="pe-combatant-header">
-                                        <div className="pe-combatant-name">THE REAPER</div>
-                                        <div className="pe-reaper-phase" style={{ color: PHASE_COLORS[reaperPhase] }}>
-                                            {reaperPhase.toUpperCase()}
-                                        </div>
-                                        <div className="pe-energy-row">
-                                            {[...Array(3)].map((_, i) => (
-                                                <div key={i} className={`pe-energy-pip ${i < this.state.reaperEnergy ? 'pe-energy-pip--filled' : ''}`} />
-                                            ))}
-                                        </div>
-                                    </div>
-                                    {this.renderSoulBar(reaperSoul, reaperMaxSoul, false)}
-                                    {this.renderCombatantStatuses(false)}
-                                    <div className="pe-reaper-zone">
-                                        <div className="pe-reaper-info">
+                    {/* ── TOP HEADER / REAPER BAR ── */}
+                    <div className="pe-header-bar">
+                        {/* Reaper Health & Info */}
+                        <div className="pe-header-combatant pe-header-combatant--reaper">
+                            <div
+                                className={`pe-health-orb-container ${canDirectAttackReaper ? 'pe-health-orb--target' : ''}`}
+                                onClick={() => canDirectAttackReaper && this.handleDirectAttackReaper()}
+                                title={canDirectAttackReaper ? 'Click to attack Reaper directly!' : `Reaper HP: ${reaperHP}/${reaperMaxHP}`}
+                            >
+                                {this.props.renderSoulBar ? this.props.renderSoulBar(reaperHP, reaperMaxHP, false) : (
+                                    <div className="pe-liquid-orb-wrap pe-liquid-orb--reaper">
+                                        <div className="pe-liquid-orb-vessel">
+                                            <div className="pe-liquid-orb-bg" />
                                             <div
-                                                className="pe-reaper-portrait"
-                                                style={images.reaper_card_back ? { backgroundImage: `url(${images.reaper_card_back})` } : {}}
-                                            >
-                                                <div className="pe-reaper-glow" />
-                                            </div>
-                                            <div className="pe-reaper-hand-wrap">
-                                                <div className="pe-reaper-hand-label">Hand ({reaperHand.length})</div>
-                                                <div className="pe-reaper-hand">
-                                                    {reaperHand.map((_, i) => (
-                                                        <div key={i} className="pe-card-back"
-                                                            style={images.reaper_card_back ? { backgroundImage: `url(${images.reaper_card_back})` } : {}} />
-                                                    ))}
-                                                    {reaperHand.length === 0 && <span className="pe-no-cards">—</span>}
-                                                </div>
-                                            </div>
+                                                className="pe-liquid-orb-fluid"
+                                                style={{
+                                                    height: `${Math.max(0, (reaperHP / reaperMaxHP) * 100)}%`,
+                                                    background: 'linear-gradient(to top, #5c0a0c, #e74c3c 65%, #ff7675 100%)',
+                                                    boxShadow: '0 -2px 12px rgba(231, 76, 60, 0.7)'
+                                                }}
+                                            />
+                                            <div className="pe-liquid-orb-glass-shine" />
+                                            <div
+                                                className="pe-liquid-orb-frame"
+                                                style={{ backgroundImage: `url(${images.reaper_health_orb})` }}
+                                            />
                                         </div>
-
-                                        <div className="pe-reaper-action-display">
-                                            {this.state.reaperLastPlayedCard ? (
-                                                <>
-                                                    <div style={{ fontSize: '10px', color: '#ff4444', marginBottom: '6px', fontWeight: 'bold', fontFamily: 'Cinzel, serif', letterSpacing: '0.05em' }}>
-                                                        LAST ACTION PLAYED
-                                                    </div>
-                                                    {this.renderReaperCard(this.state.reaperLastPlayedCard)}
-                                                </>
-                                            ) : (
-                                                <div className="pe-awaiting-action">Awaiting action...</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-
-                                 {/* Reaper field units */}
-                                {reaperField.length > 0 && (
-                                    <div className="pe-reaper-field-zone">
-                                        <div className="pe-reaper-field-label">
-                                            <span role="img" aria-label="skull">💀</span> REAPER'S FIELD
-                                        </div>
-                                        <div className="pe-reaper-field-units">
-                                            {reaperField.map(unit => {
-                                                const hpPct = Math.max(0, (unit.hp / unit.maxHp) * 100);
-                                                const art = unit.art ? (images[unit.art] || null) : null;
-                                                return (
-                                                    <div key={unit.id} className="pe-reaper-field-unit">
-                                                        {art && (
-                                                            <div 
-                                                                className="pe-unit-portrait" 
-                                                                style={{ backgroundImage: `url(${art})` }} 
-                                                            />
-                                                        )}
-                                                        <div className="pe-rfu-name">{unit.name}</div>
-                                                        <div className="pe-rfu-hp-bar-bg">
-                                                            <div className="pe-rfu-hp-bar-fill" style={{ width: `${hpPct}%` }} />
-                                                        </div>
-                                                        <div className="pe-rfu-stats">
-                                                            <span className="pe-rfu-atk">⚔ {unit.atk}</span>
-                                                            <span className="pe-rfu-hp">{unit.hp}/{unit.maxHp}</span>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
+                                        <div className="pe-liquid-orb-label">{reaperHP} / {reaperMaxHP}</div>
                                     </div>
                                 )}
-
-                                {/* Unified Player Army Zone (Field Champions + Summoned Units) */}
-                                <div className={`pe-player-field-zone ${attackFlash ? 'pe-field-attack' : ''}`}>
-                                    <div className="pe-player-field-label">
-                                        <span role="img" aria-label="shield">🛡️</span> YOUR ARMY
-                                        {fallenChampions.length > 0 && (
-                                            <span className="pe-field-fallen-count"> · {fallenChampions.length} fallen</span>
-                                        )}
-                                    </div>
-                                    <div className="pe-player-field-units">
-                                        {/* Field Champions */}
-                                        {fieldChampions.map(c => this.renderFieldChampion(c))}
-                                        {fieldChampions.length === 0 && (
-                                            <div className="pe-field-empty">Summon a champion from the Reserve →</div>
-                                        )}
-                                        {fieldChampions.length === 1 && (
-                                            <div className="pe-field-slot-empty">[ Empty Slot ]</div>
-                                        )}
-
-                                        {/* Summoned Units from Hand */}
-                                        {this.state.playerField && this.state.playerField.map(unit => {
-                                            const hpPct = Math.max(0, (unit.hp / unit.maxHp) * 100);
-                                            const art = unit.art ? (images[unit.art] || null) : null;
-                                            return (
-                                                <div key={unit.id} className="pe-player-field-unit">
-                                                    {art && (
-                                                        <div 
-                                                            className="pe-unit-portrait" 
-                                                            style={{ backgroundImage: `url(${art})` }} 
-                                                        />
-                                                    )}
-                                                    <div className="pe-pfu-name">{unit.name}</div>
-                                                    <div className="pe-pfu-hp-bar-bg">
-                                                        <div className="pe-pfu-hp-bar-fill" style={{ width: `${hpPct}%` }} />
-                                                    </div>
-                                                    <div className="pe-pfu-stats">
-                                                        <span className="pe-pfu-atk">⚔ {unit.atk}</span>
-                                                        <span className="pe-pfu-hp">{unit.hp}/{unit.maxHp}</span>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                    {totalATK > 0 && (
-                                        <div className="pe-field-atk-total" style={{ marginTop: '8px' }}>
-                                            Combined ATK: <strong>{totalATK}</strong>
-                                            {this.state.hasDeathMark && <span className="pe-death-mark-hint"> → ☠️ ×2 = {totalATK * 2}</span>}
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* Message strip */}
-                                <div className="pe-message-strip">
-                                    <div className="pe-message-text">{this.state.message}</div>
-                                </div>
-
-                                {/* Player zone */}
-                                <div className={`pe-combatant pe-combatant--player ${shakePlayer ? 'pe-shake' : ''}`}>
-                                    <div className="pe-combatant-header">
-                                        <div className="pe-combatant-name">YOUR CREW</div>
-                                        <div className="pe-energy-row">
-                                            {[...Array(Math.max(playerBaseEnergy + (this.hasFieldChampion('monk') ? 1 : 0), playerBaseEnergy))].map((_, i) => (
-                                                <div key={i} className={`pe-energy-pip ${i < playerEnergy ? 'pe-energy-pip--filled pe-energy-pip--player' : ''}`} />
-                                            ))}
-                                            <span className="pe-energy-label">{playerEnergy} Energy</span>
-                                        </div>
-                                    </div>
-                                    {this.renderSoulBar(playerSoul, playerMaxSoul, true)}
-                                    {this.renderCombatantStatuses(true)}
-                                </div>
-
-                                {/* Player Hand at bottom center of the screen */}
-                                <div className="pe-battle-hand-area">
-                                    {/* DECK PILE */}
-                                    <div className="pe-battle-hand-left">
-                                        {this.renderDeckPile()}
-                                    </div>
-
-                                    {/* HAND CARDS */}
-                                    <div className="pe-battle-hand-center">
-                                        <div className="pe-battle-hand-cards">
-                                            {playerHand.map(card => this.renderCard(card))}
-                                            {playerHand.length === 0 && <div className="pe-empty-hand-duel">No cards in hand.</div>}
-                                        </div>
-                                    </div>
-
-                                    {/* DISCARD PILE */}
-                                    <div className="pe-battle-hand-right">
-                                        {this.renderDiscardPile()}
-                                    </div>
-                                </div>
-                            </>
-                        )}
-                    </div>
-
-                    {/* ── RIGHT: Log + Controls ── */}
-                    <div className="pe-sidebar">
-                        <div className="pe-sidebar-title">Pyre &amp; Echo</div>
-                        <div className="pe-turn-badge">
-                            Turn {turnNumber} · {isAiThinking ? '💀 REAPER' : '⚔️ YOUR TURN'}
-                        </div>
-
-                        {bloodhoundReveal && (
-                            <div className="pe-bloodhound-hint">
-                                <span role="img" aria-label="bloodhound">🐕</span> Reaper has <em>{bloodhoundReveal}</em>
                             </div>
-                        )}
 
-                        {/* Active status effects */}
-                        <div className="pe-status-badges">
-                            {reaperBonusDmg > 0        && <div className="pe-badge pe-badge--danger">💀 Reaper +{reaperBonusDmg} ATK</div>}
-                            {reaperThreats.length > 0  && <div className="pe-badge pe-badge--threat">☠️ {reaperThreats.map(t => `${t.name} (${t.damage} dmg, ${t.turnsLeft}t)`).join(', ')}</div>}
-                            {activeBurns.length > 0    && <div className="pe-badge pe-badge--burn">🔥 Burn ({activeBurns.reduce((s, b) => s + b.dmgPerTurn, 0)}/turn)</div>}
-                            {hasVoidTrap               && <div className="pe-badge pe-badge--trap">🔮 Void Trap</div>}
-                            {hasDeathMark              && <div className="pe-badge pe-badge--mark">☠️ Death Mark</div>}
-                            {hasHexWard                && <div className="pe-badge pe-badge--ward">🔯 Hex Ward</div>}
-                            {warDrumsTurns > 0         && <div className="pe-badge pe-badge--buff">🥁 War Drums +{warDrumsBonus} ({warDrumsTurns}t)</div>}
-                            {fieldAmplifyThisTurn > 0  && <div className="pe-badge pe-badge--buff">⚔️ Battlecry +{fieldAmplifyThisTurn}</div>}
-                            {persistentBlockTurns > 0  && <div className="pe-badge pe-badge--block">🛡️ Iron Skin -{persistentBlockAmount} ({persistentBlockTurns}t)</div>}
-                            {playerBoneArmor > 0       && <div className="pe-badge pe-badge--armor">🦴 Armor ({playerBoneArmor})</div>}
-                            {playerDodgeTurns > 0      && <div className="pe-badge pe-badge--dodge">💨 Dodge ({playerDodgeTurns}t)</div>}
-                            {reaperStunTurns > 0       && <div className="pe-badge pe-badge--stun">❄️ Stunned ({reaperStunTurns}t)</div>}
-                            {reaperSkipNextCard        && <div className="pe-badge pe-badge--skip">🚫 Skip Reaper Card</div>}
+                            <div className="pe-header-details">
+                                <div className="pe-combatant-name--reaper">THE REAPER</div>
+                                <div className="pe-deck-counts">Deck: {reaperDeck.length} · Discard: {reaperDiscard.length}</div>
+                            </div>
                         </div>
 
-                        <button
-                            className="pe-btn pe-btn--end-turn"
-                            disabled={!canEndTurn}
-                            onClick={this.endPlayerTurn}
-                        >
-                            {totalATK > 0 ? `⚔️ Attack (${totalATK}) + End Turn` : 'End Turn'}
-                        </button>
+                        {/* Center Match Round & Spirit Info */}
+                        <div className="pe-header-round-info">
+                            <div className="pe-round-badge">ROUND {roundNumber}</div>
+                            <div className="pe-turn-indicator">
+                                {isAiThinking ? '💀 REAPER TURN' : (currentTurn === 'player' ? '⚔️ YOUR TURN' : '💀 REAPER TURN')}
+                            </div>
+                            {canDirectAttackReaper && (
+                                <button className="pe-direct-attack-btn" onClick={this.handleDirectAttackReaper}>
+                                    💥 DIRECT ATTACK REAPER!
+                                </button>
+                            )}
+                        </div>
 
-                        <button
-                            className="pe-btn pe-btn--forfeit"
-                            disabled={!this.state.duelStarted}
-                            onClick={() => this.setState({ showForfeitModal: true })}
-                        >
-                            Forfeit
-                        </button>
+                        {/* Player Health & Info */}
+                        <div className="pe-header-combatant pe-header-combatant--player">
+                            <div className="pe-header-details" style={{ textAlign: 'right' }}>
+                                <div className="pe-combatant-name--player">YOUR CREW</div>
+                                <div className="pe-spirit-meter">
+                                    <span className="pe-spirit-label">SPIRIT: </span>
+                                    <span className="pe-spirit-val">{playerSpirit} / {maxSpirit}</span>
+                                </div>
+                                <div className="pe-deck-counts">Deck: {playerDeck.length} · Discard: {playerDiscard.length}</div>
+                            </div>
 
-                        {/* Event log */}
-                        <div className="pe-log" ref={this.logRef}>
-                            {log.map((l, i) => <div key={i} className="pe-log-entry">{l}</div>)}
+                            <div className="pe-health-orb-container">
+                                {this.props.renderSoulBar ? this.props.renderSoulBar(playerHP, playerMaxHP, true) : (
+                                    <div className="pe-liquid-orb-wrap pe-liquid-orb--crew">
+                                        <div className="pe-liquid-orb-vessel">
+                                            <div className="pe-liquid-orb-bg" />
+                                            <div
+                                                className="pe-liquid-orb-fluid"
+                                                style={{
+                                                    height: `${Math.max(0, (playerHP / playerMaxHP) * 100)}%`,
+                                                    background: 'linear-gradient(to top, #0f522b, #2ecc71 65%, #a2ded0 100%)',
+                                                    boxShadow: '0 -2px 12px rgba(46, 204, 113, 0.7)'
+                                                }}
+                                            />
+                                            <div className="pe-liquid-orb-glass-shine" />
+                                            <div
+                                                className="pe-liquid-orb-frame"
+                                                style={{ backgroundImage: `url(${images.crew_health_orb})` }}
+                                            />
+                                        </div>
+                                        <div className="pe-liquid-orb-label">{playerHP} / {playerMaxHP}</div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
+                    {/* ── CENTER TACTICAL 5-LANE ARENA ── */}
+                    <div className="pe-tactical-arena">
+
+                        {/* Reaper Fanned Hand Top */}
+                        <div className="pe-reaper-hand-section">
+                            {this.renderReaperHandFanned()}
+                        </div>
+
+                        {/* 5x5 Grid Lanes */}
+                        <div className="pe-grid-section">
+                            {this.renderGridNodes()}
+                        </div>
+
+                        {/* Player Fanned Hand Bottom */}
+                        <div className="pe-player-hand-section">
+                            {this.renderFannedPlayerHand()}
+                        </div>
+                    </div>
+
+                    {/* ── RIGHT SIDEBAR LOG & CONTROLS ── */}
+                    <div className="pe-sidebar-panel">
+                        <div className="pe-sidebar-header">
+                            <h3>5-Lane Card Duel</h3>
+                        </div>
+
+                        <div className="pe-controls-group">
+                            <button
+                                className="pe-btn pe-btn--end-turn"
+                                disabled={currentTurn !== 'player' || isAiThinking || !!gameOver}
+                                onClick={this.handleEndTurn}
+                            >
+                                {currentTurn === 'player' ? 'End Turn ➔' : 'Reaper Turn...'}
+                            </button>
+
+                            <button
+                                className="pe-btn pe-btn--forfeit"
+                                onClick={() => this.setState({ showForfeitModal: true })}
+                            >
+                                Forfeit
+                            </button>
+                        </div>
+
+                        {/* Combat Log */}
+                        <div className="pe-tactical-log" ref={this.logRef}>
+                            {log.map((entry, i) => (
+                                <div key={i} className="pe-log-line">{entry}</div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
 
-                {this.renderRiddleModal()}
-                {this.renderForfeitModal()}
-                {this.renderVictoryScreen()}
+                {/* Victory / Defeat Modal */}
+                {gameOver && (
+                    <div className={`pe-end-screen ${gameOver === 'victory' ? 'pe-end--victory' : 'pe-end--defeat'}`}>
+                        <div className="pe-end-modal">
+                            <div className="pe-end-icon">
+                                {gameOver === 'victory' ? '✨' : '💀'}
+                            </div>
+                            <h2>{gameOver === 'victory' ? 'VICTORY!' : 'DEFEATED'}</h2>
+                            <p>
+                                {gameOver === 'victory'
+                                    ? 'You destroyed the Reaper\'s health in tactical combat!'
+                                    : 'Your crew\'s health was depleted by the Reaper.'}
+                            </p>
+                            <button
+                                className="pe-btn pe-btn--primary"
+                                onClick={() => this.props.onFinish && this.props.onFinish({ winner: gameOver === 'victory' ? 'player' : 'reaper' })}
+                            >
+                                {gameOver === 'victory' ? 'Claim Victory' : 'Return'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Forfeit Modal */}
+                {this.state.showForfeitModal && (
+                    <div className="pe-riddle-backdrop" onClick={e => { if (e.target === e.currentTarget) this.setState({ showForfeitModal: false }); }}>
+                        <div className="pe-forfeit-modal">
+                            <div className="pe-forfeit-icon">🏳</div>
+                            <h2 className="pe-forfeit-title">Forfeit the Duel?</h2>
+                            <p className="pe-forfeit-body">Are you sure you want to forfeit this tactical duel?</p>
+                            <div className="pe-forfeit-btns">
+                                <button className="pe-btn pe-forfeit-cancel" onClick={() => this.setState({ showForfeitModal: false })}>
+                                    Cancel
+                                </button>
+                                <button
+                                    className="pe-btn pe-forfeit-confirm"
+                                    onClick={() => {
+                                        this.setState({ showForfeitModal: false });
+                                        if (this.props.onFinish) this.props.onFinish({ winner: 'reaper' });
+                                        else if (this.props.onClose) this.props.onClose();
+                                    }}
+                                >
+                                    Forfeit
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
 }
-
-// ─── Forfeit confirm modal ────────────────────────────────────────────────────
-CardDuel.prototype.renderForfeitModal = function() {
-    if (!this.state.showForfeitModal) return null;
-    const isScrimmage = !!this.props.scrimmage;
-    return (
-        <div className="pe-riddle-backdrop" onClick={e => { if (e.target === e.currentTarget) this.setState({ showForfeitModal: false }); }}>
-            <div className="pe-forfeit-modal">
-                <div className="pe-forfeit-icon"><span role="img" aria-label="white flag">🏳</span></div>
-                <h2 className="pe-forfeit-title">Forfeit the Duel?</h2>
-                {isScrimmage ? (
-                    <p className="pe-forfeit-body">This is a scrimmage — no penalty applies.</p>
-                ) : (
-                    <p className="pe-forfeit-body">You will forfeit <span className="pe-forfeit-gold">500 gold</span> to the Reaper.</p>
-                )}
-                <div className="pe-forfeit-btns">
-                    <button className="pe-btn pe-forfeit-cancel" onClick={() => this.setState({ showForfeitModal: false })}>
-                        Cancel
-                    </button>
-                    <button
-                        className="pe-btn pe-forfeit-confirm"
-                        onClick={() => {
-                            this.setState({ showForfeitModal: false });
-                            if (!isScrimmage && this.props.inventoryManager) {
-                                this.props.inventoryManager.gold = Math.max(0, (this.props.inventoryManager.gold || 0) - 500);
-                                if (this.props.saveUserData) this.props.saveUserData();
-                            }
-                            if (isScrimmage) {
-                                if (this.props.onClose) this.props.onClose();
-                            } else {
-                                if (this.props.onFinish) this.props.onFinish({ winner: 'reaper', forfeited: true });
-                            }
-                        }}
-                    >
-                        {isScrimmage ? 'Leave' : 'Forfeit'}
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export default CardDuel;
