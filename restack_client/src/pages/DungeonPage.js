@@ -2544,6 +2544,8 @@ class DungeonPage extends React.Component {
             , mobileRightActionsCollapsed: false
             , mobileRightPoiCollapsed: false
             , isMobileLandscape: window.innerWidth <= 1024 && window.innerHeight < window.innerWidth
+            , draggingSectionId: null
+            , metaPanelConfigVersion: 0
         }
     // Native browser tooltip will be used for death-tracker; no custom tooltip state required.
         // Track timers/intervals created by this component so we can clear on unmount
@@ -5118,8 +5120,1297 @@ class DungeonPage extends React.Component {
         this.forceUpdate();
     };
 
-    // Dev console handlers
-    handleDevConsoleInputChange = (e) => {
+    isSectionCollapsed = (sectionId) => {
+        const meta = getMeta() || {};
+        const collapsed = (meta.panelConfig && meta.panelConfig.collapsed) || {};
+        return !!collapsed[sectionId];
+    };
+
+    toggleSectionCollapse = (sectionId) => {
+        const meta = getMeta() || {};
+        const panelConfig = meta.panelConfig || {
+            left: ["character", "stats", "actions", "equipment"],
+            right: ["minimap", "status_summary", "crew_list", "quick_actions", "poi", "toggles"]
+        };
+        if (!panelConfig.collapsed) panelConfig.collapsed = {};
+        panelConfig.collapsed[sectionId] = !panelConfig.collapsed[sectionId];
+
+        meta.panelConfig = panelConfig;
+        storeMeta(meta);
+        this.setState({ metaPanelConfigVersion: (this.state.metaPanelConfigVersion || 0) + 1 });
+        if (this.props.saveUserData) this.props.saveUserData();
+    };
+
+    handleDragStart = (e, sectionId) => {
+        e.dataTransfer.setData("text/plain", sectionId);
+        this.setState({ draggingSectionId: sectionId });
+    };
+
+    handleDragOver = (e) => {
+        e.preventDefault();
+    };
+
+    handleDrop = (e, targetPanel, targetIndex) => {
+        e.preventDefault();
+        const sectionId = e.dataTransfer.getData("text/plain") || this.state.draggingSectionId;
+        if (!sectionId) return;
+
+        const meta = getMeta() || {};
+        const panelConfig = meta.panelConfig || {
+            left: ["character", "stats", "actions", "equipment"],
+            right: ["minimap", "status_summary", "crew_list", "quick_actions", "poi", "toggles"]
+        };
+
+        const leftNew = (panelConfig.left || []).filter(s => s !== sectionId);
+        const rightNew = (panelConfig.right || []).filter(s => s !== sectionId);
+
+        if (targetPanel === 'left') {
+            leftNew.splice(targetIndex, 0, sectionId);
+        } else {
+            rightNew.splice(targetIndex, 0, sectionId);
+        }
+
+        panelConfig.left = leftNew;
+        panelConfig.right = rightNew;
+
+        meta.panelConfig = panelConfig;
+        storeMeta(meta);
+
+        this.setState({ draggingSectionId: null, metaPanelConfigVersion: (this.state.metaPanelConfigVersion || 0) + 1 });
+        if (this.props.saveUserData) this.props.saveUserData();
+    };
+
+    handleDragEnd = () => {
+        this.setState({ draggingSectionId: null });
+    };
+
+    renderCharacterSection = () => {
+        const collapsed = this.isSectionCollapsed('character');
+        return (
+            <div className="dungeon-panel-section section-character">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'character')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('character')}
+                >
+                    Character {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content">
+                        <div className="portrait-wrapper">
+                            <div className="status-container">
+                                <div className="member-level-indicator">Lvl {this.state.selectedCrewMember.level}</div>
+                            </div>
+                            {(() => {
+                                let portraitUrl = this.state.selectedCrewMember.portrait;
+                                if (portraitUrl && typeof portraitUrl === 'object') {
+                                    portraitUrl = portraitUrl.default || portraitUrl;
+                                }
+                                if (portraitUrl && typeof portraitUrl === 'object') {
+                                    portraitUrl = portraitUrl.default || '';
+                                }
+                                return <div className="portrait" style={{backgroundImage: `url(${portraitUrl})`}}></div>;
+                            })()}
+                            <div className="cooldowns-container">
+                                {(() => {
+                                    const actions = this.state.selectedCrewMember.specialActions || [];
+                                    const grouped = {};
+                                    actions.forEach(action => {
+                                        const key = action.type === 'glyph' && action.glyphTier
+                                            ? `glyph:${action.glyphTier}`
+                                            : action.type;
+                                        if (!grouped[key]) grouped[key] = [];
+                                        grouped[key].push(action);
+                                    });
+                                    return Object.keys(grouped).map((groupKey, i) => {
+                                        const group = grouped[groupKey];
+                                        const action = group[0];
+                                        const count = group.filter(a => a.available).length;
+                                        const now = new Date();
+                                        const inProgressAction = group.find(a => {
+                                            if (!a || !a.startDate || !a.endDate) return false;
+                                            const s = new Date(a.startDate);
+                                            const e = new Date(a.endDate);
+                                            return now >= s && now < e;
+                                        });
+                                        const progressPct = inProgressAction ? this.getActionCooldownPercentage(inProgressAction) : 0;
+                                        
+                                        let iconUrl = action.iconUrlInverted || action.iconUrl;
+                                        if (!iconUrl && action.glyphTier && typeof images !== 'undefined') {
+                                            iconUrl = images[`${action.glyphTier}_glyph`] || '';
+                                        }
+                                        if (!iconUrl && action.subtype === 'magic missile' && typeof images !== 'undefined') {
+                                            iconUrl = images['magic_missile_icon'] || images['magic_missile_inverted'] || images['magic_missile'];
+                                        }
+                                        if (!iconUrl && typeof images !== 'undefined') {
+                                            iconUrl = images['glyph_inverted'] || '';
+                                        }
+                                        if (iconUrl && typeof iconUrl === 'object') {
+                                            iconUrl = iconUrl.default || iconUrl;
+                                        }
+                                        if (iconUrl && typeof iconUrl === 'object') {
+                                            iconUrl = iconUrl.default || '';
+                                        }
+                                        const resolvedIconString = typeof iconUrl === 'string' ? iconUrl : '';
+                                        return (
+                                            <div key={groupKey} className="special-action-wrapper" style={{position: 'relative'}}>
+                                                <div className="special-action-icon" style={{backgroundImage: resolvedIconString ? `url("${encodeURI(resolvedIconString)}")` : 'none'}}></div>
+                                                {inProgressAction && progressPct < 50 && <div className="progress-overlay"></div>}
+                                                {inProgressAction && <div className="left" style={{transform: `rotate(${this.getRotateDegreesLeft(progressPct)}deg)`}}></div>}
+                                                {inProgressAction && <div className="right" style={{transform: `rotate(${this.getRotateDegreesRight(progressPct)}deg)`}}></div>}
+                                                {count >= 1 && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: 6,
+                                                        right: -16,
+                                                        color: 'white',
+                                                        fontWeight: 'bold',
+                                                        borderRadius: '50%',
+                                                        minWidth: 18,
+                                                        minHeight: 18,
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        justifyContent: 'center',
+                                                        fontSize: 10,
+                                                        zIndex: 99,
+                                                    }}>
+                                                        {this.getSubtypeNumeralElement({count})}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                        <div className="name-line">{this.state.selectedCrewMember.name} the {this.uppercaseFirstLetter(this.state.selectedCrewMember.type || this.state.selectedCrewMember.image)}</div>
+                        
+                        {(() => {
+                            const member = this.state.selectedCrewMember;
+                            const globalSkills = member.globalSkills || [];
+                            if (globalSkills.length === 0) return null;
+                            
+                            const skillDetails = {
+                                keen_eye: { name: 'Keen Eye', desc: 'L1: Reveals +2 fog tiles. L2: Reveals nearby traps. L3: +3 DEX to trap saves.' },
+                                scrounging_rat: { name: 'Scrounging Rat', desc: 'Allows scrounging for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' },
+                                fastidious_crow: { name: 'Fastidious Crow', desc: 'Scouts a random board (10x10 fog reveal) for 24 hours. Process takes 20m. Cooldown and gold/gem reward based on level.' },
+                                hunters_quarry: { name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' },
+                                read_the_land: { name: 'Read the Land', desc: 'Adjacent tile types hinted on entry' },
+                                trailblaze: { name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' },
+                                herbalism: { name: 'Herbalism', desc: 'Camp costs 1 less food per member' },
+                                mend: { name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' },
+                                ritual_efficiency: { name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' },
+                                revive: { name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' },
+                                fortify: { name: 'Fortify', desc: 'Resolve does not decay while camping' },
+                                breacher: { name: 'Breacher', desc: 'Force open a Minor Key gate once per level' },
+                                rally: { name: 'Rally', desc: '+5 bonus Resolve on combat victory' },
+                                iron_will: { name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' },
+                                arcane_sense: { name: 'Arcane Sense', desc: 'Identifies chest tier before opening' },
+                                ley_tap: { name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' },
+                                dimensional_pocket: { name: 'Dimensional Pocket', desc: '+2 shared inventory slots' },
+                                scry: { name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' },
+                                iron_gut: { name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' },
+                                savage_haul: { name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' },
+                                bloodhound: { name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' },
+                                endure: { name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%' },
+                                swift_step: { name: 'Swift Step', desc: 'Movement animation 30% faster' },
+                                focused_rest: { name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' },
+                                pressure_points: { name: 'Pressure Points', desc: '15% vendor discount once per vendor' },
+                                astral_map: { name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' },
+                                spirit_sight: { name: 'Spirit Sight', desc: 'Narrative tiles glow through fog' },
+                                plunder: { name: 'Plunder', desc: 'Open a chest a second time once per run' },
+                                soul_tithe: { name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' },
+                                dark_pact: { name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' },
+                                awake_refreshed: { name: 'Awake Refreshed', desc: 'Camp recuperation grants an additional +10/+20/+40 Resolve.' },
+                                strong_resolve: { name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }
+                            };
+
+                            const getGlobalSkillIcon = (memberType, skillKey) => {
+                                const type = (memberType || '').toLowerCase();
+                                const key = (skillKey || '').toLowerCase();
+                                if (key === 'awake_refreshed') {
+                                    if (type === 'sage') return images.awake_refreshed_sage;
+                                    if (type === 'soldier') return images.awake_refreshed_soldier;
+                                }
+                                if (key === 'strong_resolve' && type === 'soldier') {
+                                    return images.strong_resolve_soldier;
+                                }
+                                return images.glyph_inverted || images.avatar;
+                            };
+
+                            return (
+                                <div className="global-skills-row" style={{ display: 'flex', flexDirection: 'row', gap: '8px', margin: '8px 0 12px 0', justifyContent: 'center', flexWrap: 'wrap' }}>
+                                    {globalSkills.map((s, sIdx) => {
+                                        const key = typeof s === 'string' ? s : s.key;
+                                        const level = typeof s === 'string' ? 1 : (s.level || 1);
+                                        const details = skillDetails[key] || { name: key, desc: '' };
+                                        const iconUrl = getGlobalSkillIcon(member.type, key);
+                                        return (
+                                            <div
+                                                key={key + '-' + sIdx}
+                                                className="global-skill-icon-wrapper"
+                                                style={{
+                                                    position: 'relative',
+                                                    width: '32px',
+                                                    height: '32px',
+                                                    border: '1px solid rgba(212,168,68,0.4)',
+                                                    borderRadius: '4px',
+                                                    background: 'rgba(0,0,0,0.6)',
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 0 6px rgba(212,168,68,0.2)'
+                                                }}
+                                                onMouseEnter={() => this.setState({ descriptionText: `${details.name} (Level ${level}): ${details.desc}` })}
+                                                onMouseLeave={() => this.setState({ descriptionText: '' })}
+                                            >
+                                                <img
+                                                    src={iconUrl}
+                                                    alt={details.name}
+                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '3px' }}
+                                                />
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    bottom: '-5px',
+                                                    right: '-5px',
+                                                    backgroundColor: '#d4a844',
+                                                    color: 'black',
+                                                    fontWeight: 'bold',
+                                                    fontSize: '9px',
+                                                    borderRadius: '50%',
+                                                    minWidth: '13px',
+                                                    height: '13px',
+                                                    display: 'flex',
+                                                    alignItems: 'center',
+                                                    justifyContent: 'center',
+                                                    border: '1px solid black',
+                                                    padding: '1px',
+                                                    lineHeight: 1
+                                                }}>
+                                                    {level}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderStatsSection = () => {
+        const collapsed = this.isSectionCollapsed('stats');
+        const selected = this.state.selectedCrewMember || {};
+        const maxHp = (selected.stats && selected.stats.hp) ? selected.stats.hp : 0;
+        const currentHp = (typeof selected.hp !== 'undefined') ? Math.floor(selected.hp) : maxHp;
+        const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, Math.ceil((currentHp / maxHp) * 100))) : 0;
+
+        return (
+            <div className="dungeon-panel-section section-stats">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'stats')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('stats')}
+                >
+                    Stats {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content">
+                        <div className="hp-line-container" style={{width: '100%'}}>
+                            <div className="hp-line" style={{width: `${hpPct}%`}}></div>
+                        </div>
+
+                        <div className="experience-line-container">
+                            <div className="experience-line" style={{width: `${this.props.crewManager.calculateExpPercentage(this.state.selectedCrewMember)}%`}}></div>
+                        </div>
+
+                        <div className="stat-line"> <span className="stat-name">hitpoints</span>  <span className='stat-value'>{currentHp}/{maxHp}</span> </div>
+                        <div className="stat-line"> <span className="stat-name">Strength</span>  <span className='stat-value'>{this.state.selectedCrewMember.stats?.str} </span> </div>
+                        <div className="stat-line">Dexterity <span className='stat-value'> {this.state.selectedCrewMember.stats?.dex} </span></div>
+                        <div className="stat-line">Intelligence <span className='stat-value'>{this.state.selectedCrewMember.stats?.int} </span></div>
+                        <div className="stat-line">Fortitude <span className='stat-value'> {this.state.selectedCrewMember.stats?.fort} </span></div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderActionsSection = () => {
+        const collapsed = this.isSectionCollapsed('actions');
+        return (
+            <div className="dungeon-panel-section section-actions">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'actions')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('actions')}
+                >
+                    Actions {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content">
+                        <div className="icon-container menu" onClick={this.toggleActionsTray}>
+                            <CIcon icon={cilMenu} className={`menu-icon ${this.state.leftPanelExpanded ? 'expanded' : ''}`} size="sm"/>
+                            Actions
+                        </div>
+                        {this.state.isMobileLandscape && (
+                            <div style={{ padding: '4px 8px 8px 8px' }}>
+                                <button 
+                                    className="quick-action-btn"
+                                    onClick={() => this.setState({ showInventoryPopup: true })}
+                                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                                >
+                                    <span>🎒 Shared Inventory</span>
+                                </button>
+                            </div>
+                        )}
+                        <div className={`actions-tray ${this.state.actionsTrayExpanded && (Array.isArray(this.state.actionMenuTypeExpanded) ? this.state.actionMenuTypeExpanded.length > 0 : !!this.state.actionMenuTypeExpanded) ? 'double-expanded' : 
+                        (this.state.actionsTrayExpanded ? 'expanded' : '')}`}>
+                            {this.getCharacterActions(this.state.selectedCrewMember)}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderEquipmentSection = () => {
+        const collapsed = this.isSectionCollapsed('equipment');
+        const selected = this.state.selectedCrewMember || {};
+        const findEquipped = (slot) => {
+            const slotsToCheck = (slot === 'pet' || slot === 'bottom-left') ? ['pet','bottom-left'] : [slot];
+            return (selected.inventory || []).find(i => slotsToCheck.includes(i.equippedSlot));
+        };
+        const chest = findEquipped('chest');
+        const right = findEquipped('right');
+        const left = findEquipped('left');
+        const head = findEquipped('head');
+        const boots = findEquipped('boots');
+        const bottomLeft = findEquipped('pet');
+        const ancillaryLeft = findEquipped('ancillary-left');
+        const ancillaryRight = findEquipped('ancillary-right');
+
+        const ReadOnlySlot = ({ item, slotClass }) => {
+            const slotKey = slotClass.replace('slot-', '');
+            const info = SLOT_INFO[slotKey] || { name: 'Equipment Slot', desc: '' };
+            const slotName = slotClass === 'slot-left' ? 'left' : (slotClass === 'slot-right' ? 'right' : null);
+            return (
+                <div 
+                    className={`equip-slot ${slotClass} ep-slot-wrapper`}
+                    title={!item ? info.name : undefined}
+                    onMouseEnter={() => !item ? this.setState({ descriptionText: `${info.name}: ${info.desc}` }) : null}
+                    onMouseLeave={() => this.setState({ descriptionText: '' })}
+                    onContextMenu={(e) => slotName ? this.handleSlotContextMenu(e, slotName) : null}
+                >
+                    {item && (
+                        <>
+                            <Tile
+                                id={item.id}
+                                data={item}
+                                tileSize={this.state.tileSize}
+                                image={item.icon}
+                                contains={item.name ? item.name.replace(' ', '_') : null}
+                                color={item.color}
+                                editMode={false}
+                                type={'inventory-tile'}
+                                handleClick={() => {}}
+                                handleHover={() => this.setState({ descriptionText: this.buildItemSummaryDescription(item) })}
+                            />
+                            <div className="ep-slot-name">{item.name}</div>
+                        </>
+                    )}
+                </div>
+            );
+        };
+
+        return (
+            <div className="dungeon-panel-section section-equipment">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'equipment')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('equipment')}
+                >
+                    Equipment {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content">
+                        <div className="equipment-panel">
+                            <div className='crew-body' style={{marginTop: '-16px'}}>
+                                <div className='crew-body-image' style={{backgroundImage: `url(${images.body_male})`}} />
+                                <ReadOnlySlot item={chest}        slotClass="slot-chest" />
+                                <ReadOnlySlot item={right}        slotClass="slot-right" />
+                                <ReadOnlySlot item={left}         slotClass="slot-left" />
+                                <ReadOnlySlot item={head}         slotClass="slot-head" />
+                                <ReadOnlySlot item={boots}        slotClass="slot-boots" />
+                                <ReadOnlySlot item={ancillaryLeft}  slotClass="slot-ancillary-left" />
+                                <ReadOnlySlot item={ancillaryRight} slotClass="slot-ancillary-right" />
+                                <ReadOnlySlot item={bottomLeft}   slotClass="slot-pet" />
+                            </div>
+                            <div className='left-body-preview' style={{backgroundImage: `url(${images.body_male})`, backgroundSize: '130%'}}></div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderMinimapSection = () => {
+        const collapsed = this.isSectionCollapsed('minimap');
+        return (
+            <div className="dungeon-panel-section section-minimap">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'minimap')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('minimap')}
+                >
+                    Minimap {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content">
+                        <div className="minimap-container">
+                            <div className="map-wrapper">
+                                <div className="level-indicator">
+                                    {this.state.levelTracker && this.state.levelTracker.map((e,i)=>{
+                                        return <div key={i} className={`floor-level ${e.active ? 'active' : ''} `}></div>
+                                    })}
+                                </div>
+                                {this.state.minimap.map((e,i)=>{
+                                    const bcTrail = (() => {
+                                        try {
+                                            const now = Date.now();
+                                            const DIM_MS  = 20 * 60 * 1000;
+                                            const TILE_PX = 50;
+                                            const currentLevelId = (this.state.levelTracker.find(el => el.active) || {}).id;
+                                            const currentOrientation = (this.props.boardManager && this.props.boardManager.currentOrientation) || 'A';
+                                            const crumbs = [];
+                                            this._breadcrumbs.forEach(val => {
+                                                if (
+                                                    val.boardIndex === i &&
+                                                    val.levelId === currentLevelId &&
+                                                    val.orientation === currentOrientation
+                                                ) crumbs.push(val);
+                                            });
+                                            if (crumbs.length === 0) return null;
+                                            crumbs.sort((a, b) => a.seq - b.seq);
+                                            const toXY = c => ({
+                                                x: ((c.col - 15) / 14) * TILE_PX,
+                                                y: ((c.row - 15) / 14) * TILE_PX,
+                                            });
+                                            const splitIntoAdjacentSegments = (crumbList) => {
+                                                if (!Array.isArray(crumbList) || crumbList.length < 2) return [];
+                                                const segments = [];
+                                                let currentSegment = [crumbList[0]];
+
+                                                for (let idx = 1; idx < crumbList.length; idx++) {
+                                                    const prev = crumbList[idx - 1];
+                                                    const cur = crumbList[idx];
+                                                    const manhattan = Math.abs(cur.row - prev.row) + Math.abs(cur.col - prev.col);
+                                                    if (manhattan === 1) {
+                                                        currentSegment.push(cur);
+                                                    } else {
+                                                        if (currentSegment.length > 1) segments.push(currentSegment);
+                                                        currentSegment = [cur];
+                                                    }
+                                                }
+                                                if (currentSegment.length > 1) segments.push(currentSegment);
+
+                                                return segments.map((segment) =>
+                                                    segment.map((crumb) => {
+                                                        const { x, y } = toXY(crumb);
+                                                        return `${x.toFixed(1)},${y.toFixed(1)}`;
+                                                    }).join(' ')
+                                                );
+                                            };
+
+                                            const freshCrumbs = crumbs.filter((crumb) => (now - crumb.ts) <= DIM_MS);
+                                            const dimCrumbs = crumbs.filter((crumb) => (now - crumb.ts) > DIM_MS);
+                                            const freshSegments = splitIntoAdjacentSegments(freshCrumbs);
+                                            const dimSegments = splitIntoAdjacentSegments(dimCrumbs);
+
+                                            return { freshSegments, dimSegments };
+                                        } catch(el) { return null; }
+                                    })();
+                                    return <div className={`minimap-tile 
+                                    ${this.state.minimap[i].active ? 'active' : ''}
+                                    ${this.props.boardManager && this.props.boardManager.currentOrientation === 'B' && this.state.minimap[i].active ? 'backside' : ''}
+                                    ${this.state.minimapZoomedTile === i ? 'zoomed' : ''}
+                                    ${this.state.minimapZoomedTile === i && i === 0 ? 'topLeft' : ''}
+                                    ${this.state.minimapZoomedTile === i && i === 1 ? 'topMid' : ''}
+                                    ${this.state.minimapZoomedTile === i && i === 2 ? 'topRight' : ''}
+                                    ${this.state.minimapZoomedTile === i && i === 3 ? 'midLeft' : ''}
+                                    ${this.state.minimapZoomedTile === i && i === 5 ? 'midRight' : ''}
+                                    ${this.state.minimapZoomedTile === i && i === 6 ? 'botLeft' : ''}
+                                    ${this.state.minimapZoomedTile === i && i === 7 ? 'botMid' : ''}
+                                    ${this.state.minimapZoomedTile === i && i === 8 ? 'botRight' : ''}
+                                    `} key={i} onClick={() => this.minimapTileClicked(i)}>
+
+                                        {bcTrail && (bcTrail.freshSegments.length > 0 || bcTrail.dimSegments.length > 0) && (
+                                            <svg className="breadcrumb-trail-svg" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+                                                {bcTrail.dimSegments.map((segmentPoints, segmentIdx) => (
+                                                    <polyline
+                                                        key={`bc_dim_${segmentIdx}`}
+                                                        points={segmentPoints}
+                                                        className="bc-dim"
+                                                    />
+                                                ))}
+                                                {bcTrail.freshSegments.map((segmentPoints, segmentIdx) => (
+                                                    <polyline
+                                                        key={`bc_fresh_${segmentIdx}`}
+                                                        points={segmentPoints}
+                                                        className="bc-fresh"
+                                                    />
+                                                ))}
+                                            </svg>
+                                        )}
+
+                                        {this.state.minimap[i].active && <div className="player-position-indicator"
+                                        style={{
+                                            left: this.calcPlayerIndicatorLeft(),
+                                            top: this.calcPlayerIndicatorTop()
+                                        }}></div>}
+
+                                        {this.props.boardManager && this.props.boardManager.currentOrientation === 'B' && this.state.minimap[i].active && (
+                                            <div className="backside-badge" title="Backside of map">B</div>
+                                        )}
+
+                                        {(() => {
+                                            const currentLevelId = (this.state.levelTracker.find(levelEntry => levelEntry.active) || {}).id;
+                                            const currentOrientation = (this.props.boardManager && this.props.boardManager.currentOrientation) || 'A';
+                                            const baseEnemies = (this.state.minimapIndicators[i] && Array.isArray(this.state.minimapIndicators[i].enemies))
+                                                ? this.state.minimapIndicators[i].enemies
+                                                : [];
+                                            const sightingEnemies = this.getMonsterSightingsForBoard(currentLevelId, currentOrientation, i);
+                                            const mergedByTile = new Map();
+                                            baseEnemies.forEach((indicator) => {
+                                                if (!indicator || typeof indicator.tileId !== 'number') return;
+                                                if (!mergedByTile.has(indicator.tileId)) mergedByTile.set(indicator.tileId, indicator);
+                                            });
+                                            sightingEnemies.forEach((indicator) => {
+                                                if (!indicator || typeof indicator.tileId !== 'number') return;
+                                                if (!mergedByTile.has(indicator.tileId)) mergedByTile.set(indicator.tileId, indicator);
+                                            });
+
+                                            return Array.from(mergedByTile.values()).map((indicator, idx) => (
+                                                <div
+                                                    key={`${indicator.tileId}_${idx}`}
+                                                    className="minimap-indicator enemy"
+                                                    style={{
+                                                        left: this.calcIndicator(indicator.tileId).left,
+                                                        top: this.calcIndicator(indicator.tileId).top
+                                                    }}
+                                                >
+                                                </div>
+                                            ));
+                                        })()}
+                                    </div>
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderStatusSummarySection = () => {
+        const collapsed = this.isSectionCollapsed('status_summary');
+        const meta = getMeta() || {};
+        const crew = this.props.crewManager.crew || [];
+        const totalAtk = crew.reduce((sum, m) => sum + (m && m.stats && typeof m.stats.atk === 'number' ? m.stats.atk : 0), 0);
+        const totalDef = crew.reduce((sum, m) => sum + (m && m.stats && typeof m.stats.def === 'number' ? m.stats.def : 0), 0);
+        const food = typeof meta.food === 'number' ? meta.food : 55;
+        const foodLimit = this.getFoodLimit();
+        const isOverLimit = food > foodLimit;
+        const resolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+        const deaths = meta.deathTracker || 0;
+        const tooltip = 'Your crew has met death and been spared. If this happens thrice, your journey is over';
+
+        return (
+            <div className="dungeon-panel-section section-status_summary">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'status_summary')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('status_summary')}
+                >
+                    Status Summary {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content">
+                        {deaths > 0 && (
+                            <div className="death-tracker" aria-label={tooltip}>
+                                {new Array(deaths).fill(0).map((_, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="death-skull-wrapper"
+                                        tabIndex={0}
+                                        title={tooltip}
+                                        aria-label={tooltip}
+                                        role="button"
+                                        onClick={() => this.openCardDuel(idx)}
+                                        style={{cursor: 'pointer'}}
+                                    >
+                                        <div className="death-skull" style={{backgroundImage: `url(${images['whiteskull']})`}}></div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        {this.state.toastMessage && <div className="dungeon-toast" style={{marginTop:8, padding:8, background:'#2b1b1b', color:'#f0d', borderRadius:4}}>{this.state.toastMessage}</div>}
+                        <div className="quicklook-panel">
+                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="crossed swords">⚔</span> Attack</span><span className="ql-value">{totalAtk}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="shield">🛡</span> Defense</span><span className="ql-value">{totalDef}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="meat">🍖</span> Food</span><span className="ql-value" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>{food} / {foodLimit}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="fist">✊</span> Resolve</span><span className="ql-value">{resolve}</span></div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderCrewListSection = () => {
+        const collapsed = this.isSectionCollapsed('crew_list');
+        return (
+            <div className="dungeon-panel-section section-crew_list">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'crew_list')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('crew_list')}
+                >
+                    Crew List {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content">
+                        <div className="crew-tile-container">
+                            {this.props.crewManager.crew &&
+                                this.props.crewManager.crew.map((member, i) => {
+                                    const isSelectedTile = this.state.selectedCrewMember && this.state.selectedCrewMember.id === member.id;
+                                    return <div className="sub-container" key={i}>
+                                                { this.state.crewHoverMatrix[i] && <div className="hover-message">{this.state.crewHoverMatrix[i]}</div>}
+                                                <Tile 
+                                                key={i}
+                                                id={i}
+                                                tileSize={this.state.tileSize}
+                                                image={member.image ? member.image : null}
+                                                imageOverride={member.portrait ? member.portrait : null}
+                                                contains={member.type}
+                                                data={member}
+                                                color={member.color}
+                                                backgroundColor={hexToRgba(member.color, 0.5)}
+                                                editMode={false}
+                                                type={'crew-tile'}
+                                                handleClick={this.handleMemberClick}
+                                                handleHover={this.handleCrewTileHover}
+                                                className={`crew-tile ${isSelectedTile ? 'selected' : 'unselected'}`}
+                                                >
+                                                </Tile>
+                                            </div>
+                                })
+                            }
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderQuickActionsSection = () => {
+        const collapsed = this.isSectionCollapsed('quick_actions');
+        const meta = getMeta() || {};
+        const camping = meta.camping;
+        const start = meta.campingStart || '';
+        const end = meta.campingEnd || '';
+        const placeholderId = 'camp-progress-placeholder';
+
+        return (
+            <div className="dungeon-panel-section section-quick_actions">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'quick_actions')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('quick_actions')}
+                >
+                    Quick Actions {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content">
+                        <div className="quick-actions-strip">
+                            {camping ? (
+                                <div className="quick-actions-camping-container" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                    <div className="crew-action-item action-row" style={{position:'relative', margin: 0}}>
+                                        <div className="camp-label">
+                                            <span style={{position: 'relative', zIndex: 2}}>Recuperating in Camp...</span>
+                                            <div
+                                                id={placeholderId}
+                                                ref={el => this.placeholderRef(el, placeholderId, start, end)}
+                                                className={`progress-overlay camp-anim`}
+                                                data-start={start}
+                                                data-end={end}
+                                            ></div>
+                                            <div
+                                                onClick={() => this.endCamp()}
+                                                role="button"
+                                                aria-label="Close camp"
+                                                style={{position: 'absolute', right: 6, top: 2, cursor: 'pointer', fontWeight: 700, zIndex: 3}}
+                                            >
+                                                ×
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="quick-actions-btns" style={{ gap: '2px' }}>
+                                        <button
+                                            className="quick-action-btn"
+                                            onClick={() => this.handleOpenCampPopup()}
+                                            title="Go to Camp"
+                                        >
+                                            <span><span role="img" aria-label="camp">🏕</span> Go To Camp</span>
+                                            <span className="hotkey-indicator">C</span>
+                                        </button>
+                                        <button
+                                            className="quick-action-btn"
+                                            onClick={() => this.setState({ showCodex: true })}
+                                            title="Open the Codex"
+                                        >
+                                            <span><span role="img" aria-label="codex">📖</span> Codex</span>
+                                            <span className="hotkey-indicator">X</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="quick-actions-btns">
+                                    <button
+                                        className="quick-action-btn"
+                                        onClick={() => this.handleOpenCampPopup()}
+                                        title="Go to Camp"
+                                    >
+                                        <span><span role="img" aria-label="camp">🏕</span> Go To Camp</span>
+                                        <span className="hotkey-indicator">C</span>
+                                    </button>
+                                    <button
+                                        className="quick-action-btn"
+                                        onClick={() => this.setUpCamp()}
+                                        title="Immediately begin recuperating"
+                                    >
+                                        <span><span role="img" aria-label="recuperate">🛌</span> Recuperate</span>
+                                        <span className="hotkey-indicator">R</span>
+                                    </button>
+                                    <button
+                                        className="quick-action-btn"
+                                        onClick={() => {
+                                            this.setState({ isCardScrimmage: true }, () => {
+                                                this.openCardDuel(null);
+                                            });
+                                        }}
+                                        title="Play a practice card duel (no penalty)"
+                                    >
+                                        <span><span role="img" aria-label="card">🃏</span> Card Scrimmage</span>
+                                        <span className="hotkey-indicator">S</span>
+                                    </button>
+                                    <button
+                                        className="quick-action-btn"
+                                        onClick={() => this.setState({ showCodex: true })}
+                                        title="Open the Codex"
+                                    >
+                                        <span><span role="img" aria-label="codex">📖</span> Codex</span>
+                                        <span className="hotkey-indicator">X</span>
+                                    </button>
+                                    {this.state.campWarningMessage && (
+                                        <div style={{paddingLeft: 4, fontSize: 11, color: '#e74c3c', lineHeight: 1.4}}>
+                                            {this.state.campWarningMessage}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderTogglesSection = () => {
+        const collapsed = this.isSectionCollapsed('toggles');
+        const isAdmin = typeof localStorage !== 'undefined' && localStorage.getItem('isAdmin') === 'true';
+
+        return (
+            <div className="dungeon-panel-section section-toggles">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'toggles')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('toggles')}
+                >
+                    Toggles {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 8px', background: 'rgba(15, 12, 20, 0.9)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '6px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ccc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Zoom</span>
+                            <div className="mobile-tile-zoom-toggle-inline" style={{ display: 'flex', alignItems: 'center', border: '1px solid rgba(255, 255, 255, 0.25)', borderRadius: '16px', padding: '2px', background: 'rgba(0, 0, 0, 0.3)' }}>
+                                <button
+                                    onClick={() => this.toggleMobileTileZoom(false)}
+                                    style={{
+                                        width: '26px',
+                                        height: '24px',
+                                        borderRadius: '14px',
+                                        border: 'none',
+                                        background: !this.state.mobileTileZoomMinus ? '#f9b115' : 'transparent',
+                                        color: !this.state.mobileTileZoomMinus ? '#000' : '#ccc',
+                                        fontWeight: 'bold',
+                                        fontSize: '14px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                    title="100% Tile Zoom (+)"
+                                >
+                                    +
+                                </button>
+                                <button
+                                    onClick={() => this.toggleMobileTileZoom(true)}
+                                    style={{
+                                        width: '26px',
+                                        height: '24px',
+                                        borderRadius: '14px',
+                                        border: 'none',
+                                        background: this.state.mobileTileZoomMinus ? '#f9b115' : 'transparent',
+                                        color: this.state.mobileTileZoomMinus ? '#000' : '#ccc',
+                                        fontWeight: 'bold',
+                                        fontSize: '14px',
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                    title="50% Tile Zoom (-)"
+                                >
+                                    -
+                                </button>
+                            </div>
+                        </div>
+                        {isAdmin && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ccc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Debug Mode</span>
+                                <div
+                                    className="admin-debugger-toggle-inline"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        background: 'rgba(0, 0, 0, 0.3)',
+                                        border: this.state.debugMode ? '1px solid #00ffcc' : '1px solid rgba(255, 255, 255, 0.25)',
+                                        boxShadow: this.state.debugMode ? '0 0 10px rgba(0, 255, 204, 0.3)' : 'none',
+                                        borderRadius: '20px',
+                                        padding: '4px 12px',
+                                        cursor: 'pointer',
+                                        userSelect: 'none',
+                                        transition: 'all 0.25s ease'
+                                    }}
+                                    onClick={this.handleToggleDebugMode}
+                                    title="Toggle Admin Debugger Mode"
+                                >
+                                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: this.state.debugMode ? '#00ffcc' : '#ccc', letterSpacing: '0.5px' }}>
+                                        {this.state.debugMode ? 'ON' : 'OFF'}
+                                    </span>
+                                    <div style={{
+                                        width: '32px',
+                                        height: '16px',
+                                        borderRadius: '9px',
+                                        background: this.state.debugMode ? '#00ffcc' : '#444',
+                                        position: 'relative',
+                                        transition: 'background 0.25s ease'
+                                    }}>
+                                        <div style={{
+                                            width: '12px',
+                                            height: '12px',
+                                            borderRadius: '50%',
+                                            background: '#fff',
+                                            position: 'absolute',
+                                            top: '2px',
+                                            left: this.state.debugMode ? '18px' : '2px',
+                                            transition: 'left 0.25s ease'
+                                        }} />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderPoiSection = () => {
+        const collapsed = this.isSectionCollapsed('poi');
+        return (
+            <div className="dungeon-panel-section section-poi">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'poi')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('poi')}
+                >
+                    Points of Interest {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content">
+                        <div className="poi-panel">
+                            <button
+                                className="poi-toggle-btn"
+                                onClick={() => this.setState(s => ({ poiPanelExpanded: !s.poiPanelExpanded }))}
+                                title={this.state.poiPanelExpanded ? 'Hide nearby points of interest' : 'Show nearby points of interest'}
+                            >
+                                <img
+                                    src={this.state.poiPanelExpanded ? images['eye_open'] : images['eye_closed']}
+                                    alt={this.state.poiPanelExpanded ? 'Hide POI' : 'Show POI'}
+                                    className="poi-eye-icon"
+                                />
+                            </button>
+
+                            {this.state.poiPanelExpanded && (() => {
+                                const bm = this.props.boardManager;
+                                const liveTiles = (bm && bm.tiles) ? bm.tiles : (this.state.tiles || []);
+                                const meta = getMeta() || {};
+                                const playerTileIndex = (bm && bm.playerTile && bm.playerTile.location)
+                                    ? bm.getIndexFromCoordinates(bm.playerTile.location)
+                                    : (meta.location && meta.location.tileIndex != null ? meta.location.tileIndex : null);
+                                const playerCoords = (playerTileIndex !== null && bm && typeof bm.getCoordinatesFromIndex === 'function')
+                                    ? bm.getCoordinatesFromIndex(playerTileIndex)
+                                    : null;
+
+                                const GATE_TYPES = new Set([
+                                    'gate', 'dungeon_door', 'gryphon_gate', 'bat_gate', 'evil_gate',
+                                    'minor_gate', 'major_gate', 'treasury_gate', 'imperial_gate',
+                                    'necrotic_gate', 'master_necrotic_gate', 'dimensional_gate',
+                                    'cyan_gate', 'violet_gate', 'rubicund_gate',
+                                ]);
+
+                                const CHEST_SUBTYPES = new Set([
+                                    'silver_chest', 'gold_chest', 'ornate_chest',
+                                    'wooden_chest', 'iron_chest', 'steel_chest',
+                                    'gilded_casket', 'ancient_casket', 'treasury_chest', 'cryptic_chest',
+                                ]);
+
+                                const NOTABLE_TYPES = new Set([
+                                    'monster', 'chest', 'item', 'shop', 'vendor', 'shrine', 'portal',
+                                    'boss', 'npc', 'well', 'altar', 'trap', 'treasure',
+                                    'campfire', 'camp', 'artifact', 'event', 'dungeon_entrance',
+                                    'spawn', 'narrative', 'lore_tablet', 'spell',
+                                    'dungeon_portal', 'dungeon portal',
+                                    ...GATE_TYPES,
+                                ]);
+
+                                const MAX_DIST = 6;
+
+                                const POI_CODEX_MAP = {
+                                    vendor: { tab: 'interactables', entryId: 'merchant', search: 'merchant' },
+                                    shop:   { tab: 'interactables', entryId: 'merchant', search: 'merchant' },
+                                    merchant:  { tab: 'interactables', entryId: 'merchant', search: 'merchant' },
+                                    alchemist: { tab: 'interactables', entryId: 'alchemist', search: 'alchemist' },
+                                    minor_gate:        { tab: 'interactables', entryId: 'minor_gate',        search: 'minor gate' },
+                                    major_gate:        { tab: 'interactables', entryId: 'major_gate',        search: 'major gate' },
+                                    treasury_gate:     { tab: 'interactables', entryId: 'treasury_gate',     search: 'treasury gate' },
+                                    necrotic_gate:     { tab: 'interactables', entryId: 'necrotic_gate',     search: 'necrotic gate' },
+                                    dimensional_gate:  { tab: 'interactables', entryId: 'dimensional_gate',  search: 'dimensional gate' },
+                                    silver_chest:  { tab: 'interactables', entryId: 'chest_silver', search: 'silver chest' },
+                                    gold_chest:    { tab: 'interactables', entryId: 'chest_gold',   search: 'gold chest' },
+                                    ornate_chest:  { tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
+                                    wooden_chest:  { tab: 'interactables', entryId: 'chest_silver', search: 'chest' },
+                                    iron_chest:    { tab: 'interactables', entryId: 'chest_silver', search: 'chest' },
+                                    steel_chest:   { tab: 'interactables', entryId: 'chest_gold',   search: 'chest' },
+                                    gilded_casket: { tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
+                                    ancient_casket:{ tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
+                                    treasury_chest:{ tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
+                                    cryptic_chest: { tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
+                                    stairs:       { tab: 'interactables', entryId: 'stairs_down', search: 'stairs' },
+                                    dungeon_portal:  { tab: 'interactables', entryId: 'dungeon_portal', search: 'teleporter' },
+                                    'dungeon portal':{ tab: 'interactables', entryId: 'dungeon_portal', search: 'teleporter' },
+                                    narrative:    { tab: 'interactables', entryId: 'narrative',    search: 'narrative' },
+                                    lore_tablet:  { tab: 'interactables', entryId: 'lore_tablet',  search: 'lore tablet' },
+                                    spawn:        { tab: 'interactables', entryId: 'spawn_point',  search: 'spawn' },
+                                    camp:     { tab: 'interactables', entryId: 'camp',     search: 'camp' },
+                                    campfire: { tab: 'interactables', entryId: 'camp',     search: 'camp' },
+                                    shrine:   { tab: 'interactables', entryId: 'shrine',   search: 'shrine' },
+                                };
+
+                                const getCodexEntry = (type, subtype) => {
+                                    if (type === 'monster' && subtype) {
+                                        return { tab: 'monsters', entryId: null, search: subtype };
+                                    }
+                                    if (type === 'monster') {
+                                        return { tab: 'monsters', entryId: null, search: '' };
+                                    }
+                                    if (POI_CODEX_MAP[type]) {
+                                        if ((type === 'item' || type === 'chest' || GATE_TYPES.has(type)) && POI_CODEX_MAP[subtype]) {
+                                            return POI_CODEX_MAP[subtype];
+                                        }
+                                        return POI_CODEX_MAP[type];
+                                    }
+                                    return POI_CODEX_MAP[subtype] || null;
+                                };
+
+                                const openPoiCodex = (type, subtype) => {
+                                    const entry = getCodexEntry(type, subtype);
+                                    if (entry) {
+                                        this.setState({
+                                            showCodex: true,
+                                            codexEntry: entry,
+                                        });
+                                    } else {
+                                        this.setState({ noCodexEntry: true });
+                                    }
+                                };
+
+                                const getType = (contains) => {
+                                    if (!contains) return null;
+                                    if (typeof contains === 'object') {
+                                        if (contains.type === 'gate' && contains.subtype) return contains.subtype;
+                                        return contains.type || null;
+                                    }
+                                    return contains;
+                                };
+                                const getSubtype = (contains) => {
+                                    if (!contains) return null;
+                                    if (typeof contains === 'object') return contains.subtype || null;
+                                    return null;
+                                };
+
+                                const poi = liveTiles.filter((t, idx) => {
+                                    if (!t) return false;
+                                    if (t.color === 'black' || t.fog === true) return false;
+                                    const type = getType(t.contains);
+                                    if (!type || !NOTABLE_TYPES.has(type)) return false;
+                                    if (playerCoords && bm && typeof bm.getCoordinatesFromIndex === 'function') {
+                                        const tileId = t.id != null ? t.id : idx;
+                                        const tc = bm.getCoordinatesFromIndex(tileId);
+                                        const chebyshev = Math.max(
+                                            Math.abs(tc[0] - playerCoords[0]),
+                                            Math.abs(tc[1] - playerCoords[1])
+                                        );
+                                        return chebyshev <= MAX_DIST;
+                                    }
+                                    return true;
+                                });
+
+                                const seenPoi = new Set();
+                                const basePoi = poi.filter(t => {
+                                    const type    = getType(t.contains);
+                                    const subtype = getSubtype(t.contains);
+                                    const key = `${type}|${subtype || ''}|${t.image || ''}`;
+                                    if (seenPoi.has(key)) return false;
+                                    seenPoi.add(key);
+                                    return true;
+                                });
+
+                                const lootPoiList = (this.state.activeChestLoot || []).map((loot, idx) => {
+                                    const lootType = loot.type === 'currency' ? 'currency' : 'item';
+                                    return {
+                                        id: loot.id || ('loot_' + idx),
+                                        image: loot.icon,
+                                        contains: {
+                                            type: lootType,
+                                            subtype: loot.name
+                                        },
+                                        color: 'gold',
+                                        isLoot: true
+                                    };
+                                });
+
+                                const uniquePoi = [...basePoi, ...lootPoiList];
+
+                                if (uniquePoi.length === 0) {
+                                    return (
+                                        <div className="poi-empty">
+                                            <span>Nothing notable nearby</span>
+                                        </div>
+                                    );
+                                }
+
+                                return (
+                                    <div className="poi-list">
+                                        {uniquePoi.map((t, i) => {
+                                            const type = getType(t.contains);
+                                            const subtype = getSubtype(t.contains);
+                                            const isShrine = type === 'shrine';
+
+                                            if (isShrine) {
+                                                const shrineImg = images['shrine'] || null;
+                                                const classPortrait = subtype
+                                                    ? (images[subtype + '_portrait'] || images[subtype] || null)
+                                                    : null;
+                                                const label = subtype
+                                                    ? `${subtype.replace(/_/g, ' ')} Shrine`
+                                                    : 'Shrine';
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        className="poi-portrait-card poi-shrine-card"
+                                                        style={{ cursor: 'pointer' }}
+                                                        title="Click to open Codex"
+                                                        onClick={() => openPoiCodex(type, subtype)}
+                                                    >
+                                                        <div className="poi-shrine-images">
+                                                            <div className="poi-shrine-half">
+                                                                {shrineImg
+                                                                    ? <img src={shrineImg} alt="Shrine" className="poi-shrine-img" />
+                                                                    : <div className="poi-portrait-placeholder" />
+                                                                }
+                                                            </div>
+                                                            <div className="poi-shrine-half">
+                                                                {classPortrait
+                                                                    ? <img src={classPortrait} alt={subtype} className="poi-shrine-img" />
+                                                                    : <div className="poi-portrait-placeholder" />
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                        <div className="poi-portrait-name">{label}</div>
+                                                    </div>
+                                                );
+                                            }
+
+                                            const isChest    = type === 'chest' || (type === 'item' && CHEST_SUBTYPES.has(subtype));
+                                            const isGate     = GATE_TYPES.has(type);
+                                            const isVendor   = type === 'vendor' || type === 'shop';
+                                            const isNarrative = type === 'narrative' || type === 'lore_tablet';
+                                            const isSpawn    = type === 'spawn';
+                                            const isPortal   = type === 'dungeon_portal' || type === 'dungeon portal';
+                                            const isItem     = type === 'item' && !CHEST_SUBTYPES.has(subtype);
+                                            const icon = t.image
+                                                ? (images[t.image] || t.image)
+                                                : (images[subtype] || images[type] || null);
+                                            const label = isGate
+                                                ? (type || 'Gate').replace(/_/g, ' ')
+                                                : isSpawn
+                                                    ? 'Spawn Point'
+                                                    : isPortal
+                                                        ? 'Teleporter'
+                                                        : isNarrative
+                                                            ? (subtype ? subtype.replace(/_/g, ' ') : 'Narrative')
+                                                            : t.isLoot
+                                                                ? subtype
+                                                                : subtype
+                                                                    ? subtype.replace(/_/g, ' ')
+                                                                    : (type ? type.replace(/_/g, ' ') : 'Unknown');
+                                            const cardClass = isChest     ? ' poi-chest-card'
+                                                : isGate      ? ' poi-gate-card'
+                                                : isVendor    ? ' poi-vendor-card'
+                                                : isNarrative ? ' poi-narrative-card'
+                                                : isSpawn     ? ' poi-spawn-card'
+                                                : isPortal    ? ' poi-portal-card'
+                                                : isItem      ? ' poi-item-card'
+                                                : t.isLoot    ? ' poi-loot-card'
+                                                : '';
+                                            return (
+                                                <div
+                                                    key={t.id || i}
+                                                    className={`poi-portrait-card${cardClass} ${t.isLoot && this.state.chestLootFadeOut ? 'fade-out' : ''}`}
+                                                    style={{ cursor: t.isLoot ? 'default' : 'pointer' }}
+                                                    title={t.isLoot ? undefined : "Click to open Codex"}
+                                                    onClick={t.isLoot ? undefined : () => openPoiCodex(type, subtype)}
+                                                >
+                                                    <div className="poi-portrait-img-wrap">
+                                                        {icon
+                                                            ? <img src={icon} alt={label} className="poi-portrait-img" />
+                                                            : <div className="poi-portrait-placeholder" />
+                                                        }
+                                                    </div>
+                                                    <div className="poi-portrait-name">{label}</div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    renderSection = (sectionId) => {
+        switch (sectionId) {
+            case 'character':
+                return this.renderCharacterSection();
+            case 'stats':
+                return this.renderStatsSection();
+            case 'actions':
+                return this.renderActionsSection();
+            case 'equipment':
+                return this.renderEquipmentSection();
+            case 'minimap':
+                return this.renderMinimapSection();
+            case 'status_summary':
+                return this.renderStatusSummarySection();
+            case 'crew_list':
+                return this.renderCrewListSection();
+            case 'quick_actions':
+                return this.renderQuickActionsSection();
+            case 'poi':
+                return this.renderPoiSection();
+            case 'toggles':
+                return this.renderTogglesSection();
+            default:
+                return null;
+        }
+    };
+
+    renderPanelSections = (panelKey) => {
+        const meta = getMeta() || {};
+        const panelConfig = meta.panelConfig || {
+            left: ["character", "stats", "actions", "equipment"],
+            right: ["minimap", "status_summary", "crew_list", "quick_actions", "poi", "toggles"]
+        };
+        const sections = panelConfig[panelKey] || [];
+
+        return (
+            <div 
+                className={`panel-dropzone-${panelKey}`}
+                onDragOver={this.handleDragOver}
+                onDrop={(e) => this.handleDrop(e, panelKey, sections.length)}
+                style={{ minHeight: '100px', display: 'flex', flexDirection: 'column', width: '100%' }}
+            >
+                {sections.map((sectionId, index) => {
+                    if (sectionId === 'character' && (!this.state.selectedCrewMember || !this.state.selectedCrewMember.name)) {
+                        return null;
+                    }
+                    return (
+                        <div 
+                            key={sectionId}
+                            onDragOver={this.handleDragOver}
+                            onDrop={(e) => {
+                                e.stopPropagation();
+                                this.handleDrop(e, panelKey, index);
+                            }}
+                            style={{ width: '100%' }}
+                        >
+                            {this.renderSection(sectionId)}
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
+     // Dev console handlers
+     handleDevConsoleInputChange = (e) => {
         this.setState({ devConsoleInput: e.target.value });
     }
 
@@ -13525,371 +14816,13 @@ class DungeonPage extends React.Component {
                 <div className="expand-collapse-button icon-container" onClick={this.toggleLeftSidePanel}>
                     <CIcon icon={cilCaretRight} className={`expand-icon ${this.state.leftPanelExpanded ? 'expanded' : ''}`} size="sm"/>
                 </div>
-                {/* <div className="minimap-container">
-
-                </div> */}
-                {/* crew-container moved to right-side panel */}
-                {this.state.selectedCrewMember.name && (
-                    <div className="crew-info-section">
-                        {this.state.isMobileLandscape && (
-                            <div className="mobile-section-header" onClick={() => this.setState({ mobileLeftPortraitCollapsed: !this.state.mobileLeftPortraitCollapsed })}>
-                                Character {this.state.mobileLeftPortraitCollapsed ? '[+]' : '[-]'}
-                            </div>
-                        )}
-                        {(!this.state.isMobileLandscape || !this.state.mobileLeftPortraitCollapsed) && (
-                            <>
-                            <div className="portrait-wrapper">
-                            <div className="status-container">
-                                <div className="member-level-indicator">Lvl {this.state.selectedCrewMember.level}</div>
-                            </div>
-                            {(() => {
-                                let portraitUrl = this.state.selectedCrewMember.portrait;
-                                if (portraitUrl && typeof portraitUrl === 'object') {
-                                    portraitUrl = portraitUrl.default || portraitUrl;
-                                }
-                                if (portraitUrl && typeof portraitUrl === 'object') {
-                                    portraitUrl = portraitUrl.default || '';
-                                }
-                                return <div className="portrait" style={{backgroundImage: `url(${portraitUrl})`}}></div>;
-                            })()}
-                            <div className="cooldowns-container">
-                                {/* Group special actions by type (flat structure) */}
-                                {(() => {
-                                    const actions = this.state.selectedCrewMember.specialActions || [];
-                                    // Group by a key that distinguishes glyph tiers — for type:'glyph' use 'glyph:minor' etc.
-                                    const grouped = {};
-                                    actions.forEach(action => {
-                                        const key = action.type === 'glyph' && action.glyphTier
-                                            ? `glyph:${action.glyphTier}`
-                                            : action.type;
-                                        if (!grouped[key]) grouped[key] = [];
-                                        grouped[key].push(action);
-                                    });
-                                    return Object.keys(grouped).map((groupKey, i) => {
-                                        const group = grouped[groupKey];
-                                        const action = group[0]; // representative
-                                        const count = group.filter(a => a.available).length;
-                                        // Prefer an in-progress action (one whose start/end bracket 'now') for the circular progress UI.
-                                        const now = new Date();
-                                        const inProgressAction = group.find(a => {
-                                            if (!a || !a.startDate || !a.endDate) return false;
-                                            const s = new Date(a.startDate);
-                                            const e = new Date(a.endDate);
-                                            return now >= s && now < e;
-                                        });
-                                        const progressPct = inProgressAction ? this.getActionCooldownPercentage(inProgressAction) : 0;
-                                        
-                                        // Resolve icon: new-format glyphs use tier icon; legacy magic missile uses its icon
-                                        let iconUrl = action.iconUrlInverted || action.iconUrl;
-                                        if (!iconUrl && action.glyphTier && typeof images !== 'undefined') {
-                                            iconUrl = images[`${action.glyphTier}_glyph`] || '';
-                                        }
-                                        if (!iconUrl && action.subtype === 'magic missile' && typeof images !== 'undefined') {
-                                            iconUrl = images['magic_missile_icon'] || images['magic_missile_inverted'] || images['magic_missile'];
-                                        }
-                                        if (!iconUrl && typeof images !== 'undefined') {
-                                            iconUrl = images['glyph_inverted'] || '';
-                                        }
-                                        if (iconUrl && typeof iconUrl === 'object') {
-                                            iconUrl = iconUrl.default || iconUrl;
-                                        }
-                                        if (iconUrl && typeof iconUrl === 'object') {
-                                            iconUrl = iconUrl.default || '';
-                                        }
-                                        const resolvedIconString = typeof iconUrl === 'string' ? iconUrl : '';
-                                        return (
-                                            <div key={groupKey} className="special-action-wrapper" style={{position: 'relative'}}>
-                                                <div className="special-action-icon" style={{backgroundImage: resolvedIconString ? `url("${encodeURI(resolvedIconString)}")` : 'none'}}></div>
-                                                {inProgressAction && progressPct < 50 && <div className="progress-overlay"></div>}
-                                                {inProgressAction && <div className="left" style={{transform: `rotate(${this.getRotateDegreesLeft(progressPct)}deg)`}}></div>}
-                                                {inProgressAction && <div className="right" style={{transform: `rotate(${this.getRotateDegreesRight(progressPct)}deg)`}}></div>}
-                                                {count >= 1 && (
-                                                    <div style={{
-                                                        position: 'absolute',
-                                                        top: 6,
-                                                        right: -16,
-                                                        color: 'white',
-                                                        fontWeight: 'bold',
-                                                        borderRadius: '50%',
-                                                        minWidth: 18,
-                                                        minHeight: 18,
-                                                        display: 'flex',
-                                                        alignItems: 'center',
-                                                        justifyContent: 'center',
-                                                        fontSize: 10,
-                                                        zIndex: 99,
-                                                    }}>
-                                                        {this.getSubtypeNumeralElement({count})}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    });
-                                })()}
-                            </div>
-                        </div>
-                        <div className="name-line">{this.state.selectedCrewMember.name} the {this.uppercaseFirstLetter(this.state.selectedCrewMember.type || this.state.selectedCrewMember.image)}</div>
-                        
-                        {/* Global Skills row */}
-                        {(() => {
-                            const member = this.state.selectedCrewMember;
-                            const globalSkills = member.globalSkills || [];
-                            if (globalSkills.length === 0) return null;
-                            
-                            const skillDetails = {
-                                keen_eye: { name: 'Keen Eye', desc: 'L1: Reveals +2 fog tiles. L2: Reveals nearby traps. L3: +3 DEX to trap saves.' },
-                                scrounging_rat: { name: 'Scrounging Rat', desc: 'Allows scrounging for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' },
-                                fastidious_crow: { name: 'Fastidious Crow', desc: 'Scouts a random board (10x10 fog reveal) for 24 hours. Process takes 20m. Cooldown and gold/gem reward based on level.' },
-                                hunters_quarry: { name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' },
-                                read_the_land: { name: 'Read the Land', desc: 'Adjacent tile types hinted on entry' },
-                                trailblaze: { name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' },
-                                herbalism: { name: 'Herbalism', desc: 'Camp costs 1 less food per member' },
-                                mend: { name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' },
-                                ritual_efficiency: { name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' },
-                                revive: { name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' },
-                                fortify: { name: 'Fortify', desc: 'Resolve does not decay while camping' },
-                                breacher: { name: 'Breacher', desc: 'Force open a Minor Key gate once per level' },
-                                rally: { name: 'Rally', desc: '+5 bonus Resolve on combat victory' },
-                                iron_will: { name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' },
-                                arcane_sense: { name: 'Arcane Sense', desc: 'Identifies chest tier before opening' },
-                                ley_tap: { name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' },
-                                dimensional_pocket: { name: 'Dimensional Pocket', desc: '+2 shared inventory slots' },
-                                scry: { name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' },
-                                iron_gut: { name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' },
-                                savage_haul: { name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' },
-                                bloodhound: { name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' },
-                                endure: { name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%' },
-                                swift_step: { name: 'Swift Step', desc: 'Movement animation 30% faster' },
-                                focused_rest: { name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' },
-                                pressure_points: { name: 'Pressure Points', desc: '15% vendor discount once per vendor' },
-                                astral_map: { name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' },
-                                spirit_sight: { name: 'Spirit Sight', desc: 'Narrative tiles glow through fog' },
-                                plunder: { name: 'Plunder', desc: 'Open a chest a second time once per run' },
-                                soul_tithe: { name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' },
-                                dark_pact: { name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' },
-                                awake_refreshed: { name: 'Awake Refreshed', desc: 'Camp recuperation grants an additional +10/+20/+40 Resolve.' },
-                                strong_resolve: { name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }
-                            };
-
-                            const getGlobalSkillIcon = (memberType, skillKey) => {
-                                const type = (memberType || '').toLowerCase();
-                                const key = (skillKey || '').toLowerCase();
-                                if (key === 'awake_refreshed') {
-                                    if (type === 'sage') return images.awake_refreshed_sage;
-                                    if (type === 'soldier') return images.awake_refreshed_soldier;
-                                }
-                                if (key === 'strong_resolve' && type === 'soldier') {
-                                    return images.strong_resolve_soldier;
-                                }
-                                return images.glyph_inverted || images.avatar;
-                            };
-
-                            return (
-                                <div className="global-skills-row" style={{ display: 'flex', flexDirection: 'row', gap: '8px', margin: '8px 0 12px 0', justifyContent: 'center', flexWrap: 'wrap' }}>
-                                    {globalSkills.map((s, sIdx) => {
-                                        const key = typeof s === 'string' ? s : s.key;
-                                        const level = typeof s === 'string' ? 1 : (s.level || 1);
-                                        const details = skillDetails[key] || { name: key, desc: '' };
-                                        const iconUrl = getGlobalSkillIcon(member.type, key);
-                                        return (
-                                            <div
-                                                key={key + '-' + sIdx}
-                                                className="global-skill-icon-wrapper"
-                                                style={{
-                                                    position: 'relative',
-                                                    width: '32px',
-                                                    height: '32px',
-                                                    border: '1px solid rgba(212,168,68,0.4)',
-                                                    borderRadius: '4px',
-                                                    background: 'rgba(0,0,0,0.6)',
-                                                    cursor: 'pointer',
-                                                    boxShadow: '0 0 6px rgba(212,168,68,0.2)'
-                                                }}
-                                                onMouseEnter={() => this.setState({ descriptionText: `${details.name} (Level ${level}): ${details.desc}` })}
-                                                onMouseLeave={() => this.setState({ descriptionText: '' })}
-                                            >
-                                                <img
-                                                    src={iconUrl}
-                                                    alt={details.name}
-                                                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '3px' }}
-                                                />
-                                                <div style={{
-                                                    position: 'absolute',
-                                                    bottom: '-5px',
-                                                    right: '-5px',
-                                                    backgroundColor: '#d4a844',
-                                                    color: 'black',
-                                                    fontWeight: 'bold',
-                                                    fontSize: '9px',
-                                                    borderRadius: '50%',
-                                                    minWidth: '13px',
-                                                    height: '13px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    border: '1px solid black',
-                                                    padding: '1px',
-                                                    lineHeight: 1
-                                                }}>
-                                                    {level}
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })()}
-                        </>
-                        )}
-                        {this.state.isMobileLandscape && (
-                            <div className="mobile-section-header" onClick={() => this.setState({ mobileLeftStatsCollapsed: !this.state.mobileLeftStatsCollapsed })}>
-                                Stats {this.state.mobileLeftStatsCollapsed ? '[+]' : '[-]'}
-                            </div>
-                        )}
-                        {(!this.state.isMobileLandscape || !this.state.mobileLeftStatsCollapsed) && (
-                            <>
-                            {/* HP bar (hp-line-container) - shows current HP proportion */}
-                        {(() => {
-                            const selected = this.state.selectedCrewMember || {};
-                            const maxHp = (selected.stats && selected.stats.hp) ? selected.stats.hp : 0;
-                            const currentHp = (typeof selected.hp !== 'undefined') ? Math.floor(selected.hp) : maxHp;
-                            const hpPct = maxHp > 0 ? Math.max(0, Math.min(100, Math.ceil((currentHp / maxHp) * 100))) : 0;
-                            return (
-                                <div className="hp-line-container" style={{width: '100%'}}>
-                                    <div className="hp-line" style={{width: `${hpPct}%`}}></div>
-                                </div>
-                            )
-                        })()}
-
-                        <div className="experience-line-container">
-                            <div className="experience-line" style={{width: `${this.props.crewManager.calculateExpPercentage(this.state.selectedCrewMember)}%`}}></div>
-                        </div>
-
-                        {/* hitpoints stat-line under the experience container */}
-                        {(() => {
-                            const selected = this.state.selectedCrewMember || {};
-                            const maxHp = (selected.stats && selected.stats.hp) ? selected.stats.hp : 0;
-                            const currentHp = (typeof selected.hp !== 'undefined') ? Math.floor(selected.hp) : maxHp;
-                            return (
-                                <div className="stat-line"> <span className="stat-name">hitpoints</span>  <span className='stat-value'>{currentHp}/{maxHp}</span> </div>
-                            )
-                        })()}
-                        <div className="stat-line"> <span className="stat-name">Strength</span>  <span className='stat-value'>{this.state.selectedCrewMember.stats?.str} </span> </div>
-                        <div className="stat-line">Dexterity <span className='stat-value'> {this.state.selectedCrewMember.stats?.dex} </span></div>
-                        <div className="stat-line">Intelligence <span className='stat-value'>{this.state.selectedCrewMember.stats?.int} </span></div>
-                        {/* Vitality removed */}
-                        <div className="stat-line">Fortitude <span className='stat-value'> {this.state.selectedCrewMember.stats?.fort} </span></div>
-                        </>
-                        )}
-                        {this.state.isMobileLandscape && (
-                            <div className="mobile-section-header" onClick={() => this.setState({ mobileLeftActionsCollapsed: !this.state.mobileLeftActionsCollapsed })}>
-                                Actions {this.state.mobileLeftActionsCollapsed ? '[+]' : '[-]'}
-                            </div>
-                        )}
-                        {(!this.state.isMobileLandscape || !this.state.mobileLeftActionsCollapsed) && (
-                            <>
-                            <div className="icon-container menu" onClick={this.toggleActionsTray}>
-                            <CIcon icon={cilMenu} className={`menu-icon ${this.state.leftPanelExpanded ? 'expanded' : ''}`} size="sm"/>
-                            Actions
-                        </div>
-                        {this.state.isMobileLandscape && (
-                            <div style={{ padding: '4px 8px 8px 8px' }}>
-                                <button 
-                                    className="quick-action-btn"
-                                    onClick={() => this.setState({ showInventoryPopup: true })}
-                                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                                >
-                                    <span>🎒 Shared Inventory</span>
-                                </button>
-                            </div>
-                        )}
-                        <div className={`actions-tray ${this.state.actionsTrayExpanded && (Array.isArray(this.state.actionMenuTypeExpanded) ? this.state.actionMenuTypeExpanded.length > 0 : !!this.state.actionMenuTypeExpanded) ? 'double-expanded' : 
-                        (this.state.actionsTrayExpanded ? 'expanded' : '')}`}>
-                            {this.getCharacterActions(this.state.selectedCrewMember)}
-                        </div>
-                        </>
-                        )}
-                        {this.state.isMobileLandscape && (
-                            <div className="mobile-section-header" onClick={() => this.setState({ mobileLeftEquipmentCollapsed: !this.state.mobileLeftEquipmentCollapsed })}>
-                                Equipment {this.state.mobileLeftEquipmentCollapsed ? '[+]' : '[-]'}
-                            </div>
-                        )}
-                        {(!this.state.isMobileLandscape || !this.state.mobileLeftEquipmentCollapsed) && (
-                            <div className="equipment-panel">
-                            {/* Replaced with a direct copy of the `.crew-body` from the inventory popup */}
-                            <div className='crew-body' style={{marginTop: '-16px'}}>
-                                <div className='crew-body-image' style={{backgroundImage: `url(${images.body_male})`}} />
-                                {/* equip slots: chest, right-hand, left-hand, head, ancillary-left, ancillary-right */}
-                                {(() => {
-                                    const selected = this.state.selectedCrewMember || {};
-                                    const findEquipped = (slot) => {
-                                        const slotsToCheck = (slot === 'pet' || slot === 'bottom-left') ? ['pet','bottom-left'] : [slot];
-                                        return (selected.inventory || []).find(i => slotsToCheck.includes(i.equippedSlot));
-                                    };
-                                    const chest = findEquipped('chest');
-                                    const right = findEquipped('right');
-                                    const left = findEquipped('left');
-                                    const head = findEquipped('head');
-                                    const boots = findEquipped('boots');
-                                    const bottomLeft = findEquipped('pet');
-                                    const ancillaryLeft = findEquipped('ancillary-left');
-                                    const ancillaryRight = findEquipped('ancillary-right');
-                                    // Read-only slot — no click, just a name tooltip on hover
-                                    const ReadOnlySlot = ({ item, slotClass }) => {
-                                        const slotKey = slotClass.replace('slot-', '');
-                                        const info = SLOT_INFO[slotKey] || { name: 'Equipment Slot', desc: '' };
-                                        const slotName = slotClass === 'slot-left' ? 'left' : (slotClass === 'slot-right' ? 'right' : null);
-                                        return (
-                                            <div 
-                                                className={`equip-slot ${slotClass} ep-slot-wrapper`}
-                                                title={!item ? info.name : undefined}
-                                                onMouseEnter={() => !item ? this.setState({ descriptionText: `${info.name}: ${info.desc}` }) : null}
-                                                onMouseLeave={() => this.setState({ descriptionText: '' })}
-                                                onContextMenu={(e) => slotName ? this.handleSlotContextMenu(e, slotName) : null}
-                                            >
-                                                {item && (
-                                                    <>
-                                                        <Tile
-                                                            id={item.id}
-                                                            data={item}
-                                                            tileSize={this.state.tileSize}
-                                                            image={item.icon}
-                                                            contains={item.name ? item.name.replace(' ', '_') : null}
-                                                            color={item.color}
-                                                            editMode={false}
-                                                            type={'inventory-tile'}
-                                                            handleClick={() => {}}
-                                                            handleHover={() => this.setState({ descriptionText: this.buildItemSummaryDescription(item) })}
-                                                        />
-                                                        <div className="ep-slot-name">{item.name}</div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        );
-                                    };
-                                    return (
-                                        <>
-                                            <ReadOnlySlot item={chest}        slotClass="slot-chest" />
-                                            <ReadOnlySlot item={right}        slotClass="slot-right" />
-                                            <ReadOnlySlot item={left}         slotClass="slot-left" />
-                                            <ReadOnlySlot item={head}         slotClass="slot-head" />
-                                            <ReadOnlySlot item={boots}        slotClass="slot-boots" />
-                                            <ReadOnlySlot item={ancillaryLeft}  slotClass="slot-ancillary-left" />
-                                            <ReadOnlySlot item={ancillaryRight} slotClass="slot-ancillary-right" />
-                                            <ReadOnlySlot item={bottomLeft}   slotClass="slot-pet" />
-                                        </>
-                                    )
-                                })()}
-                            </div>
-                            {/* left-body-preview mirror (kept for legacy styling hooks) */}
-                            <div className='left-body-preview' style={{backgroundImage: `url(${images.body_male})`, backgroundSize: '130%'}}></div>
-                            {/* stats display area removed from left panel (kept only in inventory popup) */}
-                        </div>
-                        )}
+                {this.state.selectedCrewMember && this.state.selectedCrewMember.name && (
+                    <div className="crew-info-section" style={{ width: '100%' }}>
+                        {this.renderPanelSections('left')}
                         <div className="description-panel">
                             {this.state.descriptionText}
                         </div>
-                </div>
+                    </div>
                 )}
             </div>
             )}
@@ -13927,729 +14860,7 @@ class DungeonPage extends React.Component {
             )}
             {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
             <div className={`right-side-panel ${this.state.rightPanelExpanded ? 'expanded' : ''}`}>
-                {this.state.isMobileLandscape && (
-                    <div className="mobile-section-header" onClick={() => this.setState({ mobileRightMinimapCollapsed: !this.state.mobileRightMinimapCollapsed })}>
-                        Minimap {this.state.mobileRightMinimapCollapsed ? '[+]' : '[-]'}
-                    </div>
-                )}
-                {(!this.state.isMobileLandscape || !this.state.mobileRightMinimapCollapsed) && (
-                    <div className="minimap-container">
-                    <div className="map-wrapper">
-                        <div className="level-indicator">
-                            {this.state.levelTracker && this.state.levelTracker.map((e,i)=>{
-                                return <div key={i} className={`floor-level ${e.active ? 'active' : ''} `}></div>
-                            })}
-                        </div>
-                        {this.state.minimap.map((e,i)=>{
-                            // Build breadcrumb SVG trail for this board tile
-                            const bcTrail = (() => {
-                                try {
-                                    const now = Date.now();
-                                    const DIM_MS  = 20 * 60 * 1000; // 20 min → dim
-                                    const TILE_PX = 50; // matches .minimap-tile height/width
-                                    // Current plane — must match what recordBreadcrumb stored
-                                    const currentLevelId = (this.state.levelTracker.find(e => e.active) || {}).id;
-                                    const currentOrientation = (this.props.boardManager && this.props.boardManager.currentOrientation) || 'A';
-                                    // Gather all crumbs for this board on this plane, sorted by visit order
-                                    const crumbs = [];
-                                    this._breadcrumbs.forEach(val => {
-                                        if (
-                                            val.boardIndex === i &&
-                                            val.levelId === currentLevelId &&
-                                            val.orientation === currentOrientation
-                                        ) crumbs.push(val);
-                                    });
-                                    if (crumbs.length === 0) return null;
-                                    crumbs.sort((a, b) => a.seq - b.seq);
-                                    // Convert row/col (15–29) to SVG pixel coords within 50px tile
-                                    const toXY = c => ({
-                                        x: ((c.col - 15) / 14) * TILE_PX,
-                                        y: ((c.row - 15) / 14) * TILE_PX,
-                                    });
-                                    const splitIntoAdjacentSegments = (crumbList) => {
-                                        if (!Array.isArray(crumbList) || crumbList.length < 2) return [];
-                                        const segments = [];
-                                        let currentSegment = [crumbList[0]];
-
-                                        for (let idx = 1; idx < crumbList.length; idx++) {
-                                            const prev = crumbList[idx - 1];
-                                            const cur = crumbList[idx];
-                                            const manhattan = Math.abs(cur.row - prev.row) + Math.abs(cur.col - prev.col);
-                                            if (manhattan === 1) {
-                                                currentSegment.push(cur);
-                                            } else {
-                                                if (currentSegment.length > 1) segments.push(currentSegment);
-                                                currentSegment = [cur];
-                                            }
-                                        }
-                                        if (currentSegment.length > 1) segments.push(currentSegment);
-
-                                        return segments.map((segment) =>
-                                            segment.map((crumb) => {
-                                                const { x, y } = toXY(crumb);
-                                                return `${x.toFixed(1)},${y.toFixed(1)}`;
-                                            }).join(' ')
-                                        );
-                                    };
-
-                                    const freshCrumbs = crumbs.filter((crumb) => (now - crumb.ts) <= DIM_MS);
-                                    const dimCrumbs = crumbs.filter((crumb) => (now - crumb.ts) > DIM_MS);
-                                    const freshSegments = splitIntoAdjacentSegments(freshCrumbs);
-                                    const dimSegments = splitIntoAdjacentSegments(dimCrumbs);
-
-                                    return { freshSegments, dimSegments };
-                                } catch(e) { return null; }
-                            })();
-                            return <div className={`minimap-tile 
-                            ${this.state.minimap[i].active ? 'active' : ''}
-                            ${this.props.boardManager && this.props.boardManager.currentOrientation === 'B' && this.state.minimap[i].active ? 'backside' : ''}
-                            ${this.state.minimapZoomedTile === i ? 'zoomed' : ''}
-                            ${this.state.minimapZoomedTile === i && i === 0 ? 'topLeft' : ''}
-                            ${this.state.minimapZoomedTile === i && i === 1 ? 'topMid' : ''}
-                            ${this.state.minimapZoomedTile === i && i === 2 ? 'topRight' : ''}
-                            ${this.state.minimapZoomedTile === i && i === 3 ? 'midLeft' : ''}
-                            ${this.state.minimapZoomedTile === i && i === 5 ? 'midRight' : ''}
-                            ${this.state.minimapZoomedTile === i && i === 6 ? 'botLeft' : ''}
-                            ${this.state.minimapZoomedTile === i && i === 7 ? 'botMid' : ''}
-                            ${this.state.minimapZoomedTile === i && i === 8 ? 'botRight' : ''}
-                            `} key={i} onClick={() => this.minimapTileClicked(i)}>
-
-                                {/* Breadcrumb trail SVG — rendered below the player dot */}
-                                {bcTrail && (bcTrail.freshSegments.length > 0 || bcTrail.dimSegments.length > 0) && (
-                                    <svg className="breadcrumb-trail-svg" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
-                                        {bcTrail.dimSegments.map((segmentPoints, segmentIdx) => (
-                                            <polyline
-                                                key={`bc_dim_${segmentIdx}`}
-                                                points={segmentPoints}
-                                                className="bc-dim"
-                                            />
-                                        ))}
-                                        {bcTrail.freshSegments.map((segmentPoints, segmentIdx) => (
-                                            <polyline
-                                                key={`bc_fresh_${segmentIdx}`}
-                                                points={segmentPoints}
-                                                className="bc-fresh"
-                                            />
-                                        ))}
-                                    </svg>
-                                )}
-
-                                {/* // player // */}
-                                {this.state.minimap[i].active && <div className="player-position-indicator"
-                                style={{
-                                    left: this.calcPlayerIndicatorLeft(),
-                                    top: this.calcPlayerIndicatorTop()
-                                }}></div>}
-
-                                {this.props.boardManager && this.props.boardManager.currentOrientation === 'B' && this.state.minimap[i].active && (
-                                    <div className="backside-badge" title="Backside of map">B</div>
-                                )}
-
-                                {/* // enemies // */}
-                                {(() => {
-                                    const currentLevelId = (this.state.levelTracker.find(levelEntry => levelEntry.active) || {}).id;
-                                    const currentOrientation = (this.props.boardManager && this.props.boardManager.currentOrientation) || 'A';
-                                    const baseEnemies = (this.state.minimapIndicators[i] && Array.isArray(this.state.minimapIndicators[i].enemies))
-                                        ? this.state.minimapIndicators[i].enemies
-                                        : [];
-                                    const sightingEnemies = this.getMonsterSightingsForBoard(currentLevelId, currentOrientation, i);
-                                    const mergedByTile = new Map();
-                                    baseEnemies.forEach((indicator) => {
-                                        if (!indicator || typeof indicator.tileId !== 'number') return;
-                                        if (!mergedByTile.has(indicator.tileId)) mergedByTile.set(indicator.tileId, indicator);
-                                    });
-                                    sightingEnemies.forEach((indicator) => {
-                                        if (!indicator || typeof indicator.tileId !== 'number') return;
-                                        if (!mergedByTile.has(indicator.tileId)) mergedByTile.set(indicator.tileId, indicator);
-                                    });
-
-                                    return Array.from(mergedByTile.values()).map((indicator, idx) => (
-                                        <div
-                                            key={`${indicator.tileId}_${idx}`}
-                                            className="minimap-indicator enemy"
-                                            style={{
-                                                left: this.calcIndicator(indicator.tileId).left,
-                                                top: this.calcIndicator(indicator.tileId).top
-                                            }}
-                                        >
-                                        </div>
-                                    ));
-                                })()}
-
-                                {/* // stairs // */}
-                                {this.state.minimapIndicators[i] && this.state.minimapIndicators[i].stairs.map((indicator,idx)=>{
-                                    return <div key={idx} className={`minimap-indicator stairs`}
-                                    style={{
-                                        left: this.calcIndicator(indicator.tileId).left,
-                                        top: this.calcIndicator(indicator.tileId).top
-                                    }}>
-                                    </div>
-                                })}
-
-                                {/* // gates // */}
-                                {this.state.minimapIndicators[i] && this.state.minimapIndicators[i].gates.map((indicator,idx)=>{
-                                    return <div key={idx} className={`minimap-indicator gate`}
-                                    style={{
-                                        left: this.calcIndicator(indicator.tileId).left,
-                                        top: this.calcIndicator(indicator.tileId).top
-                                    }}>
-                                    </div>
-                                })}
-
-                                {/* // merchants // */}
-                                {this.state.minimapIndicators[i] && this.state.minimapIndicators[i].merchant.map((indicator,idx)=>{
-                                    const footprintPct = `${(2 / 15) * 100}%`;
-                                    return <div key={idx} className={`minimap-indicator merchant`}
-                                    style={{
-                                        left: this.calcIndicator(indicator.tileId).left,
-                                        top: this.calcIndicator(indicator.tileId).top,
-                                        width: footprintPct,
-                                        height: footprintPct,
-                                        borderRadius: '2px'
-                                    }}>
-                                    </div>
-                                })}
-
-                            </div>
-                        })}
-                    </div>
-                    {this.props.boardManager && this.props.boardManager.currentOrientation === 'B' && (
-                        <div className="backside-indicator">
-                            <span style={{ color: '#f9b115', marginRight: '6px' }}>☯</span> backside orientation
-                        </div>
-                    )}
-                </div>
-                )}
-                <div className="crew-container">
-                    {/* Mobile View Top-Left Respawn Timer Indicator */}
-                    {this.state.isMobileLandscape && (
-                        <div className="mobile-respawn-timer-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '5px 8px', background: 'rgba(15, 12, 20, 0.9)', borderRadius: '6px', border: '1px solid rgba(249, 177, 21, 0.3)', margin: '4px 6px 8px 6px' }}>
-                            <div style={{display: 'flex', alignItems: 'center', gap: 4}} title="Monster Respawn">
-                                <div style={{width: 8, height: 8, borderRadius: '50%', background: 'red'}}></div>
-                                <div style={{fontSize: 11, color: '#fff', fontWeight: 'bold'}}>{this.state.timeToRespawn || '0s'}</div>
-                            </div>
-                            <div style={{display: 'flex', alignItems: 'center', gap: 4}} title="Item Respawn">
-                                <div style={{width: 8, height: 8, borderRadius: '50%', background: 'gold'}}></div>
-                                <div style={{fontSize: 11, color: '#fff', fontWeight: 'bold'}}>{this.state.itemTimeToRespawn || '0m'}</div>
-                            </div>
-                            <div style={{display: 'flex', alignItems: 'center', gap: 4}} title="Relock Timer">
-                                <div style={{width: 8, height: 8, borderRadius: '50%', background: 'white'}}></div>
-                                <div style={{fontSize: 11, color: '#fff', fontWeight: 'bold'}}>{this.state.relockTimeToRespawn || '0h'}</div>
-                            </div>
-                        </div>
-                    )}
-                    {this.state.isMobileLandscape && (
-                        <div className="mobile-section-header" onClick={() => this.setState({ mobileRightQuicklookCollapsed: !this.state.mobileRightQuicklookCollapsed })}>
-                            Status Summary {this.state.mobileRightQuicklookCollapsed ? '[+]' : '[-]'}
-                        </div>
-                    )}
-                    {(!this.state.isMobileLandscape || !this.state.mobileRightQuicklookCollapsed) && (
-                        <>
-                    {/* <div className="title">Crew</div> */}
-
-                    {/* Death tracker: shows skull icons for recent group deaths (meta.deathTracker) */}
-                    {(() => {
-                        try {
-                            const meta = getMeta() || {};
-                            const deaths = meta.deathTracker || 0;
-                            const tooltip = 'Your crew has met death and been spared. If this happens thrice, your journey is over';
-                            // Always render the container (so the portal ref exists and the UI is inspectable)
-                            // but only render skulls when deaths > 0
-                                if (!deaths || deaths <= 0) return null;
-                                return (
-                                <div className="death-tracker" aria-label={tooltip}>
-                                    {new Array(deaths).fill(0).map((_, idx) => (
-                                        <div
-                                            key={idx}
-                                            className="death-skull-wrapper"
-                                            tabIndex={0}
-                                            title={tooltip}
-                                            aria-label={tooltip}
-                                            role="button"
-                                            onClick={() => this.openCardDuel(idx)}
-                                            style={{cursor: 'pointer'}}
-                                        >
-                                            <div className="death-skull" style={{backgroundImage: `url(${images['whiteskull']})`}}></div>
-                                        </div>
-                                    ))}
-                                </div>
-                            );
-                        } catch (e) { return null; }
-                    })()}
-                    {this.state.toastMessage && <div className="dungeon-toast" style={{marginTop:8, padding:8, background:'#2b1b1b', color:'#f0d', borderRadius:4}}>{this.state.toastMessage}</div>}
-                    {/* Quicklook Panel: crew-wide stats summary */}
-                    {(() => {
-                        const meta = getMeta() || {};
-                        const crew = this.props.crewManager.crew || [];
-                        const totalAtk = crew.reduce((sum, m) => sum + (m && m.stats && typeof m.stats.atk === 'number' ? m.stats.atk : 0), 0);
-                        const totalDef = crew.reduce((sum, m) => sum + (m && m.stats && typeof m.stats.def === 'number' ? m.stats.def : 0), 0);
-                        const food = typeof meta.food === 'number' ? meta.food : 55;
-                        const foodLimit = this.getFoodLimit();
-                        const isOverLimit = food > foodLimit;
-                        const resolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
-                        return (
-                            <div className="quicklook-panel">
-                                <div className="ql-row"><span className="ql-label"><span role="img" aria-label="crossed swords">⚔</span> Attack</span><span className="ql-value">{totalAtk}</span></div>
-                                <div className="ql-row"><span className="ql-label"><span role="img" aria-label="shield">🛡</span> Defense</span><span className="ql-value">{totalDef}</span></div>
-                                <div className="ql-row"><span className="ql-label"><span role="img" aria-label="meat">🍖</span> Food</span><span className="ql-value" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>{food} / {foodLimit}</span></div>
-                                <div className="ql-row"><span className="ql-label"><span role="img" aria-label="fist">✊</span> Resolve</span><span className="ql-value">{resolve}</span></div>
-                            </div>
-                        );
-                    })()}
-                        </>
-                    )}
-                    {this.state.isMobileLandscape && (
-                        <div className="mobile-section-header" onClick={() => this.setState({ mobileRightCrewCollapsed: !this.state.mobileRightCrewCollapsed })}>
-                            Crew List {this.state.mobileRightCrewCollapsed ? '[+]' : '[-]'}
-                        </div>
-                    )}
-                    {(!this.state.isMobileLandscape || !this.state.mobileRightCrewCollapsed) && (
-                        <div className="crew-tile-container">
-                        {   this.props.crewManager.crew &&
-                            this.props.crewManager.crew.map((member, i) => {
-                                const isSelectedTile = this.state.selectedCrewMember && this.state.selectedCrewMember.id === member.id;
-                                return <div className="sub-container" key={i}>
-                                            { this.state.crewHoverMatrix[i] && <div className="hover-message">{this.state.crewHoverMatrix[i]}</div>}
-                                            <Tile 
-                                            key={i}
-                                            id={i}
-                                            tileSize={this.state.tileSize}
-                                            image={member.image ? member.image : null}
-                                            imageOverride={member.portrait ? member.portrait : null}
-                                            contains={member.type}
-                                            data={member}
-                                            color={member.color}
-                                            backgroundColor={hexToRgba(member.color, 0.5)}
-                                            editMode={false}
-                                            type={'crew-tile'}
-                                            handleClick={this.handleMemberClick}
-                                            handleHover={this.handleCrewTileHover}
-                                            className={`crew-tile ${isSelectedTile ? 'selected' : 'unselected'}`}
-                                            >
-                                            </Tile>
-                                        </div>
-                            })
-                        }
-                    </div>
-                    )}
-                    {/* Quick Actions — always-visible strip */}
-                    {this.state.isMobileLandscape && (
-                        <div className="mobile-section-header" onClick={() => this.setState({ mobileRightActionsCollapsed: !this.state.mobileRightActionsCollapsed })}>
-                            Quick Actions {this.state.mobileRightActionsCollapsed ? '[+]' : '[-]'}
-                        </div>
-                    )}
-                    {(!this.state.isMobileLandscape || !this.state.mobileRightActionsCollapsed) && (
-                        <div className="quick-actions-strip">
-                        {(() => {
-                            const meta = getMeta() || {};
-                            const camping = meta.camping;
-                            if (camping) {
-                                const start = meta.campingStart || '';
-                                const end = meta.campingEnd || '';
-                                const placeholderId = 'camp-progress-placeholder';
-                                return (
-                                    <div className="quick-actions-camping-container" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                        <div className="crew-action-item action-row" style={{position:'relative', margin: 0}}>
-                                            <div className="camp-label">
-                                                <span style={{position: 'relative', zIndex: 2}}>Recuperating in Camp...</span>
-                                                <div
-                                                    id={placeholderId}
-                                                    ref={el => this.placeholderRef(el, placeholderId, start, end)}
-                                                    className={`progress-overlay camp-anim`}
-                                                    data-start={start}
-                                                    data-end={end}
-                                                ></div>
-                                                <div
-                                                    onClick={() => this.endCamp()}
-                                                    role="button"
-                                                    aria-label="Close camp"
-                                                    style={{position: 'absolute', right: 6, top: 2, cursor: 'pointer', fontWeight: 700, zIndex: 3}}
-                                                >
-                                                    ×
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="quick-actions-btns" style={{ gap: '2px' }}>
-                                            <button
-                                                className="quick-action-btn"
-                                                onClick={() => this.handleOpenCampPopup()}
-                                                title="Go to Camp"
-                                            >
-                                                <span><span role="img" aria-label="camp">🏕</span> Go To Camp</span>
-                                                <span className="hotkey-indicator">C</span>
-                                            </button>
-                                            <button
-                                                className="quick-action-btn"
-                                                onClick={() => this.setState({ showCodex: true })}
-                                                title="Open the Codex"
-                                            >
-                                                <span><span role="img" aria-label="codex">📖</span> Codex</span>
-                                                <span className="hotkey-indicator">X</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            }
-                            return (
-                                <div className="quick-actions-btns">
-                                    <button
-                                        className="quick-action-btn"
-                                        onClick={() => this.handleOpenCampPopup()}
-                                        title="Go to Camp"
-                                    >
-                                        <span><span role="img" aria-label="camp">🏕</span> Go To Camp</span>
-                                        <span className="hotkey-indicator">C</span>
-                                    </button>
-                                    <button
-                                        className="quick-action-btn"
-                                        onClick={() => this.setUpCamp()}
-                                        title="Immediately begin recuperating"
-                                    >
-                                        <span><span role="img" aria-label="recuperate">🛌</span> Recuperate</span>
-                                        <span className="hotkey-indicator">R</span>
-                                    </button>
-                                    <button
-                                        className="quick-action-btn"
-                                        onClick={() => {
-                                            this.setState({ isCardScrimmage: true }, () => {
-                                                this.openCardDuel(null);
-                                            });
-                                        }}
-                                        title="Play a practice card duel (no penalty)"
-                                    >
-                                        <span><span role="img" aria-label="card">🃏</span> Card Scrimmage</span>
-                                        <span className="hotkey-indicator">S</span>
-                                    </button>
-                                    <button
-                                        className="quick-action-btn"
-                                        onClick={() => this.setState({ showCodex: true })}
-                                        title="Open the Codex"
-                                    >
-                                        <span><span role="img" aria-label="codex">📖</span> Codex</span>
-                                        <span className="hotkey-indicator">X</span>
-                                    </button>
-                                    {this.state.campWarningMessage && (
-                                        <div style={{paddingLeft: 4, fontSize: 11, color: '#e74c3c', lineHeight: 1.4}}>
-                                            {this.state.campWarningMessage}
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })()}
-                    </div>
-                    )}
-
-                    {/* ── Points of Interest panel ─────────────────────────────── */}
-                    {this.state.isMobileLandscape && (
-                        <div className="mobile-section-header" onClick={() => this.setState({ mobileRightPoiCollapsed: !this.state.mobileRightPoiCollapsed })}>
-                            Points of Interest {this.state.mobileRightPoiCollapsed ? '[+]' : '[-]'}
-                        </div>
-                    )}
-                    {(!this.state.isMobileLandscape || !this.state.mobileRightPoiCollapsed) && (
-                        <div className="poi-panel">
-                        {/* Toggle button: open eye = visible, closed eye = collapsed */}
-                        <button
-                            className="poi-toggle-btn"
-                            onClick={() => this.setState(s => ({ poiPanelExpanded: !s.poiPanelExpanded }))}
-                            title={this.state.poiPanelExpanded ? 'Hide nearby points of interest' : 'Show nearby points of interest'}
-                        >
-                            <img
-                                src={this.state.poiPanelExpanded ? images['eye_open'] : images['eye_closed']}
-                                alt={this.state.poiPanelExpanded ? 'Hide POI' : 'Show POI'}
-                                className="poi-eye-icon"
-                            />
-                        </button>
-
-                        {this.state.poiPanelExpanded && (() => {
-                            // Use the live boardManager tiles (indexed array, not state copy)
-                            const bm = this.props.boardManager;
-                            const liveTiles = (bm && bm.tiles) ? bm.tiles : (this.state.tiles || []);
-
-                            // Resolve player position from live board manager location (falling back to meta)
-                            const meta = getMeta() || {};
-                            const playerTileIndex = (bm && bm.playerTile && bm.playerTile.location)
-                                ? bm.getIndexFromCoordinates(bm.playerTile.location)
-                                : (meta.location && meta.location.tileIndex != null ? meta.location.tileIndex : null);
-                            const playerCoords = (playerTileIndex !== null && bm && typeof bm.getCoordinatesFromIndex === 'function')
-                                ? bm.getCoordinatesFromIndex(playerTileIndex)
-                                : null; // [x, y]
-
-                            // Gate type names — boardManager returns the subtype directly for gates
-                            const GATE_TYPES = new Set([
-                                'gate', 'dungeon_door', 'gryphon_gate', 'bat_gate', 'evil_gate',
-                                'minor_gate', 'major_gate', 'treasury_gate', 'imperial_gate',
-                                'necrotic_gate', 'master_necrotic_gate', 'dimensional_gate',
-                                'cyan_gate', 'violet_gate', 'rubicund_gate',
-                            ]);
-
-                            // Chests are stored as type='item' with a chest subtype
-                            const CHEST_SUBTYPES = new Set([
-                                'silver_chest', 'gold_chest', 'ornate_chest',
-                                'wooden_chest', 'iron_chest', 'steel_chest',
-                                'gilded_casket', 'ancient_casket', 'treasury_chest', 'cryptic_chest',
-                            ]);
-
-                            const NOTABLE_TYPES = new Set([
-                                'monster', 'chest', 'item', 'shop', 'vendor', 'shrine', 'portal',
-                                'boss', 'npc', 'well', 'altar', 'trap', 'treasure',
-                                'campfire', 'camp', 'artifact', 'event', 'dungeon_entrance',
-                                'spawn', 'narrative', 'lore_tablet', 'spell',
-                                'dungeon_portal', 'dungeon portal',
-                                ...GATE_TYPES,
-                            ]);
-
-                            const MAX_DIST = 6; // Chebyshev distance in grid units
-
-                            // ── Codex deep-link lookup ─────────────────────────
-                            // Maps a POI type (or subtype) to a { tab, entryId, search } object.
-                            // Add an entry here whenever a new INTERACTABLE id is added to CodexModal.
-                            const POI_CODEX_MAP = {
-                                // vendors
-                                vendor: { tab: 'interactables', entryId: 'merchant', search: 'merchant' },
-                                shop:   { tab: 'interactables', entryId: 'merchant', search: 'merchant' },
-                                merchant:  { tab: 'interactables', entryId: 'merchant', search: 'merchant' },
-                                alchemist: { tab: 'interactables', entryId: 'alchemist', search: 'alchemist' },
-                                // gates
-                                minor_gate:        { tab: 'interactables', entryId: 'minor_gate',        search: 'minor gate' },
-                                major_gate:        { tab: 'interactables', entryId: 'major_gate',        search: 'major gate' },
-                                treasury_gate:     { tab: 'interactables', entryId: 'treasury_gate',     search: 'treasury gate' },
-                                necrotic_gate:     { tab: 'interactables', entryId: 'necrotic_gate',     search: 'necrotic gate' },
-                                dimensional_gate:  { tab: 'interactables', entryId: 'dimensional_gate',  search: 'dimensional gate' },
-                                // chests
-                                silver_chest:  { tab: 'interactables', entryId: 'chest_silver', search: 'silver chest' },
-                                gold_chest:    { tab: 'interactables', entryId: 'chest_gold',   search: 'gold chest' },
-                                ornate_chest:  { tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
-                                wooden_chest:  { tab: 'interactables', entryId: 'chest_silver', search: 'chest' },
-                                iron_chest:    { tab: 'interactables', entryId: 'chest_silver', search: 'chest' },
-                                steel_chest:   { tab: 'interactables', entryId: 'chest_gold',   search: 'chest' },
-                                gilded_casket: { tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
-                                ancient_casket:{ tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
-                                treasury_chest:{ tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
-                                cryptic_chest: { tab: 'interactables', entryId: 'chest_ornate', search: 'ornate chest' },
-                                // navigation
-                                stairs:       { tab: 'interactables', entryId: 'stairs_down', search: 'stairs' },
-                                dungeon_portal:  { tab: 'interactables', entryId: 'dungeon_portal', search: 'teleporter' },
-                                'dungeon portal':{ tab: 'interactables', entryId: 'dungeon_portal', search: 'teleporter' },
-                                // lore / narrative
-                                narrative:    { tab: 'interactables', entryId: 'narrative',    search: 'narrative' },
-                                lore_tablet:  { tab: 'interactables', entryId: 'lore_tablet',  search: 'lore tablet' },
-                                // spawn
-                                spawn:        { tab: 'interactables', entryId: 'spawn_point',  search: 'spawn' },
-                                // misc
-                                camp:     { tab: 'interactables', entryId: 'camp',     search: 'camp' },
-                                campfire: { tab: 'interactables', entryId: 'camp',     search: 'camp' },
-
-                                shrine:   { tab: 'interactables', entryId: 'shrine',   search: 'shrine' },
-                            };
-
-                            // Returns codex entry params for a given type+subtype, or null
-                            const getCodexEntry = (type, subtype) => {
-                                // Monsters → navigate to Monsters tab and search by name
-                                if (type === 'monster' && subtype) {
-                                    return { tab: 'monsters', entryId: null, search: subtype };
-                                }
-                                if (type === 'monster') {
-                                    return { tab: 'monsters', entryId: null, search: '' };
-                                }
-                                // For types where the type alone is enough (spawn, shrines, etc.)
-                                // check type first to avoid accidental subtype collision
-                                if (POI_CODEX_MAP[type]) {
-                                    // For chests and gates, subtype is more specific — prefer subtype
-                                    if ((type === 'item' || type === 'chest' || GATE_TYPES.has(type)) && POI_CODEX_MAP[subtype]) {
-                                        return POI_CODEX_MAP[subtype];
-                                    }
-                                    return POI_CODEX_MAP[type];
-                                }
-                                return POI_CODEX_MAP[subtype] || null;
-                            };
-
-                            const openPoiCodex = (type, subtype) => {
-                                const entry = getCodexEntry(type, subtype);
-                                if (entry) {
-                                    this.setState({
-                                        showCodex: true,
-                                        codexEntry: entry,
-                                    });
-                                } else {
-                                    this.setState({ noCodexEntry: true });
-                                }
-                            };
-
-                            // Mirror boardManager.getContainsType: for gate objects, return the subtype
-                            const getType = (contains) => {
-                                if (!contains) return null;
-                                if (typeof contains === 'object') {
-                                    if (contains.type === 'gate' && contains.subtype) return contains.subtype;
-                                    return contains.type || null;
-                                }
-                                return contains; // string legacy
-                            };
-                            const getSubtype = (contains) => {
-                                if (!contains) return null;
-                                if (typeof contains === 'object') return contains.subtype || null;
-                                return null;
-                            };
-
-                            const poi = liveTiles.filter((t, idx) => {
-                                if (!t) return false;
-                                // Skip fogged tiles
-                                if (t.color === 'black' || t.fog === true) return false;
-                                const type = getType(t.contains);
-                                if (!type || !NOTABLE_TYPES.has(type)) return false;
-                                // Distance filter using tile index → grid coords
-                                if (playerCoords && bm && typeof bm.getCoordinatesFromIndex === 'function') {
-                                    const tileId = t.id != null ? t.id : idx;
-                                    const tc = bm.getCoordinatesFromIndex(tileId);
-                                    const chebyshev = Math.max(
-                                        Math.abs(tc[0] - playerCoords[0]),
-                                        Math.abs(tc[1] - playerCoords[1])
-                                    );
-                                    return chebyshev <= MAX_DIST;
-                                }
-                                return true;
-                            });
-
-                            // Deduplicate multi-tile structures (e.g. a 2×2 vendor
-                            // occupies 4 tiles all with the same type+subtype+image).
-                            // Keep only the first tile for each unique combination.
-                            const seenPoi = new Set();
-                            const basePoi = poi.filter(t => {
-                                const type    = getType(t.contains);
-                                const subtype = getSubtype(t.contains);
-                                const key = `${type}|${subtype || ''}|${t.image || ''}`;
-                                if (seenPoi.has(key)) return false;
-                                seenPoi.add(key);
-                                return true;
-                            });
-
-                            const lootPoiList = (this.state.activeChestLoot || []).map((loot, idx) => {
-                                const lootType = loot.type === 'currency' ? 'currency' : 'item';
-                                return {
-                                    id: loot.id || ('loot_' + idx),
-                                    image: loot.icon,
-                                    contains: {
-                                        type: lootType,
-                                        subtype: loot.name
-                                    },
-                                    color: 'gold',
-                                    isLoot: true
-                                };
-                            });
-
-                            const uniquePoi = [...basePoi, ...lootPoiList];
-
-                            if (uniquePoi.length === 0) {
-                                return (
-                                    <div className="poi-empty">
-                                        <span>Nothing notable nearby</span>
-                                    </div>
-                                );
-                            }
-
-                            return (
-                                <div className="poi-list">
-                                    {uniquePoi.map((t, i) => {
-                                        const type = getType(t.contains);
-                                        const subtype = getSubtype(t.contains);
-                                        const isShrine = type === 'shrine';
-
-                                        if (isShrine) {
-                                            // Shrine: building image + class portrait side-by-side
-                                            const shrineImg = images['shrine'] || null;
-                                            // subtype is the class key (e.g. 'wizard', 'ranger', 'barbarian')
-                                            const classPortrait = subtype
-                                                ? (images[subtype + '_portrait'] || images[subtype] || null)
-                                                : null;
-                                            const label = subtype
-                                                ? `${subtype.replace(/_/g, ' ')} Shrine`
-                                                : 'Shrine';
-                                            return (
-                                                <div
-                                                    key={i}
-                                                    className="poi-portrait-card poi-shrine-card"
-                                                    style={{ cursor: 'pointer' }}
-                                                    title="Click to open Codex"
-                                                    onClick={() => openPoiCodex(type, subtype)}
-                                                >
-                                                    <div className="poi-shrine-images">
-                                                        <div className="poi-shrine-half">
-                                                            {shrineImg
-                                                                ? <img src={shrineImg} alt="Shrine" className="poi-shrine-img" />
-                                                                : <div className="poi-portrait-placeholder" />
-                                                            }
-                                                        </div>
-                                                        <div className="poi-shrine-half">
-                                                            {classPortrait
-                                                                ? <img src={classPortrait} alt={subtype} className="poi-shrine-img" />
-                                                                : <div className="poi-portrait-placeholder" />
-                                                            }
-                                                        </div>
-                                                    </div>
-                                                    <div className="poi-portrait-name">{label}</div>
-                                                </div>
-                                            );
-                                        }
-
-                                        // Classify for card theming
-                                        const isChest    = type === 'chest' || (type === 'item' && CHEST_SUBTYPES.has(subtype));
-                                        const isGate     = GATE_TYPES.has(type);
-                                        const isVendor   = type === 'vendor' || type === 'shop';
-                                        const isNarrative = type === 'narrative' || type === 'lore_tablet';
-                                        const isSpawn    = type === 'spawn';
-                                        const isPortal   = type === 'dungeon_portal' || type === 'dungeon portal';
-                                        const isItem     = type === 'item' && !CHEST_SUBTYPES.has(subtype);
-                                        // Image: prefer tile.image (already resolved by boardManager)
-                                        const icon = t.image
-                                            ? (images[t.image] || t.image)
-                                            : (images[subtype] || images[type] || null);
-                                        const label = isGate
-                                            ? (type || 'Gate').replace(/_/g, ' ')
-                                            : isSpawn
-                                                ? 'Spawn Point'
-                                                : isPortal
-                                                    ? 'Teleporter'
-                                                    : isNarrative
-                                                        ? (subtype ? subtype.replace(/_/g, ' ') : 'Narrative')
-                                                        : t.isLoot
-                                                            ? subtype
-                                                            : subtype
-                                                                ? subtype.replace(/_/g, ' ')
-                                                                : (type ? type.replace(/_/g, ' ') : 'Unknown');
-                                        const cardClass = isChest     ? ' poi-chest-card'
-                                            : isGate      ? ' poi-gate-card'
-                                            : isVendor    ? ' poi-vendor-card'
-                                            : isNarrative ? ' poi-narrative-card'
-                                            : isSpawn     ? ' poi-spawn-card'
-                                            : isPortal    ? ' poi-portal-card'
-                                            : isItem      ? ' poi-item-card'
-                                            : t.isLoot    ? ' poi-loot-card'
-                                            : '';
-                                        return (
-                                            <div
-                                                key={t.id || i}
-                                                className={`poi-portrait-card${cardClass} ${t.isLoot && this.state.chestLootFadeOut ? 'fade-out' : ''}`}
-                                                style={{ cursor: t.isLoot ? 'default' : 'pointer' }}
-                                                title={t.isLoot ? undefined : "Click to open Codex"}
-                                                onClick={t.isLoot ? undefined : () => openPoiCodex(type, subtype)}
-                                            >
-                                                <div className="poi-portrait-img-wrap">
-                                                    {icon
-                                                        ? <img src={icon} alt={label} className="poi-portrait-img" />
-                                                        : <div className="poi-portrait-placeholder" />
-                                                    }
-                                                </div>
-                                                <div className="poi-portrait-name">{label}</div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            );
-                        })()}
-                    </div>
-                    )}
-                    {/* ── /Points of Interest panel ───────────────────────────── */}
-
-                </div>
+                {this.renderPanelSections('right')}
                 <div className="expand-collapse-button icon-container" onClick={this.toggleRightSidePanel}>
                     <CIcon icon={cilCaretLeft} className={`expand-icon ${this.state.rightPanelExpanded ? 'expanded' : ''}`} size="sm"/>
                 </div>

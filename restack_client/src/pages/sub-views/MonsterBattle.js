@@ -2670,11 +2670,14 @@ class MonsterBattle extends React.Component {
             this._lastDragTargetIsEnemy = false;
             return;
         }
-        // Detect enemy at this grid position
-        const isEnemy = Object.values(this.state.battleData).some(u =>
-            u && !u.dead && (u.isMonster || u.isMinion) &&
-            u.coordinates && u.coordinates.x === gridX && u.coordinates.y === gridY
-        );
+        // Detect enemy at this grid position (including extra coordinates for large/huge units)
+        const isEnemy = Object.values(this.state.battleData).some(u => {
+            if (!u || u.dead || (!u.isMonster && !u.isMinion)) return false;
+            const coords = Array.isArray(u.occupiedCoords) && u.occupiedCoords.length > 0
+                ? u.occupiedCoords
+                : (u.coordinates ? [u.coordinates] : []);
+            return coords.some(coord => coord.x === gridX && coord.y === gridY);
+        });
         // Keep sync instance vars
         this._lastDragTarget = { x: gridX, y: gridY };
         this._lastDragTargetIsEnemy = isEnemy;
@@ -2728,11 +2731,14 @@ class MonsterBattle extends React.Component {
             this._lastDragTargetIsEnemy = false;
             return;
         }
-        // Detect enemy at this grid position
-        const isEnemy = Object.values(this.state.battleData).some(u =>
-            u && !u.dead && (u.isMonster || u.isMinion) &&
-            u.coordinates && u.coordinates.x === gridX && u.coordinates.y === gridY
-        );
+        // Detect enemy at this grid position (including extra coordinates for large/huge units)
+        const isEnemy = Object.values(this.state.battleData).some(u => {
+            if (!u || u.dead || (!u.isMonster && !u.isMinion)) return false;
+            const coords = Array.isArray(u.occupiedCoords) && u.occupiedCoords.length > 0
+                ? u.occupiedCoords
+                : (u.coordinates ? [u.coordinates] : []);
+            return coords.some(coord => coord.x === gridX && coord.y === gridY);
+        });
         // Keep sync instance vars so _handleDragMouseUp can read them immediately
         this._lastDragTarget = { x: gridX, y: gridY };
         this._lastDragTargetIsEnemy = isEnemy;
@@ -2763,7 +2769,13 @@ class MonsterBattle extends React.Component {
             if (cm) {
                 if (dragTargetIsEnemy) {
                     // Dragged onto an enemy — lock this fighter to prioritise that target.
-                    const enemyUnit = Object.values(this.state.battleData).find(u =>
+                    const enemyUnit = Object.values(this.state.battleData).find(u => {
+                        if (!u || u.dead || (!u.isMonster && !u.isMinion) || u.isVCT) return false;
+                        const coords = Array.isArray(u.occupiedCoords) && u.occupiedCoords.length > 0
+                            ? u.occupiedCoords
+                            : (u.coordinates ? [u.coordinates] : []);
+                        return coords.some(coord => coord.x === dragTargetTile.x && coord.y === dragTargetTile.y);
+                    }) || Object.values(this.state.battleData).find(u =>
                         u && !u.dead && (u.isMonster || u.isMinion) &&
                         u.coordinates && u.coordinates.x === dragTargetTile.x && u.coordinates.y === dragTargetTile.y
                     );
@@ -2849,8 +2861,13 @@ class MonsterBattle extends React.Component {
         // Build set of tiles occupied by enemies or other PC fighters
         const hardOccupied = new Set(occupied);
         Object.values(battleData).forEach(u => {
-            if (u && !u.dead && u.id !== fighterId && u.coordinates) {
-                hardOccupied.add(`${u.coordinates.x},${u.coordinates.y}`);
+            if (u && !u.dead && u.id !== fighterId) {
+                const coords = Array.isArray(u.occupiedCoords) && u.occupiedCoords.length > 0
+                    ? u.occupiedCoords
+                    : (u.coordinates ? [u.coordinates] : []);
+                coords.forEach(coord => {
+                    hardOccupied.add(`${coord.x},${coord.y}`);
+                });
             }
         });
 

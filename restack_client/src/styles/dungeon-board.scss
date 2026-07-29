@@ -3467,6 +3467,7 @@
     }
 
     .left-side-panel {
+        padding-top: 0 !important;
         &::-webkit-scrollbar {
             width: 4px;
         }
@@ -3476,6 +3477,9 @@
         &::-webkit-scrollbar-thumb {
             background: rgba(255,255,255,0.15);
             border-radius: 2px;
+        }
+        .crew-info-section {
+            padding-top: 0 !important;
         }
     }
 
@@ -3619,6 +3623,127 @@
         &:hover {
             transform: scale(1.04);
             filter: brightness(1.15);
+        }
+    }
+}
+
+/* Dungeon Page Panel Accordion & Drag-and-Drop styles */
+.dungeon-panel-section {
+    width: 100%;
+    margin-bottom: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 6px;
+    background: rgba(21, 21, 28, 0.6);
+    overflow: hidden;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease;
+
+    &:hover {
+        border-color: rgba(212, 168, 68, 0.35);
+        box-shadow: 0 0 10px rgba(212, 168, 68, 0.1);
+    }
+
+    .section-header {
+        background: rgba(30, 30, 40, 0.85);
+        color: #d4a844;
+        padding: 10px 14px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        cursor: grab;
+        user-select: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: background 0.25s ease, color 0.25s ease;
+
+        &:active {
+            cursor: grabbing;
+        }
+
+        &:hover {
+            background: rgba(45, 45, 60, 0.95);
+            color: #ffd473;
+        }
+    }
+
+    .section-content {
+        padding: 12px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        background: rgba(10, 10, 15, 0.35);
+    }
+}
+
+/* Adjust inline positioning and details for accordion panels */
+.left-side-panel, .right-side-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    box-sizing: border-box;
+    padding: 12px 8px;
+
+    /* Remove extra margin/padding when nested inside panels */
+    .crew-info-section {
+        padding-top: 0;
+        margin: 0;
+        width: 100%;
+    }
+    
+    .equipment-panel {
+        margin-top: 0;
+        padding: 0;
+        background: transparent;
+    }
+
+    .quick-actions-strip {
+        width: 100%;
+    }
+
+    .quicklook-panel {
+        width: 100%;
+        margin-top: 0;
+    }
+
+    .poi-panel {
+        width: 100%;
+    }
+}
+
+/* Ensure the dropzones have a visual cue when dragging, or are clean empty areas */
+[class^="panel-dropzone-"] {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    min-height: 200px;
+}
+
+/* Custom styling for specific slottable containers */
+.dungeon-panel-section {
+    &.section-character {
+        .portrait-wrapper {
+            margin-bottom: 12px;
+        }
+    }
+    &.section-quick_actions {
+        .quick-actions-btns {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            width: 100%;
+        }
+        .quick-action-btn {
+            width: 100%;
+        }
+    }
+    &.section-toggles {
+        .mobile-tile-zoom-toggle-inline, .admin-debugger-toggle-inline {
+            user-select: none;
         }
     }
 }
