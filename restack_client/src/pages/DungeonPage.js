@@ -2403,6 +2403,7 @@ class DungeonPage extends React.Component {
             })(),
             tileSize: 0,
             boardSize: 0,
+            mobileTileZoomMinus: false,
             mobileViewX: null,
             mobileViewY: null,
             currentBoardIndex: null,
@@ -3869,6 +3870,19 @@ class DungeonPage extends React.Component {
         const tileSize = this.state.tileSize || 1;
         const widthInTiles = vWidth / tileSize;
         const heightInTiles = vHeight / tileSize;
+
+        // In zoomed-out mode (- toggle), the entire board fits on screen: no panning pause or key locking
+        if (this.state.mobileTileZoomMinus) {
+            if (this.state.mobileViewX !== 0 || this.state.mobileViewY !== 0 || this.state.isRecentering) {
+                this.setState({
+                    mobileViewX: 0,
+                    mobileViewY: 0,
+                    isRecentering: false,
+                    keysLocked: (this.state.inMonsterBattle || this.state.inTowerSiege) ? true : false
+                });
+            }
+            return;
+        }
 
         // If not initialized yet, initialize instantly
         if (this.state.mobileViewX === undefined || this.state.mobileViewX === null || this.state.mobileViewY === undefined || this.state.mobileViewY === null) {
@@ -6744,10 +6758,20 @@ class DungeonPage extends React.Component {
             minimapZoomedTile: zoomed
         })
     }
+    toggleMobileTileZoom = (isMinus) => {
+        this.setState({ mobileTileZoomMinus: isMinus }, () => {
+            this.handleResize();
+        });
+    }
+
     getTileSize(){
         const isMobileLandscape = window.innerWidth <= 1024 && window.innerHeight < window.innerWidth;
         if (isMobileLandscape) {
-            return Math.floor(window.innerHeight / 13.5) * 2;
+            let baseSize = Math.floor(window.innerHeight / 13.5) * 2;
+            if (this.state && this.state.mobileTileZoomMinus) {
+                baseSize = Math.round(baseSize * 0.5);
+            }
+            return baseSize;
         }
         const h = Math.floor((window.innerHeight/17));
         const w = Math.floor((window.innerWidth/17));
@@ -11308,6 +11332,68 @@ class DungeonPage extends React.Component {
 
         return (
         <div className={`dungeon-container ${this.state.ritualWrecked ? 'wrecked' : ''}`}>
+            {/* Mobile View Tile Zoom Toggle (+ / -) */}
+            {this.state.isMobileLandscape && (
+                <div
+                    className="mobile-tile-zoom-toggle"
+                    style={{
+                        position: 'fixed',
+                        top: '16px',
+                        right: (typeof localStorage !== 'undefined' && localStorage.getItem('isAdmin') === 'true') ? '135px' : '20px',
+                        zIndex: 10005,
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: 'rgba(15, 12, 20, 0.9)',
+                        border: '1px solid rgba(255, 255, 255, 0.25)',
+                        borderRadius: '16px',
+                        padding: '2px',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
+                        backdropFilter: 'blur(8px)'
+                    }}
+                >
+                    <button
+                        onClick={() => this.toggleMobileTileZoom(false)}
+                        style={{
+                            width: '26px',
+                            height: '24px',
+                            borderRadius: '14px',
+                            border: 'none',
+                            background: !this.state.mobileTileZoomMinus ? '#f9b115' : 'transparent',
+                            color: !this.state.mobileTileZoomMinus ? '#000' : '#ccc',
+                            fontWeight: 'bold',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        title="100% Tile Zoom (+)"
+                    >
+                        +
+                    </button>
+                    <button
+                        onClick={() => this.toggleMobileTileZoom(true)}
+                        style={{
+                            width: '26px',
+                            height: '24px',
+                            borderRadius: '14px',
+                            border: 'none',
+                            background: this.state.mobileTileZoomMinus ? '#f9b115' : 'transparent',
+                            color: this.state.mobileTileZoomMinus ? '#000' : '#ccc',
+                            fontWeight: 'bold',
+                            fontSize: '14px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        title="50% Tile Zoom (-)"
+                    >
+                        -
+                    </button>
+                </div>
+            )}
+
             {/* Admin Debugger Toggle */}
             {(() => {
                 const isAdmin = typeof localStorage !== 'undefined' && localStorage.getItem('isAdmin') === 'true';
@@ -11322,12 +11408,12 @@ class DungeonPage extends React.Component {
                             zIndex: 10005,
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '10px',
+                            gap: '8px',
                             background: 'rgba(15, 12, 20, 0.9)',
                             border: this.state.debugMode ? '1px solid #00ffcc' : '1px solid rgba(255, 255, 255, 0.25)',
                             boxShadow: this.state.debugMode ? '0 0 15px rgba(0, 255, 204, 0.45)' : '0 4px 12px rgba(0,0,0,0.6)',
                             borderRadius: '20px',
-                            padding: '6px 14px',
+                            padding: '4px 12px',
                             backdropFilter: 'blur(8px)',
                             cursor: 'pointer',
                             userSelect: 'none',
@@ -11336,25 +11422,25 @@ class DungeonPage extends React.Component {
                         onClick={this.handleToggleDebugMode}
                         title="Toggle Admin Debugger Mode"
                     >
-                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: this.state.debugMode ? '#00ffcc' : '#ccc', letterSpacing: '0.5px' }}>
-                            🐛 Debugger {this.state.debugMode ? '[ON]' : '[OFF]'}
+                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: this.state.debugMode ? '#00ffcc' : '#ccc', letterSpacing: '0.5px' }}>
+                            {this.state.isMobileLandscape ? 'Debug' : `🐛 Debugger ${this.state.debugMode ? '[ON]' : '[OFF]'}`}
                         </span>
                         <div style={{
-                            width: '36px',
-                            height: '18px',
-                            borderRadius: '10px',
+                            width: '32px',
+                            height: '16px',
+                            borderRadius: '9px',
                             background: this.state.debugMode ? '#00ffcc' : '#444',
                             position: 'relative',
                             transition: 'background 0.25s ease'
                         }}>
                             <div style={{
-                                width: '14px',
-                                height: '14px',
+                                width: '12px',
+                                height: '12px',
                                 borderRadius: '50%',
                                 background: '#111',
                                 position: 'absolute',
                                 top: '2px',
-                                left: this.state.debugMode ? '20px' : '2px',
+                                left: this.state.debugMode ? '18px' : '2px',
                                 transition: 'left 0.25s ease'
                             }} />
                         </div>
@@ -14035,6 +14121,23 @@ class DungeonPage extends React.Component {
                 </div>
                 )}
                 <div className="crew-container">
+                    {/* Mobile View Top-Left Respawn Timer Indicator */}
+                    {this.state.isMobileLandscape && (
+                        <div className="mobile-respawn-timer-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px', padding: '5px 8px', background: 'rgba(15, 12, 20, 0.9)', borderRadius: '6px', border: '1px solid rgba(249, 177, 21, 0.3)', margin: '4px 6px 8px 6px' }}>
+                            <div style={{display: 'flex', alignItems: 'center', gap: 4}} title="Monster Respawn">
+                                <div style={{width: 8, height: 8, borderRadius: '50%', background: 'red'}}></div>
+                                <div style={{fontSize: 11, color: '#fff', fontWeight: 'bold'}}>{this.state.timeToRespawn || '0s'}</div>
+                            </div>
+                            <div style={{display: 'flex', alignItems: 'center', gap: 4}} title="Item Respawn">
+                                <div style={{width: 8, height: 8, borderRadius: '50%', background: 'gold'}}></div>
+                                <div style={{fontSize: 11, color: '#fff', fontWeight: 'bold'}}>{this.state.itemTimeToRespawn || '0m'}</div>
+                            </div>
+                            <div style={{display: 'flex', alignItems: 'center', gap: 4}} title="Relock Timer">
+                                <div style={{width: 8, height: 8, borderRadius: '50%', background: 'white'}}></div>
+                                <div style={{fontSize: 11, color: '#fff', fontWeight: 'bold'}}>{this.state.relockTimeToRespawn || '0h'}</div>
+                            </div>
+                        </div>
+                    )}
                     {this.state.isMobileLandscape && (
                         <div className="mobile-section-header" onClick={() => this.setState({ mobileRightQuicklookCollapsed: !this.state.mobileRightQuicklookCollapsed })}>
                             Status Summary {this.state.mobileRightQuicklookCollapsed ? '[+]' : '[-]'}
