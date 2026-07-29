@@ -17,6 +17,7 @@ describe('Goblin Warrior and Warchief Sword Swing Skillset', () => {
     });
 
     test('Goblin Warrior executes sword_swing skill in combat', () => {
+        const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.99);
         const cm = new CombatManagerRedux();
         cm.combatants = {
             warrior: {
@@ -48,9 +49,11 @@ describe('Goblin Warrior and Warchief Sword Swing Skillset', () => {
         // Enemy HP should decrease due to sword_swing attack
         expect(cm.combatants.player.hp).toBeLessThan(100);
         expect(cm.combatants.warrior.cooldowns['sword_swing']).toBeGreaterThan(0);
+        randomSpy.mockRestore();
     });
 
     test('Goblin Warchief executes sword_swing skill in combat', () => {
+        const randomSpy = jest.spyOn(Math, 'random').mockReturnValue(0.99);
         const cm = new CombatManagerRedux();
         cm.combatants = {
             warchief: {
@@ -82,5 +85,6 @@ describe('Goblin Warrior and Warchief Sword Swing Skillset', () => {
         // Enemy HP should decrease due to sword_swing attack
         expect(cm.combatants.player.hp).toBeLessThan(100);
         expect(cm.combatants.warchief.cooldowns['sword_swing']).toBeGreaterThan(0);
+        randomSpy.mockRestore();
     });
 });

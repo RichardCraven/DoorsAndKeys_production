@@ -399,8 +399,10 @@ export function CombatManagerRedux() {
                 }
             });
             if (this.vctByMonster && this.vctByMonster[id]) {
-                const vctId = `${id}_VCT`;
-                if (this.combatants[vctId]) delete this.combatants[vctId];
+                const vctId1 = `${id}_VCT`;
+                const vctId2 = `${id}_VCT2`;
+                if (this.combatants[vctId1]) delete this.combatants[vctId1];
+                if (this.combatants[vctId2]) delete this.combatants[vctId2];
                 delete this.vctByMonster[id];
             }
             delete this.combatants[id];
@@ -5709,18 +5711,44 @@ export function CombatManagerRedux() {
         const trialIndex = fighter.inTrial;
         const returnCoords = fighter.preTrialCoordinates || fighter.coordinates;
 
-        fighter.coordinates = returnCoords;
+        let dest = returnCoords;
+        if (!this.canFitAt(fighter, dest.x, dest.y)) {
+            // Find the closest unoccupied cell where fighter can fit
+            let found = false;
+            for (let dist = 1; dist < 8; dist++) {
+                if (found) break;
+                for (let dx = -dist; dx <= dist; dx++) {
+                    if (found) break;
+                    for (let dy = -dist; dy <= dist; dy++) {
+                        const tx = returnCoords.x + dx;
+                        const ty = returnCoords.y + dy;
+                        if (tx >= 0 && tx <= MAX_DEPTH && ty >= 0 && ty < MAX_LANES) {
+                            if (this.canFitAt(fighter, tx, ty)) {
+                                dest = { x: tx, y: ty };
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        fighter.coordinates = dest;
+        this._setCombatantOccupiedCoords(fighter, this.combatants);
+        this.syncVCTs();
+
         delete fighter.inTrial;
         delete fighter.trialSuccesses;
         delete fighter.preTrialCoordinates;
         delete fighter.inTrialSince;
 
         const trialNames = ['First', 'Second', 'Third'];
-        this.appendCombatLog(`${this.getCombatantLogName(fighter)} has survived the ${trialNames[trialIndex] || ''} Trial and returned!`);
+        this.appendCombatLog(`${this.getCombatantLogName(fighter)} has survived the ${trialNames[trialIndex] || ''} Trial and returned to (${dest.x}, ${dest.y})!`);
 
         // Trigger return overlay animation
         if (this.animManagerRedux && typeof this.animManagerRedux.triggerReturnFromTrial === 'function') {
-            this.animManagerRedux.triggerReturnFromTrial(returnCoords, trialIndex, fighter.id);
+            this.animManagerRedux.triggerReturnFromTrial(dest, trialIndex, fighter.id);
         }
         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
     };
@@ -7615,6 +7643,17 @@ export function CombatManagerRedux() {
         const witchAtk = spawner.stats?.atk || 10;
         const index = spawner.spidersSpawnedCount;
         const spiderId = `spider_minion_${Date.now()}_${index}_${Math.floor(Math.random() * 1000)}`;
+
+        // Find a free adjacent tile to spawn the spider. If none is free, fallback to spawner coordinates.
+        const adjacent = [
+            { x: spawner.coordinates.x, y: spawner.coordinates.y - 1 },
+            { x: spawner.coordinates.x, y: spawner.coordinates.y + 1 },
+            { x: spawner.coordinates.x - 1, y: spawner.coordinates.y },
+            { x: spawner.coordinates.x + 1, y: spawner.coordinates.y }
+        ].filter(t => t.x >= 0 && t.x <= MAX_DEPTH && t.y >= 0 && t.y < MAX_LANES && !this.isTileOccupied(t.x, t.y));
+
+        const spawnCoord = adjacent.length > 0 ? adjacent[0] : { x: spawner.coordinates.x, y: spawner.coordinates.y };
+
         const spiderMinion = {
             id: spiderId,
             type: 'spider_minion',
@@ -7630,7 +7669,7 @@ export function CombatManagerRedux() {
             sleepEndTimeMs: 0,
             endurance: 100,
             maxEndurance: 100,
-            coordinates: { x: spawner.coordinates.x, y: spawner.coordinates.y },
+            coordinates: { ...spawnCoord },
             hp: 15,
             starting_hp: 15,
             stats: { str: 10, dex: 10, atk: witchAtk, def: 5, speed: 0, hp: 15 },
@@ -9036,6 +9075,38 @@ export function CombatManagerRedux() {
             const eggId = `dragon_egg_${Date.now()}`;
             const hpBase = 50;
 
+            // Find a free tile around target.coordinates. If target.coordinates is free, use it.
+            let targetX = target.coordinates.x;
+            let targetY = target.coordinates.y;
+            if (this.isTileOccupied(targetX, targetY)) {
+                // Try searching adjacent tiles
+                const candidates = [
+                    { x: targetX - 1, y: targetY },
+                    { x: targetX + 1, y: targetY },
+                    { x: targetX, y: targetY - 1 },
+                    { x: targetX, y: targetY + 1 },
+                ];
+                const freeCand = candidates.find(c => c.x >= 0 && c.x <= MAX_DEPTH && c.y >= 0 && c.y < MAX_LANES && !this.isTileOccupied(c.x, c.y));
+                if (freeCand) {
+                    targetX = freeCand.x;
+                    targetY = freeCand.y;
+                } else {
+                    // Fallback to any free tile on the board
+                    let found = false;
+                    for (let x = MAX_DEPTH; x >= 0; x--) {
+                        for (let y = 0; y < MAX_LANES; y++) {
+                            if (!this.isTileOccupied(x, y)) {
+                                targetX = x;
+                                targetY = y;
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                }
+            }
+
             const eggMinion = {
                 id: eggId,
                 type: 'dragon_egg',
@@ -9043,7 +9114,7 @@ export function CombatManagerRedux() {
                 isMinion: true,
                 isMonster: true,
                 dead: false,
-                coordinates: { ...target.coordinates },
+                coordinates: { x: targetX, y: targetY },
                 hp: hpBase,
                 starting_hp: hpBase,
                 stats: { str: 1, dex: 0, atk: 0, def: 5, speed: 0, fort: 10 },
@@ -9067,7 +9138,7 @@ export function CombatManagerRedux() {
             this.appendCombatLog(`${this.getCombatantLogName(unit)} lays a Dragon Egg!`);
 
             if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
-                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'lay_eggs', false, null, unit.id);
+                this.animManagerRedux.triggerAbility(unit.coordinates, { x: targetX, y: targetY }, 'lay_eggs', false, null, unit.id);
             }
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             return;
@@ -9106,6 +9177,36 @@ export function CombatManagerRedux() {
             }
             summonX = Math.max(0, Math.min(MAX_DEPTH, summonX));
 
+            // Find a free tile around the target summonX, unit.coordinates.y
+            let targetX = summonX;
+            let targetY = unit.coordinates.y;
+            if (this.isTileOccupied(targetX, targetY)) {
+                const candidates = [
+                    { x: targetX, y: targetY - 1 },
+                    { x: targetX, y: targetY + 1 },
+                    { x: targetX + (facing === 'left' || facing === 'up' ? 1 : -1), y: targetY },
+                    { x: targetX - (facing === 'left' || facing === 'up' ? 1 : -1), y: targetY },
+                ];
+                const freeCand = candidates.find(c => c.x >= 0 && c.x <= MAX_DEPTH && c.y >= 0 && c.y < MAX_LANES && !this.isTileOccupied(c.x, c.y));
+                if (freeCand) {
+                    targetX = freeCand.x;
+                    targetY = freeCand.y;
+                } else {
+                    let found = false;
+                    for (let x = MAX_DEPTH; x >= 0; x--) {
+                        for (let y = 0; y < MAX_LANES; y++) {
+                            if (!this.isTileOccupied(x, y)) {
+                                targetX = x;
+                                targetY = y;
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                }
+            }
+
             this.appendCombatLog(`${this.getCombatantLogName(unit)} summons a Spider Nest behind her!`);
 
             // Spawn the spiders spawner behind the Witch
@@ -9124,7 +9225,7 @@ export function CombatManagerRedux() {
                 sleepEndTimeMs: 0,
                 endurance: 100,
                 maxEndurance: 100,
-                coordinates: { x: summonX, y: unit.coordinates.y },
+                coordinates: { x: targetX, y: targetY },
                 hp: 50,
                 starting_hp: 50,
                 stats: { str: 10, dex: 10, atk: witchAtk, def: 5, speed: 0 },
@@ -9148,7 +9249,7 @@ export function CombatManagerRedux() {
 
             if (this.animManagerRedux && typeof this.animManagerRedux.triggerSummon === 'function') {
                 const summonIcon = (images && images.summon_spiders) || 'summon_spiders_icon';
-                this.animManagerRedux.triggerSummon({ x: summonX, y: unit.coordinates.y }, 'spider', summonIcon);
+                this.animManagerRedux.triggerSummon({ x: targetX, y: targetY }, 'spider', summonIcon);
             }
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             return;

@@ -156,24 +156,29 @@ const isAvailableToMoveInto = (coords, combatants, fromCoords = null, caller = n
             })) return false;
         }
     }
-    // Large movers occupy coords + tile above: both must be free
+    // Large movers occupy 2x2 tiles
     else if (caller && isLargeMover(caller)) {
-        const above = { x: coords.x, y: coords.y - 1 };
-        // If above tile is out of bounds we can't fit — block the move
-        if (above.y < 0) return false;
-        // Check if anyone else (excluding caller) is in the above tile
-        if (Object.values(combatants).some(e => {
-            if (!e || e.id === caller.id) return false;
-            if (e.coordinates && e.coordinates.x === above.x && e.coordinates.y === above.y) return true;
-            if (Array.isArray(e.occupiedCoords)) return e.occupiedCoords.some(c => c.x === above.x && c.y === above.y);
-            return false;
-        })) return false;
+        const hOffset = (coords.x >= 4) ? -1 : 1;
+        const largeCoords = [
+            { x: coords.x, y: coords.y - 1 },
+            { x: coords.x + hOffset, y: coords.y },
+            { x: coords.x + hOffset, y: coords.y - 1 }
+        ];
+        for (const lc of largeCoords) {
+            if (isOutOfBounds(lc)) return false;
+            if (Object.values(combatants).some(e => {
+                if (!e || e.id === caller.id) return false;
+                if (e.coordinates && e.coordinates.x === lc.x && e.coordinates.y === lc.y) return true;
+                if (Array.isArray(e.occupiedCoords)) return e.occupiedCoords.some(c => c.x === lc.x && c.y === lc.y);
+                return false;
+            })) return false;
+        }
     }
     // Patch: Prevent movement into spaces virtually occupied by large monsters (2x mummy)
     // Check if any other combatant (not self) has occupiedCoords that includes the destination
     if (combatants) {
         const blocked = Object.values(combatants).some(e => {
-            if (!caller || e.id === caller.id) return false;
+            if (caller && e.id === caller.id) return false;
             if (Array.isArray(e.occupiedCoords)) {
                 return e.occupiedCoords.some(c => c.x === coords.x && c.y === coords.y);
             }
@@ -635,25 +640,25 @@ export const MovementMethods = {
 
 
         if(targetIsNorth){
-            if(isAvailableToMoveInto(S)){
+            if(isAvailableToMoveInto(S, combatants, null, caller)){
                 newCoords = S
             }
         } else if(targetIsSouth){
-            if(isAvailableToMoveInto(N)){
+            if(isAvailableToMoveInto(N, combatants, null, caller)){
                 newCoords = N
             }
         } else if(targetIsWest){
-            if(isAvailableToMoveInto(E)){
+            if(isAvailableToMoveInto(E, combatants, null, caller)){
                 newCoords = E
             }
         } else {
-            if(isAvailableToMoveInto(NE)){
+            if(isAvailableToMoveInto(NE, combatants, null, caller)){
                 newCoords = NE
-            } else if(isAvailableToMoveInto(SE)){
+            } else if(isAvailableToMoveInto(SE, combatants, null, caller)){
                 newCoords = SE
-            } else if(isAvailableToMoveInto(NW)){
+            } else if(isAvailableToMoveInto(NW, combatants, null, caller)){
                 newCoords = NW
-            }else if(isAvailableToMoveInto(SW)){
+            }else if(isAvailableToMoveInto(SW, combatants, null, caller)){
                 newCoords = SW
             }
         }

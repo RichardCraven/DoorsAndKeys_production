@@ -5414,6 +5414,7 @@ export default function SiegeCombatGrid(props) {
                     celestial: '#ffdd57'
                 };
                 const arrowColor = arrowTypeColors[anim.arrowType] || '#ff9f1c';
+                const durSec = anim.duration ? anim.duration / 1000 : 0.7;
                 return (
                     <div key={key} style={{
                         position: 'absolute',
@@ -5423,7 +5424,7 @@ export default function SiegeCombatGrid(props) {
                         height: '32px',
                         pointerEvents: 'none',
                         zIndex: 4000,
-                        animation: 'fireballTravel 0.7s linear forwards',
+                        animation: `fireballTravel ${durSec}s linear forwards`,
                         '--fb-dx': `${anim.tgtPx.x - anim.srcPx.x}px`,
                         '--fb-dy': `${anim.tgtPx.y - anim.srcPx.y}px`,
                     }}>
@@ -5538,6 +5539,7 @@ export default function SiegeCombatGrid(props) {
             const isSpinning = anim.subtype !== 'death_missile';
             const rotation = anim.subtype === 'death_missile' ? `${anim.angle}deg` : '0deg';
 
+            const durSec = anim.duration ? anim.duration / 1000 : 0.7;
             return (
                 <div key={key} style={{
                     position: 'absolute',
@@ -5547,7 +5549,7 @@ export default function SiegeCombatGrid(props) {
                     height: '32px',
                     pointerEvents: 'none',
                     zIndex: 4000,
-                    animation: 'fireballTravel 0.7s linear forwards',
+                    animation: `fireballTravel ${durSec}s linear forwards`,
                     '--fb-dx': `${anim.tgtPx.x - anim.srcPx.x}px`,
                     '--fb-dy': `${anim.tgtPx.y - anim.srcPx.y}px`,
                 }}>

@@ -50,6 +50,7 @@ export default class CardDuel extends React.Component {
             selectedUnitKey: null,   // `${row}_${col}` of player unit selected on board for move/attack
             draggedCardId: null,     // Id of card currently being dragged
             attackAnim: null,        // { attackerKey, defenderKey, direction, damageToDefender, damageToAttacker }
+            moveAnims: {},           // { [nodeKey]: 'up' | 'down' | 'left' | 'right' }
 
             // Confirm modals & log
             showForfeitModal: false,
@@ -61,6 +62,23 @@ export default class CardDuel extends React.Component {
 
     componentDidMount() {
         this.initializeDuel();
+        window.addEventListener('keydown', this.handleKeyDown);
+    }
+
+    componentWillUnmount() {
+        window.removeEventListener('keydown', this.handleKeyDown);
+    }
+
+    handleKeyDown = (e) => {
+        if (e.code === 'Space' || e.key === ' ') {
+            const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+            if (activeTag === 'input' || activeTag === 'textarea') return;
+
+            e.preventDefault();
+            if (this.state.currentTurn === 'player' && !this.state.isAiThinking && !this.state.gameOver) {
+                this.handleEndTurn();
+            }
+        }
     }
 
     componentDidUpdate(prevProps, prevState) {
@@ -71,12 +89,33 @@ export default class CardDuel extends React.Component {
 
     // ─── Duel Initialization ──────────────────────────────────────────────────
     initializeDuel = () => {
-        const rawCrew = this.props.crew || [];
-        const activeCrew = rawCrew.filter(c => c && !c.dead);
+        const rawCrew = (Array.isArray(this.props.crew) && this.props.crew.length > 0)
+            ? this.props.crew
+            : ((this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : []);
 
-        // Build Reaper Deck: 12 Pygmies (1 ATK / 1 HP, Cost 1)
+        const activeCrew = rawCrew.filter(c => c && !c.dead && (c.name || c.type || c.job || c.class));
+
+        // Helper to resolve authentic crew member portrait
+        const getCrewPortrait = (member) => {
+            if (!member) return images.soldier_portrait;
+
+            if (member.portrait && (typeof member.portrait === 'object' || (typeof member.portrait === 'string' && member.portrait.length > 10))) {
+                return member.portrait;
+            }
+
+            const typeKey = (member.type || member.job || member.class || 'soldier').toLowerCase();
+
+            return (typeof member.portrait === 'string' ? images[member.portrait] : null) ||
+                   member.portrait ||
+                   images[`${typeKey}_portrait`] ||
+                   images[typeKey] ||
+                   (member.image ? (images[`${member.image}_portrait`] || images[member.image]) : null) ||
+                   images.soldier_portrait;
+        };
+
+        // Build Reaper Deck: 11 Pygmies + 1 Pygmy War Band (3 Cost, 3/3)
         const reaperDeck = [];
-        for (let i = 0; i < 12; i++) {
+        for (let i = 0; i < 11; i++) {
             reaperDeck.push({
                 id: `reaper_pygmy_${i}_${Math.random().toString(36).substring(2, 7)}`,
                 name: 'Cave Pygmy',
@@ -89,8 +128,19 @@ export default class CardDuel extends React.Component {
                 art: images.cave_individual || images.pygmies
             });
         }
+        reaperDeck.push({
+            id: `reaper_pygmy_warband_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Pygmy War Band',
+            type: 'pygmy_warband',
+            owner: 'reaper',
+            cost: 3,
+            atk: 3,
+            hp: 3,
+            maxHp: 3,
+            art: images.woodland_warband || images.woodland_pygmies || images.pygmies
+        });
 
-        // Build Player Deck: 10 Pygmies + Crew Member Cards (total 12 cards)
+        // Build Player Deck: Crew Member Cards + 1 Pygmy War Band + Cave Pygmies (total 12 cards)
         const playerDeck = [];
 
         // Add Crew Cards (Cost 2, random 0/3, 1/2, or 2/1 stats)
@@ -98,45 +148,70 @@ export default class CardDuel extends React.Component {
         if (activeCrew.length > 0) {
             activeCrew.forEach((member, idx) => {
                 const profile = CREW_STAT_PROFILES[Math.floor(Math.random() * CREW_STAT_PROFILES.length)];
+                const memberType = (member.type || member.job || member.class || 'Soldier');
+                const formattedType = memberType.charAt(0).toUpperCase() + memberType.slice(1);
+                const portraitArt = getCrewPortrait(member);
+
                 crewCardsToAdd.push({
                     id: `player_crew_${idx}_${Math.random().toString(36).substring(2, 7)}`,
-                    name: member.name || `Crew Champion #${idx + 1}`,
+                    name: member.name || `${formattedType} Champion`,
                     type: 'crew',
                     owner: 'player',
                     cost: 2,
                     atk: profile.atk,
                     hp: profile.hp,
                     maxHp: profile.hp,
-                    art: member.portrait || images.avatar,
-                    memberType: member.type || 'soldier'
+                    art: portraitArt,
+                    memberType: formattedType
                 });
             });
         }
 
-        // If crew has fewer than 2 members, fill up to 2 crew cards
+        // If crew has fewer than 2 members, fill up to 2 crew cards with authentic class portraits
+        const fallbackTypes = ['soldier', 'wizard', 'ranger', 'monk', 'sage'];
         while (crewCardsToAdd.length < 2) {
+            const fallbackType = fallbackTypes[crewCardsToAdd.length % fallbackTypes.length];
+            const formattedType = fallbackType.charAt(0).toUpperCase() + fallbackType.slice(1);
             const profile = CREW_STAT_PROFILES[Math.floor(Math.random() * CREW_STAT_PROFILES.length)];
+            const portraitArt = images[`${fallbackType}_portrait`] || images[fallbackType] || images.soldier_portrait;
+
             crewCardsToAdd.push({
-                id: `player_crew_dummy_${crewCardsToAdd.length}_${Math.random().toString(36).substring(2, 7)}`,
-                name: `Veteran Crew`,
+                id: `player_crew_fallback_${crewCardsToAdd.length}_${Math.random().toString(36).substring(2, 7)}`,
+                name: `Veteran ${formattedType}`,
                 type: 'crew',
                 owner: 'player',
                 cost: 2,
                 atk: profile.atk,
                 hp: profile.hp,
                 maxHp: profile.hp,
-                art: images.avatar,
-                memberType: 'soldier'
+                art: portraitArt,
+                memberType: formattedType
             });
         }
 
-        // Limit crew cards to 2 max if crew is larger, or include all crew members
+        // Limit crew cards to 6 max
         const finalCrewCards = crewCardsToAdd.slice(0, Math.min(6, crewCardsToAdd.length));
         const pygmiesNeeded = Math.max(0, 12 - finalCrewCards.length);
 
         finalCrewCards.forEach(c => playerDeck.push(c));
 
-        for (let i = 0; i < pygmiesNeeded; i++) {
+        // Add 1 Pygmy War Band (3 Cost, 3/3 stats)
+        if (pygmiesNeeded > 0) {
+            playerDeck.push({
+                id: `player_pygmy_warband_${Math.random().toString(36).substring(2, 7)}`,
+                name: 'Pygmy War Band',
+                type: 'pygmy_warband',
+                owner: 'player',
+                cost: 3,
+                atk: 3,
+                hp: 3,
+                maxHp: 3,
+                art: images.woodland_warband || images.woodland_pygmies || images.pygmies
+            });
+        }
+
+        // Fill remaining slots with Cave Pygmies (Cost 1, 1/1 stats)
+        for (let i = 0; i < pygmiesNeeded - 1; i++) {
             playerDeck.push({
                 id: `player_pygmy_${i}_${Math.random().toString(36).substring(2, 7)}`,
                 name: 'Cave Pygmy',
@@ -212,14 +287,8 @@ export default class CardDuel extends React.Component {
 
         const { roundNumber, reaperHand, grid, reaperSpirit } = this.state;
 
-        // Step 1: AI unit actions on the grid (Move / Attack)
+        // Step 1: Refresh existing Reaper units for action
         let updatedGrid = { ...grid };
-        let currentReaperHP = this.state.reaperHP;
-        let currentPlayerHP = this.state.playerHP;
-        let reaperDiscard = [...this.state.reaperDiscard];
-        let playerDiscard = [...this.state.playerDiscard];
-
-        // Refresh existing Reaper units for action
         Object.keys(updatedGrid).forEach(key => {
             const unit = updatedGrid[key];
             if (unit && unit.owner === 'reaper') {
@@ -227,103 +296,169 @@ export default class CardDuel extends React.Component {
             }
         });
 
-        // AI Move & Attack Phase for Reaper units (processed from Row 4 up to Row 0)
-        for (let r = 4; r >= 0; r--) {
-            for (let c = 0; c < 5; c++) {
-                const key = `${r}_${c}`;
-                const unit = updatedGrid[key];
-                if (unit && unit.owner === 'reaper' && unit.actionsLeft > 0) {
-                    // Check if unit is in Row 4 (Player Home Row) -> Attack Player Directly!
-                    if (r === 4) {
-                        currentPlayerHP = Math.max(0, currentPlayerHP - unit.atk);
-                        unit.actionsLeft = 0;
-                        this.addLog(`💀 ${unit.name} attacked YOU directly in Lane ${c + 1} for ${unit.atk} damage!`);
-                        if (currentPlayerHP <= 0) break;
-                    } else {
-                        // Check for adjacent player units (down, left, right, up)
-                        const neighbors = [
-                            { r: r + 1, c },
-                            { r, c: c - 1 },
-                            { r, c: c + 1 },
-                            { r: r - 1, c }
-                        ].filter(pos => pos.r >= 0 && pos.r <= 4 && pos.c >= 0 && pos.c <= 4);
-
-                        const targetPos = neighbors.find(pos => {
-                            const target = updatedGrid[`${pos.r}_${pos.c}`];
-                            return target && target.owner === 'player';
-                        });
-
-                        if (targetPos) {
-                            // Execute Attack
-                            const targetKey = `${targetPos.r}_${targetPos.c}`;
-                            const targetUnit = updatedGrid[targetKey];
-
-                            targetUnit.hp -= unit.atk;
-                            unit.hp -= targetUnit.atk;
-                            unit.actionsLeft = 0;
-
-                            this.addLog(`💀 ${unit.name} attacked your ${targetUnit.name} in Lane ${targetPos.c + 1}! (${unit.atk} vs ${targetUnit.atk} dmg)`);
-
-                            if (targetUnit.hp <= 0) {
-                                delete updatedGrid[targetKey];
-                                playerDiscard.push(targetUnit);
-                                this.addLog(`💀 Your ${targetUnit.name} was defeated!`);
-                            }
-                            if (unit.hp <= 0) {
-                                delete updatedGrid[key];
-                                reaperDiscard.push(unit);
-                                this.addLog(`💀 Reaper's ${unit.name} fell in combat!`);
-                            }
-                        } else {
-                            // Try to move forward towards Player (down to r + 1)
-                            const forwardKey = `${r + 1}_${c}`;
-                            if (r + 1 <= 4 && !updatedGrid[forwardKey]) {
-                                updatedGrid[forwardKey] = { ...unit, actionsLeft: 0 };
-                                delete updatedGrid[key];
-                                this.addLog(`💀 ${unit.name} advanced to Row ${r + 2}, Lane ${c + 1}.`);
-                            }
-                        }
+        this.setState({ grid: updatedGrid }, () => {
+            // Collect all Reaper unit actions (movements / attacks) from Row 4 up to Row 0
+            const actionsToPerform = [];
+            for (let r = 4; r >= 0; r--) {
+                for (let c = 0; c < 5; c++) {
+                    const key = `${r}_${c}`;
+                    const unit = updatedGrid[key];
+                    if (unit && unit.owner === 'reaper' && unit.actionsLeft > 0) {
+                        actionsToPerform.push({ key, r, c, unit });
                     }
                 }
             }
-        }
 
-        // Check if player died from direct attacks
-        if (currentPlayerHP <= 0) {
-            this.setState({
-                grid: updatedGrid,
-                playerHP: 0,
-                gameOver: 'defeat',
-                isAiThinking: false
+            // Process existing unit actions sequentially with full movement/attack animation delays
+            this.processReaperUnitActionsSequentially(actionsToPerform, updatedGrid, (gridAfterMoves) => {
+                if (this.state.gameOver) return;
+
+                // Step 2: AI Card Play Phase from Reaper Hand (ONLY after all unit moves are finished)
+                this.playReaperCardsSequentially(
+                    gridAfterMoves,
+                    reaperSpirit,
+                    [...reaperHand],
+                    [...this.state.reaperDiscard],
+                    (finalGrid, finalSpirit, finalHand) => {
+                        // Finish Reaper Turn & Pass to Player
+                        this.setState({
+                            grid: finalGrid,
+                            reaperHand: finalHand,
+                            reaperSpirit: finalSpirit,
+                            isAiThinking: false
+                        }, () => {
+                            setTimeout(() => {
+                                this.startPlayerTurn();
+                            }, 600);
+                        });
+                    }
+                );
             });
-            this.addLog('💀 DEFEAT! Your crew health was depleted.');
+        });
+    }
+
+    // Process existing Reaper unit actions sequentially with visual animation delays
+    processReaperUnitActionsSequentially = (actions, grid, onComplete) => {
+        if (actions.length === 0 || this.state.gameOver) {
+            onComplete(grid);
             return;
         }
 
-        // Step 2: AI Card Play Phase from Reaper Hand with Flight & Flip Animation
-        this.playReaperCardsSequentially(
-            updatedGrid,
-            reaperSpirit,
-            [...reaperHand],
-            reaperDiscard,
-            (finalGrid, finalSpirit, finalHand) => {
-                // Finish Reaper Turn & Pass to Player
+        const { key, r, c, unit } = actions.shift();
+
+        // Check if unit is still alive and at this position on grid
+        if (!grid[key] || grid[key].owner !== 'reaper' || grid[key].actionsLeft <= 0) {
+            this.processReaperUnitActionsSequentially(actions, grid, onComplete);
+            return;
+        }
+
+        let nextGrid = { ...grid };
+        let currentPlayerHP = this.state.playerHP;
+        let playerDiscard = [...this.state.playerDiscard];
+
+        // 1. Row 4 (Player Home Row) -> Direct attack on player
+        if (r === 4) {
+            currentPlayerHP = Math.max(0, currentPlayerHP - unit.atk);
+            nextGrid[key].actionsLeft = 0;
+            this.addLog(`💀 ${unit.name} attacked YOU directly in Lane ${c + 1} for ${unit.atk} damage!`);
+
+            this.setState({
+                grid: nextGrid,
+                playerHP: currentPlayerHP,
+                gameOver: currentPlayerHP <= 0 ? 'defeat' : null
+            }, () => {
+                if (currentPlayerHP <= 0) {
+                    this.addLog('💀 DEFEAT! Your crew health was depleted.');
+                    return;
+                }
+                setTimeout(() => {
+                    this.processReaperUnitActionsSequentially(actions, nextGrid, onComplete);
+                }, 400);
+            });
+            return;
+        }
+
+        // 2. Check for adjacent player units (down, left, right, up)
+        const neighbors = [
+            { r: r + 1, c },
+            { r, c: c - 1 },
+            { r, c: c + 1 },
+            { r: r - 1, c }
+        ].filter(pos => pos.r >= 0 && pos.r <= 4 && pos.c >= 0 && pos.c <= 4);
+
+        const targetPos = neighbors.find(pos => {
+            const target = nextGrid[`${pos.r}_${pos.c}`];
+            return target && target.owner === 'player';
+        });
+
+        if (targetPos) {
+            // Execute Attack
+            const targetKey = `${targetPos.r}_${targetPos.c}`;
+            const targetUnit = nextGrid[targetKey];
+            const direction = this.getAttackDirection(key, targetKey);
+
+            // Attack animation
+            this.setState({
+                attackAnim: {
+                    attackerKey: key,
+                    defenderKey: targetKey,
+                    direction,
+                    damageToDefender: unit.atk,
+                    damageToAttacker: 0
+                }
+            });
+
+            setTimeout(() => {
+                targetUnit.hp -= unit.atk;
+                if (nextGrid[key]) nextGrid[key].actionsLeft = 0;
+
+                this.addLog(`💀 ${unit.name} attacked your ${targetUnit.name} in Lane ${targetPos.c + 1} for ${unit.atk} damage!`);
+
+                if (targetUnit.hp <= 0) {
+                    delete nextGrid[targetKey];
+                    playerDiscard.push(targetUnit);
+                    this.addLog(`💀 Your ${targetUnit.name} was defeated!`);
+                }
+
                 this.setState({
-                    grid: finalGrid,
-                    playerHP: currentPlayerHP,
-                    reaperHP: currentReaperHP,
-                    reaperHand: finalHand,
-                    reaperSpirit: finalSpirit,
-                    reaperDiscard,
+                    grid: nextGrid,
                     playerDiscard,
-                    isAiThinking: false
+                    attackAnim: null
                 }, () => {
                     setTimeout(() => {
-                        this.startPlayerTurn();
-                    }, 600);
+                        this.processReaperUnitActionsSequentially(actions, nextGrid, onComplete);
+                    }, 300);
                 });
-            }
-        );
+            }, 450);
+            return;
+        }
+
+        // 3. Move forward towards Player (down to r + 1)
+        const forwardKey = `${r + 1}_${c}`;
+        if (r + 1 <= 4 && !nextGrid[forwardKey]) {
+            nextGrid[forwardKey] = { ...unit, actionsLeft: 0 };
+            delete nextGrid[key];
+            this.addLog(`💀 ${unit.name} advanced to Row ${r + 2}, Lane ${c + 1}.`);
+
+            this.setState(prev => ({
+                grid: nextGrid,
+                moveAnims: { ...prev.moveAnims, [forwardKey]: 'up' }
+            }), () => {
+                setTimeout(() => {
+                    this.setState(prev => {
+                        const nextAnims = { ...prev.moveAnims };
+                        delete nextAnims[forwardKey];
+                        return { moveAnims: nextAnims };
+                    }, () => {
+                        this.processReaperUnitActionsSequentially(actions, nextGrid, onComplete);
+                    });
+                }, 350);
+            });
+            return;
+        }
+
+        // If unit couldn't move or attack, proceed to next action
+        this.processReaperUnitActionsSequentially(actions, nextGrid, onComplete);
     }
 
     // Sequentially plays Reaper cards with flight and 3D flip animation
@@ -586,6 +721,12 @@ export default class CardDuel extends React.Component {
             if (isAdjacent) {
                 if (!targetUnit) {
                     // Move Unit to empty node
+                    let fromDir = 'up';
+                    if (r > srcR) fromDir = 'up';
+                    else if (r < srcR) fromDir = 'down';
+                    else if (c > srcC) fromDir = 'left';
+                    else if (c < srcC) fromDir = 'right';
+
                     const updatedGrid = { ...grid };
                     updatedGrid[targetKey] = {
                         ...sourceUnit,
@@ -595,10 +736,20 @@ export default class CardDuel extends React.Component {
                     };
                     delete updatedGrid[selectedUnitKey];
 
-                    this.setState({
+                    this.setState(prev => ({
                         grid: updatedGrid,
-                        selectedUnitKey: null
-                    });
+                        selectedUnitKey: null,
+                        moveAnims: { ...prev.moveAnims, [targetKey]: fromDir }
+                    }));
+
+                    setTimeout(() => {
+                        this.setState(prev => {
+                            const nextAnims = { ...prev.moveAnims };
+                            delete nextAnims[targetKey];
+                            return { moveAnims: nextAnims };
+                        });
+                    }, 350);
+
                     this.addLog(`⚔️ Your ${sourceUnit.name} moved to Row ${r + 1}, Lane ${c + 1}.`);
                     return;
                 } else if (targetUnit.owner === 'reaper') {
@@ -642,14 +793,14 @@ export default class CardDuel extends React.Component {
 
         const direction = this.getAttackDirection(attackerKey, defenderKey);
 
-        // 1. Trigger Attack Animation
+        // 1. Trigger Attack Animation (Attacker deals damage, takes no retaliation damage)
         this.setState({
             attackAnim: {
                 attackerKey,
                 defenderKey,
                 direction,
                 damageToDefender: attacker.atk,
-                damageToAttacker: defender.atk
+                damageToAttacker: 0
             }
         });
 
@@ -663,21 +814,14 @@ export default class CardDuel extends React.Component {
 
             if (att && def) {
                 def.hp -= att.atk;
-                att.hp -= def.atk;
                 att.actionsLeft = 0;
 
-                this.addLog(`⚔️ ${att.name} attacked Reaper's ${def.name}! (${att.atk} vs ${def.atk} dmg)`);
+                this.addLog(`⚔️ ${att.name} attacked Reaper's ${def.name} for ${att.atk} damage!`);
 
                 if (def.hp <= 0) {
                     delete grid[defenderKey];
                     reaperDiscard.push(def);
                     this.addLog(`💥 Reaper's ${def.name} was destroyed!`);
-                }
-
-                if (att.hp <= 0) {
-                    delete grid[attackerKey];
-                    playerDiscard.push(att);
-                    this.addLog(`💥 Your ${att.name} was defeated in combat!`);
                 }
             }
 
@@ -866,6 +1010,10 @@ export default class CardDuel extends React.Component {
                             // Reaper Play Animation state
                             const isReaperPlayNode = reaperPlayAnim && reaperPlayAnim.nodeKey === nodeKey;
 
+                            // Move animation state
+                            const moveDir = this.state.moveAnims && this.state.moveAnims[nodeKey];
+                            const moveClass = moveDir ? `pe-unit--slide-from-${moveDir}` : '';
+
                             return (
                                 <div
                                     key={nodeKey}
@@ -920,7 +1068,7 @@ export default class CardDuel extends React.Component {
 
                                     {/* Unit on Node */}
                                     {unit && (
-                                        <div className={`pe-board-unit pe-board-unit--${unit.owner} ${unit.actionsLeft > 0 ? 'pe-unit--ready' : 'pe-unit--exhausted'} ${lungeClass} ${hitClass}`}>
+                                        <div className={`pe-board-unit pe-board-unit--${unit.owner} ${unit.actionsLeft > 0 ? 'pe-unit--ready' : 'pe-unit--exhausted'} ${lungeClass} ${hitClass} ${moveClass}`}>
                                             <div
                                                 className="pe-unit-portrait"
                                                 style={unit.art ? { backgroundImage: `url(${unit.art})` } : {}}
@@ -945,16 +1093,47 @@ export default class CardDuel extends React.Component {
     }
 
     getEquippedCrewRunes = () => {
-        const rawCrew = this.props.crew || [];
+        const rawCrew = (Array.isArray(this.props.crew) && this.props.crew.length > 0)
+            ? this.props.crew
+            : ((this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : []);
+
         const runes = [];
+        const validRuneKeys = [
+            'sulphuric_rune', 'shadow_rune', 'stone_rune', 'archaic_rune',
+            'earthen_rune', 'feldspar_rune', 'onyxian_rune', 'pewter_rune', 'volcanic_rune'
+        ];
+
         rawCrew.forEach(member => {
             if (!member) return;
             const inv = member.inventory || member.items || [];
             inv.forEach(item => {
                 if (!item) return;
-                if (item.type === 'rune' || item.subtype === 'rune' || item.equippedSlot === 'pet' || (item.name && item.name.toLowerCase().includes('rune')) || (item._im_key && item._im_key.includes('rune')) || (item.id && String(item.id).includes('rune'))) {
+
+                // Exclude weapons, armor, shields, helms, boots, keys
+                const itemType = (item.type || '').toLowerCase();
+                const subtype = (item.subtype || '').toLowerCase();
+                if (['weapon', 'armor', 'shield', 'helm', 'boots', 'key', 'potion', 'food'].includes(itemType) || ['axe', 'sword', 'mace', 'dagger', 'bow', 'spear', 'staff', 'cutting', 'crushing', 'piercing'].includes(subtype)) {
+                    return;
+                }
+
+                const nameLower = (item.name || '').toLowerCase();
+                const keyLower = (item._im_key || item.id || item.icon || '').toLowerCase();
+
+                const isRuneType = itemType === 'rune' || subtype === 'rune';
+                const matchedRuneKey = validRuneKeys.find(k => keyLower.includes(k) || nameLower.includes(k.replace('_', ' ')));
+                const isExplicitRuneName = (nameLower.endsWith(' rune') || nameLower.endsWith(' runes')) && !nameLower.includes('axe') && !nameLower.includes('sword');
+
+                if (isRuneType || matchedRuneKey || isExplicitRuneName) {
                     if (runes.length < 3) {
-                        runes.push(item);
+                        const imageKey = matchedRuneKey || 'archaic_rune';
+                        const resolvedIcon = item.art || (images[imageKey] ? images[imageKey] : (typeof item.icon === 'string' && images[item.icon] ? images[item.icon] : images.archaic_rune));
+                        const rawName = item.name || imageKey.replace('_', ' ');
+
+                        runes.push({
+                            ...item,
+                            resolvedIcon,
+                            formattedName: rawName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+                        });
                     }
                 }
             });
@@ -1006,13 +1185,6 @@ export default class CardDuel extends React.Component {
                         </div>
 
                         <div className="pe-header-controls">
-                            <button
-                                className="pe-btn pe-btn--end-turn"
-                                disabled={currentTurn !== 'player' || isAiThinking || !!gameOver}
-                                onClick={this.handleEndTurn}
-                            >
-                                {currentTurn === 'player' ? 'End Turn ➔' : 'Reaper Turn...'}
-                            </button>
                             <button
                                 className="pe-btn pe-btn--forfeit"
                                 onClick={() => this.setState({ showForfeitModal: true })}
@@ -1111,6 +1283,17 @@ export default class CardDuel extends React.Component {
                             {/* Player Fanned Hand Bottom */}
                             <div className="pe-player-hand-section">
                                 {this.renderFannedPlayerHand()}
+                                <div className="pe-hand-controls">
+                                    <button
+                                        className="pe-btn--end-turn-text"
+                                        disabled={currentTurn !== 'player' || isAiThinking || !!gameOver}
+                                        onClick={this.handleEndTurn}
+                                        title="End Turn (Spacebar)"
+                                    >
+                                        <span className="pe-end-turn-label">{currentTurn === 'player' ? 'End Turn ➔' : 'Reaper Turn...'}</span>
+                                        <span className="pe-hotkey-hint">(spacebar)</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -1126,12 +1309,12 @@ export default class CardDuel extends React.Component {
                                                 <>
                                                     <div
                                                         className="pe-rune-icon"
-                                                        style={rune.icon || rune.art ? { backgroundImage: `url(${rune.icon || rune.art})` } : {}}
+                                                        style={(rune.resolvedIcon || rune.icon || rune.art) ? { backgroundImage: `url(${rune.resolvedIcon || rune.icon || rune.art})` } : {}}
                                                     >
-                                                        {!rune.icon && !rune.art && '🔮'}
+                                                        {!rune.resolvedIcon && !rune.icon && !rune.art && '🔮'}
                                                     </div>
                                                     <div className="pe-rune-info">
-                                                        <div className="pe-rune-name">{rune.name || rune.label || 'Ancient Rune'}</div>
+                                                        <div className="pe-rune-name">{rune.formattedName || rune.name || rune.label || 'Ancient Rune'}</div>
                                                         <div className="pe-rune-type">{rune.equippedSlot ? `${rune.equippedSlot.toUpperCase()} RUNE` : 'EQUIPPED RUNE'}</div>
                                                     </div>
                                                 </>

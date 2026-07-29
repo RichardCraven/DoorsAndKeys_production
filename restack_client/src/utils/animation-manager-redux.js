@@ -1082,22 +1082,22 @@ export class AnimationManagerRedux {
       tgtPx,
       angle,
       arrowType: activeArrow,
-      duration: 700,
+      duration: 467,
       spherePx,
       sourceUnitId,
     });
     if (activeArrow === 'ice') {
       this._delay(() => {
         this._emit({ type: 'ice_burst', tgtPx, duration: 500 });
-      }, 600);
+      }, 367);
     } else if (activeArrow === 'poison') {
       this._delay(() => {
         this._emit({ type: 'poison_burst', tgtPx, duration: 500 });
-      }, 600);
+      }, 367);
     } else if (activeArrow === 'force') {
       this._delay(() => {
         this._emit({ type: 'force_burst', tgtPx, duration: 500 });
-      }, 600);
+      }, 367);
     }
   }
 
@@ -1155,27 +1155,27 @@ export class AnimationManagerRedux {
         tgtPx,
         angle,
         arrowType: activeArrow,
-        duration: 700,
+        duration: 467,
         spherePx,
       });
       if (activeArrow === 'ice') {
         this._delay(() => {
           this._emit({ type: 'ice_burst', tgtPx, duration: 500 });
-        }, 600);
+        }, 367);
       } else if (activeArrow === 'poison') {
         this._delay(() => {
           this._emit({ type: 'poison_burst', tgtPx, duration: 500 });
-        }, 600);
+        }, 367);
       } else if (activeArrow === 'force') {
         this._delay(() => {
           this._emit({ type: 'force_burst', tgtPx, duration: 500 });
-        }, 600);
+        }, 367);
       }
     };
 
     fireArrow();
-    this._delay(fireArrow, 250);
-    this._delay(fireArrow, 500);
+    this._delay(fireArrow, 167);
+    this._delay(fireArrow, 333);
   }
 
   _heal(src, tgt) {
