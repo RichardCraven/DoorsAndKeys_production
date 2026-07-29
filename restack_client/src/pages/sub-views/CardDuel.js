@@ -944,15 +944,35 @@ export default class CardDuel extends React.Component {
         );
     }
 
+    getEquippedCrewRunes = () => {
+        const rawCrew = this.props.crew || [];
+        const runes = [];
+        rawCrew.forEach(member => {
+            if (!member) return;
+            const inv = member.inventory || member.items || [];
+            inv.forEach(item => {
+                if (!item) return;
+                if (item.type === 'rune' || item.subtype === 'rune' || item.equippedSlot === 'pet' || (item.name && item.name.toLowerCase().includes('rune')) || (item._im_key && item._im_key.includes('rune')) || (item.id && String(item.id).includes('rune'))) {
+                    if (runes.length < 3) {
+                        runes.push(item);
+                    }
+                }
+            });
+        });
+        return runes;
+    }
+
     // ─── Main Render ──────────────────────────────────────────────────────────
     render() {
         const {
             playerHP, playerMaxHP, reaperHP, reaperMaxHP,
             roundNumber, maxSpirit, playerSpirit,
             currentTurn, isAiThinking, gameOver, log,
-            playerDeck, playerDiscard, reaperDeck, reaperDiscard,
+            playerDeck, reaperDeck,
             selectedUnitKey, grid
         } = this.state;
+
+        const equippedRunes = this.getEquippedCrewRunes();
 
         // Check if selected player unit can perform a Direct Attack on Reaper (Row 0)
         let canDirectAttackReaper = false;
@@ -971,45 +991,8 @@ export default class CardDuel extends React.Component {
                 <div className="pe-overlay" />
                 <div className="pe-layout pe-layout--tactical">
 
-                    {/* ── TOP HEADER / REAPER BAR ── */}
-                    <div className="pe-header-bar">
-                        {/* Reaper Health & Info */}
-                        <div className="pe-header-combatant pe-header-combatant--reaper">
-                            <div
-                                className={`pe-health-orb-container ${canDirectAttackReaper ? 'pe-health-orb--target' : ''}`}
-                                onClick={() => canDirectAttackReaper && this.handleDirectAttackReaper()}
-                                title={canDirectAttackReaper ? 'Click to attack Reaper directly!' : `Reaper HP: ${reaperHP}/${reaperMaxHP}`}
-                            >
-                                {this.props.renderSoulBar ? this.props.renderSoulBar(reaperHP, reaperMaxHP, false) : (
-                                    <div className="pe-liquid-orb-wrap pe-liquid-orb--reaper">
-                                        <div className="pe-liquid-orb-vessel">
-                                            <div className="pe-liquid-orb-bg" />
-                                            <div
-                                                className="pe-liquid-orb-fluid"
-                                                style={{
-                                                    height: `${Math.max(0, (reaperHP / reaperMaxHP) * 100)}%`,
-                                                    background: 'linear-gradient(to top, #5c0a0c, #e74c3c 65%, #ff7675 100%)',
-                                                    boxShadow: '0 -2px 12px rgba(231, 76, 60, 0.7)'
-                                                }}
-                                            />
-                                            <div className="pe-liquid-orb-glass-shine" />
-                                            <div
-                                                className="pe-liquid-orb-frame"
-                                                style={{ backgroundImage: `url(${images.reaper_health_orb})` }}
-                                            />
-                                        </div>
-                                        <div className="pe-liquid-orb-label">{reaperHP} / {reaperMaxHP}</div>
-                                    </div>
-                                )}
-                            </div>
-
-                            <div className="pe-header-details">
-                                <div className="pe-combatant-name--reaper">THE REAPER</div>
-                                <div className="pe-deck-counts">Deck: {reaperDeck.length} · Discard: {reaperDiscard.length}</div>
-                            </div>
-                        </div>
-
-                        {/* Center Match Round & Spirit Info */}
+                    {/* ── TOP HEADER ACTION BAR ── */}
+                    <div className="pe-header-bar pe-header-bar--top">
                         <div className="pe-header-round-info">
                             <div className="pe-round-badge">ROUND {roundNumber}</div>
                             <div className="pe-turn-indicator">
@@ -1022,69 +1005,7 @@ export default class CardDuel extends React.Component {
                             )}
                         </div>
 
-                        {/* Player Health & Info */}
-                        <div className="pe-header-combatant pe-header-combatant--player">
-                            <div className="pe-header-details" style={{ textAlign: 'right' }}>
-                                <div className="pe-combatant-name--player">YOUR CREW</div>
-                                <div className="pe-spirit-meter">
-                                    <span className="pe-spirit-label">SPIRIT: </span>
-                                    <span className="pe-spirit-val">{playerSpirit} / {maxSpirit}</span>
-                                </div>
-                                <div className="pe-deck-counts">Deck: {playerDeck.length} · Discard: {playerDiscard.length}</div>
-                            </div>
-
-                            <div className="pe-health-orb-container">
-                                {this.props.renderSoulBar ? this.props.renderSoulBar(playerHP, playerMaxHP, true) : (
-                                    <div className="pe-liquid-orb-wrap pe-liquid-orb--crew">
-                                        <div className="pe-liquid-orb-vessel">
-                                            <div className="pe-liquid-orb-bg" />
-                                            <div
-                                                className="pe-liquid-orb-fluid"
-                                                style={{
-                                                    height: `${Math.max(0, (playerHP / playerMaxHP) * 100)}%`,
-                                                    background: 'linear-gradient(to top, #0f522b, #2ecc71 65%, #a2ded0 100%)',
-                                                    boxShadow: '0 -2px 12px rgba(46, 204, 113, 0.7)'
-                                                }}
-                                            />
-                                            <div className="pe-liquid-orb-glass-shine" />
-                                            <div
-                                                className="pe-liquid-orb-frame"
-                                                style={{ backgroundImage: `url(${images.crew_health_orb})` }}
-                                            />
-                                        </div>
-                                        <div className="pe-liquid-orb-label">{playerHP} / {playerMaxHP}</div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* ── CENTER TACTICAL 5-LANE ARENA ── */}
-                    <div className="pe-tactical-arena">
-
-                        {/* Reaper Fanned Hand Top */}
-                        <div className="pe-reaper-hand-section">
-                            {this.renderReaperHandFanned()}
-                        </div>
-
-                        {/* 5x5 Grid Lanes */}
-                        <div className="pe-grid-section">
-                            {this.renderGridNodes()}
-                        </div>
-
-                        {/* Player Fanned Hand Bottom */}
-                        <div className="pe-player-hand-section">
-                            {this.renderFannedPlayerHand()}
-                        </div>
-                    </div>
-
-                    {/* ── RIGHT SIDEBAR LOG & CONTROLS ── */}
-                    <div className="pe-sidebar-panel">
-                        <div className="pe-sidebar-header">
-                            <h3>5-Lane Card Duel</h3>
-                        </div>
-
-                        <div className="pe-controls-group">
+                        <div className="pe-header-controls">
                             <button
                                 className="pe-btn pe-btn--end-turn"
                                 disabled={currentTurn !== 'player' || isAiThinking || !!gameOver}
@@ -1092,7 +1013,6 @@ export default class CardDuel extends React.Component {
                             >
                                 {currentTurn === 'player' ? 'End Turn ➔' : 'Reaper Turn...'}
                             </button>
-
                             <button
                                 className="pe-btn pe-btn--forfeit"
                                 onClick={() => this.setState({ showForfeitModal: true })}
@@ -1100,13 +1020,133 @@ export default class CardDuel extends React.Component {
                                 Forfeit
                             </button>
                         </div>
+                    </div>
 
-                        {/* Combat Log */}
-                        <div className="pe-tactical-log" ref={this.logRef}>
-                            {log.map((entry, i) => (
-                                <div key={i} className="pe-log-line">{entry}</div>
-                            ))}
+                    {/* ── MAIN ARENA FLEX CONTAINER (Left Log | Center Arena | Right Runes) ── */}
+                    <div className="pe-arena-wrapper">
+
+                        {/* ── LEFT SIDE: Event Log ── */}
+                        <div className="pe-left-sidebar">
+                            <div className="pe-sidebar-title">EVENT LOG</div>
+                            <div className="pe-tactical-log" ref={this.logRef}>
+                                {log.map((entry, i) => (
+                                    <div key={i} className="pe-log-line">{entry}</div>
+                                ))}
+                            </div>
                         </div>
+
+                        {/* ── CENTER: 5-Lane Tactical Arena ── */}
+                        <div className="pe-tactical-arena">
+
+                            {/* Reaper Fanned Hand Top */}
+                            <div className="pe-reaper-hand-section">
+                                {this.renderReaperHandFanned()}
+                            </div>
+
+                            {/* 5x5 Grid Section with Upper-Left Reaper Orb and Lower-Right Crew Orb */}
+                            <div className="pe-grid-section-wrap">
+
+                                {/* Upper-Left Corner: Reaper Health Indicator */}
+                                <div
+                                    className={`pe-corner-health-orb pe-corner-health-orb--top-left ${canDirectAttackReaper ? 'pe-health-orb--target' : ''}`}
+                                    onClick={() => canDirectAttackReaper && this.handleDirectAttackReaper()}
+                                    title={canDirectAttackReaper ? 'Click to attack Reaper directly!' : `Reaper HP: ${reaperHP}/${reaperMaxHP}`}
+                                >
+                                    <div className="pe-orb-header-label">THE REAPER</div>
+                                    {this.props.renderSoulBar ? this.props.renderSoulBar(reaperHP, reaperMaxHP, false) : (
+                                        <div className="pe-liquid-orb-wrap pe-liquid-orb--reaper">
+                                            <div className="pe-liquid-orb-vessel">
+                                                <div className="pe-liquid-orb-bg" />
+                                                <div
+                                                    className="pe-liquid-orb-fluid"
+                                                    style={{
+                                                        height: `${Math.max(0, (reaperHP / reaperMaxHP) * 100)}%`,
+                                                        background: 'linear-gradient(to top, #5c0a0c, #e74c3c 65%, #ff7675 100%)',
+                                                        boxShadow: '0 -2px 12px rgba(231, 76, 60, 0.7)'
+                                                    }}
+                                                />
+                                                <div className="pe-liquid-orb-glass-shine" />
+                                                <div
+                                                    className="pe-liquid-orb-frame"
+                                                    style={{ backgroundImage: `url(${images.reaper_health_orb})` }}
+                                                />
+                                            </div>
+                                            <div className="pe-liquid-orb-label">{reaperHP}/{reaperMaxHP}</div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* The 5x5 Tactical Board */}
+                                {this.renderGridNodes()}
+
+                                {/* Lower-Right Corner: Crew Health Indicator */}
+                                <div className="pe-corner-health-orb pe-corner-health-orb--bottom-right">
+                                    <div className="pe-orb-header-label">YOUR CREW</div>
+                                    <div className="pe-spirit-subbadge">SPIRIT: {playerSpirit}/{maxSpirit}</div>
+                                    {this.props.renderSoulBar ? this.props.renderSoulBar(playerHP, playerMaxHP, true) : (
+                                        <div className="pe-liquid-orb-wrap pe-liquid-orb--crew">
+                                            <div className="pe-liquid-orb-vessel">
+                                                <div className="pe-liquid-orb-bg" />
+                                                <div
+                                                    className="pe-liquid-orb-fluid"
+                                                    style={{
+                                                        height: `${Math.max(0, (playerHP / playerMaxHP) * 100)}%`,
+                                                        background: 'linear-gradient(to top, #0f522b, #2ecc71 65%, #a2ded0 100%)',
+                                                        boxShadow: '0 -2px 12px rgba(46, 204, 113, 0.7)'
+                                                    }}
+                                                />
+                                                <div className="pe-liquid-orb-glass-shine" />
+                                                <div
+                                                    className="pe-liquid-orb-frame"
+                                                    style={{ backgroundImage: `url(${images.crew_health_orb})` }}
+                                                />
+                                            </div>
+                                            <div className="pe-liquid-orb-label">{playerHP}/{playerMaxHP}</div>
+                                        </div>
+                                    )}
+                                </div>
+
+                            </div>
+
+                            {/* Player Fanned Hand Bottom */}
+                            <div className="pe-player-hand-section">
+                                {this.renderFannedPlayerHand()}
+                            </div>
+                        </div>
+
+                        {/* ── RIGHT SIDE: 3 Equipped Crew Rune Slots ── */}
+                        <div className="pe-right-sidebar">
+                            <div className="pe-rune-slots-header">CREW RUNES</div>
+                            <div className="pe-rune-slots-list">
+                                {[0, 1, 2].map(idx => {
+                                    const rune = equippedRunes[idx];
+                                    return (
+                                        <div key={idx} className={`pe-rune-slot ${rune ? 'pe-rune-slot--filled' : 'pe-rune-slot--empty'}`}>
+                                            {rune ? (
+                                                <>
+                                                    <div
+                                                        className="pe-rune-icon"
+                                                        style={rune.icon || rune.art ? { backgroundImage: `url(${rune.icon || rune.art})` } : {}}
+                                                    >
+                                                        {!rune.icon && !rune.art && '🔮'}
+                                                    </div>
+                                                    <div className="pe-rune-info">
+                                                        <div className="pe-rune-name">{rune.name || rune.label || 'Ancient Rune'}</div>
+                                                        <div className="pe-rune-type">{rune.equippedSlot ? `${rune.equippedSlot.toUpperCase()} RUNE` : 'EQUIPPED RUNE'}</div>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <div className="pe-rune-empty-icon">❖</div>
+                                                    <div className="pe-rune-empty-label">Rune Slot {idx + 1}</div>
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 

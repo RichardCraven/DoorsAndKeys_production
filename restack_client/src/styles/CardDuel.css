@@ -48,79 +48,270 @@
   position: relative;
   z-index: 1;
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   height: 100%;
   width: 100%;
   overflow: hidden;
 }
 
-/* ── TOP HEADER BAR ───────────────────────────────────────────── */
-.pe-header-bar {
-  position: absolute;
+/* ── TOP HEADER ACTION BAR ─────────────────────────────────────── */
+.pe-header-bar--top {
+  position: relative;
   top: 0;
   left: 0;
-  right: 280px;
-  height: 95px;
+  right: 0;
+  height: 54px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 24px;
-  background: linear-gradient(180deg, rgba(14, 10, 24, 0.95), rgba(8, 5, 15, 0.7));
+  padding: 4px 20px;
+  background: linear-gradient(180deg, rgba(14, 10, 24, 0.95), rgba(8, 5, 15, 0.8));
   border-bottom: 1px solid rgba(201, 168, 76, 0.25);
   z-index: 50;
   box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  flex-shrink: 0;
 }
 
-.pe-header-combatant {
+.pe-header-controls {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
-.pe-header-details {
+/* ── MAIN ARENA WRAPPER ────────────────────────────────────────── */
+.pe-arena-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: space-between;
+  flex: 1;
+  width: 100%;
+  height: calc(100% - 54px);
+  overflow: hidden;
+}
+
+/* ── LEFT SIDEBAR: Event Log ──────────────────────────────────── */
+.pe-left-sidebar {
+  width: 230px;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 14px 12px;
+  box-sizing: border-box;
+  background: rgba(12, 10, 20, 0.7);
+  border-right: 1px solid rgba(120, 80, 200, 0.25);
+  backdrop-filter: blur(8px);
+  z-index: 20;
+  flex-shrink: 0;
+}
+
+.pe-sidebar-title {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pe-gold);
+  letter-spacing: 0.1em;
+  margin-bottom: 10px;
+  text-shadow: 0 0 10px rgba(201, 168, 76, 0.3);
+  text-align: center;
+}
+
+.pe-tactical-log {
+  flex: 1;
+  overflow-y: auto;
+  font-size: 11.5px;
+  color: #b0a8c0;
+  line-height: 1.5;
+  padding: 8px;
+  background: rgba(8, 6, 14, 0.6);
+  border: 1px solid rgba(120, 80, 200, 0.2);
+  border-radius: 8px;
+  box-shadow: inset 0 0 12px rgba(0,0,0,0.6);
+}
+
+.pe-log-line {
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+/* ── RIGHT SIDEBAR: 3 Equipped Crew Rune Slots ─────────────────── */
+.pe-right-sidebar {
+  width: 230px;
+  min-width: 210px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 14px 12px;
+  box-sizing: border-box;
+  background: rgba(12, 10, 20, 0.7);
+  border-left: 1px solid rgba(120, 80, 200, 0.25);
+  backdrop-filter: blur(8px);
+  z-index: 20;
+  flex-shrink: 0;
+}
+
+.pe-rune-slots-header {
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--pe-gold);
+  letter-spacing: 0.1em;
+  margin-bottom: 14px;
+  text-shadow: 0 0 10px rgba(201, 168, 76, 0.3);
+  text-align: center;
+}
+
+.pe-rune-slots-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pe-rune-slot {
+  height: 72px;
+  border-radius: 10px;
+  background: rgba(20, 16, 32, 0.85);
+  border: 1px solid rgba(201, 168, 76, 0.35);
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.6), inset 0 0 12px rgba(0,0,0,0.5);
+  transition: all 0.2s ease;
+}
+
+.pe-rune-slot--filled {
+  border-color: rgba(201, 168, 76, 0.7);
+  background: linear-gradient(135deg, rgba(30, 24, 48, 0.9), rgba(15, 12, 28, 0.9));
+}
+
+.pe-rune-slot--empty {
+  border: 1px dashed rgba(120, 80, 200, 0.35);
+  background: rgba(10, 8, 16, 0.5);
+  justify-content: center;
+}
+
+.pe-rune-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  box-shadow: 0 0 8px rgba(201, 168, 76, 0.2);
+}
+
+.pe-rune-info {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  text-align: left;
+  overflow: hidden;
 }
 
-.pe-combatant-name--reaper {
+.pe-rune-name {
   font-family: 'Cinzel', serif;
-  font-size: 15px;
-  font-weight: 700;
-  color: #ff5555;
-  letter-spacing: 0.08em;
-  text-shadow: 0 0 10px rgba(255, 85, 85, 0.4);
-}
-
-.pe-combatant-name--player {
-  font-family: 'Cinzel', serif;
-  font-size: 15px;
+  font-size: 11.5px;
   font-weight: 700;
   color: var(--pe-gold);
-  letter-spacing: 0.08em;
-  text-shadow: 0 0 10px rgba(201, 168, 76, 0.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.pe-spirit-meter {
-  font-size: 11px;
+.pe-rune-type {
+  font-size: 9.5px;
+  color: #a78bfa;
   font-weight: 600;
-  color: var(--pe-cyan);
-}
-.pe-spirit-val {
-  color: #55ffff;
-  font-weight: bold;
+  letter-spacing: 0.05em;
 }
 
-.pe-deck-counts {
-  font-size: 10px;
+.pe-rune-empty-icon {
+  font-size: 20px;
+  color: rgba(201, 168, 76, 0.35);
+}
+
+.pe-rune-empty-label {
+  font-family: 'Cinzel', serif;
+  font-size: 10.5px;
   color: var(--pe-text-dim);
+  letter-spacing: 0.05em;
 }
 
-.pe-header-round-info {
+/* ── CENTER TACTICAL ARENA & GRID WRAPPER ──────────────────────── */
+.pe-tactical-arena {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.pe-grid-section-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Upper-Left Corner Reaper Orb */
+.pe-corner-health-orb--top-left {
+  position: absolute;
+  left: -88px;
+  top: -12px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+  z-index: 50;
+}
+
+/* Lower-Right Corner Crew Orb */
+.pe-corner-health-orb--bottom-right {
+  position: absolute;
+  right: -88px;
+  bottom: -12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  z-index: 50;
+}
+
+.pe-orb-header-label {
+  font-family: 'Cinzel', serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--pe-gold);
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 4px #000;
+}
+
+.pe-spirit-subbadge {
+  font-size: 8.5px;
+  font-weight: bold;
+  color: #55ffff;
+  background: rgba(0,0,0,0.8);
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(85,255,255,0.3);
+  letter-spacing: 0.04em;
+}
+
+.pe-deck-subtext {
+  font-size: 9px;
+  color: var(--pe-text-dim);
+  margin-top: 2px;
 }
 
 .pe-round-badge {
@@ -936,128 +1127,232 @@
   color: #fff;
 }
 
-/* ── RESPONSIVE MEDIA QUERIES FOR MOBILE & TABLETS ────────────── */
+/* Mobile Orbs default state: hidden on desktop */
+.pe-mobile-health-orb {
+  display: none !important;
+}
 
-@media (max-width: 1024px) or (max-height: 750px) {
-  .pe-sidebar-panel {
-    width: 220px;
-    padding: 12px 10px;
-  }
+/* ── RESPONSIVE MEDIA QUERIES FOR MOBILE VIEW ONLY ────────────── */
+
+@media (max-width: 960px), (max-height: 700px) {
+
+  /* 1. Top Bar Gone & Arena Fills Space */
   .pe-header-bar {
-    right: 220px;
-    height: 72px;
-    padding: 4px 16px;
+    display: none !important;
   }
-  .pe-liquid-orb-vessel {
-    width: 48px;
-    height: 48px;
-  }
+
   .pe-tactical-arena {
-    margin-right: 220px;
-    padding-top: 76px;
-    padding-bottom: 8px;
-    padding-left: 10px;
-    padding-right: 10px;
+    padding-top: 6px !important;
+    padding-bottom: 4px !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+    margin-right: 0 !important;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    box-sizing: border-box !important;
   }
+
+  /* 2. Hands Scale & Visibility */
+  .pe-reaper-hand-section {
+    height: 44px !important;
+    margin-top: 2px !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+
+  .pe-reaper-fanned-card {
+    width: 32px !important;
+    height: 44px !important;
+    margin-left: -10px !important;
+  }
+
+  .pe-grid-section {
+    position: relative !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    margin: 2px 0 !important;
+    flex: 1 !important;
+  }
+
   .pe-tactical-grid {
-    gap: 4px;
-    padding: 6px 10px;
+    gap: 3px !important;
+    padding: 2px 4px !important;
   }
+
   .pe-grid-node {
-    width: 72px;
-    height: 54px;
+    width: 58px !important;
+    height: 42px !important;
+    border-radius: 4px !important;
   }
+
   .pe-unit-portrait {
-    width: 26px;
-    height: 26px;
+    width: 20px !important;
+    height: 20px !important;
   }
+
   .pe-unit-name {
-    font-size: 7px;
+    font-size: 6px !important;
   }
+
   .pe-unit-stats {
-    font-size: 8px;
-    gap: 4px;
+    font-size: 7px !important;
+    gap: 2px !important;
   }
+
   .pe-player-hand-section {
-    height: 125px;
-    margin-bottom: 4px;
+    height: 105px !important;
+    margin-bottom: 4px !important;
+    z-index: 300 !important;
+    flex-shrink: 0 !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
   }
+
   .pe-fanned-hand-container {
-    padding-bottom: 12px;
+    padding-bottom: 8px !important;
   }
+
   .pe-fanned-card {
-    width: 86px;
-    height: 114px;
-    margin-left: -20px;
+    width: 76px !important;
+    height: 98px !important;
+    margin-left: -16px !important;
+    border-radius: 6px !important;
   }
-  .pe-card-portrait-area {
-    height: 52px;
+
+  .pe-fanned-card--playable:hover {
+    transform: translateY(-24px) scale(1.2) rotate(0deg) !important;
+    z-index: 400 !important;
   }
-  .pe-card-title {
-    font-size: 8px;
-  }
-  .pe-card-badge {
-    font-size: 6.5px;
-  }
+
   .pe-card-cost-gem {
-    width: 18px;
-    height: 18px;
-    font-size: 9.5px;
+    width: 15px !important;
+    height: 15px !important;
+    font-size: 8.5px !important;
+    top: 2px !important;
+    right: 2px !important;
   }
-}
 
-@media (max-width: 768px) {
+  .pe-card-portrait-area {
+    height: 38px !important;
+  }
+
+  .pe-card-title {
+    font-size: 7px !important;
+  }
+
+  .pe-card-badge {
+    display: none !important;
+  }
+
+  .pe-card-stats-line {
+    font-size: 8px !important;
+    gap: 4px !important;
+    margin-top: 0 !important;
+  }
+
+  /* 3. Health Indicators on Left and Right of Board */
+  .pe-mobile-health-orb {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    position: absolute !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    z-index: 250 !important;
+  }
+
+  .pe-mobile-health-orb--left {
+    left: 8px !important;
+  }
+
+  .pe-mobile-health-orb--right {
+    right: 8px !important;
+  }
+
+  .pe-mobile-orb-title {
+    font-family: 'Cinzel', serif !important;
+    font-size: 8.5px !important;
+    font-weight: 700 !important;
+    color: var(--pe-gold) !important;
+    letter-spacing: 0.05em !important;
+    margin-bottom: 2px !important;
+    text-shadow: 0 1px 3px #000 !important;
+  }
+
+  .pe-mobile-spirit-badge {
+    font-size: 8px !important;
+    font-weight: bold !important;
+    color: #55ffff !important;
+    background: rgba(0,0,0,0.75) !important;
+    padding: 1px 5px !important;
+    border-radius: 3px !important;
+    border: 1px solid rgba(85,255,255,0.3) !important;
+    margin-bottom: 3px !important;
+    white-space: nowrap !important;
+  }
+
+  .pe-mobile-health-orb .pe-liquid-orb-vessel {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  .pe-mobile-health-orb .pe-liquid-orb-label {
+    font-size: 8.5px !important;
+    margin-top: 2px !important;
+  }
+
+  /* 4. End Turn and Forfeit Buttons Much Smaller */
   .pe-sidebar-panel {
-    position: fixed;
-    right: 0;
-    top: 70px;
-    bottom: 0;
-    width: 200px;
-    z-index: 500;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-    background: rgba(14, 14, 22, 0.98);
+    position: absolute !important;
+    top: 6px !important;
+    right: 8px !important;
+    width: auto !important;
+    height: auto !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    z-index: 500 !important;
+    pointer-events: none !important;
   }
-  .pe-sidebar-panel.pe-sidebar--open {
-    transform: translateX(0);
-  }
-  .pe-header-bar {
-    right: 0;
-  }
-  .pe-tactical-arena {
-    margin-right: 0;
-    padding-top: 75px;
-  }
-  .pe-grid-node {
-    width: 62px;
-    height: 48px;
-  }
-  .pe-fanned-card {
-    width: 78px;
-    height: 102px;
-    margin-left: -16px;
-  }
-}
 
-@media (max-height: 600px) {
-  .pe-header-bar {
-    height: 60px;
+  .pe-sidebar-header,
+  .pe-tactical-log {
+    display: none !important;
   }
-  .pe-tactical-arena {
-    padding-top: 64px;
-    padding-bottom: 4px;
+
+  .pe-controls-group {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 6px !important;
+    pointer-events: auto !important;
   }
-  .pe-grid-node {
-    width: 58px;
-    height: 44px;
+
+  .pe-btn--end-turn {
+    padding: 3px 8px !important;
+    font-size: 9.5px !important;
+    height: 26px !important;
+    border-radius: 5px !important;
+    box-shadow: 0 2px 8px rgba(120, 80, 200, 0.5) !important;
+    min-width: auto !important;
   }
-  .pe-player-hand-section {
-    height: 100px;
-    margin-bottom: 2px;
-  }
-  .pe-fanned-card {
-    width: 72px;
-    height: 94px;
-    margin-left: -14px;
+
+  .pe-btn--forfeit {
+    padding: 2px 6px !important;
+    font-size: 8.5px !important;
+    height: 22px !important;
+    border-radius: 5px !important;
+    opacity: 0.85 !important;
+    min-width: auto !important;
   }
 }
