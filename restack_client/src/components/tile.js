@@ -304,7 +304,7 @@ function Tile(props) {
             opacity: props.isPreview ? 0.6 : 1,
             pointerEvents: props.passThrough ? 'none' : 'inherit',
             boxSizing: 'border-box',
-            transition: 'background-color 0.35s, border-color 0.35s',
+            transition: 'background-color 0.08s, border-color 0.08s',
             cursor: props.cursor ? props.cursor : 'pointer',
             height: props.tileSize+'px',
             width: props.tileSize+'px',
@@ -420,12 +420,12 @@ function Tile(props) {
                      {/* Terrain background: chosen per-tile (terrain_1..terrain_16) and rendered beneath portrait/items */}
                      { props.terrain && (() => {
                          let terrainUrl = (props.terrain && props.terrain.includes('/')) ? props.terrain : (images[props.terrain] || null);
-                         return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: color === 'black' ? 0 : 0.5, transition: 'opacity 0.35s ease-in-out'}} />
+                         return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: color === 'black' ? 0 : 0.5, transition: 'opacity 0.08s ease-in-out'}} />
                      })()}
 
                      {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
                       {(props.imageOverride || images[props.image]) && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
-                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
+                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.08s ease-in-out'}} />
                       )}
 
             {/* Soul Shard custom overlay */}
@@ -437,7 +437,7 @@ function Tile(props) {
                     <div style={{
                         position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                         opacity: color === 'black' ? 0 : 1,
-                        transition: 'opacity 0.35s ease-in-out'
+                        transition: 'opacity 0.08s ease-in-out'
                     }}>
                         {/* 50% opacity monster portrait underlay */}
                         {portraitUrl && (
@@ -504,7 +504,7 @@ function Tile(props) {
                     zIndex: 1,
                     opacity: color === 'black' ? 0 : 0.7,
                     pointerEvents: 'none',
-                    transition: 'opacity 0.35s ease-in-out'
+                    transition: 'opacity 0.08s ease-in-out'
                 }} />
            )}
 
@@ -557,7 +557,7 @@ function Tile(props) {
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 9, pointerEvents: 'none',
                     opacity: color === 'black' ? 0 : 1,
-                    transition: 'opacity 0.35s ease-in-out'
+                    transition: 'opacity 0.08s ease-in-out'
                 }}>
                     <div className="trap-indicator-overlay" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1}} />
                 </div>
@@ -569,7 +569,7 @@ function Tile(props) {
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 10, pointerEvents: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'opacity 0.35s ease-in-out'
+                    transition: 'opacity 0.08s ease-in-out'
                 }}>
                     <svg width='60%' height='60%' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'>
                         <line x1='4' y1='4' x2='20' y2='20' stroke='white' strokeWidth='1.5' strokeLinecap='round'/>
@@ -583,7 +583,7 @@ function Tile(props) {
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 10, pointerEvents: 'none',
-                    transition: 'opacity 0.35s ease-in-out'
+                    transition: 'opacity 0.08s ease-in-out'
                 }}>
                     <svg width='100%' height='100%' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'>
                         {/* Vertical lines */}
@@ -610,7 +610,7 @@ function Tile(props) {
                     zIndex: 10, pointerEvents: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     opacity: color === 'black' ? 0 : 1,
-                    transition: 'opacity 0.35s ease-in-out'
+                    transition: 'opacity 0.08s ease-in-out'
                 }}>
                     <svg width='70%' height='70%' viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'>
                         <line x1='4' y1='28' x2='12' y2='2' stroke='#d4a844' strokeWidth='3' strokeLinecap='round'/>
@@ -628,7 +628,7 @@ function Tile(props) {
                      zIndex: 10, pointerEvents: 'none',
                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                      opacity: color === 'black' ? 0 : 1,
-                     transition: 'opacity 0.35s ease-in-out'
+                     transition: 'opacity 0.08s ease-in-out'
                  }}>
                      <div style={{
                          width: '70%',
@@ -655,7 +655,7 @@ function Tile(props) {
                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                      fontSize: Math.max(8, (props.tileSize || 30) * 0.45) + 'px',
                      opacity: color === 'black' ? 0 : 1,
-                     transition: 'opacity 0.35s ease-in-out'
+                     transition: 'opacity 0.08s ease-in-out'
                  }}>
                      <div style={{
                          width: '70%',
@@ -701,7 +701,7 @@ function Tile(props) {
                       alignItems: 'center',
                       justifyContent: 'center',
                       opacity: color === 'black' ? 0 : 1,
-                      transition: 'opacity 0.35s ease-in-out'
+                      transition: 'opacity 0.08s ease-in-out'
                   };
                   if (edge === 'top') {
                       overlayStyle.borderTop = 'none';
@@ -762,7 +762,7 @@ function Tile(props) {
            { props.inscriptions && (
                 <div style={{
                     opacity: color === 'black' ? 0 : 1,
-                    transition: 'opacity 0.35s ease-in-out'
+                    transition: 'opacity 0.08s ease-in-out'
                 }}>
                     { props.inscriptions.top && (
                         <div style={{position:'absolute', top:0, left:'10%', right:'10%', height:'4px',
@@ -798,7 +798,7 @@ function Tile(props) {
                     zIndex: 25,
                     pointerEvents: 'none',
                     opacity: color === 'black' ? 0 : 1,
-                    transition: 'opacity 0.35s ease-in-out'
+                    transition: 'opacity 0.08s ease-in-out'
                 }} />
            )}
 
@@ -872,10 +872,136 @@ function Tile(props) {
     )
 }
 
-// Memoize so the thousands of read-only dungeon-view tiles don't re-render on
-// every parent state change (e.g. dropdown open/close).  Tile content never
-// changes mid-render in the dungeon preview — only tileSize, image, color, and
-// coordinates matter.  All other props that Tile receives in DungeonView are
-// stable primitives (false / null / 'board-tile'), so the shallow comparison
-// is reliable and cheap.
-export default React.memo(Tile);
+const propsAreEqual = (prev, next) => {
+    // 1. Check direct scalar props
+    if (prev.color !== next.color) return false;
+    if (prev.image !== next.image) return false;
+    if (prev.imageOverride !== next.imageOverride) return false;
+    if (prev.terrain !== next.terrain) return false;
+    if (prev.partialObscured !== next.partialObscured) return false;
+    if (prev.trapRevealed !== next.trapRevealed) return false;
+    if (prev.tileSize !== next.tileSize) return false;
+    if (prev.cursor !== next.cursor) return false;
+    if (prev.type !== next.type) return false;
+    if (prev.hovered !== next.hovered) return false;
+    if (prev.passThrough !== next.passThrough) return false;
+    if (prev.backgroundColor !== next.backgroundColor) return false;
+    if (prev.showCoordinates !== next.showCoordinates) return false;
+    if (prev.editMode !== next.editMode) return false;
+    if (prev.isActiveInventory !== next.isActiveInventory) return false;
+    if (prev.isPreview !== next.isPreview) return false;
+    if (prev.hp !== next.hp) return false;
+    if (prev.maxHp !== next.maxHp) return false;
+    if (prev.hpBarWidth !== next.hpBarWidth) return false;
+
+    // 2. Check contains (if object, compare its fields)
+    if (prev.contains !== next.contains) {
+        if (typeof prev.contains === 'object' && typeof next.contains === 'object' && prev.contains && next.contains) {
+            if (prev.contains.type !== next.contains.type) return false;
+            if (prev.contains.key !== next.contains.key) return false;
+            if (prev.contains.vendorCell !== next.contains.vendorCell) return false;
+            if (prev.contains.vendorAnchorId !== next.contains.vendorAnchorId) return false;
+        } else {
+            return false;
+        }
+    }
+
+    // 3. Check borders (if object, compare top/left/bottom/right)
+    if (prev.borders !== next.borders) {
+        if (prev.borders && next.borders) {
+            if (prev.borders.top !== next.borders.top) return false;
+            if (prev.borders.left !== next.borders.left) return false;
+            if (prev.borders.bottom !== next.borders.bottom) return false;
+            if (prev.borders.right !== next.borders.right) return false;
+        } else {
+            return false;
+        }
+    }
+
+    // 4. Check coordinates (compare x and y)
+    if (prev.coordinates !== next.coordinates) {
+        if (prev.coordinates && next.coordinates) {
+            const px = Array.isArray(prev.coordinates) ? prev.coordinates[0] : prev.coordinates.x;
+            const py = Array.isArray(prev.coordinates) ? prev.coordinates[1] : prev.coordinates.y;
+            const nx = Array.isArray(next.coordinates) ? next.coordinates[0] : next.coordinates.x;
+            const ny = Array.isArray(next.coordinates) ? next.coordinates[1] : next.coordinates.y;
+            if (px !== nx || py !== ny) return false;
+        } else {
+            return false;
+        }
+    }
+
+    // 5. Check data (complex game entity object, if changed we compare relevant properties)
+    if (prev.data !== next.data) {
+        if (prev.data && next.data) {
+            if (prev.data.id !== next.data.id) return false;
+            if (prev.data.hp !== next.data.hp) return false;
+            if (prev.data.dead !== next.data.dead) return false;
+            if (prev.data.type !== next.data.type) return false;
+            if (prev.data.monsterType !== next.data.monsterType) return false;
+            if (prev.data.count !== next.data.count) return false;
+        } else {
+            return false;
+        }
+    }
+
+    // 6. Check inscriptions (compare top/bottom/left/right)
+    if (prev.inscriptions !== next.inscriptions) {
+        if (prev.inscriptions && next.inscriptions) {
+            if (prev.inscriptions.top !== next.inscriptions.top) return false;
+            if (prev.inscriptions.bottom !== next.inscriptions.bottom) return false;
+            if (prev.inscriptions.left !== next.inscriptions.left) return false;
+            if (prev.inscriptions.right !== next.inscriptions.right) return false;
+        } else {
+            return false;
+        }
+    }
+
+    // 7. Check relevant properties of neighbor tiles from boardTiles prop.
+    // Neighbors only affect the edgeLines rendering.
+    // Edge color logic checks color, borders, contains of the 4 neighbors.
+    // If the neighbor array reference changed, check if any of the 4 neighbors'
+    // relevant fields (color, borders, contains) actually changed.
+    if (prev.boardTiles !== next.boardTiles && prev.type === 'board-tile' && Array.isArray(prev.boardTiles) && Array.isArray(next.boardTiles)) {
+        const tileIndex = (typeof prev.id === 'number') ? prev.id : ((typeof prev.index === 'number') ? prev.index : null);
+        if (tileIndex !== null) {
+            const tileRow = Math.floor(tileIndex / 15);
+            const tileCol = tileIndex % 15;
+            const offsets = [];
+            if (tileRow > 0) offsets.push(-15);
+            if (tileRow < 14) offsets.push(15);
+            if (tileCol > 0) offsets.push(-1);
+            if (tileCol < 14) offsets.push(1);
+
+            for (const offset of offsets) {
+                const idx = tileIndex + offset;
+                const pNeighbor = prev.boardTiles[idx];
+                const nNeighbor = next.boardTiles[idx];
+                if (!pNeighbor || !nNeighbor) {
+                    if (pNeighbor !== nNeighbor) return false;
+                    continue;
+                }
+                if (pNeighbor.color !== nNeighbor.color) return false;
+                if (pNeighbor.contains !== nNeighbor.contains) {
+                    const pc = pNeighbor.contains && typeof pNeighbor.contains === 'object' ? pNeighbor.contains.type : pNeighbor.contains;
+                    const nc = nNeighbor.contains && typeof nNeighbor.contains === 'object' ? nNeighbor.contains.type : nNeighbor.contains;
+                    if (pc !== nc) return false;
+                }
+                if (pNeighbor.borders !== nNeighbor.borders) {
+                    if (pNeighbor.borders && nNeighbor.borders) {
+                        if (pNeighbor.borders.top !== nNeighbor.borders.top) return false;
+                        if (pNeighbor.borders.left !== nNeighbor.borders.left) return false;
+                        if (pNeighbor.borders.bottom !== nNeighbor.borders.bottom) return false;
+                        if (pNeighbor.borders.right !== nNeighbor.borders.right) return false;
+                    } else {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
+};
+
+export default React.memo(Tile, propsAreEqual);

@@ -5,7 +5,7 @@ import { updateUserRequest } from '../utils/api-handler';
 export default function SettingsModal({ isOpen, onClose, onSave }) {
     const [suffix, setSuffix] = useState('');
     const [region, setRegion] = useState('Tartaria');
-    const [fastMove, setFastMove] = useState(false);
+    const [fastMove, setFastMove] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -14,7 +14,7 @@ export default function SettingsModal({ isOpen, onClose, onSave }) {
             const meta = getMeta() || {};
             setSuffix(meta.suffix || '');
             setRegion(meta.region || 'Tartaria');
-            setFastMove(!!meta.fastMove);
+            setFastMove(meta.fastMove !== false);
             setSaveSuccess(false);
         }
     }, [isOpen]);
