@@ -9,6 +9,7 @@ import gifTwo from '../assets/highres-gifs/gifTwo.gif';
 import gifThree from '../assets/highres-gifs/gifThree.gif';
 import { CombatManagerRedux } from '../utils/combat-manager-redux';
 import skillsMatrix from '../utils/skills-matrix';
+import { ProgressiveBgImage } from '../components/ProgressiveImage';
 
 const filterSpecialsByTier = (specials, selectedTier) => {
     // Resolve all specials to their detail object to know their tier
@@ -1116,17 +1117,17 @@ class CrewManagerPage extends React.Component {
                                     const isSelected = this.state.selectedCrewMember && (
                                         this.state.selectedCrewMember.id === e.id || this.state.selectedCrewMember.name === e.name
                                     );
-                                    return <div className={`portrait${isSelected ? ' selected' : ''}`} key={i}
-                                        style={{ backgroundImage: "url(" + e.portrait + ")" }}
+                                    return <ProgressiveBgImage className={`portrait${isSelected ? ' selected' : ''}`} key={i}
+                                        src={e.portrait}
                                         onClick={(event) => this.selectCrewMember(event, e)}
-                                    ></div>
+                                    />
                                 }
                                 )}
                             </div>
                             <div className="member-panel">
-                                {this.state.selectedCrewMember && <div className='giant-portrait'
-                                    style={{ backgroundImage: "url(" + this.state.selectedCrewMember.portrait + ")" }}
-                                ></div>}
+                                {this.state.selectedCrewMember && <ProgressiveBgImage className='giant-portrait'
+                                    src={this.state.selectedCrewMember.portrait}
+                                />}
                                 {this.state.selectedCrewMember && <div className="details-pane">
                                     <div className="member-name">{this.state.selectedCrewMember.name}</div>
                                     <div className="description">
@@ -1181,9 +1182,9 @@ class CrewManagerPage extends React.Component {
 
                                         <div className={`add-button ${!this.state.selectedCrewMember ? 'disabled' : ''}`} onClick={() => this.addMember(i)}>&oplus;</div>
 
-                                        {this.state.selectedCrew[i] && <div
+                                        {this.state.selectedCrew[i] && <ProgressiveBgImage
                                             className="portrait"
-                                            style={{ backgroundImage: "url(" + this.state.selectedCrew[i].portrait + ")" }}
+                                            src={this.state.selectedCrew[i].portrait}
                                             title="Double-click to remove"
                                             onClick={(e) => {
                                                 const now = Date.now();
@@ -1194,7 +1195,7 @@ class CrewManagerPage extends React.Component {
                                                     this.removeMember(i);
                                                 }
                                             }}
-                                        ></div>}
+                                        />}
 
                                         {this.state.selectedCrew[i] && <div className="sim-level-control" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '4px' }}>
                                             <button style={{ padding: '0 5px', fontSize: '11px', lineHeight: '16px' }}
@@ -1266,7 +1267,7 @@ class CrewManagerPage extends React.Component {
                                             title={this.state.selectedMonsterKey ? 'Double-click to remove' : 'Select from roster below'}
                                             onClick={(e) => {
                                                 const now = Date.now();
-                                                const isDoubleTap = this._lastMonsterRemoveTap && (now - this._lastMonsterRemoveTapTime < 300);
+                                                const isDoubleTap = this._lastMonsterRemoveTap === true && (now - this._lastMonsterRemoveTapTime < 300);
                                                 this._lastMonsterRemoveTap = true;
                                                 this._lastMonsterRemoveTapTime = now;
                                                 if (e.detail === 2 || isDoubleTap) {
@@ -1279,7 +1280,7 @@ class CrewManagerPage extends React.Component {
                                         >
                                             {this.state.selectedMonsterKey && (() => {
                                                 const m = this.props.monsterManager.getMonster(this.state.selectedMonsterKey);
-                                                return m ? <div className="enemy-slot-portrait" style={{ backgroundImage: `url(${m.portrait})` }}></div> : null;
+                                                return m ? <ProgressiveBgImage className="enemy-slot-portrait" src={m.portrait} /> : null;
                                             })()}
                                             {!this.state.selectedMonsterKey && <span className="enemy-slot-placeholder">＋</span>}
                                         </div>
@@ -1325,7 +1326,7 @@ class CrewManagerPage extends React.Component {
                                                         }
                                                     }}
                                                 >
-                                                    {m && <div className="enemy-slot-portrait" style={{ backgroundImage: `url(${m.portrait})` }}></div>}
+                                                    {m && <ProgressiveBgImage className="enemy-slot-portrait" src={m.portrait} />}
                                                     {!key && <span className="enemy-slot-placeholder">＋</span>}
                                                 </div>
                                                 <div className="enemy-slot-name">
@@ -1339,7 +1340,7 @@ class CrewManagerPage extends React.Component {
                                 {/* Info panel for selected enemy — always rendered at fixed height so roster never shifts */}
                                 <div className={`enemy-info-panel${this.state.selectedEnemyForInfo ? '' : ' enemy-info-panel--empty'}`} style={{ flex: '1', margin: 0, boxSizing: 'border-box' }}>
                                     {this.state.selectedEnemyForInfo && (<>
-                                        <div className="enemy-info-portrait" style={{ backgroundImage: `url(${this.state.selectedEnemyForInfo.portrait})` }}></div>
+                                        <ProgressiveBgImage className="enemy-info-portrait" src={this.state.selectedEnemyForInfo.portrait} />
                                         <div className="enemy-info-details">
                                             <div className="enemy-info-columns">
                                                 {/* Left Column: Type, Level and Stats */}
@@ -1434,10 +1435,10 @@ class CrewManagerPage extends React.Component {
                                     .map(k => this.props.monsterManager.getMonster(k))
                                     .filter(Boolean)
                                     .map((m, i) => (
-                                        <div
+                                        <ProgressiveBgImage
                                             key={m.key || i}
                                             className="monster-roster-portrait"
-                                            style={{ backgroundImage: `url(${m.portrait})` }}
+                                            src={m.portrait}
                                             title={formatMonsterType(m.type)}
                                             onClick={() => {
                                                 if (this.state.selectedEnemyForInfo && this.state.selectedEnemyForInfo.key === m.key) {
@@ -1448,7 +1449,7 @@ class CrewManagerPage extends React.Component {
                                             }}
                                         >
                                             <div className="monster-roster-name">{formatMonsterType(m.type)}</div>
-                                        </div>
+                                        </ProgressiveBgImage>
                                     ))}
                             </div>
                         </div>

@@ -1415,7 +1415,6 @@ export function BoardManager(){
         if (board && !board.trapsRolled) {
             const trapChance = isTutorialDungeon ? 0 : 65; // 0% chance for tutorial dungeons, 65% otherwise
             const roll = Math.floor(Math.random() * 100);
-            console.log(`[Trap Spawn Roll] Checking trap spawn for Board ${boardIndex} (ID: ${board.id}). Roll: ${roll}, Threshold: < ${trapChance}`);
             
             if (roll < trapChance && !isTutorialDungeon) {
                 // Succeeded! Determine trap count (2 to 4 traps)
@@ -1447,15 +1446,12 @@ export function BoardManager(){
                     shuffled[i].hasTrap = true;
                     shuffled[i].trapRevealed = false;
                 }
-                
-                console.log(`[Trap Spawn Roll] SUCCESS: Rolled ${roll} < ${trapChance}%. Spawned ${placedCount} traps on Board ${boardIndex}.`);
             } else {
                 // Failed! Ensure no traps are active
                 board.tiles.forEach(t => {
                     t.hasTrap = false;
                     t.trapRevealed = false;
                 });
-                console.log(`[Trap Spawn Roll] FAILURE: Rolled ${roll} >= ${trapChance}%. No traps spawned on Board ${boardIndex}.`);
             }
             
             board.trapsRolled = true;
@@ -1481,9 +1477,6 @@ export function BoardManager(){
             } catch (e) {
                 console.warn('[Trap Spawn] Failed to persist rolled traps', e);
             }
-        } else if (board) {
-            const count = board.tiles.filter(t => t.hasTrap).length;
-            console.log(`[Trap Load] Board ${boardIndex} (ID: ${board.id}) has already rolled traps. Active trap count: ${count}`);
         }
 
     this.ensurePygmiesSpawned = (board, spawnTileIndex = -1) => {
@@ -1509,7 +1502,6 @@ export function BoardManager(){
         if (!board.pygmiesRolled || isDebugMode) {
             const pygmiesChance = isDebugMode ? 100 : 50;
             const rollPygmies = Math.floor(Math.random() * 100);
-            console.log(`[Pygmies Spawn Roll] Checking pygmies spawn for Board (ID: ${board.id}). Roll: ${rollPygmies}, Threshold: < ${pygmiesChance} (Debug: ${isDebugMode})`);
 
             if (rollPygmies < pygmiesChance) {
                 const pygmySubtypes = [
@@ -1546,7 +1538,6 @@ export function BoardManager(){
                         this.tiles[shuffled[i].id].image = this.getImageForContains(shuffled[i].contains, shuffled[i]);
                     }
                 }
-                console.log(`[Pygmies Spawn Roll] SUCCESS: Spawned ${spawnCount} pygmies unit(s) on Board (ID: ${board.id}).`);
             }
             board.pygmiesRolled = true;
         }

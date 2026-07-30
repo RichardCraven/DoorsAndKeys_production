@@ -38,20 +38,11 @@ describe('BoardManager Trap Loading and Roll Logic', () => {
     bm.dungeon = { levels: [{ id: 1, front: plane }] };
     bm.currentLevel.id = 1;
 
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-
     // Load board
     bm.initializeTilesFromMap(0, 112);
 
-    // Verify console log indicates trap spawn checking
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[Trap Spawn Roll] Checking trap spawn')
-    );
-
     // Verify trapsRolled is now marked true
     expect(board.trapsRolled).toBe(true);
-
-    consoleSpy.mockRestore();
   });
 
   test('Trap load uses existing traps if already rolled', () => {
@@ -65,19 +56,10 @@ describe('BoardManager Trap Loading and Roll Logic', () => {
     bm.dungeon = { levels: [{ id: 1, front: plane }] };
     bm.currentLevel.id = 1;
 
-    const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
-
     // Load board
     bm.initializeTilesFromMap(0, 112);
 
-    // Verify it logged the loading of pre-existing traps, not a new roll
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[Trap Load] Board 0 (ID: mock_board_123) has already rolled traps')
-    );
-
     // Verify trap tile exists in trap set
     expect(bm.trapTileIds.has(20)).toBe(true);
-
-    consoleSpy.mockRestore();
   });
 });

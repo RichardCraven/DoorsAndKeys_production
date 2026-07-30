@@ -2545,6 +2545,8 @@ class DungeonPage extends React.Component {
             , mobileRightPoiCollapsed: false
             , isMobileLandscape: window.innerWidth <= 1024 && window.innerHeight < window.innerWidth
             , draggingSectionId: null
+            , dragOverPanel: null
+            , dragOverIndex: null
             , metaPanelConfigVersion: 0
         }
     // Native browser tooltip will be used for death-tracker; no custom tooltip state required.
@@ -3942,7 +3944,7 @@ class DungeonPage extends React.Component {
         if (!direction) return;
         if (this.state.keysLocked || this.state.inMonsterBattle) return;
         const meta = getMeta() || {};
-        const isFastMove = !!(this.state.fastMove || meta.fastMove);
+        const isFastMove = this.state.fastMove || meta.fastMove !== false;
         if (!Array.isArray(this._movementQueue)) this._movementQueue = [];
         const maxQueue = isFastMove ? 10 : 3;
         if (this._movementQueue.length >= maxQueue) return;
@@ -3955,7 +3957,7 @@ class DungeonPage extends React.Component {
     processMovementQueue = () => {
         if (this._processingQueuedMove) return;
         const meta = getMeta() || {};
-        const isFastMove = !!(this.state.fastMove || meta.fastMove);
+        const isFastMove = this.state.fastMove || meta.fastMove !== false;
         if ((!isFastMove && this.state.playerAnimating) || this.state.keysLocked || this.state.inMonsterBattle) return;
         const nextDirection = this._movementQueue.shift();
         if (!nextDirection) return;
@@ -3979,7 +3981,7 @@ class DungeonPage extends React.Component {
     handleDirectionalMove = (direction, options = {}) => {
         const { fromQueue = false } = options;
         const meta = getMeta() || {};
-        const isFastMove = !!(this.state.fastMove || meta.fastMove);
+        const isFastMove = this.state.fastMove || meta.fastMove !== false;
         const TOTAL_MOVE_MS = isFastMove ? 0 : 35;
         const BUFFER_MS = isFastMove ? 0 : 2;
         try {
@@ -5146,8 +5148,11 @@ class DungeonPage extends React.Component {
         this.setState({ draggingSectionId: sectionId });
     };
 
-    handleDragOver = (e) => {
+    handleDragOver = (e, panelKey, index) => {
         e.preventDefault();
+        if (this.state.dragOverPanel !== panelKey || this.state.dragOverIndex !== index) {
+            this.setState({ dragOverPanel: panelKey, dragOverIndex: index });
+        }
     };
 
     handleDrop = (e, targetPanel, targetIndex) => {
@@ -5176,12 +5181,17 @@ class DungeonPage extends React.Component {
         meta.panelConfig = panelConfig;
         storeMeta(meta);
 
-        this.setState({ draggingSectionId: null, metaPanelConfigVersion: (this.state.metaPanelConfigVersion || 0) + 1 });
+        this.setState({
+            draggingSectionId: null,
+            dragOverPanel: null,
+            dragOverIndex: null,
+            metaPanelConfigVersion: (this.state.metaPanelConfigVersion || 0) + 1
+        });
         if (this.props.saveUserData) this.props.saveUserData();
     };
 
     handleDragEnd = () => {
-        this.setState({ draggingSectionId: null });
+        this.setState({ draggingSectionId: null, dragOverPanel: null, dragOverIndex: null });
     };
 
     renderCharacterSection = () => {
@@ -6382,29 +6392,73 @@ class DungeonPage extends React.Component {
 
         return (
             <div 
-                className={`panel-dropzone-${panelKey}`}
-                onDragOver={this.handleDragOver}
+                className={`panel-dropzone-${panelKey} ${this.state.draggingSectionId ? 'dragging-active' : ''}`}
+                onDragOver={(e) => this.handleDragOver(e, panelKey, sections.length)}
                 onDrop={(e) => this.handleDrop(e, panelKey, sections.length)}
-                style={{ minHeight: '100px', display: 'flex', flexDirection: 'column', width: '100%' }}
+                style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', gap: '8px' }}
             >
                 {sections.map((sectionId, index) => {
                     if (sectionId === 'character' && (!this.state.selectedCrewMember || !this.state.selectedCrewMember.name)) {
                         return null;
                     }
+                    const isDragOverThisSlot = this.state.draggingSectionId && this.state.dragOverPanel === panelKey && this.state.dragOverIndex === index;
+                    const isDragOverLastSlot = this.state.draggingSectionId && this.state.dragOverPanel === panelKey && this.state.dragOverIndex === sections.length && index === sections.length - 1;
+
                     return (
                         <div 
                             key={sectionId}
-                            onDragOver={this.handleDragOver}
+                            onDragOver={(e) => this.handleDragOver(e, panelKey, index)}
                             onDrop={(e) => {
                                 e.stopPropagation();
                                 this.handleDrop(e, panelKey, index);
                             }}
-                            style={{ width: '100%' }}
+                            style={{ width: '100%', position: 'relative' }}
                         >
+                            {isDragOverThisSlot && (
+                                <div 
+                                    className="drag-drop-indicator" 
+                                    style={{
+                                        position: 'absolute',
+                                        top: '-6px',
+                                        left: 0,
+                                        right: 0,
+                                        height: '4px',
+                                        margin: 0,
+                                        zIndex: 10,
+                                        pointerEvents: 'none'
+                                    }}
+                                />
+                            )}
+                            {isDragOverLastSlot && (
+                                <div 
+                                    className="drag-drop-indicator" 
+                                    style={{
+                                        position: 'absolute',
+                                        bottom: '-6px',
+                                        left: 0,
+                                        right: 0,
+                                        height: '4px',
+                                        margin: 0,
+                                        zIndex: 10,
+                                        pointerEvents: 'none'
+                                    }}
+                                />
+                            )}
                             {this.renderSection(sectionId)}
                         </div>
                     );
                 })}
+                {sections.length === 0 && this.state.draggingSectionId && this.state.dragOverPanel === panelKey && (
+                    <div 
+                        className="drag-drop-indicator" 
+                        style={{
+                            width: '100%',
+                            height: '4px',
+                            margin: 0,
+                            pointerEvents: 'none'
+                        }}
+                    />
+                )}
             </div>
         );
     };
@@ -12685,59 +12739,7 @@ class DungeonPage extends React.Component {
                 </div>
             )}
 
-            {/* Admin Debugger Toggle */}
-            {(() => {
-                const isAdmin = typeof localStorage !== 'undefined' && localStorage.getItem('isAdmin') === 'true';
-                if (!isAdmin) return null;
-                return (
-                    <div
-                        className="admin-debugger-toggle"
-                        style={{
-                            position: 'fixed',
-                            top: '16px',
-                            right: '20px',
-                            zIndex: 10005,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '8px',
-                            background: 'rgba(15, 12, 20, 0.9)',
-                            border: this.state.debugMode ? '1px solid #00ffcc' : '1px solid rgba(255, 255, 255, 0.25)',
-                            boxShadow: this.state.debugMode ? '0 0 15px rgba(0, 255, 204, 0.45)' : '0 4px 12px rgba(0,0,0,0.6)',
-                            borderRadius: '20px',
-                            padding: '4px 12px',
-                            backdropFilter: 'blur(8px)',
-                            cursor: 'pointer',
-                            userSelect: 'none',
-                            transition: 'all 0.25s ease'
-                        }}
-                        onClick={this.handleToggleDebugMode}
-                        title="Toggle Admin Debugger Mode"
-                    >
-                        <span style={{ fontSize: '12px', fontWeight: 'bold', color: this.state.debugMode ? '#00ffcc' : '#ccc', letterSpacing: '0.5px' }}>
-                            {this.state.isMobileLandscape ? 'Debug' : `🐛 Debugger ${this.state.debugMode ? '[ON]' : '[OFF]'}`}
-                        </span>
-                        <div style={{
-                            width: '32px',
-                            height: '16px',
-                            borderRadius: '9px',
-                            background: this.state.debugMode ? '#00ffcc' : '#444',
-                            position: 'relative',
-                            transition: 'background 0.25s ease'
-                        }}>
-                            <div style={{
-                                width: '12px',
-                                height: '12px',
-                                borderRadius: '50%',
-                                background: '#111',
-                                position: 'absolute',
-                                top: '2px',
-                                left: this.state.debugMode ? '18px' : '2px',
-                                transition: 'left 0.25s ease'
-                            }} />
-                        </div>
-                    </div>
-                );
-            })()}
+
             {this.state.isTutorialMode && (
                 <>
                     <div style={{
@@ -14817,7 +14819,7 @@ class DungeonPage extends React.Component {
                     <CIcon icon={cilCaretRight} className={`expand-icon ${this.state.leftPanelExpanded ? 'expanded' : ''}`} size="sm"/>
                 </div>
                 {this.state.selectedCrewMember && this.state.selectedCrewMember.name && (
-                    <div className="crew-info-section" style={{ width: '100%' }}>
+                    <div className="crew-info-section" style={{ width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
                         {this.renderPanelSections('left')}
                         <div className="description-panel">
                             {this.state.descriptionText}

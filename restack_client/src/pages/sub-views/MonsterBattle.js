@@ -1632,7 +1632,6 @@ class MonsterBattle extends React.Component {
                         const metaFood = getMeta() || {};
                         metaFood.food = (typeof metaFood.food === 'number' ? metaFood.food : 55) + foodGained;
                         try { storeMeta(metaFood); } catch (e) { }
-                        console.log(`[Combat] food reward: +${foodGained} (total: ${metaFood.food})`);
                     }
                 } catch (e) { console.warn('food reward failed', e); }
                 // Ensure we only award gold once per battle
