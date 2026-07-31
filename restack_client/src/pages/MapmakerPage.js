@@ -1626,13 +1626,31 @@ class MapMakerPage extends React.Component {
       };
       e.preventDefault();
     } else if (touches.length === 1) {
-      this._touchState = {
-        mode: 'pan',
-        startX: touches[0].clientX,
-        startY: touches[0].clientY,
-        startPanX: this.state.mobilePanX,
-        startPanY: this.state.mobilePanY,
-      };
+      if (this.state.pinnedOption) {
+        this._touchState = {
+          mode: 'draw',
+          lastPlacedTileId: null,
+        };
+        const touch = touches[0];
+        const element = document.elementFromPoint(touch.clientX, touch.clientY);
+        const tileEl = element ? element.closest('.tile') : null;
+        const tileId = tileEl ? tileEl.getAttribute('data-tile-id') : null;
+        if (tileId !== null) {
+          const idVal = parseInt(tileId, 10);
+          this._touchState.lastPlacedTileId = idVal;
+          this.setState({ mouseDown: true, hoveredTileIdx: idVal }, () => {
+            this.handleHover(idVal, 'board-tile');
+          });
+        }
+      } else {
+        this._touchState = {
+          mode: 'pan',
+          startX: touches[0].clientX,
+          startY: touches[0].clientY,
+          startPanX: this.state.mobilePanX,
+          startPanY: this.state.mobilePanY,
+        };
+      }
       // Don't preventDefault on single-touch so tile clicks still fire
     }
   }
@@ -1671,6 +1689,21 @@ class MapMakerPage extends React.Component {
         mobilePanX: this._touchState.startPanX + dx,
         mobilePanY: this._touchState.startPanY + dy,
       });
+    } else if (this._touchState.mode === 'draw' && touches.length === 1) {
+      e.preventDefault();
+      const touch = touches[0];
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      const tileEl = element ? element.closest('.tile') : null;
+      const tileId = tileEl ? tileEl.getAttribute('data-tile-id') : null;
+      if (tileId !== null) {
+        const idVal = parseInt(tileId, 10);
+        if (idVal !== this._touchState.lastPlacedTileId) {
+          this._touchState.lastPlacedTileId = idVal;
+          this.setState({ mouseDown: true, hoveredTileIdx: idVal }, () => {
+            this.handleHover(idVal, 'board-tile');
+          });
+        }
+      }
     }
   }
 
@@ -1685,7 +1718,10 @@ class MapMakerPage extends React.Component {
         startPanX: this.state.mobilePanX,
         startPanY: this.state.mobilePanY,
       };
-    } else if (e.touches.length === 0) {
+    } else {
+      if (this._touchState.mode === 'draw') {
+        this.setState({ mouseDown: false });
+      }
       this._touchState = null;
     }
   }
@@ -7116,6 +7152,7 @@ class MapMakerPage extends React.Component {
                 onTouchStart={this._handleTouchStart}
                 onTouchMove={this._handleTouchMove}
                 onTouchEnd={this._handleTouchEnd}
+                onTouchCancel={this._handleTouchEnd}
               >
                 <div
                   className="mobile-board-transform"

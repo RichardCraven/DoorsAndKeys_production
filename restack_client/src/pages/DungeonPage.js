@@ -4178,9 +4178,11 @@ class DungeonPage extends React.Component {
             }
 
             if (!playerMoved) {
-                // Tiles unchanged on a blocked move — refreshTiles was not invoked by
-                // board-manager (move() returns early when blocked). Just reset UI state.
+                // Reset UI state and update tiles/overlayTiles in case a gate was unlocked
+                // (which changes the tile state/appearance but doesn't change player coordinates).
                 this.setState({
+                    tiles: bm.tiles,
+                    overlayTiles: bm.overlayTiles,
                     playerFloatVisible: true,
                     playerAnimating: false,
                     animOriginIndex: null,
@@ -5572,6 +5574,45 @@ class DungeonPage extends React.Component {
         );
     };
 
+    renderMobileKeypadSection = () => {
+        const collapsed = this.isSectionCollapsed('mobile_keypad');
+        return (
+            <div className="dungeon-panel-section section-mobile-keypad">
+                <div 
+                    className="section-header" 
+                    draggable={true}
+                    onDragStart={(e) => this.handleDragStart(e, 'mobile_keypad')}
+                    onDragEnd={this.handleDragEnd}
+                    onClick={() => this.toggleSectionCollapse('mobile_keypad')}
+                    style={{ cursor: 'grab' }}
+                >
+                    Movement Keypad {collapsed ? '[+]' : '[-]'}
+                </div>
+                {!collapsed && (
+                    <div className="section-content mobile-keypad-content">
+                        <div className="mobile-dpad">
+                            <div className="dpad-row">
+                                <button className="dpad-btn empty-btn" disabled></button>
+                                <button className="dpad-btn dpad-up" onClick={() => this.handleMobileDirectionalInput('up')}>▲</button>
+                                <button className="dpad-btn empty-btn" disabled></button>
+                            </div>
+                            <div className="dpad-row">
+                                <button className="dpad-btn dpad-left" onClick={() => this.handleMobileDirectionalInput('left')}>◀</button>
+                                <button className="dpad-btn empty-btn" disabled></button>
+                                <button className="dpad-btn dpad-right" onClick={() => this.handleMobileDirectionalInput('right')}>▶</button>
+                            </div>
+                            <div className="dpad-row">
+                                <button className="dpad-btn empty-btn" disabled></button>
+                                <button className="dpad-btn dpad-down" onClick={() => this.handleMobileDirectionalInput('down')}>▼</button>
+                                <button className="dpad-btn empty-btn" disabled></button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     renderMinimapSection = () => {
         const collapsed = this.isSectionCollapsed('minimap');
         return (
@@ -5804,7 +5845,7 @@ class DungeonPage extends React.Component {
                 </div>
                 {!collapsed && (
                     <div className="section-content">
-                        <div className="crew-tile-container">
+                        <div className={`crew-tile-container crew-count-${this.props.crewManager.crew ? this.props.crewManager.crew.length : 0}`}>
                             {this.props.crewManager.crew &&
                                 this.props.crewManager.crew.map((member, i) => {
                                     const isSelectedTile = this.state.selectedCrewMember && this.state.selectedCrewMember.id === member.id;
@@ -6377,6 +6418,8 @@ class DungeonPage extends React.Component {
                 return this.renderPoiSection();
             case 'toggles':
                 return this.renderTogglesSection();
+            case 'mobile_keypad':
+                return this.renderMobileKeypadSection();
             default:
                 return null;
         }
@@ -6388,7 +6431,18 @@ class DungeonPage extends React.Component {
             left: ["character", "stats", "actions", "equipment"],
             right: ["minimap", "status_summary", "crew_list", "quick_actions", "poi", "toggles"]
         };
-        const sections = panelConfig[panelKey] || [];
+        let sections = [...(panelConfig[panelKey] || [])];
+        const isMobileOrTablet = window.matchMedia("(max-width: 1024px)").matches;
+        if (isMobileOrTablet) {
+            if (panelKey === 'right' && !sections.includes('mobile_keypad')) {
+                const minimapIndex = sections.indexOf('minimap');
+                if (minimapIndex !== -1) {
+                    sections.splice(minimapIndex + 1, 0, 'mobile_keypad');
+                } else {
+                    sections.unshift('mobile_keypad');
+                }
+            }
+        }
 
         return (
             <div 
@@ -8249,6 +8303,18 @@ class DungeonPage extends React.Component {
             }
         })
     }
+
+    handleMobileDirectionalInput = (direction) => {
+        if (!direction) return;
+        if (this.state.inMonsterBattle || this.state.inTowerSiege) {
+            if (this.state.selectedCrewMember) {
+                this.props.combatManager.moveFighterOneSpace(direction);
+            }
+        } else {
+            if (this.state.keysLocked) return;
+            this.enqueueDirectionalMove(direction);
+        }
+    };
 
     keyDownHandler = (event) => {
         // Toggle dev console with Shift+Space

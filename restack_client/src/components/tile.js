@@ -300,6 +300,7 @@ function Tile(props) {
     return (
         <div 
             data-portal-id={props['data-portal-id']}
+            data-tile-id={props.id}
             style={{
             opacity: props.isPreview ? 0.6 : 1,
             pointerEvents: props.passThrough ? 'none' : 'inherit',
