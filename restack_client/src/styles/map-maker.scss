@@ -1897,3 +1897,10 @@ ul.dropdown-menu.show{
     font-size: 11px;
   }
 }
+
+/* Tablet view top padding adjustment for status bar safety */
+@media (max-width: 1366px) {
+  .right-palette:not(.palette-drawer-content .right-palette) {
+    padding-top: 30px !important;
+  }
+}

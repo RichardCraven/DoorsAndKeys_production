@@ -6651,16 +6651,16 @@
             max-height: calc(100% - 30px);
         }
 
-        @media (max-width: 950px) {
+        @media (max-width: 1024px) {
             position: fixed !important;
-            right: 12px !important;
-            left: auto !important;
+            left: 12px !important;
+            right: auto !important;
             top: 12px !important;
             height: calc(100vh - 24px) !important;
             width: 280px !important;
             min-width: 250px !important;
             z-index: 99999 !important;
-            box-shadow: -5px 0 25px rgba(0, 0, 0, 0.9);
+            box-shadow: 5px 0 25px rgba(0, 0, 0, 0.9);
         }
     }
 }
@@ -10479,7 +10479,30 @@
     }
 
     .redux-status-panel {
-        display: none !important;
+        display: block !important;
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 0 !important;
+        height: 0 !important;
+        pointer-events: none !important;
+        padding: 0 !important;
+        border: none !important;
+        margin: 0 !important;
+
+        .redux-stats-col,
+        .redux-abilities-col {
+            display: none !important;
+        }
+
+        .redux-log-col {
+            display: none !important;
+            
+            &.popped-out {
+                display: flex !important;
+                pointer-events: auto !important;
+            }
+        }
     }
 
     .mobile-left-panel {

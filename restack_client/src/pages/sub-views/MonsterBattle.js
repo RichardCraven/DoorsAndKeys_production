@@ -219,7 +219,7 @@ class MonsterBattle extends React.Component {
         super(props)
         // mount flag to avoid setState on unmounted component warnings
         this._isMounted = false;
-        const isMobile = window.matchMedia("(max-width: 950px) and (orientation: landscape)").matches;
+        const isMobile = window.matchMedia("(max-width: 1024px) and (orientation: landscape)").matches;
         this.state = {
             isMobileLandscape: isMobile,
             eventLogPoppedOut: isMobile,
@@ -367,7 +367,7 @@ class MonsterBattle extends React.Component {
 
     _handleResize = () => {
         if (this._isMounted) {
-            const isMobile = window.matchMedia("(max-width: 950px) and (orientation: landscape)").matches;
+            const isMobile = window.matchMedia("(max-width: 1024px) and (orientation: landscape)").matches;
             this.setState({ isMobileLandscape: isMobile });
         }
     }

@@ -924,6 +924,7 @@ export function CombatManagerRedux() {
 
         const m = { ...this.data.monster };
         m.isMonster = true; // Mark as monster early so isLarge/isHuge sizing evaluates correctly for VCT occupied lanes
+        m.isMainMonster = true;
         this.data.monster = m;
         const isHuge = !m.isShrineGuardian && (
             (typeof m.huge === 'boolean' && m.huge === true)
@@ -936,6 +937,7 @@ export function CombatManagerRedux() {
         const isLarge = !m.isShrineGuardian && (
             !isHuge && (
                 (typeof m.large === 'boolean' && m.large === true)
+                || (m.isMonster === true && m.isMinion !== true && !m.isSiegeUnit && !m.isSiegeArmy)
                 || (m.type && LARGE_COMBAT_KEYS.includes(m.type) && (m.isMinion !== true || m.tier === 3 || m.tier === 4))
                 || (typeof m.size === 'number' && m.size >= 2)
                 || (typeof m.scale === 'number' && m.scale >= 2)
@@ -943,6 +945,8 @@ export function CombatManagerRedux() {
                 || (m.tier === 3)
             )
         );
+        m.isLarge = isLarge;
+        m.isHuge = isHuge;
 
         if (!m.isShrineGuardian && (m.tier === 1 || m.tier === 2)) {
             if (m.stats && typeof m.stats.hp === 'number') {
@@ -1094,6 +1098,7 @@ export function CombatManagerRedux() {
         // 4. Priority-based overlap resolution pass
         const isHugeUnit = (c) => !c.isShrineGuardian && (
             (typeof c.huge === 'boolean' && c.huge === true)
+            || (c.isHuge === true)
             || (c.type === 'dragon')
             || (c.tier === 4)
             || (typeof c.size === 'number' && c.size === 3)
@@ -1103,6 +1108,8 @@ export function CombatManagerRedux() {
         const isLargeUnit = (c) => !c.isShrineGuardian && (
             !isHugeUnit(c) && (
                 (typeof c.large === 'boolean' && c.large === true)
+                || (c.isLarge === true)
+                || (c.isMainMonster === true && c.isMonster === true && c.isMinion !== true && !c.isSiegeUnit && !c.isSiegeArmy)
                 || (c.type && LARGE_COMBAT_KEYS.includes(c.type) && (c.isMinion !== true || c.tier === 3 || c.tier === 4))
                 || (typeof c.size === 'number' && c.size >= 2)
                 || (typeof c.scale === 'number' && c.scale >= 2)
@@ -1226,6 +1233,7 @@ export function CombatManagerRedux() {
 
         const isHuge = !combatant.isShrineGuardian && (
             (typeof combatant.huge === 'boolean' && combatant.huge === true)
+            || (combatant.isHuge === true)
             || (combatant.type === 'dragon')
             || (combatant.tier === 4)
             || (typeof combatant.size === 'number' && combatant.size === 3)
@@ -1236,6 +1244,8 @@ export function CombatManagerRedux() {
         const isLarge = !combatant.isShrineGuardian && (
             !isHuge && (
                 (typeof combatant.large === 'boolean' && combatant.large === true)
+                || (combatant.isLarge === true)
+                || (combatant.isMainMonster === true && combatant.isMonster === true && combatant.isMinion !== true && !combatant.isSiegeUnit && !combatant.isSiegeArmy)
                 || (combatant.type && LARGE_COMBAT_KEYS.includes(combatant.type) && (combatant.isMinion !== true || combatant.tier === 3 || combatant.tier === 4))
                 || (typeof combatant.size === 'number' && combatant.size >= 2)
                 || (typeof combatant.scale === 'number' && combatant.scale >= 2)
@@ -1433,6 +1443,7 @@ export function CombatManagerRedux() {
 
         const isHuge = !unit.isShrineGuardian && (
             (typeof unit.huge === 'boolean' && unit.huge === true)
+            || (unit.isHuge === true)
             || (unit.type === 'dragon')
             || (unit.tier === 4)
             || (typeof unit.size === 'number' && unit.size === 3)
@@ -1443,6 +1454,8 @@ export function CombatManagerRedux() {
         const isLarge = !unit.isShrineGuardian && (
             !isHuge && (
                 (typeof unit.large === 'boolean' && unit.large === true)
+                || (unit.isLarge === true)
+                || (unit.isMainMonster === true && unit.isMonster === true && unit.isMinion !== true && !unit.isSiegeUnit && !unit.isSiegeArmy)
                 || (unit.type && LARGE_COMBAT_KEYS.includes(unit.type) && (unit.isMinion !== true || unit.tier === 3 || unit.tier === 4))
                 || (typeof unit.size === 'number' && unit.size >= 2)
                 || (typeof unit.scale === 'number' && unit.scale >= 2)
@@ -1495,6 +1508,7 @@ export function CombatManagerRedux() {
 
         const isHuge = !unit.isShrineGuardian && (
             (typeof unit.huge === 'boolean' && unit.huge === true)
+            || (unit.isHuge === true)
             || (unit.type === 'dragon')
             || (unit.tier === 4)
             || (typeof unit.size === 'number' && unit.size === 3)
@@ -1505,6 +1519,8 @@ export function CombatManagerRedux() {
         const isLarge = !unit.isShrineGuardian && (
             !isHuge && (
                 (typeof unit.large === 'boolean' && unit.large === true)
+                || (unit.isLarge === true)
+                || (unit.isMainMonster === true && unit.isMonster === true && unit.isMinion !== true && !unit.isSiegeUnit && !unit.isSiegeArmy)
                 || (unit.type && LARGE_COMBAT_KEYS.includes(unit.type) && (unit.isMinion !== true || unit.tier === 3 || unit.tier === 4))
                 || (typeof unit.size === 'number' && unit.size >= 2)
                 || (typeof unit.scale === 'number' && unit.scale >= 2)
