@@ -2839,42 +2839,87 @@ export function BoardManager(){
             });
         } catch (e) {}
 
-        // Partial obscurity: tile is visible, not directly adjacent to the player,
-        // and has at least one blocked boundary with another visible tile.
+        // Calculate partialObscured for tiles around corners, walls, or void tiles
         try {
-            const visibleNow = new Set();
-            this.tiles.forEach((tile) => {
-                if (tile && tile.color !== 'black') visibleNow.add(tile.id);
-            });
-
             const playerCoords = this.getCoordinatesFromIndex(destinationTile.id);
-            const offsets = [-15, 15, -1, 1];
+            const playerRow = playerCoords[0];
+            const playerCol = playerCoords[1];
+
+            const getTileAtCoords = (r, c) => {
+                if (r < 0 || r > 29 || c < 0 || c > 29) return null;
+                const idx = this.getIndexFromCoordinates([r, c]);
+                return this.tiles[idx] || null;
+            };
+
+            const isVoidOrBlackOrBlocked = (fromTile, targetTile) => {
+                if (!targetTile) return true;
+                if (targetTile.color === 'black') return true;
+                const cType = targetTile.contains && (targetTile.contains.type || targetTile.contains);
+                if (cType === 'void_fill' || cType === 'void' || targetTile.type === 'void') return true;
+                if (fromTile && this.isPassageWallBlockingBetween(fromTile.id, targetTile.id)) return true;
+                return false;
+            };
 
             this.tiles.forEach((tile) => {
                 if (!tile || tile.color === 'black') return;
                 if (fullyRevealedVendorTileIds.has(tile.id)) return;
+
                 const coords = this.getCoordinatesFromIndex(tile.id);
-                const manhattan = Math.abs(coords[0] - playerCoords[0]) + Math.abs(coords[1] - playerCoords[1]);
-                // Exclude player tile and directly adjacent cardinal tiles.
-                if (manhattan <= 1) return;
-                // Keep shading bounded to the active reveal radius.
-                if (manhattan > 2) return;
+                const dr = coords[0] - playerRow;
+                const dc = coords[1] - playerCol;
+                const manhattan = Math.abs(dr) + Math.abs(dc);
 
-                let hasBlockedVisibleBoundary = false;
-                for (let i = 0; i < offsets.length; i++) {
-                    const neighborId = tile.id + offsets[i];
-                    if (!visibleNow.has(neighborId)) continue;
-                    if (this.isPassageWallBlockingBetween(tile.id, neighborId)) {
-                        hasBlockedVisibleBoundary = true;
-                        break;
+                // Player tile is never partialObscured
+                if (manhattan === 0) {
+                    tile.partialObscured = false;
+                    return;
+                }
+
+                // Direct cardinal neighbors
+                if (manhattan === 1) {
+                    tile.partialObscured = this.isPassageWallBlockingBetween(destinationTile.id, tile.id);
+                    return;
+                }
+
+                // Diagonals (NE, SE, NW, SW)
+                if (Math.abs(dr) === 1 && Math.abs(dc) === 1) {
+                    const vertNeighbor = getTileAtCoords(playerRow + dr, playerCol);
+                    const horizNeighbor = getTileAtCoords(playerRow, playerCol + dc);
+
+                    const vertBlocked = isVoidOrBlackOrBlocked(destinationTile, vertNeighbor);
+                    const horizBlocked = isVoidOrBlackOrBlocked(destinationTile, horizNeighbor);
+
+                    if (vertBlocked || horizBlocked ||
+                        (vertNeighbor && this.isPassageWallBlockingBetween(vertNeighbor.id, tile.id)) ||
+                        (horizNeighbor && this.isPassageWallBlockingBetween(horizNeighbor.id, tile.id))) {
+                        tile.partialObscured = true;
+                    } else {
+                        tile.partialObscured = false;
                     }
+                    return;
                 }
 
-                if (hasBlockedVisibleBoundary) {
-                    tile.partialObscured = true;
+                // Straight 2-step tiles (N, S, E, W by 2)
+                if (manhattan === 2) {
+                    const midRow = playerRow + (dr / 2);
+                    const midCol = playerCol + (dc / 2);
+                    const midTile = getTileAtCoords(midRow, midCol);
+
+                    if (isVoidOrBlackOrBlocked(destinationTile, midTile) ||
+                        (midTile && this.isPassageWallBlockingBetween(midTile.id, tile.id))) {
+                        tile.partialObscured = true;
+                    } else {
+                        tile.partialObscured = false;
+                    }
+                    return;
                 }
+
+                // Other visible tiles default to partialObscured
+                tile.partialObscured = true;
             });
-        } catch (e) {}
+        } catch (e) {
+            console.warn('Error calculating fog corner shading', e);
+        }
 
         if (!skipRefresh) {
             try { if (this.refreshTiles) this.refreshTiles(); } catch (e) {}

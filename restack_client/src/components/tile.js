@@ -268,6 +268,18 @@ function Tile(props) {
         ) : null
     } : null;
 
+    const topIsBlack = topNeighbor && isBlackRenderedTile(topNeighbor.contains, topNeighbor.color);
+    const bottomIsBlack = bottomNeighbor && isBlackRenderedTile(bottomNeighbor.contains, bottomNeighbor.color);
+    const leftIsBlack = leftNeighbor && isBlackRenderedTile(leftNeighbor.contains, leftNeighbor.color);
+    const rightIsBlack = rightNeighbor && isBlackRenderedTile(rightNeighbor.contains, rightNeighbor.color);
+
+    const fogShadows = [];
+    if (topIsBlack) fogShadows.push('inset 0 8px 10px -2px rgba(0,0,0,0.85)');
+    if (bottomIsBlack) fogShadows.push('inset 0 -8px 10px -2px rgba(0,0,0,0.85)');
+    if (leftIsBlack) fogShadows.push('inset 8px 0 10px -2px rgba(0,0,0,0.85)');
+    if (rightIsBlack) fogShadows.push('inset -8px 0 10px -2px rgba(0,0,0,0.85)');
+    const fogEdgeBoxShadow = (isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
+
     const portraitZIndex = foregroundPortalImages.includes(props.image) ? 12 : 3;
 
     const imageString = String(props.imageOverride || props.image || '').toLowerCase();
@@ -315,7 +327,7 @@ function Tile(props) {
                 '#8080807a' : 
                 ( props.type === 'overlay-tile' ? 
                     'transparent': 
-                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
+                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : 'black')),
             fontSize: '0.7em',
             position: 'relative',
             overflow: (props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v))) ? 'visible' : 'hidden',
@@ -418,15 +430,20 @@ function Tile(props) {
                 );
             })()}
 
-                     {/* Terrain background: chosen per-tile (terrain_1..terrain_16) and rendered beneath portrait/items */}
-                     { props.terrain && (() => {
-                         let terrainUrl = (props.terrain && props.terrain.includes('/')) ? props.terrain : (images[props.terrain] || null);
-                         return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: color === 'black' ? 0 : 0.5, transition: 'opacity 0.08s ease-in-out'}} />
-                     })()}
+                      {/* Terrain background layer */}
+                      {props.terrain && (() => {
+                          let terrainUrl = (props.terrain && props.terrain.includes('/')) ? props.terrain : (images[props.terrain] || null);
+                          return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: color === 'black' ? 0 : (props.partialObscured ? 0.25 : 0.5), transition: 'opacity 0.08s ease-in-out'}} />
+                      })()}
 
-                     {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
+                      {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
                       {(props.imageOverride || images[props.image]) && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
-                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.08s ease-in-out'}} />
+                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : (props.partialObscured ? 0.5 : 1), transition: 'opacity 0.08s ease-in-out'}} />
+                      )}
+
+                      {/* Pure tile-based player avatar portrait */}
+                      {props.isPlayerTile && (
+                          <div className="portrait player-tile-portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(images[props.playerImgKey || 'avatar']), backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', zIndex: 50, opacity: 1}} />
                       )}
 
             {/* Soul Shard custom overlay */}
@@ -788,7 +805,8 @@ function Tile(props) {
                 </div>
            )}
 
-           {props.partialObscured && (
+           {/* Partial obscurity overlay */}
+           { props.partialObscured && (
                 <div style={{
                     position: 'absolute',
                     top: 0,
@@ -800,6 +818,20 @@ function Tile(props) {
                     pointerEvents: 'none',
                     opacity: color === 'black' ? 0 : 1,
                     transition: 'opacity 0.08s ease-in-out'
+                }} />
+           )}
+
+           {/* Fog of war edge shading (gradient shadow along unrevealed fog boundaries) */}
+           { fogEdgeBoxShadow !== 'none' && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    boxShadow: fogEdgeBoxShadow,
+                    zIndex: 26,
+                    pointerEvents: 'none'
                 }} />
            )}
 

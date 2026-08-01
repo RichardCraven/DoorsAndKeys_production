@@ -6,6 +6,8 @@ function storeSessionData(id, token, isAdmin, username, metadata){
     try { storeMeta(metadata); } catch (e) { try { localStorage.setItem('metadata', '{}'); } catch (ie) {} }
 }
 
+let _cachedMeta = null;
+
 function storeMeta(metadata){
     try {
         // If metadata is already a string, parse it first to avoid double-stringification
@@ -18,6 +20,7 @@ function storeMeta(metadata){
                 metaObject = {};
             }
         }
+        _cachedMeta = metaObject;
         const serialized = JSON.stringify(metaObject);
         localStorage.setItem('metadata', serialized);
         return;
@@ -28,6 +31,7 @@ function storeMeta(metadata){
         try {
             console.warn('storeMeta: initial save failed, attempting sanitized save', err && err.message ? err.message : err);
             const sanitized = sanitizeMeta(metadata);
+            _cachedMeta = sanitized;
             localStorage.setItem('metadata', JSON.stringify(sanitized));
             console.info('storeMeta: saved sanitized metadata');
             return;
@@ -36,6 +40,7 @@ function storeMeta(metadata){
             // repeated quota errors; preserve nothing large.
             try {
                 console.error('storeMeta: sanitized save failed, storing minimal metadata', err2 && err2.message ? err2.message : err2);
+                _cachedMeta = {};
                 localStorage.setItem('metadata', JSON.stringify({}));
             } catch (err3) {
                 // If even this fails, there's nothing more we can do client-side.
@@ -93,7 +98,8 @@ function sanitizeMeta(metadata){
     }
     return safe;
 }
-function getMeta(){
+function getMeta(forceRefresh = false){
+    if (_cachedMeta && !forceRefresh) return _cachedMeta;
     const raw = localStorage.getItem('metadata');
     if (raw) {
         try {
@@ -102,13 +108,16 @@ function getMeta(){
             if (typeof parsed === 'string') {
                 parsed = JSON.parse(parsed);
             }
+            _cachedMeta = parsed;
             return parsed;
         } catch (e) {
             console.warn('getMeta: failed to parse metadata from localStorage, returning minimal meta', e && e.message ? e.message : e);
-            return { dungeonId: null, boardIndex: null, tileIndex: null, crew: null, inventory: null };
+            _cachedMeta = { dungeonId: null, boardIndex: null, tileIndex: null, crew: null, inventory: null };
+            return _cachedMeta;
         }
     }
-    return { dungeonId: null, boardIndex: null, tileIndex: null, crew: null, inventory: null };
+    _cachedMeta = { dungeonId: null, boardIndex: null, tileIndex: null, crew: null, inventory: null };
+    return _cachedMeta;
 }
 function getUserId(){
     return localStorage.getItem('userId')

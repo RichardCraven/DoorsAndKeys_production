@@ -714,7 +714,7 @@ export const LANDING_REDUX_CSS = `
 /* ==========================================
    MOBILE & VIEWPORT HEIGHT REDESIGN OVERRIDES
    ========================================== */
-@media (max-width: 1200px), (max-height: 850px) {
+@media (max-width: 1300px), (max-height: 920px) {
   .redux-landing-container {
     padding: 8px 12px !important;
   }
@@ -845,6 +845,135 @@ export const LANDING_REDUX_CSS = `
   .redux-landing-container .hero-card .btn-play {
     padding: 8px 0 !important;
     font-size: 0.9rem !important;
+  }
+}
+
+/* ==========================================
+   TUTORIALS PAGE & RESPONSIVE BUTTON STYLING
+   ========================================== */
+.redux-landing-container.tutorials-page {
+  position: relative;
+  min-height: 100vh;
+  height: auto;
+  overflow-y: auto !important;
+  display: flex;
+  flex-direction: column;
+  padding: 24px 0 !important;
+  box-sizing: border-box;
+}
+
+.redux-landing-container.tutorials-page .landing-header {
+  padding: 0 24px !important;
+}
+
+.redux-landing-container.tutorials-page .tutorials-main {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 0;
+  width: 100%;
+}
+
+.redux-landing-container.tutorials-page .tutorials-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  width: 100%;
+  max-width: 900px;
+  padding: 0 24px;
+  box-sizing: border-box;
+}
+
+.redux-landing-container.tutorials-page .menu-card {
+  min-height: 160px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+/* Tablet & short viewport overrides for Tutorials Page */
+@media (max-width: 1200px), (max-height: 850px) {
+  .redux-landing-container.tutorials-page {
+    overflow-y: auto !important;
+    padding: 16px 0 !important;
+  }
+
+  .redux-landing-container.tutorials-page .tutorials-main {
+    padding: 12px 0 !important;
+  }
+
+  .redux-landing-container.tutorials-page .tutorials-grid {
+    gap: 16px !important;
+    padding: 0 16px !important;
+  }
+
+  .redux-landing-container.tutorials-page .menu-card {
+    padding: 20px 22px !important;
+    min-height: 140px !important;
+    justify-content: space-between !important;
+    align-items: stretch !important;
+  }
+
+  .redux-landing-container.tutorials-page .menu-card .card-top {
+    gap: 8px !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: flex-start !important;
+  }
+
+  .redux-landing-container.tutorials-page .menu-card .card-top .card-title {
+    font-size: 1.2rem !important;
+    text-align: left !important;
+    margin: 0 !important;
+    color: #ffffff !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  .redux-landing-container.tutorials-page .menu-card .card-top .card-desc {
+    display: block !important;
+    font-size: 0.85rem !important;
+    color: #a8a29e !important;
+    line-height: 1.4 !important;
+    text-align: left !important;
+  }
+
+  .redux-landing-container.tutorials-page .menu-card .card-arrow {
+    display: block !important;
+    align-self: flex-end !important;
+    font-size: 0.85rem !important;
+    font-weight: bold !important;
+    color: #78716c !important;
+    margin-top: 12px !important;
+  }
+
+  .redux-landing-container.tutorials-page .menu-card:hover .card-arrow {
+    color: #e5b54f !important;
+  }
+}
+
+/* Mobile screen specific adjustments */
+@media (max-width: 640px) {
+  .redux-landing-container.tutorials-page .tutorials-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+
+  .redux-landing-container.tutorials-page .menu-card {
+    padding: 18px 20px !important;
+    min-height: 130px !important;
+  }
+
+  .redux-landing-container.tutorials-page .menu-card .card-top .card-title {
+    font-size: 1.15rem !important;
+  }
+
+  .redux-landing-container.tutorials-page .menu-card .card-top .card-desc {
+    font-size: 0.82rem !important;
   }
 }
 `;

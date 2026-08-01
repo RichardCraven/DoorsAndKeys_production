@@ -243,6 +243,7 @@ describe('BoardManager fog/respawn harness', () => {
     bm.initializeTilesFromMap(0, bm.getIndexFromCoordinates(bm.playerTile.location));
 
     expect(bm.tiles[northWestIndex].color).not.toBe('black');
+    // Partial obscurity correctly flags tile around wall corner:
     expect(bm.tiles[northWestIndex].partialObscured).toBe(true);
 
     // Directly adjacent visible tiles are never partially obscured.

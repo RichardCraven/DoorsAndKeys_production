@@ -2617,6 +2617,7 @@ class DungeonPage extends React.Component {
     UNSAFE_componentWillMount(){
         let tileSize = this.getTileSize(),
             boardSize = tileSize*15;
+        this.setState({ tileSize, boardSize });
         this.initializeListeners();
         // this.startSaveInterval();
         if(this.props.mapMaker) this.props.mapMaker.initializeTiles();
@@ -3171,6 +3172,7 @@ class DungeonPage extends React.Component {
         if (this.props.boardManager) {
             this.props.boardManager.debugMode = this.state.debugMode;
         }
+        this.handleResize();
         this.preloadDungeonTiles();
         // Migration: normalize legacy equippedSlot keys to 'pet'
         try {
@@ -3357,7 +3359,7 @@ class DungeonPage extends React.Component {
                     }
                 }
             } catch(e) {}
-    }, 100);
+    }, 1000);
         // Create a full-page canvas used to draw cooldown overlays at high frequency
         try {
             if (!this.cooldownCanvas) {
@@ -3799,6 +3801,28 @@ class DungeonPage extends React.Component {
         return { left: col * tileSize, top: row * tileSize };
     }
 
+    getFloatingPlayerStyle = (coords) => {
+        try {
+            if (!coords) return null;
+            const bm = this.props.boardManager;
+            if (!bm) return null;
+            const index = bm.getIndexFromCoordinates(coords);
+            const pixel = this.getPixelForIndex(index);
+
+            let meta = getMeta() || {};
+            const playerImgKey = (meta && meta.camping) ? 'campfire' : 'avatar';
+
+            return {
+                left: pixel.left,
+                top: pixel.top,
+                transform: 'translate3d(0px, 0px, 0px)',
+                backgroundImage: `url(${images[playerImgKey]})`
+            };
+        } catch (e) {
+            return null;
+        }
+    }
+
     // Position the floating player avatar at the given coordinates without animation
     updateFloatingPlayerPosition = (coords, retryCount = 0) => {
         try {
@@ -3810,24 +3834,12 @@ class DungeonPage extends React.Component {
                 return;
             }
 
-            const bm = this.props.boardManager;
-            const index = bm.getIndexFromCoordinates(coords);
-            const pixel = this.getPixelForIndex(index);
+            const floatStyle = this.getFloatingPlayerStyle(coords);
+            if (!floatStyle) return;
 
-            // Get appropriate player image (camp or avatar)
-            let meta = {};
-            try { meta = getMeta() || {}; } catch (e) { meta = {}; }
-            const playerImgKey = (meta && meta.camping) ? 'campfire' : 'avatar';
-
-            // Position absolutely within the board wrapper (no need for viewport rect calculation)
             this.setState({
                 playerFloatVisible: true,
-                playerFloatStyle: {
-                    left: pixel.left,
-                    top: pixel.top,
-                    transform: 'translate3d(0px, 0px, 0px)',
-                    backgroundImage: `url(${images[playerImgKey]})`
-                }
+                playerFloatStyle: floatStyle
             }, () => {
                 this.checkMobileViewportCentering(coords);
             });
@@ -3920,22 +3932,8 @@ class DungeonPage extends React.Component {
                 this.setState({
                     mobileViewX: targetViewX,
                     mobileViewY: targetViewY,
-                    keysLocked: true,
-                    isRecentering: true
+                    isRecentering: false
                 });
-
-                if (this._mobileRecenterTimeout) {
-                    clearTimeout(this._mobileRecenterTimeout);
-                }
-                this._mobileRecenterTimeout = this._setTimeout(() => {
-                    this.setState((state) => {
-                        const shouldKeepLocked = state.inMonsterBattle || state.inTowerSiege;
-                        return {
-                            keysLocked: shouldKeepLocked ? true : false,
-                            isRecentering: false
-                        };
-                    });
-                }, 500);
             }
         }
     }
@@ -3943,130 +3941,61 @@ class DungeonPage extends React.Component {
     enqueueDirectionalMove = (direction) => {
         if (!direction) return;
         if (this.state.keysLocked || this.state.inMonsterBattle) return;
-        const meta = getMeta() || {};
-        const isFastMove = this.state.fastMove || meta.fastMove !== false;
-        if (!Array.isArray(this._movementQueue)) this._movementQueue = [];
-        const maxQueue = isFastMove ? 10 : 3;
-        if (this._movementQueue.length >= maxQueue) return;
-        this._movementQueue.push(direction);
-        if (isFastMove || (!this.state.playerAnimating && !this._processingQueuedMove)) {
-            this.processMovementQueue();
+        if (this._isMoving) {
+            if (!this._movementQueue) this._movementQueue = [];
+            if (this._movementQueue.length < 2) {
+                this._movementQueue.push(direction);
+            }
+            return;
         }
+        this.handleDirectionalMove(direction);
     }
 
     processMovementQueue = () => {
-        if (this._processingQueuedMove) return;
-        const meta = getMeta() || {};
-        const isFastMove = this.state.fastMove || meta.fastMove !== false;
-        if ((!isFastMove && this.state.playerAnimating) || this.state.keysLocked || this.state.inMonsterBattle) return;
-        const nextDirection = this._movementQueue.shift();
-        if (!nextDirection) return;
-        this._processingQueuedMove = true;
-        this.handleDirectionalMove(nextDirection, { fromQueue: true });
+        if (this.state.keysLocked || this.state.inMonsterBattle) return;
+        if (Array.isArray(this._movementQueue) && this._movementQueue.length > 0) {
+            const nextDirection = this._movementQueue.shift();
+            if (nextDirection) this.handleDirectionalMove(nextDirection, { fromQueue: true });
+        }
     }
 
     resolveQueuedMovement = (didMove) => {
+        this._isMoving = false;
         this._processingQueuedMove = false;
+        if (this._pathfindStepTimeout) {
+            clearTimeout(this._pathfindStepTimeout);
+            this._pathfindStepTimeout = null;
+        }
         if (!didMove || this.state.keysLocked || this.state.inMonsterBattle) {
-            // Stop queue processing if the queued step was blocked/invalid or control is locked.
             this._movementQueue = [];
             return;
         }
-        if (this._movementQueue.length > 0) {
-            this.processMovementQueue();
+        if (Array.isArray(this._movementQueue) && this._movementQueue.length > 0) {
+            this._pathfindStepTimeout = setTimeout(() => {
+                this._pathfindStepTimeout = null;
+                if (this.state.keysLocked || this.state.inMonsterBattle) {
+                    this._movementQueue = [];
+                    return;
+                }
+                const nextDirection = this._movementQueue.shift();
+                if (nextDirection) {
+                    this.handleDirectionalMove(nextDirection, { fromQueue: true });
+                }
+            }, 120);
         }
     }
 
-    // High-level move handler that performs a smooth single-stage tween for within-board moves.
+    // High-level move handler that performs instant responsive movement
     handleDirectionalMove = (direction, options = {}) => {
+        if (!direction || this.state.keysLocked || this.state.inMonsterBattle || this._isMoving) return;
+        this._isMoving = true;
         const { fromQueue = false } = options;
-        const meta = getMeta() || {};
-        const isFastMove = this.state.fastMove || meta.fastMove !== false;
-        const TOTAL_MOVE_MS = isFastMove ? 0 : 35;
-        const BUFFER_MS = isFastMove ? 0 : 2;
+        const isFastMove = true;
+        const TOTAL_MOVE_MS = 0;
+        const BUFFER_MS = 0;
         try {
-            // Ignore fresh movement input while a tween is still settling (if not fast move).
-            if (!isFastMove && this.state.playerAnimating) {
-                if (fromQueue) this._processingQueuedMove = false;
-                return;
-            }
-
             const bm = this.props.boardManager;
             const curCoords = bm.playerTile.location;
-            // detect board-edge moves and fall back to immediate boardManager methods
-            if (direction === 'up' && curCoords[0] === 15) {
-                const before = [...bm.playerTile.location];
-                bm.moveUp();
-                const moved = bm.playerTile.location[0] !== before[0] || bm.playerTile.location[1] !== before[1];
-                this.setState({ tiles: bm.tiles, overlayTiles: bm.overlayTiles }, () => {
-                    try { this.updateFloatingPlayerPosition(bm.playerTile.location); } catch (e) {}
-                    if (moved) this.recordBreadcrumb();
-                    const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
-                    const currentTile = bm.tiles[playerIdx];
-                    const ctype = currentTile && currentTile.contains && (currentTile.contains.type || currentTile.contains);
-                    if (ctype === 'dungeon_portal' || ctype === 'dungeon portal') {
-                        this.executePortalTeleport(currentTile);
-                    } else {
-                        this.resolveQueuedMovement(moved);
-                    }
-                });
-                return;
-            }
-            if (direction === 'down' && curCoords[0] === 29) {
-                const before = [...bm.playerTile.location];
-                bm.moveDown();
-                const moved = bm.playerTile.location[0] !== before[0] || bm.playerTile.location[1] !== before[1];
-                this.setState({ tiles: bm.tiles, overlayTiles: bm.overlayTiles }, () => {
-                    try { this.updateFloatingPlayerPosition(bm.playerTile.location); } catch (e) {}
-                    if (moved) this.recordBreadcrumb();
-                    const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
-                    const currentTile = bm.tiles[playerIdx];
-                    const ctype = currentTile && currentTile.contains && (currentTile.contains.type || currentTile.contains);
-                    if (ctype === 'dungeon_portal' || ctype === 'dungeon portal') {
-                        this.executePortalTeleport(currentTile);
-                    } else {
-                        this.resolveQueuedMovement(moved);
-                    }
-                });
-                return;
-            }
-            if (direction === 'left' && curCoords[1] === 15) {
-                const before = [...bm.playerTile.location];
-                bm.moveLeft();
-                const moved = bm.playerTile.location[0] !== before[0] || bm.playerTile.location[1] !== before[1];
-                this.setState({ tiles: bm.tiles, overlayTiles: bm.overlayTiles }, () => {
-                    try { this.updateFloatingPlayerPosition(bm.playerTile.location); } catch (e) {}
-                    if (moved) this.recordBreadcrumb();
-                    const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
-                    const currentTile = bm.tiles[playerIdx];
-                    const ctype = currentTile && currentTile.contains && (currentTile.contains.type || currentTile.contains);
-                    if (ctype === 'dungeon_portal' || ctype === 'dungeon portal') {
-                        this.executePortalTeleport(currentTile);
-                    } else {
-                        this.resolveQueuedMovement(moved);
-                    }
-                });
-                return;
-            }
-            if (direction === 'right' && curCoords[1] === 29) {
-                const before = [...bm.playerTile.location];
-                bm.moveRight();
-                const moved = bm.playerTile.location[0] !== before[0] || bm.playerTile.location[1] !== before[1];
-                this.setState({ tiles: bm.tiles, overlayTiles: bm.overlayTiles }, () => {
-                    try { this.updateFloatingPlayerPosition(bm.playerTile.location); } catch (e) {}
-                    if (moved) this.recordBreadcrumb();
-                    const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
-                    const currentTile = bm.tiles[playerIdx];
-                    const ctype = currentTile && currentTile.contains && (currentTile.contains.type || currentTile.contains);
-                    if (ctype === 'dungeon_portal' || ctype === 'dungeon portal') {
-                        this.executePortalTeleport(currentTile);
-                    } else {
-                        this.resolveQueuedMovement(moved);
-                    }
-                });
-                return;
-            }
-
             // compute destination coordinates (mirror of BoardManager.move switch)
             let destCoords = [curCoords[0], curCoords[1]];
             switch (direction) {
@@ -4081,8 +4010,10 @@ class DungeonPage extends React.Component {
                 default: break;
             }
 
-            // Block off-board moves (diagonals can't transition boards for simplicity)
-            if (destCoords[0] < 15 || destCoords[0] > 29 || destCoords[1] < 15 || destCoords[1] > 29) {
+            // Block off-board diagonal moves (cardinal moves transition boards via BoardManager)
+            const isDiagonal = direction === 'upleft' || direction === 'upright' || direction === 'downleft' || direction === 'downright';
+            if (isDiagonal && (destCoords[0] < 15 || destCoords[0] > 29 || destCoords[1] < 15 || destCoords[1] > 29)) {
+                this._isMoving = false;
                 if (fromQueue) this._processingQueuedMove = false;
                 return;
             }
@@ -4195,7 +4126,7 @@ class DungeonPage extends React.Component {
             }
 
             if (isFastMove) {
-                this.updateFloatingPlayerPosition(bm.playerTile.location);
+                const floatStyle = this.getFloatingPlayerStyle(bm.playerTile.location);
                 this.recordBreadcrumb();
                 const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                 const currentTile = bm.tiles[playerIdx];
@@ -4205,6 +4136,7 @@ class DungeonPage extends React.Component {
                     tiles: bm.tiles,
                     overlayTiles: bm.overlayTiles,
                     playerFloatVisible: true,
+                    playerFloatStyle: floatStyle || this.state.playerFloatStyle,
                     playerAnimating: false,
                     animOriginIndex: null,
                     animDestIndex: null,
@@ -4222,6 +4154,8 @@ class DungeonPage extends React.Component {
                         } catch (e) { return {}; }
                     })() : {})
                 }, () => {
+                    this._isMoving = false;
+                    this.checkMobileViewportCentering(bm.playerTile.location);
                     if (ambushTriggered) {
                         this.ambushTimeout = setTimeout(() => {
                             this.startAmbushCombat();
@@ -4633,16 +4567,18 @@ class DungeonPage extends React.Component {
         }, 800);
     }
     checkDungeon = async () => {
-        const allDungeons = await loadAllDungeonsRequest();
-        
-        let dungeons = [];
-            
-        allDungeons.data.forEach((e, i) => {
-            let d = JSON.parse(e.content)
-            d.id = e._id
-            dungeons.push(d)
-        })
-        // const selectedDungeon = dungeons.find(e=>e.name === 'Primari');
+        try {
+            const allDungeons = await loadAllDungeonsRequest();
+            let dungeons = [];
+            const dungeonList = (allDungeons && Array.isArray(allDungeons.data)) ? allDungeons.data : [];
+            dungeonList.forEach((e, i) => {
+                let d = JSON.parse(e.content)
+                d.id = e._id
+                dungeons.push(d)
+            })
+        } catch (e) {
+            console.warn('checkDungeon error:', e);
+        }
     }
     handleRespawnTime = async () => {
         const meta = getMeta() || {};
@@ -4761,8 +4697,9 @@ class DungeonPage extends React.Component {
         const selectedTemplateName = meta.selectedDungeonTemplateName || null;
         
         const allDungeons = await loadAllDungeonsRequest();
+        const dungeonList = (allDungeons && Array.isArray(allDungeons.data)) ? allDungeons.data : [];
 
-        allDungeons.data.forEach((e, i) => {
+        dungeonList.forEach((e, i) => {
             let d = JSON.parse(e.content)
             d.id = e._id
             dungeons.push(d)
@@ -4824,8 +4761,9 @@ class DungeonPage extends React.Component {
         let dungeons = [],
         selectedDungeon;
         const allDungeons = await loadAllDungeonsRequest();
+        const dungeonList = (allDungeons && Array.isArray(allDungeons.data)) ? allDungeons.data : [];
 
-        allDungeons.data.forEach((e, i) => {
+        dungeonList.forEach((e, i) => {
             let d = JSON.parse(e.content)
             d.id = e._id
             dungeons.push(d)
@@ -4898,9 +4836,19 @@ class DungeonPage extends React.Component {
     }
     
     componentCleanup = () => {
-        window.removeEventListener('keydown', this.keyDownHandler)
+        window.removeEventListener('keydown', this.keyDownHandler);
+        window.removeEventListener('keyup', this.keyUpHandler);
         window.removeEventListener('resize', this.handleResize.bind(this));
-        clearInterval(this.state.intervalId)
+        if (this._movementRepeatInterval) {
+            clearInterval(this._movementRepeatInterval);
+            this._movementRepeatInterval = null;
+        }
+        if (this._persistBreadcrumbsDebounceTimer) {
+            clearTimeout(this._persistBreadcrumbsDebounceTimer);
+            this._persistBreadcrumbsDebounceTimer = null;
+            this.persistBreadcrumbsToMeta();
+        }
+        clearInterval(this.state.intervalId);
     }
 
     tickPygmiesMovement = async () => {
@@ -5151,7 +5099,10 @@ class DungeonPage extends React.Component {
     };
 
     handleDragOver = (e, panelKey, index) => {
-        e.preventDefault();
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         if (this.state.dragOverPanel !== panelKey || this.state.dragOverIndex !== index) {
             this.setState({ dragOverPanel: panelKey, dragOverIndex: index });
         }
@@ -6447,7 +6398,12 @@ class DungeonPage extends React.Component {
         return (
             <div 
                 className={`panel-dropzone-${panelKey} ${this.state.draggingSectionId ? 'dragging-active' : ''}`}
-                onDragOver={(e) => this.handleDragOver(e, panelKey, sections.length)}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    if (e.target === e.currentTarget) {
+                        this.handleDragOver(e, panelKey, sections.length);
+                    }
+                }}
                 onDrop={(e) => this.handleDrop(e, panelKey, sections.length)}
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', gap: '8px' }}
             >
@@ -6633,7 +6589,8 @@ class DungeonPage extends React.Component {
 
                     const allDungeons = await loadAllDungeonsRequest();
                     let dungeons = [];
-                    allDungeons.data.forEach((e) => {
+                    const dungeonList1 = (allDungeons && Array.isArray(allDungeons.data)) ? allDungeons.data : [];
+                    dungeonList1.forEach((e) => {
                         let d = JSON.parse(e.content);
                         d.id = e._id;
                         dungeons.push(d);
@@ -6679,7 +6636,8 @@ class DungeonPage extends React.Component {
 
                     const allDungeons = await loadAllDungeonsRequest();
                     let dungeons = [];
-                    allDungeons.data.forEach((e) => {
+                    const dungeonList2 = (allDungeons && Array.isArray(allDungeons.data)) ? allDungeons.data : [];
+                    dungeonList2.forEach((e) => {
                         let d = JSON.parse(e.content);
                         d.id = e._id;
                         dungeons.push(d);
@@ -7183,34 +7141,16 @@ class DungeonPage extends React.Component {
                             continue;
                         }
                     } catch (e) {}
-                    if (now < start || now >= end) continue;
                     const pct = Math.min(1, (now - start) / (end - start));
+                    // Fast non-layout-thrashing visibility check (no getComputedStyle)
+                    if (el.offsetParent === null || el.offsetWidth <= 0 || el.offsetHeight <= 0) continue;
+
                     const r = el.getBoundingClientRect();
                     const x = r.left;
                     const y = r.top;
                     const w = r.width;
                     const h = r.height;
-                    // Skip if the element itself has zero size
-                    if (w <= 0 || h <= 0) continue;
-                    // Skip if any ancestor clips this element to zero height
-                    // (e.g. the actions-tray collapses to height:0 with overflow:hidden —
-                    // getBoundingClientRect on the child still reports its own full size,
-                    // so we must check the ancestor chain ourselves)
-                    let hidden = false;
-                    try {
-                        let ancestor = el.parentElement;
-                        while (ancestor && ancestor !== document.body) {
-                            const cs = window.getComputedStyle(ancestor);
-                            if (cs.overflow === 'hidden' || cs.overflowY === 'hidden') {
-                                const ar = ancestor.getBoundingClientRect();
-                                if (ar.height <= 0 || ar.width <= 0) { hidden = true; break; }
-                                // also skip if the element's top edge is below the ancestor's bottom
-                                if (r.top >= ar.bottom || r.bottom <= ar.top) { hidden = true; break; }
-                            }
-                            ancestor = ancestor.parentElement;
-                        }
-                    } catch(e) {}
-                    if (hidden) continue;
+                    
                     // draw a semi-opaque overlay matching the original style
                     ctx.fillStyle = 'rgba(249,177,21,0.6)';
                     ctx.fillRect(x, y, w * pct, h);
@@ -8206,8 +8146,20 @@ class DungeonPage extends React.Component {
 
     initializeListeners = () => {
         window.addEventListener('keydown', this.keyDownHandler);
+        window.addEventListener('keyup', this.keyUpHandler);
         // window.addEventListener('mouseup', this.mouseUpHandler);
         window.addEventListener('resize', this.handleResize.bind(this));
+    }
+
+    keyUpHandler = (event) => {
+        const key = event.key;
+        if (this._activeDirectionKeys) {
+            this._activeDirectionKeys.delete(key);
+            if (this._activeDirectionKeys.size === 0 && this._movementRepeatInterval) {
+                clearInterval(this._movementRepeatInterval);
+                this._movementRepeatInterval = null;
+            }
+        }
     }
     startSaveInterval = () => {
         let intervalId = this._setInterval( async () => {
@@ -8317,6 +8269,58 @@ class DungeonPage extends React.Component {
     };
 
     keyDownHandler = (event) => {
+        const key = event.key;
+        const dirMap = {
+            ArrowUp: 'up',
+            ArrowDown: 'down',
+            ArrowLeft: 'left',
+            ArrowRight: 'right',
+            w: 'up', W: 'up',
+            a: 'left', A: 'left',
+            s: 'down', S: 'down',
+            d: 'right', D: 'right'
+        };
+        const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+        const isInputFocused = activeTag === 'input' || activeTag === 'textarea';
+
+        if (dirMap[key] && !isInputFocused && !this.state.devConsoleOpen && !this.state.inMonsterBattle && !this.state.keysLocked) {
+            event.preventDefault();
+            if (this._pathfindStepTimeout) {
+                clearTimeout(this._pathfindStepTimeout);
+                this._pathfindStepTimeout = null;
+            }
+            this._movementQueue = [];
+            const dir = dirMap[key];
+            if (!this._activeDirectionKeys) this._activeDirectionKeys = new Set();
+            const wasEmpty = this._activeDirectionKeys.size === 0;
+            this._activeDirectionKeys.add(key);
+
+            // Execute move immediately on keydown
+            this.enqueueDirectionalMove(dir);
+
+            // Start continuous movement repeat ticker if not already running
+            if (wasEmpty || !this._movementRepeatInterval) {
+                if (this._movementRepeatInterval) clearInterval(this._movementRepeatInterval);
+                this._movementRepeatInterval = setInterval(() => {
+                    if (this.state.keysLocked || this.state.inMonsterBattle || !this._activeDirectionKeys || this._activeDirectionKeys.size === 0) {
+                        if (this._movementRepeatInterval) {
+                            clearInterval(this._movementRepeatInterval);
+                            this._movementRepeatInterval = null;
+                        }
+                        return;
+                    }
+                    if (this._isMoving) return;
+                    const activeKeys = Array.from(this._activeDirectionKeys);
+                    const lastKey = activeKeys[activeKeys.length - 1];
+                    const activeDir = dirMap[lastKey];
+                    if (activeDir) {
+                        this.enqueueDirectionalMove(activeDir);
+                    }
+                }, 150);
+            }
+            return;
+        }
+
         // Toggle dev console with Shift+Space
         try {
             if ((event.code === 'Space' || event.key === ' ') && event.shiftKey) {
@@ -8487,7 +8491,7 @@ class DungeonPage extends React.Component {
         }
 
         if(this.state.keysLocked) return
-        let key = event.key, code = event.code
+        let code = event.code
         let newTiles = [], overlayTiles = []; // eslint-disable-line no-unused-vars
         // if(code === 'Space'){
         //     let paused = !this.state.paused;
@@ -8509,7 +8513,7 @@ class DungeonPage extends React.Component {
             this.checkWhichSideOfBoard();
         }
         switch(key){
-                case '1':
+            case '1':
                 this.toggleFullscreen();
             break;
             case 'Space':
@@ -8517,14 +8521,11 @@ class DungeonPage extends React.Component {
             break;
             case 'Tab':
                 event.preventDefault();
-                // Battle-specific tab handling (existing behavior)
-                // if(this.monsterBattleComponentRef.current) this.monsterBattleComponentRef.current.tabToFighter();
                 if(this.state.shiftDown){
                     if(this.monsterBattleComponentRef.current) this.monsterBattleComponentRef.current.tabToRetarget();
                 } else {
                     if(this.monsterBattleComponentRef.current) this.monsterBattleComponentRef.current.tabToFighter();
                 }
-                // Dungeon-level tab handling: cycle selected crew member when not in a monster battle
                 if(!this.state.inMonsterBattle){
                     const direction = this.state.shiftDown ? 'prev' : 'next';
                     this.cycleSelectedCrewMember(direction);
@@ -8535,23 +8536,6 @@ class DungeonPage extends React.Component {
                 this.setState({
                     shiftDown: true
                 })
-        break;
-            case 'ArrowUp':
-                if(this.state.keysLocked) return
-                this.enqueueDirectionalMove('up')
-                
-            break;
-            case 'ArrowDown':
-                if(this.state.keysLocked) return
-                this.enqueueDirectionalMove('down')
-            break;
-            case 'ArrowLeft':
-                if(this.state.keysLocked) return
-                this.enqueueDirectionalMove('left')
-            break;
-            case 'ArrowRight':
-                if(this.state.keysLocked) return
-                this.enqueueDirectionalMove('right')
             break;
             default:
                 // nathin
@@ -8889,6 +8873,10 @@ class DungeonPage extends React.Component {
             return null;
         };
 
+        if (this._pathfindStepTimeout) {
+            clearTimeout(this._pathfindStepTimeout);
+            this._pathfindStepTimeout = null;
+        }
         const pathDirections = bfsPathfind(startCoords, endCoords);
         if (pathDirections && pathDirections.length > 0) {
             this._movementQueue = pathDirections;
@@ -9525,14 +9513,19 @@ class DungeonPage extends React.Component {
         const shrinesUsed = Array.isArray(meta.shrinesUsed) ? meta.shrinesUsed : [];
         const narrativeVisited = Array.isArray(meta.narrativeVisited) ? meta.narrativeVisited : [];
         
+        if (shrinesUsed.length === 0 && narrativeVisited.length === 0) {
+            return tiles;
+        }
+
         const activeLevel = this.state && this.state.levelTracker ? this.state.levelTracker.find(e => e.active) : null;
         const currentLevelId = levelIdOverride !== undefined
             ? Number(levelIdOverride)
             : (activeLevel != null ? Number(activeLevel.id) : Number(meta.location?.levelId ?? 0));
         const currentBoardIndex = this.props.boardManager && this.props.boardManager.currentBoard ? this.props.boardManager.currentBoard.id : 0;
 
-        return tiles.map(tile => {
-            if (!tile) return tile;
+        for (let i = 0; i < tiles.length; i++) {
+            const tile = tiles[i];
+            if (!tile) continue;
             const tileId = tile.id;
             const tileKey = `${currentLevelId}_${currentBoardIndex}_${tileId}`;
             
@@ -9540,11 +9533,8 @@ class DungeonPage extends React.Component {
             if (tile.contains && tile.contains.type === 'shrine') {
                 const shrineKey = tile.contains.key || tileKey;
                 if (shrinesUsed.includes(shrineKey)) {
-                    return {
-                        ...tile,
-                        contains: null,
-                        image: null
-                    };
+                    tile.contains = null;
+                    tile.image = null;
                 }
             }
             
@@ -9552,19 +9542,15 @@ class DungeonPage extends React.Component {
             if (tile.contains && tile.contains.type === 'narrative') {
                 const narrativeKey = tile.contains.key || tileKey;
                 if (narrativeVisited.includes(narrativeKey)) {
-                    return {
-                        ...tile,
-                        contains: {
-                            ...tile.contains,
-                            type: 'narrative_visited'
-                        },
-                        image: 'narrative_visited'
+                    tile.contains = {
+                        ...tile.contains,
+                        type: 'narrative_visited'
                     };
+                    tile.image = 'narrative_visited';
                 }
             }
-            
-            return tile;
-        });
+        }
+        return tiles;
     }
 
     loadNewDungeon = async () => {
@@ -9577,7 +9563,8 @@ class DungeonPage extends React.Component {
             selectedDungeon,
             spawnPoint;
             
-        allDungeons.data.forEach((e, i) => {
+        const dungeonList = (allDungeons && Array.isArray(allDungeons.data)) ? allDungeons.data : [];
+        dungeonList.forEach((e, i) => {
             let d = JSON.parse(e.content)
             d.id = e._id
             dungeons.push(d)
@@ -10029,7 +10016,8 @@ class DungeonPage extends React.Component {
                 
                 // 2. Fetch the template dungeon
                 const allDungeons = await loadAllDungeonsRequest();
-                const templateRecord = allDungeons.data.find(e => {
+                const dungeonList = (allDungeons && Array.isArray(allDungeons.data)) ? allDungeons.data : [];
+                const templateRecord = dungeonList.find(e => {
                     try {
                         const d = JSON.parse(e.content);
                         return d.name === baseName;
@@ -11082,6 +11070,16 @@ class DungeonPage extends React.Component {
         return markers;
     }
 
+    schedulePersistBreadcrumbs = () => {
+        if (this._persistBreadcrumbsDebounceTimer) {
+            clearTimeout(this._persistBreadcrumbsDebounceTimer);
+        }
+        this._persistBreadcrumbsDebounceTimer = setTimeout(() => {
+            this._persistBreadcrumbsDebounceTimer = null;
+            this.persistBreadcrumbsToMeta();
+        }, 1500);
+    }
+
     // Record the player's current position onto the breadcrumb map.
     // Each unique (levelId, orientation, boardIndex, row, col) cell gets one entry;
     // revisiting a cell just refreshes its timestamp (keeping the most-recent visit).
@@ -11107,7 +11105,7 @@ class DungeonPage extends React.Component {
                 seq: existing ? existing.seq : ++this._breadcrumbSeq,
             });
             this.recordAdjacentMonsterSightings(null, false);
-            this.persistBreadcrumbsToMeta();
+            this.schedulePersistBreadcrumbs();
         } catch (e) {}
     }
 
@@ -15008,8 +15006,18 @@ class DungeonPage extends React.Component {
                         }}>
                         {this.state.tiles && this.state.tiles.map((tile, i) => {
                             let boardImage = tile.image ? tile.image : (tile.icon ? tile.icon : null);
+                            const bm = this.props.boardManager;
+                            const playerIdx = (bm && bm.playerTile && bm.playerTile.location && typeof bm.getIndexFromCoordinates === 'function')
+                                ? bm.getIndexFromCoordinates(bm.playerTile.location)
+                                : null;
+                            const isPlayerTile = playerIdx !== null && tile.id === playerIdx && !this.state.playerFloatVisible;
+                            const meta = getMeta() || {};
+                            const playerImgKey = (meta && meta.camping) ? 'campfire' : 'avatar';
+
                             return <Tile 
                             key={i}
+                            isPlayerTile={isPlayerTile}
+                            playerImgKey={playerImgKey}
                             cursor={this.state.minimapPlaceMapMarkerStarted ? 'crosshair' : 'default'}
                             tileSize={this.state.tileSize}
                             image={boardImage}
@@ -15017,7 +15025,7 @@ class DungeonPage extends React.Component {
                             contains={tile.contains}
                             boardTiles={this.state.tiles}
                             terrain={tile.terrain}
-                            color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'}
+                            color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : 'black'}
                             borders={tile.borders}
                             inscriptions={tile.inscriptions}
                             partialObscured={!!tile.partialObscured}
