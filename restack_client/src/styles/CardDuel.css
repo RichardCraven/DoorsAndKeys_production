@@ -453,13 +453,12 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding-top: 85px;
-  padding-bottom: 20px;
-  padding-left: 20px;
-  padding-right: 20px;
-  margin-right: 280px;
+  align-items: center;
+  padding: 16px 20px;
+  margin: 0;
   height: 100%;
   overflow: hidden;
+  box-sizing: border-box;
 }
 
 /* Reaper Fanned Hand (Top) */
@@ -1023,14 +1022,17 @@
 }
 
 .pe-btn--forfeit {
-  background: rgba(100,30,30,0.4);
-  border: 1px solid rgba(201,64,64,0.3);
-  color: rgba(201,64,64,0.8);
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  color: rgba(240, 110, 110, 0.85);
   font-size: 10px;
 }
 .pe-btn--forfeit:hover {
-  background: rgba(150,40,40,0.5);
-  color: var(--pe-red);
+  background: transparent !important;
+  border: none !important;
+  color: #ff5555;
 }
 
 .pe-btn--primary {
@@ -1399,8 +1401,7 @@
     pointer-events: none !important;
   }
 
-  .pe-sidebar-header,
-  .pe-tactical-log {
+  .pe-sidebar-header {
     display: none !important;
   }
 
@@ -1468,7 +1469,19 @@
   z-index: 60 !important;
 }
 
-/* ── End Turn Button Positioned Beside Player Hand ─────────────── */
+/* ── End Turn & Forfeit Controls Beside Player Hand ─────────────── */
+.pe-hand-controls-left {
+  position: absolute;
+  left: 15px;
+  bottom: 25px;
+  width: 130px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 350;
+}
+
 .pe-hand-controls {
   position: absolute;
   right: 15px;
@@ -1538,21 +1551,59 @@
   opacity: 0;
 }
 
-/* Hide spacebar label on mobile view */
+.pe-mobile-forfeit-btn {
+  display: none !important;
+}
+
+/* Mobile responsive layout for End Turn & Forfeit buttons */
 @media (max-width: 1024px) {
   .pe-hotkey-hint {
     display: none !important;
   }
 
   .pe-hand-controls {
-    right: 6px !important;
-    bottom: 12px !important;
-    width: 88px !important;
+    right: 12px !important;
+    bottom: 30px !important;
+    width: 96px !important;
+    z-index: 500 !important;
+  }
+
+  .pe-hand-controls-left {
+    left: 12px !important;
+    bottom: 30px !important;
+    width: 96px !important;
     z-index: 500 !important;
   }
 
   .pe-end-turn-label {
-    font-size: 12px !important;
+    font-size: 13px !important;
     letter-spacing: 0.6px !important;
+  }
+
+  .pe-mobile-forfeit-btn {
+    display: block !important;
+    padding: 4px 10px !important;
+    font-size: 11px !important;
+    font-family: 'Cinzel', serif !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+    background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: rgba(240, 110, 110, 0.95) !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    text-align: center !important;
+    width: 100% !important;
+    transition: all 0.2s ease !important;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9) !important;
+  }
+
+  .pe-mobile-forfeit-btn:hover {
+    background: transparent !important;
+    border: none !important;
+    color: #ffffff !important;
+    text-shadow: 0 0 10px rgba(255, 85, 85, 0.85) !important;
   }
 }

@@ -1245,6 +1245,7 @@ export function CombatManagerRedux() {
             !isHuge && (
                 (typeof combatant.large === 'boolean' && combatant.large === true)
                 || (combatant.isLarge === true)
+                || (combatant.superSize === true || combatant.superSized === true)
                 || (combatant.isMainMonster === true && combatant.isMonster === true && combatant.isMinion !== true && !combatant.isSiegeUnit && !combatant.isSiegeArmy)
                 || (combatant.type && LARGE_COMBAT_KEYS.includes(combatant.type) && (combatant.isMinion !== true || combatant.tier === 3 || combatant.tier === 4))
                 || (typeof combatant.size === 'number' && combatant.size >= 2)
@@ -1455,6 +1456,7 @@ export function CombatManagerRedux() {
             !isHuge && (
                 (typeof unit.large === 'boolean' && unit.large === true)
                 || (unit.isLarge === true)
+                || (unit.superSize === true || unit.superSized === true)
                 || (unit.isMainMonster === true && unit.isMonster === true && unit.isMinion !== true && !unit.isSiegeUnit && !unit.isSiegeArmy)
                 || (unit.type && LARGE_COMBAT_KEYS.includes(unit.type) && (unit.isMinion !== true || unit.tier === 3 || unit.tier === 4))
                 || (typeof unit.size === 'number' && unit.size >= 2)
@@ -3813,6 +3815,12 @@ export function CombatManagerRedux() {
             }
 
             let score = 0;
+            const isUltReady = !!(unit && !unit.isMonster && (unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate));
+            const matrixDef = specialsMatrix[key] || attacksMatrix[key];
+            const ultimateDef = resolved.ultimate || (matrixDef && matrixDef.ultimate);
+            if (isUltReady && ultimateDef) {
+                score += 250;
+            }
             const effects = Array.isArray(resolved.effect) ? resolved.effect : (resolved.effect ? [resolved.effect] : []);
 
             // Healing
@@ -4951,31 +4959,65 @@ export function CombatManagerRedux() {
         }
 
         // Setup Phase (no arrow notched yet)
-        // Priority 2: Ensnare if target is not ensnared
-        if (this._abilityReady(unit, 'ensnare') && !target.ensnared) {
-            if (!this.targetInRange(unit, target, 'medium') && unit.movesTakenThisRound === 0) {
-                this.moveCloser(unit, target);
-            }
-            if (this.targetInRange(unit, target, 'medium')) {
-                const pick = this.resolveSpecial(unit, 'ensnare');
-                if (pick) {
-                    this.useAbility(unit, pick, target);
-                    if (target.type === 'dragon' && Math.random() < 0.5) {
-                        this.appendCombatLog(`${this.getCombatantLogName(target)} resists Ensnare! (Dragon CC Immunity)`);
+        // Priority 2: Ensnare if target is not ensnared/incapacitated, or find an alternative target
+        if (this._abilityReady(unit, 'ensnare')) {
+            const originalTargetId = target.id;
+            let ensnareTarget = target;
+            const targetIncapacitated = target.frozen || target.stunned || target.ensnared;
+
+            if (targetIncapacitated) {
+                // Find alternative target who is alive, an enemy, and NOT frozen, stunned, or ensnared
+                const altTargets = Object.values(this.combatants).filter(enemy => {
+                    if (!enemy || enemy.dead || enemy.hp <= 0) return false;
+                    if (!!enemy.isMonster === !!unit.isMonster) return false;
+                    return !enemy.frozen && !enemy.stunned && !enemy.ensnared;
+                });
+                if (altTargets.length > 0) {
+                    // Score and select the best alternative using acquireTarget with excluded target IDs
+                    const excludedIds = Object.values(this.combatants)
+                        .filter(enemy => enemy && (enemy.dead || enemy.hp <= 0 || enemy.frozen || enemy.stunned || enemy.ensnared || !!enemy.isMonster === !!unit.isMonster))
+                        .map(enemy => enemy.id);
+                    
+                    const tempTarget = this.acquireTarget(unit, true, excludedIds);
+                    if (tempTarget) {
+                        ensnareTarget = tempTarget;
                     } else {
-                        target.ensnared = true;
-                        target.ensnaredSourceAbility = 'ensnare';
-                        target.ensnaredRounds = getDurationRounds(pick.duration || 'short');
-                        target.ensnaredTotalRounds = target.ensnaredRounds;
-                        target.ensnaredStackDuration = target.ensnaredRounds;
-                        const durMs = getDurationMsFromRounds(target.ensnaredRounds);
-                        target.ensnaredTotalDurationMs = durMs;
-                        target.ensnaredEndTimeMs = Date.now() + durMs;
+                        ensnareTarget = altTargets[0];
                     }
-                    this._setCooldown(unit, 'ensnare', pick.cooldown || 6);
-                    return;
+                } else {
+                    ensnareTarget = null; // No valid target to ensnare
                 }
             }
+
+            if (ensnareTarget) {
+                if (!this.targetInRange(unit, ensnareTarget, 'medium') && unit.movesTakenThisRound === 0) {
+                    this.moveCloser(unit, ensnareTarget);
+                }
+                if (this.targetInRange(unit, ensnareTarget, 'medium')) {
+                    const pick = this.resolveSpecial(unit, 'ensnare');
+                    if (pick) {
+                        this.useAbility(unit, pick, ensnareTarget);
+                        if (ensnareTarget.type === 'dragon' && Math.random() < 0.5) {
+                            this.appendCombatLog(`${this.getCombatantLogName(ensnareTarget)} resists Ensnare! (Dragon CC Immunity)`);
+                        } else {
+                            ensnareTarget.ensnared = true;
+                            ensnareTarget.ensnaredSourceAbility = 'ensnare';
+                            ensnareTarget.ensnaredRounds = getDurationRounds(pick.duration || 'short');
+                            ensnareTarget.ensnaredTotalRounds = ensnareTarget.ensnaredRounds;
+                            ensnareTarget.ensnaredStackDuration = ensnareTarget.ensnaredRounds;
+                            const durMs = getDurationMsFromRounds(ensnareTarget.ensnaredRounds);
+                            ensnareTarget.ensnaredTotalDurationMs = durMs;
+                            ensnareTarget.ensnaredEndTimeMs = Date.now() + durMs;
+                        }
+                        this._setCooldown(unit, 'ensnare', pick.cooldown || 6);
+                        unit.targetId = ensnareTarget.id;
+                        return;
+                    }
+                }
+            }
+
+            // Restore the original target for subsequent steps (e.g. mark, attacks)
+            unit.targetId = originalTargetId;
         }
 
         // Priority 3: Mark target
@@ -5230,6 +5272,19 @@ export function CombatManagerRedux() {
     };
 
     this._executeSummon = (unit, ability, abilityKey) => {
+        // Resolve ability special object to check if ultimate / superSize is configured
+        const resolvedAbility = this.resolveSpecial ? (this.resolveSpecial(unit, abilityKey) || ability) : ability;
+        const isSuperSized = !!(
+            resolvedAbility && (
+                resolvedAbility.superSize === true ||
+                resolvedAbility.superSized === true ||
+                resolvedAbility.isSuperSized === true ||
+                (resolvedAbility.effect && (resolvedAbility.effect.superSize === true || resolvedAbility.effect.superSized === true)) ||
+                (resolvedAbility.ultimate && (resolvedAbility.ultimate.superSize === true || resolvedAbility.ultimate.superSized === true)) ||
+                (resolvedAbility.ultimate && resolvedAbility.ultimate.effect && (resolvedAbility.ultimate.effect.superSize === true || resolvedAbility.ultimate.effect.superSized === true))
+            )
+        );
+
         // Find a free adjacent tile to place the summoned minion
         const isMonster = !!unit.isMonster;
         const forwardDX = isMonster ? -1 : 1;
@@ -5242,6 +5297,10 @@ export function CombatManagerRedux() {
                 { x: unit.coordinates.x, y: unit.coordinates.y - 1 },
                 { x: unit.coordinates.x, y: unit.coordinates.y + 1 },
                 { x: unit.coordinates.x + backwardDX, y: unit.coordinates.y },
+                { x: unit.coordinates.x + forwardDX, y: unit.coordinates.y - 1 },
+                { x: unit.coordinates.x + forwardDX, y: unit.coordinates.y + 1 },
+                { x: unit.coordinates.x + backwardDX, y: unit.coordinates.y - 1 },
+                { x: unit.coordinates.x + backwardDX, y: unit.coordinates.y + 1 }
             ];
         } else {
             adjacentTiles = [
@@ -5249,15 +5308,32 @@ export function CombatManagerRedux() {
                 { x: unit.coordinates.x, y: unit.coordinates.y - 1 },
                 { x: unit.coordinates.x, y: unit.coordinates.y + 1 },
                 { x: unit.coordinates.x + 1, y: unit.coordinates.y },
+                { x: unit.coordinates.x - 1, y: unit.coordinates.y - 1 },
+                { x: unit.coordinates.x - 1, y: unit.coordinates.y + 1 },
+                { x: unit.coordinates.x + 1, y: unit.coordinates.y - 1 },
+                { x: unit.coordinates.x + 1, y: unit.coordinates.y + 1 }
             ];
         }
 
         const filteredTiles = adjacentTiles.filter(t => t.x >= 0 && t.x <= MAX_DEPTH && t.y >= 0 && t.y < MAX_LANES);
 
-        const freeTile = filteredTiles.find(t => !this.isTileOccupied(t.x, t.y));
+        let freeTile = null;
+        if (isSuperSized) {
+            const dummyLargeMinion = {
+                id: 'dummy_super_minion',
+                isMinion: true,
+                isMonster: !!unit.isMonster,
+                size: 2,
+                isLarge: true,
+                superSize: true
+            };
+            freeTile = filteredTiles.find(t => this.canFitAt(dummyLargeMinion, t.x, t.y));
+        } else {
+            freeTile = filteredTiles.find(t => !this.isTileOccupied(t.x, t.y));
+        }
 
         if (!freeTile) {
-            this.appendCombatLog(`${this.getCombatantLogName(unit)} tried to summon but no free tile available.`);
+            this.appendCombatLog(`${this.getCombatantLogName(unit)} tried to summon ${isSuperSized ? 'Super ' : ''}minion but no ${isSuperSized ? '2x2 ' : ''}free space available.`);
             return;
         }
 
@@ -5269,14 +5345,27 @@ export function CombatManagerRedux() {
             minionType = 'archaic_familiar';
             const mm = new MonsterManager();
             const template = mm.monsters['archaic_familiar'];
-            const finalHp = template ? (template.stats?.hp || 80) : 80;
-            const stats = template ? { ...template.stats } : { str: 7, dex: 6, int: 3, fort: 4, willpower: 3, atk: 7, def: 6, speed: 5 };
+            let finalHp = template ? (template.stats?.hp || 80) : 80;
+            let stats = template ? { ...template.stats } : { str: 7, dex: 6, int: 3, fort: 4, willpower: 3, atk: 7, def: 6, speed: 5 };
             const portrait = template ? template.portrait : 'archaic_familiar_portrait';
             
+            if (isSuperSized) {
+                finalHp *= 2;
+                stats = {
+                    ...stats,
+                    hp: finalHp,
+                    atk: (stats.atk || 7) * 2,
+                    def: (stats.def || 6) * 2,
+                    str: (stats.str || 7) * 2,
+                    dex: (stats.dex || 6) * 2,
+                    speed: (stats.speed || 5) * 2
+                };
+            }
+
             newMinion = {
                 id: minionId,
                 type: 'archaic_familiar',
-                name: 'archaic familiar',
+                name: isSuperSized ? 'Super Archaic Familiar' : 'archaic familiar',
                 isMinion: true,
                 isFamiliar: true,
                 isMonster: !!unit.isMonster,
@@ -5297,7 +5386,8 @@ export function CombatManagerRedux() {
                 damageIndicators: [],
                 activeBuffs: [],
                 activeDebuffs: [],
-                invisible: true
+                invisible: true,
+                ...(isSuperSized ? { isLarge: true, size: 2, superSize: true } : {})
             };
         } else {
             minionType = abilityKey.replace('summon_', '').replace('_army', '');
@@ -5321,6 +5411,19 @@ export function CombatManagerRedux() {
                 }
             }
 
+            if (isSuperSized) {
+                finalHp *= 2;
+                stats = {
+                    ...stats,
+                    hp: finalHp,
+                    atk: (stats.atk || 4) * 2,
+                    def: (stats.def || 2) * 2,
+                    str: (stats.str || 3) * 2,
+                    dex: (stats.dex || 3) * 2,
+                    speed: (stats.speed || 3) * 2
+                };
+            }
+
             let portraitKey = `summon_${minionType}_icon`;
             if (minionType === 'skeleton_army') {
                 portraitKey = 'summon_skeleton_army_icon';
@@ -5328,10 +5431,13 @@ export function CombatManagerRedux() {
                 portraitKey = 'summon_imp_army_icon';
             }
 
+            const rawName = minionType.replace(/_/g, ' ');
+            const displayName = isSuperSized ? `Super ${rawName.charAt(0).toUpperCase() + rawName.slice(1)}` : rawName;
+
             newMinion = {
                 id: minionId,
                 type: minionType,
-                name: minionType.replace(/_/g, ' '),
+                name: displayName,
                 isMinion: true,
                 isMonster: !!unit.isMonster,
                 summonedBy: unit.id,
@@ -5346,13 +5452,14 @@ export function CombatManagerRedux() {
                 cooldowns: {},
                 movesTakenThisRound: 0,
                 actionsTakenThisRound: 0,
-                endurance: 20,
-                maxEndurance: 20,
+                endurance: isSuperSized ? 40 : 20,
+                maxEndurance: isSuperSized ? 40 : 20,
                 enduranceFrozenRounds: 0,
                 damageIndicators: [],
                 activeBuffs: [],
                 activeDebuffs: [],
-                invisible: true
+                invisible: true,
+                ...(isSuperSized ? { isLarge: true, size: 2, superSize: true } : {})
             };
         }
 
@@ -10414,9 +10521,10 @@ export function CombatManagerRedux() {
         }
         const dmgMult = target.weaknessRevealed ? 1.25 : 1.0;
         const arrowType = (abilityId === 'loose' || abilityId === 'execute' || abilityId === 'burst_shot' || abilityId === 'burst_attack') ? (activeArrowType || 'force') : null;
-        const hitCount = (abilityId === 'burst_shot' || abilityId === 'burst_attack') ? 3 : (isMagicMissile ? ((isUltimateActivation || ability.isUltimate) ? 7 : (abilityId === 'greater_magic_missile' ? 5 : (abilityId === 'minor_magic_missile' ? 1 : 3))) : 1);
+        const hitCount = (typeof ability.projectiles === 'number' && ability.projectiles > 1) ? ability.projectiles : ((abilityId === 'burst_shot' || abilityId === 'burst_attack') ? 3 : (isMagicMissile ? ((isUltimateActivation || ability.isUltimate) ? 7 : (abilityId === 'greater_magic_missile' ? 5 : (abilityId === 'minor_magic_missile' ? 1 : 3))) : 1));
         let hitsSucceeded = 0;
         let anyHitConnected = false;
+        let lastFinalDmg = 0;
         const mmResults = isMagicMissile ? [] : null;
 
         const performHit = (h) => {
@@ -10465,6 +10573,7 @@ export function CombatManagerRedux() {
                 }
 
                 let finalDmg = Math.round(this.damageCheck(unit, target, currentRawDmg, isMagicalAbility) * dmgMult);
+                lastFinalDmg = finalDmg;
                 if (arrowType === 'celestial' && (target.subtype === 'undead' || isUndead(target))) {
                     finalDmg = Math.round(finalDmg * 1.5);
                 }
@@ -10862,7 +10971,19 @@ export function CombatManagerRedux() {
                             }
                             const dur = getDurationRounds(eff.duration || 'short');
                             const now = Date.now();
-                            if (eff.type === 'frozen') {
+                            if (eff.type === 'double-strike' || eff.type === 'double_strike') {
+                                const extraDmg = Math.max(1, Math.round((lastFinalDmg || rawDamage || 10) * 0.8));
+                                target.hp = Math.max(0, target.hp - extraDmg);
+                                target.damageIndicators = target.damageIndicators || [];
+                                target.damageIndicators.push({
+                                    id: Date.now() + Math.random() + 77,
+                                    value: `-${extraDmg}`,
+                                    source: 'Double Strike',
+                                    type: 'damage'
+                                });
+                                this.appendCombatLog(`⚡ ${this.getCombatantLogName(unit)} triggers DOUBLE STRIKE on ${this.getCombatantLogName(target)} for +${extraDmg} damage!`);
+                                if (target.hp <= 0) this.targetKilled(target);
+                            } else if (eff.type === 'frozen') {
                                 target.frozen = true;
                                 target.frozenRounds = (target.frozenRounds || 0) + dur;
                                 target.frozenTotalRounds = (target.frozenTotalRounds || 0) + dur;
@@ -11084,7 +11205,9 @@ export function CombatManagerRedux() {
                 }, 750);
             }
         } else if (abilityId === 'loose' || abilityId === 'deadeye_shot' || abilityId === 'execute') {
-            setTimeout(() => performHit(0), 700);
+            for (let i = 0; i < hitCount; i++) {
+                setTimeout(() => performHit(i), 700 + (i * 200));
+            }
         } else if (abilityId === 'burst_shot' || abilityId === 'burst_attack') {
             setTimeout(() => performHit(0), 700);
             setTimeout(() => performHit(1), 950);
