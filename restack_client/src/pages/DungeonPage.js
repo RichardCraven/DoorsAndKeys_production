@@ -5422,7 +5422,7 @@ class DungeonPage extends React.Component {
                             <CIcon icon={cilMenu} className={`menu-icon ${this.state.leftPanelExpanded ? 'expanded' : ''}`} size="sm"/>
                             Actions
                         </div>
-                        {this.state.isMobileLandscape && (
+                        {(this.state.isMobileLandscape || (typeof window !== 'undefined' && window.innerWidth <= 1024)) && (
                             <div style={{ padding: '4px 8px 8px 8px' }}>
                                 <button 
                                     className="quick-action-btn"
@@ -12741,69 +12741,6 @@ class DungeonPage extends React.Component {
 
         return (
         <div className={`dungeon-container ${this.state.ritualWrecked ? 'wrecked' : ''}`}>
-            {/* Mobile View Tile Zoom Toggle (+ / -) */}
-            {this.state.isMobileLandscape && (
-                <div
-                    className="mobile-tile-zoom-toggle"
-                    style={{
-                        position: 'fixed',
-                        top: '16px',
-                        right: (typeof localStorage !== 'undefined' && localStorage.getItem('isAdmin') === 'true') ? '135px' : '20px',
-                        zIndex: 10005,
-                        display: 'flex',
-                        alignItems: 'center',
-                        background: 'rgba(15, 12, 20, 0.9)',
-                        border: '1px solid rgba(255, 255, 255, 0.25)',
-                        borderRadius: '16px',
-                        padding: '2px',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.6)',
-                        backdropFilter: 'blur(8px)'
-                    }}
-                >
-                    <button
-                        onClick={() => this.toggleMobileTileZoom(false)}
-                        style={{
-                            width: '26px',
-                            height: '24px',
-                            borderRadius: '14px',
-                            border: 'none',
-                            background: !this.state.mobileTileZoomMinus ? '#f9b115' : 'transparent',
-                            color: !this.state.mobileTileZoomMinus ? '#000' : '#ccc',
-                            fontWeight: 'bold',
-                            fontSize: '14px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
-                        title="100% Tile Zoom (+)"
-                    >
-                        +
-                    </button>
-                    <button
-                        onClick={() => this.toggleMobileTileZoom(true)}
-                        style={{
-                            width: '26px',
-                            height: '24px',
-                            borderRadius: '14px',
-                            border: 'none',
-                            background: this.state.mobileTileZoomMinus ? '#f9b115' : 'transparent',
-                            color: this.state.mobileTileZoomMinus ? '#000' : '#ccc',
-                            fontWeight: 'bold',
-                            fontSize: '14px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                        }}
-                        title="50% Tile Zoom (-)"
-                    >
-                        -
-                    </button>
-                </div>
-            )}
-
-
             {this.state.isTutorialMode && (
                 <>
                     <div style={{

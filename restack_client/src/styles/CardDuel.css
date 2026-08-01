@@ -1538,21 +1538,40 @@
   opacity: 0;
 }
 
-/* Hide spacebar label on mobile view */
+.pe-mobile-forfeit-btn {
+  display: none !important;
+}
+
+/* Mobile responsive layout for End Turn & Forfeit buttons */
 @media (max-width: 1024px) {
   .pe-hotkey-hint {
     display: none !important;
   }
 
   .pe-hand-controls {
-    right: 6px !important;
-    bottom: 12px !important;
-    width: 88px !important;
+    right: 12px !important;
+    bottom: 46px !important;
+    width: 96px !important;
     z-index: 500 !important;
   }
 
   .pe-end-turn-label {
-    font-size: 12px !important;
+    font-size: 13px !important;
     letter-spacing: 0.6px !important;
+  }
+
+  .pe-mobile-forfeit-btn {
+    display: block !important;
+    margin-top: 5px !important;
+    padding: 3px 8px !important;
+    font-size: 9px !important;
+    background: rgba(100, 30, 30, 0.45) !important;
+    border: 1px solid rgba(201, 64, 64, 0.45) !important;
+    color: rgba(240, 110, 110, 0.95) !important;
+    border-radius: 4px !important;
+    cursor: pointer !important;
+    pointer-events: auto !important;
+    text-align: center !important;
+    width: 100% !important;
   }
 }

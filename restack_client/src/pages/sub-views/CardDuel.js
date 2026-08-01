@@ -113,6 +113,8 @@ export default class CardDuel extends React.Component {
                    images.soldier_portrait;
         };
 
+        const resolveImage = (img) => (img?.default || img);
+
         // Build Reaper Deck: 11 Pygmies + 1 Pygmy War Band (3 Cost, 3/3)
         const reaperDeck = [];
         for (let i = 0; i < 11; i++) {
@@ -125,7 +127,7 @@ export default class CardDuel extends React.Component {
                 atk: 1,
                 hp: 1,
                 maxHp: 1,
-                art: images.cave_individual || images.pygmies
+                art: resolveImage(images.cave_individual) || resolveImage(images.pygmies)
             });
         }
         reaperDeck.push({
@@ -137,7 +139,7 @@ export default class CardDuel extends React.Component {
             atk: 3,
             hp: 3,
             maxHp: 3,
-            art: images.woodland_warband || images.woodland_pygmies || images.pygmies
+            art: resolveImage(images.woodland_warband) || resolveImage(images.woodland_group) || resolveImage(images.pygmies)
         });
 
         // Build Player Deck: Crew Member Cards + 1 Pygmy War Band + Cave Pygmies (total 12 cards)
@@ -206,7 +208,7 @@ export default class CardDuel extends React.Component {
                 atk: 3,
                 hp: 3,
                 maxHp: 3,
-                art: images.woodland_warband || images.woodland_pygmies || images.pygmies
+                art: resolveImage(images.woodland_warband) || resolveImage(images.woodland_group) || resolveImage(images.pygmies)
             });
         }
 
@@ -221,7 +223,7 @@ export default class CardDuel extends React.Component {
                 atk: 1,
                 hp: 1,
                 maxHp: 1,
-                art: images.cave_individual || images.pygmies
+                art: resolveImage(images.cave_individual) || resolveImage(images.pygmies)
             });
         }
 
@@ -1292,6 +1294,12 @@ export default class CardDuel extends React.Component {
                                     >
                                         <span className="pe-end-turn-label">{currentTurn === 'player' ? 'End Turn ➔' : 'Reaper Turn...'}</span>
                                         <span className="pe-hotkey-hint">(spacebar)</span>
+                                    </button>
+                                    <button
+                                        className="pe-btn pe-btn--forfeit pe-mobile-forfeit-btn"
+                                        onClick={() => this.setState({ showForfeitModal: true })}
+                                    >
+                                        Forfeit
                                     </button>
                                 </div>
                             </div>
