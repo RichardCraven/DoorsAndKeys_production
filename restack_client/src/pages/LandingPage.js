@@ -415,7 +415,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.2.8 BETA</span>
+          <span className="logo-subtitle">v 0.2.9 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">
@@ -430,8 +430,6 @@ export default function LandingPage(props) {
       <main className="landing-main-grid">
         <div className="hero-column">
           <div className="hero-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
-            <div />
-
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {/* Select Dungeon Dropdown */}
               <div className="dungeon-selector-group" ref={dungeonPickerRef}>

@@ -223,32 +223,6 @@
                 }
                 
             }
-            /* Ensure crew tiles render as a horizontal row on the right-side panel too */
-            .quicklook-panel {
-                margin: 6px 4px 2px 4px;
-                padding: 8px 10px;
-                background: rgba(255,255,255,0.04);
-                border: 1px solid rgba(255,255,255,0.08);
-                border-radius: 5px;
-                color: #e0e0e0;
-                font-size: 11px;
-                .ql-row {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    padding: 3px 0;
-                    border-bottom: 1px solid rgba(255,255,255,0.05);
-                    &:last-child { border-bottom: none; }
-                }
-                .ql-label {
-                    opacity: 0.75;
-                    letter-spacing: 0.3px;
-                }
-                .ql-value {
-                    font-weight: 700;
-                    color: #f9b115;
-                }
-            }
             .crew-tile-container{
                 display: flex;
                 flex-wrap: wrap;
@@ -3762,6 +3736,40 @@
     .quicklook-panel {
         width: 100%;
         margin-top: 0;
+        margin: 6px 4px 2px 4px;
+        padding: 8px 10px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 5px;
+        color: #f5f5f5;
+        font-size: 11px;
+        box-sizing: border-box;
+
+        .ql-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 4px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            &:last-child { border-bottom: none; }
+        }
+        .ql-label {
+            opacity: 0.95;
+            letter-spacing: 0.3px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+
+            span[role="img"] {
+                display: inline-flex;
+                justify-content: flex-start;
+                width: 16px;
+            }
+        }
+        .ql-value {
+            font-weight: 700;
+            color: #fbc02d;
+        }
     }
 
     .poi-panel {
