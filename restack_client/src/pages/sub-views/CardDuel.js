@@ -130,6 +130,7 @@ export default class CardDuel extends React.Component {
                 art: resolveImage(images.cave_individual) || resolveImage(images.pygmies)
             });
         }
+
         reaperDeck.push({
             id: `reaper_pygmy_warband_${Math.random().toString(36).substring(2, 7)}`,
             name: 'Pygmy War Band',
@@ -139,7 +140,7 @@ export default class CardDuel extends React.Component {
             atk: 3,
             hp: 3,
             maxHp: 3,
-            art: resolveImage(images.woodland_warband) || resolveImage(images.woodland_group) || resolveImage(images.pygmies)
+            art: resolveImage(images.mud_warband) || resolveImage(images.pygmies)
         });
 
         // Build Player Deck: Crew Member Cards + 1 Pygmy War Band + Cave Pygmies (total 12 cards)
@@ -208,7 +209,7 @@ export default class CardDuel extends React.Component {
                 atk: 3,
                 hp: 3,
                 maxHp: 3,
-                art: resolveImage(images.woodland_warband) || resolveImage(images.woodland_group) || resolveImage(images.pygmies)
+                art: resolveImage(images.mud_warband) || resolveImage(images.pygmies)
             });
         }
 
@@ -889,11 +890,12 @@ export default class CardDuel extends React.Component {
     // ─── Render Helpers ───────────────────────────────────────────────────────
     renderFannedPlayerHand = () => {
         const { playerHand, playerSpirit, selectedCard, currentTurn, isAiThinking } = this.state;
-        const totalCards = playerHand.length;
+        const sortedHand = [...playerHand].sort((a, b) => (b.cost || 0) - (a.cost || 0));
+        const totalCards = sortedHand.length;
 
         return (
             <div className="pe-fanned-hand-container">
-                {playerHand.map((card, idx) => {
+                {sortedHand.map((card, idx) => {
                     const canAfford = card.cost <= playerSpirit && currentTurn === 'player' && !isAiThinking;
                     const isSelected = selectedCard && selectedCard.id === card.id;
 
@@ -1284,6 +1286,14 @@ export default class CardDuel extends React.Component {
 
                             {/* Player Fanned Hand Bottom */}
                             <div className="pe-player-hand-section">
+                                <div className="pe-hand-controls-left">
+                                    <button
+                                        className="pe-btn pe-btn--forfeit pe-mobile-forfeit-btn"
+                                        onClick={() => this.setState({ showForfeitModal: true })}
+                                    >
+                                        Forfeit
+                                    </button>
+                                </div>
                                 {this.renderFannedPlayerHand()}
                                 <div className="pe-hand-controls">
                                     <button
@@ -1294,12 +1304,6 @@ export default class CardDuel extends React.Component {
                                     >
                                         <span className="pe-end-turn-label">{currentTurn === 'player' ? 'End Turn ➔' : 'Reaper Turn...'}</span>
                                         <span className="pe-hotkey-hint">(spacebar)</span>
-                                    </button>
-                                    <button
-                                        className="pe-btn pe-btn--forfeit pe-mobile-forfeit-btn"
-                                        onClick={() => this.setState({ showForfeitModal: true })}
-                                    >
-                                        Forfeit
                                     </button>
                                 </div>
                             </div>

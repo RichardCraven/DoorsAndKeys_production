@@ -1500,7 +1500,7 @@ export function BoardManager(){
 
         // If not already rolled OR in debug mode with 0 existing pygmies:
         if (!board.pygmiesRolled || isDebugMode) {
-            const pygmiesChance = isDebugMode ? 100 : 50;
+            const pygmiesChance = 25;
             const rollPygmies = Math.floor(Math.random() * 100);
 
             if (rollPygmies < pygmiesChance) {

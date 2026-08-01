@@ -107,7 +107,13 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 100,
-        type: 'damage projectile'
+        type: 'damage projectile',
+        projectiles: 1,
+        ultimate: {
+            projectiles: 5,
+            flatDamage: 5,
+            range: 'unlimited'
+        }
     },
     mark: {
         class: 'ranger',
@@ -273,11 +279,16 @@ const skillsMatrix = {
         icon: images['healing_hands'],
         cooldown: 2,
         initialCooldown: 1,
-        duration: 'instant',
+        duration: 'short',
         range: 'close',
         type: 'heal',
         flatDamage: -30, // negative damage is healing
-        regeneration_percent: 30
+        regeneration_percent: 10,
+        ultimate: {
+            flatDamage: -100,
+            regeneration_percent: 30,
+            duration: 'short'
+        }
     },
     circle_of_protection: {
         class: 'sage',
@@ -480,7 +491,14 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
-        effect: { type: 'stun', chance: 100, duration: 1 }
+        effect: { type: 'stun', chance: 100, duration: 1 },
+        ultimate: {
+            flatDamage: 20,
+            atkPercentage: 100,
+            effect: {
+                chance: 100, type: 'stun', duration: 3
+            }
+        }
     },
     defensive_stance: {
         class: 'soldier',
@@ -877,7 +895,13 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
-        effect: { type: 'bleed', chance: 100, duration: 'short' }
+        effect: { type: 'bleed', chance: 100, duration: 'short' },
+        ultimate: {
+            atkPercentage: 300,
+            effect: {
+                chance: 80, type: 'double-strike'
+            }
+        }
     },
     barbarian_axe_throw: {
         class: 'barbarian',
@@ -1177,7 +1201,13 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        ultimate: {
+            flatDamage: 80,
+            effect: {
+                chance: 40, type: 'double-strike'
+            }
+        }
     },
 
     // === SUMMONER ===
@@ -1259,7 +1289,10 @@ const skillsMatrix = {
         initialCount: 3,
         duration: 'instant',
         range: 'medium',
-        type: 'utility'
+        type: 'utility',
+        ultimate: {
+
+        }
     },
     summon_familiar: {
         class: 'none',
@@ -1287,7 +1320,11 @@ const skillsMatrix = {
         initialCount: 1,
         duration: 'instant',
         range: 'medium',
-        type: 'utility'
+        type: 'utility',
+        ultimate: {
+            range: 'far',
+            superSize: true
+        }
     },
     summon_skeleton_knight: {
         class: 'summoner',

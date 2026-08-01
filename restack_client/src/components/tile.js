@@ -228,10 +228,20 @@ function Tile(props) {
             compact.startsWith('rgb(0,0,0,') ||
             compact === '#000000ff';
     };
-    const edgeColorForBoundary = (currentBorderValue, neighborBorderValue, neighborContains, neighborColor) => {
-        if (isBlackRenderedTile(currentContains, currentTileColor) || isBlackRenderedTile(neighborContains, neighborColor)) return '#000000';
+    const isWallOrVoidOrDarkNeighbor = (neighborTile) => {
+        if (!neighborTile) return true;
+        if (isBlackRenderedTile(neighborTile.contains, neighborTile.color)) return true;
+        if (isVoidContains(neighborTile.contains)) return true;
+        const cType = getContainsType(neighborTile.contains);
+        if (cType === 'wall' || cType === 'void' || neighborTile.isWall || neighborTile.isVoid) return true;
+        return false;
+    };
+
+    const edgeColorForBoundary = (currentBorderValue, neighborBorderValue, neighborTile) => {
+        if (isBlackRenderedTile(currentContains, currentTileColor)) return '#000000';
+        if (isWallOrVoidOrDarkNeighbor(neighborTile)) return '#000000';
         const currentIntent = getBorderColorIntent(currentBorderValue);
-        const neighborIntent = getBorderColorIntent(neighborBorderValue);
+        const neighborIntent = neighborTile ? getBorderColorIntent(neighborBorderValue) : 'white';
         if (currentIntent === 'black' || neighborIntent === 'black') return '#000000';
         return 'transparent';
     };
@@ -244,40 +254,36 @@ function Tile(props) {
         top: edgeColorForBoundary(
             props.borders && props.borders.top,
             topNeighbor && topNeighbor.borders ? topNeighbor.borders.bottom : null,
-            topNeighbor ? topNeighbor.contains : null,
-            topNeighbor ? topNeighbor.color : null
+            topNeighbor
         ),
         left: edgeColorForBoundary(
             props.borders && props.borders.left,
             leftNeighbor && leftNeighbor.borders ? leftNeighbor.borders.right : null,
-            leftNeighbor ? leftNeighbor.contains : null,
-            leftNeighbor ? leftNeighbor.color : null
+            leftNeighbor
         ),
         // Right/bottom are normally owned by the neighbor's left/top edge.
         right: isLastCol ? edgeColorForBoundary(
             props.borders && props.borders.right,
             rightNeighbor && rightNeighbor.borders ? rightNeighbor.borders.left : null,
-            rightNeighbor ? rightNeighbor.contains : null,
-            rightNeighbor ? rightNeighbor.color : null
+            rightNeighbor
         ) : null,
         bottom: isLastRow ? edgeColorForBoundary(
             props.borders && props.borders.bottom,
             bottomNeighbor && bottomNeighbor.borders ? bottomNeighbor.borders.top : null,
-            bottomNeighbor ? bottomNeighbor.contains : null,
-            bottomNeighbor ? bottomNeighbor.color : null
+            bottomNeighbor
         ) : null
     } : null;
 
-    const topIsBlack = topNeighbor && isBlackRenderedTile(topNeighbor.contains, topNeighbor.color);
-    const bottomIsBlack = bottomNeighbor && isBlackRenderedTile(bottomNeighbor.contains, bottomNeighbor.color);
-    const leftIsBlack = leftNeighbor && isBlackRenderedTile(leftNeighbor.contains, leftNeighbor.color);
-    const rightIsBlack = rightNeighbor && isBlackRenderedTile(rightNeighbor.contains, rightNeighbor.color);
+    const topIsShaded = isWallOrVoidOrDarkNeighbor(topNeighbor);
+    const bottomIsShaded = isWallOrVoidOrDarkNeighbor(bottomNeighbor);
+    const leftIsShaded = isWallOrVoidOrDarkNeighbor(leftNeighbor);
+    const rightIsShaded = isWallOrVoidOrDarkNeighbor(rightNeighbor);
 
     const fogShadows = [];
-    if (topIsBlack) fogShadows.push('inset 0 8px 10px -2px rgba(0,0,0,0.85)');
-    if (bottomIsBlack) fogShadows.push('inset 0 -8px 10px -2px rgba(0,0,0,0.85)');
-    if (leftIsBlack) fogShadows.push('inset 8px 0 10px -2px rgba(0,0,0,0.85)');
-    if (rightIsBlack) fogShadows.push('inset -8px 0 10px -2px rgba(0,0,0,0.85)');
+    if (topIsShaded) fogShadows.push('inset 0 8px 10px -2px rgba(0,0,0,0.85)');
+    if (bottomIsShaded) fogShadows.push('inset 0 -8px 10px -2px rgba(0,0,0,0.85)');
+    if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0,0,0,0.85)');
+    if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0,0,0,0.85)');
     const fogEdgeBoxShadow = (isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
 
     const portraitZIndex = foregroundPortalImages.includes(props.image) ? 12 : 3;

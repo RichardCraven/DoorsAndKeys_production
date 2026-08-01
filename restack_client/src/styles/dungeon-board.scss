@@ -212,18 +212,7 @@
                 }
             }
         }
-        .crew-container {
-            .crew-actions{
-                color: white;
-                text-align: left;
-                cursor: pointer;
-                padding: 8px;
-                svg{
-                    margin-right: 7px;
-                }
-                
-            }
-            .crew-tile-container{
+        .crew-tile-container{
                 display: flex;
                 flex-wrap: wrap;
                 justify-content: center;
@@ -293,7 +282,6 @@
                     }
                 }
             }
-        }
         .actions-tray{
             color: white;
             overflow: hidden;

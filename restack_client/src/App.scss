@@ -891,6 +891,10 @@ button{
   }
 }
 .crew-manager{
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
   height: 90vh;
   width: 80vw;
   display: flex;

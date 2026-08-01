@@ -221,6 +221,8 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
     const [showContent, setShowContent] = React.useState(false);
     const [showAssembly, setShowAssembly] = React.useState(false);
     const [isAssembled, setIsAssembled] = React.useState(false);
+    // eslint-disable-next-line no-unused-vars
+    const [activeMerchantTab, setActiveMerchantTab] = React.useState('buy');
 
     React.useEffect(() => {
         if (modalType === 'Merchant' || modalType === 'Alchemist') {
@@ -665,7 +667,21 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                     transition: 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
                     pointerEvents: showContent ? 'auto' : 'none'
                 }}>
-                    <div className="vendor-split-container">
+                    <div className="vendor-tabs">
+                        <button 
+                            className={`vendor-tab-btn ${activeMerchantTab === 'buy' ? 'active' : ''}`}
+                            onClick={() => setActiveMerchantTab('buy')}
+                        >
+                            🛒 Buy Stock
+                        </button>
+                        <button 
+                            className={`vendor-tab-btn ${activeMerchantTab === 'sell' ? 'active' : ''}`}
+                            onClick={() => setActiveMerchantTab('sell')}
+                        >
+                            💰 Sell Items
+                        </button>
+                    </div>
+                    <div className={`vendor-split-container show-tab-${activeMerchantTab}`}>
                         <div className="vendor-panel">
                             <h3 className="panel-title">Merchant's Stock</h3>
                             <div className="item-list scroll-container">
@@ -2497,6 +2513,7 @@ class DungeonPage extends React.Component {
             , animDestIndex: null
             , devConsoleOpen: false
             , devConsoleInput: ''
+            , devConsoleOutput: []
             , debugMode: (typeof localStorage !== 'undefined' && localStorage.getItem('debugMode') === 'true')
             , showTeleportPopup: false
             , activeChestLoot: []
@@ -4933,6 +4950,18 @@ class DungeonPage extends React.Component {
                 let currentIdx = pTile.id;
                 const pygmyData = pTile.contains;
 
+                // Verify if Pygmy is already adjacent to the live player avatar before stepping
+                const initialLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+                if (initialLivePlayerIdx !== null && isAdjacent(currentIdx, initialLivePlayerIdx)) {
+                    pTile.contains = null;
+                    if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                    this.setState({
+                        showPygmiesAttackPopup: true,
+                        attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland'
+                    });
+                    break;
+                }
+
                 // Pick random distance between 1 and 3 tiles
                 const targetDistance = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
 
@@ -4969,8 +4998,9 @@ class DungeonPage extends React.Component {
                     toTile.contains = pygmyData;
                     currentIdx = nextStepIdx;
 
-                    // Check if adjacent to player avatar
-                    if (isAdjacent(currentIdx, playerIdx)) {
+                    // Check if adjacent to player avatar using live coordinates at this step
+                    const currentLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+                    if (currentLivePlayerIdx !== null && isAdjacent(currentIdx, currentLivePlayerIdx)) {
                         toTile.contains = null;
                         if (this.state.debugMode && typeof bm.getIndexFromCoordinates === 'function' && bm.playerTile && bm.playerTile.location) {
                             try {
@@ -4997,8 +5027,8 @@ class DungeonPage extends React.Component {
                     if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                     this.forceUpdate();
 
-                    // Step delay so Pygmies move tile-by-tile visibly
-                    await sleep(300);
+                    // Step delay so Pygmies move tile-by-tile visibly with natural movement pacing
+                    await sleep(450);
                 }
 
                 if (ambushed) break;
@@ -5774,6 +5804,8 @@ class DungeonPage extends React.Component {
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="shield">🛡</span> Defense</span><span className="ql-value">{totalDef}</span></div>
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="meat">🍖</span> Food</span><span className="ql-value" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>{food} / {foodLimit}</span></div>
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="fist">✊</span> Resolve</span><span className="ql-value">{resolve}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="gold coin">🪙</span> Gold</span><span className="ql-value" style={{color: '#ffd700'}}>{this.props.inventoryManager?.gold || 0}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span><span className="ql-value" style={{color: '#b388ff'}}>{this.props.inventoryManager?.shimmering_dust || 0}</span></div>
                         </div>
                     </div>
                 )}
@@ -8270,6 +8302,7 @@ class DungeonPage extends React.Component {
 
     keyDownHandler = (event) => {
         const key = event.key;
+        const isModifierHeld = !!(event.metaKey || event.ctrlKey || event.altKey);
         const dirMap = {
             ArrowUp: 'up',
             ArrowDown: 'down',
@@ -8283,7 +8316,7 @@ class DungeonPage extends React.Component {
         const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
         const isInputFocused = activeTag === 'input' || activeTag === 'textarea';
 
-        if (dirMap[key] && !isInputFocused && !this.state.devConsoleOpen && !this.state.inMonsterBattle && !this.state.keysLocked) {
+        if (dirMap[key] && !isModifierHeld && !isInputFocused && !this.state.devConsoleOpen && !this.state.inMonsterBattle && !this.state.keysLocked) {
             event.preventDefault();
             if (this._pathfindStepTimeout) {
                 clearTimeout(this._pathfindStepTimeout);
@@ -8543,6 +8576,7 @@ class DungeonPage extends React.Component {
         }
     }
     combatKeyDownHandler = (event) => {
+        if (event.metaKey || event.ctrlKey || event.altKey) return;
         let key = event.key, code = event.code;
         if(code === 'Space'){
             if(this.monsterBattleComponentRef.current) this.monsterBattleComponentRef.current.manualFire();
@@ -14847,7 +14881,7 @@ class DungeonPage extends React.Component {
                         <div className="dev-console-divider" />
                         <div className="dev-console-right">
                             <div className="dev-console-output" ref={this.devConsoleOutputRef}>
-                                {this.state.devConsoleOutput.map((line, idx) => {
+                                {(this.state.devConsoleOutput || []).map((line, idx) => {
                                     const isPrompt = typeof line === 'string' && line.startsWith('>');
                                     const isError = typeof line === 'string' && line.toLowerCase().includes('error');
                                     return (
