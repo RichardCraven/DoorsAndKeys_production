@@ -186,6 +186,12 @@ function Tile(props) {
         if (typeof contains === 'string') return contains;
         return null;
     };
+    const getContainsSubtype = (contains) => {
+        if (!contains) return null;
+        if (typeof contains === 'object') return contains.subtype || null;
+        if (typeof contains === 'string') return contains;
+        return null;
+    };
     const isVoidContains = (contains) => getContainsType(contains) === 'void';
     const tileIndex = (typeof props.id === 'number') ? props.id : ((typeof props.index === 'number') ? props.index : null);
     const tileRow = (tileIndex !== null) ? Math.floor(tileIndex / 15) : null;
@@ -285,6 +291,38 @@ function Tile(props) {
     if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0,0,0,0.85)');
     if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0,0,0,0.85)');
     const fogEdgeBoxShadow = (isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
+
+    const containsType = getContainsType(currentContains);
+    const containsSubtype = getContainsSubtype(currentContains);
+    const knownMonsters = [
+        'witch', 'beholder', 'dragon', 'goblin', 'horror', 'imp', 'imp_overlord',
+        'manticore', 'mummy', 'naiad', 'ogre', 'skeleton', 'sphinx', 'troll',
+        'wyvern', 'wyvern_alt', 'goloth_devil', 'zul_devil', 'mordu_devil',
+        'vukular_devil', 'ishtar_devil', 'black_demon', 'goat_demon',
+        'golden_demon', 'kabuki_demon', 'cyclops', 'high_priest_of_the_basilisk',
+        'woodland_warband', 'cave_squad', 'mud_group', 'pygmies'
+    ];
+
+    const isMonsterOrPygmyTile = containsType === 'monster' ||
+                                 containsType === 'pygmies' ||
+                                 (typeof containsType === 'string' && knownMonsters.includes(containsType)) ||
+                                 (typeof containsSubtype === 'string' && knownMonsters.includes(containsSubtype)) ||
+                                 props.type === 'monster-tile' ||
+                                 props.optionType === 'monster';
+
+    const isBlackTile = isBlackRenderedTile(currentContains, currentTileColor);
+    
+    // Proximity check: is player avatar within 3 steps of this monster tile?
+    const isNearbyMonster = (() => {
+        if (!isMonsterOrPygmyTile) return false;
+        if (tileRow === null || tileCol === null || !boardTiles) return false;
+        const playerTile = boardTiles.find(t => t && (t.isPlayerTile || (t.location && Array.isArray(t.location))));
+        if (!playerTile) return false;
+        const pRow = Math.floor(playerTile.id / 15);
+        const pCol = playerTile.id % 15;
+        const manhattanDist = Math.abs(tileRow - pRow) + Math.abs(tileCol - pCol);
+        return manhattanDist <= 3;
+    })();
 
     const portraitZIndex = foregroundPortalImages.includes(props.image) ? 12 : 3;
 
@@ -442,7 +480,30 @@ function Tile(props) {
                           return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: color === 'black' ? 0 : (props.partialObscured ? 0.25 : 0.5), transition: 'opacity 0.08s ease-in-out'}} />
                       })()}
 
-                      {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
+                      {/* Faint red light source glow emanating from behind monster/pygmy portrait */}
+                      {isMonsterOrPygmyTile && !isBlackTile && (
+                          <div 
+                              className={`monster-portrait-glow ${isNearbyMonster ? 'nearby-glow' : ''}`}
+                              style={{
+                                  position: 'absolute',
+                                  top: '-15%',
+                                  left: '-15%',
+                                  right: '-15%',
+                                  bottom: '-15%',
+                                  borderRadius: '50%',
+                                  background: isNearbyMonster 
+                                      ? 'radial-gradient(circle at center, rgba(255, 40, 40, 0.95) 0%, rgba(230, 25, 25, 0.70) 38%, rgba(180, 15, 15, 0.35) 65%, transparent 92%)'
+                                      : 'radial-gradient(circle at center, rgba(240, 40, 40, 0.75) 0%, rgba(190, 25, 25, 0.48) 38%, rgba(130, 15, 15, 0.22) 65%, transparent 88%)',
+                                  zIndex: 2,
+                                  pointerEvents: 'none',
+                                  opacity: color === 'black' ? 0 : (props.partialObscured ? 0.35 : 1),
+                                  transition: 'opacity 0.2s ease-in-out, background 0.3s ease-in-out',
+                                  animation: isNearbyMonster ? 'monsterGlowPulse 1.1s ease-in-out infinite alternate' : 'monsterGlowPulse 1.8s ease-in-out infinite alternate'
+                              }}
+                          />
+                      )}
+
+                      {/* Portrait sits above the hp-fill, terrain, and monster glow so the image remains visible */}
                       {(props.imageOverride || images[props.image]) && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
                           <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : (props.partialObscured ? 0.5 : 1), transition: 'opacity 0.08s ease-in-out'}} />
                       )}
