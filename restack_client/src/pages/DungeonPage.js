@@ -694,7 +694,7 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                                         </div>
                                         <button className="buy-btn" onClick={() => handleBuyItem(item)}>
                                             <span>Buy</span>
-                                            <span className="price-tag">🪙 {item.price}</span>
+                                            <span className="price-tag"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> {item.price}</span>
                                         </button>
                                     </div>
                                 ))}
@@ -721,7 +721,7 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                                                 </div>
                                                 <button className="sell-btn" onClick={() => handleSellItem(item, originalIndex)}>
                                                     <span>Sell</span>
-                                                    <span className="price-tag">🪙 {sellPrice}</span>
+                                                    <span className="price-tag"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> {sellPrice}</span>
                                                 </button>
                                             </div>
                                         );
@@ -733,7 +733,7 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
 
                     <div className="vendor-status-bar">
                         <div className="wallet-info">
-                            <span>Gold: <strong style={{color: '#ffd700'}}><span role="img" aria-label="gold coin">🪙</span> {inventoryManager?.gold || 0}</strong></span>
+                            <span>Gold: <strong style={{color: '#ffd700'}}><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> {inventoryManager?.gold || 0}</strong></span>
                             <span>Dust: <strong style={{color: '#b388ff'}}><span role="img" aria-label="sparkles">✨</span> {inventoryManager?.shimmering_dust || 0}</strong></span>
                         </div>
                         {feedbackMsg && (
@@ -814,7 +814,7 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                                         </div>
                                         <button className="buy-btn brew-btn" onClick={() => handleBrewPotion(recipe.key, recipe.gold, recipe.dust)}>
                                             <span>Brew</span>
-                                            <span className="price-tag">🪙 {recipe.gold} + ✨ {recipe.dust}</span>
+                                            <span className="price-tag"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> {recipe.gold} + ✨ {recipe.dust}</span>
                                         </button>
                                     </div>
                                 ))}
@@ -832,7 +832,7 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                                     </div>
                                     <button className="buy-btn heal-service-btn" onClick={handleFullHeal}>
                                         <span>Restore HP</span>
-                                        <span className="price-tag">🪙 100</span>
+                                        <span className="price-tag"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> 100</span>
                                     </button>
                                 </div>
 
@@ -844,10 +844,10 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                                     </div>
                                     <div className="trade-btn-group">
                                         <button className="trade-sub-btn" onClick={() => handleTradeIngredient('buy', 'shimmering_dust', 10)}>
-                                            <span>Buy (🪙10)</span>
+                                            <span>Buy (<span className="gold-emoji" role="img" aria-label="gold coin">🪙</span>10)</span>
                                         </button>
                                         <button className="trade-sub-btn sell" onClick={() => handleTradeIngredient('sell', 'shimmering_dust', 5)}>
-                                            <span>Sell (🪙5)</span>
+                                            <span>Sell (<span className="gold-emoji" role="img" aria-label="gold coin">🪙</span>5)</span>
                                         </button>
                                     </div>
                                 </div>
@@ -860,10 +860,10 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                                     </div>
                                     <div className="trade-btn-group">
                                         <button className="trade-sub-btn" onClick={() => handleTradeIngredient('buy', 'totems', 50)}>
-                                            <span>Buy (🪙50)</span>
+                                            <span>Buy (<span className="gold-emoji" role="img" aria-label="gold coin">🪙</span>50)</span>
                                         </button>
                                         <button className="trade-sub-btn sell" onClick={() => handleTradeIngredient('sell', 'totems', 25)}>
-                                            <span>Sell (🪙25)</span>
+                                            <span>Sell (<span className="gold-emoji" role="img" aria-label="gold coin">🪙</span>25)</span>
                                         </button>
                                     </div>
                                 </div>
@@ -972,7 +972,7 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
 
                     <div className="vendor-status-bar">
                         <div className="wallet-info">
-                            <span>Gold: <strong style={{color: '#ffd700'}}><span role="img" aria-label="gold coin">🪙</span> {inventoryManager?.gold || 0}</strong></span>
+                            <span>Gold: <strong style={{color: '#ffd700'}}><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> {inventoryManager?.gold || 0}</strong></span>
                             <span>Dust: <strong style={{color: '#b388ff'}}><span role="img" aria-label="sparkles">✨</span> {inventoryManager?.shimmering_dust || 0}</strong></span>
                             <span>Totems: <strong style={{color: '#4db8ff'}}><span role="img" aria-label="totem">🗿</span> {inventoryManager?.totems || 0}</strong></span>
                         </div>
@@ -4894,7 +4894,28 @@ class DungeonPage extends React.Component {
                 if (idA === null || idB === null || idA === undefined || idB === undefined) return false;
                 const rA = Math.floor(idA / 15), cA = idA % 15;
                 const rB = Math.floor(idB / 15), cB = idB % 15;
-                return Math.abs(rA - rB) <= 1 && Math.abs(cA - cB) <= 1;
+
+                // Orthogonal adjacency only: North, South, East, West (diagonal DOES NOT count)
+                const rowDiff = Math.abs(rA - rB);
+                const colDiff = Math.abs(cA - cB);
+                const isOrthogonal = (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
+                if (!isOrthogonal) return false;
+
+                // Must NOT have a wall, void, or closed gate between or on either tile
+                const tileA = bm.tiles[idA];
+                const tileB = bm.tiles[idB];
+                if (!tileA || !tileB) return false;
+                if (tileA.isWall || tileA.isVoid || tileB.isWall || tileB.isVoid) return false;
+                if (typeof bm.isVoidTile === 'function' && (bm.isVoidTile(tileA) || bm.isVoidTile(tileB))) return false;
+
+                const gateTypeA = typeof bm.getGateTypeFromTile === 'function' ? bm.getGateTypeFromTile(tileA) : null;
+                const gateTypeB = typeof bm.getGateTypeFromTile === 'function' ? bm.getGateTypeFromTile(tileB) : null;
+                if ((gateTypeA && bm.CLOSED_GATE_TYPES && bm.CLOSED_GATE_TYPES.includes(gateTypeA)) ||
+                    (gateTypeB && bm.CLOSED_GATE_TYPES && bm.CLOSED_GATE_TYPES.includes(gateTypeB))) {
+                    return false;
+                }
+
+                return true;
             };
 
             const isWalkableForPygmy = (tileIdx) => {
@@ -4953,13 +4974,21 @@ class DungeonPage extends React.Component {
                 // Verify if Pygmy is already adjacent to the live player avatar before stepping
                 const initialLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                 if (initialLivePlayerIdx !== null && isAdjacent(currentIdx, initialLivePlayerIdx)) {
-                    pTile.contains = null;
                     if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
-                    this.setState({
-                        showPygmiesAttackPopup: true,
-                        attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland'
-                    });
-                    break;
+                    this.forceUpdate();
+                    await sleep(350);
+                    const checkLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+                    if (checkLivePlayerIdx !== null && isAdjacent(currentIdx, checkLivePlayerIdx)) {
+                        pTile.contains = null;
+                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                        this.setState({
+                            showPygmiesAttackPopup: true,
+                            attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland'
+                        });
+                        break;
+                    } else {
+                        continue;
+                    }
                 }
 
                 // Pick random distance between 1 and 3 tiles
@@ -5001,7 +5030,7 @@ class DungeonPage extends React.Component {
                     // Check if adjacent to player avatar using live coordinates at this step
                     const currentLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                     if (currentLivePlayerIdx !== null && isAdjacent(currentIdx, currentLivePlayerIdx)) {
-                        toTile.contains = null;
+                        // Render the pygmy adjacent to the player first
                         if (this.state.debugMode && typeof bm.getIndexFromCoordinates === 'function' && bm.playerTile && bm.playerTile.location) {
                             try {
                                 const pIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
@@ -5009,12 +5038,27 @@ class DungeonPage extends React.Component {
                             } catch (e) {}
                         }
                         if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
-                        this.setState({
-                            showPygmiesAttackPopup: true,
-                            attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland'
-                        });
-                        ambushed = true;
-                        break;
+                        this.forceUpdate();
+                        
+                        // Give the player a reaction window of 350ms to move away
+                        await sleep(350);
+                        
+                        // Check if the player is still adjacent after the delay
+                        const checkLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+                        if (checkLivePlayerIdx !== null && isAdjacent(currentIdx, checkLivePlayerIdx)) {
+                            toTile.contains = null;
+                            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                            this.setState({
+                                showPygmiesAttackPopup: true,
+                                attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland'
+                            });
+                            ambushed = true;
+                            break;
+                        } else {
+                            // Player moved away! Ambush avoided. Stop moving.
+                            ambushed = false;
+                            break;
+                        }
                     }
 
                     // Update fog of war and tiles for this step
@@ -5804,7 +5848,7 @@ class DungeonPage extends React.Component {
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="shield">🛡</span> Defense</span><span className="ql-value">{totalDef}</span></div>
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="meat">🍖</span> Food</span><span className="ql-value" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>{food} / {foodLimit}</span></div>
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="fist">✊</span> Resolve</span><span className="ql-value">{resolve}</span></div>
-                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="gold coin">🪙</span> Gold</span><span className="ql-value" style={{color: '#ffd700'}}>{this.props.inventoryManager?.gold || 0}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span><span className="ql-value" style={{color: '#ffd700'}}>{this.props.inventoryManager?.gold || 0}</span></div>
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span><span className="ql-value" style={{color: '#b388ff'}}>{this.props.inventoryManager?.shimmering_dust || 0}</span></div>
                         </div>
                     </div>

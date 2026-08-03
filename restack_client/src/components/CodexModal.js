@@ -515,12 +515,13 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                         <>
                             <div className="codex-list">
                                 {filteredMonsters.length === 0 && <div className="codex-empty">No monsters match your search.</div>}
-                                {filteredMonsters.map(monster => {
+                                {filteredMonsters.map((monster, idx) => {
                                     const iconSrc = resolveImg(monster.portrait);
-                                    const selected = selectedEntry && selectedEntry.key === monster.key;
+                                    const selected = selectedEntry && (selectedEntry === monster || (selectedEntry.key && selectedEntry.key === monster.key));
+                                    const monsterKey = monster.id || (monster.key ? `${monster.key}_${idx}` : `${monster.type || 'monster'}_${idx}`);
                                     return (
                                         <div
-                                            key={monster.key || monster.type}
+                                            key={monsterKey}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(monster)}
                                         >

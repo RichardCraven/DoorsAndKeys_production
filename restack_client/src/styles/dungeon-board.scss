@@ -2471,6 +2471,24 @@
 }
 
 /* Animations */
+@keyframes monsterGlowPulse {
+    0% {
+        transform: scale(0.82);
+        opacity: 0.55;
+        filter: drop-shadow(0 0 8px rgba(255, 20, 20, 0.6)) brightness(1);
+    }
+    50% {
+        transform: scale(1.10);
+        opacity: 0.88;
+        filter: drop-shadow(0 0 18px rgba(255, 30, 30, 0.88)) brightness(1.25);
+    }
+    100% {
+        transform: scale(1.32);
+        opacity: 1;
+        filter: drop-shadow(0 0 28px rgba(255, 45, 45, 1)) brightness(1.45);
+    }
+}
+
 @keyframes pulseGlow {
     from {
         text-shadow: 0 0 10px rgba(255, 59, 48, 0.5), 0 0 2px rgba(255, 59, 48, 0.3);
@@ -3938,4 +3956,9 @@
         opacity: 1 !important;
         color: #ffd700 !important;
     }
+}
+
+.gold-emoji {
+    display: inline-block;
+    filter: sepia(1) saturate(7) hue-rotate(15deg) brightness(1.1);
 }

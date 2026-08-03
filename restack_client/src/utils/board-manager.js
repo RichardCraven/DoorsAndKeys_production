@@ -1769,8 +1769,9 @@ export function BoardManager(){
         if (!tile) return false;
         const c = tile.contains;
         if (!c) return false;
-        if (typeof c === 'object') return c.type === 'monster';
-        return this.monstersArr.includes(c);
+        const type = this.getContainsType(c);
+        if (type === 'monster' || type === 'pygmies') return true;
+        return (typeof c === 'string' && (this.monstersArr.includes(c) || c === 'pygmies'));
     })
     this.handleInteraction = (destinationTile) => {
         // Intercept visited/used narrative and shrines for the current user to bypass interactions
@@ -2282,30 +2283,9 @@ export function BoardManager(){
         this.broadcastLevelChange(this.currentLevel.id)
     }
     this.checkAdjacency = (reachableOverride = null) => {
-    // Clear any previous overlay indicators (we will set edge indicators here)
-    try { this.overlayTiles.forEach(t => { if (t) { t.color = null; t.borders = null } }) } catch (e) {}
-        const highlightColor = (tile) => {
-            let color = null;
-            if(this.isMonster(tile)) color = '#ff000078';
-            return color;
-        }
-        const curIndex = this.getIndexFromCoordinates(this.playerTile.location);
-        const reachable = reachableOverride || this.getReachableTilesWithinSteps(curIndex, 2);
-        const leftTile = this.tiles[curIndex-1];
-        const rightTile = this.tiles[curIndex+1];
-        const topRow = !!this.tiles[curIndex - 15] ? this.tiles.filter(t=>t.id >= curIndex-16 && t.id <= curIndex-14) : null
-        const bottomRow = !!this.tiles[curIndex + 15] ? this.tiles.filter(t=>t.id >= curIndex+14 && t.id <= curIndex+16) : null
-
-        if(leftTile && reachable.has(leftTile.id) && highlightColor(leftTile)) leftTile.color = highlightColor(leftTile)
-        if(rightTile && reachable.has(rightTile.id) && highlightColor(rightTile)) rightTile.color = highlightColor(rightTile);
-        if(topRow) topRow.forEach((t, i)=>{ 
-            if(!reachable.has(t.id)) return;
-            if(highlightColor(t))t.color = highlightColor(t)
-        })
-        if(bottomRow) bottomRow.forEach((t, i)=>{if(highlightColor(t)){
-            if(!reachable.has(t.id)) return;
-            t.color = highlightColor(t)}
-        })
+        // Clear any previous overlay indicators (we will set edge indicators here)
+        try { this.overlayTiles.forEach(t => { if (t) { t.color = null; t.borders = null } }) } catch (e) {}
+        try { this.tiles.forEach(t => { if (t && t.color === '#ff000078') { t.color = null; } }) } catch (e) {}
 
         // Edge indicator: when the player is adjacent to the board boundary, show a
         // 3-tile red indicator along that edge centered on the player's row/column.
