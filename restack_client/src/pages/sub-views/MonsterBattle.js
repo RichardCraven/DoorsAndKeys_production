@@ -1801,6 +1801,31 @@ class MonsterBattle extends React.Component {
                     }
                 } catch (e) { console.warn('dust loot drop failed', e); }
 
+                // ── Shimmering Dust loot drop: Tier 3+ monsters have a chance to drop shimmering dust ───────
+                try {
+                    const defMonster = this.props.monster;
+                    const mTier = (defMonster && typeof defMonster.tier === 'number') ? defMonster.tier : ((defMonster && typeof defMonster.level === 'number' && defMonster.level >= 5) ? 3 : 1);
+                    const isTier3Plus = mTier >= 3 || (defMonster && (defMonster.isBoss || defMonster.tier >= 3));
+                    if (isTier3Plus && Math.random() < 0.50) {
+                        const dustAmount = Math.floor(Math.random() * 3) + 1;
+                        if (this.props.inventoryManager) {
+                            this.props.inventoryManager.addCurrency({ type: 'shimmering_dust', amount: dustAmount });
+                            try {
+                                if (typeof this.props.onTriggerLootArc === 'function') {
+                                    const iconUrl = images['shimmering_dust']?.default || images['shimmering_dust'] || '';
+                                    this.props.onTriggerLootArc({
+                                        type: 'currency',
+                                        currencyType: 'shimmering_dust',
+                                        id: 'shimmering_dust_' + Math.random(),
+                                        icon: iconUrl,
+                                        name: `Shimmering Dust (+${dustAmount})`
+                                    });
+                                }
+                            } catch (e) { }
+                        }
+                    }
+                } catch (e) { console.warn('shimmering dust loot drop failed', e); }
+
                 // ── Rune Shard loot drop: 10% chance per combat victory ─────────────
                 try {
                     if (Math.random() < 0.10) {

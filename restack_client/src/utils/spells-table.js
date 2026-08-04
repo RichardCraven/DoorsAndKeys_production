@@ -284,3 +284,38 @@ export const DISCIPLINE_CATEGORIES = {
   stance: ['iron_skin_stance', 'flowing_water_stance', 'thundering_palm_stance'],
   spirit: ['third_eye_pulse', 'astral_sweep', 'spirit_cartography'],
 };
+
+// ── Scry Options — Wizard dungeon scrying actions ──────────────────────────
+export const SCRY_OPTIONS = {
+  scry_monsters: {
+    key: 'scry_monsters',
+    name: 'Scry Monsters',
+    icon: 'eye_inverted',
+    prepTime: 10 * 60 * 1000,          // 10 min prep
+    revealScope: 'monsters',
+    revealDuration: 15 * 60 * 1000,   // 15 min reveal
+    description: 'Divines the presence of all enemy creatures on the current miniboard, highlighting their locations.',
+    flavorText: '"No shadow conceals the predator from true sight."',
+  },
+  scry_chests: {
+    key: 'scry_chests',
+    name: 'Scry Treasure',
+    icon: 'eye_inverted',
+    prepTime: 15 * 60 * 1000,         // 15 min prep
+    revealScope: 'chests',
+    revealDuration: 20 * 60 * 1000,   // 20 min reveal
+    description: 'Seeks out hidden treasure chests, secret caches, and magical containers on the current board.',
+    flavorText: '"Gold shines bright to eyes that know where to look."',
+  },
+  scry_full: {
+    key: 'scry_full',
+    name: 'Arcane Sight',
+    icon: 'eye_inverted',
+    prepTime: 30 * 60 * 1000,         // 30 min prep
+    revealScope: 'all',
+    revealDuration: 30 * 60 * 1000,   // 30 min reveal
+    description: 'Projects deep arcane vision across the entire miniboard, revealing all fog, monsters, chests, and shrines.',
+    flavorText: '"The veil parts. All secrets stand exposed."',
+  },
+};
+

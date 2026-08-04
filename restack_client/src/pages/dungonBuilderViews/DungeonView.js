@@ -19,6 +19,66 @@ class DungeonView extends React.Component {
       this.state = {
         hoveredPlane : null
       }
+      this.clickTimer = null;
+      this.lastClickInfo = null;
+    }
+
+    componentWillUnmount() {
+      if (this.clickTimer) {
+        clearTimeout(this.clickTimer);
+        this.clickTimer = null;
+      }
+    }
+
+    handleBoardClick = (level, miniboardIndex, orientation) => {
+        const plane = orientation === 'front' ? level?.front : level?.back;
+        const now = Date.now();
+
+        if (
+            this.lastClickInfo &&
+            this.lastClickInfo.levelId === level.id &&
+            this.lastClickInfo.miniboardIndex === miniboardIndex &&
+            this.lastClickInfo.orientation === orientation &&
+            now - this.lastClickInfo.time <= 500
+        ) {
+            // Double click: navigate to Board View for this board
+            if (this.clickTimer) {
+                clearTimeout(this.clickTimer);
+                this.clickTimer = null;
+            }
+            this.lastClickInfo = null;
+
+            if (typeof this.props.zoomIntoBoard === 'function') {
+                this.props.zoomIntoBoard(level.id, miniboardIndex, orientation);
+            }
+            if (typeof this.props.setViewState === 'function') {
+                this.props.setViewState('board');
+            }
+        } else {
+            // Single click: queue navigation to Plane View after 500ms
+            if (this.clickTimer) {
+                clearTimeout(this.clickTimer);
+            }
+
+            this.lastClickInfo = {
+                levelId: level.id,
+                miniboardIndex,
+                orientation,
+                time: now
+            };
+
+            this.clickTimer = setTimeout(() => {
+                this.clickTimer = null;
+                this.lastClickInfo = null;
+
+                if (plane && typeof this.props.loadPlane === 'function') {
+                    this.props.loadPlane(plane);
+                }
+                if (typeof this.props.setViewState === 'function') {
+                    this.props.setViewState('plane');
+                }
+            }, 500);
+        }
     }
 
     shouldComponentUpdate(nextProps) {
@@ -493,8 +553,12 @@ class DungeonView extends React.Component {
                     >
                         <div className="dungeon-info">
                             { <div className="level-buttons-container">
-                                <div className="icon-container" onClick={() =>  this.props.saveDungeonLevel()}>
-                                    <CIcon icon={cilSave} size="lg" style={this.props.dungeonHasUnsavedChanges ? {color: 'gold'} : {}}/>
+                                <div className="icon-container" title="Save Dungeon" onClick={() =>  this.props.saveDungeonLevel()}>
+                                    {this.props.isSavingDungeon ? (
+                                        <CSpinner size="sm" style={{ color: 'gold' }} />
+                                    ) : (
+                                        <CIcon icon={cilSave} size="lg" style={this.props.dungeonHasUnsavedChanges ? {color: 'gold'} : {}}/>
+                                    )}
                                 </div>
                                 <div className="icon-container" onClick={() => this.props.toggleDungeonLevelOverlay()}>
                                     <CIcon icon={cilQrCode} size="lg"/>
@@ -628,7 +692,7 @@ class DungeonView extends React.Component {
                                                                         width: this.props.tileSize*2
                                                                     }}
                                                                     className={`interaction-section`}
-                                                                    onClick={() => this.props.zoomIntoBoard(level.id, i, 'front')}
+                                                                    onClick={() => this.handleBoardClick(level, i, 'front')}
                                                                     onContextMenu={(event) => this.props.handlePlaneBoardContextMenu && this.props.handlePlaneBoardContextMenu(event, level.id, i, 'front')}
                                                                 ></div>
                                                         })}
@@ -658,6 +722,7 @@ class DungeonView extends React.Component {
                                                                  delayedHoverLabel={isPortal ? (tile.contains.targetPortalId ? `Linked Portal (Target: ${tile.contains.targetCoordinates})` : 'Unlinked Portal') : null}
                                                                  tileSize={((this.props.tileSize*6)/3-2)/15}
                                                                  contains={tile.contains}
+                                                                 territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                                                                  boardTiles={board.tiles}
                                                                  image={tile.image ? tile.image : null}
                                                                  imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
@@ -667,6 +732,7 @@ class DungeonView extends React.Component {
                                                                  index={tile.id}
                                                                  showCoordinates={false}
                                                                  editMode={true}
+                                                                 isBuilder={true}
                                                                  handleHover={null}
                                                                  handleClick={null}
                                                                  type={tile.type}
@@ -727,7 +793,7 @@ class DungeonView extends React.Component {
                                                                         width: this.props.tileSize*2
                                                                     }}
                                                                     className={`interaction-section`}
-                                                                    onClick={() => this.props.zoomIntoBoard(level.id, i, 'back')}
+                                                                    onClick={() => this.handleBoardClick(level, i, 'back')}
                                                                     onContextMenu={(event) => this.props.handlePlaneBoardContextMenu && this.props.handlePlaneBoardContextMenu(event, level.id, i, 'back')}
                                                                 ></div>
                                                         })}
@@ -757,6 +823,7 @@ class DungeonView extends React.Component {
                                                                 delayedHoverLabel={isPortal ? (tile.contains.targetPortalId ? `Linked Portal (Target: ${tile.contains.targetCoordinates})` : 'Unlinked Portal') : null}
                                                                 tileSize={((this.props.tileSize*6)/3-2)/15}
                                                                 contains={tile.contains}
+                                                                territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                                                                 boardTiles={board.tiles}
                                                                 image={tile.image ? tile.image : null}
                                                                 imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}

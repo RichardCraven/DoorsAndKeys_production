@@ -1,5 +1,6 @@
 import React from 'react'
 import '@coreui/coreui/dist/css/coreui.min.css'
+import { CSpinner } from '@coreui/react'
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 import Tile from '../../components/tile'
@@ -179,6 +180,7 @@ class PlaneView extends React.Component {
                                             connectedEdge={this.hasLinedUpConnection(this.props.miniboards, boardIndex, i)}
                                             tileSize={((this.props.tileSize*15)/3-2)/15}
                                             contains={tile.contains}
+                                            territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                                             boardTiles={board.tiles}
                                             image={tile.image ? tile.image : null}
                                             imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
@@ -188,6 +190,7 @@ class PlaneView extends React.Component {
                                             index={tile.id}
                                             showCoordinates={false}
                                             editMode={true}
+                                            isBuilder={true}
                                             handleHover={null}
                                             handleClick={null}
                                             type={tile.type}

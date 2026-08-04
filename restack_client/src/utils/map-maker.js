@@ -9,6 +9,8 @@ export function MapMaker(props){
         'void fill',
         'passage',
         'connecting path',
+        'territory',
+        'buildings',
         'delete',
         'door',
         'way up',
@@ -130,6 +132,22 @@ export function MapMaker(props){
         { key: 'lore_tablet_willpower',  name: 'Willpower Tablet',  domain: 'willpower',  color: '#3A003A' },
         { key: 'lore_tablet_cunning',    name: 'Cunning Tablet',    domain: 'cunning',    color: '#2A3A00' },
         { key: 'lore_tablet_fortitude',  name: 'Fortitude Tablet',  domain: 'fortitude',  color: '#001A3A' },
+    ];
+
+    this.territoryOptions = [
+        { key: 'mud_clan', name: 'Mud Clan', clan: 'mud', disabled: false },
+        { key: 'cave_clan', name: 'Cave Clan', clan: 'cave', disabled: false },
+        { key: 'woodland_clan', name: 'Woodland Clan', clan: 'woodland', disabled: false },
+        { key: 'shadow_clan', name: 'Shadow Clan', clan: 'shadow', disabled: true },
+        { key: 'paradox_clan', name: 'Paradox Clan', clan: 'paradox', disabled: true },
+    ];
+
+    this.buildingOptions = [
+        { key: 'outpost', name: 'Outpost', image: 'buildable_outpost' },
+        { key: 'observer_platform', name: 'Observer Platform', image: 'buildable_observer_platform' },
+        { key: 'earthen_fort', name: 'Earthen Fort', image: 'buildable_earthen_fort' },
+        { key: 'war_camp', name: 'War Camp', image: 'buildable_war_camp' },
+        { key: 'war_fort', name: 'War Fort', image: 'buildable_war_fort' },
     ];
 
     this.paletteTiles = [];
@@ -406,6 +424,24 @@ export function MapMaker(props){
                     image: null,
                     color: null,
                     isLoreTablet: true,
+                    id: i
+                })
+            } else if(key === 'territory'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'territory',
+                    image: 'woodland_warband',
+                    color: null,
+                    isTerritory: true,
+                    id: i
+                })
+            } else if(key === 'buildings'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'buildings',
+                    image: 'buildable_outpost',
+                    color: null,
+                    isBuilding: true,
                     id: i
                 })
             } else {
@@ -747,6 +783,10 @@ export function MapMaker(props){
                 return 'shrine'
             case 'lore_tablet':
                 return 'lore_tablet'
+            case 'territory':
+                return 'woodland_warband'
+            case 'buildings':
+                return 'buildable_outpost'
             default:
                 return false
         }
@@ -797,4 +837,6 @@ export function MapMaker(props){
         });
         return portals;
     }
+
+    this.initializeTiles();
 }

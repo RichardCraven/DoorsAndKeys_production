@@ -1,6 +1,6 @@
 
 import * as images from '../utils/images'
-import { SPELLS, RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES } from './spells-table'
+import { SPELLS, RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, SCRY_OPTIONS } from './spells-table'
 
 // eslint-disable-next-line no-extend-native
 Date.prototype.addHours = function (h) {
@@ -686,6 +686,29 @@ export function CrewManager() {
                         notified: false,
                     });
                 }
+                break;
+            case 'scry': {
+                const scryDef = SCRY_OPTIONS[actionSubtype.scryKey] || {
+                    name: actionSubtype.type || 'Scry',
+                    prepTime: 10 * 60 * 1000,
+                    revealScope: actionSubtype.revealScope || 'all',
+                    revealDuration: 15 * 60 * 1000
+                };
+                const prepTime = scryDef.prepTime || (10 * 60 * 1000);
+                endDate = new Date(Date.now() + prepTime);
+                member.specialActions.push({
+                    type: 'scry',
+                    scryKey: scryDef.key || actionSubtype.scryKey,
+                    name: scryDef.name,
+                    iconUrl: images['eye_inverted'] || actionSubtype.iconUrl || '',
+                    available: false,
+                    revealScope: scryDef.revealScope,
+                    revealDuration: scryDef.revealDuration,
+                    startDate,
+                    endDate,
+                    notified: false,
+                });
+            }
                 break;
             default:
                 break;

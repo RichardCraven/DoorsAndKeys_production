@@ -1,5 +1,6 @@
 import React from 'react'
 import '@coreui/coreui/dist/css/coreui.min.css'
+import { CSpinner } from '@coreui/react'
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 import Tile from '../../components/tile'
@@ -10,7 +11,7 @@ import { cilSave, cilPencil, cilTrash, cilPlus } from '@coreui/icons';
 // import { cilCaretRight } from '@coreui/icons';
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
-// import * as images from '../../utils/images'
+import * as images from '../../utils/images'
 
 // ── Poly Haven floor textures (CC0) ─────────────────────────────────────────
 import texGroundGrey            from '../../assets/tilesets/ground_grey_diff_1k.jpg';
@@ -138,7 +139,12 @@ class BoardView extends React.Component {
             hasPreview = true;
             let monster, gate, key, tierOption, jewelOption, runeOption, treasureOption, vendorOption;
             if (pinnedOption.type === 'monster-tile') {
-                monster = Object.values(this.props.monsterManager?.monsters || {})[pinnedOption.id];
+                const paletteMonsters = typeof this.props.monsterManager?.getPaletteMonsters === 'function'
+                    ? this.props.monsterManager.getPaletteMonsters()
+                    : Object.values(this.props.monsterManager?.monsters || {});
+                monster = pinnedOption.monsterType
+                    ? (this.props.monsterManager?.monsters?.[pinnedOption.monsterType] || paletteMonsters[pinnedOption.id])
+                    : paletteMonsters[pinnedOption.id];
             }
             if (pinnedOption.type === 'gate-tile') {
                 gate = (this.props.gates || [])[pinnedOption.id];
@@ -162,12 +168,18 @@ class BoardView extends React.Component {
                 vendorOption = this.props.mapMaker?.vendorOptions?.[pinnedOption.id];
             }
 
-            let shrineOption = null, loreTabletOption = null;
+            let shrineOption = null, loreTabletOption = null, territoryOption = null, buildingOption = null;
             if (pinnedOption.type === 'shrine-tile') {
                 shrineOption = this.props.mapMaker?.shrineOptions?.[pinnedOption.id];
             }
             if (pinnedOption.type === 'lore-tablet-tile') {
                 loreTabletOption = this.props.mapMaker?.loreTabletOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'territory-tile') {
+                territoryOption = this.props.mapMaker?.territoryOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'building-tile') {
+                buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
             }
 
             if (monster) {
@@ -200,6 +212,11 @@ class BoardView extends React.Component {
             } else if (loreTabletOption) {
                 previewContains = { type: 'lore_tablet', subtype: loreTabletOption.domain, key: loreTabletOption.key };
                 previewColor = loreTabletOption.color;
+            } else if (territoryOption) {
+                previewContains = { territory: territoryOption.clan };
+            } else if (buildingOption) {
+                previewContains = { type: 'building', subtype: buildingOption.key };
+                previewImage = images[buildingOption.image] || buildingOption.image;
             } else if (pinned.optionType === 'passage') {
                 previewContains = { type: 'passage', subtype: null };
             } else if (pinned.optionType === 'empty space') {
@@ -230,7 +247,11 @@ class BoardView extends React.Component {
                 <div className="center-board-container" style={{flexDirection: 'column'}}>
                     <div className="level-buttons-container plane-action-buttons">
                         <div className="icon-container" title="Save Board" onClick={() => this.props.writeBoard && this.props.writeBoard()}>
-                            <CIcon icon={cilSave} size="lg"/>
+                            {this.props.isSavingBoard ? (
+                                <CSpinner size="sm" style={{ color: 'gold' }} />
+                            ) : (
+                                <CIcon icon={cilSave} size="lg"/>
+                            )}
                         </div>
                         <div className="icon-container" title="Rename Board" onClick={() => this.props.loadedBoard && this.props.renameBoard && this.props.renameBoard()}>
                             <CIcon icon={cilPencil} size="lg"/>
@@ -355,6 +376,9 @@ class BoardView extends React.Component {
                                 : baseColor;
 
                             const tileContains = showPreview ? previewContains : tile.contains;
+                            const tileTerritory = (showPreview && previewContains?.territory) 
+                                ? previewContains.territory 
+                                : (tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null));
 
                             return <Tile 
                                 key={i}
@@ -362,6 +386,7 @@ class BoardView extends React.Component {
                                 index={tile.id}
                                 tileSize={this.props.tileSize}
                                 contains={tileContains}
+                                territory={tileTerritory}
                                 boardTiles={this.props.tiles}
                                 image={tileImage ? tileImage : null}
                                 imageOverride={tileImage && tileImage.includes('/') ? tileImage : null}
@@ -370,6 +395,7 @@ class BoardView extends React.Component {
                                 coordinates={tile.coordinates}
                                 showCoordinates={this.props.showCoordinates}
                                 editMode={true}
+                                isBuilder={true}
                                 handleHover={this.props.handleHover}
                                 handleClick={this.props.handleClick}
                                 handleContextMenu={this.props.handleContextMenu}

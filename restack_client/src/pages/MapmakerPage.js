@@ -135,6 +135,9 @@ class MapMakerPage extends React.Component {
     }
 
     this.state = {
+      isSavingDungeon: false,
+      isSavingPlane: false,
+      isSavingBoard: false,
       floorTexture: floorTextureFromPrefs,
       loadedBoard: null,
       loadedPlane: null,
@@ -782,7 +785,8 @@ class MapMakerPage extends React.Component {
         ...tile,
         image: null,
         color: null,
-        contains: { type: 'passage', subtype: null }
+        contains: { type: 'passage', subtype: null },
+        territory: null
       };
     }
 
@@ -791,7 +795,8 @@ class MapMakerPage extends React.Component {
       image: null,
       color: null,
       contains: { type: 'empty_space', subtype: null },
-      borders: null
+      borders: null,
+      territory: null
     };
   }
 
@@ -985,7 +990,12 @@ class MapMakerPage extends React.Component {
 
     let monster, gate, key, tierOption, jewelOption, runeOption, treasureOption, vendorOption;
     if (pinnedOption.type === 'monster-tile') {
-      monster = Object.values(this.props.monsterManager.monsters)[pinnedOption.id];
+      const paletteMonsters = typeof this.props.monsterManager?.getPaletteMonsters === 'function'
+        ? this.props.monsterManager.getPaletteMonsters()
+        : Object.values(this.props.monsterManager?.monsters || {});
+      monster = pinnedOption.monsterType
+        ? (this.props.monsterManager?.monsters?.[pinnedOption.monsterType] || paletteMonsters[pinnedOption.id])
+        : paletteMonsters[pinnedOption.id];
     }
     if (pinnedOption.type === 'gate-tile') {
       gate = GATES[pinnedOption.id];
@@ -1009,15 +1019,21 @@ class MapMakerPage extends React.Component {
       vendorOption = this.props.mapMaker.vendorOptions[pinnedOption.id];
     }
 
-    let shrineOption = null, loreTabletOption = null;
+    let shrineOption = null, loreTabletOption = null, territoryOption = null, buildingOption = null;
     if (pinnedOption.type === 'shrine-tile') {
       shrineOption = this.props.mapMaker.shrineOptions[pinnedOption.id];
     }
     if (pinnedOption.type === 'lore-tablet-tile') {
       loreTabletOption = this.props.mapMaker.loreTabletOptions[pinnedOption.id];
     }
+    if (pinnedOption.type === 'territory-tile') {
+      territoryOption = this.props.mapMaker.territoryOptions[pinnedOption.id];
+    }
+    if (pinnedOption.type === 'building-tile') {
+      buildingOption = this.props.mapMaker.buildingOptions[pinnedOption.id];
+    }
 
-    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || loreTabletOption;
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || loreTabletOption || territoryOption || buildingOption;
     if (!isSpecialOption && !pinned) return null;
 
     let arr = this.state.tiles.map(t => ({ ...t }));
@@ -1064,6 +1080,19 @@ class MapMakerPage extends React.Component {
       arr[tileId].contains = { type: 'lore_tablet', subtype: loreTabletOption.domain, key: loreTabletOption.key };
       arr[tileId].color = loreTabletOption.color;
       arr[tileId].image = null;
+    } else if (territoryOption) {
+      const currentTile = arr[tileId];
+      const containsType = this.getContainsType(currentTile?.contains);
+      if (containsType === 'void' || currentTile?.color === 'black') {
+        arr[tileId].contains = { type: 'empty_space', subtype: null };
+        arr[tileId].color = null;
+        arr[tileId].image = null;
+      }
+      arr[tileId].territory = territoryOption.clan;
+    } else if (buildingOption) {
+      arr[tileId].contains = { type: 'building', subtype: buildingOption.key };
+      arr[tileId].image = images[buildingOption.image] || buildingOption.image;
+      arr[tileId].color = null;
     } else if (pinned.optionType === 'passage') {
       let prevTileIdx = this.state.hoveredTileIdx;
       let connectedTop = false, connectedBot = false, connectedLeft = false, connectedRight = false;
@@ -1149,7 +1178,7 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'lore-tablet-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'lore-tablet-tile', 'territory-tile', 'building-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
@@ -1772,7 +1801,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'lore-tablet-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'lore-tablet-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile') {
       this.setState({
         pinnedOption: tile
       })
@@ -2065,234 +2094,154 @@ class MapMakerPage extends React.Component {
       console.warn('Cannot write board: no loadedBoard');
       return;
     }
-    // let planesToUpdate = [];
-    // let miniboards;
 
-    const config = this.props.mapMaker.getMapConfiguration(this.state.tiles)
-    // state.loadBoard is currently set to the new incoming board
-    let planesToUpdate = this.planesContainingBoard(this.state.loadedBoard)
+    this.setState({ isSavingBoard: true });
+    try {
+      const config = this.props.mapMaker.getMapConfiguration(this.state.tiles)
+      let planesToUpdate = this.planesContainingBoard(this.state.loadedBoard)
 
-    if (this.state.loadedBoard && this.state.loadedBoard.id) {
-
-
-      // if(this.state.planes.length > 0){
-      //   this.state.planes.forEach((d) => {
-      //     let planeHasMatchingBoard = false;
-      //     d.miniboards.forEach((b, index) => {
-
-      // if(b.id === this.state.loadedBoard.id){
-      //   planeHasMatchingBoard = true;
-      //   console.log('found a plane with matching board: ', d);
-      //   miniboards = d.miniboards;
-      //   miniboards[index] = this.state.loadedBoard;
-      //   miniboards[index].name = this.state.loadedBoard.name;
-      //   miniboards[index].tiles = this.state.tiles;
-      //   miniboards[index].config = config;
-      // } 
-      //     })
-      //     // console.log('d.id:', d.id)
-      //     d.valid = this.props.mapMaker.isValidPlane(miniboards)
-      //     if(planeHasMatchingBoard) planesToUpdate.push(d)
-
-      //   })
-      // }
-      let obj = {
-        name: this.state.loadedBoard.name,
-        folderPath: this.state.loadedBoard.folderPath || '',
-        tiles: clone(this.state.tiles),
-        config: clone(config)
-      }
-
-      await updateBoardRequest(this.state.loadedBoard.id, obj);
-      await this.updateBoardInPanel({ ...obj, id: this.state.loadedBoard.id });
-
-      if (this.state.loadedPlane && Array.isArray(this.state.loadedPlane.miniboards)) {
-        let loadedPlane = clone(this.state.loadedPlane);
-        let idx = loadedPlane.miniboards.findIndex(b => b && (b.id === this.state.loadedBoard.id || b._id === this.state.loadedBoard.id || (b.name && b.name === this.state.loadedBoard.name)));
-        if (idx !== -1) {
-          loadedPlane.miniboards[idx] = {
-            ...loadedPlane.miniboards[idx],
-            tiles: clone(this.state.tiles),
-            config: clone(config)
-          };
-          loadedPlane = this.validatePlane(loadedPlane);
-          this.setState({ loadedPlane });
+      if (this.state.loadedBoard && this.state.loadedBoard.id) {
+        let obj = {
+          name: this.state.loadedBoard.name,
+          folderPath: this.state.loadedBoard.folderPath || '',
+          tiles: clone(this.state.tiles),
+          config: clone(config)
         }
-      }
-      if (Array.isArray(this.state.planes)) {
-        let planes = clone(this.state.planes);
-        planes.forEach((p) => {
-          if (p && Array.isArray(p.miniboards)) {
-            let idx = p.miniboards.findIndex(b => b && (b.id === this.state.loadedBoard.id || b._id === this.state.loadedBoard.id || (b.name && b.name === this.state.loadedBoard.name)));
-            if (idx !== -1) {
-              p.miniboards[idx] = {
-                ...p.miniboards[idx],
-                tiles: clone(this.state.tiles),
-                config: clone(config)
-              };
-              this.validatePlane(p);
+
+        await updateBoardRequest(this.state.loadedBoard.id, obj);
+        await this.updateBoardInPanel({ ...obj, id: this.state.loadedBoard.id });
+
+        if (this.state.loadedPlane && Array.isArray(this.state.loadedPlane.miniboards)) {
+          let loadedPlane = clone(this.state.loadedPlane);
+          let idx = loadedPlane.miniboards.findIndex(b => b && (b.id === this.state.loadedBoard.id || b._id === this.state.loadedBoard.id || (b.name && b.name === this.state.loadedBoard.name)));
+          if (idx !== -1) {
+            loadedPlane.miniboards[idx] = {
+              ...loadedPlane.miniboards[idx],
+              name: obj.name,
+              tiles: obj.tiles,
+              config: obj.config
+            };
+            this.setState({ loadedPlane });
+          }
+        }
+
+        let newBoard = {
+          id: this.state.loadedBoard.id,
+          name: this.state.loadedBoard.name,
+          tiles: clone(this.state.tiles),
+          config: clone(config)
+        }
+
+        if (planesToUpdate.length > 0) {
+          await Promise.all(planesToUpdate.map(async (plane) => {
+            let miniboards = plane.miniboards;
+            miniboards.forEach((b, index) => {
+              if (b && (b.id === this.state.loadedBoard.id || b.name === this.state.loadedBoard.name)) {
+                miniboards[index] = newBoard;
+              }
+            });
+            plane.valid = this.props.mapMaker.isValidPlane(miniboards);
+
+            let planeObj = {
+              name: plane.name,
+              miniboards: miniboards,
+              spawnPoints: this.props.mapMaker.getSpawnPoints(miniboards),
+              valid: plane.valid
             }
+            await updatePlaneRequest(plane.id, planeObj);
+          }));
+
+          await this.loadAllPlanes();
+        }
+
+        const allDungeonsRes = await loadAllDungeonsRequest();
+        const freshDungeons = (allDungeonsRes.data || []).map(e => {
+          if (this.state.loadedDungeon && e._id === this.state.loadedDungeon.id) {
+            return clone(this.state.loadedDungeon);
           }
+          const d = JSON.parse(e.content);
+          d.id = e._id;
+          return d;
         });
-        this.setState({ planes });
-      }
 
+        const affectedDungeons = freshDungeons.filter(dungeon => {
+          if (!Array.isArray(dungeon.levels)) return false;
+          return dungeon.levels.some(level => {
+            return planesToUpdate.some(plane => {
+              const front = level && level.front;
+              const back = level && level.back;
 
-      // this.loadAllBoards();
-      // ^ this is only needed to update board to board BoardsPanel. instead, just directly add it!
+              const frontHasBoard = front && Array.isArray(front.miniboards) && front.miniboards.some(mb => mb && mb.id === newBoard.id);
+              const backHasBoard = back && Array.isArray(back.miniboards) && back.miniboards.some(mb => mb && mb.id === newBoard.id);
 
+              const frontMatches = front && (
+                front.id === plane.id ||
+                front.name === plane.name ||
+                frontHasBoard
+              );
+              const backMatches = back && (
+                back.id === plane.id ||
+                back.name === plane.name ||
+                backHasBoard
+              );
 
-
-      this.flashLeftReadout('Board Saved')
-    } else {
-
-      console.log('CLONE PATH, RENAME SHOULD NOT GET HERE');
-
-      const newBoard = {
-        name: clone(this.state.loadedBoard.name),
-        folderPath: this.state.loadedBoard.folderPath || '',
-        tiles: clone(this.state.tiles),
-        config: clone(config)
-      }
-      const addedMap = await addBoardRequest(newBoard)
-      newBoard.id = addedMap.data._id
-
-
-      // this.loadAllBoards(); 
-      this.insertNewBoardIntoPanel(newBoard)
-      // ^ this is only needed to add board to board BoardsPanel. instead, just directly add it!
-
-      this.loadBoard(newBoard)
-
-      this.flashLeftReadout('Board Saved')
-    }
-    if (planesToUpdate && planesToUpdate.length > 0) {
-      const newBoard = {
-        name: clone(this.state.loadedBoard.name),
-        tiles: clone(this.state.tiles),
-        config: clone(config),
-        id: this.state.loadedBoard.id
-      }
-
-      for (const pToUpdate of planesToUpdate) {
-        let plane = clone(pToUpdate);
-        let index = plane.miniboards.findIndex(b => b && (b.id === newBoard.id || b._id === newBoard.id || (b.name && b.name === newBoard.name)));
-        if (index !== -1) {
-          plane.miniboards[index] = newBoard;
-          plane = this.validatePlane(plane);
-          const obj = {
-            name: plane.name,
-            miniboards: plane.miniboards,
-            spawnPoints: plane.spawnPoints,
-            valid: plane.valid
-          }
-          if (plane.id && !plane.id.startsWith('temp-')) {
-            await updatePlaneRequest(plane.id, obj);
-          }
-        }
-      }
-      await this.loadAllPlanes();
-
-      // Fetch all dungeons fresh from DB so we don't rely on potentially stale state
-      const allDungeonsRes = await loadAllDungeonsRequest();
-      const freshDungeons = (allDungeonsRes.data || []).map(e => {
-        if (this.state.loadedDungeon && e._id === this.state.loadedDungeon.id) {
-          return clone(this.state.loadedDungeon);
-        }
-        const d = JSON.parse(e.content);
-        d.id = e._id;
-        return d;
-      });
-
-      // Find dungeons that embed any of the updated planes
-      const affectedDungeons = freshDungeons.filter(dungeon => {
-        if (!Array.isArray(dungeon.levels)) return false;
-        return dungeon.levels.some(level => {
-          return planesToUpdate.some(plane => {
-            const front = level && level.front;
-            const back = level && level.back;
-
-            const frontHasBoard = front && Array.isArray(front.miniboards) && front.miniboards.some(mb => mb && mb.id === newBoard.id);
-            const backHasBoard = back && Array.isArray(back.miniboards) && back.miniboards.some(mb => mb && mb.id === newBoard.id);
-
-            const frontMatches = front && (
-              front.id === plane.id ||
-              front.name === plane.name ||
-              frontHasBoard
-            );
-            const backMatches = back && (
-              back.id === plane.id ||
-              back.name === plane.name ||
-              backHasBoard
-            );
-
-            return frontMatches || backMatches;
+              return frontMatches || backMatches;
+            });
           });
         });
-      });
 
-
-
-      for (const dungeon of affectedDungeons) {
-        dungeon.levels.forEach(level => {
-          ['front', 'back'].forEach(side => {
-            const p = level[side];
-            if (p) {
-              const upPlane = planesToUpdate.find(up => up.id === p.id || up.name === p.name);
-              if (upPlane) {
-                let pClone = clone(upPlane);
-                let idx = pClone.miniboards.findIndex(b => b && (b.id === newBoard.id || b._id === newBoard.id || (b.name && b.name === newBoard.name)));
-                if (idx !== -1) {
-                  pClone.miniboards[idx] = newBoard;
-                }
-                pClone = this.validatePlane(pClone);
-                level[side] = pClone;
-              } else {
-                if (Array.isArray(p.miniboards)) {
-                  p.miniboards.forEach((mb, idx) => {
-                    if (mb && (mb.id === newBoard.id || mb._id === newBoard.id || mb.name === newBoard.name)) {
-                      p.miniboards[idx] = {
-                        ...mb,
-                        tiles: clone(newBoard.tiles),
-                        config: clone(newBoard.config)
-                      };
+        affectedDungeons.forEach(async (dungeon) => {
+          dungeon.levels.forEach(level => {
+            for (const side of ['front', 'back']) {
+              if (level[side]) {
+                const matchPlane = planesToUpdate.find(p => p.id === level[side].id || p.name === level[side].name);
+                if (matchPlane) {
+                  level[side] = clone(matchPlane);
+                } else if (Array.isArray(level[side].miniboards)) {
+                  let p = clone(level[side]);
+                  p.miniboards = p.miniboards.map(mb => {
+                    if (mb && (mb.id === newBoard.id || mb.name === newBoard.name)) {
+                      return clone(newBoard);
                     }
+                    return mb;
                   });
                   level[side] = this.validatePlane(p);
                 }
               }
             }
           });
-        });
-        const validatedDungeon = this.validateDungeon(dungeon);
-        await updateDungeonRequest(validatedDungeon.id, validatedDungeon);
-        if (this.state.loadedDungeon && this.state.loadedDungeon.id === validatedDungeon.id) {
-          await new Promise(resolve => this.setState({ loadedDungeon: validatedDungeon }, resolve));
-          
-          if (this.state.loadedPlane) {
-            const loadedPlaneId = this.state.loadedPlane.id || this.state.loadedPlane._id;
-            for (const level of validatedDungeon.levels) {
-              if (level.front && ((loadedPlaneId && level.front.id === loadedPlaneId) || level.front.name === this.state.loadedPlane.name)) {
-                this.setState({ loadedPlane: clone(level.front) });
-                break;
-              }
-              if (level.back && ((loadedPlaneId && level.back.id === loadedPlaneId) || level.back.name === this.state.loadedPlane.name)) {
-                this.setState({ loadedPlane: clone(level.back) });
-                break;
+          const validatedDungeon = this.validateDungeon(dungeon);
+          await updateDungeonRequest(validatedDungeon.id, validatedDungeon);
+          if (this.state.loadedDungeon && this.state.loadedDungeon.id === validatedDungeon.id) {
+            await new Promise(resolve => this.setState({ loadedDungeon: validatedDungeon }, resolve));
+            
+            if (this.state.loadedPlane) {
+              const loadedPlaneId = this.state.loadedPlane.id || this.state.loadedPlane._id;
+              for (const level of validatedDungeon.levels) {
+                if (level.front && ((loadedPlaneId && level.front.id === loadedPlaneId) || level.front.name === this.state.loadedPlane.name)) {
+                  this.setState({ loadedPlane: clone(level.front) });
+                  break;
+                }
+                if (level.back && ((loadedPlaneId && level.back.id === loadedPlaneId) || level.back.name === this.state.loadedPlane.name)) {
+                  this.setState({ loadedPlane: clone(level.back) });
+                  break;
+                }
               }
             }
           }
+        });
+        if (affectedDungeons.length > 0) {
+          this.loadAllDungeons();
         }
-      }
-      if (affectedDungeons.length > 0) {
-        this.loadAllDungeons();
-      }
 
-      setTimeout(() => {
-        const currentPlane = planesToUpdate.find(p => p.id === this.state.loadedPlane?.id || p.name === this.state.loadedPlane?.name) || planesToUpdate[0];
-        const updatedPlane = this.state.planes.find(p => p.id === currentPlane.id || p.name === currentPlane.name);
-        this.loadPlane(updatedPlane || currentPlane);
-      })
+        setTimeout(() => {
+          const currentPlane = planesToUpdate.find(p => p.id === this.state.loadedPlane?.id || p.name === this.state.loadedPlane?.name) || planesToUpdate[0];
+          const updatedPlane = this.state.planes.find(p => p.id === currentPlane.id || p.name === currentPlane.name);
+          this.loadPlane(updatedPlane || currentPlane);
+        })
+      }
+    } finally {
+      this.setState({ isSavingBoard: false });
     }
   }
 
@@ -4303,7 +4252,7 @@ class MapMakerPage extends React.Component {
   //   const userId = localStorage.getItem('userId');
 
   //   // NEED TO ABSTRACT THIS INTO A USER SERVICE
-  //   if(meta.preferences && meta.preferences.editor){
+    //   if(meta.preferences && meta.preferences.editor){
   //     meta.preferences.editor['loadedDungeon'] = this.state.loadedDungeon
   //   } else {
   //     meta.preferences = {
@@ -4317,9 +4266,9 @@ class MapMakerPage extends React.Component {
   // }
   writePlane = async () => {
     if (this.state.selectedView !== 'plane') return
-    if (this.state.loadedPlane && this.state.loadedPlane.id) {
-      this.setState({ planeSyncInProgress: true });
-      try {
+    this.setState({ isSavingPlane: true, planeSyncInProgress: true });
+    try {
+      if (this.state.loadedPlane && this.state.loadedPlane.id) {
         let obj = {
           name: this.state.loadedPlane.name,
           miniboards: this.state.loadedPlane.miniboards,
@@ -4378,16 +4327,16 @@ class MapMakerPage extends React.Component {
             }
           });
 
-          if (!changed) continue;
-          const validatedDungeon = this.validateDungeon(dungeon);
-          await updateDungeonRequest(validatedDungeon.id, validatedDungeon);
-          updatedDungeonIds.push(validatedDungeon.id);
-          if (this.state.loadedDungeon && this.state.loadedDungeon.id === validatedDungeon.id) {
-            updatedLoadedDungeon = clone(validatedDungeon);
+          if (changed) {
+            const validatedDungeon = this.validateDungeon(dungeon);
+            await updateDungeonRequest(validatedDungeon.id, validatedDungeon);
+            updatedDungeonIds.push(validatedDungeon.id);
+            if (this.state.loadedDungeon && this.state.loadedDungeon.id === validatedDungeon.id) {
+              updatedLoadedDungeon = validatedDungeon;
+            }
           }
         }
 
-        await this.loadAllPlanes();
         if (updatedDungeonIds.length > 0) {
           await this.loadAllDungeons();
         }
@@ -4399,77 +4348,80 @@ class MapMakerPage extends React.Component {
 
         this.flashLeftReadout('Plane Saved');
         this.setState({ planeHasUnsavedChanges: false });
-      } finally {
-        this.setState({ planeSyncInProgress: false });
+      } else {
+        let newPlanePayload = {
+          name: this.state.loadedPlane.name,
+          miniboards: this.state.loadedPlane.miniboards,
+          spawnPoints: this.state.loadedPlane.spawnPoints,
+          valid: false
+        }
+        const newPlaneRes = await addPlaneRequest(newPlanePayload);
+        let lp = this.state.loadedPlane
+        lp.id = newPlaneRes.data._id;
+        this.setState({
+          loadedPlane: lp,
+        })
+        this.flashLeftReadout('Plane Saved');
+        this.setState({ planeHasUnsavedChanges: false });
+        this.loadAllPlanes();
       }
-    } else {
-      let newPlanePayload = {
-        name: this.state.loadedPlane.name,
-        miniboards: this.state.loadedPlane.miniboards,
-        spawnPoints: this.state.loadedPlane.spawnPoints,
-        valid: false
-      }
-      const newPlaneRes = await addPlaneRequest(newPlanePayload);
-      let lp = this.state.loadedPlane
-      lp.id = newPlaneRes.data._id;
-      this.setState({
-        loadedPlane: lp,
-        // miniboards: this.state.loadedPlane.miniboards
-      })
-      this.flashLeftReadout('Plane Saved');
-      this.setState({ planeHasUnsavedChanges: false });
-      this.loadAllPlanes();
+    } finally {
+      this.setState({ isSavingPlane: false, planeSyncInProgress: false });
     }
   }
   writeDungeon = async () => {
     console.log('loaded dungeon before validation/save', this.state.loadedDungeon);
     if (!this.state.loadedDungeon) return;
-
-    // Sync dungeon planes with the latest boards list in state before validation/saving
-    let validatedDungeon = clone(this.state.loadedDungeon);
-    if (this.state.boards && this.state.boards.length > 0) {
-      validatedDungeon = this.syncDungeonPlanesWithBoards(validatedDungeon, this.state.boards);
-    }
-    validatedDungeon = this.validateDungeon(validatedDungeon);
-
-    if (validatedDungeon.id) {
-      console.log('existing dungeon, update');
-      await updateDungeonRequest(validatedDungeon.id, validatedDungeon);
-      this.setState({ loadedDungeon: validatedDungeon });
-      await this.addDungeonPlanesAndBoardsToState(validatedDungeon);
-      setEditorPreference('loadedDungeon', validatedDungeon)
-      await this.loadAllDungeons()
-      this.flashLeftReadout('Dungeon Saved')
-    } else {
-      let newDungeonPayload = {
-        name: validatedDungeon.name,
-        levels: validatedDungeon.levels,
-        pocket_planes: validatedDungeon.pocket_planes,
-        descriptions: 'new dungeon description',
-        valid: validatedDungeon.valid === true
+    this.setState({ isSavingDungeon: true });
+    try {
+      // Sync dungeon planes with the latest boards list in state before validation/saving
+      let validatedDungeon = clone(this.state.loadedDungeon);
+      if (this.state.boards && this.state.boards.length > 0) {
+        validatedDungeon = this.syncDungeonPlanesWithBoards(validatedDungeon, this.state.boards);
       }
-      const newDungeonRes = await addDungeonRequest(newDungeonPayload);
-      let loadedDungeon = { ...validatedDungeon };
-      loadedDungeon.id = newDungeonRes.data._id;
-      const formatted = this.props.mapMaker.formatDungeon(loadedDungeon);
-      // Ensure we keep the computed valid flag since formatDungeon doesn't run validatePlane
-      formatted.valid = validatedDungeon.valid;
-      this.setState({
-        loadedDungeon: formatted
-      }, async () => {
-        await this.addDungeonPlanesAndBoardsToState(formatted);
-        setEditorPreference('loadedDungeon', formatted);
-        await this.loadAllDungeons();
-      })
-      this.flashLeftReadout('Dungeon Saved')
+      validatedDungeon = this.validateDungeon(validatedDungeon);
+
+      if (validatedDungeon.id) {
+        console.log('existing dungeon, update');
+        await updateDungeonRequest(validatedDungeon.id, validatedDungeon);
+        this.setState({ loadedDungeon: validatedDungeon });
+        await this.addDungeonPlanesAndBoardsToState(validatedDungeon);
+        setEditorPreference('loadedDungeon', validatedDungeon)
+        await this.loadAllDungeons()
+        this.flashLeftReadout('Dungeon Saved')
+      } else {
+        let newDungeonPayload = {
+          name: validatedDungeon.name,
+          levels: validatedDungeon.levels,
+          pocket_planes: validatedDungeon.pocket_planes,
+          descriptions: 'new dungeon description',
+          valid: validatedDungeon.valid === true
+        }
+        const newDungeonRes = await addDungeonRequest(newDungeonPayload);
+        let loadedDungeon = { ...validatedDungeon };
+        loadedDungeon.id = newDungeonRes.data._id;
+        const formatted = this.props.mapMaker.formatDungeon(loadedDungeon);
+        // Ensure we keep the computed valid flag since formatDungeon doesn't run validatePlane
+        formatted.valid = validatedDungeon.valid;
+        this.setState({
+          loadedDungeon: formatted
+        }, async () => {
+          await this.addDungeonPlanesAndBoardsToState(formatted);
+          setEditorPreference('loadedDungeon', formatted);
+          await this.loadAllDungeons();
+        })
+        this.flashLeftReadout('Dungeon Saved')
+      }
+      this.setState({ dungeonHasUnsavedChanges: false });
+      // update user
+      const userId = localStorage.getItem('userId');
+      setEditorPreference('loadedDungeon', this.state.loadedDungeon);
+      const meta = getMeta();
+      if (userId) updateUserRequest(userId, meta)
+      storeMeta(meta);
+    } finally {
+      this.setState({ isSavingDungeon: false });
     }
-    this.setState({ dungeonHasUnsavedChanges: false });
-    // update user
-    const userId = localStorage.getItem('userId');
-    setEditorPreference('loadedDungeon', this.state.loadedDungeon);
-    const meta = getMeta();
-    if (userId) updateUserRequest(userId, meta)
-    storeMeta(meta);
   }
   validatePlane = (plane) => {
     if (!plane) return null;
@@ -6905,7 +6857,7 @@ class MapMakerPage extends React.Component {
         </CModal>
         <div className="column-wrapper">
           <div className="inputs-container">
-            <div className="left-text-readout title" style={{ width: this.state.tileSize * 4.5 + 'px' }}>
+            <div className="left-text-readout title" style={{ width: this.state.tileSize * 4.5 + 'px', paddingLeft: '65px', boxSizing: 'border-box' }}>
               {this.state.leftReadoutFlashMessage || this.state.selectedThingTitle}
             </div>
 
@@ -7256,6 +7208,7 @@ class MapMakerPage extends React.Component {
               monsterManager={this.props.monsterManager}
               gates={GATES}
               keys={KEYS}
+              isSavingBoard={this.state.isSavingBoard}
             />}
 
 
@@ -7316,6 +7269,8 @@ class MapMakerPage extends React.Component {
               setPaletteHover={this.setPaletteHover}
               loadBoard={this.loadBoard}
               showPlanesNames={this.state.showPlanesNames}
+              isSavingPlane={this.state.isSavingPlane}
+              planeSyncInProgress={this.state.planeSyncInProgress}
             //            board specific ^              
             ></PlaneView>}
 
@@ -7326,6 +7281,7 @@ class MapMakerPage extends React.Component {
                 boardsFolders={this.state.boardsFolders}
                 boardsFoldersExpanded={this.state.boardsFoldersExpanded}
                 dungeonHasUnsavedChanges={this.state.dungeonHasUnsavedChanges}
+                isSavingDungeon={this.state.isSavingDungeon}
                 boards={this.state.boards}
                 dungeons={this.state.dungeons}
                 tiles={this.state.tiles}

@@ -1167,6 +1167,27 @@ export function MonsterManager() {
         const available = Object.values(this.monsters).filter(e => !e.isMinion && !e.isSummoned);
         return this.pickRandom(available);
     }
+    this.getPaletteMonsters = () => {
+        const seen = new Set();
+        const list = [];
+        Object.values(this.monsters).forEach((m) => {
+            if (!m || !m.type) return;
+            if (m.isMinion || m.isSummoned || m.type === 'dragon_egg' || m.key === 'dragon_egg') return;
+            if (seen.has(m.type)) return;
+            seen.add(m.type);
+            list.push(m);
+        });
+        list.sort((a, b) => {
+            const tierA = typeof a.tier === 'number' ? a.tier : 1;
+            const tierB = typeof b.tier === 'number' ? b.tier : 1;
+            if (tierA !== tierB) return tierA - tierB;
+            const lvlA = typeof a.level === 'number' ? a.level : 1;
+            const lvlB = typeof b.level === 'number' ? b.level : 1;
+            if (lvlA !== lvlB) return lvlA - lvlB;
+            return (a.key || a.type).localeCompare(b.key || b.type);
+        });
+        return list;
+    }
     this.getRandomMonsterByTier = (tier) => {
         let availableMonsters = Object.values(this.monsters).filter(e => e.tier === tier && !e.isMinion && !e.isSummoned);
         if (availableMonsters.length > 0) {
