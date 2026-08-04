@@ -626,71 +626,97 @@ export const LANDING_REDUX_CSS = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: 20px;
   width: 100%;
   background: rgba(12, 10, 9, 0.5);
   border: 1px solid rgba(212, 168, 68, 0.2);
   border-radius: 8px;
-  padding: 24px 16px;
+  padding: 28px 20px;
   box-sizing: border-box;
 }
 
 .redux-landing-container .hero-card .selected-crew-title {
   font-family: 'Cinzel', serif;
-  font-size: 0.95rem;
+  font-size: 1.1rem;
   color: #e5b54f;
   text-transform: uppercase;
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   font-weight: 700;
-  text-shadow: 0 0 8px rgba(229, 181, 79, 0.2);
+  text-shadow: 0 0 10px rgba(229, 181, 79, 0.3);
 }
 
 .redux-landing-container .hero-card .selected-crew-list {
   display: flex;
-  gap: 20px;
+  gap: 32px;
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
   width: 100%;
+  flex-grow: 1;
 }
 
 .redux-landing-container .hero-card .selected-crew-member-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  width: 80px;
+  gap: 10px;
+  width: 150px;
 }
 
 .redux-landing-container .hero-card .selected-crew-avatar-wrapper {
-  width: 60px;
-  height: 60px;
+  width: 130px;
+  height: 130px;
   border-radius: 50%;
-  background-size: cover;
-  background-position: center;
-  border: 2px solid rgba(212, 168, 68, 0.6);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.7);
   position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid rgba(212, 168, 68, 0.65);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.8), 0 0 15px rgba(212, 168, 68, 0.15);
+  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.redux-landing-container .hero-card .selected-crew-avatar-wrapper .crew-avatar-img,
+.crew-showcase-portrait .crew-avatar-img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  border-radius: 50% !important;
+  pointer-events: none !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 1 !important;
+}
+
+.redux-landing-container .hero-card .selected-crew-avatar-wrapper:hover {
+  transform: translateY(-4px) scale(1.04);
+  border-color: rgba(212, 168, 68, 0.95);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.9), 0 0 22px rgba(212, 168, 68, 0.35);
 }
 
 .redux-landing-container .hero-card .selected-crew-badge {
   position: absolute;
-  bottom: -2px;
-  right: -6px;
+  bottom: 2px;
+  right: -2px;
   background: #1c1917;
   color: #e5b54f;
-  border: 1px solid rgba(212, 168, 68, 0.3);
-  border-radius: 3px;
-  padding: 1px 4px;
-  font-size: 8px;
+  border: 1px solid rgba(212, 168, 68, 0.4);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
   font-weight: 700;
   font-family: 'Outfit', sans-serif;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.7);
+  z-index: 2 !important;
 }
 
 .redux-landing-container .hero-card .selected-crew-name {
-  font-size: 0.85rem;
+  font-size: 1.1rem;
   color: #f5f5f7;
-  font-weight: 600;
+  font-weight: 700;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -700,10 +726,10 @@ export const LANDING_REDUX_CSS = `
 }
 
 .redux-landing-container .hero-card .selected-crew-type {
-  font-size: 0.65rem;
+  font-size: 0.8rem;
   color: #e5b54f;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
   text-align: center;
   white-space: nowrap;
   overflow: hidden;
@@ -791,29 +817,29 @@ export const LANDING_REDUX_CSS = `
   }
 
   .redux-landing-container .hero-card .selected-crew-member-item {
-    width: 100px !important;
+    width: 130px !important;
     gap: 8px !important;
   }
 
   .redux-landing-container .hero-card .selected-crew-avatar-wrapper {
-    width: 80px !important;
-    height: 80px !important;
+    width: 110px !important;
+    height: 110px !important;
     border-width: 3px !important;
   }
 
   .redux-landing-container .hero-card .selected-crew-badge {
     font-size: 10px !important;
-    bottom: -4px !important;
-    right: -8px !important;
+    bottom: 0px !important;
+    right: -2px !important;
     padding: 2px 6px !important;
   }
 
   .redux-landing-container .hero-card .selected-crew-name {
-    font-size: 0.9rem !important;
+    font-size: 1rem !important;
   }
 
   .redux-landing-container .hero-card .selected-crew-type {
-    font-size: 0.7rem !important;
+    font-size: 0.75rem !important;
   }
 
   .redux-landing-container .menu-card {
@@ -886,16 +912,16 @@ export const LANDING_REDUX_CSS = `
   }
   
   .redux-landing-container .hero-card .selected-crew-avatar-wrapper {
-    width: 80px !important;
-    height: 80px !important;
+    width: 100px !important;
+    height: 100px !important;
   }
   
   .redux-landing-container .hero-card .selected-crew-name {
-    font-size: 0.85rem !important;
+    font-size: 0.95rem !important;
   }
   
   .redux-landing-container .hero-card .selected-crew-type {
-    font-size: 0.65rem !important;
+    font-size: 0.7rem !important;
   }
   
   .redux-landing-container .hero-card .dungeon-selector-group {
@@ -1040,5 +1066,431 @@ export const LANDING_REDUX_CSS = `
   .redux-landing-container.tutorials-page .menu-card .card-top .card-desc {
     font-size: 0.82rem !important;
   }
+}
+
+/* ── Selected Crew Unit Showcase Modal ── */
+.crew-showcase-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(4, 3, 3, 0.82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: showcaseFadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes showcaseFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.crew-showcase-modal {
+  position: relative;
+  width: 100%;
+  max-width: 820px;
+  max-height: 85vh;
+  background: linear-gradient(145deg, rgba(22, 18, 15, 0.96), rgba(12, 10, 8, 0.98));
+  border: 1px solid rgba(212, 168, 68, 0.4);
+  border-radius: 16px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9), 0 0 30px rgba(212, 168, 68, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  text-align: left;
+  animation: showcaseModalPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes showcaseModalPop {
+  from { opacity: 0; transform: scale(0.92) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.crew-showcase-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(212, 168, 68, 0.4);
+  color: #e5b54f;
+  width: 36px !important;
+  height: 36px !important;
+  min-width: 36px !important;
+  min-height: 36px !important;
+  max-width: 36px !important;
+  max-height: 36px !important;
+  aspect-ratio: 1 / 1 !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  font-size: 16px;
+  line-height: 1 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer;
+  z-index: 10;
+  flex-shrink: 0 !important;
+  transition: all 0.2s ease;
+}
+
+.crew-showcase-close-btn:hover {
+  background: rgba(212, 168, 68, 0.25);
+  border-color: #ffd700;
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+.crew-showcase-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 24px 28px;
+  background: rgba(212, 168, 68, 0.05);
+  border-bottom: 1px solid rgba(212, 168, 68, 0.2);
+  transition: background 0.3s ease;
+}
+
+/* ── Class Specific Colorful Background Themes ── */
+
+/* Summoner Theme (Ethereal Violet / Arcane Purple) */
+.theme-summoner .crew-showcase-portrait,
+.selected-crew-avatar-wrapper.type-summoner {
+  background-color: #2e1065 !important;
+  background-image: radial-gradient(circle at 50% 40%, #7e22ce 0%, #3b0764 65%, #0f0728 100%) !important;
+  border-color: #c084fc !important;
+  box-shadow: 0 6px 22px rgba(126, 34, 206, 0.65), 0 0 20px rgba(192, 132, 252, 0.4) !important;
+}
+.theme-summoner.crew-showcase-header {
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.45) 0%, rgba(30, 10, 60, 0.6) 100%) !important;
+  border-bottom-color: rgba(192, 132, 252, 0.35) !important;
+}
+.theme-summoner .crew-showcase-type-tag {
+  background: rgba(168, 85, 247, 0.25) !important;
+  border-color: rgba(192, 132, 252, 0.5) !important;
+  color: #f3e8ff !important;
+}
+
+/* Soldier Theme (Royal Crimson / Bronze Armor) */
+.theme-soldier .crew-showcase-portrait,
+.selected-crew-avatar-wrapper.type-soldier {
+  background-color: #450a0a !important;
+  background-image: radial-gradient(circle at 50% 40%, #b91c1c 0%, #7f1d1d 65%, #2a0404 100%) !important;
+  border-color: #fca5a5 !important;
+  box-shadow: 0 6px 22px rgba(185, 28, 28, 0.65), 0 0 20px rgba(252, 165, 165, 0.4) !important;
+}
+.theme-soldier.crew-showcase-header {
+  background: linear-gradient(135deg, rgba(153, 27, 27, 0.45) 0%, rgba(45, 10, 10, 0.6) 100%) !important;
+  border-bottom-color: rgba(252, 165, 165, 0.35) !important;
+}
+.theme-soldier .crew-showcase-type-tag {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: rgba(252, 165, 165, 0.5) !important;
+  color: #ffe4e6 !important;
+}
+
+/* Monk Theme (Jade / Ethereal Cyan) */
+.theme-monk .crew-showcase-portrait,
+.selected-crew-avatar-wrapper.type-monk {
+  background-color: #042f2e !important;
+  background-image: radial-gradient(circle at 50% 40%, #0d9488 0%, #115e59 65%, #022c22 100%) !important;
+  border-color: #5eead4 !important;
+  box-shadow: 0 6px 22px rgba(13, 148, 136, 0.65), 0 0 20px rgba(94, 234, 212, 0.4) !important;
+}
+.theme-monk.crew-showcase-header {
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.45) 0%, rgba(4, 47, 46, 0.6) 100%) !important;
+  border-bottom-color: rgba(94, 234, 212, 0.35) !important;
+}
+.theme-monk .crew-showcase-type-tag {
+  background: rgba(20, 184, 166, 0.25) !important;
+  border-color: rgba(94, 234, 212, 0.5) !important;
+  color: #ccfbf1 !important;
+}
+
+/* Barbarian Theme (Primal Ember / Fire Crimson) */
+.theme-barbarian .crew-showcase-portrait,
+.selected-crew-avatar-wrapper.type-barbarian {
+  background-color: #431407 !important;
+  background-image: radial-gradient(circle at 50% 40%, #c2410c 0%, #7c2d12 65%, #270a03 100%) !important;
+  border-color: #ff8456 !important;
+  box-shadow: 0 6px 22px rgba(194, 65, 12, 0.65), 0 0 20px rgba(255, 132, 86, 0.4) !important;
+}
+
+/* Wizard Theme (Arcane Sapphire) */
+.theme-wizard .crew-showcase-portrait,
+.selected-crew-avatar-wrapper.type-wizard {
+  background-color: #172554 !important;
+  background-image: radial-gradient(circle at 50% 40%, #2563eb 0%, #1e40af 65%, #0f172a 100%) !important;
+  border-color: #93c5fd !important;
+  box-shadow: 0 6px 22px rgba(37, 99, 235, 0.65), 0 0 20px rgba(147, 197, 253, 0.4) !important;
+}
+
+/* Engineer Theme (Copper Amber) */
+.theme-engineer .crew-showcase-portrait,
+.selected-crew-avatar-wrapper.type-engineer {
+  background-color: #451a03 !important;
+  background-image: radial-gradient(circle at 50% 40%, #d97706 0%, #78350f 65%, #240d02 100%) !important;
+  border-color: #fcd34d !important;
+  box-shadow: 0 6px 22px rgba(217, 119, 6, 0.65), 0 0 20px rgba(252, 211, 77, 0.4) !important;
+}
+
+/* Ranger Theme (Forest Emerald) */
+.theme-ranger .crew-showcase-portrait,
+.selected-crew-avatar-wrapper.type-ranger {
+  background-color: #052e16 !important;
+  background-image: radial-gradient(circle at 50% 40%, #16a34a 0%, #14532d 65%, #021a0b 100%) !important;
+  border-color: #86efac !important;
+  box-shadow: 0 6px 22px rgba(22, 163, 74, 0.65), 0 0 20px rgba(134, 239, 172, 0.4) !important;
+}
+
+/* Sage Theme (Celestial Gold) */
+.theme-sage .crew-showcase-portrait,
+.selected-crew-avatar-wrapper.type-sage {
+  background-color: #3f2c06 !important;
+  background-image: radial-gradient(circle at 50% 40%, #ca8a04 0%, #713f12 65%, #1f1402 100%) !important;
+  border-color: #fef08a !important;
+  box-shadow: 0 6px 22px rgba(202, 138, 4, 0.65), 0 0 20px rgba(254, 240, 138, 0.4) !important;
+}
+
+.crew-showcase-portrait-container {
+  position: relative;
+}
+
+.crew-showcase-portrait {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid rgba(212, 168, 68, 0.8);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.8), 0 0 15px rgba(212, 168, 68, 0.2);
+}
+
+.crew-showcase-level-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -4px;
+  background: #1c1917;
+  color: #ffd700;
+  border: 1px solid rgba(212, 168, 68, 0.5);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: 'Outfit', sans-serif;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+  z-index: 2 !important;
+}
+
+.crew-showcase-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.crew-showcase-name {
+  font-family: 'Cinzel', serif;
+  font-size: 1.7rem;
+  font-weight: 700;
+  color: #f5f5f7;
+  margin: 0;
+  letter-spacing: 1px;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.8);
+}
+
+.crew-showcase-type-tag {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: #ffd700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-weight: 600;
+  background: rgba(212, 168, 68, 0.12);
+  border: 1px solid rgba(212, 168, 68, 0.3);
+  padding: 3px 12px;
+  border-radius: 12px;
+  width: fit-content;
+}
+
+.crew-showcase-body {
+  padding: 24px 28px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.crew-showcase-panel {
+  background: rgba(12, 10, 9, 0.65);
+  border: 1px solid rgba(212, 168, 68, 0.18);
+  border-radius: 12px;
+  padding: 18px 20px;
+}
+
+.crew-showcase-panel-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  color: #e5b54f;
+  margin: 0 0 14px 0;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(212, 168, 68, 0.15);
+  padding-bottom: 8px;
+}
+
+.crew-showcase-lore-text {
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: #d1d1d6;
+  margin: 0;
+  text-align: left;
+  font-family: 'Outfit', sans-serif;
+}
+
+.crew-showcase-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px 24px;
+}
+
+.crew-showcase-stat-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #c7c7cc;
+  font-family: 'Outfit', sans-serif;
+}
+
+.stat-value {
+  color: #ffd700;
+  font-weight: 700;
+}
+
+.stat-bar-track {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.crew-showcase-skills-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.crew-showcase-skill-card {
+  display: flex;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  padding: 10px 14px;
+  align-items: flex-start;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.crew-showcase-skill-card:hover {
+  background: rgba(212, 168, 68, 0.08);
+  border-color: rgba(212, 168, 68, 0.35);
+}
+
+.skill-card-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  object-fit: cover;
+  border: 1px solid rgba(212, 168, 68, 0.4);
+  background: #000000;
+  flex-shrink: 0;
+}
+
+.skill-card-icon-placeholder {
+  width: 38px;
+  height: 38px;
+  border-radius: 6px;
+  border: 1px solid rgba(212, 168, 68, 0.4);
+  background: rgba(212, 168, 68, 0.15);
+  color: #ffd700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.skill-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.skill-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.skill-card-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #f5f5f7;
+  font-family: 'Outfit', sans-serif;
+}
+
+.skill-card-tag {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: 'Outfit', sans-serif;
+}
+
+.skill-card-tag.passive {
+  background: rgba(69, 123, 157, 0.3);
+  color: #a8dadc;
+  border: 1px solid rgba(69, 123, 157, 0.5);
+}
+
+.skill-card-tag.active {
+  background: rgba(230, 57, 70, 0.25);
+  color: #ffb703;
+  border: 1px solid rgba(230, 57, 70, 0.4);
+}
+
+.skill-card-desc {
+  font-size: 0.78rem;
+  color: #a1a1a6;
+  margin: 2px 0 0 0;
+  line-height: 1.35;
+  text-align: left;
+  font-family: 'Outfit', sans-serif;
 }
 `;

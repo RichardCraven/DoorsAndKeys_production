@@ -3989,7 +3989,8 @@ class MonsterBattle extends React.Component {
                         const headerClass = isVictory ? "victory-header" : "defeat-header";
 
                         return (
-                            <div className={`summary-panel ${isVictory ? 'victory' : 'defeat'}`}>
+                            <div className="summary-overlay-container">
+                                <div className={`summary-panel ${isVictory ? 'victory' : 'defeat'}`}>
                                 {/* Header */}
                                 <div className="summary-header">
                                     <h1 className={headerClass}>{headerText}</h1>
@@ -4199,7 +4200,8 @@ class MonsterBattle extends React.Component {
                                     )}
                                 </div>
                             </div>
-                        );
+                        </div>
+                    );
                     })()}
 
                     <CModal className='inventory-modal' alignment='center' visible={this.state.showInventoryPopup} onClose={() => this.setState({ showInventoryPopup: false })}>
