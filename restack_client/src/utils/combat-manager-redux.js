@@ -2242,6 +2242,39 @@ export function CombatManagerRedux() {
             this.appendCombatLog(`Resolve decreased by ${penalty}. Current Resolve: ${meta.resolve}`);
         }
 
+        // --- Soul Tap passive skill trigger ---
+        // Whenever a friendly PC unit dies in combat, power accumulated before their death is transferred to the Summoner.
+        const isFriendlyPCUnit = target && (!target.isMonster || isFighter);
+        if (isFriendlyPCUnit) {
+            const accumulatedPower = target.power || 0;
+            const summoner = Object.values(this.combatants).find(c =>
+                c && !c.dead && (c.type === 'summoner' || c.image === 'summoner') && !c.isMonster
+            );
+            if (summoner && !summoner.dead) {
+                const hasSoulTap = (
+                    (summoner.globalSkills && summoner.globalSkills.some(s => (typeof s === 'string' ? s : s.key) === 'soul_tap')) ||
+                    (summoner.skills && summoner.skills.some(s => (typeof s === 'string' ? s : s.key) === 'soul_tap')) ||
+                    (typeof this.getSkillLevel === 'function' && this.getSkillLevel(summoner, 'soul_tap') > 0)
+                );
+                if (hasSoulTap && accumulatedPower > 0) {
+                    const oldPower = summoner.power || 0;
+                    summoner.power = Math.min(100, oldPower + accumulatedPower);
+                    this.appendCombatLog(`✨ Soul Tap: ${this.getCombatantLogName(summoner)} drains ${accumulatedPower} Power from fallen ${this.getCombatantLogName(target)}! (${summoner.power}/100)`);
+                    if (summoner.power >= 100 && oldPower < 100) {
+                        summoner.ultimateActive = true;
+                        this.appendCombatLog(`⚡ ULTIMATE READY for ${this.getCombatantLogName(summoner)}!`);
+                    }
+                    if (target.coordinates && summoner.coordinates) {
+                        if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                            this.animManagerRedux.triggerAbility(target.coordinates, summoner.coordinates, 'soul_tap');
+                        } else if (this.animationManager && typeof this.animationManager.triggerAbility === 'function') {
+                            this.animationManager.triggerAbility(target.coordinates, summoner.coordinates, 'soul_tap');
+                        }
+                    }
+                }
+            }
+        }
+
         if (typeof this.updateData === 'function') {
             this.updateData(clone(this.combatants));
         }
@@ -12364,6 +12397,10 @@ export function CombatManagerRedux() {
      * PBTs live at least 2 rounds, then have a 50% chance to despawn each round.
      */
     this._processPowerBoostTiles = () => {
+        if (this.isShrineEncounter || this.disablePowerBoostTiles) {
+            this.powerBoostTiles = [];
+            return;
+        }
         if (!Array.isArray(this.powerBoostTiles)) this.powerBoostTiles = [];
 
         // Despawn: tick age and apply 50% chance for tiles older than 2 rounds

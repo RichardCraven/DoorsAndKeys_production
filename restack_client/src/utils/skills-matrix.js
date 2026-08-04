@@ -1237,6 +1237,19 @@ const skillsMatrix = {
         isPassive: true,
         knownByDefault: false
     },
+    soul_tap: {
+        class: 'summoner',
+        id: 'soul_tap',
+        tier: 2,
+        name: 'Soul Tap',
+        desc: 'Whenever a friendly PC unit dies in combat, power accumulated before their death is added to the Summoner\'s power pool.',
+        icon: images.soul_tap_summoner,
+        cooldown: 0,
+        type: 'passive',
+        treePath: 'combat_b',
+        isPassive: true,
+        knownByDefault: false
+    },
     soul_tithe: {
         class: 'summoner',
         id: 'soul_tithe',

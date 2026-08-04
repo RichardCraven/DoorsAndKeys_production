@@ -30,7 +30,8 @@ import {
   soldier_fist_of_honor,
   death_missile,
   death_missile_hit,
-  food
+  food,
+  soul_tap_summoner
 } from './images';
 
 export class AnimationManagerRedux {
@@ -246,6 +247,9 @@ export class AnimationManagerRedux {
         break;
       case 'energy_drain':
         this._energyDrain(sourceCoords, targetCoords);
+        break;
+      case 'soul_tap':
+        this._soulTap(sourceCoords, targetCoords);
         break;
       case 'induce_fear':
         this._induceFear(sourceCoords, targetCoords);
@@ -771,6 +775,28 @@ export class AnimationManagerRedux {
       icon: energy_drain,
       duration: 1500,
     });
+  }
+
+  _soulTap(src, tgt) {
+    if (!src || !tgt) return;
+    const srcPx = this._px(src);
+    const tgtPx = this._getImpactTargetPx(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+    this._emit({
+      type: 'soul_tap_beam',
+      srcPx,
+      tgtPx,
+      length,
+      angle,
+      icon: soul_tap_summoner,
+      duration: 1500,
+    });
+    this._delay(() => {
+      this.triggerPowerBoostPickup(tgt);
+    }, 450);
   }
 
   _induceFear(src, tgt) {

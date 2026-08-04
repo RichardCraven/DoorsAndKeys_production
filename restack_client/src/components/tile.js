@@ -939,17 +939,17 @@ function Tile(props) {
              {/* Connecting Path overlay */}
              { ((props.contains && props.contains.type === 'connecting_path') || props.optionType === 'connecting path') && (() => {
                    const isConnected = !!props.connectedEdge;
-                   let edge = props.connectedEdge || (props.contains && typeof props.contains === 'object' ? (props.contains.edge || props.contains.direction) : null);
+                   let edge = null;
 
-                   if (edge === 'E' || edge === 'east') edge = 'right';
-                   if (edge === 'W' || edge === 'west') edge = 'left';
-                   if (edge === 'N' || edge === 'north') edge = 'top';
-                   if (edge === 'S' || edge === 'south') edge = 'bottom';
-
-                   if (!edge && props.id !== undefined && props.id !== null) {
+                   if (props.id !== undefined && props.id !== null) {
                        const x = props.id % 15;
                        const y = Math.floor(props.id / 15);
 
+                       // Match Dungeon Builder (DungeonView / PlaneView) exact priority:
+                       // x === 0 (West edge) -> left (Horizontal)
+                       // x === 14 (East edge) -> right (Horizontal)
+                       // y === 0 (North edge) -> top (Vertical)
+                       // y === 14 (South edge) -> bottom (Vertical)
                        if (x === 0) edge = 'left';
                        else if (x === 14) edge = 'right';
                        else if (y === 0) edge = 'top';
@@ -967,6 +967,14 @@ function Tile(props) {
                            if (hasLeftRightNeighbor) edge = 'right';
                            else if (hasTopBottomNeighbor) edge = 'bottom';
                        }
+                   }
+
+                   if (!edge) {
+                       edge = props.connectedEdge || (props.contains && typeof props.contains === 'object' ? (props.contains.edge || props.contains.direction) : null);
+                       if (edge === 'E' || edge === 'east') edge = 'right';
+                       if (edge === 'W' || edge === 'west') edge = 'left';
+                       if (edge === 'N' || edge === 'north') edge = 'top';
+                       if (edge === 'S' || edge === 'south') edge = 'bottom';
                    }
                    const overlayStyle = {
                        position: 'absolute',

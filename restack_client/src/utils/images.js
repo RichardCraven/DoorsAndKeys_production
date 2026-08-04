@@ -1020,6 +1020,7 @@ import pressure_points_monk from '../assets/icons/global skills/Monk/pressure po
 import astral_map_monk from '../assets/icons/global skills/Monk/astral map.png';
 import spirit_sight_summoner from '../assets/icons/global skills/Summoner/spirit sight.png';
 import plunder_summoner from '../assets/icons/global skills/Summoner/plunder.png';
+import soul_tap_summoner from '../assets/icons/global skills/Summoner/sould tap.png';
 import soul_tithe_summoner from '../assets/icons/global skills/Summoner/soul tithe.png';
 import dark_pact_summoner from '../assets/icons/global skills/Summoner/dark pact.png';
 
@@ -2240,6 +2241,7 @@ export {
     astral_map_monk,
     spirit_sight_summoner,
     plunder_summoner,
+    soul_tap_summoner,
     soul_tithe_summoner,
     dark_pact_summoner,
     codex,

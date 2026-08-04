@@ -2454,6 +2454,7 @@ class DungeonPage extends React.Component {
             keysLocked: false,
             portalTransitionClass: '',
             inMonsterBattle: false,
+            instakillNextMonster: false,
             inTowerSiege: false,
             monster: null,
             crewSize: 0,
@@ -3572,6 +3573,17 @@ class DungeonPage extends React.Component {
             });
             Object.defineProperty(window, 'narrative_reset', {
                 get: () => { this.triggerNarrativeReset(); return 'Resetting narrative encounter tiles...'; },
+                configurable: true
+            });
+
+            // Debug mode toggle commands
+            window.toggleDebug = () => { this.handleToggleDebugMode(); return `Debug Mode toggled: ${window.debugMode ? 'ON' : 'OFF'}`; };
+            Object.defineProperty(window, 'd', {
+                get: () => { this.handleToggleDebugMode(); return `Debug Mode toggled: ${window.debugMode ? 'ON' : 'OFF'}`; },
+                configurable: true
+            });
+            Object.defineProperty(window, 'debug', {
+                get: () => { this.handleToggleDebugMode(); return `Debug Mode toggled: ${window.debugMode ? 'ON' : 'OFF'}`; },
                 configurable: true
             });
 
@@ -6616,6 +6628,32 @@ class DungeonPage extends React.Component {
             const raw = (this.state.devConsoleInput || '').trim();
             const cmd = raw.toLowerCase();
 
+            if (cmd === 'd' || cmd === 'debug' || cmd === 'debugmode' || cmd === 'debug mode' || cmd === 'debug-mode') {
+                const nextMode = !this.state.debugMode;
+                this.handleToggleDebugMode();
+                this.setState(prev => ({
+                    devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Debug Mode toggled: ${nextMode ? 'ON' : 'OFF'}`],
+                    devConsoleInput: ''
+                }));
+                try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) {}
+                e.preventDefault();
+                return;
+            }
+
+            if (cmd === 'instakill' || cmd === 'ik') {
+                this.setState(prev => {
+                    const nextState = !prev.instakillNextMonster;
+                    return {
+                        instakillNextMonster: nextState,
+                        devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Instakill flag: ${nextState ? 'ENABLED (Next encountered monster will be slain instantly)' : 'DISABLED'}`],
+                        devConsoleInput: ''
+                    };
+                });
+                try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) {}
+                e.preventDefault();
+                return;
+            }
+
             if (cmd === 'time') {
                 try {
                     const pstNow = getPstDate();
@@ -6877,6 +6915,7 @@ class DungeonPage extends React.Component {
                 if (cmd === 'list' || cmd === 'help') {
                     const commands = [
                         'monster-spawn / monsterspawn / mspawn',
+                        'd / debug / debugmode — toggle debug mode on or off',
                         'item-spawn / itemspawn / ispawn',
                         'shrine respawn / shrinerespawn',
                         'shrine reset / reset shrines — reset all used shrines so they can be accessed again',
@@ -7923,6 +7962,27 @@ class DungeonPage extends React.Component {
         }
     }
     triggerMonsterBattle = (bool, tileId) => {
+        if (bool && this.state.instakillNextMonster) {
+            this.setState({ instakillNextMonster: false });
+            if (this.props.boardManager && (typeof tileId === 'number' || typeof tileId === 'string' || (tileId && typeof tileId.id !== 'undefined'))) {
+                const targetId = typeof tileId === 'object' ? tileId.id : tileId;
+                try {
+                    this.props.boardManager.removeDefeatedMonsterTile(targetId);
+                    this.props.boardManager.refreshTiles();
+                } catch (e) {
+                    console.warn('Instakill removeDefeatedMonsterTile error:', e);
+                }
+            }
+            this.setState(prev => ({
+                devConsoleOutput: [...(prev.devConsoleOutput || []), '⚡ Instakill triggered! Monster slain instantly.'],
+                tiles: this.props.boardManager ? this.props.boardManager.tiles : prev.tiles,
+                overlayTiles: this.props.boardManager ? this.props.boardManager.overlayTiles : prev.overlayTiles
+            }));
+            if (this.props.boardManager && typeof this.props.boardManager.messaging === 'function') {
+                this.props.boardManager.messaging('⚡ Instakill! Monster slain instantly.');
+            }
+            return;
+        }
         if (bool) {
             this.reduxCombatManager = new CombatManagerRedux();
         } else {
@@ -13565,7 +13625,7 @@ class DungeonPage extends React.Component {
                     wizard:   [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
                     barbarian:[{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%' }],
                     monk:     [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
-                    summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],
+                    summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tap', name: 'Soul Tap', desc: 'Transfers accumulated power of fallen friendly units to the Summoner' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],
                 };
                 const availableSkills = globalSkillsByClass[sd.shrineClass] || [];
                 

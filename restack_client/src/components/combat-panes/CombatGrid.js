@@ -4414,6 +4414,44 @@ export default function CombatGrid(props) {
             );
         }
 
+        if (anim.type === 'soul_tap_beam' && anim.srcPx && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: `${anim.length}px`,
+                    height: '10px',
+                    background: 'linear-gradient(to right, rgba(46, 204, 113, 0.2), #2ecc71, #abebc6, #2ecc71, rgba(46, 204, 113, 0.2))',
+                    boxShadow: '0 0 14px #2ecc71, 0 0 26px #27ae60',
+                    transformOrigin: '0 50%',
+                    transform: `rotate(${anim.angle}deg) translateY(-50%)`,
+                    zIndex: 4500,
+                    pointerEvents: 'none',
+                    filter: 'blur(1.2px)',
+                    animation: 'pinkBeamPulse 1.5s ease-out forwards',
+                }}>
+                    {anim.icon && (
+                        <img
+                            src={anim.icon}
+                            alt="Soul Tap"
+                            style={{
+                                position: 'absolute',
+                                left: '50%',
+                                top: '50%',
+                                width: '32px',
+                                height: '32px',
+                                transform: 'translate(-50%, -50%)',
+                                boxShadow: '0 0 12px #2ecc71',
+                                borderRadius: '50%',
+                                border: '1px solid #abebc6'
+                            }}
+                        />
+                    )}
+                </div>
+            );
+        }
+
         if (anim.type === 'hex_overlay' && anim.tgtPx) {
             return (
                 <div key={key} style={{
