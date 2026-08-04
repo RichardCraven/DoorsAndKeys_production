@@ -729,6 +729,32 @@ const resolvePortrait = (portraitVal) => {
     return res;
 };
 
+const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
+    if (unit && unit.stagedPortraits) {
+        const sp = unit.stagedPortraits;
+        if (greetingInProcess && unit.isMainMonster && sp.greeting) {
+            return resolvePortrait(sp.greeting);
+        }
+        if (unit.dead && sp.death) {
+            return resolvePortrait(sp.death);
+        }
+        if (typeof unit.hp === 'number' && typeof unit.starting_hp === 'number' && unit.starting_hp > 0) {
+            const hpRatio = unit.hp / unit.starting_hp;
+            if (hpRatio < 0.3 && sp.criticallyWounded) {
+                return resolvePortrait(sp.criticallyWounded);
+            }
+            if (hpRatio < 0.7 && sp.wounded) {
+                return resolvePortrait(sp.wounded);
+            }
+        }
+    }
+    return resolvePortrait(
+        (unit.type === 'archaic_familiar' && activeAnimations && activeAnimations.some(a => a.sourceUnitId === unit.id))
+        ? 'stone_familiar_glowing'
+        : unit.portrait
+    );
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function SiegeCombatGrid(props) {
@@ -1938,14 +1964,14 @@ export default function SiegeCombatGrid(props) {
                             opacity: hideBars ? 0 : 1,
                             transition: 'opacity 0.5s ease-in-out'
                         }}>
-                            <div className="hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
+                            <div className="hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '1px' }}>
                                 <div className="red-fill" style={{
                                     width: hideBars ? '0%' : `${(getFighterDetails(fighter)?.hp / fighter.stats.hp) * 100}%`,
                                     transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                 }} />
                             </div>
                             {!getFighterDetails(fighter)?.isFamiliar && !(getFighterDetails(fighter)?.type && String(getFighterDetails(fighter)?.type).includes('familiar')) && combatManager && combatManager.round !== undefined ? (
-                                <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative', bottom: 'auto', top: 'auto' }}>
+                                <div className="endurance-bar" style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative', bottom: 'auto', top: 'auto' }}>
                                     <div className="white-fill" style={{
                                         height: '100%',
                                         backgroundColor: '#ffffff',
@@ -2411,11 +2437,7 @@ export default function SiegeCombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: unit.portrait ? `url("${resolvePortrait(
-                                (unit.type === 'archaic_familiar' && activeAnimations.some(a => a.sourceUnitId === unit.id))
-                                ? 'stone_familiar_glowing'
-                                : unit.portrait
-                            )}")` : 'none',
+                            backgroundImage: unit.portrait ? `url("${getCombatantPortrait(unit, greetingInProcess, activeAnimations)}")` : 'none',
                             backgroundSize: undefined,
                             backgroundPosition: undefined,
                             filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),
@@ -2946,7 +2968,7 @@ export default function SiegeCombatGrid(props) {
                         opacity: hideBars ? 0 : 1,
                         transition: 'opacity 0.5s ease-in-out'
                     }}>
-                        <div className="monster-hp-bar hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
+                        <div className="monster-hp-bar hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '1px' }}>
                             <div className="red-fill" style={{
                                 width: hideBars ? '0%' : `${(unit.hp / (unit.stats?.hp || unit.starting_hp || 1)) * 100}%`,
                                 transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
@@ -2954,7 +2976,7 @@ export default function SiegeCombatGrid(props) {
                         </div>
                         {!(unit.isFamiliar || (unit.type && String(unit.type).includes('familiar')) || (unit.type && String(unit.type).includes('spider'))) && (
                             combatManager && combatManager.round !== undefined ? (
-                                <div className="endurance-bar" style={{ height: '2px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative', bottom: 'auto', top: 'auto' }}>
+                                <div className="endurance-bar" style={{ height: '1px', backgroundColor: 'rgba(255,255,255,0.2)', width: '100%', position: 'relative', bottom: 'auto', top: 'auto' }}>
                                     <div className="white-fill" style={{
                                         height: '100%',
                                         backgroundColor: '#ffffff',
@@ -7220,7 +7242,7 @@ export default function SiegeCombatGrid(props) {
                 const coreLeft = iconLeft + (iconW - coreSize) / 2;  // = iconLeft + 50
                 const coreTop  = iconTop  + (iconH - coreSize) / 2;  // = iconTop  + 50
                 // HP bar: flush at the south pixel edge of the 2×2 block
-                const barH    = 3;
+                const barH    = 1;
                 const barTop  = iconTop + iconH - barH;              // = iconTop + 197
 
                 return (

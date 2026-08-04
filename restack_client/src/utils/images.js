@@ -79,8 +79,11 @@ import zul_devil from '../assets/icons/monsters/devils/zul_devil.png'
 import black_demon from '../assets/icons/monsters/demons/black_demon.png'
 
 import golden_demon from '../assets/icons/monsters/demons/golden_demon.png'
-import kabuki_demon from '../assets/portraits/monsters/variations/kabuki_demon/kabuki_demon1.png'
-import kabuki_demon_portrait from '../assets/portraits/monsters/variations/kabuki_demon/kabuki_demon1.png'
+import kabuki_demon from '../assets/portraits/monsters/stages/kabuki demon/kabuki_demon.png'
+import kabuki_demon_portrait from '../assets/portraits/monsters/stages/kabuki demon/kabuki_demon.png'
+import kabuki_demon_stage_greeting from '../assets/portraits/monsters/stages/kabuki demon/kabuki_demon_greeting.png'
+import kabuki_demon_stage_wounded from '../assets/portraits/monsters/stages/kabuki demon/kabuki_demon_wounded.png'
+import kabuki_demon_stage_critical from '../assets/portraits/monsters/stages/kabuki demon/kabuki_demon_critical.png'
 import kabuki_demon_minion_portrait from '../assets/portraits/monsters/variations/kabuki_demon/kabuki_demon_minion.png'
 import kabuki_demon_minion from '../assets/portraits/monsters/variations/kabuki_demon/kabuki_demon_minion.png'
 import archaic_familiar_portrait from '../assets/familiars/stone_familiar_dormant.png'
@@ -482,6 +485,7 @@ import wide_skull from '../assets/icons/misc/wide_skull.png'
 import eclipse from '../assets/icons/misc/eclipse.png'
 import magic_moon_1 from '../assets/icons/misc/magic_moon_1.png'
 import food from '../assets/icons/misc/food.png'
+import resolve_icon from '../assets/icons/misc/resolve_icon.jpg'
 
 // Lord Badges
 import arcolic_badge from '../assets/icons/misc/arcolic badge.png'
@@ -1671,6 +1675,7 @@ export {
     eclipse,
     magic_moon_1,
     food,
+    resolve_icon,
 
     // rune,
     quest_crown,
@@ -1815,6 +1820,9 @@ export {
     witch_p1_8,
 
     kabuki_demon_portrait,
+    kabuki_demon_stage_greeting,
+    kabuki_demon_stage_wounded,
+    kabuki_demon_stage_critical,
     kabuki_demon_minion_portrait,
     kabuki_demon_minion,
 

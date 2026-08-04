@@ -800,6 +800,39 @@ export function MonsterManager() {
                 { itemPool: TIER2_WEAPONS, percentChance: 35 },
             ]
         },
+        // olfactor: {
+        //     type: 'olfactor',
+        //     tier: 3,
+        //     subtype: 'aberration',
+        //     key: 'olfactor',
+        //     image_names: ['olfactor'],
+        //     monster_names: ['Olfactor'],
+        //     lordName: 'Olfactor',
+        //     stats: {
+        //         hp: 310,
+        //         atk: 15,
+        //         def: 5,
+        //         speed: 9,
+        //         willpower: 11,
+        //         str: 4,
+        //         int: 12,
+        //         dex: 6,
+        //         fort: 4
+        //     },
+        //     level: 14,
+        //     portrait: images['beholder_portrait'],
+        //     greetings: ['Klo. Vudandi mal modu oylod'],
+        //     deathCries: ['Urdu uruk du la meklak milnaurku...'],
+        //     skills: ['chainbolt', 'mind_swap', 'displacement_ray', 'invisibility', 'voidbite', 'greater_magic_missile'],
+        //     weaknesses: ['arcane', 'holy'],
+        //     minions: ['beholder_minion', 'beholder_minion', 'beholder_minion'],
+        //     drops: [
+        //         { item: TIER2_POTION, percentChance: 60 },
+        //         { itemPool: TIER2_MAGICAL, percentChance: 35 },
+        //         { itemPool: TIER3_MAGICAL, percentChance: 15 },
+        //         { itemPool: TIER2_WEAPONS, percentChance: 35 },
+        //     ]
+        // },
         // precipice_guardian: {
         //     type: 'precipice_guardian',
         //     key: 'precipice_guardian',
@@ -847,6 +880,12 @@ export function MonsterManager() {
             },
             level: 15,
             portrait: images['kabuki_demon_portrait'],
+            stagedPortraits: {
+                greeting: images['kabuki_demon_stage_greeting'],
+                wounded: images['kabuki_demon_stage_wounded'],
+                criticallyWounded: images['kabuki_demon_stage_critical'],
+                death: null
+            },
             greetings: ['Assaaa'],
             deathCries: ['No! Impossible!'],
             skills: ['claw_strike', 'invisibility', 'greater_magic_missile', 'rake', 'voidbite'],

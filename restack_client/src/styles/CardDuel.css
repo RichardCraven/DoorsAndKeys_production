@@ -561,25 +561,25 @@
 /* Highlight States */
 .pe-node--valid-spawn {
   background: rgba(46, 204, 113, 0.25) !important;
-  border: 2px solid #2ecc71 !important;
-  box-shadow: 0 0 15px rgba(46, 204, 113, 0.6);
+  border: 1px solid transparent !important;
+  box-shadow: inset 0 0 0 2px #2ecc71, 0 0 15px rgba(46, 204, 113, 0.6);
   animation: pe-pulse-spawn 1.2s ease-in-out infinite alternate;
 }
 @keyframes pe-pulse-spawn {
-  0% { box-shadow: 0 0 8px rgba(46, 204, 113, 0.4); }
-  100% { box-shadow: 0 0 20px rgba(46, 204, 113, 0.8); }
+  0% { box-shadow: inset 0 0 0 2px #2ecc71, 0 0 8px rgba(46, 204, 113, 0.4); }
+  100% { box-shadow: inset 0 0 0 2px #2ecc71, 0 0 20px rgba(46, 204, 113, 0.8); }
 }
 
 .pe-node--valid-move {
   background: rgba(72, 176, 200, 0.25) !important;
-  border: 2px solid #48b0c8 !important;
-  box-shadow: 0 0 15px rgba(72, 176, 200, 0.6);
+  border: 1px solid transparent !important;
+  box-shadow: inset 0 0 0 2px #48b0c8, 0 0 15px rgba(72, 176, 200, 0.6);
 }
 
 .pe-node--valid-attack {
   background: rgba(231, 76, 60, 0.3) !important;
-  border: 2px solid #e74c3c !important;
-  box-shadow: 0 0 18px rgba(231, 76, 60, 0.8);
+  border: 1px solid transparent !important;
+  box-shadow: inset 0 0 0 2px #e74c3c, 0 0 18px rgba(231, 76, 60, 0.8);
   animation: pe-pulse-attack 1s ease-in-out infinite alternate;
 }
 @keyframes pe-pulse-attack {
@@ -588,8 +588,8 @@
 }
 
 .pe-node--selected {
-  border: 2px solid var(--pe-gold) !important;
-  box-shadow: 0 0 18px rgba(201, 168, 76, 0.8);
+  border: 1px solid transparent !important;
+  box-shadow: inset 0 0 0 2px var(--pe-gold), 0 0 18px rgba(201, 168, 76, 0.8);
 }
 
 .pe-node--center-buffer {

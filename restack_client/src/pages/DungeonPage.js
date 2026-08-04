@@ -1360,14 +1360,15 @@ class DungeonPage extends React.Component {
             const spiritKeys = DISCIPLINE_CATEGORIES.spirit;
 
             const disciplineSubTypes = [
-                // Meditative Focus — direct (no submenu)
+                // Chi Focus — direct (no submenu)
                 {
                     ...buildChild(chiDef),
+                    type: 'Chi Focus',
                     isCategory: false,
                 },
-                // Body Conditioning — submenu
+                // Stances — submenu
                 {
-                    type: 'Body Conditioning',
+                    type: 'Stances',
                     disciplineKey: null,
                     category: 'stance',
                     iconUrl: images['monk_inner_fire'] || '',
@@ -1392,7 +1393,7 @@ class DungeonPage extends React.Component {
             ];
             actions.push({
                 type: 'inner_discipline',
-                name: 'Inner Discipline',
+                name: 'Discipline',
                 iconUrl: images['monk_meditate'] || '',
                 noMaxCap: true,
                 subTypes: disciplineSubTypes,
@@ -1567,25 +1568,50 @@ class DungeonPage extends React.Component {
                     {/* <div className="info-icon" style={{backgroundImage: `url(${images['info']})`}}></div> */}
                     <div className={`action-sub-menu ${!action.disabled && (Array.isArray(this.state.actionMenuTypeExpanded) ? this.state.actionMenuTypeExpanded : []).includes(action.type) ? 'expanded' : ''}`}>
                         {maximumReached && <div className='max-reached'>maximum reached</div>}
-                        {action.subTypes && action.subTypes.map((subType, j) => (
-                            <React.Fragment key={j}>
-                                <div onClick={() => this.handleActionSubtypeClick(action, subType)}
-                                    className={`action-subtype ${this.getSubtypeClass(subType, maximumReached)} ${action.type === 'glyph' && this.state.glyphBuilderOpen === subType.glyphTier ? 'active-tier' : ''} ${subType.isCategory && this.state.innerDisciplineCategoryOpen === subType.categoryKey ? 'active-tier' : ''} ${!subType.isCategory && subType.disciplineKey && this.state.innerDisciplineSelected === subType.disciplineKey ? 'active-tier' : ''}`}>
-                                    {subType.type} {subType.count !== 0 && this.getSubtypeImageCountElement(subType)}
-                                    {subType.isCategory && <span className="category-arrow">{this.state.innerDisciplineCategoryOpen === subType.categoryKey ? ' ▾' : ' ▸'}</span>}
-                                </div>
-                                {/* Nested children for inner discipline categories */}
-                                {subType.isCategory && this.state.innerDisciplineCategoryOpen === subType.categoryKey && subType.children && (
-                                    <div className="discipline-children">
-                                        {subType.children.map((child, k) => (
-                                            <div key={k}
-                                                onClick={() => this.handleActionSubtypeClick(action, child)}
-                                                className={`action-subtype discipline-child ${this.getSubtypeClass(child, false)} ${this.state.innerDisciplineSelected === child.disciplineKey ? 'active-tier' : ''}`}>
-                                                {child.type} {child.count !== 0 && this.getSubtypeImageCountElement(child)}
-                                            </div>
-                                        ))}
+                        {action.subTypes && action.subTypes.map((subType, j) => {
+                            const subTypeIcon = subType.iconUrl ? (typeof subType.iconUrl === 'object' ? (subType.iconUrl.default || '') : subType.iconUrl) : null;
+                            const subTypeDiscDef = subType.disciplineKey ? INNER_DISCIPLINES[subType.disciplineKey] : null;
+                            const subTypeTooltip = subTypeDiscDef ? `${subTypeDiscDef.name}\n${subTypeDiscDef.description}\n⏱ ${Math.round(subTypeDiscDef.prepTime / 60000)} min prep${subTypeDiscDef.combatDuration ? ` · ⚔ ${subTypeDiscDef.combatDuration} combats` : ''}${subTypeDiscDef.category === 'chi' ? ` · 🧘 Max ${subTypeDiscDef.maxCharges || 3} charges` : ''}\n"${subTypeDiscDef.flavorText}"` : undefined;
+                            return (
+                                <React.Fragment key={j}>
+                                    <div onClick={() => this.handleActionSubtypeClick(action, subType)}
+                                        title={subTypeTooltip}
+                                        className={`action-subtype ${this.getSubtypeClass(subType, maximumReached)} ${action.type === 'glyph' && this.state.glyphBuilderOpen === subType.glyphTier ? 'active-tier' : ''} ${subType.isCategory && this.state.innerDisciplineCategoryOpen === subType.categoryKey ? 'active-tier' : ''} ${!subType.isCategory && subType.disciplineKey && this.state.innerDisciplineSelected === subType.disciplineKey ? 'active-tier' : ''}`}
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '6px 8px', boxSizing: 'border-box', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left' }}
+                                    >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                                            {subTypeIcon && <img src={subTypeIcon} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />}
+                                            <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left' }}>{subType.type}</span>
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                            {subType.count !== 0 && this.getSubtypeImageCountElement(subType)}
+                                            {subType.isCategory && <span className="category-arrow" style={{ marginLeft: 4, fontSize: '10px', opacity: 0.8 }}>{this.state.innerDisciplineCategoryOpen === subType.categoryKey ? '▾' : '▸'}</span>}
+                                        </div>
                                     </div>
-                                )}
+                                    {/* Nested children for inner discipline categories */}
+                                    {subType.isCategory && this.state.innerDisciplineCategoryOpen === subType.categoryKey && subType.children && (
+                                        <div className="discipline-children" style={{ display: 'flex', flexDirection: 'column', gap: '2px', paddingLeft: '12px', borderLeft: '2px solid rgba(249, 177, 21, 0.35)', marginLeft: '10px', marginTop: '2px', marginBottom: '4px' }}>
+                                            {subType.children.map((child, k) => {
+                                                const childIcon = child.iconUrl ? (typeof child.iconUrl === 'object' ? (child.iconUrl.default || '') : child.iconUrl) : null;
+                                                const childDiscDef = child.disciplineKey ? INNER_DISCIPLINES[child.disciplineKey] : null;
+                                                const childTooltip = childDiscDef ? `${childDiscDef.name}\n${childDiscDef.description}\n⏱ ${Math.round(childDiscDef.prepTime / 60000)} min prep${childDiscDef.combatDuration ? ` · ⚔ ${childDiscDef.combatDuration} combats` : ''}${childDiscDef.revealScope ? ` · 👁 ${childDiscDef.revealScope === 'current_board' ? 'Current board' : childDiscDef.revealScope === 'adjacent_boards' ? 'Adjacent boards' : 'Entire level'}` : ''}\n"${childDiscDef.flavorText}"` : undefined;
+                                                return (
+                                                    <div key={k}
+                                                        onClick={() => this.handleActionSubtypeClick(action, child)}
+                                                        title={childTooltip}
+                                                        className={`action-subtype discipline-child ${this.getSubtypeClass(child, false)} ${this.state.innerDisciplineSelected === child.disciplineKey ? 'active-tier' : ''}`}
+                                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px 6px', boxSizing: 'border-box', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left' }}
+                                                    >
+                                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                                                            {childIcon && <img src={childIcon} alt="" style={{ width: 15, height: 15, objectFit: 'contain', flexShrink: 0 }} />}
+                                                            <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left', fontSize: '11px' }}>{child.type}</span>
+                                                        </div>
+                                                        {child.count !== 0 && this.getSubtypeImageCountElement(child)}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 {/* Builder panel renders immediately below the tier that is open */}
                                 {action.type === 'glyph' && this.state.glyphBuilderOpen === subType.glyphTier && (() => {
                                     const tier = this.state.glyphBuilderOpen;
@@ -1679,7 +1705,8 @@ class DungeonPage extends React.Component {
                                     );
                                 })()}
                             </React.Fragment>
-                        ))}
+                        )
+                    })}
 
                         {/* ── Compound Potions builder (Sage) ───────────────────────────── */}
                         {action.type === 'compound' && this.state.compoundBuilderOpen && (() => {
@@ -1944,68 +1971,10 @@ class DungeonPage extends React.Component {
                             </div>
                         );
                     })()}
-                    {/* ── Inner Discipline picker (Monk) ─────────────────────────── */}
-                    {action.type === 'inner_discipline' && this.state.innerDisciplineBuilderOpen && (() => {
-                        const selectedDisc = this.state.innerDisciplineSelected;
-                        const discDef = selectedDisc ? INNER_DISCIPLINES[selectedDisc] : null;
-                        const activeDisc = (this.state.selectedCrewMember?.specialActions || []).find(a =>
-                            a && a.type === 'inner_discipline' && new Date(a.endDate) > new Date()
-                        );
-                        const isBusy = !!activeDisc;
-                        // Chi max check
-                        let isMaxChi = false;
-                        if (discDef && discDef.category === 'chi') {
-                            const charges = (this.state.selectedCrewMember?.specialActions || []).filter(
-                                a => a.type === 'inner_discipline' && a.category === 'chi' && a.available
-                            ).length;
-                            isMaxChi = charges >= (discDef.maxCharges || 3);
-                        }
-                        const canCommit = discDef && !isBusy && !isMaxChi;
-                        return (
-                            <div className="compound-builder-panel tactics-builder-panel inner-discipline-builder-panel">
-                                {/* Discipline details */}
-                                {discDef && (
-                                    <div className="tactics-detail">
-                                        <div className="tactics-detail-name">{discDef.name}</div>
-                                        <div className="tactics-detail-desc">{discDef.description}</div>
-                                        <div className="tactics-detail-meta">
-                                            <span><span role="img" aria-label="timer">⏱</span> {Math.round(discDef.prepTime / 60000)} min prep</span>
-                                            {discDef.combatDuration && (
-                                                <span><span role="img" aria-label="crossed swords">⚔</span> {discDef.combatDuration} combat{discDef.combatDuration !== 1 ? 's' : ''}</span>
-                                            )}
-                                            {discDef.category === 'chi' && (
-                                                <span><span role="img" aria-label="meditation">🧘</span> Up to {discDef.maxCharges || 3} charges</span>
-                                            )}
-                                            {discDef.revealScope && (
-                                                <span><span role="img" aria-label="eye">👁</span> {discDef.revealScope === 'current_board' ? 'Current board' : discDef.revealScope === 'adjacent_boards' ? 'Adjacent boards' : 'Entire level'}</span>
-                                            )}
-                                        </div>
-                                        <div className="tactics-detail-flavor">{discDef.flavorText}</div>
-                                    </div>
-                                )}
-                                {!discDef && (
-                                    <div className="tactics-placeholder">Select a discipline above to see details.</div>
-                                )}
-                                <button
-                                    className={`compound-brew-btn ${canCommit ? 'ready' : 'disabled'}`}
-                                    disabled={!canCommit}
-                                    onClick={() => this.handleInnerDisciplineCommit(selectedDisc)}
-                                >
-                                    {isBusy
-                                        ? `Practising: ${activeDisc.name}…`
-                                        : isMaxChi
-                                            ? 'Maximum chi charges reached'
-                                            : discDef
-                                                ? `Begin ${discDef.name}`
-                                                : 'Select a discipline first'}
-                                </button>
-                            </div>
-                        );
-                    })()}
                     </div>
                 </div>
-                )
-            })}
+            )
+        })}
         </div>;
     }
     
@@ -2508,6 +2477,9 @@ class DungeonPage extends React.Component {
             // floating player animation state
             , playerFloatVisible: false
             , playerFloatStyle: { left: 0, top: 0, transform: 'translate3d(0px, 0px, 0px)' }
+            , showPrayOverlay: false
+            , prayerResult: null
+            , prayerFeedback: ''
             , playerAnimating: false
             , animOriginIndex: null
             , animDestIndex: null
@@ -4892,6 +4864,12 @@ class DungeonPage extends React.Component {
 
             const isAdjacent = (idA, idB) => {
                 if (idA === null || idB === null || idA === undefined || idB === undefined) return false;
+
+                // Check passage walls and room boundaries between tiles
+                if (typeof bm.isPassageWallBlockingBetween === 'function' && bm.isPassageWallBlockingBetween(idA, idB)) {
+                    return false;
+                }
+
                 const rA = Math.floor(idA / 15), cA = idA % 15;
                 const rB = Math.floor(idB / 15), cB = idB % 15;
 
@@ -4968,15 +4946,24 @@ class DungeonPage extends React.Component {
                 // Defensive: re-verify pTile still contains pygmies
                 if (bm.getContainsType(pTile.contains) !== 'pygmies') continue;
 
+                // Ensure the pygmy has a valid loaded portrait before moving/attacking
+                const imgKey = bm.getImageForContains(pTile.contains, pTile);
+                if (!imgKey || !images[imgKey]) {
+                    console.warn(`Pygmy portrait not loaded for subtype: ${bm.getContainsSubtype(pTile.contains)}. Skipping movement.`);
+                    continue;
+                }
+
                 let currentIdx = pTile.id;
                 const pygmyData = pTile.contains;
 
                 // Verify if Pygmy is already adjacent to the live player avatar before stepping
                 const initialLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                 if (initialLivePlayerIdx !== null && isAdjacent(currentIdx, initialLivePlayerIdx)) {
+                    pTile.isChargingAmbush = true;
                     if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                     this.forceUpdate();
-                    await sleep(350);
+                    await sleep(1000); // 1 full second delay with escalating red glow
+                    pTile.isChargingAmbush = false;
                     const checkLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                     if (checkLivePlayerIdx !== null && isAdjacent(currentIdx, checkLivePlayerIdx)) {
                         pTile.contains = null;
@@ -4987,6 +4974,8 @@ class DungeonPage extends React.Component {
                         });
                         break;
                     } else {
+                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                        this.forceUpdate();
                         continue;
                     }
                 }
@@ -5022,28 +5011,33 @@ class DungeonPage extends React.Component {
                     const toTile = bm.tiles[nextStepIdx];
                     if (!fromTile || !toTile) break;
 
-                    // Move Pygmy unit 1 tile
+                    // Move Pygmy unit 1 tile and clear previous tile color
                     fromTile.contains = null;
+                    fromTile.color = '#6b6057';
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[fromTile.id]) {
+                        bm.currentBoard.tiles[fromTile.id].color = '#6b6057';
+                    }
                     toTile.contains = pygmyData;
                     currentIdx = nextStepIdx;
 
                     // Check if adjacent to player avatar using live coordinates at this step
                     const currentLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                     if (currentLivePlayerIdx !== null && isAdjacent(currentIdx, currentLivePlayerIdx)) {
-                        // Render the pygmy adjacent to the player first
-                        if (this.state.debugMode && typeof bm.getIndexFromCoordinates === 'function' && bm.playerTile && bm.playerTile.location) {
-                            try {
-                                const pIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
-                                if (bm.tiles[pIdx]) bm.handleFogOfWar(bm.tiles[pIdx]);
-                            } catch (e) {}
-                        }
+                        // Render the pygmy adjacent to the player with charging red glow
+                        toTile.isChargingAmbush = true;
+                        // Always re-apply fog of war so the revealed tile colors are correct
+                        try {
+                            const pIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+                            if (bm.tiles[pIdx]) bm.handleFogOfWar(bm.tiles[pIdx]);
+                        } catch (e) {}
                         if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                         this.forceUpdate();
                         
-                        // Give the player a reaction window of 350ms to move away
-                        await sleep(350);
+                        // 1 full second delay with escalating red glow before attacking
+                        await sleep(1000);
                         
-                        // Check if the player is still adjacent after the delay
+                        toTile.isChargingAmbush = false;
+                        // Check if the player is still adjacent after 1 full second
                         const checkLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                         if (checkLivePlayerIdx !== null && isAdjacent(currentIdx, checkLivePlayerIdx)) {
                             toTile.contains = null;
@@ -5055,19 +5049,21 @@ class DungeonPage extends React.Component {
                             ambushed = true;
                             break;
                         } else {
-                            // Player moved away! Ambush avoided. Stop moving.
+                            // Player moved away! Ambush avoided. Clear glow and stop moving.
+                            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                            this.forceUpdate();
                             ambushed = false;
                             break;
                         }
                     }
 
-                    // Update fog of war and tiles for this step
-                    if (this.state.debugMode && typeof bm.getIndexFromCoordinates === 'function' && bm.playerTile && bm.playerTile.location) {
-                        try {
+                    // Always re-apply fog of war so tile colors are correct (sanitizes red pygmy placement colors)
+                    try {
+                        if (typeof bm.getIndexFromCoordinates === 'function' && bm.playerTile && bm.playerTile.location) {
                             const pIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                             if (bm.tiles[pIdx]) bm.handleFogOfWar(bm.tiles[pIdx]);
-                        } catch (e) {}
-                    }
+                        }
+                    } catch (e) {}
                     if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                     this.forceUpdate();
 
@@ -5356,7 +5352,7 @@ class DungeonPage extends React.Component {
                                 focused_rest: { name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' },
                                 pressure_points: { name: 'Pressure Points', desc: '15% vendor discount once per vendor' },
                                 astral_map: { name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' },
-                                spirit_sight: { name: 'Spirit Sight', desc: 'Narrative tiles glow through fog' },
+                                spirit_sight: { name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' },
                                 plunder: { name: 'Plunder', desc: 'Open a chest a second time once per run' },
                                 soul_tithe: { name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' },
                                 dark_pact: { name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' },
@@ -5847,7 +5843,17 @@ class DungeonPage extends React.Component {
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="crossed swords">⚔</span> Attack</span><span className="ql-value">{totalAtk}</span></div>
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="shield">🛡</span> Defense</span><span className="ql-value">{totalDef}</span></div>
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="meat">🍖</span> Food</span><span className="ql-value" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>{food} / {foodLimit}</span></div>
-                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="fist">✊</span> Resolve</span><span className="ql-value">{resolve}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span style={{
+                                display: 'inline-block',
+                                backgroundImage: `url(${images.resolve_icon})`,
+                                backgroundSize: 'contain',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'center',
+                                width: '16px',
+                                height: '16px',
+                                verticalAlign: 'middle',
+                                marginRight: '4px'
+                            }} /> Resolve</span><span className="ql-value">{resolve}</span></div>
                             <div className="ql-row"><span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span><span className="ql-value" style={{color: '#ffd700'}}>{this.props.inventoryManager?.gold || 0}</span></div>
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span><span className="ql-value" style={{color: '#b388ff'}}>{this.props.inventoryManager?.shimmering_dust || 0}</span></div>
                         </div>
@@ -5886,6 +5892,8 @@ class DungeonPage extends React.Component {
                                                 imageOverride={member.portrait ? member.portrait : null}
                                                 contains={member.type}
                                                 data={member}
+                                                hp={member.hp}
+                                                maxHp={member.stats ? member.stats.hp : member.max_hp}
                                                 color={member.color}
                                                 backgroundColor={hexToRgba(member.color, 0.5)}
                                                 editMode={false}
@@ -5929,21 +5937,34 @@ class DungeonPage extends React.Component {
                         <div className="quick-actions-strip">
                             {camping ? (
                                 <div className="quick-actions-camping-container" style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    <div className="crew-action-item action-row" style={{position:'relative', margin: 0}}>
-                                        <div className="camp-label">
-                                            <span style={{position: 'relative', zIndex: 2}}>Recuperating in Camp...</span>
+                                    <div className="crew-action-item action-row" style={{ position: 'relative', margin: 0, overflow: 'hidden', borderRadius: '6px', border: '1px solid rgba(249, 177, 21, 0.4)', background: 'rgba(255, 255, 255, 0.05)' }}>
+                                        <div className="camp-label" style={{ position: 'relative', width: '100%', minHeight: '34px', padding: '4px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxSizing: 'border-box', whiteSpace: 'nowrap' }}>
+                                            <span style={{ position: 'relative', zIndex: 2, fontWeight: 600, color: '#f9b115', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden' }}>Recuperating...</span>
                                             <div
                                                 id={placeholderId}
                                                 ref={el => this.placeholderRef(el, placeholderId, start, end)}
-                                                className={`progress-overlay camp-anim`}
+                                                className="progress-overlay camp-anim"
                                                 data-start={start}
                                                 data-end={end}
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: 0,
+                                                    left: 0,
+                                                    width: '0%',
+                                                    height: '100%',
+                                                    backgroundColor: 'rgba(249, 177, 21, 0.45)',
+                                                    animationName: 'campProgress',
+                                                    animationTimingFunction: 'linear',
+                                                    animationFillMode: 'forwards',
+                                                    zIndex: 1,
+                                                    pointerEvents: 'none'
+                                                }}
                                             ></div>
                                             <div
                                                 onClick={() => this.endCamp()}
                                                 role="button"
                                                 aria-label="Close camp"
-                                                style={{position: 'absolute', right: 6, top: 2, cursor: 'pointer', fontWeight: 700, zIndex: 3}}
+                                                style={{ position: 'relative', cursor: 'pointer', fontWeight: 700, zIndex: 3, color: '#ffffff', opacity: 0.8, fontSize: '16px', lineHeight: 1, padding: '2px 4px' }}
                                             >
                                                 ×
                                             </div>
@@ -7586,7 +7607,13 @@ class DungeonPage extends React.Component {
     }
     addItemToInventory = (tile) => {
         //this is coming from a board tile
-        const tileContains = tile.contains;
+        let tileContains = tile.contains;
+        if (tileContains && typeof tileContains === 'object') {
+            tileContains = tileContains.subtype || tileContains.type || '';
+        }
+        if (typeof tileContains === 'string') {
+            tileContains = tileContains.trim().replace(/\s+/g, '_');
+        }
         const itemDefinition = this.props.inventoryManager.allItems[tileContains];
         const itemDisplayName = itemDefinition?.name || (typeof tileContains === 'string' ? tileContains.replaceAll('_', ' ') : tileContains);
         if (itemDefinition) {
@@ -7605,7 +7632,9 @@ class DungeonPage extends React.Component {
             inventoryHoverMatrix: matrix
         })
 
-        if (this.props.boardManager && (this.props.boardManager.chestPickupInProgress || this.props.boardManager.treasurePickupInProgress)) {
+        const isChestOrTreasure = this.props.boardManager && (this.props.boardManager.chestPickupInProgress || this.props.boardManager.treasurePickupInProgress);
+        const isKey = typeof tileContains === 'string' && tileContains.toLowerCase().includes('key');
+        if (isChestOrTreasure || isKey) {
             const iconKey = itemDefinition?.icon || tileContains;
             this.triggerLootRadialArc({
                 type: 'item',
@@ -8205,10 +8234,26 @@ class DungeonPage extends React.Component {
             boardSize = tileSize*15;
 
         this.setState((state, props) => {
+            const W = window.innerWidth;
+            const H = window.innerHeight;
+            const L = state.leftPanelExpanded ? 200 : 0;
+            const R = state.rightPanelExpanded ? 200 : 0;
+
+            const wrapper = document.querySelector('.center-board-wrapper');
+            const wrapperWidth = wrapper ? wrapper.clientWidth : (W - 80);
+            const wrapperHeight = wrapper ? wrapper.clientHeight : (H - 10);
+
+            const wrapperLeft = (W - wrapperWidth) / 2;
+            const visibleCenterScreen = L + (W - L - R) / 2;
+            const zoomOutOffsetX = visibleCenterScreen - wrapperLeft - (boardSize / 2);
+            const zoomOutOffsetY = (wrapperHeight - boardSize) / 2;
+
             return {
                 tileSize,
                 boardSize,
-                isMobileLandscape
+                isMobileLandscape,
+                zoomOutOffsetX,
+                zoomOutOffsetY
             }
         }, () => {
             try {
@@ -8496,16 +8541,17 @@ class DungeonPage extends React.Component {
                 this.setState((prev) => ({ showQuestsPopup: !prev.showQuestsPopup }));
                 return;
             }
-            // 'm' — open Camp Map overlay directly from dungeon (blocked during battle)
-            if ((maybeKey === 'm' || maybeKey === 'M') && !this.state.inMonsterBattle) {
-                event.preventDefault();
-                this.setState({
-                    showCampPopup: true,
-                    showFoodPrepOverlay: false,
-                    showSpellsOverlay: false
-                }, this.handleOpenMapOverlay);
-                return;
-            }
+             // 'm' — open Camp Map overlay directly from dungeon (blocked during battle)
+             if ((maybeKey === 'm' || maybeKey === 'M') && !this.state.inMonsterBattle) {
+                 event.preventDefault();
+                 this.setState({
+                     showCampPopup: true,
+                     showFoodPrepOverlay: false,
+                     showSpellsOverlay: false,
+                     showPrayOverlay: false
+                 }, this.handleOpenMapOverlay);
+                 return;
+             }
             // 'r' — Immediately begin recuperating (setUpCamp)
             if ((maybeKey === 'r' || maybeKey === 'R') && !this.state.inMonsterBattle && !event.metaKey && !event.ctrlKey) {
                 const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
@@ -10598,7 +10644,9 @@ class DungeonPage extends React.Component {
         // If called as an onClick handler it may receive an event object.
         // Accept either an object like { expanded: true } or no arg to toggle.
         const newVal = (val && typeof val === 'object' && Object.prototype.hasOwnProperty.call(val, 'expanded')) ? val.expanded : !this.state.leftPanelExpanded;
-        this.setState({leftPanelExpanded: newVal})
+        this.setState({leftPanelExpanded: newVal}, () => {
+            this.handleResize();
+        });
         const meta = getMeta()
         meta.leftExpanded = newVal
         storeMeta(meta)
@@ -10607,7 +10655,9 @@ class DungeonPage extends React.Component {
     toggleRightSidePanel = async (val = null) => {
         // Handle event objects from onClick; accept { expanded } objects or toggle when no arg
         const newVal = (val && typeof val === 'object' && Object.prototype.hasOwnProperty.call(val, 'expanded')) ? val.expanded : !this.state.rightPanelExpanded
-        this.setState({rightPanelExpanded: newVal})
+        this.setState({rightPanelExpanded: newVal}, () => {
+            this.handleResize();
+        });
         const meta = getMeta()
         meta.rightExpanded = newVal;
         storeMeta(meta)
@@ -11576,10 +11626,9 @@ class DungeonPage extends React.Component {
                 });
                 return;
             }
-            // Direct discipline (Meditative Focus) or child discipline — select for preview
+            // Direct discipline (Chi Focus) or child discipline — commit directly on click
             if (subType.disciplineKey) {
-                const current = this.state.innerDisciplineSelected;
-                this.setState({ innerDisciplineSelected: current === subType.disciplineKey ? null : subType.disciplineKey });
+                this.handleInnerDisciplineCommit(subType.disciplineKey);
                 return;
             }
         }
@@ -12388,7 +12437,7 @@ class DungeonPage extends React.Component {
         try { this.setState({ showSkillTreePopup: false, selectedSkillTreeCrewMember: null }); } catch(e) {}
     }
     handleCloseCampPopup = () => {
-        try { this.setState({ showCampPopup: false, showFoodPrepOverlay: false, showSpellsOverlay: false, showMapOverlay: false, mapZoomedLevelId: null, mapUnzoomingLevelId: null, mapRevealAfterUnzoom: false, mapPendingZoomLevelId: null, mapSelectedLevelId: null, mapBoardDetailStage: null, mapBoardDetailBoardIndex: null }, () => this._cleanupModalBodyClass()); } catch(e) {}
+        try { this.setState({ showCampPopup: false, showFoodPrepOverlay: false, showSpellsOverlay: false, showMapOverlay: false, showPrayOverlay: false, mapZoomedLevelId: null, mapUnzoomingLevelId: null, mapRevealAfterUnzoom: false, mapPendingZoomLevelId: null, mapSelectedLevelId: null, mapBoardDetailStage: null, mapBoardDetailBoardIndex: null }, () => this._cleanupModalBodyClass()); } catch(e) {}
     }
 
     handleOpenFoodPrep = () => {
@@ -12405,6 +12454,78 @@ class DungeonPage extends React.Component {
 
     handleSpellsBack = () => {
         this.setState({ showSpellsOverlay: false });
+    }
+
+    handleOpenPrayOverlay = () => {
+        this.setState({
+            showPrayOverlay: true,
+            prayerResult: null,
+            prayerFeedback: ''
+        });
+    }
+
+    handlePrayBack = () => {
+        this.setState({ showPrayOverlay: false });
+    }
+
+    handlePray = async (prayerType) => {
+        try {
+            const meta = getMeta() || {};
+            const now = Date.now();
+            const lastPrayer = meta.lastPrayerTime ? new Date(meta.lastPrayerTime).getTime() : 0;
+            const COOLDOWN_DURATION = 12 * 60 * 60 * 1000; // 12 hours in ms
+
+            if (now - lastPrayer < COOLDOWN_DURATION) {
+                this.setState({ prayerFeedback: 'Your prayers are still echoing. Cooldown active.' });
+                return;
+            }
+
+            // Put it on cooldown immediately
+            meta.lastPrayerTime = new Date().toISOString();
+            
+            let success = false;
+            let feedback = '';
+
+            if (prayerType === 'food') {
+                const roll = Math.random() * 100;
+                if (roll < 25) {
+                    success = true;
+                    meta.food = (typeof meta.food === 'number' ? meta.food : 55) + 50;
+                    feedback = 'Your prayer was heard! 50 food has been granted by alchemical spirits.';
+                    this.displayMessage('🙏 Prayer answered: +50 Food');
+                } else {
+                    feedback = 'Silence. The spirits do not answer your plea for sustenance this time.';
+                }
+            } else if (prayerType === 'key') {
+                const roll = Math.random() * 100;
+                if (roll < 15) {
+                    success = true;
+                    const keyType = Math.random() < 0.5 ? 'minor_key' : 'major_key';
+                    const keyName = keyType === 'minor_key' ? 'minor key' : 'major key';
+                    const keyItem = this.props.inventoryManager.allItems[keyType];
+                    if (keyItem) {
+                        this.props.inventoryManager.addItem({ ...keyItem });
+                    }
+                    feedback = `Your prayer was heard! A ${keyName} materialized before you.`;
+                    this.displayMessage(`🙏 Prayer answered: Materialized a ${keyName}`);
+                } else {
+                    feedback = 'Silence. The spirits do not grant you passage at this moment.';
+                }
+            }
+
+            try { storeMeta(meta); } catch(e) {}
+            try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch(e) {}
+            try { if (typeof this.props.saveUserData === 'function') this.props.saveUserData(); } catch(e) {}
+
+            this.setState({
+                prayerResult: success ? 'success' : 'failure',
+                prayerFeedback: feedback
+            });
+
+        } catch (e) {
+            console.error('Error during handlePray:', e);
+            this.setState({ prayerFeedback: 'Something went wrong with your prayer.' });
+        }
     }
 
     handleSpellAction = (member, ritual, actionType) => {
@@ -12813,6 +12934,16 @@ class DungeonPage extends React.Component {
     }
     render(){
         const crew = ((this.props.crewManager && this.props.crewManager.crew) || []);
+
+        const hasLivingSummoner = crew.some(m => {
+            if (m && !m.dead && ((m.type || '').toLowerCase() === 'summoner' || (m.image || '').toLowerCase() === 'summoner')) {
+                if (m.globalSkills) {
+                    return m.globalSkills.some(s => (typeof s === 'string' ? s : s.key) === 'spirit_sight');
+                }
+                return true;
+            }
+            return false;
+        });
 
         const hasMagicUser = crew.some(member => ['wizard', 'sage'].includes((member.type || '').toLowerCase()));
         const magicUsers = crew.filter(member => ['wizard', 'sage'].includes((member.type || '').toLowerCase()));
@@ -13320,7 +13451,7 @@ class DungeonPage extends React.Component {
                     wizard:   [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
                     barbarian:[{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%' }],
                     monk:     [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
-                    summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],
+                    summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],
                 };
                 const availableSkills = globalSkillsByClass[sd.shrineClass] || [];
                 
@@ -13748,6 +13879,17 @@ class DungeonPage extends React.Component {
                                 <span>Spells</span>
                             </button>
                         )}
+                        <button className="camp-action-btn" onClick={this.handleOpenPrayOverlay}>
+                            <span className="camp-btn-icon" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#e5b54f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 3px rgba(229, 181, 79, 0.4))' }}>
+                                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" opacity="0.4" strokeWidth="1"/>
+                                    <path d="M12 5c-3.87 0-7 3.13-7 7a7 7 0 0 0 7 7c3.87 0 7-3.13 7-7a7 7 0 0 0-7-7z" strokeWidth="1" strokeDasharray="3 3"/>
+                                    <path d="M10 16c-.5-1.5-1-3.5-.5-5.5.5-2 1.5-3.5 2.5-4.5 1 1 2 2.5 2.5 4.5.5 2 0 4-.5 5.5"/>
+                                    <path d="M8 17h8" opacity="0.7"/>
+                                </svg>
+                            </span>
+                            <span>Pray for Aid</span>
+                        </button>
                     </div>
 
                     {/* BOTTOM: trophies / card deck / shards tiles */}
@@ -14882,6 +15024,128 @@ class DungeonPage extends React.Component {
                                                         </div>
                                                     );
                                                 })()}
+
+                {this.state.showPrayOverlay && (() => {
+                    const meta = getMeta() || {};
+                    const now = Date.now();
+                    const lastPrayer = meta.lastPrayerTime ? new Date(meta.lastPrayerTime).getTime() : 0;
+                    const COOLDOWN_DURATION = 12 * 60 * 60 * 1000;
+                    const remainingMs = COOLDOWN_DURATION - (now - lastPrayer);
+                    const onCooldown = remainingMs > 0;
+                    const hours = Math.max(0, Math.floor(remainingMs / 3600000));
+                    const minutes = Math.max(0, Math.floor((remainingMs % 3600000) / 60000));
+                    const cooldownText = onCooldown ? `${hours}h ${minutes}m remaining` : null;
+
+                    return (
+                        <div className="pray-aid-overlay">
+                            <div className="pray-aid-header">
+                                <button className="pray-aid-back" onClick={this.handlePrayBack}>← Back</button>
+                                <div className="pray-aid-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#e5b54f" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 3px rgba(229, 181, 79, 0.4))' }}>
+                                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" opacity="0.4" strokeWidth="1"/>
+                                        <path d="M12 5c-3.87 0-7 3.13-7 7a7 7 0 0 0 7 7c3.87 0 7-3.13 7-7a7 7 0 0 0-7-7z" strokeWidth="1" strokeDasharray="3 3"/>
+                                        <path d="M10 16c-.5-1.5-1-3.5-.5-5.5.5-2 1.5-3.5 2.5-4.5 1 1 2 2.5 2.5 4.5.5 2 0 4-.5 5.5"/>
+                                        <path d="M8 17h8" opacity="0.7"/>
+                                    </svg>
+                                    <span>Pray for Aid</span>
+                                </div>
+                            </div>
+
+                            <div className="pray-aid-content">
+                                <div className="pray-description">
+                                    Plead with the alchemical spirits of the dungeon for key items or sustenance. Cooldown applies.
+                                </div>
+
+                                {onCooldown ? (
+                                    <div className="pray-cooldown-banner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <circle cx="12" cy="12" r="10"/>
+                                            <polyline points="12 6 12 12 16 14"/>
+                                        </svg>
+                                        <span>Cooldown: {cooldownText}</span>
+                                    </div>
+                                ) : (
+                                    <div className="pray-status-banner ready" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                                        </svg>
+                                        <span>Spirits are listening...</span>
+                                    </div>
+                                )}
+
+                                <div className="pray-options">
+                                    <div className={`pray-option-card ${onCooldown ? 'disabled' : ''}`}>
+                                        <div className="pray-option-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#f5c77e" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 4px rgba(245, 199, 126, 0.3))' }}>
+                                                <path d="M6 3h12v5c0 3.31-2.69 6-6 6s-6-2.69-6-6V3z"/>
+                                                <path d="M12 14v6m-4 0h8"/>
+                                            </svg>
+                                        </div>
+                                        <div className="pray-option-details">
+                                            <div className="pray-option-name">Prayer for Sustenance</div>
+                                            <div className="pray-option-desc">25% chance to materialize +50 Food supply.</div>
+                                            <div className="pray-option-meta">25% Success Rate</div>
+                                        </div>
+                                        <button 
+                                            className="pray-action-btn"
+                                            disabled={onCooldown}
+                                            onClick={() => this.handlePray('food')}
+                                        >
+                                            Pray for Food
+                                        </button>
+                                    </div>
+
+                                    <div className={`pray-option-card ${onCooldown ? 'disabled' : ''}`}>
+                                        <div className="pray-option-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#d4a844" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 4px rgba(212, 168, 68, 0.3))' }}>
+                                                <circle cx="8" cy="8" r="4"/>
+                                                <path d="M12 8h8v4h-2v-2h-2v2h-2V8z"/>
+                                            </svg>
+                                        </div>
+                                        <div className="pray-option-details">
+                                            <div className="pray-option-name">Prayer for Passage</div>
+                                            <div className="pray-option-desc">15% chance to materialize a minor or major key.</div>
+                                            <div className="pray-option-meta">15% Success Rate</div>
+                                        </div>
+                                        <button 
+                                            className="pray-action-btn"
+                                            disabled={onCooldown}
+                                            onClick={() => this.handlePray('key')}
+                                        >
+                                            Pray for Passage
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {this.state.prayerFeedback && (
+                                    <div className={`pray-feedback-box ${this.state.prayerResult || ''}`}>
+                                        <div className="pray-feedback-title">
+                                            {this.state.prayerResult === 'success' ? (
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#2ecc71" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: 'drop-shadow(0 0 3px rgba(46, 204, 113, 0.4))' }}>
+                                                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                                                        <polyline points="22 4 12 14.01 9 11.01"/>
+                                                    </svg>
+                                                    <span>Prayer Answered!</span>
+                                                </span>
+                                            ) : (
+                                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#bdc3c7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                                        <path d="M9.59 4.59A2 2 0 1 1 11 8H2m10.59 11.41A2 2 0 1 0 14 16H2m15.73-8.27A2.5 2.5 0 1 1 19.5 12H2"/>
+                                                    </svg>
+                                                    <span>Silence...</span>
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="pray-feedback-text">
+                                            {this.state.prayerFeedback}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })()}
                                             </CModal>
 
                                             {/* Skill Tree popup */}
@@ -14976,7 +15240,9 @@ class DungeonPage extends React.Component {
                     width: this.state.boardSize + 'px',
                     height: this.state.boardSize + 'px',
                     transform: this.state.isMobileLandscape
-                        ? `translate3d(${- (this.state.mobileViewX || 0) * this.state.tileSize + (this.state.leftPanelExpanded ? 200 : 0)}px, ${- (this.state.mobileViewY || 0) * this.state.tileSize}px, 0px)`
+                        ? (this.state.mobileTileZoomMinus
+                            ? `translate3d(${this.state.zoomOutOffsetX || 0}px, ${this.state.zoomOutOffsetY || 0}px, 0px)`
+                            : `translate3d(${- (this.state.mobileViewX || 0) * this.state.tileSize + (this.state.leftPanelExpanded ? 200 : 0)}px, ${- (this.state.mobileViewY || 0) * this.state.tileSize}px, 0px)`)
                         : 'none',
                     transition: this.state.isMobileLandscape
                         ? 'transform 0.5s ease-in-out'
@@ -14999,7 +15265,7 @@ class DungeonPage extends React.Component {
                             contains={tile.contains}
                             boardTiles={this.state.tiles}
                             terrain={tile.terrain}
-                            color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'}
+                            color={(tile.color && tile.color !== 'null' && tile.color !== 'undefined' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : 'transparent'}
                             borders={tile.borders}
                             partialObscured={!!tile.partialObscured}
                             coordinates={tile.coordinates}
@@ -15010,7 +15276,7 @@ class DungeonPage extends React.Component {
                             passThrough={!this.state.minimapPlaceMapMarkerStarted}
                             handleClick={(e)=>this.handleOverlayClick}
                             // For overlay tiles we want the background color to reflect overlay state (e.g. edge indicator)
-                            backgroundColor={tile.color && tile.color !== 'null' ? tile.color : (this.state.overlayHoveredTileId === i && this.state.minimapPlaceMapMarkerStarted ? 'rgba(100, 100, 38, 0.272)' : 'transparent')}
+                            backgroundColor={(tile.color && tile.color !== 'null' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : (this.state.overlayHoveredTileId === i && this.state.minimapPlaceMapMarkerStarted ? 'rgba(100, 100, 38, 0.272)' : 'transparent')}
                             >
                             </Tile>
                         })}
@@ -15029,9 +15295,14 @@ class DungeonPage extends React.Component {
                             const meta = getMeta() || {};
                             const playerImgKey = (meta && meta.camping) ? 'campfire' : 'avatar';
 
+                            const rawColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : 'black';
+                            const isMonsterTile = bm && typeof bm.isMonster === 'function' ? bm.isMonster(tile) : false;
+                            const safeColor = (String(rawColor).includes('ff0000') && (!isMonsterTile || !this.state.debugMode)) ? 'black' : rawColor;
+
                             return <Tile 
                             key={i}
                             isPlayerTile={isPlayerTile}
+                            hasLivingSummoner={hasLivingSummoner}
                             playerImgKey={playerImgKey}
                             cursor={this.state.minimapPlaceMapMarkerStarted ? 'crosshair' : 'default'}
                             tileSize={this.state.tileSize}
@@ -15040,7 +15311,7 @@ class DungeonPage extends React.Component {
                             contains={tile.contains}
                             boardTiles={this.state.tiles}
                             terrain={tile.terrain}
-                            color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : 'black'}
+                            color={safeColor}
                             borders={tile.borders}
                             inscriptions={tile.inscriptions}
                             partialObscured={!!tile.partialObscured}
