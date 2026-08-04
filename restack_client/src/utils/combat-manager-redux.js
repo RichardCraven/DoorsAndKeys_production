@@ -2517,6 +2517,33 @@ export function CombatManagerRedux() {
                         return;
                     }
 
+                    // --- MINION STAMINA DECAY ---
+                    if (unit.isMinion && unit.summonedBy) {
+                        const summoner = this.combatants[unit.summonedBy];
+                        if (summoner && summoner.type === 'summoner') {
+                            const maxEndurance = unit.maxEndurance || 20;
+                            const decay = Math.max(1, Math.round(maxEndurance * 0.10));
+                            unit.endurance = Math.max(0, (unit.endurance || 0) - decay);
+                            
+                            unit.damageIndicators = unit.damageIndicators || [];
+                            unit.damageIndicators.push({
+                                id: Date.now() + Math.random() + 200,
+                                value: `-${decay} STAM`,
+                                type: 'damage'
+                            });
+                            
+                            this.appendCombatLog(`${this.getCombatantLogName(unit)} lost ${decay} stamina from decay.`);
+
+                            if (unit.endurance <= 0) {
+                                unit.hp = 0;
+                                this.appendCombatLog(`☠️ ${this.getCombatantLogName(unit)} has run out of stamina and collapsed!`);
+                                this.targetKilled(unit);
+                                if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+                                return;
+                            }
+                        }
+                    }
+
                     // Tick down active buff/debuff durations
                     this._tickUnitBuffs(unit);
                     this._tickUnitDebuffs(unit);
@@ -3548,45 +3575,115 @@ export function CombatManagerRedux() {
         if (!unit.isMonster && !unit.isMinion && unit.queuedSkill) {
             const qKey = unit.queuedSkill;
             if (this._abilityReady(unit, qKey)) {
-                let qTarget = this.combatants[unit.queuedSkillTargetId];
-                if (!qTarget || qTarget.dead) {
-                    this.acquireTarget(unit, true);
-                    qTarget = this.combatants[unit.targetId];
-                }
-                if (qTarget && !qTarget.dead) {
+                const normKey = (qKey || '').replace(/\s+/g, '_').toLowerCase();
+                const isSummonSkill = normKey.startsWith('summon_') && normKey !== 'summon_spiders' && normKey !== 'summon_skulls';
+                
+                if (isSummonSkill && unit.queuedSkillTargetTile) {
                     const qSpec = this.resolveSpecial(unit, qKey);
                     if (qSpec && qSpec.type !== 'passive' && !qSpec.isPassive) {
                         let actualAbility = qSpec;
-                        const normKey = (qKey || '').replace(/\s+/g, '_').toLowerCase();
                         const matrixDef = specialsMatrix[normKey] || attacksMatrix[normKey];
                         const ultimateDef = qSpec.ultimate || (matrixDef && matrixDef.ultimate);
                         const isUltReady = !!(unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate);
                         if (isUltReady && ultimateDef) {
                             actualAbility = { ...qSpec, ...ultimateDef, isUltimate: true };
                         }
-                        const rangeType = actualAbility.range;
-                        const inRange = this.targetInRange(unit, qTarget, rangeType);
-                        if (inRange) {
+                        
+                        const targetTile = unit.queuedSkillTargetTile;
+                        const dx = Math.abs(unit.coordinates.x - targetTile.x);
+                        const dy = Math.abs(unit.coordinates.y - targetTile.y);
+                        const isAdjacent = (dx <= 1 && dy <= 1);
+                        
+                        if (isAdjacent) {
                             unit.queuedSkill = null; // consume and clear
-                            unit.queuedSkillTargetId = null;
-                            this.useAbility(unit, actualAbility, qTarget);
+                            this.useAbility(unit, actualAbility, unit);
                             return;
                         } else {
-                            // Out of range: prioritize moving to be in range
+                            // Out of range: prioritize moving to be adjacent
                             const maxMoves = (unit.etherealSpeedActive || unit.isDemonMode) ? 2 : 1;
                             if (unit.movesTakenThisRound < maxMoves && !this.isUnitInWeb(unit) && !unit.ensnared && !unit.shieldWallActive) {
-                                this.moveCloser(unit, qTarget);
-                                // Check again after moving
-                                const nowInRange = this.targetInRange(unit, qTarget, rangeType);
-                                if (nowInRange) {
-                                    unit.queuedSkill = null; // consume and clear
-                                    unit.queuedSkillTargetId = null;
-                                    this.useAbility(unit, actualAbility, qTarget);
-                                    return;
+                                // Find free adjacent coords next to targetTile
+                                const adjacentCoords = [
+                                    { x: targetTile.x - 1, y: targetTile.y },
+                                    { x: targetTile.x + 1, y: targetTile.y },
+                                    { x: targetTile.x, y: targetTile.y - 1 },
+                                    { x: targetTile.x, y: targetTile.y + 1 },
+                                    { x: targetTile.x - 1, y: targetTile.y - 1 },
+                                    { x: targetTile.x - 1, y: targetTile.y + 1 },
+                                    { x: targetTile.x + 1, y: targetTile.y - 1 },
+                                    { x: targetTile.x + 1, y: targetTile.y + 1 }
+                                ];
+                                
+                                const freeAdjacent = adjacentCoords.filter(c => 
+                                    c.x >= 0 && c.x <= MAX_DEPTH && c.y >= 0 && c.y < MAX_LANES &&
+                                    (!this.isTileOccupied(c.x, c.y) || (c.x === unit.coordinates.x && c.y === unit.coordinates.y))
+                                );
+                                
+                                if (freeAdjacent.length > 0) {
+                                    // Sort by distance to unit's current coordinates
+                                    freeAdjacent.sort((a, b) => {
+                                        const distA = Math.abs(unit.coordinates.x - a.x) + Math.abs(unit.coordinates.y - a.y);
+                                        const distB = Math.abs(unit.coordinates.x - b.x) + Math.abs(unit.coordinates.y - b.y);
+                                        return distA - distB;
+                                    });
+                                    
+                                    const bestCoord = freeAdjacent[0];
+                                    this.moveCloserToCoord(unit, bestCoord.x, bestCoord.y);
+                                    
+                                    // Check adjacency again after moving
+                                    const nextDx = Math.abs(unit.coordinates.x - targetTile.x);
+                                    const nextDy = Math.abs(unit.coordinates.y - targetTile.y);
+                                    if (nextDx <= 1 && nextDy <= 1) {
+                                        unit.queuedSkill = null; // consume and clear
+                                        this.useAbility(unit, actualAbility, unit);
+                                        return;
+                                    }
                                 }
                             }
-                            // Still out of range or cannot move: keep queued, end turn (do not fall through to default AI)
+                            // Still out of range or cannot move: keep queued, end turn
                             return;
+                        }
+                    }
+                } else {
+                    let qTarget = this.combatants[unit.queuedSkillTargetId];
+                    if (!qTarget || qTarget.dead) {
+                        this.acquireTarget(unit, true);
+                        qTarget = this.combatants[unit.targetId];
+                    }
+                    if (qTarget && !qTarget.dead) {
+                        const qSpec = this.resolveSpecial(unit, qKey);
+                        if (qSpec && qSpec.type !== 'passive' && !qSpec.isPassive) {
+                            let actualAbility = qSpec;
+                            const matrixDef = specialsMatrix[normKey] || attacksMatrix[normKey];
+                            const ultimateDef = qSpec.ultimate || (matrixDef && matrixDef.ultimate);
+                            const isUltReady = !!(unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate);
+                            if (isUltReady && ultimateDef) {
+                                actualAbility = { ...qSpec, ...ultimateDef, isUltimate: true };
+                            }
+                            const rangeType = actualAbility.range;
+                            const inRange = this.targetInRange(unit, qTarget, rangeType);
+                            if (inRange) {
+                                unit.queuedSkill = null; // consume and clear
+                                unit.queuedSkillTargetId = null;
+                                this.useAbility(unit, actualAbility, qTarget);
+                                return;
+                            } else {
+                                // Out of range: prioritize moving to be in range
+                                const maxMoves = (unit.etherealSpeedActive || unit.isDemonMode) ? 2 : 1;
+                                if (unit.movesTakenThisRound < maxMoves && !this.isUnitInWeb(unit) && !unit.ensnared && !unit.shieldWallActive) {
+                                    this.moveCloser(unit, qTarget);
+                                    // Check again after moving
+                                    const nowInRange = this.targetInRange(unit, qTarget, rangeType);
+                                    if (nowInRange) {
+                                        unit.queuedSkill = null; // consume and clear
+                                        unit.queuedSkillTargetId = null;
+                                        this.useAbility(unit, actualAbility, qTarget);
+                                        return;
+                                    }
+                                }
+                                // Still out of range or cannot move: keep queued, end turn (do not fall through to default AI)
+                                return;
+                            }
                         }
                     }
                 }
@@ -5274,14 +5371,15 @@ export function CombatManagerRedux() {
     this._executeSummon = (unit, ability, abilityKey) => {
         // Resolve ability special object to check if ultimate / superSize is configured
         const resolvedAbility = this.resolveSpecial ? (this.resolveSpecial(unit, abilityKey) || ability) : ability;
+        const isUltimateCast = !!(ability && (ability.isUltimate === true || ability.superSize === true || ability.superSized === true));
         const isSuperSized = !!(
             resolvedAbility && (
                 resolvedAbility.superSize === true ||
                 resolvedAbility.superSized === true ||
                 resolvedAbility.isSuperSized === true ||
                 (resolvedAbility.effect && (resolvedAbility.effect.superSize === true || resolvedAbility.effect.superSized === true)) ||
-                (resolvedAbility.ultimate && (resolvedAbility.ultimate.superSize === true || resolvedAbility.ultimate.superSized === true)) ||
-                (resolvedAbility.ultimate && resolvedAbility.ultimate.effect && (resolvedAbility.ultimate.effect.superSize === true || resolvedAbility.ultimate.effect.superSized === true))
+                (isUltimateCast && resolvedAbility.ultimate && (resolvedAbility.ultimate.superSize === true || resolvedAbility.ultimate.superSized === true)) ||
+                (isUltimateCast && resolvedAbility.ultimate && resolvedAbility.ultimate.effect && (resolvedAbility.ultimate.effect.superSize === true || resolvedAbility.ultimate.effect.superSized === true))
             )
         );
 
@@ -5318,18 +5416,38 @@ export function CombatManagerRedux() {
         const filteredTiles = adjacentTiles.filter(t => t.x >= 0 && t.x <= MAX_DEPTH && t.y >= 0 && t.y < MAX_LANES);
 
         let freeTile = null;
-        if (isSuperSized) {
-            const dummyLargeMinion = {
-                id: 'dummy_super_minion',
-                isMinion: true,
-                isMonster: !!unit.isMonster,
-                size: 2,
-                isLarge: true,
-                superSize: true
-            };
-            freeTile = filteredTiles.find(t => this.canFitAt(dummyLargeMinion, t.x, t.y));
-        } else {
-            freeTile = filteredTiles.find(t => !this.isTileOccupied(t.x, t.y));
+        const dummyLargeMinion = {
+            id: 'dummy_super_minion',
+            isMinion: true,
+            isMonster: !!unit.isMonster,
+            size: 2,
+            isLarge: true,
+            superSize: true
+        };
+
+        const queuedTile = unit.queuedSkillTargetTile;
+        if (queuedTile) {
+            const dx = Math.abs(unit.coordinates.x - queuedTile.x);
+            const dy = Math.abs(unit.coordinates.y - queuedTile.y);
+            const isAdjacent = (dx <= 1 && dy <= 1);
+            const isFree = isSuperSized
+                ? this.canFitAt(dummyLargeMinion, queuedTile.x, queuedTile.y)
+                : !this.isTileOccupied(queuedTile.x, queuedTile.y);
+                
+            if (isAdjacent && isFree) {
+                freeTile = queuedTile;
+            } else {
+                this.appendCombatLog(`⚠️ Summon target Tile (${queuedTile.x}, ${queuedTile.y}) was blocked or out of range. Finding alternate space.`);
+            }
+            unit.queuedSkillTargetTile = null; // consume
+        }
+
+        if (!freeTile) {
+            if (isSuperSized) {
+                freeTile = filteredTiles.find(t => this.canFitAt(dummyLargeMinion, t.x, t.y));
+            } else {
+                freeTile = filteredTiles.find(t => !this.isTileOccupied(t.x, t.y));
+            }
         }
 
         if (!freeTile) {

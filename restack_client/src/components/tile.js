@@ -3,7 +3,12 @@ import * as images from '../utils/images'
 
 
 function Tile(props) {
-    const color = (props.color === 'null' || props.color === 'undefined') ? null : props.color;
+    const colorVal = (props.color === 'null' || props.color === 'undefined') ? null : props.color;
+    const isShrine = (props.contains && props.contains.type === 'shrine') || props.optionType === 'shrine' || props.isShrine;
+    const isNarrative = (props.contains && (props.contains.type === 'narrative' || props.contains.type === 'narrative_visited')) || props.optionType === 'narrative' || props.optionType === 'narrative_visited' || props.image === 'narrative' || props.image === 'narrative_visited';
+    const isDarkColor = colorVal === 'black';
+    const isRevealedBySpiritSight = !!props.hasLivingSummoner && (isShrine || isNarrative) && isDarkColor;
+    const color = isRevealedBySpiritSight ? 'spirit-sight' : colorVal;
     const hoverLabelTimerRef = React.useRef(null);
     const [showDelayedHoverLabel, setShowDelayedHoverLabel] = React.useState(false);
 
@@ -324,6 +329,12 @@ function Tile(props) {
         return manhattanDist <= 3;
     })();
 
+    const isChargingAmbush = !!(currentTile && currentTile.isChargingAmbush) || !!props.isChargingAmbush;
+
+    if (isMonsterOrPygmyTile && (typeof window !== 'undefined' && window.debugTileGlow)) {
+        console.log(`[TileGlowDebug] tileId:${props.id} type:${props.type} isBlack:${isBlackTile} color:${color} tileColor:${currentTileColor} contains:`, currentContains);
+    }
+
     const portraitZIndex = foregroundPortalImages.includes(props.image) ? 12 : 3;
 
     const imageString = String(props.imageOverride || props.image || '').toLowerCase();
@@ -361,7 +372,7 @@ function Tile(props) {
             opacity: props.isPreview ? 0.6 : 1,
             pointerEvents: props.passThrough ? 'none' : 'inherit',
             boxSizing: 'border-box',
-            transition: 'background-color 0.08s, border-color 0.08s',
+            transition: 'background-color 0.08s, border-color 0.08s, box-shadow 0.2s',
             cursor: props.cursor ? props.cursor : 'pointer',
             height: props.tileSize+'px',
             width: props.tileSize+'px',
@@ -374,14 +385,15 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : 'black')),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: (props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v))) ? 'visible' : 'hidden',
-            zIndex: (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : undefined,
-            border: vctBorder,
-            borderLeft: isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
-                (props.type === 'palette-tile' && props.hovered ? '2px solid red' : '1px solid transparent'))))),
-            borderRight: isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.right) ? props.borders.right : '1px solid transparent'))),
-            borderTop: isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.top) ? props.borders.top : '1px solid transparent'))),
-            borderBottom: isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.bottom) ? props.borders.bottom : '1px solid transparent')))
+            overflow: (isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v))) ? 'visible' : 'hidden',
+            zIndex: isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : undefined),
+            boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
+            border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
+            borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
+                (props.type === 'palette-tile' && props.hovered ? '2px solid red' : '1px solid transparent')))))),
+            borderRight: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.right) ? props.borders.right : '1px solid transparent')))),
+            borderTop: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.top) ? props.borders.top : '1px solid transparent')))),
+            borderBottom: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.bottom) ? props.borders.bottom : '1px solid transparent'))))
             }}
             onMouseEnter={() => {
                 beginDelayedHoverLabel();
@@ -481,24 +493,28 @@ function Tile(props) {
                       })()}
 
                       {/* Faint red light source glow emanating from behind monster/pygmy portrait */}
-                      {isMonsterOrPygmyTile && !isBlackTile && (
+                      {isMonsterOrPygmyTile && !isBlackTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
                           <div 
-                              className={`monster-portrait-glow ${isNearbyMonster ? 'nearby-glow' : ''}`}
+                              className={`monster-portrait-glow ${isChargingAmbush ? 'charging-ambush-glow' : (isNearbyMonster ? 'nearby-glow' : '')}`}
                               style={{
                                   position: 'absolute',
-                                  top: '-15%',
-                                  left: '-15%',
-                                  right: '-15%',
-                                  bottom: '-15%',
+                                  top: isChargingAmbush ? '-25%' : '-15%',
+                                  left: isChargingAmbush ? '-25%' : '-15%',
+                                  right: isChargingAmbush ? '-25%' : '-15%',
+                                  bottom: isChargingAmbush ? '-25%' : '-15%',
                                   borderRadius: '50%',
-                                  background: isNearbyMonster 
-                                      ? 'radial-gradient(circle at center, rgba(255, 40, 40, 0.95) 0%, rgba(230, 25, 25, 0.70) 38%, rgba(180, 15, 15, 0.35) 65%, transparent 92%)'
-                                      : 'radial-gradient(circle at center, rgba(240, 40, 40, 0.75) 0%, rgba(190, 25, 25, 0.48) 38%, rgba(130, 15, 15, 0.22) 65%, transparent 88%)',
+                                  background: isChargingAmbush
+                                      ? 'radial-gradient(circle at center, rgba(255, 0, 0, 1) 0%, rgba(245, 15, 15, 0.88) 38%, rgba(200, 10, 10, 0.55) 68%, transparent 95%)'
+                                      : (isNearbyMonster 
+                                          ? 'radial-gradient(circle at center, rgba(255, 40, 40, 0.95) 0%, rgba(230, 25, 25, 0.70) 38%, rgba(180, 15, 15, 0.35) 65%, transparent 92%)'
+                                          : 'radial-gradient(circle at center, rgba(240, 40, 40, 0.75) 0%, rgba(190, 25, 25, 0.48) 38%, rgba(130, 15, 15, 0.22) 65%, transparent 88%)'),
                                   zIndex: 2,
                                   pointerEvents: 'none',
-                                  opacity: color === 'black' ? 0 : (props.partialObscured ? 0.35 : 1),
-                                  transition: 'opacity 0.2s ease-in-out, background 0.3s ease-in-out',
-                                  animation: isNearbyMonster ? 'monsterGlowPulse 1.1s ease-in-out infinite alternate' : 'monsterGlowPulse 1.8s ease-in-out infinite alternate'
+                                  opacity: (color === 'black' || props.type === 'overlay-tile') ? 0 : (props.partialObscured ? 0.35 : 1),
+                                  transition: 'opacity 0.2s ease-in-out, background 0.2s ease-in-out, top 0.2s ease-in-out, left 0.2s ease-in-out',
+                                  animation: isChargingAmbush
+                                      ? 'pygmyChargePulse 0.35s ease-in-out infinite alternate'
+                                      : (isNearbyMonster ? 'monsterGlowPulse 1.1s ease-in-out infinite alternate' : 'monsterGlowPulse 1.8s ease-in-out infinite alternate')
                               }}
                           />
                       )}
@@ -758,6 +774,39 @@ function Tile(props) {
                  </div>
             )}
 
+             {/* Narrative Tile marker / Spirit Sight faint icon overlay */}
+             { isNarrative && (
+                  <div style={{
+                      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                      zIndex: 10, pointerEvents: 'none',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      opacity: isRevealedBySpiritSight ? 0.45 : (color === 'black' ? 0 : 1),
+                      transition: 'opacity 0.08s ease-in-out'
+                  }}>
+                      <div style={{
+                          width: '65%',
+                          height: '65%',
+                          backgroundImage: toCssUrl(images[props.imageOverride] || images[props.image] || (props.contains && images[props.contains.type]) || images.narrative),
+                          backgroundSize: 'contain',
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'center',
+                          filter: isRevealedBySpiritSight ? 'drop-shadow(0 0 5px rgba(0, 243, 255, 0.9))' : undefined
+                      }} />
+                      {((props.contains && props.contains.subtype) || props.subtype) && (
+                          <span style={{
+                              fontSize: Math.max(6, (props.tileSize || 30) * 0.22) + 'px',
+                              color: isRevealedBySpiritSight ? '#00f3ff' : '#ffd700',
+                              fontWeight: 'bold',
+                              textTransform: 'uppercase',
+                              lineHeight: 1.1,
+                              textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 4px black'
+                          }}>
+                              {((props.contains && props.contains.subtype) || props.subtype || '').slice(0, 3)}
+                          </span>
+                      )}
+                  </div>
+             )}
+
              {/* Connecting Path overlay */}
              { ((props.contains && props.contains.type === 'connecting_path') || props.optionType === 'connecting path') && (() => {
                   const isConnected = !!props.connectedEdge;
@@ -873,14 +922,14 @@ function Tile(props) {
            )}
 
            {/* Partial obscurity overlay */}
-           { props.partialObscured && (
+           { (props.partialObscured || isRevealedBySpiritSight) && (
                 <div style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    backgroundColor: isRevealedBySpiritSight ? 'rgba(0, 0, 0, 0.65)' : 'rgba(0, 0, 0, 0.5)',
                     zIndex: 25,
                     pointerEvents: 'none',
                     opacity: color === 'black' ? 0 : 1,
@@ -974,6 +1023,7 @@ function Tile(props) {
 
 const propsAreEqual = (prev, next) => {
     // 1. Check direct scalar props
+    if (prev.hasLivingSummoner !== next.hasLivingSummoner) return false;
     if (prev.color !== next.color) return false;
     if (prev.image !== next.image) return false;
     if (prev.imageOverride !== next.imageOverride) return false;
@@ -993,6 +1043,7 @@ const propsAreEqual = (prev, next) => {
     if (prev.hp !== next.hp) return false;
     if (prev.maxHp !== next.maxHp) return false;
     if (prev.hpBarWidth !== next.hpBarWidth) return false;
+    if (prev.className !== next.className) return false;
 
     // 2. Check contains (if object, compare its fields)
     if (prev.contains !== next.contains) {

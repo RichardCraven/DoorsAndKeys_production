@@ -1370,7 +1370,7 @@
                 margin: 0 0 4px 0;
                 letter-spacing: 0.15em;
                 text-transform: uppercase;
-                font-family: 'Outfit', 'Inter', sans-serif;
+                font-family: 'Cinzel', serif;
 
                 &.victory-header {
                     color: #ffd700;
@@ -1810,7 +1810,7 @@
                 outline: none;
                 border: none;
                 cursor: pointer;
-                font-family: 'Outfit', 'Inter', sans-serif;
+                font-family: 'Cinzel', serif;
                 font-size: 15px;
                 font-weight: 800;
                 letter-spacing: 0.1em;
@@ -11197,6 +11197,16 @@
         box-shadow: 0 0 22px rgba(255, 100, 30, 0.8) !important;
         z-index: 250;
         border-radius: 8px;
+    }
+
+    .combat-tile.drag-over {
+        // The empty tile directly under the drag gesture gets a beautiful blue-indigo glow
+        filter: brightness(1.4) !important;
+        outline: 2px solid rgba(0, 191, 255, 0.95) !important;
+        outline-offset: 2px;
+        box-shadow: 0 0 22px rgba(0, 120, 255, 0.85) !important;
+        z-index: 250;
+        border-radius: 4px;
     }
 }
 

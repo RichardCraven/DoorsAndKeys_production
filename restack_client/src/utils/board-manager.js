@@ -563,6 +563,12 @@ export function BoardManager(){
         for (let i = 0; i < board.tiles.length; i++) {
             let t = board.tiles[i];
             if (!t) continue;
+
+            // Strip legacy monster red color from tiles that no longer contain a monster or pygmy
+            if (t.color && String(t.color).includes('ff0000') && !this.isMonster(t)) {
+                t.color = '#6b6057';
+            }
+
             // if already object format, ensure minimal shape
             if (typeof t.contains === 'object' && t.contains !== null && t.contains.type) {
                 // nothing to do
@@ -1680,10 +1686,16 @@ export function BoardManager(){
                 console.warn('Failed to apply shared instance overrides during initializeTilesFromMap', e);
             }
 
+            let tileColor = tile.color;
+            if (tileColor && String(tileColor).includes('ff0000') && !this.isMonster(tile)) {
+                tileColor = '#6b6057';
+                tile.color = '#6b6057';
+            }
+
             this.tiles.push({
                 type: 'board-tile',
                 id: tile.id,
-                color: tile.color,
+                color: tileColor,
                 showCoordinates: false,
                 contains: tileContains,
                 image: tileImage,
@@ -2729,12 +2741,18 @@ export function BoardManager(){
                     const persistedColor = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].color);
                     const persistedBorders = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].borders);
                     const runtimeColor = (e.color && e.color !== 'black' && e.color !== 'white' && e.color !== 'null') ? e.color : null;
-                    const boardColor = (persistedColor && persistedColor !== 'black' && persistedColor !== 'white' && persistedColor !== 'null') ? persistedColor : (runtimeColor || null);
-                    // Use persisted/runtime board color when available.  Fall back to a
-                    // neutral dark-stone tone rather than 'white' — white tiles were a
-                    // jarring visual glitch when server data had no explicit color saved.
-                    // The terrain texture overlay renders on top so this colour only shows
-                    // at tile edges / between renders.
+                    let boardColor = (persistedColor && persistedColor !== 'black' && persistedColor !== 'white' && persistedColor !== 'null') ? persistedColor : (runtimeColor || null);
+                    
+                    // Sanitize red monster/pygmy indicator colors unless in debug mode.
+                    // In normal play, the red highlight should never be visible to the player —
+                    // the monster/pygmy image is still rendered via e.image below.
+                    if (boardColor && String(boardColor).includes('ff0000') && !isDebugMode) {
+                        boardColor = null;
+                        if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id]) {
+                            this.currentBoard.tiles[e.id].color = '#6b6057';
+                        }
+                    }
+
                     e.color = boardColor || (isVoid ? '#0e0e0e' : '#6b6057');
                     e.image = this.getImageForContains(e.contains, e);
                     e.borders = this.normalizeFogBorders(persistedBorders);

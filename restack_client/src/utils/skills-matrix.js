@@ -1216,7 +1216,7 @@ const skillsMatrix = {
         id: 'spirit_sight',
         tier: 1,
         name: 'Spirit Sight',
-        desc: 'Narrative tiles glow through fog.',
+        desc: 'Narrative tiles and shrines glow through fog.',
         icon: images.spirit_sight_summoner,
         cooldown: 0,
         type: 'passive',

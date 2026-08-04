@@ -1229,18 +1229,36 @@ class MonsterBattle extends React.Component {
         const x = e.clientX;
         const y = e.clientY;
 
-        // Walk up from the element under the cursor to find a data-monster-id node
-        // (temporarily hide the ghost so elementFromPoint works through it)
+        // Walk up from the element under the cursor to find a target node
         let el = document.elementFromPoint(x, y);
         let monsterId   = null;
         let monsterName = null;
         let monsterEl   = null;
+        let tileIndex   = null;
+        let tileX       = null;
+        let tileY       = null;
+
+        const normKey = (this.state.mobileSkillDrag.normalizedKey || '').replace(/\s+/g, '_').toLowerCase();
+        const isSummonSkill = normKey.startsWith('summon_') && normKey !== 'summon_spiders' && normKey !== 'summon_skulls';
+
         while (el && el !== document.body) {
-            if (el.dataset && el.dataset.monsterId) {
-                monsterId   = el.dataset.monsterId;
-                monsterName = el.dataset.monsterName || monsterId;
-                monsterEl   = el;
-                break;
+            if (isSummonSkill) {
+                if (el.dataset && el.dataset.tileIndex !== undefined && el.dataset.tileIndex !== null) {
+                    tileIndex = parseInt(el.dataset.tileIndex, 10);
+                    tileX     = parseInt(el.dataset.tileX, 10);
+                    tileY     = parseInt(el.dataset.tileY, 10);
+                    monsterId   = `tile_${tileX}_${tileY}`;
+                    monsterName = `Tile (${tileX}, ${tileY})`;
+                    monsterEl   = el;
+                    break;
+                }
+            } else {
+                if (el.dataset && el.dataset.monsterId) {
+                    monsterId   = el.dataset.monsterId;
+                    monsterName = el.dataset.monsterName || monsterId;
+                    monsterEl   = el;
+                    break;
+                }
             }
             el = el.parentElement;
         }
@@ -1261,6 +1279,9 @@ class MonsterBattle extends React.Component {
                 overMonsterId:   monsterId,
                 overMonsterName: monsterName,
                 overEl:          monsterEl,
+                overTileIndex:   tileIndex,
+                overTileX:       tileX,
+                overTileY:       tileY
             }
         }));
     }
@@ -1277,7 +1298,20 @@ class MonsterBattle extends React.Component {
 
         if (drag.overEl) drag.overEl.classList.remove('drag-over');
 
-        if (drag.overMonsterId) {
+        const normKey = (drag.normalizedKey || '').replace(/\s+/g, '_').toLowerCase();
+        const isSummonSkill = normKey.startsWith('summon_') && normKey !== 'summon_spiders' && normKey !== 'summon_skulls';
+
+        if (isSummonSkill && drag.overTileIndex !== undefined && drag.overTileIndex !== null) {
+            this._commitSummonSkillQueue(
+                drag.fighterId,
+                drag.normalizedKey,
+                drag.overTileIndex,
+                drag.overTileX,
+                drag.overTileY,
+                drag.skillName,
+                drag.isUltimate
+            );
+        } else if (drag.overMonsterId) {
             this._commitSkillQueue(
                 drag.fighterId,
                 drag.normalizedKey,
@@ -1298,17 +1332,36 @@ class MonsterBattle extends React.Component {
         const x = t.clientX;
         const y = t.clientY;
 
-        // Walk up from the element under the finger to find a data-monster-id node
+        // Walk up from the element under the finger to find a target node
         let el = document.elementFromPoint(x, y);
         let monsterId   = null;
         let monsterName = null;
         let monsterEl   = null;
+        let tileIndex   = null;
+        let tileX       = null;
+        let tileY       = null;
+
+        const normKey = (this.state.mobileSkillDrag.normalizedKey || '').replace(/\s+/g, '_').toLowerCase();
+        const isSummonSkill = normKey.startsWith('summon_') && normKey !== 'summon_spiders' && normKey !== 'summon_skulls';
+
         while (el && el !== document.body) {
-            if (el.dataset && el.dataset.monsterId) {
-                monsterId   = el.dataset.monsterId;
-                monsterName = el.dataset.monsterName || monsterId;
-                monsterEl   = el;
-                break;
+            if (isSummonSkill) {
+                if (el.dataset && el.dataset.tileIndex !== undefined && el.dataset.tileIndex !== null) {
+                    tileIndex = parseInt(el.dataset.tileIndex, 10);
+                    tileX     = parseInt(el.dataset.tileX, 10);
+                    tileY     = parseInt(el.dataset.tileY, 10);
+                    monsterId   = `tile_${tileX}_${tileY}`;
+                    monsterName = `Tile (${tileX}, ${tileY})`;
+                    monsterEl   = el;
+                    break;
+                }
+            } else {
+                if (el.dataset && el.dataset.monsterId) {
+                    monsterId   = el.dataset.monsterId;
+                    monsterName = el.dataset.monsterName || monsterId;
+                    monsterEl   = el;
+                    break;
+                }
             }
             el = el.parentElement;
         }
@@ -1330,6 +1383,9 @@ class MonsterBattle extends React.Component {
                 overMonsterId:   monsterId,
                 overMonsterName: monsterName,
                 overEl:          monsterEl,
+                overTileIndex:   tileIndex,
+                overTileX:       tileX,
+                overTileY:       tileY
             }
         }));
     }
@@ -1349,7 +1405,20 @@ class MonsterBattle extends React.Component {
         // Remove drag-over from the last tile
         if (drag.overEl) drag.overEl.classList.remove('drag-over');
 
-        if (drag.overMonsterId) {
+        const normKey = (drag.normalizedKey || '').replace(/\s+/g, '_').toLowerCase();
+        const isSummonSkill = normKey.startsWith('summon_') && normKey !== 'summon_spiders' && normKey !== 'summon_skulls';
+
+        if (isSummonSkill && drag.overTileIndex !== undefined && drag.overTileIndex !== null) {
+            this._commitSummonSkillQueue(
+                drag.fighterId,
+                drag.normalizedKey,
+                drag.overTileIndex,
+                drag.overTileX,
+                drag.overTileY,
+                drag.skillName,
+                drag.isUltimate
+            );
+        } else if (drag.overMonsterId) {
             this._commitSkillQueue(
                 drag.fighterId,
                 drag.normalizedKey,
@@ -1383,6 +1452,30 @@ class MonsterBattle extends React.Component {
         const toastMsg = isUltimate
             ? `⚡ ULTIMATE: ${label} → ${target}`
             : `Queued: ${label} → ${target}`;
+        this.setState({ toastMsg });
+        if (this._toastTimeout) clearTimeout(this._toastTimeout);
+        this._toastTimeout = setTimeout(() => this.setState({ toastMsg: null }), 2500);
+    }
+
+    _commitSummonSkillQueue = (fighterId, skillKey, tileIndex, tileX, tileY, skillName, isUltimate = false) => {
+        const cm = this.props.combatManager;
+        if (cm && cm.combatants && cm.combatants[fighterId]) {
+            cm.combatants[fighterId].queuedSkill = skillKey;
+            cm.combatants[fighterId].queuedSkillTargetTile = { x: tileX, y: tileY };
+            cm.combatants[fighterId].queuedSkillTargetId = null;
+            cm.combatants[fighterId].queuedSkillIsUltimate = isUltimate;
+        }
+        this.setState(prev => ({
+            queuedSkillMap: { ...prev.queuedSkillMap, [fighterId]: skillKey },
+            queuedSkillTargetMap: {
+                ...prev.queuedSkillTargetMap,
+                [fighterId]: { monsterId: null, monsterName: `Tile (${tileX}, ${tileY})` }
+            }
+        }));
+        const label = skillName || skillKey || 'Summon';
+        const toastMsg = isUltimate
+            ? `⚡ ULTIMATE: ${label} → Tile (${tileX}, ${tileY})`
+            : `Queued: ${label} → Tile (${tileX}, ${tileY})`;
         this.setState({ toastMsg });
         if (this._toastTimeout) clearTimeout(this._toastTimeout);
         this._toastTimeout = setTimeout(() => this.setState({ toastMsg: null }), 2500);
@@ -3945,18 +4038,37 @@ class MonsterBattle extends React.Component {
                                                 <div className="items-list">
                                                     {this.state.itemsGained && this.state.itemsGained.length > 0 &&
                                                         this.state.itemsGained.map((itemKey, idx) => {
-                                                            const isSoulShard = itemKey.endsWith('_soul_shard');
-                                                            const itemDef = isSoulShard ? {
-                                                                name: itemKey.replaceAll('_', ' '),
-                                                                icon: 'sould_shards'
-                                                            } : this.props.inventoryManager.allItems[itemKey];
-                                                            const rawIcon = itemDef?.icon ? images[itemDef.icon] : null;
-                                                            const iconSrc = rawIcon?.default || rawIcon || null;
-                                                            const displayName = itemDef?.name || itemKey.replaceAll('_', ' ');
+                                                            const isSoulShard = typeof itemKey === 'string' && itemKey.endsWith('_soul_shard');
+                                                            let displayName = '';
+                                                            let iconSrc = null;
+
+                                                            if (isSoulShard) {
+                                                                const mType = itemKey.replace('_soul_shard', '');
+                                                                displayName = mType.replaceAll('_', ' ') + ' soul shard';
+                                                                const rawIcon = images.sould_shards;
+                                                                iconSrc = typeof rawIcon === 'string' ? rawIcon : (rawIcon?.default || rawIcon || null);
+                                                            } else {
+                                                                const im = this.props.inventoryManager;
+                                                                const allItems = (im && im.allItems) || {};
+                                                                const keyStr = typeof itemKey === 'string' ? itemKey : (itemKey?.key || itemKey?.name || itemKey?.contains || '');
+                                                                
+                                                                // Look up item definition directly or via helper key variants
+                                                                let itemDef = allItems[keyStr] || allItems[`${keyStr}_sword`] || allItems[`${keyStr}_axe`] || Object.values(allItems).find(i => i && (i.name === keyStr || i.icon === keyStr));
+
+                                                                displayName = itemDef?.name || keyStr.replaceAll('_', ' ');
+                                                                const iconKey = itemDef?.icon || keyStr;
+                                                                const rawIcon = (iconKey && images[iconKey]) ? images[iconKey] : (images[keyStr] ? images[keyStr] : null);
+                                                                iconSrc = typeof rawIcon === 'string' ? rawIcon : (rawIcon?.default || rawIcon || null);
+                                                            }
+
                                                             return (
                                                                 <div key={`item-${idx}`} className="item-spoil-row">
                                                                     <div className="item-icon-wrapper">
-                                                                        {iconSrc ? <img className="item-spoil-icon" src={iconSrc} alt="" /> : <span className="item-fallback-icon" role="img" aria-label="backpack">🎒</span>}
+                                                                        {iconSrc ? (
+                                                                            <img className="item-spoil-icon" src={iconSrc} alt={displayName} />
+                                                                        ) : (
+                                                                            <span className="item-fallback-icon" role="img" aria-label="backpack">🎒</span>
+                                                                        )}
                                                                     </div>
                                                                     <span className="item-spoil-text">Found <strong className="highlight-text">{displayName}</strong></span>
                                                                 </div>
@@ -4242,6 +4354,9 @@ class MonsterBattle extends React.Component {
                                 <div
                                     key={i}
                                     className={tileClassName}
+                                    data-tile-index={i}
+                                    data-tile-x={t.x}
+                                    data-tile-y={t.y}
                                     onDragOver={(event) => this.onDragOver(event, i)}
                                     onDrop={() => { this.onDrop(i) }}
                                     onClick={isAcidBombTarget ? () => this.handleAcidBombPlacement(t) : undefined}

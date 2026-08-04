@@ -202,6 +202,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         manualCount: 0,
         timeAhead: null,
         damageIndicators: [], // Will store objects: { id, value, source }
+        stagedPortraits: fighter.stagedPortraits,
     manualMovesTotal: fighter.manualMovesTotal,
     manualMovesCurrent: fighter.manualMovesCurrent,
     // New alias fields for broader use: movement points apply to both manual and AI

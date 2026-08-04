@@ -2,6 +2,31 @@ import React from 'react';
 import Overlay from '../Overlay';
 import { ROCK_DURATION } from '../../utils/shared-constants';
 
+const getMonsterPortrait = (monster, battleData, greetingInProcess) => {
+    const liveUnit = battleData?.[monster.id] || monster;
+    if (liveUnit && liveUnit.stagedPortraits) {
+        const sp = liveUnit.stagedPortraits;
+        if (greetingInProcess && liveUnit.isMainMonster && sp.greeting) {
+            return sp.greeting.default || sp.greeting;
+        }
+        if (liveUnit.dead && sp.death) {
+            return sp.death.default || sp.death;
+        }
+        const currentHp = typeof liveUnit.hp === 'number' ? liveUnit.hp : liveUnit.stats?.hp;
+        const startHp = typeof liveUnit.starting_hp === 'number' ? liveUnit.starting_hp : liveUnit.stats?.hp;
+        if (typeof currentHp === 'number' && typeof startHp === 'number' && startHp > 0) {
+            const hpRatio = currentHp / startHp;
+            if (hpRatio < 0.3 && sp.criticallyWounded) {
+                return sp.criticallyWounded.default || sp.criticallyWounded;
+            }
+            if (hpRatio < 0.7 && sp.wounded) {
+                return sp.wounded.default || sp.wounded;
+            }
+        }
+    }
+    return monster.portrait?.default || monster.portrait || '';
+};
+
 const MonstersCombatGrid = ({
     monster,
     minions,
@@ -608,7 +633,7 @@ const MonstersCombatGrid = ({
                                         }
                                     }}
                                     style={{
-                                        backgroundImage: monster.portrait ? `url(${monster.portrait})` : 'none',
+                                        backgroundImage: monster.portrait ? `url(${getMonsterPortrait(monster, battleData, greetingInProcess)})` : 'none',
                                         filter: `sepia(${portraitHoveredId === monster.id ? '2' : '0'}) ${battleData[monster.id]?.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''}`,
                                         zIndex: 1,
                                         position: 'relative',

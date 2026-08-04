@@ -729,6 +729,32 @@ const resolvePortrait = (portraitVal) => {
     return res;
 };
 
+const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
+    if (unit && unit.stagedPortraits) {
+        const sp = unit.stagedPortraits;
+        if (greetingInProcess && unit.isMainMonster && sp.greeting) {
+            return resolvePortrait(sp.greeting);
+        }
+        if (unit.dead && sp.death) {
+            return resolvePortrait(sp.death);
+        }
+        if (typeof unit.hp === 'number' && typeof unit.starting_hp === 'number' && unit.starting_hp > 0) {
+            const hpRatio = unit.hp / unit.starting_hp;
+            if (hpRatio < 0.3 && sp.criticallyWounded) {
+                return resolvePortrait(sp.criticallyWounded);
+            }
+            if (hpRatio < 0.7 && sp.wounded) {
+                return resolvePortrait(sp.wounded);
+            }
+        }
+    }
+    return resolvePortrait(
+        (unit.type === 'archaic_familiar' && activeAnimations && activeAnimations.some(a => a.sourceUnitId === unit.id))
+        ? 'stone_familiar_glowing'
+        : unit.portrait
+    );
+};
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function CombatGrid(props) {
@@ -2424,11 +2450,7 @@ export default function CombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: unit.portrait ? `url("${resolvePortrait(
-                                (unit.type === 'archaic_familiar' && activeAnimations.some(a => a.sourceUnitId === unit.id))
-                                ? 'stone_familiar_glowing'
-                                : unit.portrait
-                            )}")` : 'none',
+                            backgroundImage: unit.portrait ? `url("${getCombatantPortrait(unit, greetingInProcess, activeAnimations)}")` : 'none',
                             backgroundSize: undefined,
                             backgroundPosition: undefined,
                             filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),

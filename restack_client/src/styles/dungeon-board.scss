@@ -367,6 +367,21 @@
             to { width: 100%; }
         }
 
+        .progress-overlay.camp-anim {
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-color: rgba(249,177,21,0.45);
+            width: 0%;
+            transition: none;
+            animation-name: campProgress;
+            animation-timing-function: linear;
+            animation-fill-mode: forwards;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
         /* Always-visible quick-action button strip */
         .quick-actions-strip {
             padding: 6px 8px;
@@ -1068,18 +1083,28 @@
                 &.expanded{
                     max-height: 500px;
                     overflow: visible;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    padding: 8px 10px;
                 }
                 &.double-expanded{
                     max-height: 1500px;
                     overflow: visible;
-                }
-                .actions-container{
-                    height: auto;
                     display: flex;
                     flex-direction: column;
-                    align-items: flex-start;
+                    justify-content: flex-start;
+                    padding: 8px 10px;
+                }
+                .actions-container{
+                    height: 100%;
+                    width: 100%;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: stretch;
                     justify-content: center;
-                    padding-bottom: 8px;
+                    margin: auto 0;
+                    padding: 0;
                     .action-wrapper{
                         position: relative;
                         width: 100%;
@@ -1236,6 +1261,57 @@
                             font-size: 8px;
                             opacity: 0.6;
                             margin-left: 4px;
+                        }
+                        
+                        /* ── Monk Actions Menu Specific Rules ── */
+                        &.action-wrapper--inner_discipline {
+                            .action-hover-wrapper {
+                                justify-content: flex-start !important;
+                                text-align: left !important;
+                                padding: 4px 6px !important;
+                                .action-icon {
+                                    width: 20px !important;
+                                    height: 20px !important;
+                                    margin-right: 6px !important;
+                                    flex-shrink: 0 !important;
+                                }
+                                .action-text {
+                                    text-align: left !important;
+                                    white-space: nowrap !important;
+                                    overflow: hidden !important;
+                                    font-size: 12px !important;
+                                    font-weight: 600 !important;
+                                    letter-spacing: -0.1px !important;
+                                }
+                            }
+                            .action-sub-menu {
+                                align-items: flex-start !important;
+                                text-align: left !important;
+                                .action-subtype {
+                                    text-align: left !important;
+                                    white-space: nowrap !important;
+                                    overflow: hidden !important;
+                                    font-size: 11px !important;
+                                    padding: 4px 4px !important;
+                                    box-sizing: border-box !important;
+                                    width: 100% !important;
+                                }
+                                .discipline-children {
+                                    width: calc(100% - 12px) !important;
+                                    align-items: flex-start !important;
+                                    text-align: left !important;
+                                    margin-left: 6px !important;
+                                    padding-left: 4px !important;
+                                    .discipline-child {
+                                        text-align: left !important;
+                                        white-space: nowrap !important;
+                                        overflow: hidden !important;
+                                        font-size: 10.5px !important;
+                                        padding: 3px 4px !important;
+                                        width: 100% !important;
+                                    }
+                                }
+                            }
                         }
                         // ── Glyph Builder Panel ──────────────────────────────────────
                         .glyph-builder-panel {
@@ -2296,19 +2372,20 @@
 
 /* Ambush Popup Redesign */
 .ambush-popup-overlay {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(8px);
+    background-color: rgba(6, 4, 12, 0.93);
     z-index: 9999;
     display: flex;
     align-items: center;
     justify-content: center;
     animation: smoothOverlayFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
     will-change: opacity;
+    backface-visibility: hidden;
+    transform: translate3d(0, 0, 0);
 }
 
 .ambush-popup-card {
@@ -2325,6 +2402,9 @@
     will-change: transform, opacity;
     position: relative;
     overflow: hidden;
+    backface-visibility: hidden;
+    transform: translate3d(0, 0, 0);
+    -webkit-font-smoothing: antialiased;
 
     &::before {
         content: '';
@@ -2489,6 +2569,19 @@
     }
 }
 
+@keyframes pygmyChargePulse {
+    0% {
+        transform: scale(0.95);
+        opacity: 0.85;
+        filter: drop-shadow(0 0 16px rgba(255, 0, 0, 0.8)) brightness(1.3);
+    }
+    100% {
+        transform: scale(1.50);
+        opacity: 1;
+        filter: drop-shadow(0 0 42px rgba(255, 0, 0, 1)) brightness(2.2);
+    }
+}
+
 @keyframes pulseGlow {
     from {
         text-shadow: 0 0 10px rgba(255, 59, 48, 0.5), 0 0 2px rgba(255, 59, 48, 0.3);
@@ -2514,25 +2607,26 @@
 }
 
 @keyframes smoothCardScaleIn {
-    from { opacity: 0; transform: scale(0.93) translateY(8px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
+    from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.95); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 
 /* Trap Popup */
 .trap-popup-overlay {
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(8px);
+    background-color: rgba(6, 4, 12, 0.93);
     z-index: 9999;
     display: flex;
     align-items: center;
     justify-content: center;
     animation: smoothOverlayFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
     will-change: opacity;
+    backface-visibility: hidden;
+    transform: translate3d(0, 0, 0);
 }
 
 .trap-popup-card {
@@ -2549,6 +2643,9 @@
     will-change: transform, opacity;
     position: relative;
     overflow: hidden;
+    backface-visibility: hidden;
+    transform: translate3d(0, 0, 0);
+    -webkit-font-smoothing: antialiased;
 
     &::before {
         content: '';

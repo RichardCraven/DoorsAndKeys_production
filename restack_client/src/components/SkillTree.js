@@ -183,9 +183,9 @@ const SkillTree = ({ crewMember, onClose }) => {
                         const midY = (line.y1 + line.y2) / 2;
                         const d = `M ${line.x2} ${line.y2} C ${line.x2} ${midY}, ${line.x1} ${midY}, ${line.x1} ${line.y1}`;
                         
-                        let strokeColor = '#FFD700'; // Global Yellow
-                        if (line.pathName === 'combat_a') strokeColor = '#32CD32'; // Green
-                        if (line.pathName === 'combat_b') strokeColor = '#FF4500'; // Red
+                        let strokeColor = '#d4a03b'; // Antique Gold
+                        if (line.pathName === 'combat_a') strokeColor = '#4a9f68'; // Soft Green
+                        if (line.pathName === 'combat_b') strokeColor = '#b8462d'; // Deep Crimson
                         
                         return (
                             <path

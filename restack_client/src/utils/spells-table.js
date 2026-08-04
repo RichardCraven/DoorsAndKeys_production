@@ -192,7 +192,7 @@ export const INNER_DISCIPLINES = {
   meditative_focus: {
     key: 'meditative_focus',
     category: 'chi',
-    name: 'Meditative Focus',
+    name: 'Chi Focus',
     icon: 'monk_meditate',
     prepTime: 15 * 60 * 1000,          // 15 min per charge
     maxCharges: 3,
@@ -231,7 +231,7 @@ export const INNER_DISCIPLINES = {
   thundering_palm_stance: {
     key: 'thundering_palm_stance',
     category: 'stance',
-    name: 'Thundering Palm',
+    name: 'Thunder Palm',
     icon: 'monk_force_punch',
     prepTime: 40 * 60 * 1000,          // 40 min
     combatDuration: 2,
@@ -246,7 +246,7 @@ export const INNER_DISCIPLINES = {
   third_eye_pulse: {
     key: 'third_eye_pulse',
     category: 'spirit',
-    name: 'Third Eye Pulse',
+    name: 'Third Eye',
     icon: 'monk_third_eye',
     prepTime: 5 * 60 * 1000,           // 5 min
     revealScope: 'current_board',
@@ -268,7 +268,7 @@ export const INNER_DISCIPLINES = {
   spirit_cartography: {
     key: 'spirit_cartography',
     category: 'spirit',
-    name: 'Spirit Cartography',
+    name: 'Spirit Map',
     icon: 'monk_astral_projection',
     prepTime: 30 * 60 * 1000,          // 30 min
     revealScope: 'current_level',
