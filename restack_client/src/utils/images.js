@@ -666,6 +666,7 @@ import qlippoth from '../assets/portraits/monsters/qlippoth.png'
 //MID JOURNEY
 import goat_demon from '../assets/portraits/monsters/goat_demon.png'
 import gorgon from '../assets/portraits/monsters/gorgon.png'
+import cyclops from '../assets/portraits/monsters/cyclops.png'
 
 import gorgon_portrait from '../assets/portraits/monsters/gorgon.png'
 import goat_demon_portrait from '../assets/portraits/monsters/goat_demon.png'
@@ -1806,6 +1807,7 @@ export {
     goat_demon_portrait,
     gorgon,
     gorgon_portrait,
+    cyclops,
     cyclops_portrait,
 
     witch,

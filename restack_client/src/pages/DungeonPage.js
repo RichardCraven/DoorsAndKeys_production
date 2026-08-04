@@ -6389,8 +6389,8 @@ class DungeonPage extends React.Component {
                                             const isPortal   = type === 'dungeon_portal' || type === 'dungeon portal';
                                             const isItem     = type === 'item' && !CHEST_SUBTYPES.has(subtype);
                                             const icon = t.image
-                                                ? (images[t.image] || t.image)
-                                                : (images[subtype] || images[type] || null);
+                                                ? (images[t.image] || images[`${t.image}_portrait`] || (typeof t.image === 'string' && t.image.includes('/') ? t.image : null))
+                                                : (images[subtype] || images[`${subtype}_portrait`] || images[type] || images[`${type}_portrait`] || null);
                                             const label = isGate
                                                 ? (type || 'Gate').replace(/_/g, ' ')
                                                 : isSpawn

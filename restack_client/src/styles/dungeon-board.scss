@@ -2644,6 +2644,24 @@
     }
 }
 
+@keyframes keyGlowPulse {
+    0% {
+        transform: scale(0.82);
+        opacity: 0.55;
+        filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.6)) brightness(1);
+    }
+    50% {
+        transform: scale(1.10);
+        opacity: 0.88;
+        filter: drop-shadow(0 0 18px rgba(255, 215, 0, 0.88)) brightness(1.25);
+    }
+    100% {
+        transform: scale(1.32);
+        opacity: 1;
+        filter: drop-shadow(0 0 28px rgba(255, 215, 0, 1)) brightness(1.45);
+    }
+}
+
 @keyframes pygmyChargePulse {
     0% {
         transform: scale(0.95);

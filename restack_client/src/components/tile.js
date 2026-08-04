@@ -274,6 +274,20 @@ function Tile(props) {
     const leftNeighbor = getNeighborTile(-1);
     const rightNeighbor = getNeighborTile(1);
     const bottomNeighbor = getNeighborTile(15);
+
+    const topIsShaded = isWallOrVoidOrDarkNeighbor(topNeighbor);
+    const bottomIsShaded = isWallOrVoidOrDarkNeighbor(bottomNeighbor);
+    const leftIsShaded = isWallOrVoidOrDarkNeighbor(leftNeighbor);
+    const rightIsShaded = isWallOrVoidOrDarkNeighbor(rightNeighbor);
+
+    const fogShadows = [];
+    if (topIsShaded) fogShadows.push('inset 0 8px 10px -2px rgba(0, 0, 0, 0.85)');
+    if (bottomIsShaded) fogShadows.push('inset 0 -8px 10px -2px rgba(0, 0, 0, 0.85)');
+    if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0, 0, 0, 0.85)');
+    if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0, 0, 0, 0.85)');
+    const isDebugMode = !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
+    const fogEdgeBoxShadow = (isDebugMode && isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
+
     const edgeLines = isBoardGridTile ? {
         top: edgeColorForBoundary(
             props.borders && props.borders.top,
@@ -322,21 +336,6 @@ function Tile(props) {
 
     const isBlackTile = isBlackRenderedTile(currentContains, currentTileColor);
 
-    const isDebugMode = !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
-
-    const topIsShaded = isWallOrVoidOrDarkNeighbor(topNeighbor);
-    const bottomIsShaded = isWallOrVoidOrDarkNeighbor(bottomNeighbor);
-    const leftIsShaded = isWallOrVoidOrDarkNeighbor(leftNeighbor);
-    const rightIsShaded = isWallOrVoidOrDarkNeighbor(rightNeighbor);
-
-    const fogShadows = [];
-    if (topIsShaded) fogShadows.push('inset 0 8px 10px -2px rgba(0,0,0,0.85)');
-    if (bottomIsShaded) fogShadows.push('inset 0 -8px 10px -2px rgba(0,0,0,0.85)');
-    if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0,0,0,0.85)');
-    if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0,0,0,0.85)');
-
-    const fogEdgeBoxShadow = (isDebugMode && isBoardGridTile && !isBlackTile && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
-
     const isNearbyMonster = (() => {
         if (!isMonsterOrPygmyTile) return false;
         if (tileRow === null || tileCol === null || !boardTiles) return false;
@@ -378,6 +377,49 @@ function Tile(props) {
                        (containsObj && (containsObj.type === 'item' || containsObj.type === 'key')) ||
                        ['key', 'items', 'jewels', 'runes', 'treasure'].includes(props.optionType) ||
                        isItemImage;
+
+    const isKeyTile = (() => {
+        const strImage = imageString;
+        const strContains = typeof currentContains === 'string' ? currentContains.toLowerCase() : '';
+        const strType = typeof containsType === 'string' ? containsType.toLowerCase() : '';
+        const strSubtype = typeof containsSubtype === 'string' ? containsSubtype.toLowerCase() : '';
+        const strOptionType = String(props.optionType || '').toLowerCase();
+
+        // Exclude gates / doors
+        if (strImage.includes('gate') || strContains.includes('gate') || strSubtype.includes('gate') || 
+            strImage.includes('door') || strContains.includes('door') || strSubtype.includes('door')) {
+            return false;
+        }
+
+        // Check types / subtypes / optionTypes / contains / image
+        if (strType === 'key' || strType.includes('key') || strSubtype === 'key' || strSubtype.includes('key')) return true;
+        if (strContains.includes('key')) return true;
+        if (strOptionType === 'key' || strOptionType.includes('key')) return true;
+        if (strImage.includes('key')) return true;
+
+        if (containsObj) {
+            const objType = String(containsObj.type || '').toLowerCase();
+            const objSubtype = String(containsObj.subtype || '').toLowerCase();
+            const objName = String(containsObj.name || '').toLowerCase();
+            const objId = String(containsObj.id || '').toLowerCase();
+
+            if (objType === 'key' || objType.includes('key') || objSubtype.includes('key') || objName.includes('key') || objId.includes('key')) {
+                return true;
+            }
+        }
+
+        if (props.data) {
+            const dType = String(props.data.type || '').toLowerCase();
+            const dSubtype = String(props.data.subtype || '').toLowerCase();
+            const dName = String(props.data.name || '').toLowerCase();
+
+            if (dType === 'key' || dType.includes('key') || dSubtype.includes('key') || dName.includes('key')) {
+                return true;
+            }
+        }
+
+        return false;
+    })();
 
     return (
         <div 
@@ -529,6 +571,27 @@ function Tile(props) {
                                   animation: isChargingAmbush
                                       ? 'pygmyChargePulse 0.35s ease-in-out infinite alternate'
                                       : (isNearbyMonster ? 'monsterGlowPulse 1.1s ease-in-out infinite alternate' : 'monsterGlowPulse 1.8s ease-in-out infinite alternate')
+                              }}
+                          />
+                      )}
+
+                      {/* Faint gold light source glow emanating from behind key items in the dungeon */}
+                      {isKeyTile && !isBlackTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
+                          <div 
+                              className="key-portrait-glow"
+                              style={{
+                                  position: 'absolute',
+                                  top: '-15%',
+                                  left: '-15%',
+                                  right: '-15%',
+                                  bottom: '-15%',
+                                  borderRadius: '50%',
+                                  background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.85) 0%, rgba(218, 165, 32, 0.55) 38%, rgba(180, 130, 15, 0.25) 65%, transparent 88%)',
+                                  zIndex: 2,
+                                  pointerEvents: 'none',
+                                  opacity: (color === 'black' || props.type === 'overlay-tile') ? 0 : (props.partialObscured ? 0.35 : 1),
+                                  transition: 'opacity 0.2s ease-in-out, background 0.2s ease-in-out',
+                                  animation: 'keyGlowPulse 1.8s ease-in-out infinite alternate'
                               }}
                           />
                       )}
@@ -945,7 +1008,7 @@ function Tile(props) {
                 }} />
            )}
 
-           {/* Fog of war / void edge shading (gradient shadow along unrevealed fog/void boundaries) — Active when Debug Mode is ON */}
+           {/* Fog of war / void edge shading — Active when Debug Mode is ON */}
            { fogEdgeBoxShadow !== 'none' && (
                 <div style={{
                     position: 'absolute',
