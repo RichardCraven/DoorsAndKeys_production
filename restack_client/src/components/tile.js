@@ -285,7 +285,8 @@ function Tile(props) {
     if (bottomIsShaded) fogShadows.push('inset 0 -8px 10px -2px rgba(0, 0, 0, 0.85)');
     if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0, 0, 0, 0.85)');
     if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0, 0, 0, 0.85)');
-    const isDebugMode = !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
+    const isBuilderTile = !!(props.isBuilder || props.isMapmaker || props.disableFogShading || props.disableShading || props.type === 'palette-tile' || props.type === 'builder-tile');
+    const isDebugMode = !isBuilderTile && !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
     const fogEdgeBoxShadow = (isDebugMode && isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
 
     const edgeLines = isBoardGridTile ? {
@@ -324,8 +325,46 @@ function Tile(props) {
         'wyvern', 'wyvern_alt', 'goloth_devil', 'zul_devil', 'mordu_devil',
         'vukular_devil', 'ishtar_devil', 'black_demon', 'goat_demon',
         'golden_demon', 'kabuki_demon', 'cyclops', 'high_priest_of_the_basilisk',
+        'high_priest_of_basilisk', 'basilisk_priest', 'basilisk_cultists',
+        'basilisk_cultist', 'basilisk', 'shade', 'blalok', 'horned_pet', 'qlippoth',
         'woodland_warband', 'cave_squad', 'mud_group', 'pygmies'
     ];
+
+    const resolvedPortraitUrl = (() => {
+        if (props.imageOverride) {
+            if (typeof props.imageOverride === 'string' && (props.imageOverride.includes('/') || props.imageOverride.startsWith('data:'))) {
+                return props.imageOverride;
+            }
+            if (images[props.imageOverride]) return images[props.imageOverride];
+        }
+        if (props.image) {
+            if (typeof props.image === 'string') {
+                if (props.image.includes('/') || props.image.startsWith('data:')) {
+                    return props.image;
+                }
+                const key = props.image.trim().toLowerCase().replace(/[\s-]+/g, '_');
+                if (images[key]) return images[key];
+                if (images[`${key}_portrait`]) return images[`${key}_portrait`];
+            } else if (typeof props.image === 'object') {
+                return props.image.default || props.image;
+            }
+        }
+        if (props.contains) {
+            if (typeof props.contains === 'string') {
+                const key = props.contains.trim().toLowerCase().replace(/[\s-]+/g, '_');
+                if (images[key]) return images[key];
+                if (images[`${key}_portrait`]) return images[`${key}_portrait`];
+            } else if (typeof props.contains === 'object') {
+                const sub = props.contains.subtype || props.contains.type || props.contains.name;
+                if (sub && typeof sub === 'string') {
+                    const key = sub.trim().toLowerCase().replace(/[\s-]+/g, '_');
+                    if (images[key]) return images[key];
+                    if (images[`${key}_portrait`]) return images[`${key}_portrait`];
+                }
+            }
+        }
+        return null;
+    })();
 
     const isMonsterOrPygmyTile = containsType === 'monster' ||
                                  containsType === 'pygmies' ||
@@ -503,6 +542,20 @@ function Tile(props) {
                 </>
            )}
 
+           {/* Fog of war / void edge shading — Active when Debug Mode is ON */}
+           { fogEdgeBoxShadow !== 'none' && (
+               <div style={{
+                   position: 'absolute',
+                   top: 0,
+                   left: 0,
+                   right: 0,
+                   bottom: 0,
+                   boxShadow: fogEdgeBoxShadow,
+                   zIndex: 26,
+                   pointerEvents: 'none'
+               }} />
+           )}
+
             {/* HP fill: rendered as a vertical fill using a vibrant green gradient with a dark track */}
             { (typeof hpVal === 'number' && typeof maxHpVal === 'number') && (() => {
                 const pct = Math.max(0, Math.min(1, maxHpVal <= 0 ? 0 : hpVal / maxHpVal));
@@ -548,6 +601,43 @@ function Tile(props) {
                          return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: color === 'black' ? 0 : 0.5, transition: 'opacity 0.35s ease-in-out'}} />
                      })()}
 
+                     {/* Territory Layer: renders clan-specific territory shading beneath items/monsters/buildings */}
+                     { (props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory) && (() => {
+                         const rawClan = props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory;
+                         const clan = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : String(rawClan);
+                         let territoryBg = 'rgba(180, 110, 40, 0.45)'; // mud default
+                         let borderColor = 'rgba(210, 130, 50, 0.65)';
+                         if (clan === 'cave' || clan === 'cave_clan') {
+                             territoryBg = 'rgba(90, 110, 160, 0.45)';
+                             borderColor = 'rgba(110, 130, 190, 0.65)';
+                         } else if (clan === 'woodland' || clan === 'woodland_clan') {
+                             territoryBg = 'rgba(34, 160, 34, 0.45)';
+                             borderColor = 'rgba(50, 190, 50, 0.65)';
+                         } else if (clan === 'shadow' || clan === 'shadow_clan') {
+                             territoryBg = 'rgba(120, 20, 180, 0.45)';
+                             borderColor = 'rgba(150, 30, 210, 0.65)';
+                         } else if (clan === 'paradox' || clan === 'paradox_clan') {
+                             territoryBg = 'rgba(210, 20, 210, 0.45)';
+                             borderColor = 'rgba(230, 40, 230, 0.65)';
+                         }
+                         return (
+                             <div 
+                                 className="territory-bg" 
+                                 style={{
+                                     position: 'absolute', 
+                                     top: 0, left: 0, right: 0, bottom: 0, 
+                                     backgroundColor: territoryBg, 
+                                     boxShadow: `inset 0 0 10px ${borderColor}`, 
+                                     border: `1px dashed ${borderColor}`,
+                                     zIndex: 1, 
+                                     pointerEvents: 'none', 
+                                     opacity: color === 'black' ? 0 : 1, 
+                                     transition: 'opacity 0.35s ease-in-out'
+                                 }} 
+                             />
+                         );
+                      })()}
+
                       {/* Faint red light source glow emanating from behind monster/pygmy portrait */}
                       {isMonsterOrPygmyTile && !isBlackTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
                           <div 
@@ -575,8 +665,8 @@ function Tile(props) {
                           />
                       )}
 
-                      {/* Faint gold light source glow emanating from behind key items in the dungeon */}
-                      {isKeyTile && !isBlackTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
+                      {/* Faint gold light source glow emanating from behind key items in the dungeon (disabled in palette/builder) */}
+                      {isKeyTile && !isBlackTile && !isBuilderTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
                           <div 
                               className="key-portrait-glow"
                               style={{
@@ -597,8 +687,8 @@ function Tile(props) {
                       )}
 
                       {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
-                      {(props.imageOverride || images[props.image]) && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
-                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
+                      {resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
+                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(resolvedPortraitUrl), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
                       )}
 
             {/* Soul Shard custom overlay */}
@@ -848,44 +938,68 @@ function Tile(props) {
 
              {/* Connecting Path overlay */}
              { ((props.contains && props.contains.type === 'connecting_path') || props.optionType === 'connecting path') && (() => {
-                  const isConnected = !!props.connectedEdge;
-                  let edge = props.connectedEdge;
-                  if (!edge && props.id !== undefined && props.id !== null) {
-                      const col = props.id % 15;
-                      const row = Math.floor(props.id / 15);
-                      if (col === 0) edge = 'left';
-                      else if (col === 14) edge = 'right';
-                      else if (row === 0) edge = 'top';
-                      else if (row === 14) edge = 'bottom';
-                  }
-                  const overlayStyle = {
-                      position: 'absolute',
-                      top: edge === 'top' ? -3 : 0,
-                      left: edge === 'left' ? -3 : 0,
-                      right: edge === 'right' ? -3 : 0,
-                      bottom: edge === 'bottom' ? -3 : 0,
-                      backgroundColor: isConnected ? 'rgba(212, 168, 68, 0.45)' : 'rgba(180, 130, 20, 0.22)',
-                      border: isConnected ? '2px solid rgba(212, 168, 68, 0.95)' : '2px dashed rgba(180, 130, 20, 0.65)',
-                      boxShadow: isConnected ? '0 0 10px rgba(212, 168, 68, 0.65), inset 0 0 6px rgba(255, 255, 255, 0.35)' : 'none',
-                      borderRadius: isConnected ? '3px' : '0px',
-                      zIndex: 10,
-                      pointerEvents: 'none',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: color === 'black' ? 0 : 1,
-                      transition: 'opacity 0.35s ease-in-out'
-                  };
-                  if (edge === 'top') {
-                      overlayStyle.borderTop = 'none';
-                  } else if (edge === 'bottom') {
-                      overlayStyle.borderBottom = 'none';
-                  } else if (edge === 'left') {
-                     overlayStyle.borderLeft = 'none';
-                  } else if (edge === 'right') {
-                      overlayStyle.borderRight = 'none';
-                  }
-                  const isHorizontal = edge === 'left' || edge === 'right';
+                   const isConnected = !!props.connectedEdge;
+                   let edge = props.connectedEdge || (props.contains && typeof props.contains === 'object' ? (props.contains.edge || props.contains.direction) : null);
+
+                   if (edge === 'E' || edge === 'east') edge = 'right';
+                   if (edge === 'W' || edge === 'west') edge = 'left';
+                   if (edge === 'N' || edge === 'north') edge = 'top';
+                   if (edge === 'S' || edge === 'south') edge = 'bottom';
+
+                   if (!edge && props.id !== undefined && props.id !== null) {
+                       const x = props.id % 15;
+                       const y = Math.floor(props.id / 15);
+
+                       if (x === 0) edge = 'left';
+                       else if (x === 14) edge = 'right';
+                       else if (y === 0) edge = 'top';
+                       else if (y === 14) edge = 'bottom';
+                       else {
+                           const boardTiles = props.boardTiles;
+                           let hasLeftRightNeighbor = false;
+                           let hasTopBottomNeighbor = false;
+                           if (Array.isArray(boardTiles)) {
+                               if (x > 0 && boardTiles[props.id - 1] && boardTiles[props.id - 1].color !== 'black') hasLeftRightNeighbor = true;
+                               if (x < 14 && boardTiles[props.id + 1] && boardTiles[props.id + 1].color !== 'black') hasLeftRightNeighbor = true;
+                               if (y > 0 && boardTiles[props.id - 15] && boardTiles[props.id - 15].color !== 'black') hasTopBottomNeighbor = true;
+                               if (y < 14 && boardTiles[props.id + 15] && boardTiles[props.id + 15].color !== 'black') hasTopBottomNeighbor = true;
+                           }
+                           if (hasLeftRightNeighbor) edge = 'right';
+                           else if (hasTopBottomNeighbor) edge = 'bottom';
+                       }
+                   }
+                   const overlayStyle = {
+                       position: 'absolute',
+                       top: edge === 'top' ? -3 : 0,
+                       left: edge === 'left' ? -3 : 0,
+                       right: edge === 'right' ? -3 : 0,
+                       bottom: edge === 'bottom' ? -3 : 0,
+                       backgroundColor: isConnected ? 'rgba(212, 168, 68, 0.45)' : 'rgba(180, 130, 20, 0.22)',
+                       border: isConnected ? '2px solid rgba(212, 168, 68, 0.95)' : '2px dashed rgba(180, 130, 20, 0.65)',
+                       boxShadow: isConnected ? '0 0 10px rgba(212, 168, 68, 0.65), inset 0 0 6px rgba(255, 255, 255, 0.35)' : 'none',
+                       borderRadius: isConnected ? '3px' : '0px',
+                       zIndex: 10,
+                       pointerEvents: 'none',
+                       display: 'flex',
+                       alignItems: 'center',
+                       justifyContent: 'center',
+                       opacity: color === 'black' ? 0 : 1,
+                       transition: 'opacity 0.35s ease-in-out'
+                   };
+                   if (edge === 'top') {
+                       overlayStyle.borderTop = 'none';
+                   } else if (edge === 'bottom') {
+                       overlayStyle.borderBottom = 'none';
+                   } else if (edge === 'left') {
+                      overlayStyle.borderLeft = 'none';
+                   } else if (edge === 'right') {
+                       overlayStyle.borderRight = 'none';
+                   }
+                   let isHorizontal = edge === 'left' || edge === 'right';
+                   if (props.contains && typeof props.contains === 'object' && props.contains.orientation) {
+                       if (props.contains.orientation === 'horizontal') isHorizontal = true;
+                       if (props.contains.orientation === 'vertical') isHorizontal = false;
+                   }
                  return (
                       <div style={overlayStyle}>
                           {/* Passage with golden connection background SVG */}

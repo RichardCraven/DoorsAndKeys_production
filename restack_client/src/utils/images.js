@@ -1170,7 +1170,7 @@ import buildable_builders_house from '../assets/icons/buildings/buildable/builde
 import building from '../assets/icons/buildings/buildable/building.png';
 import buildable_camp from '../assets/icons/buildings/buildable/camp.png';
 import buildable_captains_tower from '../assets/icons/buildings/buildable/captains tower.png';
-import buildable_fort from '../assets/icons/buildings/buildable/fort.png';
+import buildable_earthen_fort from '../assets/icons/buildings/buildable/earthen fort.png';
 import buildable_house from '../assets/icons/buildings/buildable/house.png';
 import buildable_hut from '../assets/icons/buildings/buildable/hut.png';
 import buildable_observer_platform from '../assets/icons/buildings/buildable/observer platform.png';
@@ -1199,6 +1199,22 @@ const cave_pygmies = cave_squad;
 const save_pygmies = cave_squad;
 const woodland_pygmies = woodland_warband;
 const pygmies = woodland_warband;
+
+const basilisk_cultist = basilisk_cultists;
+const basilisk_cultist_portrait = basilisk_cultists_portrait;
+const high_priest_of_basilisk = high_priest_of_the_basilisk;
+const high_priest_of_basilisk_portrait = high_priest_of_the_basilisk_portrait;
+const basilisk_priest = high_priest_of_the_basilisk;
+const basilisk_priest_portrait = high_priest_of_the_basilisk_portrait;
+const basilisk = high_priest_of_the_basilisk;
+const basilisk_portrait = high_priest_of_the_basilisk_portrait;
+
+const earthen_fort = buildable_earthen_fort;
+const buildable_fort = buildable_earthen_fort;
+const observer_platform = buildable_observer_platform;
+const outpost = buildable_outpost;
+const war_camp = buildable_war_camp;
+const war_fort = buildable_war_fort;
 
 const tattoo_placeholder = tattoo_ink; // placeholder until real tattoo art is added
 const _terrainBase = [terrain_1, terrain_2, terrain_3, terrain_4, terrain_5, terrain_6, terrain_7, terrain_8, terrain_9, terrain_10, terrain_11, terrain_12, terrain_13, terrain_14, terrain_15, terrain_16];
@@ -1307,8 +1323,16 @@ export {
     shade,
     high_priest_of_the_basilisk,
     high_priest_of_the_basilisk_portrait,
+    high_priest_of_basilisk,
+    high_priest_of_basilisk_portrait,
+    basilisk_priest,
+    basilisk_priest_portrait,
+    basilisk,
+    basilisk_portrait,
     basilisk_cultists,
     basilisk_cultists_portrait,
+    basilisk_cultist,
+    basilisk_cultist_portrait,
     horned_pet,
     horned_pet_portrait,
     dragon_hatchling,
@@ -2307,6 +2331,7 @@ export {
     buildable_builders_house,
     buildable_camp,
     buildable_captains_tower,
+    buildable_earthen_fort,
     buildable_fort,
     buildable_house,
     buildable_hut,
@@ -2317,6 +2342,12 @@ export {
     buildable_temple,
     buildable_war_camp,
     buildable_war_fort,
+
+    earthen_fort,
+    observer_platform,
+    outpost,
+    war_camp,
+    war_fort,
 
     reaper_health_orb,
     crew_health_orb,

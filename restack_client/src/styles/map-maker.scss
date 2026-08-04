@@ -130,6 +130,8 @@ $bot-level-zIndex: 2; // doubletall containers
 }
 .left-text-readout{
     text-align: left;
+    padding-left: 65px;
+    box-sizing: border-box;
 }
 .right-menus{
 }
@@ -307,7 +309,7 @@ $bot-level-zIndex: 2; // doubletall containers
     .column-wrapper{
         align-items: center;
         position: relative;
-        justify-content: center;
+        justify-content: flex-start;
         display: flex;
         height: 100%;
         flex-direction: column;
@@ -316,6 +318,8 @@ $bot-level-zIndex: 2; // doubletall containers
             display: flex;
             justify-content: space-between;
             padding-bottom: 5px;
+            flex-shrink: 0;
+            z-index: 10;
             input{
                 padding-left: 10px;
                 outline: none;
@@ -352,6 +356,8 @@ $bot-level-zIndex: 2; // doubletall containers
             height: 100%;
             min-height: 660px;
             flex-direction: row;
+            margin-top: auto;
+            margin-bottom: auto;
         }
     }
 }

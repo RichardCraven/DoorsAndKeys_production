@@ -1,2 +1,3 @@
-Make new action submenu for wizard called 'Scry'
-use this icon: eye_inverted
+[x] Make new action submenu for wizard called 'Scry' (completed)
+    - Icon: eye_inverted
+    - Subtypes: Scry Monsters, Scry Treasure, Arcane Sight

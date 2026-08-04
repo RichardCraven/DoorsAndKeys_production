@@ -35,7 +35,7 @@ import  CIcon  from '@coreui/icons-react';
 
 import { CButton, CFormSelect, CFormInput, CModal, CModalHeader, CModalTitle, CModalBody, CModalFooter} from '@coreui/react';
 import * as images from '../utils/images'
-import { RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, DISCIPLINE_CATEGORIES } from '../utils/spells-table'
+import { RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, DISCIPLINE_CATEGORIES, SCRY_OPTIONS } from '../utils/spells-table'
 import { RECIPES } from '../utils/spells-table'
 import skillsMatrix from '../utils/skills-matrix'
 import REAGENTS, { REAGENT_KEYS } from '../utils/reagents'
@@ -834,10 +834,10 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                             <h3 className="panel-title">Potion Brewing</h3>
                             <div className="item-list scroll-container">
                                 {[
-                                    { key: 'minor_health_potion', name: 'Minor Health Potion', desc: 'Restores 15% HP', gold: 15, dust: 5, icon: 'minor_health_potion' },
-                                    { key: 'major_health_potion', name: 'Major Health Potion', desc: 'Restores 35% HP', gold: 40, dust: 10, icon: 'minor_health_potion' },
-                                    { key: 'grand_health_potion', name: 'Grand Health Potion', desc: 'Restores 80% HP', gold: 100, dust: 20, icon: 'minor_health_potion' },
-                                    { key: 'supreme_health_potion', name: 'Supreme Health Potion', desc: 'Restores 100% HP, 100% Endurance & cleanses debuffs', gold: 200, dust: 40, icon: 'minor_health_potion' },
+                                    { key: 'minor_health_potion', name: 'Minor Health Potion', desc: 'Restores 15% HP', gold: 15, dust: 2, icon: 'minor_health_potion' },
+                                    { key: 'major_health_potion', name: 'Major Health Potion', desc: 'Restores 35% HP', gold: 40, dust: 5, icon: 'minor_health_potion' },
+                                    { key: 'grand_health_potion', name: 'Grand Health Potion', desc: 'Restores 80% HP', gold: 100, dust: 10, icon: 'minor_health_potion' },
+                                    { key: 'supreme_health_potion', name: 'Supreme Health Potion', desc: 'Restores 100% HP, 100% Endurance & cleanses debuffs', gold: 200, dust: 20, icon: 'minor_health_potion' },
                                 ].map((recipe, idx) => (
                                     <div key={idx} className="item-card">
                                         {renderItemIcon(recipe.icon)}
@@ -1041,7 +1041,7 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                     <div style={{ fontSize: '0.98rem', lineHeight: '1.6', color: '#d1d5db', marginBottom: '20px' }}>
                         <p style={{ margin: '0 0 12px 0' }}>
                             Begin a detailed sharpening process for the party's bladed weapons. 
-                            The Soldier will spend dedicated time honing the edges of all cutting weapons.
+                            The Soldier will spend dedicated time honing the edge of one random unsharpened cutting weapon.
                         </p>
                         
                         <div style={{
@@ -1057,10 +1057,10 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                         <h4 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', fontWeight: 600, color: '#f3f4f6' }}>Upgrade Benefits:</h4>
                         <ul style={{ margin: 0, paddingLeft: '20px', color: '#9ca3af' }}>
                             <li style={{ marginBottom: '8px' }}>
-                                Applies a permanent <strong style={{ color: '#10b981' }}>+80% flat damage boost</strong> to all cutting weapons currently in the shared inventory or equipped by crew members.
+                                Applies a permanent <strong style={{ color: '#10b981' }}>+80% flat damage boost</strong> to a random unsharpened cutting weapon in the shared inventory or equipped by crew members.
                             </li>
                             <li>
-                                Weapons will be upgraded to their <strong style={{ color: '#38bdf8' }}>(Sharpened)</strong> version upon completion.
+                                The chosen weapon will be upgraded to its <strong style={{ color: '#38bdf8' }}>(Sharpened)</strong> version upon completion.
                             </li>
                         </ul>
                     </div>
@@ -1265,6 +1265,28 @@ class DungeonPage extends React.Component {
                 iconUrl: images['magic_moon_1'] || '',
                 disabled: !hasAnyKnownRitual,
                 subTypes: ritualSubTypes
+            });
+
+            // ── Scry action for Wizard ──────────────────────────────────────────
+            const scrySubTypes = Object.values(SCRY_OPTIONS).map(s => {
+                const activeScry = specialActions.find(a => a.type === 'scry' && a.scryKey === s.key && a.available);
+                return {
+                    type: s.name,
+                    scryKey: s.key,
+                    iconUrl: images['eye_inverted'] || '',
+                    available: true,
+                    count: activeScry ? 1 : 0,
+                    prepMins: Math.round(s.prepTime / 60000),
+                    description: s.description,
+                    flavorText: s.flavorText,
+                };
+            });
+            actions.push({
+                type: 'scry',
+                name: 'Scry',
+                iconUrl: images['eye_inverted'] || '',
+                noMaxCap: true,
+                subTypes: scrySubTypes
             });
         }
         // Sage also gets the Prepare Ritual action (same ritual pool as wizard)
@@ -1605,8 +1627,10 @@ class DungeonPage extends React.Component {
                             const subTypeIcon = subType.iconUrl ? (typeof subType.iconUrl === 'object' ? (subType.iconUrl.default || '') : subType.iconUrl) : null;
                             const subTypeDiscDef = subType.disciplineKey ? INNER_DISCIPLINES[subType.disciplineKey] : null;
                             const subTypeTacticDef = subType.tacticKey ? BATTLE_TACTICS[subType.tacticKey] : null;
+                            const subTypeScryDef = subType.scryKey ? SCRY_OPTIONS[subType.scryKey] : null;
                             const subTypeTooltip = subTypeDiscDef ? `${subTypeDiscDef.name}\n${subTypeDiscDef.description}\n⏱ ${Math.round(subTypeDiscDef.prepTime / 60000)} min prep${subTypeDiscDef.combatDuration ? ` · ⚔ ${subTypeDiscDef.combatDuration} combats` : ''}${subTypeDiscDef.category === 'chi' ? ` · 🧘 Max ${subTypeDiscDef.maxCharges || 3} charges` : ''}\n"${subTypeDiscDef.flavorText}"`
-                            : (subTypeTacticDef ? `${subTypeTacticDef.name}\n${subTypeTacticDef.description}\n⏱ ${Math.round(subTypeTacticDef.prepTime / 60000)} min prep · ⚔ ${subTypeTacticDef.combatDuration} combats · ✦ +${Math.round((subTypeTacticDef.xpMultiplier - 1) * 100)}% XP\n"${subTypeTacticDef.flavorText}"` : undefined);
+                            : (subTypeTacticDef ? `${subTypeTacticDef.name}\n${subTypeTacticDef.description}\n⏱ ${Math.round(subTypeTacticDef.prepTime / 60000)} min prep · ⚔ ${subTypeTacticDef.combatDuration} combats · ✦ +${Math.round((subTypeTacticDef.xpMultiplier - 1) * 100)}% XP\n"${subTypeTacticDef.flavorText}"`
+                            : (subTypeScryDef ? `${subTypeScryDef.name}\n${subTypeScryDef.description}\n⏱ ${Math.round(subTypeScryDef.prepTime / 60000)} min prep\n"${subTypeScryDef.flavorText}"` : undefined));
                             return (
                                 <React.Fragment key={j}>
                                     <div onClick={() => this.handleActionSubtypeClick(action, subType)}
@@ -2046,34 +2070,45 @@ class DungeonPage extends React.Component {
 
                             let updateText = '';
                             if (a.type === 'sharpen_blades') {
-                                let cuttingWeapons = [];
-                                if (this.props.inventoryManager && Array.isArray(this.props.inventoryManager.inventory)) {
-                                    this.props.inventoryManager.inventory.forEach(item => {
-                                        if (item && item.type === 'weapon' && item.subtype === 'cutting' && !item.name.includes('(Sharpened)')) {
-                                            cuttingWeapons.push(item);
-                                        }
-                                    });
-                                }
-                                if (Array.isArray(member.inventory)) {
-                                    member.inventory.forEach(item => {
-                                        if (item && item.type === 'weapon' && item.subtype === 'cutting' && !item.name.includes('(Sharpened)')) {
-                                            cuttingWeapons.push(item);
-                                        }
-                                    });
-                                }
-
-                                if (cuttingWeapons.length === 0) {
-                                    updateText = `${member.name} has finished sharpening blades, but no valid cutting weapons were present in the inventory when the process completed.`;
+                                if (a.resultText) {
+                                    updateText = a.resultText;
                                 } else {
-                                    const details = cuttingWeapons.map(item => {
-                                        const bonus = Math.round(item.damage * 0.8);
-                                        if (markNotified) {
-                                            item.damage += bonus;
-                                            item.name = `${item.name} (Sharpened)`;
+                                    let cuttingWeapons = [];
+                                    const addValidWeapon = (item) => {
+                                        if (item && item.type === 'weapon' && item.subtype === 'cutting' && !item.isSharpened && !item.name.includes('(Sharpened)')) {
+                                            if (!cuttingWeapons.includes(item)) {
+                                                cuttingWeapons.push(item);
+                                            }
                                         }
-                                        return `Applied +${bonus} damage to "${item.name}${markNotified ? '' : ' (Sharpened)'}"`;
-                                    }).join(', ');
-                                    updateText = `${member.name} finished sharpening blades! ${details}`;
+                                    };
+
+                                    if (this.props.inventoryManager && Array.isArray(this.props.inventoryManager.inventory)) {
+                                        this.props.inventoryManager.inventory.forEach(addValidWeapon);
+                                    }
+                                    if (Array.isArray(member.inventory)) {
+                                        member.inventory.forEach(addValidWeapon);
+                                    }
+
+                                    if (cuttingWeapons.length === 0) {
+                                        updateText = `${member.name} has finished sharpening blades, but no valid cutting weapons were present in the inventory when the process completed.`;
+                                    } else {
+                                        // Pick ONE random unsharpened cutting weapon
+                                        const chosenIndex = Math.floor(Math.random() * cuttingWeapons.length);
+                                        const item = cuttingWeapons[chosenIndex];
+                                        const bonus = Math.round((item.damage || 0) * 0.8);
+                                        if (markNotified) {
+                                            item.damage = (item.damage || 0) + bonus;
+                                            item.isSharpened = true;
+                                            if (!item.name.includes('(Sharpened)')) {
+                                                item.name = `${item.name} (Sharpened)`;
+                                            }
+                                        }
+                                        const displayName = markNotified ? item.name : (item.name.includes('(Sharpened)') ? item.name : `${item.name} (Sharpened)`);
+                                        updateText = `${member.name} finished sharpening blades! Applied +${bonus} damage to "${displayName}".`;
+                                    }
+                                    if (markNotified) {
+                                        a.resultText = updateText;
+                                    }
                                 }
                             } else {
                                 updateText = isRitual
@@ -2109,30 +2144,34 @@ class DungeonPage extends React.Component {
                             if (isRitual) hasRitualUpdate = true;
                             let updateText = '';
                             if (a.type === 'sharpen_blades') {
-                                let cuttingWeapons = [];
-                                if (this.props.inventoryManager && Array.isArray(this.props.inventoryManager.inventory)) {
-                                    this.props.inventoryManager.inventory.forEach(item => {
-                                        if (item && item.type === 'weapon' && item.subtype === 'cutting' && !item.name.includes('(Sharpened)')) {
-                                            cuttingWeapons.push(item);
-                                        }
-                                    });
-                                }
-                                if (Array.isArray(member.inventory)) {
-                                    member.inventory.forEach(item => {
-                                        if (item && item.type === 'weapon' && item.subtype === 'cutting' && !item.name.includes('(Sharpened)')) {
-                                            cuttingWeapons.push(item);
-                                        }
-                                    });
-                                }
-
-                                if (cuttingWeapons.length === 0) {
-                                    updateText = `${member.name} has finished sharpening blades, but no valid cutting weapons were present in the inventory when the process completed.`;
+                                if (a.resultText) {
+                                    updateText = a.resultText;
                                 } else {
-                                    const details = cuttingWeapons.map(item => {
-                                        const bonus = Math.round(item.damage * 0.8);
-                                        return `Applied +${bonus} damage to "${item.name} (Sharpened)"`;
-                                    }).join(', ');
-                                    updateText = `${member.name} finished sharpening blades! ${details}`;
+                                    let cuttingWeapons = [];
+                                    const addValidWeapon = (item) => {
+                                        if (item && item.type === 'weapon' && item.subtype === 'cutting' && !item.isSharpened && !item.name.includes('(Sharpened)')) {
+                                            if (!cuttingWeapons.includes(item)) {
+                                                cuttingWeapons.push(item);
+                                            }
+                                        }
+                                    };
+
+                                    if (this.props.inventoryManager && Array.isArray(this.props.inventoryManager.inventory)) {
+                                        this.props.inventoryManager.inventory.forEach(addValidWeapon);
+                                    }
+                                    if (Array.isArray(member.inventory)) {
+                                        member.inventory.forEach(addValidWeapon);
+                                    }
+
+                                    if (cuttingWeapons.length === 0) {
+                                        updateText = `${member.name} has finished sharpening blades, but no valid cutting weapons were present in the inventory when the process completed.`;
+                                    } else {
+                                        const chosenIndex = Math.floor(Math.random() * cuttingWeapons.length);
+                                        const item = cuttingWeapons[chosenIndex];
+                                        const bonus = Math.round((item.damage || 0) * 0.8);
+                                        const displayName = item.name.includes('(Sharpened)') ? item.name : `${item.name} (Sharpened)`;
+                                        updateText = `${member.name} finished sharpening blades! Applied +${bonus} damage to "${displayName}".`;
+                                    }
                                 }
                             } else {
                                 updateText = isRitual
@@ -7738,8 +7777,20 @@ class DungeonPage extends React.Component {
             if (seenVendorGroups.has(vendorGroupId)) return;
             seenVendorGroups.add(vendorGroupId);
 
+            const subtype = contains.subtype || 'merchant';
+            if (String(subtype).toLowerCase() === 'alchemist') {
+                try {
+                    const meta = getMeta() || {};
+                    if (!meta.discoveredAlchemist) {
+                        meta.discoveredAlchemist = true;
+                        storeMeta(meta);
+                        this.displayMessage('You have discovered an Alchemist! Your map has been marked.');
+                    }
+                } catch (e) { }
+            }
+
             merchantMarkers.push({
-                type: contains.subtype || 'merchant',
+                type: subtype,
                 tileId: tile.id,
                 vendorGroupId
             });
@@ -8539,15 +8590,19 @@ class DungeonPage extends React.Component {
                 this.setState((prev) => ({ showQuestsPopup: !prev.showQuestsPopup }));
                 return;
             }
-             // 'm' — open Camp Map overlay directly from dungeon (blocked during battle)
+             // 'm' — toggle Camp Map overlay directly from dungeon (blocked during battle)
              if ((maybeKey === 'm' || maybeKey === 'M') && !this.state.inMonsterBattle) {
                  event.preventDefault();
-                 this.setState({
-                     showCampPopup: true,
-                     showFoodPrepOverlay: false,
-                     showSpellsOverlay: false,
-                     showPrayOverlay: false
-                 }, this.handleOpenMapOverlay);
+                 if (this.state.showMapOverlay) {
+                     this.setState({ showMapOverlay: false, mapZoomedLevelId: null, mapSelectedLevelId: null, mapBoardDetailStage: null, mapBoardDetailBoardIndex: null, mapOrientation: null });
+                 } else {
+                     this.setState({
+                         showCampPopup: true,
+                         showFoodPrepOverlay: false,
+                         showSpellsOverlay: false,
+                         showPrayOverlay: false
+                     }, this.handleOpenMapOverlay);
+                 }
                  return;
              }
             // 'r' — Immediately begin recuperating (setUpCamp)
@@ -11467,6 +11522,18 @@ class DungeonPage extends React.Component {
             }
             nextState.deployAnimalBuilderOpen = !isOpen;
         }
+        // ── Scry action toggle (Wizard) ─────────────────────────────────────────
+        if (action.type === 'scry') {
+            const character = this.state.selectedCrewMember;
+            const busyScry = (character?.specialActions || []).find(a => {
+                if (!a || a.type !== 'scry') return false;
+                return new Date(a.endDate) > new Date();
+            });
+            if (busyScry) {
+                this.displayMessage(`Already scrying: ${busyScry.name}!`);
+                return;
+            }
+        }
         this.setState(nextState);
     }
     getSubtypeClass = (subtype, maxReached) => {
@@ -11610,6 +11677,11 @@ class DungeonPage extends React.Component {
         // For tactics: commit directly on click (like monk disciplines)
         if (action.type === 'tactics' && subType.tacticKey) {
             this.handleTacticsCommit(subType.tacticKey);
+            return;
+        }
+        // For scry: commit directly on click
+        if (action.type === 'scry' && subType.scryKey) {
+            this.handleScryCommit(subType.scryKey);
             return;
         }
         // For inner discipline: handle category expansion + child selection
@@ -11793,6 +11865,41 @@ class DungeonPage extends React.Component {
         this.setState({
             tacticsBuilderOpen: false,
             tacticsBuilderSelected: null,
+            actionMenuTypeExpanded: nextExpanded,
+            selectedCrewMember: updatedCrewMember ? { ...updatedCrewMember } : this.state.selectedCrewMember,
+        });
+    }
+
+    // ── Scry commit handler (Wizard) ───────────────────────────────────────────
+    handleScryCommit = (scryKey) => {
+        if (!scryKey) return;
+        const scryDef = SCRY_OPTIONS[scryKey];
+        if (!scryDef) return;
+        const characterFromCrew = this.props.crewManager.crew.find(e => e.id === this.state.selectedCrewMember.id);
+        if (!characterFromCrew) return;
+
+        const busyScry = (characterFromCrew.specialActions || []).find(a => {
+            if (!a || a.type !== 'scry') return false;
+            return new Date(a.endDate) > new Date();
+        });
+        if (busyScry) {
+            this.displayMessage(`Already scrying: ${busyScry.name}!`);
+            return;
+        }
+
+        const action = { type: 'scry' };
+        const subType = { scryKey };
+        this.props.crewManager.beginSpecialAction(characterFromCrew, action, subType);
+        const nextExpanded = this.collapseActionMenu('scry');
+
+        const meta = getMeta() || {};
+        meta.crew = this.props.crewManager.crew;
+        storeMeta(meta);
+        this.props.saveUserData();
+
+        const updatedCrewMember = this.props.crewManager.crew.find(e => e.id === this.state.selectedCrewMember.id);
+        this.displayMessage(`👁 Scry action started: ${scryDef.name}. Ready in ${Math.round(scryDef.prepTime / 60000)} minutes.`);
+        this.setState({
             actionMenuTypeExpanded: nextExpanded,
             selectedCrewMember: updatedCrewMember ? { ...updatedCrewMember } : this.state.selectedCrewMember,
         });
@@ -12204,6 +12311,16 @@ class DungeonPage extends React.Component {
 
     triggerVendorEncounter = (vendorType) => {
         const normalized = String(vendorType || '').toLowerCase();
+        if (normalized === 'alchemist') {
+            try {
+                const meta = getMeta() || {};
+                if (!meta.discoveredAlchemist) {
+                    meta.discoveredAlchemist = true;
+                    storeMeta(meta);
+                    this.displayMessage('You have discovered an Alchemist! Your map has been marked.');
+                }
+            } catch (e) { }
+        }
         this.setState({
             keysLocked: true,
             modalType: normalized === 'alchemist' ? 'Alchemist' : 'Merchant',
@@ -14282,17 +14399,29 @@ class DungeonPage extends React.Component {
                             return Math.max(0, Math.min(100, raw));
                         };
 
-                        // board detail data (same logic as original)
+                        const playerPhysicalOrientation = (this.props.boardManager?.currentOrientation || 'F');
+                        const currentMapOrientation = this.state.mapOrientation || playerPhysicalOrientation;
+                        const isPlayerOnCurrentMapOrientation = (currentMapOrientation === playerPhysicalOrientation);
+                        const targetLevelId = zoomedLevelId !== null && typeof zoomedLevelId !== 'undefined' ? zoomedLevelId : currentLevelId;
+
+                        const mapMinimapIndicators = (() => {
+                            const meta = getMeta() || {};
+                            if (isPlayerOnCurrentMapOrientation && targetLevelId === currentLevelId && Array.isArray(this.state.minimapIndicators)) {
+                                return this.state.minimapIndicators;
+                            }
+                            const group = (meta.minimapIndicators || []).find(e => Number(e.level) === targetLevelId && e.orientation === currentMapOrientation);
+                            return group ? (group.indicators || []) : [];
+                        })();
+
+                        // board detail data
                         const boardDetailDiscoveryDots = (() => {
                             try {
-                                const bm = this.props.boardManager;
-                                const currentOrientation = (bm && bm.currentOrientation) || 'A';
                                 const dots = [];
                                 this._breadcrumbs.forEach((val) => {
                                     if (!val) return;
                                     if (val.boardIndex !== activeMinimapIndex) return;
                                     if (val.levelId !== currentLevelId) return;
-                                    if (val.orientation !== currentOrientation) return;
+                                    if (val.orientation !== currentMapOrientation) return;
                                     const xPct = toBoardDetailPercent(val.col);
                                     const yPct = toBoardDetailPercent(val.row);
                                     dots.push({ key: `bc_${val.seq}_${val.row}_${val.col}`, left: `${xPct.toFixed(2)}%`, top: `${yPct.toFixed(2)}%`, xPct, yPct, row: val.row, col: val.col, seq: Number(val.seq) || 0 });
@@ -14316,7 +14445,7 @@ class DungeonPage extends React.Component {
                             return segments.map(s => s.map(d => `${d.xPct.toFixed(2)},${d.yPct.toFixed(2)}`).join(' '));
                         })();
 
-                        const boardDetailPlayerTile = (() => {
+                        const boardDetailPlayerTile = isPlayerOnCurrentMapOrientation ? (() => {
                             try {
                                 const bm = this.props.boardManager;
                                 if (!bm || !bm.playerTile || !Array.isArray(bm.playerTile.location)) return null;
@@ -14328,44 +14457,124 @@ class DungeonPage extends React.Component {
                                 const loc = bm.playerTile.location;
                                 return { left: `${toBoardDetailPercent(loc[1]).toFixed(2)}%`, top: `${toBoardDetailPercent(loc[0]).toFixed(2)}%` };
                             } catch (e) { return null; }
-                        })();
+                        })() : null;
 
-                        const boardDetailEnemyTiles = (() => {
+                        const boardDetailEnemyTiles = isPlayerOnCurrentMapOrientation ? (() => {
                             try {
                                 const bm = this.props.boardManager;
                                 if (!bm || typeof bm.getCoordinatesFromIndex !== 'function') return [];
-                                if (activeMinimapIndex < 0 || !Array.isArray(this.state.minimapIndicators)) return [];
-                                const group = this.state.minimapIndicators[activeMinimapIndex] || {};
-                                const orientation = (bm && bm.currentOrientation) || 'A';
+                                if (activeMinimapIndex < 0 || !Array.isArray(mapMinimapIndicators)) return [];
+                                const group = mapMinimapIndicators[activeMinimapIndex] || {};
                                 const byTileId = new Map();
                                 (Array.isArray(group.enemies) ? group.enemies : []).forEach((marker) => { if (marker && typeof marker.tileId === 'number') byTileId.set(marker.tileId, marker); });
-                                this.getMonsterSightingsForBoard(currentLevelId, orientation, activeMinimapIndex).forEach((marker) => { if (marker && typeof marker.tileId === 'number' && !byTileId.has(marker.tileId)) byTileId.set(marker.tileId, marker); });
+                                this.getMonsterSightingsForBoard(currentLevelId, currentMapOrientation, activeMinimapIndex).forEach((marker) => { if (marker && typeof marker.tileId === 'number' && !byTileId.has(marker.tileId)) byTileId.set(marker.tileId, marker); });
                                 return Array.from(byTileId.values()).map((marker) => {
                                     const coords = bm.getCoordinatesFromIndex(marker.tileId);
                                     if (!Array.isArray(coords) || coords.length < 2) return null;
                                     return { key: `enemy_tile_${marker.tileId}`, left: `${toBoardDetailPercent(coords[1]).toFixed(2)}%`, top: `${toBoardDetailPercent(coords[0]).toFixed(2)}%` };
                                 }).filter(Boolean);
                             } catch (e) { return []; }
-                        })();
+                        })() : [];
 
                         const boardDetailMarkers2D = (() => {
                             try {
                                 const bm = this.props.boardManager;
                                 if (!bm || typeof bm.getCoordinatesFromIndex !== 'function') return [];
-                                if (activeMinimapIndex < 0 || !Array.isArray(this.state.minimapIndicators)) return [];
-                                const group = this.state.minimapIndicators[activeMinimapIndex] || {};
                                 const markers = [];
+                                const seenKeys = new Set();
+                                const seenVendorGroups = new Set();
+
+                                const pushVendorMarker = (vendorGroupId, tileId, vendorType) => {
+                                    const groupKey = vendorGroupId || `vendor_${tileId}`;
+                                    if (seenVendorGroups.has(groupKey)) return;
+                                    seenVendorGroups.add(groupKey);
+
+                                    let anchorCoords = bm.getCoordinatesFromIndex(tileId);
+                                    if (!Array.isArray(anchorCoords) || anchorCoords.length < 2) return;
+
+                                    if (isPlayerOnCurrentMapOrientation && Array.isArray(bm.tiles)) {
+                                        let minRow = anchorCoords[0];
+                                        let minCol = anchorCoords[1];
+                                        bm.tiles.forEach(t => {
+                                            if (t && t.contains && typeof t.contains === 'object' && t.contains.type === 'vendor' && t.contains.vendorGroupId === vendorGroupId) {
+                                                const tc = bm.getCoordinatesFromIndex(t.id);
+                                                if (Array.isArray(tc)) {
+                                                    if (tc[0] < minRow) minRow = tc[0];
+                                                    if (tc[1] < minCol) minCol = tc[1];
+                                                }
+                                            }
+                                        });
+                                        anchorCoords = [minRow, minCol];
+                                    }
+
+                                    const xPct = toBoardDetailPercent(anchorCoords[1] + 0.5);
+                                    const yPct = toBoardDetailPercent(anchorCoords[0] + 0.5);
+                                    const markerType = (vendorType || 'merchant').toLowerCase();
+                                    const iconKey = markerType === 'alchemist' ? 'alchemist' : 'merchant';
+
+                                    markers.push({
+                                        key: `vendor_group_${groupKey}`,
+                                        left: `${xPct.toFixed(2)}%`,
+                                        top: `${yPct.toFixed(2)}%`,
+                                        icon: normalizeMapImgUrl(images[iconKey]),
+                                        markerType,
+                                        isLargeVendor: true
+                                    });
+                                };
+
                                 const pushMarker = (marker, defaultType) => {
                                     if (!marker || typeof marker.tileId !== 'number') return;
+                                    const markerType = (marker.type || defaultType || 'location').toLowerCase();
+
+                                    if (markerType === 'alchemist' || markerType === 'merchant' || markerType === 'vendor') {
+                                        const groupKey = marker.vendorGroupId || `vendor_${marker.tileId}`;
+                                        pushVendorMarker(groupKey, marker.tileId, markerType);
+                                        return;
+                                    }
+
                                     const coords = bm.getCoordinatesFromIndex(marker.tileId);
                                     if (!Array.isArray(coords) || coords.length < 2) return;
-                                    const markerType = (marker.type || defaultType || 'location').toLowerCase();
-                                    const iconKey = markerType === 'alchemist' ? 'alchemist' : (markerType === 'merchant' ? 'merchant' : null);
-                                    markers.push({ key: `${markerType}_${marker.tileId}`, left: `${toBoardDetailPercent(coords[1]).toFixed(2)}%`, top: `${toBoardDetailPercent(coords[0]).toFixed(2)}%`, icon: iconKey ? normalizeMapImgUrl(images[iconKey]) : '', markerType });
+                                    const key = `${markerType}_${marker.tileId}`;
+                                    if (seenKeys.has(key)) return;
+                                    seenKeys.add(key);
+                                    const iconKey = markerType === 'shrine' ? 'shrine' : null;
+                                    markers.push({
+                                        key,
+                                        left: `${toBoardDetailPercent(coords[1]).toFixed(2)}%`,
+                                        top: `${toBoardDetailPercent(coords[0]).toFixed(2)}%`,
+                                        icon: iconKey ? normalizeMapImgUrl(images[iconKey]) : '',
+                                        markerType
+                                    });
                                 };
-                                (Array.isArray(group.merchant) ? group.merchant : []).forEach(m => pushMarker(m, 'merchant'));
-                                (Array.isArray(group.stairs) ? group.stairs : []).forEach(m => pushMarker(m, 'stairs'));
-                                (Array.isArray(group.gates) ? group.gates : []).forEach(m => pushMarker(m, 'gate'));
+
+                                if (activeMinimapIndex >= 0 && Array.isArray(mapMinimapIndicators)) {
+                                    const group = mapMinimapIndicators[activeMinimapIndex] || {};
+                                    (Array.isArray(group.merchant) ? group.merchant : []).forEach(m => pushMarker(m, m.type || 'merchant'));
+                                    (Array.isArray(group.stairs) ? group.stairs : []).forEach(m => pushMarker(m, 'stairs'));
+                                    (Array.isArray(group.gates) ? group.gates : []).forEach(m => pushMarker(m, 'gate'));
+                                    (Array.isArray(group.misc) ? group.misc : []).forEach(m => pushMarker(m, 'location'));
+                                }
+
+                                if (isPlayerOnCurrentMapOrientation && Array.isArray(bm.tiles)) {
+                                    const meta = getMeta() || {};
+                                    bm.tiles.forEach(tile => {
+                                        if (!tile) return;
+                                        const c = tile.contains;
+                                        if (!c) return;
+                                        const cType = typeof c === 'string' ? c : (c.type || '');
+                                        const cSub = typeof c === 'object' ? (c.subtype || '') : '';
+                                        if (cType === 'vendor' || cType === 'shop' || cType === 'merchant' || cType === 'alchemist' || cSub === 'alchemist' || cSub === 'merchant') {
+                                            const vendorType = (cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' : 'merchant';
+                                            const isDiscovered = tile.color !== 'black' || tile.discovered || (vendorType === 'alchemist' && meta.discoveredAlchemist);
+                                            if (isDiscovered) {
+                                                const groupKey = (typeof c === 'object' && c.vendorGroupId) ? c.vendorGroupId : `vendor_${vendorType}_${tile.id}`;
+                                                pushVendorMarker(groupKey, tile.id, vendorType);
+                                            }
+                                        } else if ((cType === 'shrine' || cType === 'lore_tablet') && tile.color !== 'black') {
+                                            pushMarker({ tileId: tile.id, type: 'shrine' }, 'shrine');
+                                        }
+                                    });
+                                }
                                 return markers;
                             } catch (e) { return []; }
                         })();
@@ -14389,18 +14598,18 @@ class DungeonPage extends React.Component {
                                 boardDetailEnemyTiles={boardDetailEnemyTiles}
                                 boardDetailMarkers2D={boardDetailMarkers2D}
                                 slabVendorMarkers={slabVendorMarkers}
-                                minimapIndicators={this.state.minimapIndicators || []}
-                                orientation={this.props.boardManager?.currentOrientation || 'F'}
+                                minimapIndicators={mapMinimapIndicators}
+                                orientation={currentMapOrientation}
                                 meta={getMeta() || {}}
                                 breadcrumbs={this._breadcrumbs}
                                 canEnterZone={canEnterZone}
                                 onBack={this.handleMapOverlayBack}
-                                onClose={() => this.setState({ showMapOverlay: false, mapZoomedLevelId: null, mapSelectedLevelId: null, mapBoardDetailStage: null, mapBoardDetailBoardIndex: null })}
+                                onClose={() => this.setState({ showMapOverlay: false, mapZoomedLevelId: null, mapSelectedLevelId: null, mapBoardDetailStage: null, mapBoardDetailBoardIndex: null, mapOrientation: null })}
                                 onLevelSelect={this.handleMapLevelSelect}
                                 onZoomIn={(lvlId) => this.handleMapZoomInStart(lvlId, levelIds.length, levelIds.findIndex(id => id === lvlId))}
                                 onZoomOut={this.handleMapZoomClose}
                                 onNodeClick={(boardIndex) => this.handleMapCurrentBoardLayerOpen(boardIndex)}
-                                onOrientationChange={(o) => { if (this.props.boardManager) { this.props.boardManager.currentOrientation = o; this.forceUpdate(); } }}
+                                onOrientationChange={(o) => this.setState({ mapOrientation: o })}
                                 onSendScoutCrow={this.handleSendScoutCrow}
                                 getFastidiousCrowLevel={this.getFastidiousCrowLevel}
                                 breadcrumbNavigate={this.handleMapBreadcrumbNavigate}
@@ -14553,20 +14762,68 @@ class DungeonPage extends React.Component {
                         try {
                             const bm = this.props.boardManager;
                             if (!bm || typeof bm.getCoordinatesFromIndex !== 'function') return [];
-                            if (activeMinimapIndex < 0 || !Array.isArray(this.state.minimapIndicators)) return [];
-                            const group = this.state.minimapIndicators[activeMinimapIndex] || {};
                             const markers = [];
+                            const seenKeys = new Set();
+                            const seenVendorGroups = new Set();
+
+                            const pushVendorMarker = (vendorGroupId, tileId, vendorType) => {
+                                const groupKey = vendorGroupId || `vendor_${tileId}`;
+                                if (seenVendorGroups.has(groupKey)) return;
+                                seenVendorGroups.add(groupKey);
+
+                                let anchorCoords = bm.getCoordinatesFromIndex(tileId);
+                                if (!Array.isArray(anchorCoords) || anchorCoords.length < 2) return;
+
+                                if (Array.isArray(bm.tiles)) {
+                                    let minRow = anchorCoords[0];
+                                    let minCol = anchorCoords[1];
+                                    bm.tiles.forEach(t => {
+                                        if (t && t.contains && typeof t.contains === 'object' && t.contains.type === 'vendor' && t.contains.vendorGroupId === vendorGroupId) {
+                                            const tc = bm.getCoordinatesFromIndex(t.id);
+                                            if (Array.isArray(tc)) {
+                                                if (tc[0] < minRow) minRow = tc[0];
+                                                if (tc[1] < minCol) minCol = tc[1];
+                                            }
+                                        }
+                                    });
+                                    anchorCoords = [minRow, minCol];
+                                }
+
+                                const xPct = toBoardDetailPercent(anchorCoords[1] + 0.5);
+                                const yPct = toBoardDetailPercent(anchorCoords[0] + 0.5);
+                                const markerType = (vendorType || 'merchant').toLowerCase();
+                                const iconKey = markerType === 'alchemist' ? 'alchemist' : 'merchant';
+
+                                markers.push({
+                                    key: `vendor_group_${groupKey}`,
+                                    left: `${xPct.toFixed(2)}%`,
+                                    top: `${yPct.toFixed(2)}%`,
+                                    icon: normalizeMapImgUrl(images[iconKey]),
+                                    markerType,
+                                    isLargeVendor: true
+                                });
+                            };
 
                             const pushMarker = (marker, defaultType) => {
                                 if (!marker || typeof marker.tileId !== 'number') return;
+                                const markerType = (marker.type || defaultType || 'location').toLowerCase();
+
+                                if (markerType === 'alchemist' || markerType === 'merchant' || markerType === 'vendor') {
+                                    const groupKey = marker.vendorGroupId || `vendor_${marker.tileId}`;
+                                    pushVendorMarker(groupKey, marker.tileId, markerType);
+                                    return;
+                                }
+
                                 const coords = bm.getCoordinatesFromIndex(marker.tileId);
                                 if (!Array.isArray(coords) || coords.length < 2) return;
-                                const markerType = (marker.type || defaultType || 'location').toLowerCase();
-                                const iconKey = markerType === 'alchemist' ? 'alchemist' : (markerType === 'merchant' ? 'merchant' : null);
+                                const key = `${markerType}_${marker.tileId}_${marker.vendorGroupId || ''}`;
+                                if (seenKeys.has(key)) return;
+                                seenKeys.add(key);
+                                const iconKey = markerType === 'shrine' ? 'shrine' : null;
                                 const xPct = toBoardDetailPercent(coords[1]);
                                 const yPct = toBoardDetailPercent(coords[0]);
                                 markers.push({
-                                    key: `${markerType}_${marker.tileId}_${marker.vendorGroupId || ''}`,
+                                    key,
                                     left: `${xPct.toFixed(2)}%`,
                                     top: `${yPct.toFixed(2)}%`,
                                     icon: iconKey ? normalizeMapImgUrl(images[iconKey]) : '',
@@ -14574,9 +14831,38 @@ class DungeonPage extends React.Component {
                                 });
                             };
 
-                            (Array.isArray(group.merchant) ? group.merchant : []).forEach((marker) => pushMarker(marker, 'merchant'));
-                            (Array.isArray(group.stairs) ? group.stairs : []).forEach((marker) => pushMarker(marker, 'stairs'));
-                            (Array.isArray(group.gates) ? group.gates : []).forEach((marker) => pushMarker(marker, 'gate'));
+                            if (activeMinimapIndex >= 0 && Array.isArray(this.state.minimapIndicators)) {
+                                const group = this.state.minimapIndicators[activeMinimapIndex] || {};
+                                (Array.isArray(group.merchant) ? group.merchant : []).forEach((marker) => pushMarker(marker, marker.type || 'merchant'));
+                                (Array.isArray(group.stairs) ? group.stairs : []).forEach((marker) => pushMarker(marker, 'stairs'));
+                                (Array.isArray(group.gates) ? group.gates : []).forEach((marker) => pushMarker(marker, 'gate'));
+                                (Array.isArray(group.misc) ? group.misc : []).forEach((marker) => pushMarker(marker, 'location'));
+                            }
+
+                            if (Array.isArray(bm.tiles)) {
+                                bm.tiles.forEach(tile => {
+                                    if (!tile) return;
+                                    const c = tile.contains;
+                                    if (!c) return;
+                                    const cType = typeof c === 'string' ? c : (c.type || '');
+                                    const cSub = typeof c === 'object' ? (c.subtype || '') : '';
+                                    if (cType === 'vendor' || cType === 'shop' || cType === 'merchant' || cType === 'alchemist' || cSub === 'alchemist' || cSub === 'merchant') {
+                                        const vendorType = (cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' : 'merchant';
+                                        let isDiscovered = tile.color !== 'black' || tile.discovered;
+                                        try {
+                                            const meta = getMeta() || {};
+                                            if (vendorType === 'alchemist' && meta.discoveredAlchemist) isDiscovered = true;
+                                        } catch (e) {}
+                                        if (isDiscovered) {
+                                            const groupKey = (typeof c === 'object' && c.vendorGroupId) ? c.vendorGroupId : `vendor_${vendorType}_${tile.id}`;
+                                            pushVendorMarker(groupKey, tile.id, vendorType);
+                                        }
+                                    } else if ((cType === 'shrine' || cType === 'lore_tablet') && tile.color !== 'black') {
+                                        pushMarker({ tileId: tile.id, type: 'shrine' }, 'shrine');
+                                    }
+                                });
+                            }
+
                             return markers;
                         } catch (e) {
                             return [];

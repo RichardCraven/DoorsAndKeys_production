@@ -22,6 +22,8 @@ class BoardsPalette extends React.Component {
         if (optionType === 'jewels') return 'Jewels';
         if (optionType === 'runes') return 'Runes';
         if (optionType === 'connecting path') return 'Connecting Path';
+        if (optionType === 'territory') return 'Territory';
+        if (optionType === 'buildings') return 'Buildings';
         return optionType;
     }
 
@@ -90,7 +92,7 @@ class BoardsPalette extends React.Component {
                                 }}
                                 >{this.getOptionLabel(tile.optionType)}</span>
                             </div>
-                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'lore_tablet'].includes(tile.optionType) && (() => {
+                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'lore_tablet', 'territory', 'buildings'].includes(tile.optionType) && (() => {
                                 const isExpanded = this.props.optionClickedIdx === i;
                                 return (
                                     <div style={{ marginRight: '15px', display: 'flex', alignItems: 'center', userSelect: 'none' }}>
@@ -146,9 +148,9 @@ class BoardsPalette extends React.Component {
                                     </Tile>
                                 </div>
                             })}
-                            {Object.values(this.props.monsterManager.monsters).map((monster,i)=>{
+                            {(typeof this.props.monsterManager?.getPaletteMonsters === 'function' ? this.props.monsterManager.getPaletteMonsters() : Object.values(this.props.monsterManager?.monsters || {})).map((monster,i)=>{
                                 const isHovered = this.state.hoveredSubItem?.type === 'monster' && this.state.hoveredSubItem?.id === i;
-                                const isSelected = this.props.pinnedOption?.type === 'monster-tile' && this.props.pinnedOption?.id === i;
+                                const isSelected = this.props.pinnedOption?.type === 'monster-tile' && (this.props.pinnedOption?.id === i || this.props.pinnedOption?.monsterType === monster.type);
                                 return <div 
                                 key={i} 
                                 className={`palette-option-subcontainer${isHovered ? ' sub-hovered' : ''}${isSelected ? ' sub-selected' : ''}`}
@@ -156,8 +158,9 @@ class BoardsPalette extends React.Component {
                                 onMouseLeave={() => this.setState({ hoveredSubItem: null })}
                                 onClick={() => {
                                     this.props.handleClick({
-                                    type: 'monster-tile',
-                                    id: i
+                                        type: 'monster-tile',
+                                        id: i,
+                                        monsterType: monster.type
                                     })}
                                 }
                                 >
@@ -510,6 +513,82 @@ class BoardsPalette extends React.Component {
                                         fontSize: Math.max(8, this.props.tileSize * 0.35) + 'px',
                                         flexShrink: 0
                                     }}><span role="img" aria-label="scroll">📜</span></div>
+                                </div>
+                            })}
+                        </div>}
+                        {tile.optionType === 'territory' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
+                            {(this.props.mapMaker.territoryOptions || []).map((tItem, ti) => {
+                                const isHovered = this.state.hoveredSubItem?.type === 'territory' && this.state.hoveredSubItem?.id === ti;
+                                const isSelected = this.props.pinnedOption?.type === 'territory-tile' && this.props.pinnedOption?.id === ti;
+                                const isDisabled = !!tItem.disabled;
+                                const clanColors = {
+                                    mud: '#8b5a2b',
+                                    cave: '#646e8c',
+                                    woodland: '#228b22',
+                                    shadow: '#500078',
+                                    paradox: '#b400b4'
+                                };
+                                return <div
+                                key={`territory-${ti}`}
+                                className={`palette-option-subcontainer${isHovered ? ' sub-hovered' : ''}${isSelected ? ' sub-selected' : ''}${isDisabled ? ' sub-disabled' : ''}`}
+                                style={{ opacity: isDisabled ? 0.45 : 1, cursor: isDisabled ? 'not-allowed' : 'pointer' }}
+                                onMouseEnter={() => !isDisabled && this.setState({ hoveredSubItem: { type: 'territory', id: ti } })}
+                                onMouseLeave={() => this.setState({ hoveredSubItem: null })}
+                                onClick={() => {
+                                    if (isDisabled) return;
+                                    this.props.handleClick({
+                                        type: 'territory-tile',
+                                        id: ti
+                                    })
+                                }}
+                                >
+                                    <div className="text-container" style={{ color: isDisabled ? '#777' : undefined }}>
+                                        {tItem.name} {isDisabled ? '(Disabled)' : ''}
+                                    </div>
+                                    <div style={{
+                                        width: this.props.tileSize + 'px',
+                                        height: this.props.tileSize + 'px',
+                                        backgroundColor: clanColors[tItem.clan] || '#444',
+                                        borderRadius: '4px',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: Math.max(9, this.props.tileSize * 0.35) + 'px',
+                                        fontWeight: 'bold', color: '#fff',
+                                        opacity: isDisabled ? 0.4 : 0.85,
+                                        boxShadow: 'inset 0 0 6px rgba(0,0,0,0.5)',
+                                        flexShrink: 0
+                                    }}>
+                                        {tItem.clan ? tItem.clan.charAt(0).toUpperCase() : '?'}
+                                    </div>
+                                </div>
+                            })}
+                        </div>}
+                        {tile.optionType === 'buildings' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
+                            {(this.props.mapMaker.buildingOptions || []).map((bItem, bi) => {
+                                const isHovered = this.state.hoveredSubItem?.type === 'building' && this.state.hoveredSubItem?.id === bi;
+                                const isSelected = this.props.pinnedOption?.type === 'building-tile' && this.props.pinnedOption?.id === bi;
+                                return <div
+                                key={`building-${bi}`}
+                                className={`palette-option-subcontainer${isHovered ? ' sub-hovered' : ''}${isSelected ? ' sub-selected' : ''}`}
+                                onMouseEnter={() => this.setState({ hoveredSubItem: { type: 'building', id: bi } })}
+                                onMouseLeave={() => this.setState({ hoveredSubItem: null })}
+                                onClick={() => {
+                                    this.props.handleClick({
+                                        type: 'building-tile',
+                                        id: bi
+                                    })
+                                }}
+                                >
+                                    <div className="text-container">{bItem.name}</div>
+                                    <Tile
+                                    id={bi}
+                                    tileSize={this.props.tileSize}
+                                    index={bi}
+                                    image={images[bItem.image]}
+                                    imageOverride={images[bItem.image]}
+                                    handleHover={null}
+                                    handleClick={null}
+                                    type={'item'}>
+                                    </Tile>
                                 </div>
                             })}
                         </div>}

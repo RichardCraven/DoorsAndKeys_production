@@ -2646,19 +2646,19 @@
 
 @keyframes keyGlowPulse {
     0% {
-        transform: scale(0.82);
-        opacity: 0.55;
-        filter: drop-shadow(0 0 8px rgba(255, 215, 0, 0.6)) brightness(1);
+        transform: scale(0.88);
+        opacity: 0.45;
+        filter: drop-shadow(0 0 6px rgba(255, 215, 0, 0.4)) brightness(1);
     }
     50% {
-        transform: scale(1.10);
-        opacity: 0.88;
-        filter: drop-shadow(0 0 18px rgba(255, 215, 0, 0.88)) brightness(1.25);
+        transform: scale(1.02);
+        opacity: 0.68;
+        filter: drop-shadow(0 0 11px rgba(255, 215, 0, 0.6)) brightness(1.12);
     }
     100% {
-        transform: scale(1.32);
-        opacity: 1;
-        filter: drop-shadow(0 0 28px rgba(255, 215, 0, 1)) brightness(1.45);
+        transform: scale(1.12);
+        opacity: 0.80;
+        filter: drop-shadow(0 0 14px rgba(255, 215, 0, 0.7)) brightness(1.20);
     }
 }
 
@@ -2723,10 +2723,10 @@
 }
 
 .trap-popup-card {
-    background: linear-gradient(135deg, #1a1408 0%, #1c1205 100%);
-    border: 2px solid #e67e22;
-    box-shadow: 0 0 30px rgba(230, 126, 34, 0.35), inset 0 0 15px rgba(230, 126, 34, 0.15);
-    padding: 30px 35px;
+    background: linear-gradient(135deg, #18120c 0%, #120d07 100%);
+    border: 1.5px solid rgba(230, 126, 34, 0.6);
+    box-shadow: 0 0 25px rgba(230, 126, 34, 0.25), inset 0 0 15px rgba(0, 0, 0, 0.5);
+    padding: 28px 32px;
     color: white;
     text-align: center;
     border-radius: 16px;
@@ -2739,6 +2739,7 @@
     backface-visibility: hidden;
     transform: translate3d(0, 0, 0);
     -webkit-font-smoothing: antialiased;
+    font-family: 'Outfit', 'Inter', sans-serif;
 
     &::before {
         content: '';
@@ -2746,26 +2747,28 @@
         top: 0;
         left: 0;
         right: 0;
-        height: 4px;
-        background: linear-gradient(90deg, #e67e22, #f39c12, #e67e22);
+        height: 3px;
+        background: linear-gradient(90deg, transparent, #e67e22, #f39c12, #e67e22, transparent);
     }
 }
 
 .trap-title {
-    font-size: 1.8rem;
-    font-weight: 800;
+    font-family: 'Cinzel Decorative', 'Cinzel', serif;
+    font-size: 1.75rem;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 2px;
-    color: #e67e22;
-    text-shadow: 0 0 10px rgba(230, 126, 34, 0.6);
-    margin-bottom: 5px;
-    margin-top: 5px;
-    animation: pulseGlow 1.5s infinite alternate;
+    color: #f39c12;
+    text-shadow: 0 0 12px rgba(243, 156, 18, 0.45);
+    margin-bottom: 6px;
+    margin-top: 2px;
+    animation: pulseGlow 2s infinite alternate;
 }
 
 .trap-subtitle {
-    font-size: 1.05rem;
-    color: #ddd;
+    font-family: 'Outfit', 'Inter', sans-serif;
+    font-size: 0.95rem;
+    color: #c5bba8;
     margin-bottom: 18px;
 }
 
@@ -2785,33 +2788,38 @@
     padding: 8px 12px;
     border-radius: 8px;
     font-size: 0.9rem;
+    font-family: 'Outfit', 'Inter', sans-serif;
 
     &.saved {
-        background: rgba(46, 204, 113, 0.12);
-        border: 1px solid rgba(46, 204, 113, 0.25);
+        background: rgba(46, 204, 113, 0.1);
+        border: 1px solid rgba(46, 204, 113, 0.22);
     }
 
     &.hit {
-        background: rgba(231, 76, 60, 0.12);
-        border: 1px solid rgba(231, 76, 60, 0.25);
+        background: rgba(231, 76, 60, 0.1);
+        border: 1px solid rgba(231, 76, 60, 0.22);
     }
 }
 
 .trap-crew-name {
+    font-family: 'Cinzel', serif;
     font-weight: 600;
     color: #eaeaea;
     min-width: 100px;
     text-align: left;
+    letter-spacing: 0.5px;
 }
 
 .trap-roll-info {
-    color: #aaa;
+    font-family: 'Outfit', 'Inter', sans-serif;
+    color: #999;
     font-size: 0.8rem;
     flex: 1;
     text-align: center;
 }
 
 .trap-result-label {
+    font-family: 'Outfit', 'Inter', sans-serif;
     font-weight: 700;
     font-size: 0.85rem;
     min-width: 80px;
@@ -2827,14 +2835,15 @@
 }
 
 .trap-dismiss-btn {
-    background: linear-gradient(185deg, #d35400 0%, #a04000 100%);
-    border: 1px solid #e67e22;
-    box-shadow: 0 4px 15px rgba(211, 84, 0, 0.4);
-    color: white;
-    font-size: 1.1rem;
-    font-weight: 800;
+    font-family: 'Cinzel', serif;
+    background: rgba(230, 126, 34, 0.14);
+    border: 1px solid rgba(230, 126, 34, 0.45);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    color: #e2cca6;
+    font-size: 0.95rem;
+    font-weight: 600;
     letter-spacing: 1.5px;
-    padding: 10px 32px;
+    padding: 8px 28px;
     border-radius: 8px;
     cursor: pointer;
     display: inline-block;
@@ -2842,15 +2851,19 @@
     text-transform: uppercase;
 
     &:hover {
-        transform: translateY(-2px) scale(1.03);
-        box-shadow: 0 6px 20px rgba(211, 84, 0, 0.6);
+        background: rgba(230, 126, 34, 0.28);
+        border-color: rgba(230, 126, 34, 0.75);
+        color: #ffffff;
+        box-shadow: 0 4px 12px rgba(230, 126, 34, 0.3);
+        transform: translateY(-1px);
     }
 }
 
 .trap-shortcut-hint {
+    font-family: 'Outfit', 'Inter', sans-serif;
     margin-top: 8px;
     font-size: 0.75rem;
-    color: #777;
+    color: #666;
     letter-spacing: 0.5px;
 }
 
@@ -3843,20 +3856,25 @@
     }
 
     .pygmies-attack-btn {
-        background: linear-gradient(180deg, #e5b54f 0%, #b8860b 100%);
-        color: #120c06;
-        font-weight: bold;
-        font-size: 15px;
-        padding: 10px 24px;
-        border: none;
-        border-radius: 6px;
+        background: linear-gradient(180deg, #e5b54f 0%, #8a6305 100%);
+        color: #1a1106;
+        font-family: 'Cinzel', serif;
+        font-weight: 700;
+        font-size: 16px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        padding: 12px 28px;
+        border: 1px solid #ffeb99;
+        border-radius: 4px;
         cursor: pointer;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        transition: transform 0.15s ease, filter 0.15s ease;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.8), 0 0 15px rgba(229, 181, 79, 0.4), inset 0 2px 5px rgba(255, 255, 255, 0.5);
+        text-shadow: 0 1px 1px rgba(255, 255, 255, 0.4);
+        transition: all 0.2s ease;
 
         &:hover {
-            transform: scale(1.04);
-            filter: brightness(1.15);
+            transform: translateY(-2px) scale(1.02);
+            filter: brightness(1.2);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.9), 0 0 25px rgba(229, 181, 79, 0.6), inset 0 2px 5px rgba(255, 255, 255, 0.6);
         }
     }
 }

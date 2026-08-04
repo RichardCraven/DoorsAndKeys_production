@@ -313,10 +313,10 @@ export function CombatManagerRedux() {
                     ability.range = 'close';
                     ability.flatDamage = -30;
                 } else if (lvl === 2) {
-                    ability.range = 'medium';
+                    ability.range = 'close';
                     ability.flatDamage = -30;
                 } else if (lvl === 3) {
-                    ability.range = 'medium';
+                    ability.range = 'close';
                     ability.flatDamage = -45;
                 }
             }
@@ -1892,8 +1892,8 @@ export function CombatManagerRedux() {
             finalDamage = Math.max(1, Math.round(finalDamage * 0.85));
         }
 
-        // Award power to PC callers for damage dealt
-        if (caller && !caller.isMonster && !caller.isVCT && target && target.isMonster !== false) {
+        // Award power to PC callers for damage dealt (excluding minions/summons)
+        if (caller && !caller.isMonster && !caller.isMinion && !caller.isSummoned && !caller.summonedBy && !caller.isVCT && target && target.isMonster !== false) {
             this._awardPower(caller, target, Math.max(1, finalDamage));
         }
 
@@ -1906,7 +1906,7 @@ export function CombatManagerRedux() {
      * Triggers Ultimate at 100 power.
      */
     this._awardPower = (caller, target, finalDamage) => {
-        if (!caller || caller.isMonster || caller.dead) return;
+        if (!caller || caller.isMonster || caller.isMinion || caller.isSummoned || caller.summonedBy || caller.dead) return;
         const targetMaxHp = target.starting_hp || target.stats?.hp || 1;
         const pctDamaged = (finalDamage / targetMaxHp) * 100;
         let powerGain = Math.floor(pctDamaged / 5);
@@ -1933,7 +1933,7 @@ export function CombatManagerRedux() {
      * and logs the readiness state until player fires an ultimate skill.
      */
     this._triggerUltimate = (caller) => {
-        if (!caller) return;
+        if (!caller || caller.isMonster || caller.isMinion || caller.isSummoned || caller.summonedBy) return;
         caller.ultimateActive = true;
         caller.power = 100;
         console.log(`%c ⚡ ULTIMATE READY for ${this.getCombatantLogName(caller)} (Power: 100/100) ⚡`, 'background: #ffd700; color: #000; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
@@ -3584,7 +3584,7 @@ export function CombatManagerRedux() {
                         let actualAbility = qSpec;
                         const matrixDef = specialsMatrix[normKey] || attacksMatrix[normKey];
                         const ultimateDef = qSpec.ultimate || (matrixDef && matrixDef.ultimate);
-                        const isUltReady = !!(unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate);
+                        const isUltReady = !!(unit && !unit.isMonster && !unit.isMinion && !unit.summonedBy && !unit.isSummoned && (unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate));
                         if (isUltReady && ultimateDef) {
                             actualAbility = { ...qSpec, ...ultimateDef, isUltimate: true };
                         }
@@ -3656,7 +3656,7 @@ export function CombatManagerRedux() {
                             let actualAbility = qSpec;
                             const matrixDef = specialsMatrix[normKey] || attacksMatrix[normKey];
                             const ultimateDef = qSpec.ultimate || (matrixDef && matrixDef.ultimate);
-                            const isUltReady = !!(unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate);
+                            const isUltReady = !!(unit && !unit.isMonster && !unit.isMinion && !unit.summonedBy && !unit.isSummoned && (unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate));
                             if (isUltReady && ultimateDef) {
                                 actualAbility = { ...qSpec, ...ultimateDef, isUltimate: true };
                             }
@@ -3912,7 +3912,7 @@ export function CombatManagerRedux() {
             }
 
             let score = 0;
-            const isUltReady = !!(unit && !unit.isMonster && (unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate));
+            const isUltReady = !!(unit && !unit.isMonster && !unit.isMinion && !unit.summonedBy && !unit.isSummoned && (unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate));
             const matrixDef = specialsMatrix[key] || attacksMatrix[key];
             const ultimateDef = resolved.ultimate || (matrixDef && matrixDef.ultimate);
             if (isUltReady && ultimateDef) {
@@ -4518,21 +4518,28 @@ export function CombatManagerRedux() {
         if (woundedPct < 0.7 && this._abilityReady(unit, 'heal')) {
             const pick = this.resolveSpecial(unit, 'heal');
             if (pick && woundedAlly) {
-                const healAmount = Math.abs(typeof pick.flatDamage === 'number' ? pick.flatDamage : -30);
-                woundedAlly.hp = Math.min(woundedAlly.starting_hp || woundedAlly.hp, woundedAlly.hp + healAmount);
-                woundedAlly.damageIndicators = woundedAlly.damageIndicators || [];
-                woundedAlly.damageIndicators.push({ id: Date.now() + Math.random(), value: `+${healAmount}`, source: 'Healing Hands', type: 'heal' });
-                this.appendCombatLog(`${this.getCombatantLogName(unit)} uses Healing Hands on ${this.getCombatantLogName(woundedAlly)} for +${healAmount} HP.`);
-                this._setCooldown(unit, 'heal', typeof pick.cooldown === 'number' ? pick.cooldown : 4);
-                unit.actionsTakenThisRound += 1;
+                const healRange = pick.range || 'close';
+                if (this.targetInRange(unit, woundedAlly, healRange)) {
+                    const healAmount = Math.abs(typeof pick.flatDamage === 'number' ? pick.flatDamage : -30);
+                    woundedAlly.hp = Math.min(woundedAlly.starting_hp || woundedAlly.hp, woundedAlly.hp + healAmount);
+                    woundedAlly.damageIndicators = woundedAlly.damageIndicators || [];
+                    woundedAlly.damageIndicators.push({ id: Date.now() + Math.random(), value: `+${healAmount}`, source: 'Healing Hands', type: 'heal' });
+                    this.appendCombatLog(`${this.getCombatantLogName(unit)} uses Healing Hands on ${this.getCombatantLogName(woundedAlly)} for +${healAmount} HP.`);
+                    this._setCooldown(unit, 'heal', typeof pick.cooldown === 'number' ? pick.cooldown : 4);
+                    unit.actionsTakenThisRound += 1;
 
-                // Trigger animation
-                if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
-                    this.animManagerRedux.triggerAbility(unit.coordinates, woundedAlly.coordinates, 'heal', false, null, unit.id);
+                    // Trigger animation
+                    if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                        this.animManagerRedux.triggerAbility(unit.coordinates, woundedAlly.coordinates, 'heal', false, null, unit.id);
+                    }
+
+                    if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+                    return;
+                } else if (unit.movesTakenThisRound < (unit.maxMovesPerRound || 1)) {
+                    this._stepToward(unit, woundedAlly.coordinates);
+                    if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+                    return;
                 }
-
-                if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
-                return;
             }
         }
 
@@ -8012,7 +8019,7 @@ export function CombatManagerRedux() {
         const normAbilityId = (ability.id || ability.key || ability.name || '').toLowerCase().replace(/\s+/g, '_');
         const matrixDef = specialsMatrix[normAbilityId] || attacksMatrix[normAbilityId];
         const ultimateDef = ability.ultimate || (matrixDef && matrixDef.ultimate);
-        const isUltReady = !!(unit && !unit.isMonster && (unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate || ability.isUltimate));
+        const isUltReady = !!(unit && !unit.isMonster && !unit.isMinion && !unit.summonedBy && !unit.isSummoned && (unit.ultimateActive || (unit.power !== undefined && unit.power >= 100) || unit.queuedSkillIsUltimate || ability.isUltimate));
         if (isUltReady && ultimateDef) {
             ability = { ...ability, ...ultimateDef, isUltimate: true };
             isUltimateActivation = true;
@@ -12404,7 +12411,7 @@ export function CombatManagerRedux() {
         if (!Array.isArray(this.powerBoostTiles) || this.powerBoostTiles.length === 0) return;
         const toRemove = new Set();
         Object.values(this.combatants).forEach(fighter => {
-            if (!fighter || fighter.dead || fighter.isMonster || fighter.isVCT) return;
+            if (!fighter || fighter.dead || fighter.isMonster || fighter.isMinion || fighter.isSummoned || fighter.summonedBy || fighter.isVCT) return;
             if (!fighter.coordinates) return;
             const fx = fighter.coordinates.x;
             const fy = fighter.coordinates.y;

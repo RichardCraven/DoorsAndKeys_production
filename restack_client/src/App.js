@@ -460,79 +460,108 @@ function App(props) {
                 display: 'flex',
                 flexDirection: isMapmaker ? 'column' : 'row',
                 alignItems: 'center',
+                justifyContent: 'center',
                 gap: '4px',
                 background: 'rgba(0, 0, 0, 0.75)',
                 backdropFilter: 'blur(10px)',
                 WebkitBackdropFilter: 'blur(10px)',
-                padding: isMapmaker ? '8px 4px' : '4px 8px',
-                borderRadius: '18px',
+                padding: menuTrayExpanded ? (isMapmaker ? '8px 4px' : '4px 8px') : '0',
+                borderRadius: menuTrayExpanded ? '18px' : '50%',
+                width: menuTrayExpanded ? 'auto' : '40px',
+                height: menuTrayExpanded ? 'auto' : '40px',
                 border: '1px solid rgba(255, 255, 255, 0.1)',
                 boxShadow: '0 4px 16px rgba(0, 0, 0, 0.6)',
-                pointerEvents: 'auto'
+                pointerEvents: 'auto',
+                transition: 'all 0.25s ease',
+                boxSizing: 'border-box'
               }}>
                 <button
-                  className="menu-buttons logout-button"
-                  onClick={logout}
-                  onMouseEnter={() => setHoveredMenuItem('Logout')}
+                  className="menu-buttons hamburger-toggle-button"
+                  onClick={() => setMenuTrayExpanded(!menuTrayExpanded)}
+                  onMouseEnter={() => setHoveredMenuItem(menuTrayExpanded ? 'Close Menu' : 'Menu')}
                   onMouseLeave={() => setHoveredMenuItem(null)}
-                  style={desktopMenuItemStyle}
-                  title="Logout"
+                  style={{
+                    ...desktopMenuItemStyle,
+                    width: menuTrayExpanded ? 'auto' : '40px',
+                    height: menuTrayExpanded ? 'auto' : '40px',
+                    borderRadius: menuTrayExpanded ? '12px' : '50%',
+                    color: menuTrayExpanded ? '#f9b115' : '#fff',
+                    fontSize: '16px',
+                    fontWeight: 'bold',
+                    lineHeight: 1
+                  }}
+                  title={menuTrayExpanded ? 'Close Menu' : 'Menu'}
                 >
-                  <span style={{ fontSize: '15px' }}>🚪</span>
+                  {menuTrayExpanded ? '✕' : '☰'}
                 </button>
 
-                {location.pathname !== '/userProfilePage' && location.pathname !== '/combatSimulator' && !isCombatActive && (
-                  <button
-                    className="menu-buttons save-button"
-                    onClick={saveUserData}
-                    onMouseEnter={() => setHoveredMenuItem('Save Game')}
-                    onMouseLeave={() => setHoveredMenuItem(null)}
-                    style={desktopMenuItemStyle}
-                    title="Save Game"
-                  >
-                    <span style={{ fontSize: '15px' }}>💾</span>
-                  </button>
+                {menuTrayExpanded && (
+                  <>
+                    <button
+                      className="menu-buttons logout-button"
+                      onClick={() => { setMenuTrayExpanded(false); logout(); }}
+                      onMouseEnter={() => setHoveredMenuItem('Logout')}
+                      onMouseLeave={() => setHoveredMenuItem(null)}
+                      style={desktopMenuItemStyle}
+                      title="Logout"
+                    >
+                      <span style={{ fontSize: '15px' }}>🚪</span>
+                    </button>
+
+                    {location.pathname !== '/userProfilePage' && location.pathname !== '/combatSimulator' && !isCombatActive && (
+                      <button
+                        className="menu-buttons save-button"
+                        onClick={() => { setMenuTrayExpanded(false); saveUserData(); }}
+                        onMouseEnter={() => setHoveredMenuItem('Save Game')}
+                        onMouseLeave={() => setHoveredMenuItem(null)}
+                        style={desktopMenuItemStyle}
+                        title="Save Game"
+                      >
+                        <span style={{ fontSize: '15px' }}>💾</span>
+                      </button>
+                    )}
+
+                    <button
+                      className="menu-buttons go-home-button"
+                      onClick={() => { setMenuTrayExpanded(false); goHome(); }}
+                      onMouseEnter={() => setHoveredMenuItem('Home')}
+                      onMouseLeave={() => setHoveredMenuItem(null)}
+                      style={desktopMenuItemStyle}
+                      title="Home"
+                    >
+                      <span style={{ fontSize: '15px' }}>🏠</span>
+                    </button>
+
+                    {(location.pathname === '/dungeon' || location.pathname === '/mapmaker') && (
+                      <button
+                        className="menu-buttons show-coordinates-button"
+                        onClick={() => { toggleShowCoordinates(); }}
+                        onMouseEnter={() => setHoveredMenuItem(showCoordinates ? 'Hide Coordinates' : 'Show Coordinates')}
+                        onMouseLeave={() => setHoveredMenuItem(null)}
+                        style={{
+                          ...desktopMenuItemStyle,
+                          border: showCoordinates ? '1px solid #f9b115' : 'none',
+                          background: showCoordinates ? 'rgba(249, 177, 21, 0.25)' : 'transparent',
+                          boxShadow: showCoordinates ? '0 0 8px rgba(249, 177, 21, 0.5)' : 'none'
+                        }}
+                        title={showCoordinates ? 'Hide Coordinates' : 'Show Coordinates'}
+                      >
+                        <span style={{ fontSize: '15px' }}>📍</span>
+                      </button>
+                    )}
+
+                    <button
+                      className="menu-buttons settings-button"
+                      onClick={() => { setMenuTrayExpanded(false); setShowSettingsModal(true); }}
+                      onMouseEnter={() => setHoveredMenuItem('Settings')}
+                      onMouseLeave={() => setHoveredMenuItem(null)}
+                      style={desktopMenuItemStyle}
+                      title="Settings"
+                    >
+                      <span style={{ fontSize: '15px' }}>⚙️</span>
+                    </button>
+                  </>
                 )}
-
-                <button
-                  className="menu-buttons go-home-button"
-                  onClick={goHome}
-                  onMouseEnter={() => setHoveredMenuItem('Home')}
-                  onMouseLeave={() => setHoveredMenuItem(null)}
-                  style={desktopMenuItemStyle}
-                  title="Home"
-                >
-                  <span style={{ fontSize: '15px' }}>🏠</span>
-                </button>
-
-                {(location.pathname === '/dungeon' || location.pathname === '/mapmaker') && (
-                  <button
-                    className="menu-buttons show-coordinates-button"
-                    onClick={toggleShowCoordinates}
-                    onMouseEnter={() => setHoveredMenuItem(showCoordinates ? 'Hide Coordinates' : 'Show Coordinates')}
-                    onMouseLeave={() => setHoveredMenuItem(null)}
-                    style={{
-                      ...desktopMenuItemStyle,
-                      border: showCoordinates ? '1px solid #f9b115' : 'none',
-                      background: showCoordinates ? 'rgba(249, 177, 21, 0.25)' : 'transparent',
-                      boxShadow: showCoordinates ? '0 0 8px rgba(249, 177, 21, 0.5)' : 'none'
-                    }}
-                    title={showCoordinates ? 'Hide Coordinates' : 'Show Coordinates'}
-                  >
-                    <span style={{ fontSize: '15px' }}>📍</span>
-                  </button>
-                )}
-
-                <button
-                  className="menu-buttons settings-button"
-                  onClick={() => setShowSettingsModal(true)}
-                  onMouseEnter={() => setHoveredMenuItem('Settings')}
-                  onMouseLeave={() => setHoveredMenuItem(null)}
-                  style={desktopMenuItemStyle}
-                  title="Settings"
-                >
-                  <span style={{ fontSize: '15px' }}>⚙️</span>
-                </button>
               </div>
             )}
 

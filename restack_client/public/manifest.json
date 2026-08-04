@@ -1,6 +1,14 @@
 {
   "short_name": "DreamTower",
   "name": "DreamTower",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display_override": ["fullscreen", "minimal-ui"],
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "theme_color": "#0d0c0b",
+  "background_color": "#0d0c0b",
   "icons": [
     {
       "src": "favicon.ico",
@@ -11,18 +19,25 @@
       "src": "logo192.png",
       "type": "image/png",
       "sizes": "192x192",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
       "sizes": "512x512",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable"
     }
-  ],
-  "start_url": ".",
-  "display": "fullscreen",
-  "orientation": "landscape",
-  "theme_color": "#0d0c0b",
-  "background_color": "#0d0c0b"
+  ]
 }
