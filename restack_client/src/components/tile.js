@@ -2,6 +2,20 @@ import React from 'react';
 import * as images from '../utils/images'
 
 
+const getContainsType = (contains) => {
+    if (!contains) return null;
+    if (typeof contains === 'object') return contains.type || null;
+    if (typeof contains === 'string') return contains;
+    return null;
+};
+
+const getContainsSubtype = (contains) => {
+    if (!contains) return null;
+    if (typeof contains === 'object') return contains.subtype || null;
+    if (typeof contains === 'string') return contains;
+    return null;
+};
+
 function Tile(props) {
     const colorVal = (props.color === 'null' || props.color === 'undefined') ? null : props.color;
     const isShrine = (props.contains && props.contains.type === 'shrine') || props.optionType === 'shrine' || props.isShrine;
@@ -239,51 +253,27 @@ function Tile(props) {
             compact.startsWith('rgb(0,0,0,') ||
             compact === '#000000ff';
     };
+    const edgeColorForBoundary = (currentBorderValue, neighborBorderValue, neighborContains, neighborColor) => {
+        if (isBlackRenderedTile(currentContains, currentTileColor) || isBlackRenderedTile(neighborContains, neighborColor)) return '#000000';
+        const currentIntent = getBorderColorIntent(currentBorderValue);
+        const neighborIntent = getBorderColorIntent(neighborBorderValue);
+        if (currentIntent === 'black' || neighborIntent === 'black') return '#000000';
+        return 'transparent';
+    };
+
     const isWallOrVoidOrDarkNeighbor = (neighborTile) => {
         if (!neighborTile) return true;
-        if (isBlackRenderedTile(neighborTile.contains, neighborTile.color)) return true;
         if (isVoidContains(neighborTile.contains)) return true;
+        if (isBlackRenderedTile(neighborTile.contains, neighborTile.color)) return true;
         const cType = getContainsType(neighborTile.contains);
         if (cType === 'wall' || cType === 'void' || neighborTile.isWall || neighborTile.isVoid) return true;
         return false;
-    };
-
-    const edgeColorForBoundary = (currentBorderValue, neighborBorderValue, neighborTile) => {
-        if (isBlackRenderedTile(currentContains, currentTileColor)) return '#000000';
-        if (isWallOrVoidOrDarkNeighbor(neighborTile)) return '#000000';
-        const currentIntent = getBorderColorIntent(currentBorderValue);
-        const neighborIntent = neighborTile ? getBorderColorIntent(neighborBorderValue) : 'white';
-        if (currentIntent === 'black' || neighborIntent === 'black') return '#000000';
-        return 'transparent';
     };
 
     const topNeighbor = getNeighborTile(-15);
     const leftNeighbor = getNeighborTile(-1);
     const rightNeighbor = getNeighborTile(1);
     const bottomNeighbor = getNeighborTile(15);
-    const edgeLines = isBoardGridTile ? {
-        top: edgeColorForBoundary(
-            props.borders && props.borders.top,
-            topNeighbor && topNeighbor.borders ? topNeighbor.borders.bottom : null,
-            topNeighbor
-        ),
-        left: edgeColorForBoundary(
-            props.borders && props.borders.left,
-            leftNeighbor && leftNeighbor.borders ? leftNeighbor.borders.right : null,
-            leftNeighbor
-        ),
-        // Right/bottom are normally owned by the neighbor's left/top edge.
-        right: isLastCol ? edgeColorForBoundary(
-            props.borders && props.borders.right,
-            rightNeighbor && rightNeighbor.borders ? rightNeighbor.borders.left : null,
-            rightNeighbor
-        ) : null,
-        bottom: isLastRow ? edgeColorForBoundary(
-            props.borders && props.borders.bottom,
-            bottomNeighbor && bottomNeighbor.borders ? bottomNeighbor.borders.top : null,
-            bottomNeighbor
-        ) : null
-    } : null;
 
     const topIsShaded = isWallOrVoidOrDarkNeighbor(topNeighbor);
     const bottomIsShaded = isWallOrVoidOrDarkNeighbor(bottomNeighbor);
@@ -291,11 +281,40 @@ function Tile(props) {
     const rightIsShaded = isWallOrVoidOrDarkNeighbor(rightNeighbor);
 
     const fogShadows = [];
-    if (topIsShaded) fogShadows.push('inset 0 8px 10px -2px rgba(0,0,0,0.85)');
-    if (bottomIsShaded) fogShadows.push('inset 0 -8px 10px -2px rgba(0,0,0,0.85)');
-    if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0,0,0,0.85)');
-    if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0,0,0,0.85)');
-    const fogEdgeBoxShadow = (isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
+    if (topIsShaded) fogShadows.push('inset 0 8px 10px -2px rgba(0, 0, 0, 0.85)');
+    if (bottomIsShaded) fogShadows.push('inset 0 -8px 10px -2px rgba(0, 0, 0, 0.85)');
+    if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0, 0, 0, 0.85)');
+    if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0, 0, 0, 0.85)');
+    const isDebugMode = !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
+    const fogEdgeBoxShadow = (isDebugMode && isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
+
+    const edgeLines = isBoardGridTile ? {
+        top: edgeColorForBoundary(
+            props.borders && props.borders.top,
+            topNeighbor && topNeighbor.borders ? topNeighbor.borders.bottom : null,
+            topNeighbor ? topNeighbor.contains : null,
+            topNeighbor ? topNeighbor.color : null
+        ),
+        left: edgeColorForBoundary(
+            props.borders && props.borders.left,
+            leftNeighbor && leftNeighbor.borders ? leftNeighbor.borders.right : null,
+            leftNeighbor ? leftNeighbor.contains : null,
+            leftNeighbor ? leftNeighbor.color : null
+        ),
+        // Right/bottom are normally owned by the neighbor's left/top edge.
+        right: isLastCol ? edgeColorForBoundary(
+            props.borders && props.borders.right,
+            rightNeighbor && rightNeighbor.borders ? rightNeighbor.borders.left : null,
+            rightNeighbor ? rightNeighbor.contains : null,
+            rightNeighbor ? rightNeighbor.color : null
+        ) : null,
+        bottom: isLastRow ? edgeColorForBoundary(
+            props.borders && props.borders.bottom,
+            bottomNeighbor && bottomNeighbor.borders ? bottomNeighbor.borders.top : null,
+            bottomNeighbor ? bottomNeighbor.contains : null,
+            bottomNeighbor ? bottomNeighbor.color : null
+        ) : null
+    } : null;
 
     const containsType = getContainsType(currentContains);
     const containsSubtype = getContainsSubtype(currentContains);
@@ -316,8 +335,7 @@ function Tile(props) {
                                  props.optionType === 'monster';
 
     const isBlackTile = isBlackRenderedTile(currentContains, currentTileColor);
-    
-    // Proximity check: is player avatar within 3 steps of this monster tile?
+
     const isNearbyMonster = (() => {
         if (!isMonsterOrPygmyTile) return false;
         if (tileRow === null || tileCol === null || !boardTiles) return false;
@@ -330,10 +348,6 @@ function Tile(props) {
     })();
 
     const isChargingAmbush = !!(currentTile && currentTile.isChargingAmbush) || !!props.isChargingAmbush;
-
-    if (isMonsterOrPygmyTile && (typeof window !== 'undefined' && window.debugTileGlow)) {
-        console.log(`[TileGlowDebug] tileId:${props.id} type:${props.type} isBlack:${isBlackTile} color:${color} tileColor:${currentTileColor} contains:`, currentContains);
-    }
 
     const portraitZIndex = foregroundPortalImages.includes(props.image) ? 12 : 3;
 
@@ -364,15 +378,57 @@ function Tile(props) {
                        ['key', 'items', 'jewels', 'runes', 'treasure'].includes(props.optionType) ||
                        isItemImage;
 
+    const isKeyTile = (() => {
+        const strImage = imageString;
+        const strContains = typeof currentContains === 'string' ? currentContains.toLowerCase() : '';
+        const strType = typeof containsType === 'string' ? containsType.toLowerCase() : '';
+        const strSubtype = typeof containsSubtype === 'string' ? containsSubtype.toLowerCase() : '';
+        const strOptionType = String(props.optionType || '').toLowerCase();
+
+        // Exclude gates / doors
+        if (strImage.includes('gate') || strContains.includes('gate') || strSubtype.includes('gate') || 
+            strImage.includes('door') || strContains.includes('door') || strSubtype.includes('door')) {
+            return false;
+        }
+
+        // Check types / subtypes / optionTypes / contains / image
+        if (strType === 'key' || strType.includes('key') || strSubtype === 'key' || strSubtype.includes('key')) return true;
+        if (strContains.includes('key')) return true;
+        if (strOptionType === 'key' || strOptionType.includes('key')) return true;
+        if (strImage.includes('key')) return true;
+
+        if (containsObj) {
+            const objType = String(containsObj.type || '').toLowerCase();
+            const objSubtype = String(containsObj.subtype || '').toLowerCase();
+            const objName = String(containsObj.name || '').toLowerCase();
+            const objId = String(containsObj.id || '').toLowerCase();
+
+            if (objType === 'key' || objType.includes('key') || objSubtype.includes('key') || objName.includes('key') || objId.includes('key')) {
+                return true;
+            }
+        }
+
+        if (props.data) {
+            const dType = String(props.data.type || '').toLowerCase();
+            const dSubtype = String(props.data.subtype || '').toLowerCase();
+            const dName = String(props.data.name || '').toLowerCase();
+
+            if (dType === 'key' || dType.includes('key') || dSubtype.includes('key') || dName.includes('key')) {
+                return true;
+            }
+        }
+
+        return false;
+    })();
+
     return (
         <div 
             data-portal-id={props['data-portal-id']}
-            data-tile-id={props.id}
             style={{
             opacity: props.isPreview ? 0.6 : 1,
             pointerEvents: props.passThrough ? 'none' : 'inherit',
             boxSizing: 'border-box',
-            transition: 'background-color 0.08s, border-color 0.08s, box-shadow 0.2s',
+            transition: 'background-color 0.35s, border-color 0.35s',
             cursor: props.cursor ? props.cursor : 'pointer',
             height: props.tileSize+'px',
             width: props.tileSize+'px',
@@ -382,7 +438,7 @@ function Tile(props) {
                 '#8080807a' : 
                 ( props.type === 'overlay-tile' ? 
                     'transparent': 
-                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : 'black')),
+                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
             overflow: (isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v))) ? 'visible' : 'hidden',
@@ -486,11 +542,11 @@ function Tile(props) {
                 );
             })()}
 
-                      {/* Terrain background layer */}
-                      {props.terrain && (() => {
-                          let terrainUrl = (props.terrain && props.terrain.includes('/')) ? props.terrain : (images[props.terrain] || null);
-                          return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: color === 'black' ? 0 : (props.partialObscured ? 0.25 : 0.5), transition: 'opacity 0.08s ease-in-out'}} />
-                      })()}
+                     {/* Terrain background: chosen per-tile (terrain_1..terrain_16) and rendered beneath portrait/items */}
+                     { props.terrain && (() => {
+                         let terrainUrl = (props.terrain && props.terrain.includes('/')) ? props.terrain : (images[props.terrain] || null);
+                         return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: color === 'black' ? 0 : 0.5, transition: 'opacity 0.35s ease-in-out'}} />
+                     })()}
 
                       {/* Faint red light source glow emanating from behind monster/pygmy portrait */}
                       {isMonsterOrPygmyTile && !isBlackTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
@@ -519,14 +575,30 @@ function Tile(props) {
                           />
                       )}
 
-                      {/* Portrait sits above the hp-fill, terrain, and monster glow so the image remains visible */}
-                      {(props.imageOverride || images[props.image]) && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
-                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : (props.partialObscured ? 0.5 : 1), transition: 'opacity 0.08s ease-in-out'}} />
+                      {/* Faint gold light source glow emanating from behind key items in the dungeon */}
+                      {isKeyTile && !isBlackTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
+                          <div 
+                              className="key-portrait-glow"
+                              style={{
+                                  position: 'absolute',
+                                  top: '-15%',
+                                  left: '-15%',
+                                  right: '-15%',
+                                  bottom: '-15%',
+                                  borderRadius: '50%',
+                                  background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.85) 0%, rgba(218, 165, 32, 0.55) 38%, rgba(180, 130, 15, 0.25) 65%, transparent 88%)',
+                                  zIndex: 2,
+                                  pointerEvents: 'none',
+                                  opacity: (color === 'black' || props.type === 'overlay-tile') ? 0 : (props.partialObscured ? 0.35 : 1),
+                                  transition: 'opacity 0.2s ease-in-out, background 0.2s ease-in-out',
+                                  animation: 'keyGlowPulse 1.8s ease-in-out infinite alternate'
+                              }}
+                          />
                       )}
 
-                      {/* Pure tile-based player avatar portrait */}
-                      {props.isPlayerTile && (
-                          <div className="portrait player-tile-portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(images[props.playerImgKey || 'avatar']), backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', zIndex: 50, opacity: 1}} />
+                      {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
+                      {(props.imageOverride || images[props.image]) && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
+                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(props.imageOverride || images[props.image]), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
                       )}
 
             {/* Soul Shard custom overlay */}
@@ -538,7 +610,7 @@ function Tile(props) {
                     <div style={{
                         position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                         opacity: color === 'black' ? 0 : 1,
-                        transition: 'opacity 0.08s ease-in-out'
+                        transition: 'opacity 0.35s ease-in-out'
                     }}>
                         {/* 50% opacity monster portrait underlay */}
                         {portraitUrl && (
@@ -605,7 +677,7 @@ function Tile(props) {
                     zIndex: 1,
                     opacity: color === 'black' ? 0 : 0.7,
                     pointerEvents: 'none',
-                    transition: 'opacity 0.08s ease-in-out'
+                    transition: 'opacity 0.35s ease-in-out'
                 }} />
            )}
 
@@ -658,7 +730,7 @@ function Tile(props) {
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 9, pointerEvents: 'none',
                     opacity: color === 'black' ? 0 : 1,
-                    transition: 'opacity 0.08s ease-in-out'
+                    transition: 'opacity 0.35s ease-in-out'
                 }}>
                     <div className="trap-indicator-overlay" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1}} />
                 </div>
@@ -670,7 +742,7 @@ function Tile(props) {
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 10, pointerEvents: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'opacity 0.08s ease-in-out'
+                    transition: 'opacity 0.35s ease-in-out'
                 }}>
                     <svg width='60%' height='60%' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'>
                         <line x1='4' y1='4' x2='20' y2='20' stroke='white' strokeWidth='1.5' strokeLinecap='round'/>
@@ -684,7 +756,7 @@ function Tile(props) {
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 10, pointerEvents: 'none',
-                    transition: 'opacity 0.08s ease-in-out'
+                    transition: 'opacity 0.35s ease-in-out'
                 }}>
                     <svg width='100%' height='100%' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'>
                         {/* Vertical lines */}
@@ -711,7 +783,7 @@ function Tile(props) {
                     zIndex: 10, pointerEvents: 'none',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     opacity: color === 'black' ? 0 : 1,
-                    transition: 'opacity 0.08s ease-in-out'
+                    transition: 'opacity 0.35s ease-in-out'
                 }}>
                     <svg width='70%' height='70%' viewBox='0 0 30 30' xmlns='http://www.w3.org/2000/svg'>
                         <line x1='4' y1='28' x2='12' y2='2' stroke='#d4a844' strokeWidth='3' strokeLinecap='round'/>
@@ -729,7 +801,7 @@ function Tile(props) {
                      zIndex: 10, pointerEvents: 'none',
                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                      opacity: color === 'black' ? 0 : 1,
-                     transition: 'opacity 0.08s ease-in-out'
+                     transition: 'opacity 0.35s ease-in-out'
                  }}>
                      <div style={{
                          width: '70%',
@@ -756,7 +828,7 @@ function Tile(props) {
                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
                      fontSize: Math.max(8, (props.tileSize || 30) * 0.45) + 'px',
                      opacity: color === 'black' ? 0 : 1,
-                     transition: 'opacity 0.08s ease-in-out'
+                     transition: 'opacity 0.35s ease-in-out'
                  }}>
                      <div style={{
                          width: '70%',
@@ -773,39 +845,6 @@ function Tile(props) {
                      }}>{(props.contains && props.contains.subtype ? props.contains.subtype.slice(0,3) : '')}</span>
                  </div>
             )}
-
-             {/* Narrative Tile marker / Spirit Sight faint icon overlay */}
-             { isNarrative && (
-                  <div style={{
-                      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                      zIndex: 10, pointerEvents: 'none',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                      opacity: isRevealedBySpiritSight ? 0.45 : (color === 'black' ? 0 : 1),
-                      transition: 'opacity 0.08s ease-in-out'
-                  }}>
-                      <div style={{
-                          width: '65%',
-                          height: '65%',
-                          backgroundImage: toCssUrl(images[props.imageOverride] || images[props.image] || (props.contains && images[props.contains.type]) || images.narrative),
-                          backgroundSize: 'contain',
-                          backgroundRepeat: 'no-repeat',
-                          backgroundPosition: 'center',
-                          filter: isRevealedBySpiritSight ? 'drop-shadow(0 0 5px rgba(0, 243, 255, 0.9))' : undefined
-                      }} />
-                      {((props.contains && props.contains.subtype) || props.subtype) && (
-                          <span style={{
-                              fontSize: Math.max(6, (props.tileSize || 30) * 0.22) + 'px',
-                              color: isRevealedBySpiritSight ? '#00f3ff' : '#ffd700',
-                              fontWeight: 'bold',
-                              textTransform: 'uppercase',
-                              lineHeight: 1.1,
-                              textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 4px black'
-                          }}>
-                              {((props.contains && props.contains.subtype) || props.subtype || '').slice(0, 3)}
-                          </span>
-                      )}
-                  </div>
-             )}
 
              {/* Connecting Path overlay */}
              { ((props.contains && props.contains.type === 'connecting_path') || props.optionType === 'connecting path') && (() => {
@@ -835,7 +874,7 @@ function Tile(props) {
                       alignItems: 'center',
                       justifyContent: 'center',
                       opacity: color === 'black' ? 0 : 1,
-                      transition: 'opacity 0.08s ease-in-out'
+                      transition: 'opacity 0.35s ease-in-out'
                   };
                   if (edge === 'top') {
                       overlayStyle.borderTop = 'none';
@@ -896,7 +935,7 @@ function Tile(props) {
            { props.inscriptions && (
                 <div style={{
                     opacity: color === 'black' ? 0 : 1,
-                    transition: 'opacity 0.08s ease-in-out'
+                    transition: 'opacity 0.35s ease-in-out'
                 }}>
                     { props.inscriptions.top && (
                         <div style={{position:'absolute', top:0, left:'10%', right:'10%', height:'4px',
@@ -921,7 +960,39 @@ function Tile(props) {
                 </div>
            )}
 
-           {/* Partial obscurity overlay */}
+             {/* Narrative Tile marker / Spirit Sight faint icon overlay */}
+             { isNarrative && (
+                  <div style={{
+                      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                      zIndex: 10, pointerEvents: 'none',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      opacity: isRevealedBySpiritSight ? 0.45 : (color === 'black' ? 0 : 1),
+                      transition: 'opacity 0.08s ease-in-out'
+                  }}>
+                      <div style={{
+                          width: '65%',
+                          height: '65%',
+                          backgroundImage: toCssUrl(images[props.imageOverride] || images[props.image] || (props.contains && images[props.contains.type]) || images.narrative),
+                          backgroundSize: 'contain',
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'center',
+                          filter: isRevealedBySpiritSight ? 'drop-shadow(0 0 5px rgba(0, 243, 255, 0.9))' : undefined
+                      }} />
+                      {((props.contains && props.contains.subtype) || props.subtype) && (
+                          <span style={{
+                              fontSize: Math.max(6, (props.tileSize || 30) * 0.22) + 'px',
+                              color: isRevealedBySpiritSight ? '#00f3ff' : '#ffd700',
+                              fontWeight: 'bold',
+                              textTransform: 'uppercase',
+                              lineHeight: 1.1,
+                              textShadow: '0 1px 3px rgba(0,0,0,0.9), 0 0 4px black'
+                          }}>
+                              {((props.contains && props.contains.subtype) || props.subtype || '').slice(0, 3)}
+                          </span>
+                      )}
+                  </div>
+             )}
+
            { (props.partialObscured || isRevealedBySpiritSight) && (
                 <div style={{
                     position: 'absolute',
@@ -937,7 +1008,7 @@ function Tile(props) {
                 }} />
            )}
 
-           {/* Fog of war edge shading (gradient shadow along unrevealed fog boundaries) */}
+           {/* Fog of war / void edge shading — Active when Debug Mode is ON */}
            { fogEdgeBoxShadow !== 'none' && (
                 <div style={{
                     position: 'absolute',
@@ -1021,138 +1092,10 @@ function Tile(props) {
     )
 }
 
-const propsAreEqual = (prev, next) => {
-    // 1. Check direct scalar props
-    if (prev.hasLivingSummoner !== next.hasLivingSummoner) return false;
-    if (prev.color !== next.color) return false;
-    if (prev.image !== next.image) return false;
-    if (prev.imageOverride !== next.imageOverride) return false;
-    if (prev.terrain !== next.terrain) return false;
-    if (prev.partialObscured !== next.partialObscured) return false;
-    if (prev.trapRevealed !== next.trapRevealed) return false;
-    if (prev.tileSize !== next.tileSize) return false;
-    if (prev.cursor !== next.cursor) return false;
-    if (prev.type !== next.type) return false;
-    if (prev.hovered !== next.hovered) return false;
-    if (prev.passThrough !== next.passThrough) return false;
-    if (prev.backgroundColor !== next.backgroundColor) return false;
-    if (prev.showCoordinates !== next.showCoordinates) return false;
-    if (prev.editMode !== next.editMode) return false;
-    if (prev.isActiveInventory !== next.isActiveInventory) return false;
-    if (prev.isPreview !== next.isPreview) return false;
-    if (prev.hp !== next.hp) return false;
-    if (prev.maxHp !== next.maxHp) return false;
-    if (prev.hpBarWidth !== next.hpBarWidth) return false;
-    if (prev.className !== next.className) return false;
-
-    // 2. Check contains (if object, compare its fields)
-    if (prev.contains !== next.contains) {
-        if (typeof prev.contains === 'object' && typeof next.contains === 'object' && prev.contains && next.contains) {
-            if (prev.contains.type !== next.contains.type) return false;
-            if (prev.contains.key !== next.contains.key) return false;
-            if (prev.contains.vendorCell !== next.contains.vendorCell) return false;
-            if (prev.contains.vendorAnchorId !== next.contains.vendorAnchorId) return false;
-        } else {
-            return false;
-        }
-    }
-
-    // 3. Check borders (if object, compare top/left/bottom/right)
-    if (prev.borders !== next.borders) {
-        if (prev.borders && next.borders) {
-            if (prev.borders.top !== next.borders.top) return false;
-            if (prev.borders.left !== next.borders.left) return false;
-            if (prev.borders.bottom !== next.borders.bottom) return false;
-            if (prev.borders.right !== next.borders.right) return false;
-        } else {
-            return false;
-        }
-    }
-
-    // 4. Check coordinates (compare x and y)
-    if (prev.coordinates !== next.coordinates) {
-        if (prev.coordinates && next.coordinates) {
-            const px = Array.isArray(prev.coordinates) ? prev.coordinates[0] : prev.coordinates.x;
-            const py = Array.isArray(prev.coordinates) ? prev.coordinates[1] : prev.coordinates.y;
-            const nx = Array.isArray(next.coordinates) ? next.coordinates[0] : next.coordinates.x;
-            const ny = Array.isArray(next.coordinates) ? next.coordinates[1] : next.coordinates.y;
-            if (px !== nx || py !== ny) return false;
-        } else {
-            return false;
-        }
-    }
-
-    // 5. Check data (complex game entity object, if changed we compare relevant properties)
-    if (prev.data !== next.data) {
-        if (prev.data && next.data) {
-            if (prev.data.id !== next.data.id) return false;
-            if (prev.data.hp !== next.data.hp) return false;
-            if (prev.data.dead !== next.data.dead) return false;
-            if (prev.data.type !== next.data.type) return false;
-            if (prev.data.monsterType !== next.data.monsterType) return false;
-            if (prev.data.count !== next.data.count) return false;
-        } else {
-            return false;
-        }
-    }
-
-    // 6. Check inscriptions (compare top/bottom/left/right)
-    if (prev.inscriptions !== next.inscriptions) {
-        if (prev.inscriptions && next.inscriptions) {
-            if (prev.inscriptions.top !== next.inscriptions.top) return false;
-            if (prev.inscriptions.bottom !== next.inscriptions.bottom) return false;
-            if (prev.inscriptions.left !== next.inscriptions.left) return false;
-            if (prev.inscriptions.right !== next.inscriptions.right) return false;
-        } else {
-            return false;
-        }
-    }
-
-    // 7. Check relevant properties of neighbor tiles from boardTiles prop.
-    // Neighbors only affect the edgeLines rendering.
-    // Edge color logic checks color, borders, contains of the 4 neighbors.
-    // If the neighbor array reference changed, check if any of the 4 neighbors'
-    // relevant fields (color, borders, contains) actually changed.
-    if (prev.boardTiles !== next.boardTiles && prev.type === 'board-tile' && Array.isArray(prev.boardTiles) && Array.isArray(next.boardTiles)) {
-        const tileIndex = (typeof prev.id === 'number') ? prev.id : ((typeof prev.index === 'number') ? prev.index : null);
-        if (tileIndex !== null) {
-            const tileRow = Math.floor(tileIndex / 15);
-            const tileCol = tileIndex % 15;
-            const offsets = [];
-            if (tileRow > 0) offsets.push(-15);
-            if (tileRow < 14) offsets.push(15);
-            if (tileCol > 0) offsets.push(-1);
-            if (tileCol < 14) offsets.push(1);
-
-            for (const offset of offsets) {
-                const idx = tileIndex + offset;
-                const pNeighbor = prev.boardTiles[idx];
-                const nNeighbor = next.boardTiles[idx];
-                if (!pNeighbor || !nNeighbor) {
-                    if (pNeighbor !== nNeighbor) return false;
-                    continue;
-                }
-                if (pNeighbor.color !== nNeighbor.color) return false;
-                if (pNeighbor.contains !== nNeighbor.contains) {
-                    const pc = pNeighbor.contains && typeof pNeighbor.contains === 'object' ? pNeighbor.contains.type : pNeighbor.contains;
-                    const nc = nNeighbor.contains && typeof nNeighbor.contains === 'object' ? nNeighbor.contains.type : nNeighbor.contains;
-                    if (pc !== nc) return false;
-                }
-                if (pNeighbor.borders !== nNeighbor.borders) {
-                    if (pNeighbor.borders && nNeighbor.borders) {
-                        if (pNeighbor.borders.top !== nNeighbor.borders.top) return false;
-                        if (pNeighbor.borders.left !== nNeighbor.borders.left) return false;
-                        if (pNeighbor.borders.bottom !== nNeighbor.borders.bottom) return false;
-                        if (pNeighbor.borders.right !== nNeighbor.borders.right) return false;
-                    } else {
-                        return false;
-                    }
-                }
-            }
-        }
-    }
-
-    return true;
-};
-
-export default React.memo(Tile, propsAreEqual);
+// Memoize so the thousands of read-only dungeon-view tiles don't re-render on
+// every parent state change (e.g. dropdown open/close).  Tile content never
+// changes mid-render in the dungeon preview — only tileSize, image, color, and
+// coordinates matter.  All other props that Tile receives in DungeonView are
+// stable primitives (false / null / 'board-tile'), so the shallow comparison
+// is reliable and cheap.
+export default React.memo(Tile);

@@ -344,6 +344,7 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
     const [search, setSearch] = React.useState('');
     const [selectedEntry, setSelectedEntry] = React.useState(null);
     const [skillClassFilter, setSkillClassFilter] = React.useState('all');
+    const selectedRowRef = React.useRef(null);
     // Tracks whether the next tab-change is a programmatic navigation (should not reset entry)
     const suppressNextReset = React.useRef(false);
 
@@ -363,16 +364,33 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
         }
         if (initialTab === 'monsters' && initialSearch && monsterManager) {
             // Auto-select the first monster whose type matches the search term
-            const q = initialSearch.trim().toLowerCase();
+            const qRaw = initialSearch.trim().toLowerCase();
+            const q = qRaw.replace(/_/g, ' ');
             const allMonsters = Object.values(monsterManager.monsters || {}).filter(m => !m.isSummoned);
-            const match = allMonsters.find(m => (m.type || '').toLowerCase() === q)
-                || allMonsters.find(m => (m.type || '').toLowerCase().includes(q));
+            const match = allMonsters.find(m => (m.type || '').toLowerCase() === qRaw || (m.type || '').toLowerCase().replace(/_/g, ' ') === q)
+                || allMonsters.find(m => (m.type || '').toLowerCase().includes(qRaw) || (m.type || '').toLowerCase().replace(/_/g, ' ').includes(q))
+                || allMonsters.find(m => (m.key || '').toLowerCase() === qRaw)
+                || allMonsters.find(m => (m.id || '').toLowerCase() === qRaw);
             if (match) { setSelectedEntry(match); return; }
         }
         setSelectedEntry(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, initialTab, initialSearch, initialEntryId]);
 
+    // Auto-scroll selected list row into view whenever selectedEntry changes or modal opens
+    React.useEffect(() => {
+        if (visible && selectedEntry) {
+            const timer = setTimeout(() => {
+                if (selectedRowRef.current) {
+                    selectedRowRef.current.scrollIntoView({
+                        behavior: 'auto',
+                        block: 'center'
+                    });
+                }
+            }, 50);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedEntry, activeTab, visible]);
 
     // Reset selection when tab changes manually (not when set programmatically)
     React.useEffect(() => {
@@ -484,6 +502,7 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                                     return (
                                         <div
                                             key={skill.id}
+                                            ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(skill)}
                                         >
@@ -517,11 +536,17 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                                 {filteredMonsters.length === 0 && <div className="codex-empty">No monsters match your search.</div>}
                                 {filteredMonsters.map((monster, idx) => {
                                     const iconSrc = resolveImg(monster.portrait);
-                                    const selected = selectedEntry && (selectedEntry === monster || (selectedEntry.key && selectedEntry.key === monster.key));
+                                    const selected = selectedEntry && (
+                                        selectedEntry === monster ||
+                                        (selectedEntry.key && selectedEntry.key === monster.key) ||
+                                        (selectedEntry.id && selectedEntry.id === monster.id) ||
+                                        (selectedEntry.type && monster.type && selectedEntry.type === monster.type)
+                                    );
                                     const monsterKey = monster.id || (monster.key ? `${monster.key}_${idx}` : `${monster.type || 'monster'}_${idx}`);
                                     return (
                                         <div
                                             key={monsterKey}
+                                            ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(monster)}
                                         >
@@ -557,6 +582,7 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                                     return (
                                         <div
                                             key={cls.id}
+                                            ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(cls)}
                                         >
@@ -592,6 +618,7 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                                     return (
                                         <div
                                             key={item.id}
+                                            ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(item)}
                                         >

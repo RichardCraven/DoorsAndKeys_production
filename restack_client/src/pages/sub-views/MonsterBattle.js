@@ -1550,24 +1550,27 @@ class MonsterBattle extends React.Component {
         })
     }
     confirmClicked = () => {
-        const hasLevelUps = Object.keys(this.state.levelTransitions || {}).length > 0;
-        if (hasLevelUps && this.state.battleResult === 'win') {
-            const queue = [];
-            (this.props.crew || []).forEach(member => {
-                if (member && Array.isArray(member.pendingLevelUpPicks) && member.pendingLevelUpPicks.length > 0) {
-                    member.pendingLevelUpPicks.forEach(lvl => {
-                        queue.push({
-                            crewMember: member,
-                            fromLevel: lvl - 1,
-                            toLevel: lvl
-                        });
+        const crewList = (this.props.crewManager && Array.isArray(this.props.crewManager.crew) && this.props.crewManager.crew.length > 0)
+            ? this.props.crewManager.crew
+            : (this.props.crew || []);
+
+        const queue = [];
+        crewList.forEach(member => {
+            if (member && Array.isArray(member.pendingLevelUpPicks) && member.pendingLevelUpPicks.length > 0) {
+                member.pendingLevelUpPicks.forEach(lvl => {
+                    queue.push({
+                        crewMember: member,
+                        fromLevel: lvl - 1,
+                        toLevel: lvl
                     });
-                }
-            });
-            if (queue.length > 0) {
-                this.setState({ showLevelUpScreen: true, levelUpQueue: queue });
-                return;
+                });
             }
+        });
+
+        const hasLevelUps = Object.keys(this.state.levelTransitions || {}).length > 0 || queue.length > 0;
+        if (hasLevelUps && this.state.battleResult === 'win' && queue.length > 0) {
+            this.setState({ showLevelUpScreen: true, showSummaryPanel: false, levelUpQueue: queue });
+            return;
         }
         this.props.battleOver(this.state.battleResult);
     }
@@ -3989,7 +3992,8 @@ class MonsterBattle extends React.Component {
                         const headerClass = isVictory ? "victory-header" : "defeat-header";
 
                         return (
-                            <div className={`summary-panel ${isVictory ? 'victory' : 'defeat'}`}>
+                            <div className="summary-overlay-container">
+                                <div className={`summary-panel ${isVictory ? 'victory' : 'defeat'}`}>
                                 {/* Header */}
                                 <div className="summary-header">
                                     <h1 className={headerClass}>{headerText}</h1>
@@ -4199,7 +4203,8 @@ class MonsterBattle extends React.Component {
                                     )}
                                 </div>
                             </div>
-                        );
+                        </div>
+                    );
                     })()}
 
                     <CModal className='inventory-modal' alignment='center' visible={this.state.showInventoryPopup} onClose={() => this.setState({ showInventoryPopup: false })}>

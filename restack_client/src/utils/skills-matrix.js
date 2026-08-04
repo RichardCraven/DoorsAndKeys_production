@@ -2117,7 +2117,7 @@ const skillsMatrix = {
     madness: {
         id: 'madness',
         name: 'Madness',
-        desc: 'Project a fracturing psychic field into a 2×2 area, pitting the Hashmallim\'s terrible will against the minds of all within. Those who fail the contested mentality check are consumed by the Madness debuff for 10 eras — each round they have a 50% chance to switch sides and attack their own allies in a fit of uncontrollable violence, and a 25% chance to turn on themselves, dealing self-inflicted damage in a moment of psychotic rage.',
+        desc: 'Project a fracturing psychic field into a 2×2 area, pitting the caster\'s will against the minds of all within. Those who fail the contested mentality check are consumed by the Madness debuff for 10 eras — each round they have a 50% chance to switch sides and attack their own allies in a fit of uncontrollable violence, and a 25% chance to turn on themselves, dealing self-inflicted damage in a moment of psychotic rage.',
         icon: images.hashmallim_madness,
         cooldown: 14,
         initialCooldown: 6,

@@ -4,8 +4,41 @@ import { useHistory } from "react-router";
 import { getMeta, storeMeta } from '../utils/session-handler';
 import { loadAllDungeonsRequest, deleteDungeonRequest } from '../utils/api-handler';
 
+import skillsMatrix from '../utils/skills-matrix';
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 
+const DEFAULT_CLASS_LORE = {
+  summoner: 'A conduit for unstable arcana who overwhelms enemies with elemental pressure by opening rifts and summoning minions.',
+  monk: 'A master of martial disciplines and ethereal energy, striking with terrifying speed and redirecting incoming force.',
+  soldier: 'A resilient vanguard proficient in defensive tactics, crushing shield blows, and frontline command.',
+  barbarian: 'A fierce warrior of the Rootsnarl Clan who channels primal fury into sweeping cleaves and devastating blows.',
+  engineer: 'A battlefield machinist who excels at spacing control, deploying turrets, traps, and tactical pressure.',
+  wizard: 'An archmage of elemental destruction who commands arcana to incinerate foes and shield allies.',
+  ranger: 'A deadly scout and sniper proficient with longbows, tracking targets, and setting lethal traps.',
+  sage: 'A chronicler of ancient mysteries and sacred arts, providing vital healing, wards, and strategic guidance.'
+};
+
+const DEFAULT_CLASS_SKILLS = {
+  summoner: ['summon_skeleton', 'summon_imp', 'summoner_duplicate', 'magic_affinity'],
+  monk: ['monk_palm_strike', 'ethereal_speed', 'monk_meditation', 'inner_peace'],
+  soldier: ['shield_bash', 'taunt', 'heavy_strike', 'shield_mastery'],
+  barbarian: ['sword_swing', 'barbarian_cleave', 'barbarian_berserker', 'fury'],
+  engineer: ['sword_swing', 'axe_throw', 'force_back', 'inspiring_force'],
+  wizard: ['fireball', 'ice_bolt', 'arcane_shield', 'mana_overflow'],
+  ranger: ['loose', 'notch', 'mark', 'nimble_dodge', 'eagle_eye'],
+  sage: ['heal', 'circle_of_protection', 'owls_insight', 'herbalism']
+};
+
+const DEFAULT_CLASS_STATS = {
+  summoner: { str: 3, int: 8, dex: 5, fort: 6, baseHp: 10 },
+  monk: { str: 6, int: 6, dex: 8, fort: 6, baseHp: 12 },
+  soldier: { str: 7, int: 4, dex: 5, fort: 8, baseHp: 16 },
+  barbarian: { str: 8, int: 3, dex: 4, fort: 6, baseHp: 52 },
+  engineer: { str: 5, int: 6, dex: 7, fort: 6, baseHp: 10 },
+  wizard: { str: 3, int: 9, dex: 5, fort: 4, baseHp: 10 },
+  ranger: { str: 5, int: 5, dex: 6, fort: 3, baseHp: 10 },
+  sage: { str: 3, int: 7, dex: 5, fort: 7, baseHp: 10 }
+};
 
 export default function LandingPage(props) {
   useEffect(() => {
@@ -63,6 +96,10 @@ export default function LandingPage(props) {
   const [isLoadingInstances, setIsLoadingInstances] = useState(false);
   const [deletingInstanceId, setDeletingInstanceId] = useState(null);
   const [instanceFeedbackMsg, setInstanceFeedbackMsg] = useState(null);
+  const [showcaseUnit, setShowcaseUnit] = useState(null);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editNameVal, setEditNameVal] = useState('');
+  const [, setForceUpdateToggle] = useState(0);
 
   const fetchInstances = async () => {
     setIsLoadingInstances(true);
@@ -415,7 +452,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.3.1 BETA</span>
+          <span className="logo-subtitle">v 0.3.4 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">
@@ -493,10 +530,19 @@ export default function LandingPage(props) {
                     <span className="selected-crew-title">Selected Crew</span>
                     <div className="selected-crew-list">
                       {crew.map((member, i) => (
-                        <div key={i} className="selected-crew-member-item">
-                          <div className="selected-crew-avatar-wrapper" style={{
-                            backgroundImage: `url(${member.portrait || member.image})`
-                          }}>
+                        <div
+                          key={i}
+                          className="selected-crew-member-item"
+                          onClick={() => {
+                            setShowcaseUnit(member);
+                            setIsEditingName(false);
+                            setEditNameVal(member.name || '');
+                          }}
+                          style={{ cursor: 'pointer' }}
+                          title={`Click to view profile & stats for ${member.name}`}
+                        >
+                          <div className={`selected-crew-avatar-wrapper type-${String(member.type || member.image || '').toLowerCase()}`}>
+                            <img src={member.portrait || member.image} alt={member.name} className="crew-avatar-img" />
                             <span className="selected-crew-badge">
                               Lvl {member.level || 1}
                             </span>
@@ -830,6 +876,262 @@ export default function LandingPage(props) {
           </div>
         </div>
       )}
+
+      {/* Selected Crew Unit Showcase Overlay */}
+      {showcaseUnit && (() => {
+        const uType = String(showcaseUnit.type || showcaseUnit.image || '').toLowerCase();
+        const defaultStats = DEFAULT_CLASS_STATS[uType] || { str: 5, int: 5, dex: 5, fort: 5, baseHp: 10 };
+        const stats = {
+          str: showcaseUnit.stats?.str ?? defaultStats.str,
+          int: showcaseUnit.stats?.int ?? defaultStats.int,
+          dex: showcaseUnit.stats?.dex ?? defaultStats.dex,
+          fort: showcaseUnit.stats?.fort ?? defaultStats.fort,
+          baseHp: showcaseUnit.stats?.baseHp ?? defaultStats.baseHp
+        };
+
+        const description = showcaseUnit.description || DEFAULT_CLASS_LORE[uType] || 'A heroic adventurer equipped for dungeon exploration.';
+        const rawSkills = Array.isArray(showcaseUnit.skills) && showcaseUnit.skills.length > 0 ? showcaseUnit.skills : (DEFAULT_CLASS_SKILLS[uType] || []);
+        const rawPassives = Array.isArray(showcaseUnit.passives) ? showcaseUnit.passives : [];
+        const allSkillKeys = Array.from(new Set([...rawSkills, ...rawPassives]));
+
+        const renderStatBar = (label, value, maxVal, color) => {
+          const pct = Math.min(100, Math.max(8, (value / maxVal) * 100));
+          return (
+            <div key={label} className="crew-showcase-stat-item">
+              <div className="stat-label-row">
+                <span>{label}</span>
+                <span className="stat-value">{value}</span>
+              </div>
+              <div className="stat-bar-track">
+                <div className="stat-bar-fill" style={{ width: `${pct}%`, backgroundColor: color }} />
+              </div>
+            </div>
+          );
+        };
+
+        return (
+          <div className="crew-showcase-overlay" onClick={() => setShowcaseUnit(null)}>
+            <div className="crew-showcase-modal" onClick={(e) => e.stopPropagation()}>
+              <button
+                className="crew-showcase-close-btn"
+                onClick={() => setShowcaseUnit(null)}
+                title="Close Profile"
+              >
+                ✕
+              </button>
+
+              {/* Header */}
+              <div className={`crew-showcase-header theme-${uType}`}>
+                <div className="crew-showcase-portrait-container">
+                  <div className={`crew-showcase-portrait theme-${uType}`}>
+                    <img src={showcaseUnit.portrait || showcaseUnit.image} alt={showcaseUnit.name} className="crew-avatar-img" />
+                    <span className="crew-showcase-level-badge">Lvl {showcaseUnit.level || 1}</span>
+                  </div>
+                </div>
+                <div className="crew-showcase-identity">
+                  {isEditingName ? (
+                    <div className="crew-showcase-rename-form" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                      <input
+                        type="text"
+                        value={editNameVal}
+                        onChange={(e) => setEditNameVal(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const trimmed = editNameVal.trim();
+                            if (trimmed && showcaseUnit) {
+                              const oldName = showcaseUnit.name;
+                              showcaseUnit.name = trimmed;
+                              setIsEditingName(false);
+                              const meta = getMeta() || {};
+                              if (Array.isArray(meta.crew)) {
+                                const memberInMeta = meta.crew.find(c =>
+                                  (c.id && showcaseUnit.id && c.id === showcaseUnit.id) ||
+                                  c.name === oldName ||
+                                  (c.type || c.image) === (showcaseUnit.type || showcaseUnit.image)
+                                );
+                                if (memberInMeta) {
+                                  memberInMeta.name = trimmed;
+                                }
+                                storeMeta(meta);
+                              }
+                              setForceUpdateToggle(prev => prev + 1);
+                            }
+                          }
+                          if (e.key === 'Escape') setIsEditingName(false);
+                        }}
+                        autoFocus
+                        style={{
+                          background: 'rgba(12, 10, 9, 0.9)',
+                          border: '1px solid rgba(212, 168, 68, 0.7)',
+                          borderRadius: '6px',
+                          color: '#ffffff',
+                          padding: '6px 12px',
+                          fontSize: '1.2rem',
+                          fontWeight: '700',
+                          fontFamily: 'Cinzel, serif',
+                          outline: 'none',
+                          width: '200px'
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          const trimmed = editNameVal.trim();
+                          if (trimmed && showcaseUnit) {
+                            const oldName = showcaseUnit.name;
+                            showcaseUnit.name = trimmed;
+                            setIsEditingName(false);
+                            const meta = getMeta() || {};
+                            if (Array.isArray(meta.crew)) {
+                              const memberInMeta = meta.crew.find(c =>
+                                (c.id && showcaseUnit.id && c.id === showcaseUnit.id) ||
+                                c.name === oldName ||
+                                (c.type || c.image) === (showcaseUnit.type || showcaseUnit.image)
+                              );
+                              if (memberInMeta) {
+                                memberInMeta.name = trimmed;
+                              }
+                              storeMeta(meta);
+                            }
+                            setForceUpdateToggle(prev => prev + 1);
+                          }
+                        }}
+                        title="Save Name"
+                        style={{
+                          background: 'linear-gradient(135deg, #ffd700, #c9932b)',
+                          border: 'none',
+                          color: '#000000',
+                          borderRadius: '6px',
+                          padding: '6px 14px',
+                          fontSize: '0.85rem',
+                          fontWeight: '700',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setIsEditingName(false)}
+                        title="Cancel"
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          color: '#aaaaaa',
+                          borderRadius: '6px',
+                          padding: '6px 10px',
+                          fontSize: '0.85rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <h2 className="crew-showcase-name">{showcaseUnit.name}</h2>
+                      <button
+                        onClick={() => {
+                          setEditNameVal(showcaseUnit.name || '');
+                          setIsEditingName(true);
+                        }}
+                        title="Rename Unit"
+                        style={{
+                          background: 'rgba(212, 168, 68, 0.15)',
+                          border: '1px solid rgba(212, 168, 68, 0.4)',
+                          color: '#ffd700',
+                          borderRadius: '6px',
+                          padding: '4px 10px',
+                          fontSize: '0.78rem',
+                          cursor: 'pointer',
+                          fontWeight: '600',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(212, 168, 68, 0.3)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(212, 168, 68, 0.15)'}
+                      >
+                        ✏️ Rename
+                      </button>
+                    </div>
+                  )}
+                  <div className="crew-showcase-type-tag">
+                    {showcaseUnit.type || showcaseUnit.class || 'HERO'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Body Content */}
+              <div className="crew-showcase-body">
+                {/* Background Info Panel */}
+                <div className="crew-showcase-panel lore-panel">
+                  <h3 className="crew-showcase-panel-title">
+                    <span className="panel-icon">📜</span> Background & Lore
+                  </h3>
+                  <p className="crew-showcase-lore-text">{description}</p>
+                </div>
+
+                {/* Stats Panel */}
+                <div className="crew-showcase-panel stats-panel">
+                  <h3 className="crew-showcase-panel-title">
+                    <span className="panel-icon">⚔️</span> Attributes & Stats
+                  </h3>
+                  <div className="crew-showcase-stats-grid">
+                    {renderStatBar('Strength (STR)', stats.str, 10, '#e63946')}
+                    {renderStatBar('Intelligence (INT)', stats.int, 10, '#457b9d')}
+                    {renderStatBar('Dexterity (DEX)', stats.dex, 10, '#2a9d8f')}
+                    {renderStatBar('Fortitude (FORT)', stats.fort, 10, '#f4a261')}
+                    {renderStatBar('Base Health (HP)', stats.baseHp, 60, '#e76f51')}
+                  </div>
+                </div>
+
+                {/* Skills & Passives Panel */}
+                <div className="crew-showcase-panel skills-panel">
+                  <h3 className="crew-showcase-panel-title">
+                    <span className="panel-icon">✨</span> Active Skills & Passives
+                  </h3>
+                  <div className="crew-showcase-skills-list">
+                    {allSkillKeys.length === 0 ? (
+                      <p style={{ color: '#a1a1a6', margin: 0, fontSize: '0.85rem' }}>
+                        No specific skills recorded for this unit.
+                      </p>
+                    ) : (
+                      allSkillKeys.map((skKey, idx) => {
+                        const skDef = skillsMatrix[skKey] || {
+                          id: skKey,
+                          name: String(skKey).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                          desc: 'Special combat ability or passive perk.',
+                          isPassive: skKey.includes('passive') || rawPassives.includes(skKey)
+                        };
+                        return (
+                          <div key={idx} className="crew-showcase-skill-card">
+                            {skDef.icon ? (
+                              <img src={skDef.icon} alt={skDef.name} className="skill-card-icon" />
+                            ) : (
+                              <div className="skill-card-icon-placeholder">✨</div>
+                            )}
+                            <div className="skill-card-info">
+                              <div className="skill-card-header">
+                                <span className="skill-card-name">{skDef.name || skKey}</span>
+                                <span className={`skill-card-tag ${skDef.isPassive ? 'passive' : 'active'}`}>
+                                  {skDef.isPassive ? 'PASSIVE' : 'ACTIVE'}
+                                </span>
+                              </div>
+                              <p className="skill-card-desc">
+                                {skDef.desc || skDef.description || 'Special class ability.'}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

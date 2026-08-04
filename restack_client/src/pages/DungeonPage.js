@@ -515,30 +515,39 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                 
                 let title = "Preparation Completed";
                 let emoji = "⚙️";
+                let customImg = null;
                 let note = "The prepared upgrades and effects are now active.";
 
                 if (actionType === 'tactics') {
                     title = "Tactic Prepared";
-                    emoji = "🛡️";
-                    note = "Your combat formation and battlefield tactics are now ready.";
+                    customImg = images.astral_map_monk || images.shortsword;
+                    note = "Your combat formation and battlefield tactics are active for upcoming encounters.";
+                } else if (actionType === 'sharpen_blades' || actionType === 'sharpen') {
+                    title = "Blades Sharpened";
+                    customImg = images.shortsword;
+                    note = "Weapons are razor-sharp. Bonus attack damage is active for your next combats.";
                 } else if (actionType === 'compound' || actionType === 'brew') {
                     title = "Alchemy Complete";
-                    emoji = "🧪";
-                    note = "Potions and compounds have been brewed and stored in your supplies.";
+                    customImg = images.potion || images.minor_health_potion;
+                    note = "Potions and alchemy compounds have been brewed and added to your supplies.";
                 } else if (actionType === 'inner_discipline') {
                     title = "Training Complete";
-                    emoji = "🧘";
+                    customImg = images.monk_meditate;
                     note = "Inner discipline training has completed and passive bonuses are active.";
                 } else if (actionType === 'glyph') {
                     title = "Glyph Etched";
-                    emoji = "🌀";
+                    customImg = images.supreme_glyph || images.glyph;
                     note = "The runic glyph is fully charged and ready to discharge in combat.";
                 }
 
                 return (
                     <div className="prep-complete-zone">
                         <div className="prep-complete-icon">
-                            <span role="img" aria-label={title}>{emoji}</span>
+                            {customImg ? (
+                                <img src={customImg} alt={title} className="prep-complete-custom-img" />
+                            ) : (
+                                <span role="img" aria-label={title}>{emoji}</span>
+                            )}
                         </div>
                         <h3 className="prep-complete-title">{title}</h3>
                         <div className="prep-complete-card">
@@ -551,25 +560,49 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                 );
             })()}
 
-            {modalType === 'RitualComplete' && (
-                <div className="ritual-complete-zone">
-                    <div className="ritual-complete-icon"><span role="img" aria-label="sparkles">✨</span></div>
-                    <h3 className="ritual-complete-title">Ritual Complete</h3>
-                    {(updates || []).map((update, i) => (
-                        <div key={i} className="ritual-complete-text">{update.text}</div>
-                    ))}
-                    <p className="ritual-complete-note">The ritual is now ready to use in combat.</p>
-                </div>
-            )}
+            {modalType === 'RitualComplete' && (() => {
+                const customImg = images.minor_glyph || images.glyph;
+                return (
+                    <div className="ritual-complete-zone">
+                        <div className="prep-complete-icon">
+                            {customImg ? (
+                                <img src={customImg} alt="Ritual Complete" className="prep-complete-custom-img" />
+                            ) : (
+                                <span role="img" aria-label="sparkles">✨</span>
+                            )}
+                        </div>
+                        <h3 className="ritual-complete-title">Ritual Complete</h3>
+                        <div className="prep-complete-card">
+                            {(updates || []).map((update, i) => (
+                                <p key={i} className="ritual-complete-text">{update.text}</p>
+                            ))}
+                        </div>
+                        <p className="ritual-complete-note">The sacred ritual is fully attuned and ready to unleash in combat.</p>
+                    </div>
+                );
+            })()}
 
-            {modalType === 'FoodComplete' && (
-                <div className="food-complete-zone">
-                    <div className="food-complete-icon"><span role="img" aria-label="meat">🍖</span></div>
-                    <h3 className="food-complete-title">Food Ready!</h3>
-                    {(updates || []).map((u, i) => <div key={i} className="food-complete-text">{u.text}</div>)}
-                    <p className="food-complete-note">Food has been added to your supplies.</p>
-                </div>
-            )}
+            {modalType === 'FoodComplete' && (() => {
+                const customImg = images.camp || images.brew_meat || images.food;
+                return (
+                    <div className="food-complete-zone">
+                        <div className="prep-complete-icon">
+                            {customImg ? (
+                                <img src={customImg} alt="Food Prepared" className="prep-complete-custom-img" />
+                            ) : (
+                                <span role="img" aria-label="meat">🍖</span>
+                            )}
+                        </div>
+                        <h3 className="food-complete-title">Food Prepared</h3>
+                        <div className="prep-complete-card">
+                            {(updates || []).map((u, i) => (
+                                <p key={i} className="food-complete-text">{u.text}</p>
+                            ))}
+                        </div>
+                        <p className="food-complete-note">Nourishing food supplies have been added to your party inventory.</p>
+                    </div>
+                );
+            })()}
 
             {modalType === 'Magic' && (
                 <div className="ritual-encounter-zone">
@@ -1571,17 +1604,19 @@ class DungeonPage extends React.Component {
                         {action.subTypes && action.subTypes.map((subType, j) => {
                             const subTypeIcon = subType.iconUrl ? (typeof subType.iconUrl === 'object' ? (subType.iconUrl.default || '') : subType.iconUrl) : null;
                             const subTypeDiscDef = subType.disciplineKey ? INNER_DISCIPLINES[subType.disciplineKey] : null;
-                            const subTypeTooltip = subTypeDiscDef ? `${subTypeDiscDef.name}\n${subTypeDiscDef.description}\n⏱ ${Math.round(subTypeDiscDef.prepTime / 60000)} min prep${subTypeDiscDef.combatDuration ? ` · ⚔ ${subTypeDiscDef.combatDuration} combats` : ''}${subTypeDiscDef.category === 'chi' ? ` · 🧘 Max ${subTypeDiscDef.maxCharges || 3} charges` : ''}\n"${subTypeDiscDef.flavorText}"` : undefined;
+                            const subTypeTacticDef = subType.tacticKey ? BATTLE_TACTICS[subType.tacticKey] : null;
+                            const subTypeTooltip = subTypeDiscDef ? `${subTypeDiscDef.name}\n${subTypeDiscDef.description}\n⏱ ${Math.round(subTypeDiscDef.prepTime / 60000)} min prep${subTypeDiscDef.combatDuration ? ` · ⚔ ${subTypeDiscDef.combatDuration} combats` : ''}${subTypeDiscDef.category === 'chi' ? ` · 🧘 Max ${subTypeDiscDef.maxCharges || 3} charges` : ''}\n"${subTypeDiscDef.flavorText}"`
+                            : (subTypeTacticDef ? `${subTypeTacticDef.name}\n${subTypeTacticDef.description}\n⏱ ${Math.round(subTypeTacticDef.prepTime / 60000)} min prep · ⚔ ${subTypeTacticDef.combatDuration} combats · ✦ +${Math.round((subTypeTacticDef.xpMultiplier - 1) * 100)}% XP\n"${subTypeTacticDef.flavorText}"` : undefined);
                             return (
                                 <React.Fragment key={j}>
                                     <div onClick={() => this.handleActionSubtypeClick(action, subType)}
                                         title={subTypeTooltip}
                                         className={`action-subtype ${this.getSubtypeClass(subType, maximumReached)} ${action.type === 'glyph' && this.state.glyphBuilderOpen === subType.glyphTier ? 'active-tier' : ''} ${subType.isCategory && this.state.innerDisciplineCategoryOpen === subType.categoryKey ? 'active-tier' : ''} ${!subType.isCategory && subType.disciplineKey && this.state.innerDisciplineSelected === subType.disciplineKey ? 'active-tier' : ''}`}
-                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '6px 8px', boxSizing: 'border-box', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left' }}
+                                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px 6px', boxSizing: 'border-box', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left' }}
                                     >
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', textAlign: 'left' }}>
-                                            {subTypeIcon && <img src={subTypeIcon} alt="" style={{ width: 18, height: 18, objectFit: 'contain', flexShrink: 0 }} />}
-                                            <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left' }}>{subType.type}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0, flex: 1, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', textAlign: 'left' }}>
+                                            {subTypeIcon && <img src={subTypeIcon} alt="" style={{ width: 16, height: 16, objectFit: 'contain', flexShrink: 0 }} />}
+                                            <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left', fontSize: '11px' }}>{subType.type}</span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                                             {subType.count !== 0 && this.getSubtypeImageCountElement(subType)}
@@ -1931,44 +1966,6 @@ class DungeonPage extends React.Component {
                                 {matchedBrew ? `Brew: ${matchedBrew.name}` : (brewSlots.length === 0 ? 'Select ingredients above' : 'No matching recipe')}
                             </button>
                         </div>
-                        );
-                    })()}
-                    {/* ── Battle Tactics picker (Soldier) ───────────────────────────── */}
-                    {action.type === 'tactics' && this.state.tacticsBuilderOpen && (() => {
-                        const selectedTactic = this.state.tacticsBuilderSelected;
-                        const tacticDef = selectedTactic ? BATTLE_TACTICS[selectedTactic] : null;
-                        const activeTactic = (this.state.selectedCrewMember?.specialActions || []).find(a => a.type === 'tactics');
-                        const isBusy = activeTactic && new Date(activeTactic.endDate) > new Date();
-                        return (
-                            <div className="compound-builder-panel tactics-builder-panel">
-                                {/* Tactic details */}
-                                {tacticDef && (
-                                    <div className="tactics-detail">
-                                        <div className="tactics-detail-name">{tacticDef.name}</div>
-                                        <div className="tactics-detail-desc">{tacticDef.description}</div>
-                                        <div className="tactics-detail-meta">
-                                            <span>⏱ {Math.round(tacticDef.prepTime / 60000)} min prep</span>
-                                            <span>⚔ {tacticDef.combatDuration} combat{tacticDef.combatDuration !== 1 ? 's' : ''}</span>
-                                            <span>✦ +{Math.round((tacticDef.xpMultiplier - 1) * 100)}% XP</span>
-                                        </div>
-                                        <div className="tactics-detail-flavor">{tacticDef.flavorText}</div>
-                                    </div>
-                                )}
-                                {!tacticDef && (
-                                    <div className="tactics-placeholder">Select a tactic above to see details.</div>
-                                )}
-                                <button
-                                    className={`compound-brew-btn ${tacticDef && !isBusy ? 'ready' : 'disabled'}`}
-                                    disabled={!tacticDef || isBusy}
-                                    onClick={() => this.handleTacticsCommit(selectedTactic)}
-                                >
-                                    {isBusy
-                                        ? `Preparing: ${activeTactic.name}…`
-                                        : tacticDef
-                                            ? `Commit to ${tacticDef.name}`
-                                            : 'Select a tactic first'}
-                                </button>
-                            </div>
                         );
                     })()}
                     </div>
@@ -6392,8 +6389,8 @@ class DungeonPage extends React.Component {
                                             const isPortal   = type === 'dungeon_portal' || type === 'dungeon portal';
                                             const isItem     = type === 'item' && !CHEST_SUBTYPES.has(subtype);
                                             const icon = t.image
-                                                ? (images[t.image] || t.image)
-                                                : (images[subtype] || images[type] || null);
+                                                ? (images[t.image] || images[`${t.image}_portrait`] || (typeof t.image === 'string' && t.image.includes('/') ? t.image : null))
+                                                : (images[subtype] || images[`${subtype}_portrait`] || images[type] || images[`${type}_portrait`] || null);
                                             const label = isGate
                                                 ? (type || 'Gate').replace(/_/g, ' ')
                                                 : isSpawn
@@ -6802,6 +6799,7 @@ class DungeonPage extends React.Component {
                                 return m;
                             });
                         }
+                        meta.resolve = 100;
                         try { storeMeta(meta); } catch(e){}
                         try { updateUserRequest(getUserId(), meta).catch(()=>{}); } catch(e){}
                         try { if (typeof this.props.saveUserData === 'function') this.props.saveUserData(); } catch(e){}
@@ -6813,7 +6811,7 @@ class DungeonPage extends React.Component {
                             }
                             this.forceUpdate();
                         } catch(e){}
-                        this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'All crew restored to full health'], devConsoleInput: '' }));
+                        this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'All crew restored to full health & Resolve set to 100'], devConsoleInput: '' }));
                     } catch (err) {
                         this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error: ${err && err.message ? err.message : err}`], devConsoleInput: '' }));
                     }
@@ -11609,10 +11607,9 @@ class DungeonPage extends React.Component {
             }
             return;
         }
-        // For tactics: select/deselect a tactic in the builder panel
+        // For tactics: commit directly on click (like monk disciplines)
         if (action.type === 'tactics' && subType.tacticKey) {
-            const current = this.state.tacticsBuilderSelected;
-            this.setState({ tacticsBuilderSelected: current === subType.tacticKey ? null : subType.tacticKey });
+            this.handleTacticsCommit(subType.tacticKey);
             return;
         }
         // For inner discipline: handle category expansion + child selection
@@ -15301,6 +15298,7 @@ class DungeonPage extends React.Component {
 
                             return <Tile 
                             key={i}
+                            debugMode={this.state.debugMode}
                             isPlayerTile={isPlayerTile}
                             hasLivingSummoner={hasLivingSummoner}
                             playerImgKey={playerImgKey}
