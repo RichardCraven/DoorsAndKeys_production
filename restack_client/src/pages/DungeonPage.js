@@ -515,30 +515,39 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                 
                 let title = "Preparation Completed";
                 let emoji = "⚙️";
+                let customImg = null;
                 let note = "The prepared upgrades and effects are now active.";
 
                 if (actionType === 'tactics') {
                     title = "Tactic Prepared";
-                    emoji = "🛡️";
-                    note = "Your combat formation and battlefield tactics are now ready.";
+                    customImg = images.astral_map_monk || images.shortsword;
+                    note = "Your combat formation and battlefield tactics are active for upcoming encounters.";
+                } else if (actionType === 'sharpen_blades' || actionType === 'sharpen') {
+                    title = "Blades Sharpened";
+                    customImg = images.shortsword;
+                    note = "Weapons are razor-sharp. Bonus attack damage is active for your next combats.";
                 } else if (actionType === 'compound' || actionType === 'brew') {
                     title = "Alchemy Complete";
-                    emoji = "🧪";
-                    note = "Potions and compounds have been brewed and stored in your supplies.";
+                    customImg = images.potion || images.minor_health_potion;
+                    note = "Potions and alchemy compounds have been brewed and added to your supplies.";
                 } else if (actionType === 'inner_discipline') {
                     title = "Training Complete";
-                    emoji = "🧘";
+                    customImg = images.monk_meditate;
                     note = "Inner discipline training has completed and passive bonuses are active.";
                 } else if (actionType === 'glyph') {
                     title = "Glyph Etched";
-                    emoji = "🌀";
+                    customImg = images.supreme_glyph || images.glyph;
                     note = "The runic glyph is fully charged and ready to discharge in combat.";
                 }
 
                 return (
                     <div className="prep-complete-zone">
                         <div className="prep-complete-icon">
-                            <span role="img" aria-label={title}>{emoji}</span>
+                            {customImg ? (
+                                <img src={customImg} alt={title} className="prep-complete-custom-img" />
+                            ) : (
+                                <span role="img" aria-label={title}>{emoji}</span>
+                            )}
                         </div>
                         <h3 className="prep-complete-title">{title}</h3>
                         <div className="prep-complete-card">
@@ -551,25 +560,49 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                 );
             })()}
 
-            {modalType === 'RitualComplete' && (
-                <div className="ritual-complete-zone">
-                    <div className="ritual-complete-icon"><span role="img" aria-label="sparkles">✨</span></div>
-                    <h3 className="ritual-complete-title">Ritual Complete</h3>
-                    {(updates || []).map((update, i) => (
-                        <div key={i} className="ritual-complete-text">{update.text}</div>
-                    ))}
-                    <p className="ritual-complete-note">The ritual is now ready to use in combat.</p>
-                </div>
-            )}
+            {modalType === 'RitualComplete' && (() => {
+                const customImg = images.minor_glyph || images.glyph;
+                return (
+                    <div className="ritual-complete-zone">
+                        <div className="prep-complete-icon">
+                            {customImg ? (
+                                <img src={customImg} alt="Ritual Complete" className="prep-complete-custom-img" />
+                            ) : (
+                                <span role="img" aria-label="sparkles">✨</span>
+                            )}
+                        </div>
+                        <h3 className="ritual-complete-title">Ritual Complete</h3>
+                        <div className="prep-complete-card">
+                            {(updates || []).map((update, i) => (
+                                <p key={i} className="ritual-complete-text">{update.text}</p>
+                            ))}
+                        </div>
+                        <p className="ritual-complete-note">The sacred ritual is fully attuned and ready to unleash in combat.</p>
+                    </div>
+                );
+            })()}
 
-            {modalType === 'FoodComplete' && (
-                <div className="food-complete-zone">
-                    <div className="food-complete-icon"><span role="img" aria-label="meat">🍖</span></div>
-                    <h3 className="food-complete-title">Food Ready!</h3>
-                    {(updates || []).map((u, i) => <div key={i} className="food-complete-text">{u.text}</div>)}
-                    <p className="food-complete-note">Food has been added to your supplies.</p>
-                </div>
-            )}
+            {modalType === 'FoodComplete' && (() => {
+                const customImg = images.camp || images.brew_meat || images.food;
+                return (
+                    <div className="food-complete-zone">
+                        <div className="prep-complete-icon">
+                            {customImg ? (
+                                <img src={customImg} alt="Food Prepared" className="prep-complete-custom-img" />
+                            ) : (
+                                <span role="img" aria-label="meat">🍖</span>
+                            )}
+                        </div>
+                        <h3 className="food-complete-title">Food Prepared</h3>
+                        <div className="prep-complete-card">
+                            {(updates || []).map((u, i) => (
+                                <p key={i} className="food-complete-text">{u.text}</p>
+                            ))}
+                        </div>
+                        <p className="food-complete-note">Nourishing food supplies have been added to your party inventory.</p>
+                    </div>
+                );
+            })()}
 
             {modalType === 'Magic' && (
                 <div className="ritual-encounter-zone">
@@ -15265,6 +15298,7 @@ class DungeonPage extends React.Component {
 
                             return <Tile 
                             key={i}
+                            debugMode={this.state.debugMode}
                             isPlayerTile={isPlayerTile}
                             hasLivingSummoner={hasLivingSummoner}
                             playerImgKey={playerImgKey}

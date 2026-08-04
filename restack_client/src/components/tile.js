@@ -262,7 +262,7 @@ function Tile(props) {
     };
 
     const isWallOrVoidOrDarkNeighbor = (neighborTile) => {
-        if (!neighborTile) return false;
+        if (!neighborTile) return true;
         if (isVoidContains(neighborTile.contains)) return true;
         if (isBlackRenderedTile(neighborTile.contains, neighborTile.color)) return true;
         const cType = getContainsType(neighborTile.contains);
@@ -321,6 +321,21 @@ function Tile(props) {
                                  props.optionType === 'monster';
 
     const isBlackTile = isBlackRenderedTile(currentContains, currentTileColor);
+
+    const isDebugMode = !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
+
+    const topIsShaded = isWallOrVoidOrDarkNeighbor(topNeighbor);
+    const bottomIsShaded = isWallOrVoidOrDarkNeighbor(bottomNeighbor);
+    const leftIsShaded = isWallOrVoidOrDarkNeighbor(leftNeighbor);
+    const rightIsShaded = isWallOrVoidOrDarkNeighbor(rightNeighbor);
+
+    const fogShadows = [];
+    if (topIsShaded) fogShadows.push('inset 0 8px 10px -2px rgba(0,0,0,0.85)');
+    if (bottomIsShaded) fogShadows.push('inset 0 -8px 10px -2px rgba(0,0,0,0.85)');
+    if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0,0,0,0.85)');
+    if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0,0,0,0.85)');
+
+    const fogEdgeBoxShadow = (isDebugMode && isBoardGridTile && !isBlackTile && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
 
     const isNearbyMonster = (() => {
         if (!isMonsterOrPygmyTile) return false;
@@ -927,6 +942,20 @@ function Tile(props) {
                     pointerEvents: 'none',
                     opacity: color === 'black' ? 0 : 1,
                     transition: 'opacity 0.08s ease-in-out'
+                }} />
+           )}
+
+           {/* Fog of war / void edge shading (gradient shadow along unrevealed fog/void boundaries) — Active when Debug Mode is ON */}
+           { fogEdgeBoxShadow !== 'none' && (
+                <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    boxShadow: fogEdgeBoxShadow,
+                    zIndex: 26,
+                    pointerEvents: 'none'
                 }} />
            )}
 
