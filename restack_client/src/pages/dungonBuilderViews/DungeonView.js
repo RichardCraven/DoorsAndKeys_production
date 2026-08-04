@@ -644,6 +644,11 @@ class DungeonView extends React.Component {
                                                              > 
                                                                  {board.tiles && board.tiles.map((tile, tileIdx) => {
                                                                  const isPortal = tile.contains && (tile.contains.type === 'dungeon_portal' || tile.contains.type === 'dungeon portal');
+                                                                 const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                                                                 const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                                                                (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                                                                 const tileColor = isVoid ? 'black' : (storedColor || '#6b6057');
+
                                                                  return <Tile
                                                                  key={tileIdx}
                                                                  id={tile.id}
@@ -656,7 +661,8 @@ class DungeonView extends React.Component {
                                                                  boardTiles={board.tiles}
                                                                  image={tile.image ? tile.image : null}
                                                                  imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                                                 color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
+                                                                 color={tileColor}
+                                                                 borders={tile.borders}
                                                                  coordinates={tile.coordinates}
                                                                  index={tile.id}
                                                                  showCoordinates={false}
@@ -737,6 +743,11 @@ class DungeonView extends React.Component {
                                                             > 
                                                                 {board.tiles && board.tiles.map((tile, tileIdx) => {
                                                                 const isPortal = tile.contains && (tile.contains.type === 'dungeon_portal' || tile.contains.type === 'dungeon portal');
+                                                                const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                                                                const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                                                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                                                                const tileColor = isVoid ? 'black' : (storedColor || '#6b6057');
+
                                                                 return <Tile
                                                                 key={tileIdx}
                                                                 connectedEdge={this.hasLinedUpConnection(level.back.miniboards, boardIdx, tileIdx)}
@@ -749,7 +760,8 @@ class DungeonView extends React.Component {
                                                                 boardTiles={board.tiles}
                                                                 image={tile.image ? tile.image : null}
                                                                 imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                                                color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
+                                                                color={tileColor}
+                                                                borders={tile.borders}
                                                                 coordinates={tile.coordinates}
                                                                 index={tile.id}
                                                                 showCoordinates={false}

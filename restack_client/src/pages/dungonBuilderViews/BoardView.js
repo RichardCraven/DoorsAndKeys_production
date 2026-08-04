@@ -315,6 +315,7 @@ class BoardView extends React.Component {
                         backgroundImage: `url(${this.props.floorTexture || DEFAULT_FLOOR_TEXTURE})`,
                         backgroundRepeat: 'repeat',
                         backgroundSize: '350px 350px',
+                        boxShadow: 'inset 0 0 14px 4px rgba(0, 0, 0, 0.85)'
                         }}>
                         {this.props.tiles && this.props.tiles.map((tile, i) => {
                             const isHovered = (hoveredTileFootprint.length > 0 && hoveredTileFootprint.includes(tile.id)) || this.props.hoveredTileIdx === tile.id;

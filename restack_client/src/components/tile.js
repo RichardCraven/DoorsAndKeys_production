@@ -261,6 +261,15 @@ function Tile(props) {
         return 'transparent';
     };
 
+    const isWallOrVoidOrDarkNeighbor = (neighborTile) => {
+        if (!neighborTile) return false;
+        if (isVoidContains(neighborTile.contains)) return true;
+        if (isBlackRenderedTile(neighborTile.contains, neighborTile.color)) return true;
+        const cType = getContainsType(neighborTile.contains);
+        if (cType === 'wall' || cType === 'void' || neighborTile.isWall || neighborTile.isVoid) return true;
+        return false;
+    };
+
     const topNeighbor = getNeighborTile(-15);
     const leftNeighbor = getNeighborTile(-1);
     const rightNeighbor = getNeighborTile(1);

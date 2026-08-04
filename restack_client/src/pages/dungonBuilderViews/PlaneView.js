@@ -166,7 +166,12 @@ class PlaneView extends React.Component {
                                         draggable
                                         >
                                         {this.props.showPlanesNames && <div className="plane-name">{board.name}</div>}
-                                        {board.tiles && board.tiles.map((tile, i) => {
+                                         {board.tiles && board.tiles.map((tile, i) => {
+                                             const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                                             const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                                            (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                                             const tileColor = isVoid ? 'black' : (storedColor || '#6b6057');
+
                                             return <Tile
                                             key={i}
                                             id={i}
@@ -174,9 +179,11 @@ class PlaneView extends React.Component {
                                             connectedEdge={this.hasLinedUpConnection(this.props.miniboards, boardIndex, i)}
                                             tileSize={((this.props.tileSize*15)/3-2)/15}
                                             contains={tile.contains}
+                                            boardTiles={board.tiles}
                                             image={tile.image ? tile.image : null}
                                             imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                            color={tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : '#6b6057'} borders={tile.borders}
+                                            color={tileColor}
+                                            borders={tile.borders}
                                             coordinates={tile.coordinates}
                                             index={tile.id}
                                             showCoordinates={false}
@@ -184,9 +191,7 @@ class PlaneView extends React.Component {
                                             handleHover={null}
                                             handleClick={null}
                                             type={tile.type}
-                                            hovered={
-                                            false
-                                            }
+                                            hovered={false}
                                             />
                                         })}
                                         </div>
