@@ -6763,7 +6763,7 @@ class DungeonPage extends React.Component {
             right: ["minimap", "status_summary", "crew_list", "quick_actions", "poi", "toggles"]
         };
         let sections = [...(panelConfig[panelKey] || [])];
-        const isMobileOrTablet = window.matchMedia("(max-width: 1024px)").matches;
+        const isMobileOrTablet = (typeof window !== 'undefined' && typeof window.matchMedia === 'function') ? window.matchMedia("(max-width: 1024px)").matches : false;
         if (isMobileOrTablet) {
             if (panelKey === 'right' && !sections.includes('mobile_keypad')) {
                 const minimapIndex = sections.indexOf('minimap');

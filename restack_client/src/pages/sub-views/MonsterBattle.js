@@ -1883,6 +1883,15 @@ class MonsterBattle extends React.Component {
                     });
                 } catch (e) { }
                 // Use latest liveCrew snapshot when awarding experience
+                // ── Leader's Doctrine: +10% XP when the party leader survives the battle ──
+                try {
+                    const leaderInLiveCrew = liveCrew.find(c => c && c.isLeader);
+                    if (leaderInLiveCrew) {
+                        const doctrineBonus = Math.round(experienceGained * 0.10);
+                        experienceGained += doctrineBonus;
+                        console.log(`[Leader's Doctrine] Leader survived — +${doctrineBonus} XP bonus. Total: ${experienceGained}`);
+                    }
+                } catch (e) { console.warn('[Leader\'s Doctrine] XP bonus failed', e); }
                 try { this.props.crewManager.addExperience(liveCrew, experienceGained); } catch (e) { console.warn('addExperience failed', e); }
                 // ── Battle Tactics: decrement combatsRemaining after this victory ──
                 try {

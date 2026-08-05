@@ -442,6 +442,7 @@ export default function NarrativeSequence(props) {
 
   return (
     <div className="intro-pane pane">
+      <div className="intro-image-frame">
         {currentOddSequence && <img 
          alt=""
          className={`intro-image ${wreckImage ? 'wrecked' : ''} ${moreWrecked ? 'more-wrecked' : ''}`}
@@ -450,7 +451,7 @@ export default function NarrativeSequence(props) {
             (currentSequence && currentSequence.id%2===1 ? 1 : (fadeOutLastFrame ? 0 : 0))}}  
          />}
 
-         {currentEvenSequence && <img 
+        {currentEvenSequence && <img 
          alt=""
          className={`intro-image ${wreckImage ? 'wrecked' : ''} ${moreWrecked ? 'more-wrecked' : ''}`}
          src={currentEvenSequence.image}
@@ -459,6 +460,7 @@ export default function NarrativeSequence(props) {
             (currentSequence && currentSequence.id%2===0 && fadeInFirstFrame ? 1 : 0)
         }}  
          />}
+      </div>
 
          {currentSequence && currentSequence.id%2===0 && <div 
          key={currentSequence.id}

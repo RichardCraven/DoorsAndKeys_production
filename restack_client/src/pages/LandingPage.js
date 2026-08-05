@@ -661,7 +661,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.3.6 BETA</span>
+          <span className="logo-subtitle">v 0.3.7 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">
@@ -976,7 +976,7 @@ export default function LandingPage(props) {
                   No dungeon instances found.
                 </div>
               ) : (
-                 instancesList.map((inst) => {
+                instancesList.map((inst) => {
                   const isCurrentActive = getMeta()?.dungeonId === inst.id;
                   return (
                     <div
@@ -1092,6 +1092,7 @@ export default function LandingPage(props) {
                                 <thead>
                                   <tr style={{ borderBottom: '1px solid rgba(212, 168, 68, 0.25)', textAlign: 'left' }}>
                                     <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600' }}>Player</th>
+                                    <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600' }}>Leader</th>
                                     <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600' }}>Entered</th>
                                     <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600', textAlign: 'right' }}>Time Remaining</th>
                                   </tr>
@@ -1099,10 +1100,10 @@ export default function LandingPage(props) {
                                 <tbody>
                                   {registeredUsers.map(u => {
                                     const uMeta = JSON.parse(u.metadata);
-                                    const entryTimeStr = uMeta.dungeonEntryTimestamp 
-                                      ? new Date(uMeta.dungeonEntryTimestamp).toLocaleString() 
+                                    const entryTimeStr = uMeta.dungeonEntryTimestamp
+                                      ? new Date(uMeta.dungeonEntryTimestamp).toLocaleString()
                                       : 'N/A';
-                                      
+
                                     let timeRemainingStr = 'N/A';
                                     let isExpired = false;
                                     if (uMeta.dungeonEntryTimestamp) {
@@ -1119,21 +1120,45 @@ export default function LandingPage(props) {
                                         timeRemainingStr = `${days}d ${hours}h`;
                                       }
                                     }
-                                    
-                                    return (
-                                      <tr key={u._id} style={{ borderBottom: '1px solid rgba(120, 113, 108, 0.15)' }}>
-                                        <td style={{ padding: '8px 8px', fontWeight: '600', color: '#ffffff', textAlign: 'left' }}>{u.username}</td>
-                                        <td style={{ padding: '8px 8px', textAlign: 'left' }}>{entryTimeStr}</td>
-                                        <td style={{ 
-                                          padding: '8px 8px', 
-                                          textAlign: 'right', 
-                                          color: isExpired ? '#ef4444' : '#10b981', 
-                                          fontWeight: '700' 
-                                        }}>
-                                          {timeRemainingStr}
-                                        </td>
-                                      </tr>
-                                    );
+
+                                    return (() => {
+                                      let leaderDisplay = '—';
+                                      try {
+                                        const metaCrew = Array.isArray(uMeta.crew) ? uMeta.crew : [];
+                                        const leaderEntry = metaCrew.find(m => m && m.isLeader);
+                                        if (leaderEntry) {
+                                          const cls = (leaderEntry.type || leaderEntry.image || '').toLowerCase();
+                                          leaderDisplay = cls ? cls.charAt(0).toUpperCase() + cls.slice(1) : '?';
+                                        }
+                                      } catch (e) {}
+                                      return (
+                                        <tr key={u._id} style={{ borderBottom: '1px solid rgba(120, 113, 108, 0.15)' }}>
+                                          <td style={{ padding: '8px 8px', fontWeight: '600', color: '#ffffff', textAlign: 'left' }}>{u.username}</td>
+                                          <td style={{ padding: '8px 8px', textAlign: 'left' }}>
+                                            <span style={{
+                                              display: 'inline-block',
+                                              background: leaderDisplay !== '—' ? 'rgba(212,168,68,0.12)' : 'transparent',
+                                              border: leaderDisplay !== '—' ? '1px solid rgba(212,168,68,0.35)' : 'none',
+                                              color: leaderDisplay !== '—' ? '#e5b54f' : '#6b7280',
+                                              borderRadius: '4px',
+                                              padding: '1px 7px',
+                                              fontSize: '0.7rem',
+                                              fontWeight: '700',
+                                              letterSpacing: '0.5px',
+                                            }}>{leaderDisplay}</span>
+                                          </td>
+                                          <td style={{ padding: '8px 8px', textAlign: 'left' }}>{entryTimeStr}</td>
+                                          <td style={{
+                                            padding: '8px 8px',
+                                            textAlign: 'right',
+                                            color: isExpired ? '#ef4444' : '#10b981',
+                                            fontWeight: '700'
+                                          }}>
+                                            {timeRemainingStr}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })();
                                   })}
                                 </tbody>
                               </table>
@@ -1434,9 +1459,9 @@ export default function LandingPage(props) {
                   const isDungeonActive = !!(meta.dungeonId);
                   const currentMember = Array.isArray(meta.crew)
                     ? meta.crew.find(c =>
-                        (c.id && showcaseUnit.id && c.id === showcaseUnit.id) ||
-                        (c.type || c.image) === (showcaseUnit.type || showcaseUnit.image)
-                      )
+                      (c.id && showcaseUnit.id && c.id === showcaseUnit.id) ||
+                      (c.type || c.image) === (showcaseUnit.type || showcaseUnit.image)
+                    )
                     : null;
                   const selectedSpecialty = currentMember?.specialty || showcaseUnit.specialty || null;
 

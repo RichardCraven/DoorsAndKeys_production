@@ -41,6 +41,7 @@ describe('Fortify Camping Rebalance & Cooldowns', () => {
                             type: 'soldier',
                             level: 1,
                             dead: false,
+                            isLeader: true,
                             globalSkills: [{ key: 'fortify', level: 1 }]
                         }
                     ]
@@ -89,7 +90,7 @@ describe('Fortify Camping Rebalance & Cooldowns', () => {
         });
 
         await endCamp(mockComponent);
-        expect(getMeta().resolve).toBe(50 + 15 + 10); // 50 start + 15 base + 10 fortify bonus
+        expect(getMeta().resolve).toBe(50 + 15 + 10 + 5); // 50 start + 15 base + 10 fortify bonus + 5 leader fortify bonus
         mathRandomSpy.mockRestore();
     });
 

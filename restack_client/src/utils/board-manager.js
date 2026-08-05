@@ -2658,7 +2658,22 @@ export function BoardManager(){
             e.trapRevealed = false;
         });
 
-        const visibleTileIds = this.getReachableTilesWithinSteps(destinationTile.id, 2);
+        // Scout Ahead: an alive soldier leader (or any leader with rally) extends visibility from 2 → 3 tiles
+        let fogRadius = 2;
+        try {
+            const fwMeta = getMeta() || {};
+            const fwCrew = fwMeta.crew || [];
+            const fwLeader = fwCrew.find(m => m && m.isLeader && !m.dead);
+            if (fwLeader) {
+                const isLeaderSoldier = (fwLeader.type || fwLeader.image || '').toLowerCase() === 'soldier';
+                const hasRally = fwLeader.globalSkills && fwLeader.globalSkills.some(s => (typeof s === 'string' ? s : s.key) === 'rally');
+                if (isLeaderSoldier || hasRally) {
+                    fogRadius = 3;
+                }
+            }
+        } catch (e) {}
+
+        const visibleTileIds = this.getReachableTilesWithinSteps(destinationTile.id, fogRadius);
 
         // Helper: strip legacy player-position markers that should never render on the board
         const _clearPlayerMarker = (tile) => {

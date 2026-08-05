@@ -849,6 +849,9 @@ export function CombatManagerRedux() {
             } else if (e.type === 'barbarian') {
                 e.attacks = e.attacks || [];
                 if (!e.attacks.includes('sword_swing')) e.attacks.push('sword_swing');
+            } else if (e.type === 'monk') {
+                e.attacks = e.attacks || [];
+                if (!e.attacks.includes('punch') && !e.attacks.includes('monk_punch')) e.attacks.push('punch');
             }
 
             // Check if unit has archaic_rune equipped in their pet slot, grant them the summon_familiar special skill
@@ -922,6 +925,29 @@ export function CombatManagerRedux() {
                 }
             }
         } catch (e) { console.warn('[Combat] Battle Tactics buff application failed', e); }
+
+        // ── Leadership Aura: alive leader grants +2 DEF to all friendly combatants ──
+        // The aura is stripped if the leader dies (see targetKilled below).
+        try {
+            const leaderData = (this.data.crew || []).find(e => e && e.isLeader && !e.dead);
+            if (leaderData) {
+                const AURA_ROUNDS = 9999;
+                const leaderCombatant = this.combatants[leaderData.id];
+                if (leaderCombatant) {
+                    leaderCombatant.leaderAuraActive = true;
+                }
+                Object.values(this.combatants).forEach(combatant => {
+                    if (!combatant || combatant.isMonster) return;
+                    this._applyBuff(
+                        combatant,
+                        { increase_stats: { stats: [{ stat: 'def', amount: 2 }] } },
+                        'Leadership Aura',
+                        AURA_ROUNDS
+                    );
+                });
+                this.appendCombatLog(`⚔️ ${leaderData.name || 'The Leader'} inspires the party — Leadership Aura grants +2 DEF to all allies!`);
+            }
+        } catch (e) { console.warn('[Combat] Leadership Aura buff application failed', e); }
 
         const m = { ...this.data.monster };
         m.isMonster = true; // Mark as monster early so isLarge/isHuge sizing evaluates correctly for VCT occupied lanes
@@ -1545,6 +1571,7 @@ export function CombatManagerRedux() {
         const oy = unit.coordinates.y;
         unit.coordinates.x = nx;
         unit.coordinates.y = clampedY;
+        this._setCombatantOccupiedCoords(unit);
         if (unit.isSiegeUnit || unit.isSiegeArmy) {
             unit.facing = unit.isMonster ? 'left' : 'right';
         } else if (nx !== ox) {
@@ -2245,6 +2272,28 @@ export function CombatManagerRedux() {
             meta.resolve = Math.max(0, currentResolve - penalty);
             storeMeta(meta);
             this.appendCombatLog(`Resolve decreased by ${penalty}. Current Resolve: ${meta.resolve}`);
+        }
+
+        // ── Morale Collapse: if the dead target was the leader, strip Leadership Aura from all allies ──
+        if (target.leaderAuraActive) {
+            try {
+                Object.values(this.combatants).forEach(c => {
+                    if (!c || c.isMonster || c.dead || c.id === target.id) return;
+                    const auraIdx = (c.activeBuffs || []).findIndex(b => b.name === 'Leadership Aura');
+                    if (auraIdx !== -1) {
+                        const auraBuff = c.activeBuffs[auraIdx];
+                        this._revertBuff(c, auraBuff);
+                        c.activeBuffs.splice(auraIdx, 1);
+                    }
+                });
+                // Apply extra resolve penalty for losing the leader in combat
+                const meta = getMeta();
+                const resolveNow = (meta && typeof meta.resolve === 'number') ? meta.resolve : 100;
+                const collapsePenalty = applyResolvePenalty(5);
+                meta.resolve = Math.max(0, resolveNow - collapsePenalty);
+                storeMeta(meta);
+                this.appendCombatLog(`💔 Morale Collapse! The leader has fallen — Leadership Aura fades. Resolve −${collapsePenalty}. Current Resolve: ${meta.resolve}`);
+            } catch (e) { console.warn('[Combat] Morale Collapse failed', e); }
         }
 
         // --- Soul Tap passive skill trigger ---
@@ -3972,6 +4021,9 @@ export function CombatManagerRedux() {
             seenKeys.add(key);
 
             if (key === 'barbarian_leap_attack' && target && this.targetInRange(unit, target, 'close')) return;
+            if (key === 'monk_ethereal_speed' && unit.etherealSpeedActive) return;
+            if (key === 'monk_third_eye' && unit.thirdEyeActive) return;
+            if (key === 'monk_astral_focus' && unit.astralBeingActive) return;
             if (key === 'regenerate' && (selfHpPct >= 0.50 || unit.regenerating)) return;
             const resolved = this.resolveSpecial(unit, key);
             if (!resolved || resolved.type === 'passive' || resolved.isPassive) return;
@@ -11651,10 +11703,12 @@ export function CombatManagerRedux() {
         if (target && target.isVCT && target.parentMonsterId && this.combatants[target.parentMonsterId]) {
             target = this.combatants[target.parentMonsterId];
         }
-        const baseAttack = Array.isArray(unit.attacks) && unit.attacks.length > 0 ? unit.attacks[0] : null;
+        const baseAttack = (Array.isArray(unit.attacks) && unit.attacks.length > 0)
+            ? unit.attacks[0]
+            : (unit.type === 'monk' ? 'monk_punch' : (unit.type === 'wizard' ? 'magic_missile' : 'slash'));
         if (!baseAttack) return;
 
-        const attackKey = typeof baseAttack === 'string' ? baseAttack : baseAttack.id;
+        const attackKey = typeof baseAttack === 'string' ? baseAttack : (baseAttack ? baseAttack.id : null);
         if (attackKey && !this._abilityReady(unit, attackKey)) {
             return;
         }

@@ -1257,10 +1257,75 @@ function Tile(props) {
     )
 }
 
-// Memoize so the thousands of read-only dungeon-view tiles don't re-render on
-// every parent state change (e.g. dropdown open/close).  Tile content never
-// changes mid-render in the dungeon preview — only tileSize, image, color, and
-// coordinates matter.  All other props that Tile receives in DungeonView are
-// stable primitives (false / null / 'board-tile'), so the shallow comparison
-// is reliable and cheap.
-export default React.memo(Tile);
+export function propsAreEqual(prevProps, nextProps) {
+    if (prevProps === nextProps) return true;
+
+    const keysToCompare = [
+        'id', 'index', 'type', 'color', 'tileSize', 'hovered', 'selected',
+        'isPreview', 'passThrough', 'backgroundColor', 'terrain', 'territory',
+        'isShrine', 'isLoreTablet', 'trapRevealed', 'connectedEdge',
+        'partialObscured', 'showCoordinates', 'image', 'imageOverride',
+        'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level'
+    ];
+
+    for (let key of keysToCompare) {
+        if (prevProps[key] !== nextProps[key]) return false;
+    }
+
+    const prevContains = prevProps.contains;
+    const nextContains = nextProps.contains;
+    if (typeof prevContains !== typeof nextContains) return false;
+    if (typeof prevContains === 'object' && prevContains !== null) {
+        if (JSON.stringify(prevContains) !== JSON.stringify(nextContains)) return false;
+    } else if (prevContains !== nextContains) {
+        return false;
+    }
+
+    const prevBorders = prevProps.borders;
+    const nextBorders = nextProps.borders;
+    if (typeof prevBorders !== typeof nextBorders) return false;
+    if (typeof prevBorders === 'object' && prevBorders !== null) {
+        if (prevBorders.top !== nextBorders?.top || prevBorders.bottom !== nextBorders?.bottom ||
+            prevBorders.left !== nextBorders?.left || prevBorders.right !== nextBorders?.right) return false;
+    }
+
+    const prevCoords = prevProps.coordinates;
+    const nextCoords = nextProps.coordinates;
+    if (Array.isArray(prevCoords) && Array.isArray(nextCoords)) {
+        if (prevCoords[0] !== nextCoords[0] || prevCoords[1] !== nextCoords[1]) return false;
+    } else if (prevCoords !== nextCoords) {
+        return false;
+    }
+
+    if (prevProps.boardTiles || nextProps.boardTiles) {
+        const prevBoard = prevProps.boardTiles || [];
+        const nextBoard = nextProps.boardTiles || [];
+        if (prevBoard !== nextBoard) {
+            const tileId = (typeof prevProps.id === 'number') ? prevProps.id : ((typeof prevProps.index === 'number') ? prevProps.index : null);
+            if (tileId !== null) {
+                const x = tileId % 15;
+                const y = Math.floor(tileId / 15);
+                const neighborIndices = [];
+                if (y > 0) neighborIndices.push(tileId - 15);
+                if (y < 14) neighborIndices.push(tileId + 15);
+                if (x > 0) neighborIndices.push(tileId - 1);
+                if (x < 14) neighborIndices.push(tileId + 1);
+
+                for (let idx of neighborIndices) {
+                    const prevN = prevBoard[idx];
+                    const nextN = nextBoard[idx];
+                    if (!prevN && !nextN) continue;
+                    if (!prevN || !nextN) return false;
+                    if (prevN.color !== nextN.color) return false;
+                    if (JSON.stringify(prevN.contains) !== JSON.stringify(nextN.contains)) return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+Tile.compare = propsAreEqual;
+
+export default React.memo(Tile, propsAreEqual);

@@ -564,7 +564,7 @@ class ShrineScreen extends React.Component {
     // ── Render ────────────────────────────────────────────────────────────────
 
     render() {
-        const { shrineData } = this.props;
+        const { shrineData, crew } = this.props;
         const { phase, stoneTileMap, currentRound, totalRounds, log, outcome, showSkillSelect } = this.state;
 
         const shrineClass = shrineData && shrineData.shrineClass;
@@ -575,6 +575,11 @@ class ShrineScreen extends React.Component {
         const nextSkill = shrineData && shrineData.matchingMember
             ? this._getNextSkillForMember(shrineData.matchingMember, shrineClass)
             : null;
+
+        // Favored Offering: does the party leader's class match this shrine?
+        const leaderMember = (crew || []).find(m => m && m.isLeader);
+        const isFavoredOffering = !!(leaderMember && shrineClass &&
+            (leaderMember.type || leaderMember.image || '').toLowerCase() === shrineClass.toLowerCase());
 
         const gridW = COLS * TILE_SIZE + (COLS - 1) * 2; // with 2px borders
         const gridH = ROWS * TILE_SIZE + (ROWS - 1) * 2;
@@ -919,11 +924,35 @@ class ShrineScreen extends React.Component {
                         </div>
                         <div style={{
                             color: '#c5bba8', fontSize: '14px', fontStyle: 'italic',
-                            marginBottom: '26px', maxWidth: '340px', textAlign: 'center', lineHeight: 1.6
+                            marginBottom: isFavoredOffering ? '12px' : '26px', maxWidth: '340px', textAlign: 'center', lineHeight: 1.6
                         }}>
-                            The ancestors have heard the champion's prayer.
-                            A gift of ancient wisdom is bestowed.
+                            {isFavoredOffering
+                                ? `The ${classLabel} ancestors resonate with the voice of their kin. Their blessing runs deep.`
+                                : 'The ancestors have heard the champion\u2019s prayer. A gift of ancient wisdom is bestowed.'
+                            }
                         </div>
+
+                        {/* Favored Offering banner */}
+                        {isFavoredOffering && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                background: 'linear-gradient(90deg, rgba(201,162,39,0.12), rgba(201,162,39,0.22), rgba(201,162,39,0.12))',
+                                border: '1px solid rgba(201,162,39,0.55)',
+                                borderRadius: '8px',
+                                padding: '8px 18px',
+                                marginBottom: '20px',
+                                maxWidth: '340px',
+                                animation: 'shrine-fade-in 0.8s ease-out',
+                                boxShadow: '0 0 18px rgba(201,162,39,0.25)',
+                            }}>
+                                <span style={{ fontSize: '18px' }}>✦</span>
+                                <div>
+                                    <div style={{ color: '#f5d06e', fontSize: '12px', fontWeight: '700', letterSpacing: '1.5px', textTransform: 'uppercase' }}>Favored Offering</div>
+                                    <div style={{ color: '#b8a87a', fontSize: '11px', marginTop: '2px' }}>Leader shares this shrine's lineage — skill resonance enhanced.</div>
+                                </div>
+                                <span style={{ fontSize: '18px' }}>✦</span>
+                            </div>
+                        )}
 
                         {nextSkill ? (
                             <div

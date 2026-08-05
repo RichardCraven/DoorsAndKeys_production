@@ -65,18 +65,23 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
     let rawAttacks = [];
     let rawSpecials = [];
     const BASIC_ATTACK_KEYS = [
-        'slash', 'magic_missile', 'monk_punch', 'heal', 'loose', 
+        'slash', 'magic_missile', 'monk_punch', 'punch', 'heal', 'loose', 
         'barbarian_slash', 'sword_swing', 'axe_throw', 'summon_skeleton', 
         'claw_strike', 'claws', 'rake', 'gore_horns', 'snake_strike', 
         'grasp', 'void_lance', 'crush', 'tackle', 'major_magic_missile', 'greater_magic_missile', 
         'vampiric_bite', 'induce_madness', 'lightning', 'bite', 'gore'
     ];
 
-    if (Array.isArray(fighter.skills)) {
+    if (Array.isArray(fighter.attacks) && fighter.attacks.length > 0) {
+        rawAttacks = fighter.attacks;
+    } else if (Array.isArray(fighter.skills)) {
         rawAttacks = fighter.skills.filter(s => BASIC_ATTACK_KEYS.includes(s));
+    } else {
+        rawAttacks = [];
+    }
+    if (Array.isArray(fighter.skills)) {
         rawSpecials = fighter.skills.filter(s => !BASIC_ATTACK_KEYS.includes(s));
     } else {
-        rawAttacks = Array.isArray(fighter.attacks) ? fighter.attacks : [];
         rawSpecials = Array.isArray(fighter.specials) ? fighter.specials : [];
     }
 
