@@ -320,7 +320,8 @@ function Tile(props) {
     const containsType = getContainsType(currentContains);
     const containsSubtype = getContainsSubtype(currentContains);
     const knownMonsters = [
-        'witch', 'beholder', 'dragon', 'goblin', 'horror', 'imp', 'imp_overlord',
+        'witch', 'beholder', 'dragon', 'goblin', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef',
+        'horror', 'imp', 'imp_overlord',
         'manticore', 'mummy', 'naiad', 'ogre', 'skeleton', 'sphinx', 'troll',
         'wyvern', 'wyvern_alt', 'goloth_devil', 'zul_devil', 'mordu_devil',
         'vukular_devil', 'ishtar_devil', 'black_demon', 'goat_demon',
@@ -331,6 +332,11 @@ function Tile(props) {
     ];
 
     const resolvedPortraitUrl = (() => {
+        if (props.building) {
+            const key = String(props.building).trim().toLowerCase().replace(/[\s-]+/g, '_');
+            if (images[key]) return images[key];
+            if (images[`buildable_${key}`]) return images[`buildable_${key}`];
+        }
         if (props.imageOverride) {
             if (typeof props.imageOverride === 'string' && (props.imageOverride.includes('/') || props.imageOverride.startsWith('data:'))) {
                 return props.imageOverride;
@@ -344,6 +350,7 @@ function Tile(props) {
                 }
                 const key = props.image.trim().toLowerCase().replace(/[\s-]+/g, '_');
                 if (images[key]) return images[key];
+                if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
             } else if (typeof props.image === 'object') {
                 return props.image.default || props.image;
@@ -353,12 +360,14 @@ function Tile(props) {
             if (typeof props.contains === 'string') {
                 const key = props.contains.trim().toLowerCase().replace(/[\s-]+/g, '_');
                 if (images[key]) return images[key];
+                if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
             } else if (typeof props.contains === 'object') {
-                const sub = props.contains.subtype || props.contains.type || props.contains.name;
+                const sub = props.contains.subtype || props.contains.building || props.contains.type || props.contains.name;
                 if (sub && typeof sub === 'string') {
                     const key = sub.trim().toLowerCase().replace(/[\s-]+/g, '_');
                     if (images[key]) return images[key];
+                    if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                     if (images[`${key}_portrait`]) return images[`${key}_portrait`];
                 }
             }
@@ -665,8 +674,8 @@ function Tile(props) {
                           />
                       )}
 
-                      {/* Faint gold light source glow emanating from behind key items in the dungeon (disabled in palette/builder) */}
-                      {isKeyTile && !isBlackTile && !isBuilderTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
+                      {/* Faint gold light source glow emanating from behind key items in the dungeon (disabled in palette/builder/inventory) */}
+                      {isKeyTile && !isBlackTile && !isBuilderTile && props.type !== 'overlay-tile' && props.type !== 'inventory-tile' && props.type !== 'crew-tile' && props.type !== 'equip-slot' && !props.isInInventory && color !== 'black' && currentTileColor !== 'black' && (
                           <div 
                               className="key-portrait-glow"
                               style={{
@@ -939,17 +948,17 @@ function Tile(props) {
              {/* Connecting Path overlay */}
              { ((props.contains && props.contains.type === 'connecting_path') || props.optionType === 'connecting path') && (() => {
                    const isConnected = !!props.connectedEdge;
-                   let edge = props.connectedEdge || (props.contains && typeof props.contains === 'object' ? (props.contains.edge || props.contains.direction) : null);
+                   let edge = null;
 
-                   if (edge === 'E' || edge === 'east') edge = 'right';
-                   if (edge === 'W' || edge === 'west') edge = 'left';
-                   if (edge === 'N' || edge === 'north') edge = 'top';
-                   if (edge === 'S' || edge === 'south') edge = 'bottom';
-
-                   if (!edge && props.id !== undefined && props.id !== null) {
+                   if (props.id !== undefined && props.id !== null) {
                        const x = props.id % 15;
                        const y = Math.floor(props.id / 15);
 
+                       // Match Dungeon Builder (DungeonView / PlaneView) exact priority:
+                       // x === 0 (West edge) -> left (Horizontal)
+                       // x === 14 (East edge) -> right (Horizontal)
+                       // y === 0 (North edge) -> top (Vertical)
+                       // y === 14 (South edge) -> bottom (Vertical)
                        if (x === 0) edge = 'left';
                        else if (x === 14) edge = 'right';
                        else if (y === 0) edge = 'top';
@@ -967,6 +976,14 @@ function Tile(props) {
                            if (hasLeftRightNeighbor) edge = 'right';
                            else if (hasTopBottomNeighbor) edge = 'bottom';
                        }
+                   }
+
+                   if (!edge) {
+                       edge = props.connectedEdge || (props.contains && typeof props.contains === 'object' ? (props.contains.edge || props.contains.direction) : null);
+                       if (edge === 'E' || edge === 'east') edge = 'right';
+                       if (edge === 'W' || edge === 'west') edge = 'left';
+                       if (edge === 'N' || edge === 'north') edge = 'top';
+                       if (edge === 'S' || edge === 'south') edge = 'bottom';
                    }
                    const overlayStyle = {
                        position: 'absolute',
@@ -1202,14 +1219,113 @@ function Tile(props) {
                     pointerEvents: 'none'
                 }} title="Unlock spell active" />
             )}
+
+            {/* Earthen Fort level badge (levels > 1 show a number in the top right of the icon) */}
+            {(() => {
+                const bSubtype = containsSubtype || (containsObj && containsObj.subtype);
+                const isFort = bSubtype === 'earthen_fort' || props.building === 'earthen_fort' || props.image === 'earthen_fort' || props.image === 'buildable_earthen_fort';
+                const lvl = (containsObj && containsObj.level) || (props.contains && props.contains.level) || (currentContains && currentContains.level) || props.level;
+                if (isFort && typeof lvl === 'number' && lvl > 1) {
+                    return (
+                        <div style={{
+                            position: 'absolute',
+                            top: '2px',
+                            right: '2px',
+                            background: '#1c1917',
+                            color: '#ffd700',
+                            border: '1px solid rgba(212, 168, 68, 0.8)',
+                            borderRadius: '50%',
+                            width: Math.max(14, Math.round((props.tileSize || 30) * 0.4)) + 'px',
+                            height: Math.max(14, Math.round((props.tileSize || 30) * 0.4)) + 'px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: Math.max(9, Math.round((props.tileSize || 30) * 0.3)) + 'px',
+                            fontWeight: 'bold',
+                            fontFamily: 'Outfit, sans-serif',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.9)',
+                            zIndex: 35,
+                            pointerEvents: 'none'
+                        }}>
+                            {lvl}
+                        </div>
+                    );
+                }
+                return null;
+            })()}
         </div>
     )
 }
 
-// Memoize so the thousands of read-only dungeon-view tiles don't re-render on
-// every parent state change (e.g. dropdown open/close).  Tile content never
-// changes mid-render in the dungeon preview — only tileSize, image, color, and
-// coordinates matter.  All other props that Tile receives in DungeonView are
-// stable primitives (false / null / 'board-tile'), so the shallow comparison
-// is reliable and cheap.
-export default React.memo(Tile);
+export function propsAreEqual(prevProps, nextProps) {
+    if (prevProps === nextProps) return true;
+
+    const keysToCompare = [
+        'id', 'index', 'type', 'color', 'tileSize', 'hovered', 'selected',
+        'isPreview', 'passThrough', 'backgroundColor', 'terrain', 'territory',
+        'isShrine', 'isLoreTablet', 'trapRevealed', 'connectedEdge',
+        'partialObscured', 'showCoordinates', 'image', 'imageOverride',
+        'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level'
+    ];
+
+    for (let key of keysToCompare) {
+        if (prevProps[key] !== nextProps[key]) return false;
+    }
+
+    const prevContains = prevProps.contains;
+    const nextContains = nextProps.contains;
+    if (typeof prevContains !== typeof nextContains) return false;
+    if (typeof prevContains === 'object' && prevContains !== null) {
+        if (JSON.stringify(prevContains) !== JSON.stringify(nextContains)) return false;
+    } else if (prevContains !== nextContains) {
+        return false;
+    }
+
+    const prevBorders = prevProps.borders;
+    const nextBorders = nextProps.borders;
+    if (typeof prevBorders !== typeof nextBorders) return false;
+    if (typeof prevBorders === 'object' && prevBorders !== null) {
+        if (prevBorders.top !== nextBorders?.top || prevBorders.bottom !== nextBorders?.bottom ||
+            prevBorders.left !== nextBorders?.left || prevBorders.right !== nextBorders?.right) return false;
+    }
+
+    const prevCoords = prevProps.coordinates;
+    const nextCoords = nextProps.coordinates;
+    if (Array.isArray(prevCoords) && Array.isArray(nextCoords)) {
+        if (prevCoords[0] !== nextCoords[0] || prevCoords[1] !== nextCoords[1]) return false;
+    } else if (prevCoords !== nextCoords) {
+        return false;
+    }
+
+    if (prevProps.boardTiles || nextProps.boardTiles) {
+        const prevBoard = prevProps.boardTiles || [];
+        const nextBoard = nextProps.boardTiles || [];
+        if (prevBoard !== nextBoard) {
+            const tileId = (typeof prevProps.id === 'number') ? prevProps.id : ((typeof prevProps.index === 'number') ? prevProps.index : null);
+            if (tileId !== null) {
+                const x = tileId % 15;
+                const y = Math.floor(tileId / 15);
+                const neighborIndices = [];
+                if (y > 0) neighborIndices.push(tileId - 15);
+                if (y < 14) neighborIndices.push(tileId + 15);
+                if (x > 0) neighborIndices.push(tileId - 1);
+                if (x < 14) neighborIndices.push(tileId + 1);
+
+                for (let idx of neighborIndices) {
+                    const prevN = prevBoard[idx];
+                    const nextN = nextBoard[idx];
+                    if (!prevN && !nextN) continue;
+                    if (!prevN || !nextN) return false;
+                    if (prevN.color !== nextN.color) return false;
+                    if (JSON.stringify(prevN.contains) !== JSON.stringify(nextN.contains)) return false;
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
+Tile.compare = propsAreEqual;
+
+export default React.memo(Tile, propsAreEqual);

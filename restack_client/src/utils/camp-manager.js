@@ -18,11 +18,18 @@ export async function setUpCamp(component, maybeDuration) {
         // --- Food cost check ---
         // Cost = sum of (5 * member.level) for each crew member + (10 * member.level) for each dead member
         const crew = (component.props.crewManager && component.props.crewManager.crew) || [];
-        const foodCost = crew.reduce((sum, m) => {
+        let foodCost = crew.reduce((sum, m) => {
             const baseCost = 5 * (typeof m.level === 'number' ? m.level : 1);
             const reviveCost = m.dead ? 10 * (typeof m.level === 'number' ? m.level : 1) : 0;
             return sum + baseCost + reviveCost;
         }, 0);
+        // Leader's Watch: an alive leader reduces the food cost through effective rationing
+        const leaderMember = crew.find(m => m && m.isLeader);
+        const leaderAlive = leaderMember && !leaderMember.dead;
+        if (leaderAlive) {
+            const discount = 3 * (typeof leaderMember.level === 'number' ? leaderMember.level : 1);
+            foodCost = Math.max(0, foodCost - discount);
+        }
         const currentFood = typeof meta.food === 'number' ? meta.food : 55;
         let fortifyLevel = 0;
         crew.forEach(member => {
@@ -235,6 +242,10 @@ export async function endCamp(component) {
         let awakeRefreshedBonus = 0;
         let fortifyLevel = 0;
         const crew = (component.props.crewManager && component.props.crewManager.crew) || [];
+        // Leader's Watch: check if leader is alive or dead at end of camp
+        const campLeader = crew.find(mb => mb && mb.isLeader);
+        const leaderAliveAtCampEnd = campLeader && !campLeader.dead;
+        let leaderFortifyBonus = 0;
         crew.forEach(member => {
             if (!member || !member.globalSkills) return;
             const arSkill = member.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === 'awake_refreshed');
@@ -252,6 +263,11 @@ export async function endCamp(component) {
                         fortifyLevel = lvl;
                     }
                 }
+                // Leader with Fortify adds extra resolve recovery through disciplined watch rotations
+                if (member.isLeader) {
+                    const leaderFortify = member.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === 'fortify');
+                    if (leaderFortify) leaderFortifyBonus = 5;
+                }
             }
         });
 
@@ -266,7 +282,18 @@ export async function endCamp(component) {
             }
         }
 
-        m.resolve = Math.min(100, currentResolve + 15 + awakeRefreshedBonus + fortifyBonus);
+        // Restless Camp: if the leader is dead, the crew rests uneasily (-5 resolve from recovery)
+        const restlessPenalty = leaderAliveAtCampEnd ? 0 : 5;
+
+        m.resolve = Math.min(100, currentResolve + 15 - restlessPenalty + awakeRefreshedBonus + fortifyBonus + leaderFortifyBonus);
+        // Notify about restless camp if the leader fell
+        if (!leaderAliveAtCampEnd && campLeader) {
+            try {
+                component.setState({ campWarningMessage: `The crew rests uneasily without ${campLeader.name || 'the leader'}. Resolve recovery reduced.` });
+                const setTimeoutFn = (component._setTimeout && typeof component._setTimeout === 'function') ? component._setTimeout : setTimeout;
+                setTimeoutFn(() => { try { component.setState({ campWarningMessage: null }); } catch(e){} }, 5000);
+            } catch(e) {}
+        }
         try {
             const crew = (component.props.crewManager && component.props.crewManager.crew) || [];
             // Build a new array of spread objects so React sees new prop references on Tile

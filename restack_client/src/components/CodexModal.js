@@ -23,7 +23,7 @@ function PowerRatingsPanel({ stats, classId }) {
             int: base.int,
             dex: base.dex,
             fort: base.fort,
-            speed: Math.round(base.dex * 1.5),
+            speed: base.dex,
             def: Math.round((base.str + base.dex) / 2),
             hp: base.hp
         };
@@ -39,10 +39,10 @@ function PowerRatingsPanel({ stats, classId }) {
 
     const items = [
         { label: 'STRENGTH', val: strVal, max: 15 },
-        { label: 'SPEED', val: spdVal, max: 20 },
+        { label: 'SPEED', val: spdVal, max: 15 },
         { label: 'AGILITY', val: dexVal, max: 15 },
         { label: 'STAMINA', val: fortVal, max: 15 },
-        { label: 'DURABILITY', val: defVal, max: 20 },
+        { label: 'DURABILITY', val: defVal, max: 15 },
         { label: 'INTELLIGENCE', val: intVal, max: 15 }
     ];
     if (!classId) {
@@ -257,6 +257,10 @@ const INTERACTABLES = [
 
 export const MONSTER_LORE = {
     goblin: { lore: 'Fast and fragile. Notorious for surprise attacks. Weak to crushing and electricity.', tactics: 'Dispatch quickly — their high dex makes them hard to hit. AoE attacks shine here.' },
+    goblin_thief: { lore: 'Fast and fragile. Notorious for surprise attacks. Weak to crushing and electricity.', tactics: 'Dispatch quickly — their high dex makes them hard to hit. AoE attacks shine here.' },
+    goblin_warrior: { lore: 'Armored goblin frontline fighter with fierce claw and weapon attacks.', tactics: 'Shatter armor or use magic attacks.' },
+    goblin_warchief: { lore: 'Brutal commander of goblin squads.', tactics: 'Focus down the warchief to disrupt leadership.' },
+    goblin_chef: { lore: 'Cleaver-wielding goblin cook who whips up chaos on the battlefield.', tactics: 'Watch out for cleaver slashes.' },
     skeleton: { lore: 'Undead soldier reanimated by dark magic. Can reassemble after being defeated.', tactics: 'Apply fire damage to prevent Reassembly. Focus fire to ensure destruction.' },
     troll: { lore: 'A hulking regenerating brute. Nearly impossible to keep down without sustained damage.', tactics: 'Stack damage-over-time effects. Prevent healing with bleed or acid.' },
     ogre: { lore: 'A brutish giant with earth-shaking attacks. Slow but devastating in close quarters.', tactics: 'Keep ranged units mobile. Tank with Soldier or Barbarian.' },
@@ -496,12 +500,12 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                         <>
                             <div className="codex-list">
                                 {filteredSkills.length === 0 && <div className="codex-empty">No skills match your search.</div>}
-                                {filteredSkills.map(skill => {
+                                {filteredSkills.map((skill, idx) => {
                                     const iconSrc = resolveImg(skill.icon);
                                     const selected = selectedEntry && selectedEntry.id === skill.id;
                                     return (
                                         <div
-                                            key={skill.id}
+                                            key={`${skill.id}_${idx}`}
                                             ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(skill)}
@@ -542,7 +546,7 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                                         (selectedEntry.id && selectedEntry.id === monster.id) ||
                                         (selectedEntry.type && monster.type && selectedEntry.type === monster.type)
                                     );
-                                    const monsterKey = monster.id || (monster.key ? `${monster.key}_${idx}` : `${monster.type || 'monster'}_${idx}`);
+                                    const monsterKey = monster.id ? `${monster.id}_${idx}` : (monster.key ? `${monster.key}_${idx}` : `${monster.type || 'monster'}_${idx}`);
                                     return (
                                         <div
                                             key={monsterKey}
@@ -577,11 +581,11 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                     {activeTab === 'classes' && (
                         <>
                             <div className="codex-list">
-                                {filteredClasses.map(cls => {
+                                {filteredClasses.map((cls, idx) => {
                                     const selected = selectedEntry && selectedEntry.id === cls.id;
                                     return (
                                         <div
-                                            key={cls.id}
+                                            key={`${cls.id}_${idx}`}
                                             ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(cls)}
@@ -612,12 +616,12 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                         <>
                             <div className="codex-list">
                                 {filteredInteractables.length === 0 && <div className="codex-empty">No entries match your search.</div>}
-                                {filteredInteractables.map(item => {
+                                {filteredInteractables.map((item, idx) => {
                                     const iconSrc = resolveImg(item.icon);
                                     const selected = selectedEntry && selectedEntry.id === item.id;
                                     return (
                                         <div
-                                            key={item.id}
+                                            key={`${item.id}_${idx}`}
                                             ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(item)}

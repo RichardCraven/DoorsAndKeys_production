@@ -104,6 +104,33 @@ export const REAGENTS = {
         category: 'reagent',
         equippedBy: null,
     },
+    wood: {
+        id: 'wood',
+        name: 'Wood',
+        description: 'Sturdy wooden planks used in construction.',
+        icon: 'wood',
+        type: 'consumable',
+        category: 'reagent',
+        equippedBy: null,
+    },
+    stone: {
+        id: 'stone',
+        name: 'Stone',
+        description: 'Dense stone blocks for building walls and fortifications.',
+        icon: 'stone',
+        type: 'consumable',
+        category: 'reagent',
+        equippedBy: null,
+    },
+    slate: {
+        id: 'slate',
+        name: 'Slate',
+        description: 'Rare slate slabs for heavy fortifications.',
+        icon: 'slate',
+        type: 'consumable',
+        category: 'reagent',
+        equippedBy: null,
+    },
 };
 
 /** Ordered list for display and console command use */

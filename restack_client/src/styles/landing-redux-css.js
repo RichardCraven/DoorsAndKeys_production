@@ -320,7 +320,12 @@ export const LANDING_REDUX_CSS = `
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-auto-rows: minmax(140px, auto);
+  align-content: start;
   gap: 20px;
+}
+
+.redux-landing-container .landing-main-grid .menu-column.basic-user {
+  align-content: start;
 }
 
 @media (max-width: 600px) {
@@ -1320,59 +1325,85 @@ export const LANDING_REDUX_CSS = `
 }
 
 .crew-showcase-body {
-  padding: 24px 28px;
+  padding: 16px 22px 20px;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 12px;
+  align-content: start;
 }
 
 .crew-showcase-panel {
   background: rgba(12, 10, 9, 0.65);
   border: 1px solid rgba(212, 168, 68, 0.18);
-  border-radius: 12px;
-  padding: 18px 20px;
+  border-radius: 10px;
+  padding: 13px 16px;
+}
+
+.crew-showcase-panel.lore-panel {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.crew-showcase-panel.stats-panel {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.crew-showcase-panel.skills-panel {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.crew-showcase-panel.specialty-panel {
+  grid-column: 2;
+  grid-row: 2;
 }
 
 .crew-showcase-panel-title {
   font-family: 'Cinzel', serif;
-  font-size: 1.05rem;
+  font-size: 0.92rem;
   color: #e5b54f;
-  margin: 0 0 14px 0;
+  margin: 0 0 10px 0;
   letter-spacing: 1px;
   text-transform: uppercase;
   display: flex;
   align-items: center;
   gap: 8px;
   border-bottom: 1px solid rgba(212, 168, 68, 0.15);
-  padding-bottom: 8px;
+  padding-bottom: 6px;
 }
 
 .crew-showcase-lore-text {
-  font-size: 0.92rem;
-  line-height: 1.6;
+  font-size: 0.82rem;
+  line-height: 1.5;
   color: #d1d1d6;
   margin: 0;
   text-align: left;
   font-family: 'Outfit', sans-serif;
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .crew-showcase-stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 14px 24px;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 12px;
 }
 
 .crew-showcase-stat-item {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .stat-label-row {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   font-weight: 600;
   color: #c7c7cc;
   font-family: 'Outfit', sans-serif;
@@ -1385,7 +1416,7 @@ export const LANDING_REDUX_CSS = `
 
 .stat-bar-track {
   width: 100%;
-  height: 8px;
+  height: 6px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 4px;
   overflow: hidden;
@@ -1399,19 +1430,19 @@ export const LANDING_REDUX_CSS = `
 }
 
 .crew-showcase-skills-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
 }
 
 .crew-showcase-skill-card {
   display: flex;
-  gap: 12px;
+  gap: 9px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  padding: 10px 14px;
-  align-items: flex-start;
+  border-radius: 7px;
+  padding: 7px 10px;
+  align-items: center;
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 
@@ -1421,9 +1452,9 @@ export const LANDING_REDUX_CSS = `
 }
 
 .skill-card-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
   object-fit: cover;
   border: 1px solid rgba(212, 168, 68, 0.4);
   background: #000000;
@@ -1431,16 +1462,16 @@ export const LANDING_REDUX_CSS = `
 }
 
 .skill-card-icon-placeholder {
-  width: 38px;
-  height: 38px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
   border: 1px solid rgba(212, 168, 68, 0.4);
   background: rgba(212, 168, 68, 0.15);
   color: #ffd700;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
+  font-size: 12px;
   flex-shrink: 0;
 }
 
@@ -1486,11 +1517,205 @@ export const LANDING_REDUX_CSS = `
 }
 
 .skill-card-desc {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: #a1a1a6;
-  margin: 2px 0 0 0;
-  line-height: 1.35;
+  margin: 1px 0 0 0;
+  line-height: 1.3;
   text-align: left;
   font-family: 'Outfit', sans-serif;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Specialization Panel ── */
+
+.specialty-panel {
+  background: rgba(10, 8, 6, 0.7);
+  border: 1px solid rgba(212, 168, 68, 0.22);
+}
+
+.specialty-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.specialty-title-diamond {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #e5b54f;
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(229, 181, 79, 0.6);
+}
+
+.specialty-locked-badge {
+  margin-left: auto;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
+}
+
+.specialty-lock-notice,
+.specialty-prompt-notice {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  margin: 0 0 8px 0;
+  padding: 5px 9px;
+  border-radius: 5px;
+  text-align: left;
+}
+
+.specialty-lock-notice {
+  color: #d1c4a8;
+  background: rgba(239, 68, 68, 0.07);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.specialty-prompt-notice {
+  color: #c0b08a;
+  background: rgba(212, 168, 68, 0.07);
+  border: 1px solid rgba(212, 168, 68, 0.18);
+}
+
+.specialty-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+}
+
+.specialty-card {
+  background: rgba(22, 18, 14, 0.8);
+  border: 1px solid rgba(212, 168, 68, 0.16);
+  border-radius: 8px;
+  padding: 9px 11px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  position: relative;
+  user-select: none;
+}
+
+.specialty-card:not(.locked):hover {
+  background: rgba(212, 168, 68, 0.06);
+  border-color: rgba(212, 168, 68, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5), 0 0 10px rgba(212, 168, 68, 0.08);
+}
+
+.specialty-card:not(.locked):focus-visible {
+  outline: 2px solid rgba(212, 168, 68, 0.7);
+  outline-offset: 2px;
+}
+
+.specialty-card.selected {
+  background: rgba(212, 168, 68, 0.1);
+  border-color: rgba(212, 168, 68, 0.7);
+  box-shadow: 0 0 16px rgba(212, 168, 68, 0.18), inset 0 1px 0 rgba(255, 220, 120, 0.08);
+}
+
+.specialty-card.selected:not(.locked):hover {
+  background: rgba(212, 168, 68, 0.14);
+  border-color: #e5b54f;
+  box-shadow: 0 0 20px rgba(212, 168, 68, 0.28);
+}
+
+.specialty-card.locked {
+  cursor: default;
+  opacity: 0.7;
+  transform: none !important;
+}
+
+.specialty-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.specialty-card-name {
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #c9a84c;
+  letter-spacing: 0.3px;
+  line-height: 1.2;
+}
+
+.specialty-card.selected .specialty-card-name {
+  color: #ffd700;
+}
+
+.specialty-selected-mark {
+  font-size: 0.9rem;
+  color: #ffd700;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+  text-shadow: 0 0 6px rgba(255, 215, 0, 0.6);
+}
+
+.specialty-card-desc {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.7rem;
+  color: #9a9390;
+  line-height: 1.35;
+  margin: 0;
+  text-align: left;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.specialty-card.selected .specialty-card-desc {
+  color: #b8a88a;
+}
+
+.specialty-bonus-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.specialty-bonus-tag {
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: #c9932b;
+  background: rgba(212, 168, 68, 0.1);
+  border: 1px solid rgba(212, 168, 68, 0.25);
+  border-radius: 10px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.specialty-card.selected .specialty-bonus-tag {
+  color: #e5b54f;
+  background: rgba(212, 168, 68, 0.16);
+  border-color: rgba(212, 168, 68, 0.4);
+}
+
+@media (max-width: 600px) {
+  .specialty-grid {
+    grid-template-columns: 1fr;
+  }
 }
 `;
+

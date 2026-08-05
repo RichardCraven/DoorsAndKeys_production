@@ -20,6 +20,7 @@ import Canvas from '../../components/Canvas/canvas'
 // import CanvasMagicMissile from '../../components/Canvas/canvas_magic_missile'
 import CombatGrid, { getActiveEffects } from '../../components/combat-panes/CombatGrid'
 import { AnimationManagerRedux } from '../../utils/animation-manager-redux';
+import AudioManager from '../../utils/audio-manager';
 
 import { INTERVALS, INTERVAL_DISPLAY_NAMES } from '../../utils/shared-constants';
 import REAGENTS, { REAGENT_KEYS } from '../../utils/reagents';
@@ -404,6 +405,17 @@ class MonsterBattle extends React.Component {
             this.props.combatManager.connectAnimationManagerRedux(this._animManagerRedux);
         }
 
+        // Wire AudioManager — resumeContext() must be called inside a user-gesture
+        // componentDidMount fires after the initial click that opened MonsterBattle,
+        // so this is a safe place to unlock the AudioContext.
+        this._audioManager = AudioManager.getInstance();
+        this._audioManager.resumeContext();
+        if (typeof this.props.combatManager.connectAudioManager === 'function') {
+            this.props.combatManager.connectAudioManager(this._audioManager);
+        }
+        // Signal combat start for BGM hookpoint
+        try { this._audioManager.onCombatStart(); } catch (e) {}
+
         // Wire Monk teleport callback to set teleportingFighterId
         const monkAI = this.props.combatManager.fighterAI?.roster?.monk;
         if (monkAI) {
@@ -736,6 +748,8 @@ class MonsterBattle extends React.Component {
         try { window.removeEventListener('touchmove', this._boundDragTouchMove); } catch (e) { }
         try { window.removeEventListener('touchend', this._boundDragTouchEnd); } catch (e) { }
         try { window.removeEventListener('touchstart', this._boundContextMenuDismiss); } catch (e) { }
+        // Purge area-specific audio buffers to free RAM when leaving combat
+        try { if (this._audioManager) this._audioManager.purgeDynamicCache(); } catch (e) { }
     }
     monster = () => {
         // console.log('monster: ', this.state.battleData[this.props.monster.id]);
@@ -1137,6 +1151,18 @@ class MonsterBattle extends React.Component {
         if (!wasPausedWhenOpened && this.props.combatManager && typeof this.props.combatManager.pauseCombat === 'function') {
             this.props.combatManager.pauseCombat(false);
         }
+    }
+
+    resolveIcon = (candidate) => {
+        if (!candidate) return '';
+        if (typeof candidate === 'string') {
+            if (candidate.trim().startsWith('url(')) return candidate.replace(/^url\((.*)?\/\)$/i, '$1').replace(/^['"]|['"]$/g, '');
+            const mapped = images[candidate.trim()];
+            if (mapped) return mapped.default || mapped;
+            return candidate;
+        }
+        if (typeof candidate === 'object' && candidate.default) return candidate.default;
+        return '';
     }
 
     // Open the skill description popup (called when user clicks a hover-label)
@@ -1857,6 +1883,15 @@ class MonsterBattle extends React.Component {
                     });
                 } catch (e) { }
                 // Use latest liveCrew snapshot when awarding experience
+                // ── Leader's Doctrine: +10% XP when the party leader survives the battle ──
+                try {
+                    const leaderInLiveCrew = liveCrew.find(c => c && c.isLeader);
+                    if (leaderInLiveCrew) {
+                        const doctrineBonus = Math.round(experienceGained * 0.10);
+                        experienceGained += doctrineBonus;
+                        console.log(`[Leader's Doctrine] Leader survived — +${doctrineBonus} XP bonus. Total: ${experienceGained}`);
+                    }
+                } catch (e) { console.warn('[Leader\'s Doctrine] XP bonus failed', e); }
                 try { this.props.crewManager.addExperience(liveCrew, experienceGained); } catch (e) { console.warn('addExperience failed', e); }
                 // ── Battle Tactics: decrement combatsRemaining after this victory ──
                 try {
@@ -3276,17 +3311,7 @@ class MonsterBattle extends React.Component {
         const fighterId = liveSelectedFighter.id;
 
         // Icon resolution helper
-        const resolveIcon = (candidate) => {
-            if (!candidate) return '';
-            if (typeof candidate === 'string') {
-                if (candidate.trim().startsWith('url(')) return candidate.replace(/^url\((.*)?\/\)$/i, '$1').replace(/^['"]|['"]$/g, '');
-                const mapped = images[candidate.trim()];
-                if (mapped) return mapped.default || mapped;
-                return candidate;
-            }
-            if (typeof candidate === 'object' && candidate.default) return candidate.default;
-            return '';
-        };
+        const resolveIcon = this.resolveIcon;
 
         // Spec resolution helper
         const resolveSpec = (a) => {
@@ -5731,20 +5756,7 @@ class MonsterBattle extends React.Component {
 
                 {this.state.activeSkillPopup && (() => {
                     const spec = this.state.activeSkillPopup;
-                    const iconCandidate = spec.iconUrl || spec.icon;
-                    let iconUrl = '';
-                    if (iconCandidate) {
-                        if (typeof iconCandidate === 'string') {
-                            if (iconCandidate.trim().startsWith('url(')) {
-                                iconUrl = iconCandidate.replace(/^url\((.*)?\)$/i, '$1').replace(/^['"]|['"]$/g, '');
-                            } else {
-                                const mapped = images[iconCandidate.trim()];
-                                iconUrl = mapped ? (mapped.default || mapped) : iconCandidate;
-                            }
-                        } else if (typeof iconCandidate === 'object' && iconCandidate.default) {
-                            iconUrl = iconCandidate.default;
-                        }
-                    }
+                    const iconUrl = this.resolveIcon(spec.iconUrl || spec.icon);
                     const skillName = spec.name || 'Ability';
                     const cd = spec.cooldown || 0;
                     const cost = spec.energy_cost || spec.energyCost || spec.cost || 0;
@@ -5783,7 +5795,7 @@ class MonsterBattle extends React.Component {
                                     borderRadius: '50%',
                                     border: '3px solid #ffb830',
                                     margin: '0 auto 16px auto',
-                                    backgroundImage: iconUrl ? `url(${iconUrl})` : 'none',
+                                    backgroundImage: iconUrl ? `url("${encodeURI(String(iconUrl).replace(/^['"]/g, '').replace(/['"]/g, ''))}")` : 'none',
                                     backgroundSize: 'cover',
                                     backgroundPosition: 'center',
                                     boxShadow: '0 4px 12px rgba(0,0,0,0.5)'

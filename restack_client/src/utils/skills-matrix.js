@@ -1237,6 +1237,19 @@ const skillsMatrix = {
         isPassive: true,
         knownByDefault: false
     },
+    soul_tap: {
+        class: 'summoner',
+        id: 'soul_tap',
+        tier: 2,
+        name: 'Soul Tap',
+        desc: 'Whenever a friendly PC unit dies in combat, power accumulated before their death is added to the Summoner\'s power pool.',
+        icon: images.soul_tap_summoner,
+        cooldown: 0,
+        type: 'passive',
+        treePath: 'combat_b',
+        isPassive: true,
+        knownByDefault: false
+    },
     soul_tithe: {
         class: 'summoner',
         id: 'soul_tithe',
@@ -1874,7 +1887,7 @@ const skillsMatrix = {
         tier: 1,
         name: 'Undead Grasp',
         desc: 'Savage close-range claw strike dealing 100% ATK damage with a 20% chance to stun.',
-        icon: images['undead_grasp'],
+        icon: images.undead_grasp,
         cooldown: 4,
         range: 'close',
         type: 'damage',
@@ -2288,6 +2301,17 @@ const skillsMatrix = {
         duration: 3,
         range: 'far',
         type: 'debuff'
+    },
+    mimicry: {
+        id: 'mimicry',
+        name: 'Mimicry',
+        desc: "Targets an enemy unit in medium range and transforms into an upside-down negative reflection of it. Copies the target's portrait and all available skills with 0 initial cooldown for 4 turns.",
+        icon: images.mimicry || images.eidolon,
+        cooldown: 4,
+        initialCooldown: 2,
+        duration: 4,
+        range: 'medium',
+        type: 'utility'
     }
 };
 

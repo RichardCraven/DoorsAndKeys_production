@@ -405,6 +405,20 @@ class MapMakerPage extends React.Component {
       const raw = (this.state.devConsoleInput || '').trim();
       const cmd = raw.toLowerCase();
 
+      if (cmd === 'd' || cmd === 'debug' || cmd === 'debugmode' || cmd === 'debug mode' || cmd === 'debug-mode') {
+        const currentMode = (typeof localStorage !== 'undefined' && localStorage.getItem('debugMode') === 'true');
+        const nextMode = !currentMode;
+        try { localStorage.setItem('debugMode', String(nextMode)); } catch (_) {}
+        window.debugMode = nextMode;
+        this.setState(prev => ({
+          devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Debug Mode toggled: ${nextMode ? 'ON' : 'OFF'}`],
+          devConsoleInput: ''
+        }), this.scrollDevConsoleToBottom);
+        try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (_) { }
+        e.preventDefault();
+        return;
+      }
+
       if (cmd === 'back to dungeon' || cmd === 'back') {
         this.setState(prev => ({
           devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Returning to dungeon...'],
@@ -418,6 +432,7 @@ class MapMakerPage extends React.Component {
       if (cmd === 'list' || cmd === 'help') {
         const commands = [
           'back to dungeon / back — return to dungeon page',
+          'd / debug / debugmode — toggle debug mode on or off',
           'list / help — show available commands',
         ];
         this.setState(prev => ({
@@ -1090,7 +1105,17 @@ class MapMakerPage extends React.Component {
       }
       arr[tileId].territory = territoryOption.clan;
     } else if (buildingOption) {
-      arr[tileId].contains = { type: 'building', subtype: buildingOption.key };
+      const currentTile = arr[tileId];
+      const currentContains = currentTile?.contains;
+      let fortLevel = 1;
+      if (buildingOption.key === 'earthen_fort') {
+        const isExistingFort = currentContains && currentContains.type === 'building' && currentContains.subtype === 'earthen_fort';
+        if (isExistingFort) {
+          const existingLvl = typeof currentContains.level === 'number' ? currentContains.level : 1;
+          fortLevel = Math.min(3, existingLvl + 1);
+        }
+      }
+      arr[tileId].contains = { type: 'building', subtype: buildingOption.key, level: fortLevel };
       arr[tileId].image = images[buildingOption.image] || buildingOption.image;
       arr[tileId].color = null;
     } else if (pinned.optionType === 'passage') {

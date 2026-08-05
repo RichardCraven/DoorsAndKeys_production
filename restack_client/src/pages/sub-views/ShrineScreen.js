@@ -20,7 +20,7 @@ import '../../styles/monster-battle.scss';
 
 
 // ── Grid constants ────────────────────────────────────────────────────────────
-const COLS = 8;
+const COLS = 9;
 const ROWS = 6;
 const TILE_SIZE = 100;
 
@@ -138,6 +138,8 @@ class ShrineScreen extends React.Component {
 
         // 1. Instantiate CombatManagerRedux
         this.combatManager = new CombatManagerRedux();
+        this.combatManager.isShrineEncounter = true;
+        this.combatManager.disablePowerBoostTiles = true;
         this.combatManager.beginGreeting = () => {}; // Override standard greeting sequence
         this.combatManager.initialize();
 
@@ -351,7 +353,7 @@ class ShrineScreen extends React.Component {
         let rightIdx = 0;
         guardians.forEach((c) => {
             const isMob1 = c.id.includes('shrine_guardian_1');
-            const startX = isMob1 ? 0 : 7;
+            const startX = isMob1 ? 0 : 8;
             const yOffset = isMob1 ? leftIdx++ : rightIdx++;
             const startY = 2 + yOffset;
             c.coordinates = { x: startX, y: startY };
@@ -540,7 +542,7 @@ class ShrineScreen extends React.Component {
             wizard:   [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
             barbarian:[{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%' }],
             monk:     [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
-            summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],
+            summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tap', name: 'Soul Tap', desc: 'Transfers accumulated power of fallen friendly units to the Summoner' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],
         };
     }
 
@@ -562,7 +564,7 @@ class ShrineScreen extends React.Component {
     // ── Render ────────────────────────────────────────────────────────────────
 
     render() {
-        const { shrineData } = this.props;
+        const { shrineData, crew } = this.props;
         const { phase, stoneTileMap, currentRound, totalRounds, log, outcome, showSkillSelect } = this.state;
 
         const shrineClass = shrineData && shrineData.shrineClass;
@@ -573,6 +575,11 @@ class ShrineScreen extends React.Component {
         const nextSkill = shrineData && shrineData.matchingMember
             ? this._getNextSkillForMember(shrineData.matchingMember, shrineClass)
             : null;
+
+        // Favored Offering: does the party leader's class match this shrine?
+        const leaderMember = (crew || []).find(m => m && m.isLeader);
+        const isFavoredOffering = !!(leaderMember && shrineClass &&
+            (leaderMember.type || leaderMember.image || '').toLowerCase() === shrineClass.toLowerCase());
 
         const gridW = COLS * TILE_SIZE + (COLS - 1) * 2; // with 2px borders
         const gridH = ROWS * TILE_SIZE + (ROWS - 1) * 2;
@@ -840,26 +847,41 @@ class ShrineScreen extends React.Component {
                 {outcome === 'failure' && !showSkillSelect && (
                     <div style={{
                         position: 'absolute', inset: 0,
-                        background: 'rgba(10,4,20,0.9)',
+                        background: 'rgba(10,4,20,0.92)',
                         display: 'flex', flexDirection: 'column',
                         alignItems: 'center', justifyContent: 'center',
                         zIndex: 100,
                         animation: 'shrine-fade-in 0.6s ease-out',
+                        fontFamily: "'Outfit', 'Inter', sans-serif",
                     }}>
-                        <div style={{ fontSize: '40px', marginBottom: '12px' }}><span role="img" aria-label="skull">💀</span></div>
-                        <div style={{ color: '#c0392b', fontSize: '22px', fontWeight: 'bold', marginBottom: '8px', letterSpacing: '2px' }}>
+                        <div style={{ marginBottom: '14px', filter: 'drop-shadow(0 0 10px rgba(192,57,43,0.5))' }}>
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z" fill="#c0392b" opacity="0.85" />
+                            </svg>
+                        </div>
+                        <div style={{
+                            fontFamily: "'Cinzel Decorative', 'Cinzel', serif",
+                            color: '#e74c3c', fontSize: '22px', fontWeight: '700',
+                            marginBottom: '8px', letterSpacing: '2.5px', textTransform: 'uppercase',
+                            textShadow: '0 0 12px rgba(231,76,60,0.4)'
+                        }}>
                             Communion Failed
                         </div>
-                        <div style={{ color: '#999', fontSize: '13px', maxWidth: '320px', textAlign: 'center', lineHeight: 1.6, marginBottom: '24px', fontStyle: 'italic' }}>
+                        <div style={{
+                            color: '#c5bba8', fontSize: '13.5px', maxWidth: '340px',
+                            textAlign: 'center', lineHeight: 1.6, marginBottom: '26px', fontStyle: 'italic'
+                        }}>
                             The communion was broken by the guardians. The shrine's power fades.
                         </div>
                         <button
                             onClick={() => this.props.onShrineComplete({ success: false, shrineData })}
                             style={{
-                                background: 'rgba(192,57,43,0.2)', border: '1px solid rgba(192,57,43,0.6)',
-                                color: '#e74c3c', padding: '10px 28px', borderRadius: '6px',
-                                cursor: 'pointer', fontSize: '13px', letterSpacing: '1px',
-                                fontFamily: 'inherit',
+                                fontFamily: "'Cinzel', serif",
+                                background: 'rgba(192,57,43,0.18)', border: '1px solid rgba(192,57,43,0.55)',
+                                color: '#f5b7b1', padding: '10px 30px', borderRadius: '8px',
+                                cursor: 'pointer', fontSize: '13px', letterSpacing: '1.5px',
+                                textTransform: 'uppercase', transition: 'all 0.2s ease',
+                                boxShadow: '0 2px 10px rgba(0,0,0,0.4)'
                             }}
                         >
                             Return to Dungeon
@@ -875,6 +897,7 @@ class ShrineScreen extends React.Component {
                         alignItems: 'center', justifyContent: 'center',
                         zIndex: 100,
                         animation: 'shrine-fade-in 0.6s ease-out',
+                        fontFamily: "'Outfit', 'Inter', sans-serif",
                     }}>
                         {/* Gold shimmer particles */}
                         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
@@ -891,41 +914,82 @@ class ShrineScreen extends React.Component {
                                 }} />
                             ))}
                         </div>
-                        <div style={{ fontSize: '36px', marginBottom: '10px' }}><span role="img" aria-label="sparkles">✨</span></div>
-                        <div style={{ color: '#c9a227', fontSize: '20px', letterSpacing: '2px', marginBottom: '6px' }}>
+                        <div style={{
+                            fontFamily: "'Cinzel Decorative', 'Cinzel', serif",
+                            color: '#f39c12', fontSize: '24px', fontWeight: '700',
+                            letterSpacing: '2.5px', marginBottom: '8px', textTransform: 'uppercase',
+                            textShadow: '0 0 14px rgba(243,156,18,0.45)'
+                        }}>
                             Communion Complete
                         </div>
-                        <div style={{ color: '#ccc', fontSize: '13px', fontStyle: 'italic', marginBottom: '24px', maxWidth: '320px', textAlign: 'center', lineHeight: 1.6 }}>
-                            The ancestors have heard the champion's prayer.
-                            A gift of ancient wisdom is bestowed.
+                        <div style={{
+                            color: '#c5bba8', fontSize: '14px', fontStyle: 'italic',
+                            marginBottom: isFavoredOffering ? '12px' : '26px', maxWidth: '340px', textAlign: 'center', lineHeight: 1.6
+                        }}>
+                            {isFavoredOffering
+                                ? `The ${classLabel} ancestors resonate with the voice of their kin. Their blessing runs deep.`
+                                : 'The ancestors have heard the champion\u2019s prayer. A gift of ancient wisdom is bestowed.'
+                            }
                         </div>
+
+                        {/* Favored Offering banner */}
+                        {isFavoredOffering && (
+                            <div style={{
+                                display: 'flex', alignItems: 'center', gap: '8px',
+                                background: 'linear-gradient(90deg, rgba(201,162,39,0.12), rgba(201,162,39,0.22), rgba(201,162,39,0.12))',
+                                border: '1px solid rgba(201,162,39,0.55)',
+                                borderRadius: '8px',
+                                padding: '8px 18px',
+                                marginBottom: '20px',
+                                maxWidth: '340px',
+                                animation: 'shrine-fade-in 0.8s ease-out',
+                                boxShadow: '0 0 18px rgba(201,162,39,0.25)',
+                            }}>
+                                <span style={{ fontSize: '18px' }}>✦</span>
+                                <div>
+                                    <div style={{ color: '#f5d06e', fontSize: '12px', fontWeight: '700', letterSpacing: '1.5px', textTransform: 'uppercase' }}>Favored Offering</div>
+                                    <div style={{ color: '#b8a87a', fontSize: '11px', marginTop: '2px' }}>Leader shares this shrine's lineage — skill resonance enhanced.</div>
+                                </div>
+                                <span style={{ fontSize: '18px' }}>✦</span>
+                            </div>
+                        )}
 
                         {nextSkill ? (
                             <div
                                 onClick={() => this.props.onShrineComplete({ success: true, shrineData, selectedSkill: nextSkill.key })}
                                 style={{
-                                    background: 'linear-gradient(135deg, rgba(201,162,39,0.2), rgba(201,162,39,0.08))',
-                                    border: '1px solid rgba(201,162,39,0.6)',
-                                    borderRadius: '10px', padding: '18px 28px',
+                                    background: 'linear-gradient(135deg, rgba(35,26,14,0.9), rgba(20,14,7,0.95))',
+                                    border: '1.5px solid rgba(243,156,18,0.55)',
+                                    boxShadow: '0 0 20px rgba(243,156,18,0.18), inset 0 0 12px rgba(0,0,0,0.5)',
+                                    borderRadius: '12px', padding: '20px 30px',
                                     cursor: 'pointer', maxWidth: '340px', width: '100%',
-                                    transition: 'all 0.2s',
+                                    transition: 'all 0.25s ease',
                                     textAlign: 'center',
-                                    marginBottom: '12px',
+                                    marginBottom: '16px',
                                 }}
                                 onMouseEnter={e => {
-                                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(201,162,39,0.35), rgba(201,162,39,0.15))';
-                                    e.currentTarget.style.boxShadow = '0 0 24px rgba(201,162,39,0.35)';
+                                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(50,36,18,0.95), rgba(30,20,10,0.98))';
+                                    e.currentTarget.style.borderColor = 'rgba(243,156,18,0.85)';
+                                    e.currentTarget.style.boxShadow = '0 0 28px rgba(243,156,18,0.4), inset 0 0 15px rgba(243,156,18,0.15)';
                                 }}
                                 onMouseLeave={e => {
-                                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(201,162,39,0.2), rgba(201,162,39,0.08))';
-                                    e.currentTarget.style.boxShadow = 'none';
+                                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(35,26,14,0.9), rgba(20,14,7,0.95))';
+                                    e.currentTarget.style.borderColor = 'rgba(243,156,18,0.55)';
+                                    e.currentTarget.style.boxShadow = '0 0 20px rgba(243,156,18,0.18), inset 0 0 12px rgba(0,0,0,0.5)';
                                 }}
                             >
-                                <div style={{ color: '#c9a227', fontSize: '16px', fontWeight: 'bold', marginBottom: '6px' }}>
+                                <div style={{
+                                    fontFamily: "'Cinzel', serif",
+                                    color: '#f39c12', fontSize: '18px', fontWeight: '600',
+                                    letterSpacing: '1px', marginBottom: '8px'
+                                }}>
                                     {nextSkill.name}
                                     {nextSkill.nextLevel > 1 ? ` (Upgrade to Level ${nextSkill.nextLevel})` : ''}
                                 </div>
-                                <div style={{ color: '#aaa', fontSize: '12px', lineHeight: 1.5 }}>
+                                <div style={{
+                                    fontFamily: "'Outfit', 'Inter', sans-serif",
+                                    color: '#b0a898', fontSize: '13px', lineHeight: 1.5
+                                }}>
                                     {nextSkill.desc}
                                 </div>
                             </div>
@@ -939,10 +1003,12 @@ class ShrineScreen extends React.Component {
                             <button
                                 onClick={() => this.props.onShrineComplete({ success: true, shrineData, selectedSkill: null })}
                                 style={{
-                                    background: 'rgba(201,162,39,0.15)', border: '1px solid rgba(201,162,39,0.5)',
-                                    color: '#c9a227', padding: '10px 28px', borderRadius: '6px',
-                                    cursor: 'pointer', fontSize: '13px', letterSpacing: '1px',
-                                    fontFamily: 'inherit',
+                                    fontFamily: "'Cinzel', serif",
+                                    background: 'rgba(243,156,18,0.14)', border: '1px solid rgba(243,156,18,0.45)',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+                                    color: '#e2cca6', padding: '10px 30px', borderRadius: '8px',
+                                    cursor: 'pointer', fontSize: '13px', letterSpacing: '1.5px',
+                                    textTransform: 'uppercase', transition: 'all 0.2s ease',
                                 }}
                             >
                                 Return to Dungeon

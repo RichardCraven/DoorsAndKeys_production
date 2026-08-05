@@ -90,6 +90,16 @@ import archaic_familiar_portrait from '../assets/familiars/stone_familiar_dorman
 import stone_familiar_dormant from '../assets/familiars/stone_familiar_dormant.png'
 import stone_familiar_glowing from '../assets/familiars/stone familiar glowing.png'
 
+import eidolon from '../assets/portraits/monsters/stages/eidolon/eidolon.png'
+import eidolon_greeting from '../assets/portraits/monsters/stages/eidolon/eidolon_greeting.png'
+import eidolon_death1 from '../assets/portraits/monsters/stages/eidolon/death/death1.png'
+import eidolon_death2 from '../assets/portraits/monsters/stages/eidolon/death/death2.png'
+import eidolon_death3 from '../assets/portraits/monsters/stages/eidolon/death/death3.png'
+import eidolon_death4 from '../assets/portraits/monsters/stages/eidolon/death/death4.png'
+import eidolon_death5 from '../assets/portraits/monsters/stages/eidolon/death/death5.png'
+import eidolon_death6 from '../assets/portraits/monsters/stages/eidolon/death/death6.png'
+import eidolon_death7 from '../assets/portraits/monsters/stages/eidolon/death/death7.png'
+
 import arrowUp from '../assets/graphics/arrow_up.png'
 import arrowDown from '../assets/graphics/arrow_down.png'
 import reaper_card_back from '../assets/graphics/card_duel/reaper_card_back.png'
@@ -1020,6 +1030,7 @@ import pressure_points_monk from '../assets/icons/global skills/Monk/pressure po
 import astral_map_monk from '../assets/icons/global skills/Monk/astral map.png';
 import spirit_sight_summoner from '../assets/icons/global skills/Summoner/spirit sight.png';
 import plunder_summoner from '../assets/icons/global skills/Summoner/plunder.png';
+import soul_tap_summoner from '../assets/icons/global skills/Summoner/sould tap.png';
 import soul_tithe_summoner from '../assets/icons/global skills/Summoner/soul tithe.png';
 import dark_pact_summoner from '../assets/icons/global skills/Summoner/dark pact.png';
 
@@ -1160,6 +1171,11 @@ import shimmering_dust from '../assets/icons/loot/Enchantment_07_magicdust.png';
 import monadic_nugget from '../assets/icons/loot/monadic_nugget.png';
 import tattoo_ink from '../assets/icons/items/potions/Res_42_ink.png';
 
+// ── Misc Materials / Building Resources ─────────────────────────────────────
+import wood from '../assets/icons/misc materials/wood.png';
+import stone from '../assets/icons/misc materials/stone.png';
+import slate from '../assets/icons/misc materials/slate.png';
+
 // ── Buildings & Buildables ──────────────────────────────────────────────────
 import campfire from '../assets/icons/buildings/campfire.png';
 import dead_campfire from '../assets/icons/buildings/dead campfire.png';
@@ -1185,6 +1201,7 @@ import reaper_health_orb from '../assets/icons/reaper-health-orb.png';
 import crew_health_orb from '../assets/icons/crew-health-orb.png';
 
 // ── Pygmies Denizens ────────────────────────────────────────────────────────
+import cave_group from '../assets/portraits/pygmies/cave-group.png';
 import cave_individual from '../assets/portraits/pygmies/cave-individual.png';
 import cave_squad from '../assets/portraits/pygmies/cave-squad.png';
 import mud_group from '../assets/portraits/pygmies/mud-group.png';
@@ -1199,6 +1216,11 @@ const cave_pygmies = cave_squad;
 const save_pygmies = cave_squad;
 const woodland_pygmies = woodland_warband;
 const pygmies = woodland_warband;
+
+const cave_pygmy_group = cave_group;
+const woodland_pygmy_group = woodland_group;
+const mud_pygmy_group = mud_group;
+
 
 const basilisk_cultist = basilisk_cultists;
 const basilisk_cultist_portrait = basilisk_cultists_portrait;
@@ -2240,6 +2262,7 @@ export {
     astral_map_monk,
     spirit_sight_summoner,
     plunder_summoner,
+    soul_tap_summoner,
     soul_tithe_summoner,
     dark_pact_summoner,
     codex,
@@ -2353,6 +2376,7 @@ export {
     crew_health_orb,
 
     // ── Pygmies Denizens ────────────────────────────────────────────────────────
+    cave_group,
     cave_individual,
     cave_squad,
     mud_group,
@@ -2366,4 +2390,24 @@ export {
     cave_pygmies,
     woodland_pygmies,
     pygmies,
+    cave_pygmy_group,
+    woodland_pygmy_group,
+    mud_pygmy_group,
+
+    // ── Misc Materials ─────────────────────────────────────────────────────────
+    wood,
+    stone,
+    slate,
+
+    // Eidolon & Mimicry
+    eidolon,
+    eidolon as mimicry,
+    eidolon_greeting,
+    eidolon_death1,
+    eidolon_death2,
+    eidolon_death3,
+    eidolon_death4,
+    eidolon_death5,
+    eidolon_death6,
+    eidolon_death7,
 };

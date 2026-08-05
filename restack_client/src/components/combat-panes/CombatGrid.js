@@ -735,8 +735,18 @@ const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
         if (greetingInProcess && unit.isMainMonster && sp.greeting) {
             return resolvePortrait(sp.greeting);
         }
-        if (unit.dead && sp.death) {
-            return resolvePortrait(sp.death);
+        if (unit.dead) {
+            const deathList = Array.isArray(sp.death) ? sp.death : (Array.isArray(sp.deathStages) ? sp.deathStages : null);
+            if (deathList && deathList.length > 0) {
+                const deathStart = unit.deathTimestamp || unit.deathStartTime || (unit._deathStartTime = unit._deathStartTime || Date.now());
+                const elapsed = Date.now() - deathStart;
+                const frameDuration = 320;
+                const frameIdx = Math.min(deathList.length - 1, Math.floor(elapsed / frameDuration));
+                return resolvePortrait(deathList[frameIdx]);
+            }
+            if (sp.death) {
+                return resolvePortrait(sp.death);
+            }
         }
         if (typeof unit.hp === 'number' && typeof unit.starting_hp === 'number' && unit.starting_hp > 0) {
             const hpRatio = unit.hp / unit.starting_hp;
@@ -751,7 +761,7 @@ const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
     return resolvePortrait(
         (unit.type === 'archaic_familiar' && activeAnimations && activeAnimations.some(a => a.sourceUnitId === unit.id))
         ? 'stone_familiar_glowing'
-        : unit.portrait
+        : (unit.portrait || unit.type || unit.subtype)
     );
 };
 
@@ -2500,6 +2510,35 @@ export default function CombatGrid(props) {
                             />
                         )}
                         {SHOW_MONSTER_IDS ? unit.id : null}
+                        {unit.mimicTargetPortrait && (
+                            <div
+                                className="mimicry-overlay-portrait"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: `url("${resolvePortrait(unit.mimicTargetPortrait)}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    backgroundRepeat: 'no-repeat',
+                                    filter: 'invert(0.85) hue-rotate(180deg) contrast(1.2) drop-shadow(0 0 10px rgba(236, 72, 153, 0.9))',
+                                    transform: (() => {
+                                        const isFighterTarget = unit.mimicTargetIsFighter !== false;
+                                        const needFlip = isFighterTarget
+                                            ? (unit.facing === 'left' || unit.facing !== 'right')
+                                            : (unit.facing === 'right');
+                                        return needFlip ? 'scaleX(-1) scaleY(-1)' : 'scaleY(-1)';
+                                    })(),
+                                    transformOrigin: 'center center',
+                                    opacity: (unit.mimicryActive && !isDead) ? 1 : 0,
+                                    transition: 'opacity 0.6s ease-in-out',
+                                    pointerEvents: 'none',
+                                    zIndex: 3
+                                }}
+                            />
+                        )}
                         {unit.wounded && <div className="hit-flash-overlay" />}
                         {unit.type === 'darkness_sphere' && (
                             <div
@@ -3036,6 +3075,63 @@ export default function CombatGrid(props) {
                     zIndex: 3500,
                     animation: 'scaleUpFadeOut 1.5s ease-out forwards',
                 }} />
+            );
+        }
+
+        if (anim.type === 'mimicry_beam' && anim.srcPx && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: `${anim.length}px`,
+                    height: '8px',
+                    transformOrigin: '0% 50%',
+                    transform: `rotate(${anim.angle}deg)`,
+                    background: 'linear-gradient(90deg, rgba(255,0,255,0.9), rgba(0,255,255,0.9), rgba(255,255,255,1), rgba(138,43,226,0.9))',
+                    boxShadow: '0 0 20px #ff00ff, 0 0 40px #00ffff',
+                    borderRadius: '4px',
+                    pointerEvents: 'none',
+                    zIndex: 4200,
+                    animation: 'scaleUpFadeOut 1.2s ease-out forwards'
+                }} />
+            );
+        }
+
+        if (anim.type === 'mimicry_dazzle_overlay' && anim.tgtPx) {
+            return (
+                <React.Fragment key={key}>
+                    <div style={{
+                        position: 'absolute',
+                        left: `${anim.tgtPx.x}px`,
+                        top: `${anim.tgtPx.y}px`,
+                        width: '140px',
+                        height: '140px',
+                        transform: 'translate(-50%, -50%)',
+                        background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(236,72,153,0.8) 40%, rgba(59,130,246,0.6) 70%, transparent 100%)',
+                        boxShadow: '0 0 35px #ec4899, 0 0 70px #3b82f6',
+                        borderRadius: '50%',
+                        pointerEvents: 'none',
+                        zIndex: 4300,
+                        animation: 'scaleUpFadeOut 1.5s cubic-bezier(0.15, 0.85, 0.35, 1) forwards'
+                    }} />
+                    {anim.srcPx && (
+                        <div style={{
+                            position: 'absolute',
+                            left: `${anim.srcPx.x}px`,
+                            top: `${anim.srcPx.y}px`,
+                            width: '140px',
+                            height: '140px',
+                            transform: 'translate(-50%, -50%)',
+                            background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(168,85,247,0.8) 40%, rgba(14,165,233,0.6) 70%, transparent 100%)',
+                            boxShadow: '0 0 35px #a855f7, 0 0 70px #0ea5e9',
+                            borderRadius: '50%',
+                            pointerEvents: 'none',
+                            zIndex: 4300,
+                            animation: 'scaleUpFadeOut 1.5s cubic-bezier(0.15, 0.85, 0.35, 1) forwards'
+                        }} />
+                    )}
+                </React.Fragment>
             );
         }
 
@@ -4411,6 +4507,44 @@ export default function CombatGrid(props) {
                     filter: 'blur(1.5px)',
                     animation: 'pinkBeamPulse 1.5s ease-out forwards',
                 }} />
+            );
+        }
+
+        if (anim.type === 'soul_tap_beam' && anim.srcPx && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: `${anim.length}px`,
+                    height: '10px',
+                    background: 'linear-gradient(to right, rgba(46, 204, 113, 0.2), #2ecc71, #abebc6, #2ecc71, rgba(46, 204, 113, 0.2))',
+                    boxShadow: '0 0 14px #2ecc71, 0 0 26px #27ae60',
+                    transformOrigin: '0 50%',
+                    transform: `rotate(${anim.angle}deg) translateY(-50%)`,
+                    zIndex: 4500,
+                    pointerEvents: 'none',
+                    filter: 'blur(1.2px)',
+                    animation: 'pinkBeamPulse 1.5s ease-out forwards',
+                }}>
+                    {anim.icon && (
+                        <img
+                            src={anim.icon}
+                            alt="Soul Tap"
+                            style={{
+                                position: 'absolute',
+                                left: '50%',
+                                top: '50%',
+                                width: '32px',
+                                height: '32px',
+                                transform: 'translate(-50%, -50%)',
+                                boxShadow: '0 0 12px #2ecc71',
+                                borderRadius: '50%',
+                                border: '1px solid #abebc6'
+                            }}
+                        />
+                    )}
+                </div>
             );
         }
 

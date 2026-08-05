@@ -229,25 +229,54 @@ button{
   background-color: black !important;
   padding: 40px 0px;
   
-  .intro-image{
-    height: 80vh;
-    width: 90vh;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-    position: absolute;
-    transition: all 1.5s;
-    &.wrecked{
-      filter: invert(1) saturate(35.5);
-      transform: perspective(350px) translateX(-3px) translateZ(130px) rotate(40deg)
-      scaleX(1.2) scaleY(0.9) skewX(10deg) skewY(35deg);
-      opacity: 0.5;
+  .intro-image-frame {
+    position: relative;
+    width: min(72vh, 72vw);
+    height: min(72vh, 72vw);
+    max-width: 680px;
+    max-height: 680px;
+    aspect-ratio: 1 / 1;
+    border-radius: 4px;
+    border: 1px solid rgba(212, 168, 68, 0.25);
+    box-shadow: 
+      0 20px 60px rgba(0, 0, 0, 0.95),
+      0 0 40px rgba(0, 0, 0, 0.85);
+    overflow: hidden;
+    background-color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      box-shadow: inset 0 0 45px 12px rgba(0, 0, 0, 0.9);
+      pointer-events: none;
+      z-index: 10;
+      border-radius: 3px;
     }
-    &.more-wrecked{
-      transition: all 1.5s ease-in-out;
-      filter: invert(1) saturate(35.5);
-      transform: perspective(350px) translateX(-3px) translateZ(306px) rotate(40deg)
-      scaleX(1.2) scaleY(0.9) skewX(10deg) skewY(35deg);
+
+    .intro-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      position: absolute;
+      top: 0;
+      left: 0;
+      transition: all 1.5s;
+      &.wrecked {
+        filter: invert(1) saturate(35.5);
+        transform: perspective(350px) translateX(-3px) translateZ(130px) rotate(40deg)
+        scaleX(1.2) scaleY(0.9) skewX(10deg) skewY(35deg);
+        opacity: 0.5;
+      }
+      &.more-wrecked {
+        transition: all 1.5s ease-in-out;
+        filter: invert(1) saturate(35.5);
+        transform: perspective(350px) translateX(-3px) translateZ(306px) rotate(40deg)
+        scaleX(1.2) scaleY(0.9) skewX(10deg) skewY(35deg);
+      }
     }
   }
   .text-container{

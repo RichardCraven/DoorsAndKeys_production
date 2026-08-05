@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
 import { getMeta, storeMeta } from '../utils/session-handler';
-import { loadAllDungeonsRequest, deleteDungeonRequest } from '../utils/api-handler';
+import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest } from '../utils/api-handler';
 
 import skillsMatrix from '../utils/skills-matrix';
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
@@ -40,21 +40,219 @@ const DEFAULT_CLASS_STATS = {
   sage: { str: 3, int: 7, dex: 5, fort: 7, baseHp: 10 }
 };
 
-export default function LandingPage(props) {
-  useEffect(() => {
-    const styleId = 'landing-redux-injected-styles';
-    let styleEl = document.getElementById(styleId);
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = styleId;
-      styleEl.textContent = LANDING_REDUX_CSS;
-      document.head.appendChild(styleEl);
+const CLASS_SPECIALTIES = {
+  sage: [
+    {
+      id: 'herbalist',
+      name: 'Herbalist',
+      description: 'A master of botanical remedies who accelerates natural recovery and improves the potency of all consumables prepared at camp.',
+      bonuses: ['+20% Food Restoration', '+15% Potion Potency', 'Herb Forage Chance']
+    },
+    {
+      id: 'battle_medic',
+      name: 'Battle Medic',
+      description: 'Trained to heal under fire, this specialist applies wards and mending arts with remarkable speed during combat encounters.',
+      bonuses: ['+1 Heal Range', 'Instant Ward Cast', '-20% Healing Cooldown']
+    },
+    {
+      id: 'arcane_scholar',
+      name: 'Arcane Scholar',
+      description: 'A studious keeper of esoteric knowledge whose insight amplifies spell resonance and reveals hidden dungeon lore.',
+      bonuses: ['+2 INT Rating', 'Codex Bonus Reveals', '+10% Arcane Skill Power']
+    },
+    {
+      id: 'ward_keeper',
+      name: 'Ward Keeper',
+      description: 'Specializes in protective circles and defensive barriers, extending the duration and coverage of all protective effects.',
+      bonuses: ['+40% Ward Duration', 'Shared Protection Aura', '-1 Ward AP Cost']
     }
-    return () => {
-      const el = document.getElementById(styleId);
-      if (el) el.remove();
-    };
-  }, []);
+  ],
+  soldier: [
+    {
+      id: 'iron_vanguard',
+      name: 'Iron Vanguard',
+      description: 'A frontline specialist who positions at the tip of every engagement, absorbing punishment and holding ground through attrition.',
+      bonuses: ['+3 Armor Rating', '+25% Taunt Effectiveness', 'Immovable Stance Passive']
+    },
+    {
+      id: 'shield_wall',
+      name: 'Shield Wall',
+      description: 'Trained to form defensive formations, this soldier extends their protection to adjacent allies and punishes flanking attempts.',
+      bonuses: ['Adjacent Ally Block +15%', 'Counter-Flank Riposte', '+10% Fortitude']
+    },
+    {
+      id: 'executioner',
+      name: 'Executioner',
+      description: 'Foregoes defensive training for brutal offensive power, delivering crushing finishing blows against weakened targets.',
+      bonuses: ['+30% Damage vs Low HP', 'Execute Threshold: 15%', '+2 STR Rating']
+    },
+    {
+      id: 'quartermaster',
+      name: 'Quartermaster',
+      description: 'A logistics specialist who stretches expedition resources and ensures the crew operates with maximum efficiency between engagements.',
+      bonuses: ['+10% Resource Conservation', 'Supply Cache Passive', 'Reduced Ration Use']
+    }
+  ],
+  monk: [
+    {
+      id: 'way_empty_fist',
+      name: 'Way of the Empty Fist',
+      description: 'Channels all energy into explosive unarmed strikes, magnifying the damage of every palm blow and counterattack sequence.',
+      bonuses: ['+25% Strike Damage', 'Combo Multiplier +1', '+2 DEX Rating']
+    },
+    {
+      id: 'way_iron_skin',
+      name: 'Way of the Iron Skin',
+      description: 'Hardens the body through rigorous conditioning, granting exceptional resistance to physical and elemental punishment.',
+      bonuses: ['+3 Physical Resistance', '+15% Elemental Mitigation', 'Injury Recovery Bonus']
+    },
+    {
+      id: 'way_wind',
+      name: 'Way of the Wind',
+      description: 'Prioritizes fluid movement and evasion, dramatically increasing mobility and making the monk difficult to pin down.',
+      bonuses: ['+2 Movement Range', '+20% Dodge Rating', 'Repositioning Step Passive']
+    },
+    {
+      id: 'way_mind',
+      name: 'Way of the Mind',
+      description: 'Turns the mind into a weapon, enabling psychic disruption of enemy concentration and enhanced perception of threats.',
+      bonuses: ['+15% Meditation Restore', 'Disrupt Focus Ability', '+2 INT Rating']
+    }
+  ],
+  barbarian: [
+    {
+      id: 'berserkers_blood',
+      name: "Berserker's Blood",
+      description: 'Enters a frenzied state as health drops, growing more dangerous and relentless the closer to death the barbarian becomes.',
+      bonuses: ['Rage Scales with Damage', '+40% Low-HP Attack Speed', 'Pain Threshold Passive']
+    },
+    {
+      id: 'runebound',
+      name: 'Runebound',
+      description: 'Ancient clan runes carved into flesh grant primal magic resistance and channel battle fury into runic strikes.',
+      bonuses: ['+3 Magic Resistance', 'Rune Strike Ability', 'Ancestral Ward Passive']
+    },
+    {
+      id: 'stone_tusk',
+      name: 'Stone Tusk',
+      description: 'Becomes an immovable anchor of the battlefield, trading speed for unbreakable endurance and devastating charge attacks.',
+      bonuses: ['+4 FORT Rating', 'Unstoppable Charge', 'Knockback Immunity']
+    },
+    {
+      id: 'war_howler',
+      name: 'War Howler',
+      description: 'A terrifying war cry specialist whose battle shouts weaken enemy resolve, lower their defenses, and inspire nearby allies.',
+      bonuses: ['Demoralize Aura', 'Ally Morale Boost', '-15% Enemy Defense']
+    }
+  ],
+  engineer: [
+    {
+      id: 'trap_master',
+      name: 'Trap Master',
+      description: 'Perfects the art of mechanical ambush, constructing traps with greater lethality, trigger sensitivity, and blast radius.',
+      bonuses: ['+35% Trap Damage', 'Chain Trigger Passive', '+1 Trap Placement Range']
+    },
+    {
+      id: 'battle_machinist',
+      name: 'Battle Machinist',
+      description: 'Specializes in rapid battlefield construction and turret deployment, keeping pressure on enemies through sustained mechanical fire.',
+      bonuses: ['-20% Turret Deploy Time', '+2 Turret HP', 'Overcharge Shot Passive']
+    },
+    {
+      id: 'demolitions_expert',
+      name: 'Demolitions Expert',
+      description: 'Masters explosive ordnance and area denial, creating controlled blasts that reshape the flow of combat.',
+      bonuses: ['AOE Blast +25%', 'Explosive Chain Passive', 'Smoke Cover Ability']
+    },
+    {
+      id: 'field_medic',
+      name: 'Field Medic',
+      description: 'Applies mechanical ingenuity to medicine, crafting automated recovery devices and emergency stabilization tools.',
+      bonuses: ['Emergency Stabilize Ability', '+10% Camp Heal Bonus', 'Auto-Patch Passive']
+    }
+  ],
+  wizard: [
+    {
+      id: 'elementalist',
+      name: 'Elementalist',
+      description: 'Commands raw elemental forces with amplified intensity, maximizing the destructive output of fire, frost, and lightning.',
+      bonuses: ['+30% Elemental Spell Power', 'Dual Element Cast', '+2 INT Rating']
+    },
+    {
+      id: 'arcanist',
+      name: 'Arcanist',
+      description: 'Channels raw arcane energy with refined precision, reducing spell costs and extending magical endurance across long encounters.',
+      bonuses: ['-25% Mana Cost', '+20% Spell Duration', 'Arcane Reserve Passive']
+    },
+    {
+      id: 'conjurer',
+      name: 'Conjurer',
+      description: 'Bridges the gap between disciplines, summoning arcane constructs and barriers that protect allies and contain enemies.',
+      bonuses: ['Arcane Barrier Ability', '+15% Construct HP', 'Containment Field Passive']
+    },
+    {
+      id: 'rift_walker',
+      name: 'Rift Walker',
+      description: 'Bends spatial reality to reposition allies, displace enemies, and open dimensional shortcuts across the battlefield.',
+      bonuses: ['Dimensional Shift Ability', 'Enemy Displacement', '+2 DEX Rating']
+    }
+  ],
+  ranger: [
+    {
+      id: 'pathfinder',
+      name: 'Pathfinder',
+      description: 'An unmatched scout who reads terrain instinctively, revealing hidden threats and identifying optimal routes through the dungeon.',
+      bonuses: ['+1 Exploration Reveal Radius', 'Ambush Detection Passive', 'Trap Sight Passive']
+    },
+    {
+      id: 'assassins_eye',
+      name: "Assassin's Eye",
+      description: 'Trains the eye for lethal precision, delivering devastating headshots and critical strikes against isolated targets.',
+      bonuses: ['+25% Critical Strike Chance', 'Headshot Passive', '+2 DEX Rating']
+    },
+    {
+      id: 'beast_bonder',
+      name: 'Beast Bonder',
+      description: 'Forms a primal bond with the wilds, gaining the ability to communicate with and command creatures encountered in the dungeon.',
+      bonuses: ['Beast Ally Passive', '+10% Nature Resistance', 'Creature Affinity Bonus']
+    },
+    {
+      id: 'trapper',
+      name: 'Trapper',
+      description: 'Lays intricate snares and pitfalls before battle begins, controlling enemy movement and weakening them before the first blow is struck.',
+      bonuses: ['+2 Trap Placements', 'Ensnare Duration +50%', 'Pre-Combat Lay Passive']
+    }
+  ],
+  summoner: [
+    {
+      id: 'bone_weaver',
+      name: 'Bone Weaver',
+      description: 'Raises undead constructs of unusual resilience, animating the fallen and binding them into a durable skeletal host.',
+      bonuses: ['+30% Undead HP', 'Revive Fallen Minion', '+2 Max Skeleton Cap']
+    },
+    {
+      id: 'rift_keeper',
+      name: 'Rift Keeper',
+      description: 'Stabilizes the arcane rifts used for summoning, reducing the cost of calling creatures and allowing multiple simultaneous summons.',
+      bonuses: ['-20% Summon Cost', '+1 Active Summon Slot', 'Rift Stability Passive']
+    },
+    {
+      id: 'spirit_binder',
+      name: 'Spirit Binder',
+      description: 'Binds ethereal entities to physical anchors, creating persistent spectral guardians that linger long beyond their initial summoning.',
+      bonuses: ['Specter Persistence +60%', 'Ethereal Shield Ability', '+2 INT Rating']
+    },
+    {
+      id: 'void_channeler',
+      name: 'Void Channeler',
+      description: 'Opens a conduit to the void itself, channeling raw entropic energy through minions and amplifying their destructive potential.',
+      bonuses: ['+25% Minion Damage', 'Void Surge Passive', 'Entropy Aura Ability']
+    }
+  ]
+};
+
+
+export default function LandingPage(props) {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showIOSPrompt, setShowIOSPrompt] = useState(false);
 
@@ -93,6 +291,7 @@ export default function LandingPage(props) {
 
   const [showInstanceManager, setShowInstanceManager] = useState(false);
   const [instancesList, setInstancesList] = useState([]);
+  const [usersList, setUsersList] = useState([]);
   const [isLoadingInstances, setIsLoadingInstances] = useState(false);
   const [deletingInstanceId, setDeletingInstanceId] = useState(null);
   const [instanceFeedbackMsg, setInstanceFeedbackMsg] = useState(null);
@@ -118,6 +317,15 @@ export default function LandingPage(props) {
 
       const instances = all.filter((d) => isInstanceDungeonName(d.name) || (d.name && d.name.includes('_')));
       setInstancesList(instances);
+
+      try {
+        const usersRes = await getAllUsersRequest();
+        if (usersRes && usersRes.data) {
+          setUsersList(usersRes.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch users for Instance Manager:', err);
+      }
     } catch (e) {
       console.error('Failed to fetch instances:', e);
     } finally {
@@ -405,6 +613,7 @@ export default function LandingPage(props) {
 
   return (
     <div className="redux-landing-container">
+      <style dangerouslySetInnerHTML={{ __html: LANDING_REDUX_CSS }} />
       {deferredPrompt && (
         <div className="pwa-install-banner">
           <div className="pwa-banner-content">
@@ -452,7 +661,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.3.5 BETA</span>
+          <span className="logo-subtitle">v 0.3.7 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">
@@ -590,7 +799,7 @@ export default function LandingPage(props) {
           </div>
         </div>
 
-        <div className="menu-column">
+        <div className={`menu-column ${!isAdmin ? 'basic-user' : ''}`}>
           {/* Crew Card */}
           <div className="menu-card" onClick={() => setNavCrew(true)}>
             <div className="card-top">
@@ -774,75 +983,189 @@ export default function LandingPage(props) {
                       key={inst.id}
                       style={{
                         display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
+                        flexDirection: 'column',
                         background: 'rgba(12, 10, 9, 0.6)',
                         border: isCurrentActive ? '1px solid #e5b54f' : '1px solid rgba(120, 113, 108, 0.25)',
                         borderRadius: '6px',
                         padding: '14px 18px',
-                        gap: '16px'
+                        gap: '12px'
                       }}
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{
-                            fontWeight: 'bold',
-                            fontSize: '0.95rem',
-                            color: '#ffffff',
-                            fontFamily: "'Outfit', sans-serif"
-                          }}>
-                            🏰 {inst.name}
-                          </span>
-                          {isCurrentActive && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{
-                              background: 'rgba(229, 181, 79, 0.2)',
-                              border: '1px solid rgba(229, 181, 79, 0.4)',
-                              color: '#e5b54f',
-                              fontSize: '0.65rem',
-                              padding: '2px 6px',
-                              borderRadius: '3px',
                               fontWeight: 'bold',
-                              textTransform: 'uppercase'
+                              fontSize: '0.95rem',
+                              color: '#ffffff',
+                              fontFamily: "'Outfit', sans-serif"
                             }}>
-                              Active Session
+                              🏰 {inst.name}
                             </span>
-                          )}
+                            {isCurrentActive && (
+                              <span style={{
+                                background: 'rgba(229, 181, 79, 0.2)',
+                                border: '1px solid rgba(229, 181, 79, 0.4)',
+                                color: '#e5b54f',
+                                fontSize: '0.65rem',
+                                padding: '2px 6px',
+                                borderRadius: '3px',
+                                fontWeight: 'bold',
+                                textTransform: 'uppercase'
+                              }}>
+                                Active Session
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#78716c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            ID: {inst.id} {inst.lastRelockIso ? `• Relocked: ${new Date(inst.lastRelockIso).toLocaleString()}` : ''}
+                          </div>
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#78716c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          ID: {inst.id} {inst.lastRelockIso ? `• Relocked: ${new Date(inst.lastRelockIso).toLocaleString()}` : ''}
-                        </div>
+
+                        <button
+                          onClick={() => handleDeleteInstance(inst.id, inst.name)}
+                          disabled={deletingInstanceId === inst.id}
+                          style={{
+                            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                            border: '1px solid rgba(239, 68, 68, 0.4)',
+                            color: '#ef4444',
+                            padding: '8px 14px',
+                            borderRadius: '4px',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            cursor: deletingInstanceId === inst.id ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s ease',
+                            whiteSpace: 'nowrap'
+                          }}
+                          onMouseEnter={e => {
+                            if (deletingInstanceId !== inst.id) {
+                              e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+                              e.target.style.borderColor = '#ef4444';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (deletingInstanceId !== inst.id) {
+                              e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+                              e.target.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                            }
+                          }}
+                        >
+                          {deletingInstanceId === inst.id ? 'Deleting...' : 'Delete 🗑️'}
+                        </button>
                       </div>
 
-                      <button
-                        onClick={() => handleDeleteInstance(inst.id, inst.name)}
-                        disabled={deletingInstanceId === inst.id}
-                        style={{
-                          backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                          border: '1px solid rgba(239, 68, 68, 0.4)',
-                          color: '#ef4444',
-                          padding: '8px 14px',
-                          borderRadius: '4px',
-                          fontSize: '0.85rem',
-                          fontWeight: 'bold',
-                          cursor: deletingInstanceId === inst.id ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.2s ease',
-                          whiteSpace: 'nowrap'
-                        }}
-                        onMouseEnter={e => {
-                          if (deletingInstanceId !== inst.id) {
-                            e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
-                            e.target.style.borderColor = '#ef4444';
+                      {/* Registered Users Table */}
+                      {(() => {
+                        const registeredUsers = usersList.filter(user => {
+                          if (!user.metadata) return false;
+                          try {
+                            const uMeta = JSON.parse(user.metadata);
+                            return uMeta && uMeta.dungeonId === inst.id;
+                          } catch (e) {
+                            return false;
                           }
-                        }}
-                        onMouseLeave={e => {
-                          if (deletingInstanceId !== inst.id) {
-                            e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
-                            e.target.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-                          }
-                        }}
-                      >
-                        {deletingInstanceId === inst.id ? 'Deleting...' : 'Delete 🗑️'}
-                      </button>
+                        });
+
+                        if (registeredUsers.length === 0) return null;
+
+                        return (
+                          <div style={{
+                            background: 'rgba(0, 0, 0, 0.35)',
+                            borderRadius: '4px',
+                            border: '1px solid rgba(212, 168, 68, 0.15)',
+                            padding: '10px 14px',
+                            marginTop: '4px'
+                          }}>
+                            <div style={{
+                              fontSize: '0.8rem',
+                              color: '#e5b54f',
+                              fontWeight: '700',
+                              marginBottom: '8px',
+                              fontFamily: "'Outfit', sans-serif",
+                              letterSpacing: '0.5px',
+                              textAlign: 'left'
+                            }}>
+                              Registered Players ({registeredUsers.length})
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', color: '#d6d3d1' }}>
+                                <thead>
+                                  <tr style={{ borderBottom: '1px solid rgba(212, 168, 68, 0.25)', textAlign: 'left' }}>
+                                    <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600' }}>Player</th>
+                                    <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600' }}>Leader</th>
+                                    <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600' }}>Entered</th>
+                                    <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600', textAlign: 'right' }}>Time Remaining</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {registeredUsers.map(u => {
+                                    const uMeta = JSON.parse(u.metadata);
+                                    const entryTimeStr = uMeta.dungeonEntryTimestamp
+                                      ? new Date(uMeta.dungeonEntryTimestamp).toLocaleString()
+                                      : 'N/A';
+
+                                    let timeRemainingStr = 'N/A';
+                                    let isExpired = false;
+                                    if (uMeta.dungeonEntryTimestamp) {
+                                      const entryTime = new Date(uMeta.dungeonEntryTimestamp).getTime();
+                                      const elapsed = Date.now() - entryTime;
+                                      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+                                      const remaining = sevenDays - elapsed;
+                                      if (remaining <= 0) {
+                                        timeRemainingStr = 'Expired';
+                                        isExpired = true;
+                                      } else {
+                                        const days = Math.floor(remaining / (24 * 60 * 60 * 1000));
+                                        const hours = Math.floor((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                                        timeRemainingStr = `${days}d ${hours}h`;
+                                      }
+                                    }
+
+                                    return (() => {
+                                      let leaderDisplay = '—';
+                                      try {
+                                        const metaCrew = Array.isArray(uMeta.crew) ? uMeta.crew : [];
+                                        const leaderEntry = metaCrew.find(m => m && m.isLeader);
+                                        if (leaderEntry) {
+                                          const cls = (leaderEntry.type || leaderEntry.image || '').toLowerCase();
+                                          leaderDisplay = cls ? cls.charAt(0).toUpperCase() + cls.slice(1) : '?';
+                                        }
+                                      } catch (e) {}
+                                      return (
+                                        <tr key={u._id} style={{ borderBottom: '1px solid rgba(120, 113, 108, 0.15)' }}>
+                                          <td style={{ padding: '8px 8px', fontWeight: '600', color: '#ffffff', textAlign: 'left' }}>{u.username}</td>
+                                          <td style={{ padding: '8px 8px', textAlign: 'left' }}>
+                                            <span style={{
+                                              display: 'inline-block',
+                                              background: leaderDisplay !== '—' ? 'rgba(212,168,68,0.12)' : 'transparent',
+                                              border: leaderDisplay !== '—' ? '1px solid rgba(212,168,68,0.35)' : 'none',
+                                              color: leaderDisplay !== '—' ? '#e5b54f' : '#6b7280',
+                                              borderRadius: '4px',
+                                              padding: '1px 7px',
+                                              fontSize: '0.7rem',
+                                              fontWeight: '700',
+                                              letterSpacing: '0.5px',
+                                            }}>{leaderDisplay}</span>
+                                          </td>
+                                          <td style={{ padding: '8px 8px', textAlign: 'left' }}>{entryTimeStr}</td>
+                                          <td style={{
+                                            padding: '8px 8px',
+                                            textAlign: 'right',
+                                            color: isExpired ? '#ef4444' : '#10b981',
+                                            fontWeight: '700'
+                                          }}>
+                                            {timeRemainingStr}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })();
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })
@@ -1127,7 +1450,93 @@ export default function LandingPage(props) {
                     )}
                   </div>
                 </div>
+
+                {/* Specialization Panel */}
+                {(() => {
+                  const classKey = uType;
+                  const specialties = CLASS_SPECIALTIES[classKey] || [];
+                  const meta = getMeta() || {};
+                  const isDungeonActive = !!(meta.dungeonId);
+                  const currentMember = Array.isArray(meta.crew)
+                    ? meta.crew.find(c =>
+                      (c.id && showcaseUnit.id && c.id === showcaseUnit.id) ||
+                      (c.type || c.image) === (showcaseUnit.type || showcaseUnit.image)
+                    )
+                    : null;
+                  const selectedSpecialty = currentMember?.specialty || showcaseUnit.specialty || null;
+
+                  if (specialties.length === 0) return null;
+
+                  const handleSelectSpecialty = (specId) => {
+                    if (isDungeonActive) return;
+                    const newMeta = getMeta() || {};
+                    showcaseUnit.specialty = specId;
+                    if (Array.isArray(newMeta.crew)) {
+                      const m = newMeta.crew.find(c =>
+                        (c.id && showcaseUnit.id && c.id === showcaseUnit.id) ||
+                        (c.type || c.image) === (showcaseUnit.type || showcaseUnit.image)
+                      );
+                      if (m) m.specialty = specId;
+                    }
+                    storeMeta(newMeta);
+                    setForceUpdateToggle(prev => prev + 1);
+                  };
+
+                  return (
+                    <div className="crew-showcase-panel specialty-panel">
+                      <h3 className="crew-showcase-panel-title specialty-panel-title">
+                        <span className="specialty-title-diamond" aria-hidden="true"></span>
+                        Specialization
+                        {isDungeonActive && (
+                          <span className="specialty-locked-badge">Locked</span>
+                        )}
+                      </h3>
+
+                      {isDungeonActive && (
+                        <p className="specialty-lock-notice">
+                          This crew member's specialization was sealed upon entering the dungeon. Choose specializations before your next expedition.
+                        </p>
+                      )}
+
+                      {!isDungeonActive && !selectedSpecialty && (
+                        <p className="specialty-prompt-notice">
+                          Select a specialization path. This choice will be sealed when the crew enters the dungeon.
+                        </p>
+                      )}
+
+                      <div className="specialty-grid">
+                        {specialties.map((spec) => {
+                          const isSelected = selectedSpecialty === spec.id;
+                          return (
+                            <div
+                              key={spec.id}
+                              className={`specialty-card ${isSelected ? 'selected' : ''} ${isDungeonActive ? 'locked' : ''}`}
+                              onClick={() => handleSelectSpecialty(spec.id)}
+                              role={isDungeonActive ? undefined : 'button'}
+                              tabIndex={isDungeonActive ? -1 : 0}
+                              onKeyDown={e => { if (!isDungeonActive && (e.key === 'Enter' || e.key === ' ')) handleSelectSpecialty(spec.id); }}
+                            >
+                              <div className="specialty-card-header">
+                                <span className="specialty-card-name">{spec.name}</span>
+                                {isSelected && (
+                                  <span className="specialty-selected-mark" aria-label="Selected">&#10003;</span>
+                                )}
+                              </div>
+                              <p className="specialty-card-desc">{spec.description}</p>
+                              <div className="specialty-bonus-tags">
+                                {spec.bonuses.map((bonus, bi) => (
+                                  <span key={bi} className="specialty-bonus-tag">{bonus}</span>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
+
             </div>
           </div>
         );

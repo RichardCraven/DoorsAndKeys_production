@@ -274,9 +274,12 @@ export function BoardManager(){
         }
         if (type === 'pygmies') {
             const pySubtype = subtype || 'woodland_warband';
-            if (pySubtype === 'mud') return this.getImage('mud_group');
-            if (pySubtype === 'cave' || pySubtype === 'save') return this.getImage('cave_squad');
-            if (pySubtype === 'woodland') return this.getImage('woodland_warband');
+            if (pySubtype === 'cave_group') return this.getImage('cave_group') || this.getImage('cave_squad');
+            if (pySubtype === 'woodland_group') return this.getImage('woodland_group') || this.getImage('woodland_warband');
+            if (pySubtype === 'mud_group') return this.getImage('mud_group');
+            if (pySubtype === 'cave_individual' || pySubtype === 'cave' || pySubtype === 'save') return this.getImage('cave_individual') || this.getImage('cave_squad');
+            if (pySubtype === 'woodland_individual' || pySubtype === 'woodland') return this.getImage('woodland_individual') || this.getImage('woodland_warband');
+            if (pySubtype === 'mud_individual' || pySubtype === 'mud') return this.getImage('mud_individual') || this.getImage('mud_group');
             return this.getImage(pySubtype) || this.getImage('woodland_warband');
         }
         // monsters should render subtype image
@@ -797,7 +800,7 @@ export function BoardManager(){
         if (roll < 0.95) {
             return {
                 kind: 'item',
-                itemKey: this.pickRandom([...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS])
+                itemKey: this.pickRandom([...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS, 'wood', 'stone', 'slate'])
             };
         }
 
@@ -834,7 +837,7 @@ export function BoardManager(){
         if (roll < 0.95) {
             return {
                 kind: 'item',
-                itemKey: this.pickRandom([...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS])
+                itemKey: this.pickRandom([...BREW_INGREDIENT_KEYS, ...REAGENT_KEYS, 'wood', 'stone', 'slate'])
             };
         }
 
@@ -2655,7 +2658,22 @@ export function BoardManager(){
             e.trapRevealed = false;
         });
 
-        const visibleTileIds = this.getReachableTilesWithinSteps(destinationTile.id, 2);
+        // Scout Ahead: an alive soldier leader (or any leader with rally) extends visibility from 2 → 3 tiles
+        let fogRadius = 2;
+        try {
+            const fwMeta = getMeta() || {};
+            const fwCrew = fwMeta.crew || [];
+            const fwLeader = fwCrew.find(m => m && m.isLeader && !m.dead);
+            if (fwLeader) {
+                const isLeaderSoldier = (fwLeader.type || fwLeader.image || '').toLowerCase() === 'soldier';
+                const hasRally = fwLeader.globalSkills && fwLeader.globalSkills.some(s => (typeof s === 'string' ? s : s.key) === 'rally');
+                if (isLeaderSoldier || hasRally) {
+                    fogRadius = 3;
+                }
+            }
+        } catch (e) {}
+
+        const visibleTileIds = this.getReachableTilesWithinSteps(destinationTile.id, fogRadius);
 
         // Helper: strip legacy player-position markers that should never render on the board
         const _clearPlayerMarker = (tile) => {

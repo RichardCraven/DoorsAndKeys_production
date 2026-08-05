@@ -143,6 +143,7 @@ export function MapMaker(props){
     ];
 
     this.buildingOptions = [
+        { key: 'hut', name: 'Hut', image: 'buildable_hut' },
         { key: 'outpost', name: 'Outpost', image: 'buildable_outpost' },
         { key: 'observer_platform', name: 'Observer Platform', image: 'buildable_observer_platform' },
         { key: 'earthen_fort', name: 'Earthen Fort', image: 'buildable_earthen_fort' },

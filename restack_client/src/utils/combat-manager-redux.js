@@ -154,6 +154,7 @@ export function CombatManagerRedux() {
 
     this.getCombatantLogName = (combatant) => {
         if (!combatant) return 'Unknown';
+        if (combatant.mimicryActive && combatant.mimicName) return combatant.mimicName;
         if (combatant.isMinion) return formatCombatText(combatant.type || combatant.name || 'minion');
         return combatant.name || formatCombatText(combatant.type || 'unknown');
     };
@@ -848,6 +849,9 @@ export function CombatManagerRedux() {
             } else if (e.type === 'barbarian') {
                 e.attacks = e.attacks || [];
                 if (!e.attacks.includes('sword_swing')) e.attacks.push('sword_swing');
+            } else if (e.type === 'monk') {
+                e.attacks = e.attacks || [];
+                if (!e.attacks.includes('punch') && !e.attacks.includes('monk_punch')) e.attacks.push('punch');
             }
 
             // Check if unit has archaic_rune equipped in their pet slot, grant them the summon_familiar special skill
@@ -921,6 +925,29 @@ export function CombatManagerRedux() {
                 }
             }
         } catch (e) { console.warn('[Combat] Battle Tactics buff application failed', e); }
+
+        // ── Leadership Aura: alive leader grants +2 DEF to all friendly combatants ──
+        // The aura is stripped if the leader dies (see targetKilled below).
+        try {
+            const leaderData = (this.data.crew || []).find(e => e && e.isLeader && !e.dead);
+            if (leaderData) {
+                const AURA_ROUNDS = 9999;
+                const leaderCombatant = this.combatants[leaderData.id];
+                if (leaderCombatant) {
+                    leaderCombatant.leaderAuraActive = true;
+                }
+                Object.values(this.combatants).forEach(combatant => {
+                    if (!combatant || combatant.isMonster) return;
+                    this._applyBuff(
+                        combatant,
+                        { increase_stats: { stats: [{ stat: 'def', amount: 2 }] } },
+                        'Leadership Aura',
+                        AURA_ROUNDS
+                    );
+                });
+                this.appendCombatLog(`⚔️ ${leaderData.name || 'The Leader'} inspires the party — Leadership Aura grants +2 DEF to all allies!`);
+            }
+        } catch (e) { console.warn('[Combat] Leadership Aura buff application failed', e); }
 
         const m = { ...this.data.monster };
         m.isMonster = true; // Mark as monster early so isLarge/isHuge sizing evaluates correctly for VCT occupied lanes
@@ -1544,6 +1571,7 @@ export function CombatManagerRedux() {
         const oy = unit.coordinates.y;
         unit.coordinates.x = nx;
         unit.coordinates.y = clampedY;
+        this._setCombatantOccupiedCoords(unit);
         if (unit.isSiegeUnit || unit.isSiegeArmy) {
             unit.facing = unit.isMonster ? 'left' : 'right';
         } else if (nx !== ox) {
@@ -2178,6 +2206,10 @@ export function CombatManagerRedux() {
             return;
         }
         target.dead = true;
+        target.deathTimestamp = Date.now();
+        if (target.mimicryActive) {
+            target.mimicryActive = false;
+        }
 
         // Kill all summoned minions summoned by this unit
         Object.values(this.combatants).forEach(c => {
@@ -2242,6 +2274,61 @@ export function CombatManagerRedux() {
             this.appendCombatLog(`Resolve decreased by ${penalty}. Current Resolve: ${meta.resolve}`);
         }
 
+        // ── Morale Collapse: if the dead target was the leader, strip Leadership Aura from all allies ──
+        if (target.leaderAuraActive) {
+            try {
+                Object.values(this.combatants).forEach(c => {
+                    if (!c || c.isMonster || c.dead || c.id === target.id) return;
+                    const auraIdx = (c.activeBuffs || []).findIndex(b => b.name === 'Leadership Aura');
+                    if (auraIdx !== -1) {
+                        const auraBuff = c.activeBuffs[auraIdx];
+                        this._revertBuff(c, auraBuff);
+                        c.activeBuffs.splice(auraIdx, 1);
+                    }
+                });
+                // Apply extra resolve penalty for losing the leader in combat
+                const meta = getMeta();
+                const resolveNow = (meta && typeof meta.resolve === 'number') ? meta.resolve : 100;
+                const collapsePenalty = applyResolvePenalty(5);
+                meta.resolve = Math.max(0, resolveNow - collapsePenalty);
+                storeMeta(meta);
+                this.appendCombatLog(`💔 Morale Collapse! The leader has fallen — Leadership Aura fades. Resolve −${collapsePenalty}. Current Resolve: ${meta.resolve}`);
+            } catch (e) { console.warn('[Combat] Morale Collapse failed', e); }
+        }
+
+        // --- Soul Tap passive skill trigger ---
+        // Whenever a friendly PC unit dies in combat, power accumulated before their death is transferred to the Summoner.
+        const isFriendlyPCUnit = target && (!target.isMonster || isFighter);
+        if (isFriendlyPCUnit) {
+            const accumulatedPower = target.power || 0;
+            const summoner = Object.values(this.combatants).find(c =>
+                c && !c.dead && (c.type === 'summoner' || c.image === 'summoner') && !c.isMonster
+            );
+            if (summoner && !summoner.dead) {
+                const hasSoulTap = (
+                    (summoner.globalSkills && summoner.globalSkills.some(s => (typeof s === 'string' ? s : s.key) === 'soul_tap')) ||
+                    (summoner.skills && summoner.skills.some(s => (typeof s === 'string' ? s : s.key) === 'soul_tap')) ||
+                    (typeof this.getSkillLevel === 'function' && this.getSkillLevel(summoner, 'soul_tap') > 0)
+                );
+                if (hasSoulTap && accumulatedPower > 0) {
+                    const oldPower = summoner.power || 0;
+                    summoner.power = Math.min(100, oldPower + accumulatedPower);
+                    this.appendCombatLog(`✨ Soul Tap: ${this.getCombatantLogName(summoner)} drains ${accumulatedPower} Power from fallen ${this.getCombatantLogName(target)}! (${summoner.power}/100)`);
+                    if (summoner.power >= 100 && oldPower < 100) {
+                        summoner.ultimateActive = true;
+                        this.appendCombatLog(`⚡ ULTIMATE READY for ${this.getCombatantLogName(summoner)}!`);
+                    }
+                    if (target.coordinates && summoner.coordinates) {
+                        if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                            this.animManagerRedux.triggerAbility(target.coordinates, summoner.coordinates, 'soul_tap');
+                        } else if (this.animationManager && typeof this.animationManager.triggerAbility === 'function') {
+                            this.animationManager.triggerAbility(target.coordinates, summoner.coordinates, 'soul_tap');
+                        }
+                    }
+                }
+            }
+        }
+
         if (typeof this.updateData === 'function') {
             this.updateData(clone(this.combatants));
         }
@@ -2249,6 +2336,16 @@ export function CombatManagerRedux() {
         // Trigger fighter death callback so UI can clean up selection states immediately
         if (isFighter && typeof this.onFighterDeath === 'function') {
             try { this.onFighterDeath(target.id); } catch (e) { console.warn('onFighterDeath callback failed', e); }
+        }
+
+        // ── Audio hook ────────────────────────────────────────────────────────
+        if (this.audioManager) {
+            try {
+                this.audioManager.onCombatDeath(
+                    target.type || target.key || target.id,
+                    !target.isMonster
+                );
+            } catch (e) { /* audio errors must never crash combat */ }
         }
 
         setTimeout(() => {
@@ -2323,12 +2420,14 @@ export function CombatManagerRedux() {
         if (!crewAlive) {
             this.combatOver = true;
             this.appendCombatLog('Defeat! The crew has fallen.');
+            if (this.audioManager) { try { this.audioManager.onCombatEnd(false); } catch (e) {} }
             if (this.gameOver) this.gameOver('monstersWin');
             return true;
         }
         if (!monstersAlive) {
             this.combatOver = true;
             this.appendCombatLog('Victory! All enemies defeated.');
+            if (this.audioManager) { try { this.audioManager.onCombatEnd(true); } catch (e) {} }
             if (this.gameOver) this.gameOver('crewWins');
             return true;
         }
@@ -2347,6 +2446,11 @@ export function CombatManagerRedux() {
     /** Wire the new Sandbox-style AnimationManagerRedux (pure state, no canvas) */
     this.connectAnimationManagerRedux = (instance) => {
         this.animManagerRedux = instance;
+    };
+
+    /** Wire the AudioManager singleton so combat events can trigger sounds */
+    this.connectAudioManager = (instance) => {
+        this.audioManager = instance;
     };
 
     this.triggerVisualAbility = (unitId, targetId, ability) => {
@@ -2547,6 +2651,22 @@ export function CombatManagerRedux() {
                     // Tick down active buff/debuff durations
                     this._tickUnitBuffs(unit);
                     this._tickUnitDebuffs(unit);
+
+                    // --- MIMICRY DURATION TICK ---
+                    if (unit.mimicryActive) {
+                        unit.mimicryDuration = (unit.mimicryDuration || 4) - 1;
+                        if (unit.mimicryDuration <= 0) {
+                            const eidolonLogName = this.getCombatantLogName(unit);
+                            unit.mimicryActive = false;
+                            unit.mimicTargetId = null;
+                            unit.mimicTargetName = null;
+                            unit.mimicTargetPortrait = null;
+                            unit.mimicTargetSkills = null;
+                            unit.mimicName = null;
+                            unit.skills = ['mimicry'];
+                            this.appendCombatLog(`🪞 ${eidolonLogName}'s Mimicry effect expires, reverting to Eidolon form.`);
+                        }
+                    }
 
                     // Update UI immediately for status tick changes (e.g. poison, bleed, regeneration)
                     if (typeof this.updateData === 'function') {
@@ -3901,6 +4021,9 @@ export function CombatManagerRedux() {
             seenKeys.add(key);
 
             if (key === 'barbarian_leap_attack' && target && this.targetInRange(unit, target, 'close')) return;
+            if (key === 'monk_ethereal_speed' && unit.etherealSpeedActive) return;
+            if (key === 'monk_third_eye' && unit.thirdEyeActive) return;
+            if (key === 'monk_astral_focus' && unit.astralBeingActive) return;
             if (key === 'regenerate' && (selfHpPct >= 0.50 || unit.regenerating)) return;
             const resolved = this.resolveSpecial(unit, key);
             if (!resolved || resolved.type === 'passive' || resolved.isPassive) return;
@@ -4061,7 +4184,6 @@ export function CombatManagerRedux() {
 
         // Tick Ethereal Speed timer
         if (unit.etherealSpeedActive) {
-            unit.etherealSpeedRoundsLeft = (unit.etherealSpeedRoundsLeft || 1) - 1;
             if (unit.etherealSpeedRoundsLeft <= 0) {
                 unit.etherealSpeedActive = false;
                 unit.etherealSpeedRoundsLeft = 0;
@@ -4069,6 +4191,8 @@ export function CombatManagerRedux() {
                 unit.etherealSpeedTotalDurationMs = 0;
                 unit.etherealSpeedEndTimeMs = 0;
                 this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Ethereal Speed fades.`);
+            } else {
+                unit.etherealSpeedRoundsLeft -= 1;
             }
         }
 
@@ -8212,6 +8336,56 @@ export function CombatManagerRedux() {
             unit.cooldowns[abilityId] = finalCooldown;
         }
 
+        if (abilityId === 'mimicry') {
+            if (!target || target.id === unit.id) return;
+
+            const targetName = target.name || target.type || 'Unit';
+            const targetPortrait = target.portrait || target.image || (typeof target.getPortrait === 'function' ? target.getPortrait() : '');
+
+            const rawTargetSkills = [
+                ...(Array.isArray(target.skills) ? target.skills : []),
+                ...(Array.isArray(target.specials) ? target.specials : []),
+                ...(Array.isArray(target.attacks) ? target.attacks : [])
+            ];
+
+            const copiedSkills = [];
+            const seen = new Set();
+            rawTargetSkills.forEach(s => {
+                const key = this._resolveAbilityKey(s);
+                if (key && !seen.has(key)) {
+                    const resolved = this.resolveSpecial(target, key);
+                    if (resolved && !resolved.isPassive && resolved.type !== 'passive') {
+                        seen.add(key);
+                        copiedSkills.push(key);
+                    }
+                }
+            });
+
+            unit.mimicryActive = true;
+            unit.mimicTargetId = target.id;
+            unit.mimicTargetName = targetName;
+            unit.mimicTargetPortrait = targetPortrait;
+            unit.mimicTargetIsFighter = (!target.isMonster && !target.isMinion);
+            unit.mimicTargetSkills = copiedSkills.length > 0 ? copiedSkills : ['magic_missile', 'sleep'];
+            unit.mimicryDuration = 4;
+            unit.mimicName = `Negative ${targetName}`;
+
+            unit.skills = [...unit.mimicTargetSkills];
+            unit.cooldowns = unit.cooldowns || {};
+            unit.mimicTargetSkills.forEach(k => {
+                unit.cooldowns[k] = 0;
+            });
+
+            this.appendCombatLog(`✨ ${this.getCombatantLogName(unit)} casts Mimicry on ${this.getCombatantLogName(target)} and transforms into a Negative ${targetName}!`);
+
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'mimicry', false, null, unit.id);
+            }
+
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
+        }
+
         // Delegate summon/duplicate/triplicate actions for Summoner
         if (abilityId.startsWith('summon_') && abilityId !== 'summon_spiders' && abilityId !== 'summon_skulls') {
             this._executeSummon(unit, ability, abilityId);
@@ -11529,10 +11703,12 @@ export function CombatManagerRedux() {
         if (target && target.isVCT && target.parentMonsterId && this.combatants[target.parentMonsterId]) {
             target = this.combatants[target.parentMonsterId];
         }
-        const baseAttack = Array.isArray(unit.attacks) && unit.attacks.length > 0 ? unit.attacks[0] : null;
+        const baseAttack = (Array.isArray(unit.attacks) && unit.attacks.length > 0)
+            ? unit.attacks[0]
+            : (unit.type === 'monk' ? 'monk_punch' : (unit.type === 'wizard' ? 'magic_missile' : 'slash'));
         if (!baseAttack) return;
 
-        const attackKey = typeof baseAttack === 'string' ? baseAttack : baseAttack.id;
+        const attackKey = typeof baseAttack === 'string' ? baseAttack : (baseAttack ? baseAttack.id : null);
         if (attackKey && !this._abilityReady(unit, attackKey)) {
             return;
         }
@@ -12364,6 +12540,10 @@ export function CombatManagerRedux() {
      * PBTs live at least 2 rounds, then have a 50% chance to despawn each round.
      */
     this._processPowerBoostTiles = () => {
+        if (this.isShrineEncounter || this.disablePowerBoostTiles) {
+            this.powerBoostTiles = [];
+            return;
+        }
         if (!Array.isArray(this.powerBoostTiles)) this.powerBoostTiles = [];
 
         // Despawn: tick age and apply 50% chance for tiles older than 2 rounds
