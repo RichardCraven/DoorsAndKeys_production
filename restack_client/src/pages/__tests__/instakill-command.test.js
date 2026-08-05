@@ -18,9 +18,10 @@ jest.mock('@coreui/react', () => ({
 }));
 
 describe('Instakill Dev Console Command Unit Test', () => {
-  test('instakill flag logic and monster removal', () => {
+  test('instakill flag logic, instantkill alias, meta flag, and monster removal', () => {
+    let mockMeta = {};
     let state = {
-      instakillNextMonster: false,
+      instakillNextMonster: !!mockMeta.instakillNextMonster,
       devConsoleOutput: []
     };
 
@@ -32,18 +33,21 @@ describe('Instakill Dev Console Command Unit Test', () => {
       }
     };
 
-    // 1. Simulate dev console command 'instakill' or 'ik'
+    // 1. Simulate dev console command 'instakill', 'instantkill', or 'ik'
     const handleCommand = (cmd, raw) => {
-      if (cmd === 'instakill' || cmd === 'ik') {
-        setState(prev => ({
-          instakillNextMonster: !prev.instakillNextMonster,
-          devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Instakill flag: ${!prev.instakillNextMonster}`]
-        }));
+      if (cmd === 'instakill' || cmd === 'instantkill' || cmd === 'ik') {
+        const nextState = !mockMeta.instakillNextMonster;
+        mockMeta.instakillNextMonster = nextState;
+        setState({
+          instakillNextMonster: nextState,
+          devConsoleOutput: [...state.devConsoleOutput, `> ${raw}`, `Instakill flag: ${nextState}`]
+        });
       }
     };
 
-    handleCommand('ik', 'ik');
+    handleCommand('instantkill', 'instantkill');
     expect(state.instakillNextMonster).toBe(true);
+    expect(mockMeta.instakillNextMonster).toBe(true);
 
     // 2. Simulate triggerMonsterBattle execution with instakill active
     const mockRemove = jest.fn();
@@ -57,7 +61,9 @@ describe('Instakill Dev Console Command Unit Test', () => {
     };
 
     const triggerMonsterBattle = (bool, tileId) => {
-      if (bool && state.instakillNextMonster) {
+      const instakillActive = !!(state.instakillNextMonster || mockMeta.instakillNextMonster);
+      if (bool && instakillActive) {
+        mockMeta.instakillNextMonster = false;
         setState({ instakillNextMonster: false });
         if (boardManager && typeof tileId !== 'undefined' && tileId !== null) {
           boardManager.removeDefeatedMonsterTile(tileId);
@@ -71,6 +77,7 @@ describe('Instakill Dev Console Command Unit Test', () => {
     const result = triggerMonsterBattle(true, 105);
     expect(result).toBe('instakilled');
     expect(state.instakillNextMonster).toBe(false);
+    expect(mockMeta.instakillNextMonster).toBe(false);
     expect(mockRemove).toHaveBeenCalledWith(105);
     expect(mockRefresh).toHaveBeenCalled();
   });

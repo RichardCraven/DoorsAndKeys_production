@@ -730,9 +730,6 @@ const resolvePortrait = (portraitVal) => {
 };
 
 const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
-    if (unit && unit.mimicryActive && unit.mimicTargetPortrait && !unit.dead) {
-        return resolvePortrait(unit.mimicTargetPortrait);
-    }
     if (unit && unit.stagedPortraits) {
         const sp = unit.stagedPortraits;
         if (greetingInProcess && unit.isMainMonster && sp.greeting) {
@@ -764,7 +761,7 @@ const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
     return resolvePortrait(
         (unit.type === 'archaic_familiar' && activeAnimations && activeAnimations.some(a => a.sourceUnitId === unit.id))
         ? 'stone_familiar_glowing'
-        : unit.portrait
+        : (unit.portrait || unit.type || unit.subtype)
     );
 };
 
@@ -2353,7 +2350,7 @@ export default function SiegeCombatGrid(props) {
             unit.isBifurcateCopy ? 'bifurcate-copy-spawning' : '',
             unit.missed ? (((liveMonster.facing || unit.facing) === 'right') ? 'missed-reversed' : 'missed') : '',
             selectedMonster?.id === unit.id ? 'selected' : '',
-            (liveMonster.facing || unit.facing) === 'right' ? 'reversed' : '',
+            ((liveMonster.facing || unit.facing) === 'right' && !unit.mimicryActive) ? 'reversed' : '',
             (liveMonster.facing || unit.facing) === 'up' ? 'facing-up' : '',
             (liveMonster.facing || unit.facing) === 'down' ? 'facing-down' : '',
             liveMonster.chargingUpActive ? 'charging-up' : '',
@@ -2502,6 +2499,36 @@ export default function SiegeCombatGrid(props) {
                             />
                         )}
                         {SHOW_MONSTER_IDS ? unit.id : null}
+                        {unit.mimicTargetPortrait && (
+                            <div
+                                className="mimicry-overlay-portrait"
+                                style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: `url("${resolvePortrait(unit.mimicTargetPortrait)}")`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    backgroundRepeat: 'no-repeat',
+                                    filter: 'invert(0.85) hue-rotate(180deg) contrast(1.2) drop-shadow(0 0 10px rgba(236, 72, 153, 0.9))',
+                                    transform: (() => {
+                                        const isFighterTarget = unit.mimicTargetIsFighter !== false;
+                                        const f = liveMonster.facing || unit.facing;
+                                        const needFlip = isFighterTarget
+                                            ? (f === 'left' || f !== 'right')
+                                            : (f === 'right');
+                                        return needFlip ? 'scaleX(-1) scaleY(-1)' : 'scaleY(-1)';
+                                    })(),
+                                    transformOrigin: 'center center',
+                                    opacity: (unit.mimicryActive && !isDead) ? 1 : 0,
+                                    transition: 'opacity 0.6s ease-in-out',
+                                    pointerEvents: 'none',
+                                    zIndex: 3
+                                }}
+                            />
+                        )}
                         {unit.wounded && <div className="hit-flash-overlay" />}
                         {unit.type === 'darkness_sphere' && (
                             <div

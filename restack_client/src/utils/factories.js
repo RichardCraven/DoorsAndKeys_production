@@ -386,7 +386,8 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                     const speed = (this.stats && typeof this.stats.speed === 'number' && this.stats.speed > 0)
                         ? this.stats.speed
                         : 1;
-                    const regenPerTick = speed * 0.1;
+                    const isMonsterOrMinion = this.isMonster || this.isMinion;
+                    const regenPerTick = (isMonsterOrMinion ? speed : speed * 1.4) * 0.1;
                     this.energy = Math.min(100, (this.energy || 0) + regenPerTick);
                 }
 

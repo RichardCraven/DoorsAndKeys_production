@@ -1153,6 +1153,18 @@ class MonsterBattle extends React.Component {
         }
     }
 
+    resolveIcon = (candidate) => {
+        if (!candidate) return '';
+        if (typeof candidate === 'string') {
+            if (candidate.trim().startsWith('url(')) return candidate.replace(/^url\((.*)?\/\)$/i, '$1').replace(/^['"]|['"]$/g, '');
+            const mapped = images[candidate.trim()];
+            if (mapped) return mapped.default || mapped;
+            return candidate;
+        }
+        if (typeof candidate === 'object' && candidate.default) return candidate.default;
+        return '';
+    }
+
     // Open the skill description popup (called when user clicks a hover-label)
     openSkillPopup = (spec) => {
         const initiallyPaused = !!(this.props.paused || this.props.combatManager?.combatPaused);
@@ -3290,17 +3302,7 @@ class MonsterBattle extends React.Component {
         const fighterId = liveSelectedFighter.id;
 
         // Icon resolution helper
-        const resolveIcon = (candidate) => {
-            if (!candidate) return '';
-            if (typeof candidate === 'string') {
-                if (candidate.trim().startsWith('url(')) return candidate.replace(/^url\((.*)?\/\)$/i, '$1').replace(/^['"]|['"]$/g, '');
-                const mapped = images[candidate.trim()];
-                if (mapped) return mapped.default || mapped;
-                return candidate;
-            }
-            if (typeof candidate === 'object' && candidate.default) return candidate.default;
-            return '';
-        };
+        const resolveIcon = this.resolveIcon;
 
         // Spec resolution helper
         const resolveSpec = (a) => {
@@ -5745,20 +5747,7 @@ class MonsterBattle extends React.Component {
 
                 {this.state.activeSkillPopup && (() => {
                     const spec = this.state.activeSkillPopup;
-                    const iconCandidate = spec.iconUrl || spec.icon;
-                    let iconUrl = '';
-                    if (iconCandidate) {
-                        if (typeof iconCandidate === 'string') {
-                            if (iconCandidate.trim().startsWith('url(')) {
-                                iconUrl = iconCandidate.replace(/^url\((.*)?\)$/i, '$1').replace(/^['"]|['"]$/g, '');
-                            } else {
-                                const mapped = images[iconCandidate.trim()];
-                                iconUrl = mapped ? (mapped.default || mapped) : iconCandidate;
-                            }
-                        } else if (typeof iconCandidate === 'object' && iconCandidate.default) {
-                            iconUrl = iconCandidate.default;
-                        }
-                    }
+                    const iconUrl = this.resolveIcon(spec.iconUrl || spec.icon);
                     const skillName = spec.name || 'Ability';
                     const cd = spec.cooldown || 0;
                     const cost = spec.energy_cost || spec.energyCost || spec.cost || 0;
@@ -5797,7 +5786,7 @@ class MonsterBattle extends React.Component {
                                     borderRadius: '50%',
                                     border: '3px solid #ffb830',
                                     margin: '0 auto 16px auto',
-                                    backgroundImage: iconUrl ? `url(${iconUrl})` : 'none',
+                                    backgroundImage: iconUrl ? `url("${encodeURI(String(iconUrl).replace(/^['"]/g, '').replace(/['"]/g, ''))}")` : 'none',
                                     backgroundSize: 'cover',
                                     backgroundPosition: 'center',
                                     boxShadow: '0 4px 12px rgba(0,0,0,0.5)'

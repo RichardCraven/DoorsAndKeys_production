@@ -112,4 +112,31 @@ describe('Sharpen Blades Special Action & UI Details Popup', () => {
     expect(updates).toHaveLength(1);
     expect(updates[0].text).toContain('no valid cutting weapons were present in the inventory when the process completed');
   });
+
+  test('Sharpen Blades action is disabled when any sharpen action is in progress or completed but not yet dismissed', () => {
+    // 1. Initially, should not be disabled
+    let actions = [];
+    const getActions = () => {
+      const active = (soldier.specialActions || []).some(a => a.type === 'sharpen_blades');
+      return {
+        type: 'sharpen_blades',
+        disabled: active
+      };
+    };
+    
+    expect(getActions().disabled).toBe(false);
+
+    // 2. Queue a sharpen blades action
+    crewManager.beginSpecialAction(soldier, { type: 'sharpen_blades' }, {});
+    expect(getActions().disabled).toBe(true); // in progress -> disabled
+
+    // 3. Fast-forward to completion (not yet dismissed/notified)
+    soldier.specialActions[0].endDate = new Date(Date.now() - 1000);
+    expect(getActions().disabled).toBe(true); // completed but not dismissed -> still disabled!
+
+    // 4. Collect and dismiss (notified = true and filtered out)
+    dungeonPage.checkAndCollectFinishedSpecialActions({ markNotified: true });
+    soldier.specialActions = soldier.specialActions.filter(sa => !(sa.type === 'sharpen_blades' && sa.notified));
+    expect(getActions().disabled).toBe(false); // dismissed -> enabled again!
+  });
 });

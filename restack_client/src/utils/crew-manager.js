@@ -232,7 +232,7 @@ export function CrewManager() {
 
         // Speed
         const spCon = this.statConstituents.speed.all[0];
-        s.speed = combine(spCon);
+        s.speed = get(spCon);
 
         // Vitality / Endurance
         const vitCon = this.statConstituents.vitality.all[0];

@@ -4132,7 +4132,6 @@ export function CombatManagerRedux() {
 
         // Tick Ethereal Speed timer
         if (unit.etherealSpeedActive) {
-            unit.etherealSpeedRoundsLeft = (unit.etherealSpeedRoundsLeft || 1) - 1;
             if (unit.etherealSpeedRoundsLeft <= 0) {
                 unit.etherealSpeedActive = false;
                 unit.etherealSpeedRoundsLeft = 0;
@@ -4140,6 +4139,8 @@ export function CombatManagerRedux() {
                 unit.etherealSpeedTotalDurationMs = 0;
                 unit.etherealSpeedEndTimeMs = 0;
                 this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Ethereal Speed fades.`);
+            } else {
+                unit.etherealSpeedRoundsLeft -= 1;
             }
         }
 
@@ -8312,6 +8313,7 @@ export function CombatManagerRedux() {
             unit.mimicTargetId = target.id;
             unit.mimicTargetName = targetName;
             unit.mimicTargetPortrait = targetPortrait;
+            unit.mimicTargetIsFighter = (!target.isMonster && !target.isMinion);
             unit.mimicTargetSkills = copiedSkills.length > 0 ? copiedSkills : ['magic_missile', 'sleep'];
             unit.mimicryDuration = 4;
             unit.mimicName = `Negative ${targetName}`;

@@ -4,9 +4,6 @@ import { ROCK_DURATION } from '../../utils/shared-constants';
 
 const getMonsterPortrait = (monster, battleData, greetingInProcess) => {
     const liveUnit = battleData?.[monster.id] || monster;
-    if (liveUnit && liveUnit.mimicryActive && liveUnit.mimicTargetPortrait && !liveUnit.dead) {
-        return liveUnit.mimicTargetPortrait.default || liveUnit.mimicTargetPortrait;
-    }
     if (liveUnit && liveUnit.stagedPortraits) {
         const sp = liveUnit.stagedPortraits;
         if (greetingInProcess && liveUnit.isMainMonster && sp.greeting) {
@@ -632,7 +629,7 @@ const MonstersCombatGrid = ({
                                         ${battleData[monster.id]?.dead ? 'dead mummyDeadAnimation' : ''}
                                         ${battleData[monster.id]?.missed ? (battleData[monster.id]?.facing === 'right' ? 'missed-reversed' : 'missed') : ''}
                                         ${selectedMonster?.id === monster.id ? 'selected' : ''}
-                                        ${battleData[monster.id]?.facing === 'right' ? 'reversed' : ''}
+                                        ${(battleData[monster.id]?.facing === 'right' && !battleData[monster.id]?.mimicryActive) ? 'reversed' : ''}
                                         ${battleData[monster.id]?.facing === 'up' ? 'facing-up' : ''}
                                         ${battleData[monster.id]?.facing === 'down' ? 'facing-down' : ''}
                                         ${battleData[monster.id]?.chargingUpActive ? 'charging-up' : ''}
@@ -648,12 +645,9 @@ const MonstersCombatGrid = ({
                                     }}
                                     style={{
                                         backgroundImage: monster.portrait ? `url(${getMonsterPortrait(monster, battleData, greetingInProcess)})` : 'none',
-                                        filter: battleData[monster.id]?.mimicryActive && !battleData[monster.id]?.dead
-                                            ? 'invert(0.85) hue-rotate(180deg) contrast(1.2)'
-                                            : `sepia(${portraitHoveredId === monster.id ? '2' : '0'}) ${battleData[monster.id]?.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''}`,
-                                        transform: battleData[monster.id]?.mimicryActive && !battleData[monster.id]?.dead
-                                            ? 'scaleY(-1)'
-                                            : undefined,
+                                        filter: `sepia(${portraitHoveredId === monster.id ? '2' : '0'}) ${battleData[monster.id]?.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''}`,
+                                        transform: undefined,
+                                        transformOrigin: undefined,
                                         zIndex: 1,
                                         position: 'relative',
                                         // Never apply BulgePortrait when dead — it competes with meltDownDeath
@@ -684,6 +678,36 @@ const MonstersCombatGrid = ({
                                     }}
                                 >
                                     {SHOW_MONSTER_IDS ? monster.id : null}
+                                    {battleData[monster.id]?.mimicTargetPortrait && (
+                                        <div
+                                            className="mimicry-overlay-portrait"
+                                            style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                width: '100%',
+                                                height: '100%',
+                                                backgroundImage: `url(${battleData[monster.id].mimicTargetPortrait.default || battleData[monster.id].mimicTargetPortrait})`,
+                                                backgroundSize: 'cover',
+                                                backgroundPosition: 'center',
+                                                backgroundRepeat: 'no-repeat',
+                                                filter: 'invert(0.85) hue-rotate(180deg) contrast(1.2) drop-shadow(0 0 10px rgba(236, 72, 153, 0.9))',
+                                                transform: (() => {
+                                                    const liveUnit = battleData[monster.id] || monster;
+                                                    const isFighterTarget = liveUnit.mimicTargetIsFighter !== false;
+                                                    const needFlip = isFighterTarget
+                                                        ? (liveUnit.facing === 'left' || liveUnit.facing !== 'right')
+                                                        : (liveUnit.facing === 'right');
+                                                    return needFlip ? 'scaleX(-1) scaleY(-1)' : 'scaleY(-1)';
+                                                })(),
+                                                transformOrigin: 'center center',
+                                                opacity: (battleData[monster.id]?.mimicryActive && !battleData[monster.id]?.dead) ? 1 : 0,
+                                                transition: 'opacity 0.6s ease-in-out',
+                                                pointerEvents: 'none',
+                                                zIndex: 3
+                                            }}
+                                        />
+                                    )}
                                     {/* Blue hit-flash overlay: show for transient flash OR when wounded (keeps behavior consistent with minions) */}
                                     {(showMonsterHitFlash || battleData[monster.id]?.wounded) && (
                                         <div className="hit-flash-overlay" key={monsterHitFlashKey} />

@@ -24,7 +24,8 @@ import {
     updateDungeonRequest,
     updateUserRequest,
     addDungeonRequest,
-    deleteDungeonRequest
+    deleteDungeonRequest,
+    getAllUsersRequest
   } from '../utils/api-handler';
 import {storeMeta, getMeta, getUserId, applyResolvePenalty} from '../utils/session-handler';
 import { keyCleanup, itemCleanup, resolveItemPools, resolveMonsterPools } from '../utils/cache-cleanup';
@@ -1374,13 +1375,13 @@ class DungeonPage extends React.Component {
                 activeTactic,
             });
 
-            // Sharpen Blades action
-            const activeSharpen = (character.specialActions || []).find(a => a.type === 'sharpen_blades' && new Date(a.endDate) > new Date());
+            // Sharpen Blades action: disabled if any sharpen action is in progress or completed but not yet dismissed
+            const hasSharpen = (character.specialActions || []).some(a => a.type === 'sharpen_blades');
             actions.push({
                 type: 'sharpen_blades',
                 name: 'Sharpen Blades',
                 iconUrl: images['shortsword'] || '',
-                disabled: !!activeSharpen,
+                disabled: hasSharpen,
                 subTypes: []
             });
         }
@@ -2455,7 +2456,7 @@ class DungeonPage extends React.Component {
             keysLocked: false,
             portalTransitionClass: '',
             inMonsterBattle: false,
-            instakillNextMonster: false,
+            instakillNextMonster: !!((getMeta() || {}).instakillNextMonster),
             inTowerSiege: false,
             monster: null,
             crewSize: 0,
@@ -3195,6 +3196,43 @@ class DungeonPage extends React.Component {
         }
     }
 
+    checkInstanceTimeouts = async () => {
+        try {
+            const res = await getAllUsersRequest();
+            if (!res || !res.data || !Array.isArray(res.data)) return;
+            const users = res.data;
+            const now = Date.now();
+            const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+            const currentUserId = getUserId();
+
+            for (const user of users) {
+                if (String(user._id) === String(currentUserId)) continue;
+                if (!user.metadata) continue;
+                let userMeta;
+                try {
+                    userMeta = JSON.parse(user.metadata);
+                } catch (e) {
+                    continue;
+                }
+                if (userMeta && userMeta.dungeonId && userMeta.dungeonEntryTimestamp) {
+                    const entryTime = new Date(userMeta.dungeonEntryTimestamp).getTime();
+                    if (now - entryTime > sevenDaysMs) {
+                        console.log(`[DungeonPage] User ${user.username || user._id} instance registration has timed out. Clearing registration.`);
+                        delete userMeta.dungeonId;
+                        delete userMeta.dungeonEntryTimestamp;
+                        try {
+                            await updateUserRequest(user._id, userMeta);
+                        } catch (err) {
+                            console.error(`[DungeonPage] Failed to clear registration for user ${user._id}:`, err);
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('[DungeonPage] Error running checkInstanceTimeouts:', e);
+        }
+    }
+
     componentDidMount(){
         window.debugMode = this.state.debugMode;
         if (this.props.boardManager) {
@@ -3202,6 +3240,16 @@ class DungeonPage extends React.Component {
         }
         this.handleResize();
         this.preloadDungeonTiles();
+
+        try {
+            const meta = getMeta() || {};
+            meta.dungeonEntryTimestamp = new Date().toISOString();
+            storeMeta(meta);
+            updateUserRequest(getUserId(), meta).catch(() => {});
+            this.checkInstanceTimeouts();
+        } catch (e) {
+            console.error('Failed to update dungeonEntryTimestamp or check timeouts:', e);
+        }
         // Migration: normalize legacy equippedSlot keys to 'pet'
         try {
             const metaForMigration = getMeta() || {};
@@ -6827,15 +6875,17 @@ class DungeonPage extends React.Component {
                 return;
             }
 
-            if (cmd === 'instakill' || cmd === 'ik') {
-                this.setState(prev => {
-                    const nextState = !prev.instakillNextMonster;
-                    return {
-                        instakillNextMonster: nextState,
-                        devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Instakill flag: ${nextState ? 'ENABLED (Next encountered monster will be slain instantly)' : 'DISABLED'}`],
-                        devConsoleInput: ''
-                    };
-                });
+            if (cmd === 'instakill' || cmd === 'instantkill' || cmd === 'ik') {
+                const meta = getMeta() || {};
+                const nextState = !meta.instakillNextMonster;
+                meta.instakillNextMonster = nextState;
+                storeMeta(meta);
+                try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch (e) {}
+                this.setState(prev => ({
+                    instakillNextMonster: nextState,
+                    devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Instakill flag: ${nextState ? 'ENABLED (Next encountered monster will be slain instantly)' : 'DISABLED'}`],
+                    devConsoleInput: ''
+                }));
                 try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) {}
                 e.preventDefault();
                 return;
@@ -7101,6 +7151,7 @@ class DungeonPage extends React.Component {
                 // list available commands
                 if (cmd === 'list' || cmd === 'help') {
                     const commands = [
+                        'instakill / instantkill / ik — toggle instakill mode (next encountered monster is slain instantly)',
                         'monster-spawn / monsterspawn / mspawn',
                         'd / debug / debugmode — toggle debug mode on or off',
                         'item-spawn / itemspawn / ispawn',
@@ -8149,7 +8200,12 @@ class DungeonPage extends React.Component {
         }
     }
     triggerMonsterBattle = (bool, tileId) => {
-        if (bool && this.state.instakillNextMonster) {
+        const meta = getMeta() || {};
+        const instakillActive = !!(this.state.instakillNextMonster || meta.instakillNextMonster);
+        if (bool && instakillActive) {
+            meta.instakillNextMonster = false;
+            storeMeta(meta);
+            try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch (e) {}
             this.setState({ instakillNextMonster: false });
             if (this.props.boardManager && (typeof tileId === 'number' || typeof tileId === 'string' || (tileId && typeof tileId.id !== 'undefined'))) {
                 const targetId = typeof tileId === 'object' ? tileId.id : tileId;
@@ -11657,6 +11713,8 @@ class DungeonPage extends React.Component {
                         const mins = Math.ceil(remainingMs / 60000);
                         this.displayMessage(`Sharpen Blades is currently in progress! ${mins} minutes remaining.`);
                     }
+                } else {
+                    this.displayMessage('Sharpen Blades is already complete! Dismiss the training notification to start another.');
                 }
                 return;
             }

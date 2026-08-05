@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
 import { getMeta, storeMeta } from '../utils/session-handler';
-import { loadAllDungeonsRequest, deleteDungeonRequest } from '../utils/api-handler';
+import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest } from '../utils/api-handler';
 
 import skillsMatrix from '../utils/skills-matrix';
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
@@ -291,6 +291,7 @@ export default function LandingPage(props) {
 
   const [showInstanceManager, setShowInstanceManager] = useState(false);
   const [instancesList, setInstancesList] = useState([]);
+  const [usersList, setUsersList] = useState([]);
   const [isLoadingInstances, setIsLoadingInstances] = useState(false);
   const [deletingInstanceId, setDeletingInstanceId] = useState(null);
   const [instanceFeedbackMsg, setInstanceFeedbackMsg] = useState(null);
@@ -316,6 +317,15 @@ export default function LandingPage(props) {
 
       const instances = all.filter((d) => isInstanceDungeonName(d.name) || (d.name && d.name.includes('_')));
       setInstancesList(instances);
+
+      try {
+        const usersRes = await getAllUsersRequest();
+        if (usersRes && usersRes.data) {
+          setUsersList(usersRes.data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch users for Instance Manager:', err);
+      }
     } catch (e) {
       console.error('Failed to fetch instances:', e);
     } finally {
@@ -966,82 +976,171 @@ export default function LandingPage(props) {
                   No dungeon instances found.
                 </div>
               ) : (
-                instancesList.map((inst) => {
+                 instancesList.map((inst) => {
                   const isCurrentActive = getMeta()?.dungeonId === inst.id;
                   return (
                     <div
                       key={inst.id}
                       style={{
                         display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
+                        flexDirection: 'column',
                         background: 'rgba(12, 10, 9, 0.6)',
                         border: isCurrentActive ? '1px solid #e5b54f' : '1px solid rgba(120, 113, 108, 0.25)',
                         borderRadius: '6px',
                         padding: '14px 18px',
-                        gap: '16px'
+                        gap: '12px'
                       }}
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{
-                            fontWeight: 'bold',
-                            fontSize: '0.95rem',
-                            color: '#ffffff',
-                            fontFamily: "'Outfit', sans-serif"
-                          }}>
-                            🏰 {inst.name}
-                          </span>
-                          {isCurrentActive && (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{
-                              background: 'rgba(229, 181, 79, 0.2)',
-                              border: '1px solid rgba(229, 181, 79, 0.4)',
-                              color: '#e5b54f',
-                              fontSize: '0.65rem',
-                              padding: '2px 6px',
-                              borderRadius: '3px',
                               fontWeight: 'bold',
-                              textTransform: 'uppercase'
+                              fontSize: '0.95rem',
+                              color: '#ffffff',
+                              fontFamily: "'Outfit', sans-serif"
                             }}>
-                              Active Session
+                              🏰 {inst.name}
                             </span>
-                          )}
+                            {isCurrentActive && (
+                              <span style={{
+                                background: 'rgba(229, 181, 79, 0.2)',
+                                border: '1px solid rgba(229, 181, 79, 0.4)',
+                                color: '#e5b54f',
+                                fontSize: '0.65rem',
+                                padding: '2px 6px',
+                                borderRadius: '3px',
+                                fontWeight: 'bold',
+                                textTransform: 'uppercase'
+                              }}>
+                                Active Session
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#78716c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            ID: {inst.id} {inst.lastRelockIso ? `• Relocked: ${new Date(inst.lastRelockIso).toLocaleString()}` : ''}
+                          </div>
                         </div>
-                        <div style={{ fontSize: '0.75rem', color: '#78716c', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          ID: {inst.id} {inst.lastRelockIso ? `• Relocked: ${new Date(inst.lastRelockIso).toLocaleString()}` : ''}
-                        </div>
+
+                        <button
+                          onClick={() => handleDeleteInstance(inst.id, inst.name)}
+                          disabled={deletingInstanceId === inst.id}
+                          style={{
+                            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                            border: '1px solid rgba(239, 68, 68, 0.4)',
+                            color: '#ef4444',
+                            padding: '8px 14px',
+                            borderRadius: '4px',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            cursor: deletingInstanceId === inst.id ? 'not-allowed' : 'pointer',
+                            transition: 'all 0.2s ease',
+                            whiteSpace: 'nowrap'
+                          }}
+                          onMouseEnter={e => {
+                            if (deletingInstanceId !== inst.id) {
+                              e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
+                              e.target.style.borderColor = '#ef4444';
+                            }
+                          }}
+                          onMouseLeave={e => {
+                            if (deletingInstanceId !== inst.id) {
+                              e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
+                              e.target.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                            }
+                          }}
+                        >
+                          {deletingInstanceId === inst.id ? 'Deleting...' : 'Delete 🗑️'}
+                        </button>
                       </div>
 
-                      <button
-                        onClick={() => handleDeleteInstance(inst.id, inst.name)}
-                        disabled={deletingInstanceId === inst.id}
-                        style={{
-                          backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                          border: '1px solid rgba(239, 68, 68, 0.4)',
-                          color: '#ef4444',
-                          padding: '8px 14px',
-                          borderRadius: '4px',
-                          fontSize: '0.85rem',
-                          fontWeight: 'bold',
-                          cursor: deletingInstanceId === inst.id ? 'not-allowed' : 'pointer',
-                          transition: 'all 0.2s ease',
-                          whiteSpace: 'nowrap'
-                        }}
-                        onMouseEnter={e => {
-                          if (deletingInstanceId !== inst.id) {
-                            e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.3)';
-                            e.target.style.borderColor = '#ef4444';
+                      {/* Registered Users Table */}
+                      {(() => {
+                        const registeredUsers = usersList.filter(user => {
+                          if (!user.metadata) return false;
+                          try {
+                            const uMeta = JSON.parse(user.metadata);
+                            return uMeta && uMeta.dungeonId === inst.id;
+                          } catch (e) {
+                            return false;
                           }
-                        }}
-                        onMouseLeave={e => {
-                          if (deletingInstanceId !== inst.id) {
-                            e.target.style.backgroundColor = 'rgba(239, 68, 68, 0.15)';
-                            e.target.style.borderColor = 'rgba(239, 68, 68, 0.4)';
-                          }
-                        }}
-                      >
-                        {deletingInstanceId === inst.id ? 'Deleting...' : 'Delete 🗑️'}
-                      </button>
+                        });
+
+                        if (registeredUsers.length === 0) return null;
+
+                        return (
+                          <div style={{
+                            background: 'rgba(0, 0, 0, 0.35)',
+                            borderRadius: '4px',
+                            border: '1px solid rgba(212, 168, 68, 0.15)',
+                            padding: '10px 14px',
+                            marginTop: '4px'
+                          }}>
+                            <div style={{
+                              fontSize: '0.8rem',
+                              color: '#e5b54f',
+                              fontWeight: '700',
+                              marginBottom: '8px',
+                              fontFamily: "'Outfit', sans-serif",
+                              letterSpacing: '0.5px',
+                              textAlign: 'left'
+                            }}>
+                              Registered Players ({registeredUsers.length})
+                            </div>
+                            <div style={{ overflowX: 'auto' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', color: '#d6d3d1' }}>
+                                <thead>
+                                  <tr style={{ borderBottom: '1px solid rgba(212, 168, 68, 0.25)', textAlign: 'left' }}>
+                                    <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600' }}>Player</th>
+                                    <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600' }}>Entered</th>
+                                    <th style={{ padding: '6px 8px', color: '#a8a29e', fontWeight: '600', textAlign: 'right' }}>Time Remaining</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {registeredUsers.map(u => {
+                                    const uMeta = JSON.parse(u.metadata);
+                                    const entryTimeStr = uMeta.dungeonEntryTimestamp 
+                                      ? new Date(uMeta.dungeonEntryTimestamp).toLocaleString() 
+                                      : 'N/A';
+                                      
+                                    let timeRemainingStr = 'N/A';
+                                    let isExpired = false;
+                                    if (uMeta.dungeonEntryTimestamp) {
+                                      const entryTime = new Date(uMeta.dungeonEntryTimestamp).getTime();
+                                      const elapsed = Date.now() - entryTime;
+                                      const sevenDays = 7 * 24 * 60 * 60 * 1000;
+                                      const remaining = sevenDays - elapsed;
+                                      if (remaining <= 0) {
+                                        timeRemainingStr = 'Expired';
+                                        isExpired = true;
+                                      } else {
+                                        const days = Math.floor(remaining / (24 * 60 * 60 * 1000));
+                                        const hours = Math.floor((remaining % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+                                        timeRemainingStr = `${days}d ${hours}h`;
+                                      }
+                                    }
+                                    
+                                    return (
+                                      <tr key={u._id} style={{ borderBottom: '1px solid rgba(120, 113, 108, 0.15)' }}>
+                                        <td style={{ padding: '8px 8px', fontWeight: '600', color: '#ffffff', textAlign: 'left' }}>{u.username}</td>
+                                        <td style={{ padding: '8px 8px', textAlign: 'left' }}>{entryTimeStr}</td>
+                                        <td style={{ 
+                                          padding: '8px 8px', 
+                                          textAlign: 'right', 
+                                          color: isExpired ? '#ef4444' : '#10b981', 
+                                          fontWeight: '700' 
+                                        }}>
+                                          {timeRemainingStr}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })

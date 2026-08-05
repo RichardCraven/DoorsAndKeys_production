@@ -1887,7 +1887,7 @@ const skillsMatrix = {
         tier: 1,
         name: 'Undead Grasp',
         desc: 'Savage close-range claw strike dealing 100% ATK damage with a 20% chance to stun.',
-        icon: images['undead_grasp'],
+        icon: images.undead_grasp,
         cooldown: 4,
         range: 'close',
         type: 'damage',

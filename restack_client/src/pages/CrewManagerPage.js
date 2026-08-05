@@ -21,15 +21,15 @@ const renderPowerRatingsPanel = (crewMember) => {
     const fortVal = typeof s.fort === 'number' ? s.fort : 0;
     
     // Derived stats
-    const spdVal = typeof s.speed === 'number' ? s.speed : Math.round(dexVal * 1.5);
+    const spdVal = typeof s.speed === 'number' ? s.speed : dexVal;
     const defVal = typeof s.def === 'number' ? s.def : Math.round((strVal + dexVal) / 2);
     
     const items = [
         { label: 'STRENGTH', val: strVal, max: 15 },
-        { label: 'SPEED', val: spdVal, max: 20 },
+        { label: 'SPEED', val: spdVal, max: 15 },
         { label: 'AGILITY', val: dexVal, max: 15 },
         { label: 'STAMINA', val: fortVal, max: 15 },
-        { label: 'DURABILITY', val: defVal, max: 20 },
+        { label: 'DURABILITY', val: defVal, max: 15 },
         { label: 'INTELLIGENCE', val: intVal, max: 15 }
     ];
 

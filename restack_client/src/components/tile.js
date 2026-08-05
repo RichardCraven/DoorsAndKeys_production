@@ -320,7 +320,8 @@ function Tile(props) {
     const containsType = getContainsType(currentContains);
     const containsSubtype = getContainsSubtype(currentContains);
     const knownMonsters = [
-        'witch', 'beholder', 'dragon', 'goblin', 'horror', 'imp', 'imp_overlord',
+        'witch', 'beholder', 'dragon', 'goblin', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef',
+        'horror', 'imp', 'imp_overlord',
         'manticore', 'mummy', 'naiad', 'ogre', 'skeleton', 'sphinx', 'troll',
         'wyvern', 'wyvern_alt', 'goloth_devil', 'zul_devil', 'mordu_devil',
         'vukular_devil', 'ishtar_devil', 'black_demon', 'goat_demon',
@@ -673,8 +674,8 @@ function Tile(props) {
                           />
                       )}
 
-                      {/* Faint gold light source glow emanating from behind key items in the dungeon (disabled in palette/builder) */}
-                      {isKeyTile && !isBlackTile && !isBuilderTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
+                      {/* Faint gold light source glow emanating from behind key items in the dungeon (disabled in palette/builder/inventory) */}
+                      {isKeyTile && !isBlackTile && !isBuilderTile && props.type !== 'overlay-tile' && props.type !== 'inventory-tile' && props.type !== 'crew-tile' && props.type !== 'equip-slot' && !props.isInInventory && color !== 'black' && currentTileColor !== 'black' && (
                           <div 
                               className="key-portrait-glow"
                               style={{
