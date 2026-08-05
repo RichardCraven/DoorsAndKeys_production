@@ -51,6 +51,10 @@ describe('MapMakerPage Portal Configurator', () => {
     };
 
     mapmakerInstance = new MapMakerPage(mockProps);
+    mapmakerInstance.setState = function(newState, cb) {
+      this.state = { ...this.state, ...newState };
+      if (cb) cb();
+    };
   });
 
   test('correctly blends live unsaved tiles state when finding dungeon portals', () => {
@@ -132,5 +136,85 @@ describe('MapMakerPage Portal Configurator', () => {
     // The other portal 'portal_new' should be available for linking
     expect(otherPortals.length).toBe(1);
     expect(otherPortals[0].portalId).toBe('portal_new');
+  });
+
+  test('linkPortals establishes symmetric bi-directional target references for both portals', () => {
+    const mockBoard = {
+      id: 'board_1',
+      tiles: [
+        { id: 0, coordinates: [0, 0], contains: { type: 'dungeon_portal', portalId: 'portal_A' } },
+        { id: 1, coordinates: [0, 1], contains: { type: 'dungeon_portal', portalId: 'portal_B' } }
+      ]
+    };
+
+    const mockDungeon = {
+      levels: [
+        {
+          id: 0,
+          front: { miniboards: [mockBoard] }
+        }
+      ]
+    };
+
+    mapmakerInstance.state = {
+      loadedDungeon: mockDungeon,
+      loadedBoard: mockBoard,
+      tiles: mockBoard.tiles,
+      dungeonHasUnsavedChanges: false,
+      boardHasUnsavedChanges: false
+    };
+
+    const tileA = mapmakerInstance.state.tiles[0];
+    const targetB = {
+      tileId: 1,
+      coordinates: [0, 1],
+      miniboardIndex: 0,
+      orientation: 'front',
+      levelId: 0,
+      portalId: 'portal_B',
+      contains: { type: 'dungeon_portal', portalId: 'portal_B' }
+    };
+
+    mapmakerInstance.linkPortals(tileA, 0, 'front', 0, targetB);
+
+    const tileAContains = mapmakerInstance.state.tiles[0].contains;
+    const tileBContains = mapmakerInstance.state.tiles[1].contains;
+
+    // Both sides must point to each other symmetrically
+    expect(tileAContains.targetPortalId).toBe('portal_B');
+    expect(tileAContains.targetCoordinates).toEqual([0, 1]);
+
+    expect(tileBContains.targetPortalId).toBe('portal_A');
+    expect(tileBContains.targetCoordinates).toEqual([0, 0]);
+
+    // Test breakPortalLink
+    mapmakerInstance.breakPortalLink(mapmakerInstance.state.tiles[0], 0, 'front', 0);
+
+    const brokenA = mapmakerInstance.state.tiles[0].contains;
+    const brokenB = mapmakerInstance.state.tiles[1].contains;
+
+    expect(brokenA.targetPortalId).toBeNull();
+    expect(brokenB.targetPortalId).toBeNull();
+  });
+
+  test('initializeTilesFromMap updates boardManager playerTile boardIndex and location to spawn tile', () => {
+    const { BoardManager } = require('../../utils/board-manager');
+    const bm = new BoardManager();
+    
+    // Create a mock miniboard with 225 tiles
+    const tiles = [];
+    for (let i = 0; i < 225; i++) {
+      tiles.push({ id: i, contains: null, color: null });
+    }
+    
+    bm.currentLevel = { id: 0, front: { miniboards: [{ id: 'b0', tiles }] } };
+    bm.currentOrientation = 'F';
+    bm.playerTile = { boardIndex: 0, location: [15, 15] };
+
+    // Initialize board 0 with spawnTileIndex = 131 (col 11, row 8 -> [23, 26])
+    bm.initializeTilesFromMap(0, 131);
+
+    expect(bm.playerTile.boardIndex).toBe(0);
+    expect(bm.playerTile.location).toEqual([23, 26]);
   });
 });

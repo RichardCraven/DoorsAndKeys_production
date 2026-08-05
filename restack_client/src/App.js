@@ -242,7 +242,7 @@ function App(props) {
   const saveUserData = async () => {
     // ...existing code...
     setMenuTrayExpanded(false);
-    if (!props.boardManager.dungeon || !props.boardManager.dungeon.id) return
+    if (!props.boardManager.dungeon || !props.boardManager.dungeon.id || props.boardManager.dungeon.id === 'tutorial_dungeon' || props.boardManager.dungeon.isTutorial) return
     if (!props.boardManager.playerTile || !props.boardManager.playerTile.location) return
     const meta = getMeta()
     const userId = getUserId();
@@ -614,9 +614,10 @@ function App(props) {
           )} />
           <Route exact path="/dungeon" render={(routeProps) => {
             if (!loggedIn) return <Redirect to="/login" />;
+            const isTutorialRoute = routeProps.location && routeProps.location.search && routeProps.location.search.includes('tutorial=dungeon');
             const meta = getMeta();
             const hasCrew = Array.isArray(meta && meta.crew) && meta.crew.length > 0;
-            if (!hasCrew) return <Redirect to="/crewManager" />;
+            if (!hasCrew && !isTutorialRoute) return <Redirect to="/crewManager" />;
             return <DungeonPage {...props} {...routeProps} saveUserData={saveUserData} setNarrativeSequence={setNarrativeSequence} showCoordinates={showCoordinates} registerMessaging={(fn) => { dungeonMessagingRef.current = fn }} />;
           }} />
 

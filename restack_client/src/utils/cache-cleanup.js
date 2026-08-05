@@ -221,7 +221,7 @@ export function resolveItemPools(dungeon, allItems) {
 
                     const chosen = pool[Math.floor(Math.random() * pool.length)];
                     tile.contains = { type: 'item', subtype: chosen };
-                    tile.image = null;
+                    tile.image = allItems[chosen]?.icon || null;
                     resolvedCount++;
                 });
             });

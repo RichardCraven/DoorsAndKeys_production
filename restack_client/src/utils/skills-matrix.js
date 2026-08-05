@@ -858,7 +858,7 @@ const skillsMatrix = {
         id: 'endure',
         tier: 4,
         name: 'Endure',
-        desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%.',
+        desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.',
         icon: images.endure_barbarian,
         cooldown: 0,
         type: 'passive',

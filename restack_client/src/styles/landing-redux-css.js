@@ -1717,5 +1717,33 @@ export const LANDING_REDUX_CSS = `
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Selected Crew Leader Indicator ── */
+.selected-crew-avatar-wrapper.is-leader {
+  overflow: visible !important;
+  box-shadow: 0 0 15px rgba(249, 177, 21, 0.3) !important;
+}
+
+.selected-crew-avatar-wrapper.is-leader::before {
+  content: '';
+  position: absolute;
+  top: -12px; left: -12px; right: -12px; bottom: -12px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='48' fill='none' stroke='%23ca8a04' stroke-width='0.5' stroke-dasharray='1 3'/%3E%3Ccircle cx='50' cy='50' r='45' fill='none' stroke='%23f9b115' stroke-width='0.75' stroke-dasharray='3 2'/%3E%3Cpath d='M 50 1 C 53 7, 56 4, 50 11 C 44 4, 47 7, 50 1 Z' fill='%23f9b115'/%3E%3Cpath d='M 50 99 C 53 93, 56 96, 50 89 C 44 96, 47 93, 50 99 Z' fill='%23f9b115'/%3E%3Cpath d='M 1 50 C 7 47, 4 44, 11 50 C 4 56, 7 53, 1 50 Z' fill='%23f9b115'/%3E%3Cpath d='M 99 50 C 93 47, 96 44, 89 50 C 93 56, 96 53, 99 50 Z' fill='%23f9b115'/%3E%3C/svg%3E");
+  background-size: cover;
+  background-position: center;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 10;
+  animation: spin-slow 40s linear infinite;
+}
+
+@keyframes spin-slow {
+  100% { transform: rotate(360deg); }
+}
+
+.selected-crew-avatar-wrapper.is-leader:hover {
+  transform: translateY(-4px) scale(1.04) !important;
+  box-shadow: 0 0 30px rgba(249, 177, 21, 0.5) !important;
+}
 `;
 
