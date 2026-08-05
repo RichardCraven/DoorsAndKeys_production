@@ -702,7 +702,7 @@ function Tile(props) {
 
                       {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
                       {resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
-                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(resolvedPortraitUrl), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 30 : portraitZIndex, opacity: color === 'black' ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
+                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(resolvedPortraitUrl), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 40 : portraitZIndex, opacity: (color === 'black' || props.isFadingOut) ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
                       )}
 
             {/* Soul Shard custom overlay */}

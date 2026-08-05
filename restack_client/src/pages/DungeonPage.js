@@ -6,6 +6,7 @@ import gifThree from '../assets/highres-gifs/gifThree.gif';
 import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../utils/shared-constants';
 import '../styles/dungeon-board.scss'
 import Tile from '../components/tile'
+import ProjectileCanvas from '../components/ProjectileCanvas'
 import MonsterBattle from './sub-views/MonsterBattle';
 import ShrineScreen from './sub-views/ShrineScreen';
 
@@ -2587,6 +2588,7 @@ class DungeonPage extends React.Component {
         this._setTimeout = (fn, t) => { const id = setTimeout(fn, t); try { this._timers.push(id); } catch(e){}; return id };
         
         this._setInterval = (fn, t) => { const id = setInterval(fn, t); try { this._intervals.push(id); } catch(e){}; return id };
+        this.projectileCanvasRef = React.createRef();
     }
 
     // Reverted to native browser tooltip; no custom tooltip lifecycle is necessary.
@@ -3567,6 +3569,15 @@ class DungeonPage extends React.Component {
             }, 2000);
         } catch (e) {
             console.warn('Error starting Pygmies movement interval', e);
+        }
+
+        // Start 4-second Outpost attack loop
+        try {
+            this.outpostAttackInterval = setInterval(() => {
+                this.tickOutpostAttacks();
+            }, 4000);
+        } catch (e) {
+            console.warn('Error starting Outpost attack interval', e);
         }
         // Ensure initial layout calculations run once on mount so the board renders
         // correctly without requiring a manual window resize.
@@ -4926,6 +4937,7 @@ class DungeonPage extends React.Component {
         // Backwards compat: clear any direct references as well
         try { if (this.realTimeSpecialActionCheckInterval) { clearInterval(this.realTimeSpecialActionCheckInterval); } } catch(e){}
         try { if (this.pygmiesInterval) { clearInterval(this.pygmiesInterval); this.pygmiesInterval = null; } } catch(e){}
+        try { if (this.outpostAttackInterval) { clearInterval(this.outpostAttackInterval); this.outpostAttackInterval = null; } } catch(e){}
         try { if (this.prepCompleteTimeout) { clearTimeout(this.prepCompleteTimeout); this.prepCompleteTimeout = null; } } catch(e){}
         try { if (this.campTimeout) { clearTimeout(this.campTimeout); this.campTimeout = null; } } catch(e){}
         try { if (this.state && this.state.respawnUpdateInterval) { clearInterval(this.state.respawnUpdateInterval); } } catch(e){}
@@ -5359,9 +5371,6 @@ class DungeonPage extends React.Component {
 
                         const checkLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                         if (checkLivePlayerIdx !== null && isAdjacent(currentIdx, checkLivePlayerIdx)) {
-                            toTile.contains = null;
-                            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
-
                             const playerTileObj = bm.tiles[checkLivePlayerIdx] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[checkLivePlayerIdx]);
                             const isHutProtected = playerTileObj && (
                                 playerTileObj.building === 'hut' ||
@@ -5370,6 +5379,8 @@ class DungeonPage extends React.Component {
 
                             if (isHutProtected) {
                                 this.displayMessage('⛺ Your Hut protected your crew from the Pygmy ambush!');
+                                toTile.contains = null;
+                                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                                 ambushed = false;
                                 break;
                             }
@@ -5377,7 +5388,8 @@ class DungeonPage extends React.Component {
                             this.setState({
                                 showPygmiesAttackPopup: true,
                                 attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland',
-                                attackingPygmyIsGroup: isGroupUnit
+                                attackingPygmyIsGroup: isGroupUnit,
+                                attackingPygmyTileIdx: currentIdx
                             });
                             ambushed = true;
                             break;
@@ -5446,11 +5458,95 @@ class DungeonPage extends React.Component {
             console.error('Error handling Pygmies Attack popup close:', e);
         }
 
+        const attackTileIdx = this.state.attackingPygmyTileIdx;
+
         this.setState({
             showPygmiesAttackPopup: false,
             attackingPygmySubtype: null,
-            attackingPygmyIsGroup: false
+            attackingPygmyIsGroup: false,
+            attackingPygmyTileIdx: null
         });
+
+        if (attackTileIdx !== null && attackTileIdx !== undefined && this.props.boardManager && this.props.boardManager.tiles) {
+            const tile = this.props.boardManager.tiles[attackTileIdx];
+            if (tile) {
+                // Set fading flag
+                tile.isFadingOut = true;
+                if (typeof this.props.boardManager.refreshTiles === 'function') this.props.boardManager.refreshTiles();
+                this.forceUpdate();
+
+                setTimeout(() => {
+                    tile.isFadingOut = false;
+                    tile.contains = null;
+                    if (typeof this.props.boardManager.refreshTiles === 'function') this.props.boardManager.refreshTiles();
+                    this.forceUpdate();
+                }, 350); // Matches transition duration
+            }
+        }
+    };
+
+    tickOutpostAttacks = () => {
+        try {
+            const bm = this.props.boardManager;
+            if (!bm || !bm.tiles || !bm.playerTile || !bm.playerTile.location) return;
+
+            const playerTileIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+            if (playerTileIdx === null || playerTileIdx === undefined) return;
+
+            // Outpost criteria: building that is not a hut
+            const outposts = bm.tiles.filter(tile => {
+                if (!tile) return false;
+                const type = bm.getContainsType(tile.contains);
+                const subtype = bm.getContainsSubtype(tile.contains);
+                
+                if (type === 'building' && subtype !== 'hut') return true;
+                if (type !== 'hut' && subtype !== 'hut' && tile.building && tile.building !== 'hut') return true;
+                return false;
+            });
+
+            if (outposts.length === 0) return;
+
+            outposts.forEach(outpost => {
+                if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
+                    this.projectileCanvasRef.current.fireProjectile(outpost.id, playerTileIdx, () => {
+                        this.handleProjectileHitPlayer();
+                    });
+                }
+            });
+        } catch (e) {
+            console.error('Error in tickOutpostAttacks:', e);
+        }
+    };
+
+    handleProjectileHitPlayer = () => {
+        try {
+            let meta = getMeta() || {};
+            const crew = (this.props.crewManager && this.props.crewManager.crew) || meta.crew || [];
+            let totalDamageDealt = 0;
+
+            const updatedCrew = crew.map(member => {
+                if (!member || member.dead) return member;
+                const dmg = Math.floor(Math.random() * 10) + 1; // 1-10 damage
+                totalDamageDealt += dmg;
+                const newHp = Math.max(0, (member.hp || 10) - dmg);
+                const isDead = newHp <= 0;
+                return {
+                    ...member,
+                    hp: newHp,
+                    dead: isDead
+                };
+            });
+
+            meta.crew = updatedCrew;
+            storeMeta(meta);
+            try { if (this.props.crewManager) this.props.crewManager.crew = updatedCrew; } catch(e){}
+            updateUserRequest(getUserId(), meta).catch(err => console.error('Error updating crew after projectile hit:', err));
+
+            this.displayMessage(`💥 An arrow hit your party! Dealt ${totalDamageDealt} total damage to crew.`);
+            this.forceUpdate();
+        } catch (e) {
+            console.error('Error handling projectile hit player:', e);
+        }
     };
 
     handleToggleDebugMode = () => {
@@ -5849,7 +5945,7 @@ class DungeonPage extends React.Component {
                     onDragEnd={this.handleDragEnd}
                     onClick={() => this.toggleSectionCollapse('actions')}
                 >
-                    Actions {collapsed ? '[+]' : '[-]'}
+                    Personal Actions {collapsed ? '[+]' : '[-]'}
                 </div>
                 {!collapsed && (
                     <div className="section-content">
@@ -6295,7 +6391,7 @@ class DungeonPage extends React.Component {
                     onDragEnd={this.handleDragEnd}
                     onClick={() => this.toggleSectionCollapse('quick_actions')}
                 >
-                    Quick Actions {collapsed ? '[+]' : '[-]'}
+                    Group Actions {collapsed ? '[+]' : '[-]'}
                 </div>
                 {!collapsed && (
                     <div className="section-content">
@@ -16269,6 +16365,7 @@ class DungeonPage extends React.Component {
                             handleHover={this.handleHover}
                             type={tile.type}
                             handleClick={this.handleClick}
+                            isFadingOut={!!tile.isFadingOut}
                             >
                             </Tile>
                         })}
@@ -16559,6 +16656,11 @@ class DungeonPage extends React.Component {
                             </div>
                         );
                     })()}
+                    <ProjectileCanvas
+                        ref={this.projectileCanvasRef}
+                        boardSize={this.state.boardSize}
+                        tileSize={this.state.tileSize}
+                    />
                 </div>
             </div>}
 
