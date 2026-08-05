@@ -2301,6 +2301,17 @@ const skillsMatrix = {
         duration: 3,
         range: 'far',
         type: 'debuff'
+    },
+    mimicry: {
+        id: 'mimicry',
+        name: 'Mimicry',
+        desc: "Targets an enemy unit in medium range and transforms into an upside-down negative reflection of it. Copies the target's portrait and all available skills with 0 initial cooldown for 4 turns.",
+        icon: images.mimicry || images.eidolon,
+        cooldown: 4,
+        initialCooldown: 2,
+        duration: 4,
+        range: 'medium',
+        type: 'utility'
     }
 };
 

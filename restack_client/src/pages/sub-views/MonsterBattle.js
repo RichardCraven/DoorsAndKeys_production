@@ -20,6 +20,7 @@ import Canvas from '../../components/Canvas/canvas'
 // import CanvasMagicMissile from '../../components/Canvas/canvas_magic_missile'
 import CombatGrid, { getActiveEffects } from '../../components/combat-panes/CombatGrid'
 import { AnimationManagerRedux } from '../../utils/animation-manager-redux';
+import AudioManager from '../../utils/audio-manager';
 
 import { INTERVALS, INTERVAL_DISPLAY_NAMES } from '../../utils/shared-constants';
 import REAGENTS, { REAGENT_KEYS } from '../../utils/reagents';
@@ -404,6 +405,17 @@ class MonsterBattle extends React.Component {
             this.props.combatManager.connectAnimationManagerRedux(this._animManagerRedux);
         }
 
+        // Wire AudioManager — resumeContext() must be called inside a user-gesture
+        // componentDidMount fires after the initial click that opened MonsterBattle,
+        // so this is a safe place to unlock the AudioContext.
+        this._audioManager = AudioManager.getInstance();
+        this._audioManager.resumeContext();
+        if (typeof this.props.combatManager.connectAudioManager === 'function') {
+            this.props.combatManager.connectAudioManager(this._audioManager);
+        }
+        // Signal combat start for BGM hookpoint
+        try { this._audioManager.onCombatStart(); } catch (e) {}
+
         // Wire Monk teleport callback to set teleportingFighterId
         const monkAI = this.props.combatManager.fighterAI?.roster?.monk;
         if (monkAI) {
@@ -736,6 +748,8 @@ class MonsterBattle extends React.Component {
         try { window.removeEventListener('touchmove', this._boundDragTouchMove); } catch (e) { }
         try { window.removeEventListener('touchend', this._boundDragTouchEnd); } catch (e) { }
         try { window.removeEventListener('touchstart', this._boundContextMenuDismiss); } catch (e) { }
+        // Purge area-specific audio buffers to free RAM when leaving combat
+        try { if (this._audioManager) this._audioManager.purgeDynamicCache(); } catch (e) { }
     }
     monster = () => {
         // console.log('monster: ', this.state.battleData[this.props.monster.id]);

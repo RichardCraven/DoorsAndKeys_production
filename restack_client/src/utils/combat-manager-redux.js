@@ -154,6 +154,7 @@ export function CombatManagerRedux() {
 
     this.getCombatantLogName = (combatant) => {
         if (!combatant) return 'Unknown';
+        if (combatant.mimicryActive && combatant.mimicName) return combatant.mimicName;
         if (combatant.isMinion) return formatCombatText(combatant.type || combatant.name || 'minion');
         return combatant.name || formatCombatText(combatant.type || 'unknown');
     };
@@ -2178,6 +2179,10 @@ export function CombatManagerRedux() {
             return;
         }
         target.dead = true;
+        target.deathTimestamp = Date.now();
+        if (target.mimicryActive) {
+            target.mimicryActive = false;
+        }
 
         // Kill all summoned minions summoned by this unit
         Object.values(this.combatants).forEach(c => {
@@ -2284,6 +2289,16 @@ export function CombatManagerRedux() {
             try { this.onFighterDeath(target.id); } catch (e) { console.warn('onFighterDeath callback failed', e); }
         }
 
+        // ── Audio hook ────────────────────────────────────────────────────────
+        if (this.audioManager) {
+            try {
+                this.audioManager.onCombatDeath(
+                    target.type || target.key || target.id,
+                    !target.isMonster
+                );
+            } catch (e) { /* audio errors must never crash combat */ }
+        }
+
         setTimeout(() => {
             const live = this.combatants[target.id];
             if (live && live.dead) {
@@ -2356,12 +2371,14 @@ export function CombatManagerRedux() {
         if (!crewAlive) {
             this.combatOver = true;
             this.appendCombatLog('Defeat! The crew has fallen.');
+            if (this.audioManager) { try { this.audioManager.onCombatEnd(false); } catch (e) {} }
             if (this.gameOver) this.gameOver('monstersWin');
             return true;
         }
         if (!monstersAlive) {
             this.combatOver = true;
             this.appendCombatLog('Victory! All enemies defeated.');
+            if (this.audioManager) { try { this.audioManager.onCombatEnd(true); } catch (e) {} }
             if (this.gameOver) this.gameOver('crewWins');
             return true;
         }
@@ -2380,6 +2397,11 @@ export function CombatManagerRedux() {
     /** Wire the new Sandbox-style AnimationManagerRedux (pure state, no canvas) */
     this.connectAnimationManagerRedux = (instance) => {
         this.animManagerRedux = instance;
+    };
+
+    /** Wire the AudioManager singleton so combat events can trigger sounds */
+    this.connectAudioManager = (instance) => {
+        this.audioManager = instance;
     };
 
     this.triggerVisualAbility = (unitId, targetId, ability) => {
@@ -2580,6 +2602,22 @@ export function CombatManagerRedux() {
                     // Tick down active buff/debuff durations
                     this._tickUnitBuffs(unit);
                     this._tickUnitDebuffs(unit);
+
+                    // --- MIMICRY DURATION TICK ---
+                    if (unit.mimicryActive) {
+                        unit.mimicryDuration = (unit.mimicryDuration || 4) - 1;
+                        if (unit.mimicryDuration <= 0) {
+                            const eidolonLogName = this.getCombatantLogName(unit);
+                            unit.mimicryActive = false;
+                            unit.mimicTargetId = null;
+                            unit.mimicTargetName = null;
+                            unit.mimicTargetPortrait = null;
+                            unit.mimicTargetSkills = null;
+                            unit.mimicName = null;
+                            unit.skills = ['mimicry'];
+                            this.appendCombatLog(`🪞 ${eidolonLogName}'s Mimicry effect expires, reverting to Eidolon form.`);
+                        }
+                    }
 
                     // Update UI immediately for status tick changes (e.g. poison, bleed, regeneration)
                     if (typeof this.updateData === 'function') {
@@ -8243,6 +8281,55 @@ export function CombatManagerRedux() {
             this._setCooldown(unit, abilityId, finalCooldown);
         } else {
             unit.cooldowns[abilityId] = finalCooldown;
+        }
+
+        if (abilityId === 'mimicry') {
+            if (!target || target.id === unit.id) return;
+
+            const targetName = target.name || target.type || 'Unit';
+            const targetPortrait = target.portrait || target.image || (typeof target.getPortrait === 'function' ? target.getPortrait() : '');
+
+            const rawTargetSkills = [
+                ...(Array.isArray(target.skills) ? target.skills : []),
+                ...(Array.isArray(target.specials) ? target.specials : []),
+                ...(Array.isArray(target.attacks) ? target.attacks : [])
+            ];
+
+            const copiedSkills = [];
+            const seen = new Set();
+            rawTargetSkills.forEach(s => {
+                const key = this._resolveAbilityKey(s);
+                if (key && !seen.has(key)) {
+                    const resolved = this.resolveSpecial(target, key);
+                    if (resolved && !resolved.isPassive && resolved.type !== 'passive') {
+                        seen.add(key);
+                        copiedSkills.push(key);
+                    }
+                }
+            });
+
+            unit.mimicryActive = true;
+            unit.mimicTargetId = target.id;
+            unit.mimicTargetName = targetName;
+            unit.mimicTargetPortrait = targetPortrait;
+            unit.mimicTargetSkills = copiedSkills.length > 0 ? copiedSkills : ['magic_missile', 'sleep'];
+            unit.mimicryDuration = 4;
+            unit.mimicName = `Negative ${targetName}`;
+
+            unit.skills = [...unit.mimicTargetSkills];
+            unit.cooldowns = unit.cooldowns || {};
+            unit.mimicTargetSkills.forEach(k => {
+                unit.cooldowns[k] = 0;
+            });
+
+            this.appendCombatLog(`✨ ${this.getCombatantLogName(unit)} casts Mimicry on ${this.getCombatantLogName(target)} and transforms into a Negative ${targetName}!`);
+
+            if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'mimicry', false, null, unit.id);
+            }
+
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            return;
         }
 
         // Delegate summon/duplicate/triplicate actions for Summoner

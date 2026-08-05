@@ -8,20 +8,7 @@ export default function LoginPage(props) {
   
   const [paneToggle, setPane] = useState('login')
   
-  useEffect(() => {
-    const styleId = 'landing-redux-injected-styles';
-    let styleEl = document.getElementById(styleId);
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = styleId;
-      styleEl.textContent = LANDING_REDUX_CSS;
-      document.head.appendChild(styleEl);
-    }
-    return () => {
-      const el = document.getElementById(styleId);
-      if (el) el.remove();
-    };
-  }, []);
+
 
   const [registerName, setRegName] = useState('')
   const [registerPass1, setRegPass1] = useState('')
@@ -213,6 +200,7 @@ export default function LoginPage(props) {
   }
   return (
     <div className="redux-login-container">
+      <style dangerouslySetInnerHTML={{ __html: LANDING_REDUX_CSS }} />
       <div className="login-card">
         <div className="title-glowing">
           Dream Tower

@@ -10,6 +10,7 @@ import MonsterBattle from './sub-views/MonsterBattle';
 import ShrineScreen from './sub-views/ShrineScreen';
 
 import LevelUpScreen from '../components/LevelUpScreen';
+import BuildMenuModal from '../components/BuildMenuModal';
 import '../styles/level-up-screen.scss';
 import { CombatManagerRedux } from '../utils/combat-manager-redux';
 import CardDuel from './sub-views/CardDuel';
@@ -2531,6 +2532,7 @@ class DungeonPage extends React.Component {
             , chestLootStyle: null
             , showQuestsPopup: false
             , showCampPopup: false
+            , showBuildMenu: false
             , showAvatarRadialMenu: false
             , showPygmiesAttackPopup: false
             , attackingPygmySubtype: null
@@ -4090,7 +4092,11 @@ class DungeonPage extends React.Component {
             let ambushMonster = null;
             if (playerMoved) {
                 let destTileObj = bm.tiles[destIndex];
-                if (destTileObj && destTileObj.contains && destTileObj.contains.type === 'obscured_space') {
+                const isHutProtected = destTileObj && (
+                    destTileObj.building === 'hut' ||
+                    (destTileObj.contains && (destTileObj.contains.subtype === 'hut' || destTileObj.contains.building === 'hut'))
+                );
+                if (destTileObj && destTileObj.contains && destTileObj.contains.type === 'obscured_space' && !isHutProtected) {
                     // Check if an ambush was triggered within the last 2 minutes (120,000 ms)
                     let baseAmbushChance = 0.3;
                     try {
@@ -4888,6 +4894,53 @@ class DungeonPage extends React.Component {
         clearInterval(this.state.intervalId);
     }
 
+    getContiguousTerritoryTileIds = (startTileIdx, clan) => {
+        try {
+            const bm = this.props.boardManager;
+            if (!bm || !bm.tiles) return new Set();
+            const territorySet = new Set();
+            const getTileClan = (tId) => {
+                const tile = bm.tiles[tId];
+                if (!tile) return null;
+                const raw = tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null);
+                if (!raw) return null;
+                return typeof raw === 'object' ? raw.clan || raw.type : String(raw);
+            };
+
+            const targetClan = clan || getTileClan(startTileIdx);
+            if (!targetClan) return new Set();
+
+            const queue = [startTileIdx];
+            const visited = new Set([startTileIdx]);
+
+            while (queue.length > 0) {
+                const curr = queue.shift();
+                const currClan = getTileClan(curr);
+                if (currClan === targetClan) {
+                    territorySet.add(curr);
+                    const row = Math.floor(curr / 15);
+                    const col = curr % 15;
+                    const neighbors = [];
+                    if (row > 0) neighbors.push((row - 1) * 15 + col);
+                    if (row < 14) neighbors.push((row + 1) * 15 + col);
+                    if (col > 0) neighbors.push(row * 15 + (col - 1));
+                    if (col < 14) neighbors.push(row * 15 + (col + 1));
+
+                    for (const n of neighbors) {
+                        if (!visited.has(n) && getTileClan(n) === targetClan) {
+                            visited.add(n);
+                            queue.push(n);
+                        }
+                    }
+                }
+            }
+            return territorySet;
+        } catch (e) {
+            console.warn('Error in getContiguousTerritoryTileIds:', e);
+            return new Set();
+        }
+    };
+
     tickPygmiesMovement = async () => {
         if (this._pygmiesMoving) return;
         this._pygmiesMoving = true;
@@ -4902,32 +4955,19 @@ class DungeonPage extends React.Component {
             const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
             if (playerIdx === null || playerIdx === undefined) return;
 
-            // Find all pygmies tiles on the active board
-            const pygmiesTiles = bm.tiles.filter(t => {
-                const type = bm.getContainsType(t.contains);
-                return type === 'pygmies';
-            });
-
-            if (pygmiesTiles.length === 0) return;
-
             const isAdjacent = (idA, idB) => {
                 if (idA === null || idB === null || idA === undefined || idB === undefined) return false;
-
-                // Check passage walls and room boundaries between tiles
                 if (typeof bm.isPassageWallBlockingBetween === 'function' && bm.isPassageWallBlockingBetween(idA, idB)) {
                     return false;
                 }
 
                 const rA = Math.floor(idA / 15), cA = idA % 15;
                 const rB = Math.floor(idB / 15), cB = idB % 15;
-
-                // Orthogonal adjacency only: North, South, East, West (diagonal DOES NOT count)
                 const rowDiff = Math.abs(rA - rB);
                 const colDiff = Math.abs(cA - cB);
                 const isOrthogonal = (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1);
                 if (!isOrthogonal) return false;
 
-                // Must NOT have a wall, void, or closed gate between or on either tile
                 const tileA = bm.tiles[idA];
                 const tileB = bm.tiles[idB];
                 if (!tileA || !tileB) return false;
@@ -4940,7 +4980,6 @@ class DungeonPage extends React.Component {
                     (gateTypeB && bm.CLOSED_GATE_TYPES && bm.CLOSED_GATE_TYPES.includes(gateTypeB))) {
                     return false;
                 }
-
                 return true;
             };
 
@@ -4950,7 +4989,7 @@ class DungeonPage extends React.Component {
                 if (!tile) return false;
                 if (typeof bm.isVoidTile === 'function' && bm.isVoidTile(tile)) return false;
                 if (tile.isVoid || tile.structure || tile.isWall) return false;
-                // Cannot walk through closed gates
+
                 const gateType = typeof bm.getGateTypeFromTile === 'function' ? bm.getGateTypeFromTile(tile) : null;
                 if (gateType && bm.CLOSED_GATE_TYPES && bm.CLOSED_GATE_TYPES.includes(gateType)) return false;
 
@@ -4959,7 +4998,6 @@ class DungeonPage extends React.Component {
                 return !isBlocked;
             };
 
-            // BFS pathfinder returning shortest array of tile IDs from startIdx to targetIdx
             const getBFSPath = (startIdx, targetIdx) => {
                 if (startIdx === targetIdx) return [startIdx];
                 const queue = [[startIdx]];
@@ -4990,11 +5028,145 @@ class DungeonPage extends React.Component {
 
             const sleep = ms => new Promise(res => setTimeout(res, ms));
 
+            const getNeighbors = (idx) => {
+                const row = Math.floor(idx / 15), col = idx % 15;
+                const list = [];
+                if (row > 0) list.push((row - 1) * 15 + col);
+                if (row < 14) list.push((row + 1) * 15 + col);
+                if (col > 0) list.push(row * 15 + (col - 1));
+                if (col < 14) list.push(row * 15 + (col + 1));
+                return list;
+            };
+
+            // ── 1. Process Earthen Fort Spawning & Consolidation ──
+            const fortTiles = bm.tiles.filter(t => {
+                const cType = bm.getContainsType(t.contains);
+                const cSub = bm.getContainsSubtype(t.contains);
+                return cType === 'building' && cSub === 'earthen_fort';
+            });
+
+            for (const fortTile of fortTiles) {
+                const fortIdx = fortTile.id;
+                const fortLevel = Math.min(3, Math.max(1, fortTile.contains?.level || 1));
+
+                let rawClan = fortTile.territory || fortTile.contains?.territory || bm.tiles[fortIdx]?.territory;
+                let clan = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : (rawClan ? String(rawClan) : null);
+                if (!clan) {
+                    for (const aId of getNeighbors(fortIdx)) {
+                        const aClan = bm.tiles[aId]?.territory;
+                        if (aClan) { clan = String(aClan); break; }
+                    }
+                }
+                if (!clan) clan = 'woodland'; // fallback default
+
+                const contiguousTerritory = this.getContiguousTerritoryTileIds(fortIdx, clan);
+                if (contiguousTerritory.size === 0) contiguousTerritory.add(fortIdx);
+
+                // Find all pygmies associated with this fort or in its territory
+                const associatedPygmies = bm.tiles.filter(t => {
+                    const type = bm.getContainsType(t.contains);
+                    if (type !== 'pygmies') return false;
+                    return t.contains?.homeFortTileId === fortIdx || (t.contains?.homeClan === clan && contiguousTerritory.has(t.id));
+                });
+
+                const hasGroup = associatedPygmies.some(p => p.contains?.isGroup || (p.contains?.subtype && p.contains.subtype.includes('group')));
+                const singlePygmies = hasGroup ? [] : associatedPygmies.filter(p => !p.contains?.isGroup && !(p.contains?.subtype && p.contains.subtype.includes('group')));
+                const singleCount = singlePygmies.length;
+                const maxCapacity = fortLevel; // Level 1: 1, Level 2: 2, Level 3: 3
+
+                // ── Level 3 Fort Consolidation (10% chance per tick when max 3 single pygmies are active) ──
+                if (fortLevel === 3 && singleCount >= 3 && !hasGroup) {
+                    if (!fortTile.isConsolidating) {
+                        if (Math.random() * 100 < 10) {
+                            fortTile.isConsolidating = true;
+                            this.displayMessage(`🪵 The Level 3 Earthen Fort sounds a war horn! Pygmies are consolidating...`);
+                        }
+                    }
+
+                    if (fortTile.isConsolidating) {
+                        let allAtBase = true;
+                        for (const pygmyTile of singlePygmies) {
+                            if (pygmyTile.id === fortIdx) continue;
+                            const path = getBFSPath(pygmyTile.id, fortIdx);
+                            if (path && path.length > 1) {
+                                const nextStep = path[1];
+                                if (nextStep === fortIdx || isWalkableForPygmy(nextStep)) {
+                                    if (nextStep !== fortIdx) allAtBase = false;
+                                    const pygmyData = pygmyTile.contains;
+                                    pygmyTile.contains = null;
+                                    pygmyTile.color = '#6b6057';
+                                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[pygmyTile.id]) {
+                                        bm.currentBoard.tiles[pygmyTile.id].color = '#6b6057';
+                                    }
+                                    if (nextStep !== fortIdx) {
+                                        bm.tiles[nextStep].contains = pygmyData;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (allAtBase) {
+                            // Merge the 3 pygmies into 1 Pygmy Group
+                            for (const pTile of singlePygmies) {
+                                if (pTile.id !== fortIdx) pTile.contains = null;
+                            }
+                            fortTile.isConsolidating = false;
+
+                            const groupSubtype = `${clan}_group`;
+                            const spawnCandidates = [fortIdx, ...getNeighbors(fortIdx)].filter(idx => isWalkableForPygmy(idx) || idx === fortIdx);
+                            const spawnIdx = spawnCandidates.length > 0 ? spawnCandidates[0] : fortIdx;
+
+                            bm.tiles[spawnIdx].contains = {
+                                type: 'pygmies',
+                                subtype: groupSubtype,
+                                homeFortTileId: fortIdx,
+                                homeClan: clan,
+                                isGroup: true
+                            };
+                            bm.tiles[spawnIdx].image = bm.getImageForContains(bm.tiles[spawnIdx].contains, bm.tiles[spawnIdx]);
+
+                            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                            this.forceUpdate();
+                            this.displayMessage(`⚠️ The pygmies have consolidated into a Pygmy War Party!`);
+                        }
+                        continue; // Skip standard random roam during consolidation step
+                    }
+                }
+
+                // ── Fort Spawning Check (20% * level chance per tick if below capacity) ──
+                if (!hasGroup && singleCount < maxCapacity && !fortTile.isConsolidating) {
+                    const spawnChance = 20 * fortLevel; // Level 1: 20%, Level 2: 40%, Level 3: 60%
+                    if (Math.random() * 100 < spawnChance) {
+                        const walkableNeighbors = getNeighbors(fortIdx).filter(idx => isWalkableForPygmy(idx) && contiguousTerritory.has(idx));
+                        if (walkableNeighbors.length > 0) {
+                            const spawnIdx = walkableNeighbors[Math.floor(Math.random() * walkableNeighbors.length)];
+                            const singleSubtype = `${clan}_individual`;
+                            bm.tiles[spawnIdx].contains = {
+                                type: 'pygmies',
+                                subtype: singleSubtype,
+                                homeFortTileId: fortIdx,
+                                homeClan: clan,
+                                isGroup: false
+                            };
+                            bm.tiles[spawnIdx].image = bm.getImageForContains(bm.tiles[spawnIdx].contains, bm.tiles[spawnIdx]);
+
+                            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                            this.forceUpdate();
+                        }
+                    }
+                }
+            }
+
+            // ── 2. Process Pygmy Roaming & Ambush Logic ──
+            const pygmiesTiles = bm.tiles.filter(t => bm.getContainsType(t.contains) === 'pygmies');
+            if (pygmiesTiles.length === 0) return;
+
             for (const pTile of pygmiesTiles) {
-                // Defensive: re-verify pTile still contains pygmies
                 if (bm.getContainsType(pTile.contains) !== 'pygmies') continue;
 
-                // Ensure the pygmy has a valid loaded portrait before moving/attacking
+                const pygmyData = pTile.contains;
+                const isGroupUnit = !!(pygmyData?.isGroup || (typeof pygmyData?.subtype === 'string' && pygmyData.subtype.includes('group')));
+
                 const imgKey = bm.getImageForContains(pTile.contains, pTile);
                 if (!imgKey || !images[imgKey]) {
                     console.warn(`Pygmy portrait not loaded for subtype: ${bm.getContainsSubtype(pTile.contains)}. Skipping movement.`);
@@ -5002,23 +5174,24 @@ class DungeonPage extends React.Component {
                 }
 
                 let currentIdx = pTile.id;
-                const pygmyData = pTile.contains;
 
-                // Verify if Pygmy is already adjacent to the live player avatar before stepping
+                // Verify if Pygmy is already adjacent to player avatar before stepping
                 const initialLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                 if (initialLivePlayerIdx !== null && isAdjacent(currentIdx, initialLivePlayerIdx)) {
                     pTile.isChargingAmbush = true;
                     if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                     this.forceUpdate();
-                    await sleep(1000); // 1 full second delay with escalating red glow
+                    await sleep(1000); // 1s charge-up delay
                     pTile.isChargingAmbush = false;
+
                     const checkLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                     if (checkLivePlayerIdx !== null && isAdjacent(currentIdx, checkLivePlayerIdx)) {
                         pTile.contains = null;
                         if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                         this.setState({
                             showPygmiesAttackPopup: true,
-                            attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland'
+                            attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland',
+                            attackingPygmyIsGroup: isGroupUnit
                         });
                         break;
                     } else {
@@ -5028,13 +5201,18 @@ class DungeonPage extends React.Component {
                     }
                 }
 
-                // Pick random distance between 1 and 3 tiles
-                const targetDistance = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+                // Determine territory restriction for this pygmy
+                const homeClan = pygmyData?.homeClan || pTile.territory;
+                const territorySet = homeClan ? this.getContiguousTerritoryTileIds(currentIdx, homeClan) : null;
 
-                // Find candidate empty tiles reachable within targetDistance
+                const targetDistance = Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
                 const candidateTiles = [];
+
                 for (let i = 0; i < 225; i++) {
                     if (i === currentIdx || !isWalkableForPygmy(i)) continue;
+                    // If pygmy belongs to a territory, NEVER venture outside established territory
+                    if (territorySet && territorySet.size > 0 && !territorySet.has(i)) continue;
+
                     const rowS = Math.floor(currentIdx / 15), colS = currentIdx % 15;
                     const rowT = Math.floor(i / 15), colT = i % 15;
                     const manhattan = Math.abs(rowS - rowT) + Math.abs(colS - colT);
@@ -5048,10 +5226,8 @@ class DungeonPage extends React.Component {
 
                 if (candidateTiles.length === 0) continue;
 
-                // Randomly choose one candidate destination tile
                 const chosen = candidateTiles[Math.floor(Math.random() * candidateTiles.length)];
-                const pathSteps = chosen.path.slice(1); // steps after startIdx
-
+                const pathSteps = chosen.path.slice(1);
                 let ambushed = false;
 
                 for (const nextStepIdx of pathSteps) {
@@ -5059,7 +5235,6 @@ class DungeonPage extends React.Component {
                     const toTile = bm.tiles[nextStepIdx];
                     if (!fromTile || !toTile) break;
 
-                    // Move Pygmy unit 1 tile and clear previous tile color
                     fromTile.contains = null;
                     fromTile.color = '#6b6057';
                     if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[fromTile.id]) {
@@ -5068,36 +5243,44 @@ class DungeonPage extends React.Component {
                     toTile.contains = pygmyData;
                     currentIdx = nextStepIdx;
 
-                    // Check if adjacent to player avatar using live coordinates at this step
                     const currentLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                     if (currentLivePlayerIdx !== null && isAdjacent(currentIdx, currentLivePlayerIdx)) {
-                        // Render the pygmy adjacent to the player with charging red glow
                         toTile.isChargingAmbush = true;
-                        // Always re-apply fog of war so the revealed tile colors are correct
                         try {
                             const pIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                             if (bm.tiles[pIdx]) bm.handleFogOfWar(bm.tiles[pIdx]);
                         } catch (e) {}
                         if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                         this.forceUpdate();
-                        
-                        // 1 full second delay with escalating red glow before attacking
+
                         await sleep(1000);
-                        
                         toTile.isChargingAmbush = false;
-                        // Check if the player is still adjacent after 1 full second
+
                         const checkLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                         if (checkLivePlayerIdx !== null && isAdjacent(currentIdx, checkLivePlayerIdx)) {
                             toTile.contains = null;
                             if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+
+                            const playerTileObj = bm.tiles[checkLivePlayerIdx] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[checkLivePlayerIdx]);
+                            const isHutProtected = playerTileObj && (
+                                playerTileObj.building === 'hut' ||
+                                (playerTileObj.contains && (playerTileObj.contains.subtype === 'hut' || playerTileObj.contains.building === 'hut'))
+                            );
+
+                            if (isHutProtected) {
+                                this.displayMessage('⛺ Your Hut protected your crew from the Pygmy ambush!');
+                                ambushed = false;
+                                break;
+                            }
+
                             this.setState({
                                 showPygmiesAttackPopup: true,
-                                attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland'
+                                attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland',
+                                attackingPygmyIsGroup: isGroupUnit
                             });
                             ambushed = true;
                             break;
                         } else {
-                            // Player moved away! Ambush avoided. Clear glow and stop moving.
                             if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                             this.forceUpdate();
                             ambushed = false;
@@ -5105,7 +5288,6 @@ class DungeonPage extends React.Component {
                         }
                     }
 
-                    // Always re-apply fog of war so tile colors are correct (sanitizes red pygmy placement colors)
                     try {
                         if (typeof bm.getIndexFromCoordinates === 'function' && bm.playerTile && bm.playerTile.location) {
                             const pIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
@@ -5115,7 +5297,6 @@ class DungeonPage extends React.Component {
                     if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
                     this.forceUpdate();
 
-                    // Step delay so Pygmies move tile-by-tile visibly with natural movement pacing
                     await sleep(450);
                 }
 
@@ -5134,9 +5315,12 @@ class DungeonPage extends React.Component {
             const crew = (this.props.crewManager && this.props.crewManager.crew) || meta.crew || [];
             let totalDamageDealt = 0;
 
+            const isGroup = !!this.state.attackingPygmyIsGroup;
+            const multiplier = isGroup ? 3 : 1;
+
             const updatedCrew = crew.map(member => {
                 if (!member || member.dead) return member;
-                const dmg = Math.floor(Math.random() * 5) + 1; // 1 to 5 damage
+                const dmg = (Math.floor(Math.random() * 5) + 1) * multiplier; // 1-5 for single, 3-15 for group (3x)
                 totalDamageDealt += dmg;
                 const newHp = Math.max(0, (member.hp || 10) - dmg);
                 const isDead = newHp <= 0;
@@ -5152,16 +5336,19 @@ class DungeonPage extends React.Component {
             try { if (this.props.crewManager) this.props.crewManager.crew = updatedCrew; } catch(e){}
             updateUserRequest(getUserId(), meta).catch(err => console.error('Error updating crew after pygmies attack:', err));
 
-            if (this.props.boardManager && typeof this.props.boardManager.messaging === 'function') {
-                this.props.boardManager.messaging(`⚔️ Pygmies ambushed! Your crew took total ${totalDamageDealt} damage.`);
-            }
+            const activeMsg = isGroup
+                ? `🪵 Pygmy War Party ambushed your crew dealing ${totalDamageDealt} total damage (3x multiplier)!`
+                : `🪵 Pygmy ambushed your crew dealing ${totalDamageDealt} total damage!`;
+
+            this.displayMessage(activeMsg);
         } catch (e) {
             console.error('Error handling Pygmies Attack popup close:', e);
         }
 
         this.setState({
             showPygmiesAttackPopup: false,
-            attackingPygmySubtype: null
+            attackingPygmySubtype: null,
+            attackingPygmyIsGroup: false
         });
     };
 
@@ -8513,6 +8700,12 @@ class DungeonPage extends React.Component {
         };
         const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
         const isInputFocused = activeTag === 'input' || activeTag === 'textarea';
+
+        if ((key === 'b' || key === 'B') && !isModifierHeld && !isInputFocused && !this.state.devConsoleOpen && !this.state.inMonsterBattle && !this.state.keysLocked) {
+            event.preventDefault();
+            this.setState(prev => ({ showBuildMenu: !prev.showBuildMenu, showAvatarRadialMenu: false }));
+            return;
+        }
 
         if (dirMap[key] && !isModifierHeld && !isInputFocused && !this.state.devConsoleOpen && !this.state.inMonsterBattle && !this.state.keysLocked) {
             event.preventDefault();
@@ -12586,6 +12779,152 @@ class DungeonPage extends React.Component {
         });
     }
 
+    removeExistingHuts = () => {
+        const bm = this.props.boardManager;
+        if (!bm) return;
+        const tilesArrays = [bm.tiles, bm.currentBoard && bm.currentBoard.tiles].filter(Boolean);
+        tilesArrays.forEach(arr => {
+            if (!Array.isArray(arr)) return;
+            arr.forEach(t => {
+                if (!t) return;
+                if (t.building === 'hut') {
+                    t.building = null;
+                }
+                if (t.contains && (t.contains.subtype === 'hut' || t.contains.building === 'hut' || t.contains.type === 'hut')) {
+                    t.contains = null;
+                }
+            });
+        });
+    };
+
+    finishConstruction = (constructionState) => {
+        if (!constructionState || !constructionState.buildingDef) return;
+        const { buildingDef, targetTileIdx } = constructionState;
+        const bm = this.props.boardManager;
+
+        if (buildingDef.key === 'hut') {
+            // Replaces any hut the crew has placed previously
+            this.removeExistingHuts();
+        }
+
+        const buildingObj = {
+            type: 'building',
+            subtype: buildingDef.key,
+            name: buildingDef.name,
+            placedBy: 'player'
+        };
+
+        if (bm) {
+            if (bm.tiles && bm.tiles[targetTileIdx]) {
+                bm.tiles[targetTileIdx].contains = buildingObj;
+                bm.tiles[targetTileIdx].building = buildingDef.key;
+            }
+            if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[targetTileIdx]) {
+                bm.currentBoard.tiles[targetTileIdx].contains = buildingObj;
+                bm.currentBoard.tiles[targetTileIdx].building = buildingDef.key;
+            }
+            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+            if (typeof bm.messaging === 'function') {
+                bm.messaging(`🔨 Construction complete! Built ${buildingDef.name}.`);
+            }
+        }
+
+        this.setState({ activeConstruction: null });
+
+        if (typeof this.props.saveUserData === 'function') {
+            this.props.saveUserData();
+        }
+    };
+
+    handleBuildBuilding = (buildingDef) => {
+        if (!buildingDef) return;
+        if (this.state.activeConstruction) return;
+
+        const bm = this.props.boardManager;
+        if (!bm || !bm.playerTile || !bm.playerTile.location) return;
+
+        const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+        if (playerIdx === null || playerIdx === undefined) return;
+
+        const invManager = this.props.inventoryManager;
+        const inv = (invManager && invManager.inventory) || [];
+
+        const costs = buildingDef.costs || { wood: 0, stone: 0, slate: 0 };
+        const toRemove = { wood: costs.wood || 0, stone: costs.stone || 0, slate: costs.slate || 0 };
+
+        for (const resKey of Object.keys(toRemove)) {
+            let needed = toRemove[resKey];
+            while (needed > 0) {
+                const idx = inv.findIndex(item => {
+                    if (!item) return false;
+                    const k = (item.key || item.id || item._im_key || item.name || '').toLowerCase();
+                    return k.includes(resKey);
+                });
+                if (idx === -1) break;
+
+                const item = inv[idx];
+                const amt = item.amount || 1;
+                if (amt > needed) {
+                    item.amount = amt - needed;
+                    needed = 0;
+                } else {
+                    needed -= amt;
+                    inv.splice(idx, 1);
+                }
+            }
+        }
+
+        const buildTimeSec = buildingDef.buildTime || 20;
+        const durationMs = buildTimeSec * 1000;
+        const constructionState = {
+            buildingDef,
+            targetTileIdx: playerIdx,
+            startTime: Date.now(),
+            durationMs,
+            progressPct: 0,
+            secondsRemaining: buildTimeSec
+        };
+
+        if (this._constructionTicker) {
+            clearInterval(this._constructionTicker);
+        }
+
+        this.setState({
+            showBuildMenu: false,
+            activeConstruction: constructionState
+        });
+
+        if (typeof bm.messaging === 'function') {
+            bm.messaging(`🔨 Construction started: ${buildingDef.name} (${buildTimeSec}s remaining)...`);
+        }
+
+        this._constructionTicker = setInterval(() => {
+            if (!this.state.activeConstruction) {
+                clearInterval(this._constructionTicker);
+                this._constructionTicker = null;
+                return;
+            }
+
+            const elapsed = Date.now() - constructionState.startTime;
+            const pct = Math.min(100, Math.floor((elapsed / durationMs) * 100));
+            const secRem = Math.max(0, Math.ceil((durationMs - elapsed) / 1000));
+
+            if (elapsed >= durationMs) {
+                clearInterval(this._constructionTicker);
+                this._constructionTicker = null;
+                this.finishConstruction(constructionState);
+            } else {
+                this.setState(prev => ({
+                    activeConstruction: prev.activeConstruction ? {
+                        ...prev.activeConstruction,
+                        progressPct: pct,
+                        secondsRemaining: secRem
+                    } : null
+                }));
+            }
+        }, 200);
+    };
+
     handleCloseQuestsPopup = () => {
         try {
             // Mark as seen for this session only so a full page refresh will show it again
@@ -13366,27 +13705,37 @@ class DungeonPage extends React.Component {
                     <div className="pygmies-attack-card smooth-card-scale">
                         <div className="pygmies-attack-header">
                             <span className="pygmies-attack-icon">🪵</span>
-                            <h2>Pygmies Attack!</h2>
+                            <h2>{this.state.attackingPygmyIsGroup ? 'Pygmy War Party Ambush!' : 'Pygmies Attack!'}</h2>
                         </div>
                         <div className="pygmies-attack-body">
                             <div className="pygmies-portrait-container">
                                 <img
                                     src={
                                         images[this.state.attackingPygmySubtype] ||
-                                        (this.state.attackingPygmySubtype === 'mud'
+                                        (this.state.attackingPygmySubtype === 'mud' || this.state.attackingPygmySubtype === 'mud_group'
                                             ? images.mud_group
-                                            : (this.state.attackingPygmySubtype === 'cave' || this.state.attackingPygmySubtype === 'save')
-                                                ? images.cave_squad
-                                                : images.woodland_warband)
+                                            : (this.state.attackingPygmySubtype === 'cave' || this.state.attackingPygmySubtype === 'cave_group' || this.state.attackingPygmySubtype === 'save')
+                                                ? (images.cave_group || images.cave_squad)
+                                                : (images.woodland_group || images.woodland_warband))
                                     }
                                     alt="Pygmies"
                                     className="pygmies-portrait-img"
                                 />
                             </div>
                             <p className="pygmies-attack-text">
-                                Native Pygmies ambushed your party from the shadows of the Dream Tower!
-                                <br />
-                                All crew members will take <strong>1 – 5 damage</strong>.
+                                {this.state.attackingPygmyIsGroup ? (
+                                    <>
+                                        A consolidated <strong>Pygmy War Party</strong> ambushed your party from the shadows of the Dream Tower!
+                                        <br />
+                                        All crew members will take <strong>3x damage (3 – 15 damage)</strong>.
+                                    </>
+                                ) : (
+                                    <>
+                                        Native Pygmies ambushed your party from the shadows of the Dream Tower!
+                                        <br />
+                                        All crew members will take <strong>1 – 5 damage</strong>.
+                                    </>
+                                )}
                             </p>
                         </div>
                         <div className="pygmies-attack-footer">
@@ -13966,6 +14315,96 @@ class DungeonPage extends React.Component {
                     })()}
                 </CModalBody>
             </CModal>
+            {/* Build Menu Modal */}
+            {this.state.showBuildMenu && (
+                <BuildMenuModal
+                    inventoryManager={this.props.inventoryManager}
+                    activeConstruction={this.state.activeConstruction}
+                    onClose={() => this.setState({ showBuildMenu: false })}
+                    onBuild={this.handleBuildBuilding}
+                />
+            )}
+
+            {/* Floating Active Construction Progress HUD */}
+            {this.state.activeConstruction && (() => {
+                const ac = this.state.activeConstruction;
+                const bDef = ac.buildingDef;
+                const bImg = images[bDef.imageKey] || images[bDef.fallbackImageKey] || images.building;
+
+                return (
+                    <div style={{
+                        position: 'fixed',
+                        bottom: '24px',
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        zIndex: 9999,
+                        background: 'linear-gradient(135deg, rgba(22, 18, 14, 0.95) 0%, rgba(12, 9, 7, 0.98) 100%)',
+                        border: '2px solid #e5b54f',
+                        borderRadius: '16px',
+                        padding: '12px 20px',
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.85), 0 0 20px rgba(229, 181, 79, 0.3)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '16px',
+                        minWidth: '360px',
+                        fontFamily: "'Inter', sans-serif",
+                        color: '#f0ede5',
+                        pointerEvents: 'auto'
+                    }}>
+                        {/* Building Thumbnail */}
+                        <div style={{
+                            width: '42px',
+                            height: '42px',
+                            borderRadius: '10px',
+                            background: 'radial-gradient(circle, #2a1f14 0%, #120c06 100%)',
+                            border: '1.5px solid #e5b54f',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                        }}>
+                            {bImg && <img src={bImg} alt={bDef.name} style={{ width: '32px', height: '32px', objectFit: 'contain' }} />}
+                        </div>
+
+                        {/* Info & Progress Track */}
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '13px' }}>
+                                <span style={{ fontFamily: "'Cinzel', serif", fontWeight: '700', color: '#f9b115', letterSpacing: '0.04em' }}>
+                                    🔨 BUILDING: {bDef.name.toUpperCase()}
+                                </span>
+                                <span style={{ fontWeight: '600', color: 'rgba(255,255,255,0.7)', fontSize: '12px' }}>
+                                    ⏳ {ac.secondsRemaining}s remaining
+                                </span>
+                            </div>
+
+                            {/* Progress Track */}
+                            <div style={{
+                                width: '100%',
+                                height: '10px',
+                                background: 'rgba(0, 0, 0, 0.6)',
+                                border: '1px solid rgba(255, 255, 255, 0.12)',
+                                borderRadius: '5px',
+                                overflow: 'hidden',
+                                position: 'relative'
+                            }}>
+                                <div style={{
+                                    width: `${ac.progressPct}%`,
+                                    height: '100%',
+                                    background: 'linear-gradient(90deg, #c9840a 0%, #f9b115 100%)',
+                                    borderRadius: '4px',
+                                    boxShadow: '0 0 10px rgba(249, 177, 21, 0.7)',
+                                    transition: 'width 0.2s linear'
+                                }} />
+                            </div>
+                        </div>
+
+                        {/* Percentage */}
+                        <div style={{ fontFamily: "'Cinzel', serif", fontSize: '14px', fontWeight: '700', color: '#f9b115', minWidth: '40px', textAlign: 'right' }}>
+                            {ac.progressPct}%
+                        </div>
+                    </div>
+                );
+            })()}
             {/* Camp popup */}
             <CModal className={'camp-modal'} alignment="center" visible={this.state.showCampPopup} onClose={this.handleCloseCampPopup} backdrop={true}>
                 {/* Background: camp icon at cover opacity 0.3 */}
@@ -15793,10 +16232,7 @@ class DungeonPage extends React.Component {
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        this.setState({ showAvatarRadialMenu: false });
-                                        if (this.props.boardManager && this.props.boardManager.messaging) {
-                                            this.props.boardManager.messaging('🏗️ Build Mode — Option selected.');
-                                        }
+                                        this.setState({ showAvatarRadialMenu: false, showBuildMenu: true });
                                     }}
                                     title="Build"
                                     style={{

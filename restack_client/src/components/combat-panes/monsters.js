@@ -4,13 +4,27 @@ import { ROCK_DURATION } from '../../utils/shared-constants';
 
 const getMonsterPortrait = (monster, battleData, greetingInProcess) => {
     const liveUnit = battleData?.[monster.id] || monster;
+    if (liveUnit && liveUnit.mimicryActive && liveUnit.mimicTargetPortrait && !liveUnit.dead) {
+        return liveUnit.mimicTargetPortrait.default || liveUnit.mimicTargetPortrait;
+    }
     if (liveUnit && liveUnit.stagedPortraits) {
         const sp = liveUnit.stagedPortraits;
         if (greetingInProcess && liveUnit.isMainMonster && sp.greeting) {
             return sp.greeting.default || sp.greeting;
         }
-        if (liveUnit.dead && sp.death) {
-            return sp.death.default || sp.death;
+        if (liveUnit.dead) {
+            const deathList = Array.isArray(sp.death) ? sp.death : (Array.isArray(sp.deathStages) ? sp.deathStages : null);
+            if (deathList && deathList.length > 0) {
+                const deathStart = liveUnit.deathTimestamp || liveUnit.deathStartTime || (monster._deathStartTime = monster._deathStartTime || Date.now());
+                const elapsed = Date.now() - deathStart;
+                const frameDuration = 320; // 320ms per death stage
+                const frameIdx = Math.min(deathList.length - 1, Math.floor(elapsed / frameDuration));
+                const frame = deathList[frameIdx];
+                return frame?.default || frame || monster.portrait?.default || monster.portrait;
+            }
+            if (sp.death) {
+                return sp.death.default || sp.death;
+            }
         }
         const currentHp = typeof liveUnit.hp === 'number' ? liveUnit.hp : liveUnit.stats?.hp;
         const startHp = typeof liveUnit.starting_hp === 'number' ? liveUnit.starting_hp : liveUnit.stats?.hp;
@@ -634,7 +648,12 @@ const MonstersCombatGrid = ({
                                     }}
                                     style={{
                                         backgroundImage: monster.portrait ? `url(${getMonsterPortrait(monster, battleData, greetingInProcess)})` : 'none',
-                                        filter: `sepia(${portraitHoveredId === monster.id ? '2' : '0'}) ${battleData[monster.id]?.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''}`,
+                                        filter: battleData[monster.id]?.mimicryActive && !battleData[monster.id]?.dead
+                                            ? 'invert(0.85) hue-rotate(180deg) contrast(1.2)'
+                                            : `sepia(${portraitHoveredId === monster.id ? '2' : '0'}) ${battleData[monster.id]?.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''}`,
+                                        transform: battleData[monster.id]?.mimicryActive && !battleData[monster.id]?.dead
+                                            ? 'scaleY(-1)'
+                                            : undefined,
                                         zIndex: 1,
                                         position: 'relative',
                                         // Never apply BulgePortrait when dead — it competes with meltDownDeath

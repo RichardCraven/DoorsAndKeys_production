@@ -496,12 +496,12 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                         <>
                             <div className="codex-list">
                                 {filteredSkills.length === 0 && <div className="codex-empty">No skills match your search.</div>}
-                                {filteredSkills.map(skill => {
+                                {filteredSkills.map((skill, idx) => {
                                     const iconSrc = resolveImg(skill.icon);
                                     const selected = selectedEntry && selectedEntry.id === skill.id;
                                     return (
                                         <div
-                                            key={skill.id}
+                                            key={`${skill.id}_${idx}`}
                                             ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(skill)}
@@ -542,7 +542,7 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                                         (selectedEntry.id && selectedEntry.id === monster.id) ||
                                         (selectedEntry.type && monster.type && selectedEntry.type === monster.type)
                                     );
-                                    const monsterKey = monster.id || (monster.key ? `${monster.key}_${idx}` : `${monster.type || 'monster'}_${idx}`);
+                                    const monsterKey = monster.id ? `${monster.id}_${idx}` : (monster.key ? `${monster.key}_${idx}` : `${monster.type || 'monster'}_${idx}`);
                                     return (
                                         <div
                                             key={monsterKey}
@@ -577,11 +577,11 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                     {activeTab === 'classes' && (
                         <>
                             <div className="codex-list">
-                                {filteredClasses.map(cls => {
+                                {filteredClasses.map((cls, idx) => {
                                     const selected = selectedEntry && selectedEntry.id === cls.id;
                                     return (
                                         <div
-                                            key={cls.id}
+                                            key={`${cls.id}_${idx}`}
                                             ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(cls)}
@@ -612,12 +612,12 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                         <>
                             <div className="codex-list">
                                 {filteredInteractables.length === 0 && <div className="codex-empty">No entries match your search.</div>}
-                                {filteredInteractables.map(item => {
+                                {filteredInteractables.map((item, idx) => {
                                     const iconSrc = resolveImg(item.icon);
                                     const selected = selectedEntry && selectedEntry.id === item.id;
                                     return (
                                         <div
-                                            key={item.id}
+                                            key={`${item.id}_${idx}`}
                                             ref={el => { if (selected) selectedRowRef.current = el; }}
                                             className={`codex-list-row${selected ? ' selected' : ''}`}
                                             onClick={() => setSelectedEntry(item)}

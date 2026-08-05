@@ -929,6 +929,49 @@ export function MonsterManager() {
             ]
         },
         // ── Level 19 ─────────────────────────────────────────────────────
+        eidolon: {
+            type: 'eidolon',
+            tier: 3,
+            subtype: 'eldritch',
+            key: 'eidolon',
+            image_names: ['eidolon'],
+            monster_names: ['Worminron', 'Shadael'],
+            lordName: 'Oblivion',
+            stats: {
+                hp: 220,
+                atk: 8,
+                def: 8,
+                speed: 10,
+                willpower: 8,
+                str: 3,
+                int: 7,
+                dex: 6,
+                fort: 4
+            },
+            level: 19,
+            portrait: images['eidolon'],
+            stagedPortraits: {
+                greeting: images['eidolon_greeting'],
+                death: [
+                    images['eidolon_death1'],
+                    images['eidolon_death2'],
+                    images['eidolon_death3'],
+                    images['eidolon_death4'],
+                    images['eidolon_death5'],
+                    images['eidolon_death6'],
+                    images['eidolon_death7']
+                ]
+            },
+            greetings: ['you and I are much alike... both of us lost'],
+            deathCries: ['*shrieks and fades*'],
+            skills: ['mimicry'],
+            weaknesses: ['fire', 'holy'],
+            minions: ['troll'],
+            drops: [
+                { item: TIER1_POTION, percentChance: 35 },
+                { itemPool: TIER1_ITEM, percentChance: 35 },
+            ]
+        },
         djinn: {
             type: 'djinn',
             tier: 3,

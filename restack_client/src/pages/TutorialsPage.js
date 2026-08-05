@@ -5,23 +5,13 @@ import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 export default function TutorialsPage(props) {
   const history = useHistory();
 
-  useEffect(() => {
-    const styleId = 'landing-redux-injected-styles';
-    let styleEl = document.getElementById(styleId);
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      styleEl.id = styleId;
-      document.head.appendChild(styleEl);
-    }
-    styleEl.textContent = LANDING_REDUX_CSS;
-  }, []);
-
   const goBack = () => {
     history.push('/landing');
   };
 
   return (
     <div className="redux-landing-container tutorials-page">
+      <style dangerouslySetInnerHTML={{ __html: LANDING_REDUX_CSS }} />
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Tutorials</span>

@@ -476,11 +476,39 @@ export class AnimationManagerRedux {
       case 'feed_the_masses':
         this._feedTheMasses(sourceCoords, targetCoords);
         break;
+      case 'mimicry':
+        this._mimicryDazzle(sourceCoords, targetCoords);
+        break;
       default:
         // Generic melee hit for unknown abilities
         this._genericHit(sourceCoords, targetCoords);
         break;
     }
+  }
+
+  _mimicryDazzle(src, tgt) {
+    const srcPx = this._px(src);
+    const tgtPx = this._getImpactTargetPx(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    this._emit({
+      type: 'mimicry_beam',
+      srcPx,
+      tgtPx,
+      length,
+      angle,
+      duration: 1200
+    });
+
+    this._emit({
+      type: 'mimicry_dazzle_overlay',
+      srcPx,
+      tgtPx,
+      duration: 1600
+    });
   }
 
   _isProjectileAbility(name) {

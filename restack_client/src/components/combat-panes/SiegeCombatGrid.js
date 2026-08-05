@@ -730,13 +730,26 @@ const resolvePortrait = (portraitVal) => {
 };
 
 const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
+    if (unit && unit.mimicryActive && unit.mimicTargetPortrait && !unit.dead) {
+        return resolvePortrait(unit.mimicTargetPortrait);
+    }
     if (unit && unit.stagedPortraits) {
         const sp = unit.stagedPortraits;
         if (greetingInProcess && unit.isMainMonster && sp.greeting) {
             return resolvePortrait(sp.greeting);
         }
-        if (unit.dead && sp.death) {
-            return resolvePortrait(sp.death);
+        if (unit.dead) {
+            const deathList = Array.isArray(sp.death) ? sp.death : (Array.isArray(sp.deathStages) ? sp.deathStages : null);
+            if (deathList && deathList.length > 0) {
+                const deathStart = unit.deathTimestamp || unit.deathStartTime || (unit._deathStartTime = unit._deathStartTime || Date.now());
+                const elapsed = Date.now() - deathStart;
+                const frameDuration = 320;
+                const frameIdx = Math.min(deathList.length - 1, Math.floor(elapsed / frameDuration));
+                return resolvePortrait(deathList[frameIdx]);
+            }
+            if (sp.death) {
+                return resolvePortrait(sp.death);
+            }
         }
         if (typeof unit.hp === 'number' && typeof unit.starting_hp === 'number' && unit.starting_hp > 0) {
             const hpRatio = unit.hp / unit.starting_hp;

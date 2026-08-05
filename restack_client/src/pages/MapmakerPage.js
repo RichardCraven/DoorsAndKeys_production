@@ -1105,7 +1105,17 @@ class MapMakerPage extends React.Component {
       }
       arr[tileId].territory = territoryOption.clan;
     } else if (buildingOption) {
-      arr[tileId].contains = { type: 'building', subtype: buildingOption.key };
+      const currentTile = arr[tileId];
+      const currentContains = currentTile?.contains;
+      let fortLevel = 1;
+      if (buildingOption.key === 'earthen_fort') {
+        const isExistingFort = currentContains && currentContains.type === 'building' && currentContains.subtype === 'earthen_fort';
+        if (isExistingFort) {
+          const existingLvl = typeof currentContains.level === 'number' ? currentContains.level : 1;
+          fortLevel = Math.min(3, existingLvl + 1);
+        }
+      }
+      arr[tileId].contains = { type: 'building', subtype: buildingOption.key, level: fortLevel };
       arr[tileId].image = images[buildingOption.image] || buildingOption.image;
       arr[tileId].color = null;
     } else if (pinned.optionType === 'passage') {

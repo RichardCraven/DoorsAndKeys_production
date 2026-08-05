@@ -331,6 +331,11 @@ function Tile(props) {
     ];
 
     const resolvedPortraitUrl = (() => {
+        if (props.building) {
+            const key = String(props.building).trim().toLowerCase().replace(/[\s-]+/g, '_');
+            if (images[key]) return images[key];
+            if (images[`buildable_${key}`]) return images[`buildable_${key}`];
+        }
         if (props.imageOverride) {
             if (typeof props.imageOverride === 'string' && (props.imageOverride.includes('/') || props.imageOverride.startsWith('data:'))) {
                 return props.imageOverride;
@@ -344,6 +349,7 @@ function Tile(props) {
                 }
                 const key = props.image.trim().toLowerCase().replace(/[\s-]+/g, '_');
                 if (images[key]) return images[key];
+                if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
             } else if (typeof props.image === 'object') {
                 return props.image.default || props.image;
@@ -353,12 +359,14 @@ function Tile(props) {
             if (typeof props.contains === 'string') {
                 const key = props.contains.trim().toLowerCase().replace(/[\s-]+/g, '_');
                 if (images[key]) return images[key];
+                if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
             } else if (typeof props.contains === 'object') {
-                const sub = props.contains.subtype || props.contains.type || props.contains.name;
+                const sub = props.contains.subtype || props.contains.building || props.contains.type || props.contains.name;
                 if (sub && typeof sub === 'string') {
                     const key = sub.trim().toLowerCase().replace(/[\s-]+/g, '_');
                     if (images[key]) return images[key];
+                    if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                     if (images[`${key}_portrait`]) return images[`${key}_portrait`];
                 }
             }
@@ -1210,6 +1218,40 @@ function Tile(props) {
                     pointerEvents: 'none'
                 }} title="Unlock spell active" />
             )}
+
+            {/* Earthen Fort level badge (levels > 1 show a number in the top right of the icon) */}
+            {(() => {
+                const bSubtype = containsSubtype || (containsObj && containsObj.subtype);
+                const isFort = bSubtype === 'earthen_fort' || props.building === 'earthen_fort' || props.image === 'earthen_fort' || props.image === 'buildable_earthen_fort';
+                const lvl = (containsObj && containsObj.level) || (props.contains && props.contains.level) || (currentContains && currentContains.level) || props.level;
+                if (isFort && typeof lvl === 'number' && lvl > 1) {
+                    return (
+                        <div style={{
+                            position: 'absolute',
+                            top: '2px',
+                            right: '2px',
+                            background: '#1c1917',
+                            color: '#ffd700',
+                            border: '1px solid rgba(212, 168, 68, 0.8)',
+                            borderRadius: '50%',
+                            width: Math.max(14, Math.round((props.tileSize || 30) * 0.4)) + 'px',
+                            height: Math.max(14, Math.round((props.tileSize || 30) * 0.4)) + 'px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: Math.max(9, Math.round((props.tileSize || 30) * 0.3)) + 'px',
+                            fontWeight: 'bold',
+                            fontFamily: 'Outfit, sans-serif',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.9)',
+                            zIndex: 35,
+                            pointerEvents: 'none'
+                        }}>
+                            {lvl}
+                        </div>
+                    );
+                }
+                return null;
+            })()}
         </div>
     )
 }

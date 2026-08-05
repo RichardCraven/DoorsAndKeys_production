@@ -403,6 +403,41 @@ goBack = () => {
         navToLanding: true
     })
 }
+  handleNameChange = (event) => {
+    const newName = event.target.value;
+    const { selectedCrewMember, selectedCrew, options } = this.state;
+    if (!selectedCrewMember) return;
+
+    const targetId = selectedCrewMember.id;
+    const updatedSelectedMember = { ...selectedCrewMember, name: newName };
+
+    const updatedSelectedCrew = selectedCrew.map(c => {
+        if (c && (c.id === targetId || (c.type === selectedCrewMember.type && c.id === selectedCrewMember.id))) {
+            return { ...c, name: newName };
+        }
+        return c;
+    });
+
+    const updatedOptions = options.map(o => {
+        if (o && o.id === targetId) {
+            return { ...o, name: newName };
+        }
+        return o;
+    });
+
+    this.setState({
+        selectedCrewMember: updatedSelectedMember,
+        selectedCrew: updatedSelectedCrew,
+        options: updatedOptions
+    });
+
+    // Also update adventurers array in crewManager prop if available
+    if (this.props.crewManager && Array.isArray(this.props.crewManager.adventurers)) {
+        const adv = this.props.crewManager.adventurers.find(a => a.id === targetId);
+        if (adv) adv.name = newName;
+    }
+  };
+
   render(){
     return (
     <div className="crew-manager">
@@ -411,7 +446,9 @@ goBack = () => {
             <div className="button-row-top">
                 <button onClick={() => this.submit()}>Back</button>
             </div>
-            <div className="title">Choose your crew</div>
+            <div className="title" style={{ marginTop: '-24px', marginBottom: '12px', fontSize: '1.4em', fontWeight: 'bold', fontFamily: "'Cinzel', serif", color: '#f9b115', letterSpacing: '0.06em' }}>
+                Choose your crew
+            </div>
             <div className="crew-selector">
                 <div className="crew-options">
                     {this.state.options.map((e,i)=> {
@@ -469,9 +506,34 @@ goBack = () => {
                                         }
                     {this.state.selectedCrewMember && <div className="details-pane" style={{ marginRight: '15px' }}>
                         <div className="member-name" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-                            <span style={{ color: '#fff', fontSize: '2em', fontWeight: 'bold', textShadow: '0 2px 8px #000, 0 0px 2px #000', letterSpacing: '0.04em', lineHeight: '1.1' }}>
-                                {this.state.selectedCrewMember.name}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <input
+                                    type="text"
+                                    value={this.state.selectedCrewMember.name || ''}
+                                    onChange={this.handleNameChange}
+                                    style={{
+                                        background: 'rgba(0, 0, 0, 0.55)',
+                                        border: '1px solid rgba(249, 177, 21, 0.45)',
+                                        borderRadius: '6px',
+                                        color: '#fff',
+                                        fontSize: '18px',
+                                        fontWeight: 'bold',
+                                        fontFamily: "'Cinzel', serif",
+                                        padding: '4px 10px',
+                                        width: '210px',
+                                        height: '36px',
+                                        boxSizing: 'border-box',
+                                        letterSpacing: '0.04em',
+                                        outline: 'none',
+                                        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
+                                        transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+                                    }}
+                                    onFocus={e => { e.target.style.borderColor = '#f9b115'; e.target.style.boxShadow = '0 0 8px rgba(249, 177, 21, 0.5)'; }}
+                                    onBlur={e => { e.target.style.borderColor = 'rgba(249, 177, 21, 0.45)'; e.target.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.5)'; }}
+                                    title="Click to edit name"
+                                />
+                                <span style={{ fontSize: '14px', opacity: 0.6 }} title="Editable name">✏️</span>
+                            </div>
                             <span style={{ fontSize: '11px', color: '#f9b115', fontWeight: 'bold', background: 'rgba(249,177,21,0.1)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(249,177,21,0.2)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                                 Level {this.state.selectedCrewMember.level || 1} {this.state.selectedCrewMember.type ? this.state.selectedCrewMember.type : ''}
                             </span>
@@ -521,16 +583,45 @@ goBack = () => {
                         <button>+</button>
                     </div> */}
                 </div>
-                <div className="crew-tray">
+                <div className="crew-tray" style={{ position: 'relative', alignItems: 'flex-end' }}>
+                    {/* Leader label above slot 0 */}
+                    <div style={{
+                        position: 'absolute',
+                        top: '-26px',
+                        left: '0',
+                        width: '125px',
+                        textAlign: 'center',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        color: '#f9b115',
+                        fontFamily: "'Cinzel', serif",
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase'
+                    }}>
+                        Leader
+                    </div>
                     {this.state.crewSlots.map((slot, i)=>{
                         const member = this.state.selectedCrew[i];
+                        const isLeader = i === 0;
+                        const slotSize = isLeader ? '125px' : '101px';
                         return (
-                            <div key={i} className={`selected-crew-portrait-container ${i === 3 && !this.state.advancedUser ? 'closed' : ''}`}>
+                            <div 
+                                key={i} 
+                                className={`selected-crew-portrait-container ${i === 3 && !this.state.advancedUser ? 'closed' : ''}`}
+                                style={{
+                                    width: slotSize,
+                                    height: slotSize,
+                                    ...(isLeader ? {
+                                        border: '1.5px solid #f9b115',
+                                        boxShadow: '0 0 12px rgba(249, 177, 21, 0.45)'
+                                    } : {})
+                                }}
+                            >
                                 {(i === 3 && !this.state.advancedUser) === false && (
                                     <div className={`add-button ${!this.state.selectedCrewMember ? 'disabled' : ''}`} onClick={()=>this.addMember(i)}>&oplus;</div>
                                 )}
                                 {member && (
-                                    <div className="portrait" style={{backgroundImage: "url(" + member.portrait + ")", position: 'relative'}}>
+                                    <div className="portrait" style={{backgroundImage: "url(" + member.portrait + ")", position: 'relative', width: '100%', height: '100%'}}>
                                         <span style={{
                                             position: 'absolute',
                                             bottom: '2px',
