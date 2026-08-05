@@ -661,7 +661,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.3.7 BETA</span>
+          <span className="logo-subtitle">v 0.3.8 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">
@@ -738,32 +738,38 @@ export default function LandingPage(props) {
                   <div className="selected-crew-preview-card">
                     <span className="selected-crew-title">Selected Crew</span>
                     <div className="selected-crew-list">
-                      {crew.map((member, i) => (
-                        <div
-                          key={i}
-                          className="selected-crew-member-item"
-                          onClick={() => {
-                            setShowcaseUnit(member);
-                            setIsEditingName(false);
-                            setEditNameVal(member.name || '');
-                          }}
-                          style={{ cursor: 'pointer' }}
-                          title={`Click to view profile & stats for ${member.name}`}
-                        >
-                          <div className={`selected-crew-avatar-wrapper type-${String(member.type || member.image || '').toLowerCase()}`}>
-                            <img src={member.portrait || member.image} alt={member.name} className="crew-avatar-img" />
-                            <span className="selected-crew-badge">
-                              Lvl {member.level || 1}
+                      {(() => {
+                        let orderedCrew = [...crew];
+                        const leaderIdx = orderedCrew.findIndex(m => m && m.isLeader);
+                        if (leaderIdx !== -1 && orderedCrew.length > 1) {
+                          const leader = orderedCrew.splice(leaderIdx, 1)[0];
+                          const centerIdx = Math.floor(orderedCrew.length / 2);
+                          orderedCrew.splice(centerIdx, 0, leader);
+                        }
+                        return orderedCrew.map((member, i) => (
+                          <div
+                            key={i}
+                            className="selected-crew-member-item"
+                            onClick={() => {
+                              setShowcaseUnit(member);
+                              setIsEditingName(false);
+                              setEditNameVal(member.name || '');
+                            }}
+                            style={{ cursor: 'pointer' }}
+                            title={`Click to view profile & stats for ${member.name}`}
+                          >
+                            <div className={`selected-crew-avatar-wrapper type-${String(member.type || member.image || '').toLowerCase()}${member.isLeader ? ' is-leader' : ''}`}>
+                              <img src={member.portrait || member.image} alt={member.name} className="crew-avatar-img" />
+                            </div>
+                            <span className="selected-crew-name" title={member.name}>
+                              {member.name}
+                            </span>
+                            <span className="selected-crew-type">
+                              Lvl {member.level || 1} {member.type || ''}
                             </span>
                           </div>
-                          <span className="selected-crew-name" title={member.name}>
-                            {member.name}
-                          </span>
-                          <span className="selected-crew-type">
-                            {member.type || ''}
-                          </span>
-                        </div>
-                      ))}
+                        ));
+                      })()}
                     </div>
                   </div>
                 );
@@ -1130,7 +1136,7 @@ export default function LandingPage(props) {
                                           const cls = (leaderEntry.type || leaderEntry.image || '').toLowerCase();
                                           leaderDisplay = cls ? cls.charAt(0).toUpperCase() + cls.slice(1) : '?';
                                         }
-                                      } catch (e) {}
+                                      } catch (e) { }
                                       return (
                                         <tr key={u._id} style={{ borderBottom: '1px solid rgba(120, 113, 108, 0.15)' }}>
                                           <td style={{ padding: '8px 8px', fontWeight: '600', color: '#ffffff', textAlign: 'left' }}>{u.username}</td>
@@ -1378,8 +1384,27 @@ export default function LandingPage(props) {
                       </button>
                     </div>
                   )}
-                  <div className="crew-showcase-type-tag">
-                    {showcaseUnit.type || showcaseUnit.class || 'HERO'}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div className="crew-showcase-type-tag">
+                      Lvl {showcaseUnit.level || 1} {showcaseUnit.type || showcaseUnit.class || 'HERO'}
+                    </div>
+                    {showcaseUnit.isLeader && (
+                      <div className="crew-showcase-leader-tag" style={{
+                        display: 'inline-block',
+                        fontSize: '0.8rem',
+                        color: '#ffd700',
+                        textTransform: 'uppercase',
+                        letterSpacing: '1.5px',
+                        fontWeight: '700',
+                        background: 'rgba(212, 168, 68, 0.25)',
+                        border: '1px solid rgba(212, 168, 68, 0.6)',
+                        padding: '3px 12px',
+                        borderRadius: '12px',
+                        width: 'fit-content'
+                      }}>
+                        LEADER
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1464,11 +1489,12 @@ export default function LandingPage(props) {
                     )
                     : null;
                   const selectedSpecialty = currentMember?.specialty || showcaseUnit.specialty || null;
+                  const isSpecLocked = isDungeonActive && !!selectedSpecialty;
 
                   if (specialties.length === 0) return null;
 
                   const handleSelectSpecialty = (specId) => {
-                    if (isDungeonActive) return;
+                    if (isSpecLocked) return;
                     const newMeta = getMeta() || {};
                     showcaseUnit.specialty = specId;
                     if (Array.isArray(newMeta.crew)) {
@@ -1487,20 +1513,22 @@ export default function LandingPage(props) {
                       <h3 className="crew-showcase-panel-title specialty-panel-title">
                         <span className="specialty-title-diamond" aria-hidden="true"></span>
                         Specialization
-                        {isDungeonActive && (
+                        {isSpecLocked && (
                           <span className="specialty-locked-badge">Locked</span>
                         )}
                       </h3>
 
-                      {isDungeonActive && (
+                      {isSpecLocked && (
                         <p className="specialty-lock-notice">
                           This crew member's specialization was sealed upon entering the dungeon. Choose specializations before your next expedition.
                         </p>
                       )}
 
-                      {!isDungeonActive && !selectedSpecialty && (
+                      {!isSpecLocked && (
                         <p className="specialty-prompt-notice">
-                          Select a specialization path. This choice will be sealed when the crew enters the dungeon.
+                          {isDungeonActive
+                            ? "Select a specialization path. Once chosen, it will be sealed for the rest of this expedition."
+                            : "Select a specialization path. This choice will be sealed when the crew enters the dungeon."}
                         </p>
                       )}
 
@@ -1510,11 +1538,11 @@ export default function LandingPage(props) {
                           return (
                             <div
                               key={spec.id}
-                              className={`specialty-card ${isSelected ? 'selected' : ''} ${isDungeonActive ? 'locked' : ''}`}
+                              className={`specialty-card ${isSelected ? 'selected' : ''} ${isSpecLocked ? 'locked' : ''}`}
                               onClick={() => handleSelectSpecialty(spec.id)}
-                              role={isDungeonActive ? undefined : 'button'}
-                              tabIndex={isDungeonActive ? -1 : 0}
-                              onKeyDown={e => { if (!isDungeonActive && (e.key === 'Enter' || e.key === ' ')) handleSelectSpecialty(spec.id); }}
+                              role={isSpecLocked ? undefined : 'button'}
+                              tabIndex={isSpecLocked ? -1 : 0}
+                              onKeyDown={e => { if (!isSpecLocked && (e.key === 'Enter' || e.key === ' ')) handleSelectSpecialty(spec.id); }}
                             >
                               <div className="specialty-card-header">
                                 <span className="specialty-card-name">{spec.name}</span>

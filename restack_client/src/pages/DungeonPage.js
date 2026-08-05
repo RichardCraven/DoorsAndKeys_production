@@ -2769,11 +2769,35 @@ class DungeonPage extends React.Component {
         const isTutorial = (this.props.location && this.props.location.search && this.props.location.search.includes('tutorial=dungeon')) || (this.props.location && this.props.location.state && this.props.location.state.isTutorial);
 
         if (isTutorial) {
-            this.props.crewManager.initializeCrew(meta.crew);
-            itemCleanup(null, meta.crew);
-            if (this.props.inventoryManager && typeof this.props.inventoryManager.refreshWeaponStats === 'function') {
-                this.props.crewManager.crew.forEach(m => { if (m && Array.isArray(m.inventory)) m.inventory = this.props.inventoryManager.refreshWeaponStats(m.inventory); });
-            }
+            this._isTutorialSession = true;
+            try {
+                this._preTutorialMeta = JSON.parse(JSON.stringify(getMeta() || {}));
+            } catch (e) {}
+            try {
+                this._preTutorialCrew = JSON.parse(JSON.stringify((this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : []));
+            } catch (e) {}
+            try {
+                this._preTutorialInventory = JSON.parse(JSON.stringify((this.props.inventoryManager && Array.isArray(this.props.inventoryManager.inventory)) ? this.props.inventoryManager.inventory : []));
+            } catch (e) {}
+
+            const tutorialCrew = [
+                {
+                    id: 'tutorial_member_1',
+                    name: 'Recruit Valen',
+                    type: 'warrior',
+                    specialty: 'warrior',
+                    hp: 100,
+                    maxHp: 100,
+                    stats: { strength: 14, agility: 10, intelligence: 8 },
+                    portrait: 'fighter',
+                    image: 'fighter',
+                    selected: true,
+                    level: 1,
+                    inventory: []
+                }
+            ];
+            this.props.crewManager.initializeCrew(tutorialCrew);
+            itemCleanup(null, tutorialCrew);
             this.loadTutorialSequence();
         } else if(!meta || !meta.dungeonId){
             this.props.crewManager.initializeCrew(meta.crew);
@@ -3897,13 +3921,24 @@ class DungeonPage extends React.Component {
             const pixel = this.getPixelForIndex(index);
 
             let meta = getMeta() || {};
-            const playerImgKey = (meta && meta.camping) ? 'campfire' : 'avatar';
+            const crew = Array.isArray(meta.crew) ? meta.crew : (Array.isArray(this.props?.crewManager?.crew) ? this.props.crewManager.crew : []);
+            const leader = crew.find(m => m && m.isLeader);
+            
+            let playerImgSrc = '';
+            if (meta && meta.camping) {
+                playerImgSrc = images['campfire'];
+            } else if (leader && (leader.portrait || leader.image)) {
+                const p = leader.portrait || leader.image;
+                playerImgSrc = images[p] || p;
+            } else {
+                playerImgSrc = images['avatar'];
+            }
 
             return {
                 left: pixel.left,
                 top: pixel.top,
                 transform: 'translate3d(0px, 0px, 0px)',
-                backgroundImage: `url(${images[playerImgKey]})`
+                backgroundImage: `url(${playerImgSrc})`
             };
         } catch (e) {
             return null;
@@ -3959,8 +3994,8 @@ class DungeonPage extends React.Component {
         const playerRow = coords[0] % 15;
 
         // Side panel width adjustments
-        const leftPanelExpanded = this.state.leftPanelExpanded;
-        const rightPanelExpanded = this.state.rightPanelExpanded;
+        const leftPanelExpanded = this.state.isTutorialMode ? false : this.state.leftPanelExpanded;
+        const rightPanelExpanded = this.state.isTutorialMode ? false : this.state.rightPanelExpanded;
         const panelWidth = 200; // side panels are 200px wide
         const leftPadding = leftPanelExpanded ? panelWidth : 0;
         const rightPadding = rightPanelExpanded ? panelWidth : 0;
@@ -4074,9 +4109,10 @@ class DungeonPage extends React.Component {
 
     // High-level move handler that performs instant responsive movement
     handleDirectionalMove = (direction, options = {}) => {
-        if (!direction || this.state.keysLocked || this.state.inMonsterBattle || this._isMoving) return;
+        const { fromQueue = false, fromTutorial = false, allowWhileLocked = false } = options;
+        const isTutorialAllowed = fromTutorial || (this.state.isTutorialMode && !fromQueue);
+        if (!direction || (this.state.keysLocked && !isTutorialAllowed && !allowWhileLocked) || this.state.inMonsterBattle || this._isMoving) return;
         this._isMoving = true;
-        const { fromQueue = false } = options;
         const isFastMove = true;
         const TOTAL_MOVE_MS = 0;
         const BUFFER_MS = 0;
@@ -4500,7 +4536,7 @@ class DungeonPage extends React.Component {
 
     executePortalTeleport = (tile) => {
         const portal = tile.contains;
-        if (!portal || !portal.targetCoordinates) {
+        if (!portal || (!portal.targetCoordinates && !portal.targetPortalId)) {
             this.resolveQueuedMovement(true);
             return;
         }
@@ -4527,7 +4563,7 @@ class DungeonPage extends React.Component {
                                 for (let mbIndex = 0; mbIndex < plane.miniboards.length; mbIndex++) {
                                     const mb = plane.miniboards[mbIndex];
                                     if (mb && Array.isArray(mb.tiles)) {
-                                        const tile = mb.tiles.find(t => t.contains && t.contains.portalId === portal.targetPortalId);
+                                        const tile = mb.tiles.find(t => t.contains && (t.contains.portalId === portal.targetPortalId || (portal.portalId && t.contains.targetPortalId === portal.portalId)));
                                         if (tile) {
                                             foundTarget = {
                                                 levelId: level.id,
@@ -4927,6 +4963,17 @@ class DungeonPage extends React.Component {
     }
     
     componentCleanup = () => {
+        if (this._isTutorialSession || (this.state && this.state.isTutorialMode)) {
+            if (this._preTutorialMeta) {
+                try { storeMeta(this._preTutorialMeta); } catch (e) {}
+            }
+            if (Array.isArray(this._preTutorialCrew) && this.props.crewManager) {
+                try { this.props.crewManager.initializeCrew(this._preTutorialCrew); } catch (e) {}
+            }
+            if (Array.isArray(this._preTutorialInventory) && this.props.inventoryManager) {
+                try { this.props.inventoryManager.initializeItems(this._preTutorialInventory); } catch (e) {}
+            }
+        }
         window.removeEventListener('keydown', this.keyDownHandler);
         window.removeEventListener('keyup', this.keyUpHandler);
         window.removeEventListener('resize', this.handleResize.bind(this));
@@ -4937,7 +4984,9 @@ class DungeonPage extends React.Component {
         if (this._persistBreadcrumbsDebounceTimer) {
             clearTimeout(this._persistBreadcrumbsDebounceTimer);
             this._persistBreadcrumbsDebounceTimer = null;
-            this.persistBreadcrumbsToMeta();
+            if (!this.state?.isTutorialMode && !this._isTutorialSession) {
+                this.persistBreadcrumbsToMeta();
+            }
         }
         clearInterval(this.state.intervalId);
     }
@@ -5042,6 +5091,10 @@ class DungeonPage extends React.Component {
                 if (gateType && bm.CLOSED_GATE_TYPES && bm.CLOSED_GATE_TYPES.includes(gateType)) return false;
 
                 const type = bm.getContainsType(tile.contains);
+                const subtype = bm.getContainsSubtype(tile.contains);
+                if (type === 'building' && subtype === 'earthen_fort') return false;
+                if (type === 'earthen_fort' || subtype === 'earthen_fort' || tile.building === 'earthen_fort') return false;
+
                 const isBlocked = type && ['monster', 'pygmies', 'item', 'door', 'gate', 'shrine', 'narrative', 'way_up', 'way_down', 'vendor', 'spawn', 'stairs', 'chest', 'dead_campfire'].includes(type);
                 return !isBlocked;
             };
@@ -5630,7 +5683,7 @@ class DungeonPage extends React.Component {
                                 iron_gut: { name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' },
                                 savage_haul: { name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' },
                                 bloodhound: { name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' },
-                                endure: { name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%' },
+                                endure: { name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.' },
                                 swift_step: { name: 'Swift Step', desc: 'Movement animation 30% faster' },
                                 focused_rest: { name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' },
                                 pressure_points: { name: 'Pressure Points', desc: '15% vendor discount once per vendor' },
@@ -5677,8 +5730,14 @@ class DungeonPage extends React.Component {
                                                     cursor: 'pointer',
                                                     boxShadow: '0 0 6px rgba(212,168,68,0.2)'
                                                 }}
-                                                onMouseEnter={() => this.setState({ descriptionText: `${details.name} (Level ${level}): ${details.desc}` })}
-                                                onMouseLeave={() => this.setState({ descriptionText: '' })}
+                                                onMouseEnter={(e) => {
+                                                    const tooltipEl = e.currentTarget.querySelector('.global-skill-tooltip');
+                                                    if (tooltipEl) tooltipEl.style.display = 'block';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                    const tooltipEl = e.currentTarget.querySelector('.global-skill-tooltip');
+                                                    if (tooltipEl) tooltipEl.style.display = 'none';
+                                                }}
                                             >
                                                 <img
                                                     src={iconUrl}
@@ -5704,6 +5763,29 @@ class DungeonPage extends React.Component {
                                                     lineHeight: 1
                                                 }}>
                                                     {level}
+                                                </div>
+                                                <div className="global-skill-tooltip" style={{
+                                                    display: 'none',
+                                                    position: 'absolute',
+                                                    bottom: '125%',
+                                                    left: '50%',
+                                                    transform: 'translateX(-50%)',
+                                                    backgroundColor: '#1a1815',
+                                                    color: '#f0e6d2',
+                                                    border: '1px solid #d4a844',
+                                                    borderRadius: '5px',
+                                                    padding: '8px 12px',
+                                                    fontSize: '11px',
+                                                    whiteSpace: 'normal',
+                                                    width: '190px',
+                                                    zIndex: 1000,
+                                                    boxShadow: '0 4px 14px rgba(0,0,0,0.85)',
+                                                    pointerEvents: 'none',
+                                                    textAlign: 'center',
+                                                    lineHeight: '1.35'
+                                                }}>
+                                                    <div style={{ color: '#d4a844', fontWeight: 'bold', marginBottom: '3px', fontSize: '12px' }}>{details.name} (Level {level})</div>
+                                                    <div>{details.desc}</div>
                                                 </div>
                                             </div>
                                         );
@@ -7941,7 +8023,11 @@ class DungeonPage extends React.Component {
         this.getCombinedInventory().forEach((e,i)=>{
             matrix[i] = '';
         })
-        this.displayMessage(`You found a ${itemDisplayName}!`)
+        
+        const isPlural = itemDisplayName.toLowerCase().includes('shards') || itemDisplayName.toLowerCase().includes('gold') || itemDisplayName.toLowerCase().includes('dust');
+        const article = isPlural ? 'some' : 'a';
+        this.displayMessage(`You found ${article} ${itemDisplayName}!`)
+        
         this.setState({
             inventoryHoverMatrix: matrix
         })
@@ -7959,8 +8045,11 @@ class DungeonPage extends React.Component {
         }
     }
     addTreasureToInventory = (treasure, tile = null) => {
-        let item = treasure.item
-        const message = `You open the treasure chest and find a ${item.replaceAll('_',' ')} and ${treasure.currency.amount} ${treasure.currency.type.replace('_',' ')}!`
+        let item = treasure.item;
+        const itemStr = item.replaceAll('_',' ');
+        const isPluralItem = itemStr.toLowerCase().includes('shards') || itemStr.toLowerCase().includes('gold') || itemStr.toLowerCase().includes('dust');
+        const article = isPluralItem ? 'some' : 'a';
+        const message = `You open the treasure chest and find ${article} ${itemStr} and ${treasure.currency.amount} ${treasure.currency.type.replace('_',' ')}!`
         this.displayMessage(message);
         this.props.inventoryManager.addItem(this.props.inventoryManager.allItems[treasure.item])
         this.props.inventoryManager.addCurrency(treasure.currency);
@@ -8010,6 +8099,9 @@ class DungeonPage extends React.Component {
         }
     }
     updateDungeon = async (dungeon) => {
+        if (!dungeon || dungeon.id === 'tutorial_dungeon' || dungeon.isTutorial) {
+            return;
+        }
         await updateDungeonRequest(dungeon.id, dungeon);
     }
     messaging = (message) => {
@@ -8588,8 +8680,8 @@ class DungeonPage extends React.Component {
         this.setState((state, props) => {
             const W = window.innerWidth;
             const H = window.innerHeight;
-            const L = state.leftPanelExpanded ? 200 : 0;
-            const R = state.rightPanelExpanded ? 200 : 0;
+            const L = (state.leftPanelExpanded && !state.isTutorialMode) ? 200 : 0;
+            const R = (state.rightPanelExpanded && !state.isTutorialMode) ? 200 : 0;
 
             const wrapper = document.querySelector('.center-board-wrapper');
             const wrapperWidth = wrapper ? wrapper.clientWidth : (W - 80);
@@ -9287,6 +9379,10 @@ class DungeonPage extends React.Component {
                 if (t.blockedByLargeMonster) return true;
 
                 const type = bm.getContainsType(t.contains);
+                const subtype = bm.getContainsSubtype(t.contains);
+                if (type === 'building' && subtype === 'earthen_fort') return true;
+                if (type === 'earthen_fort' || subtype === 'earthen_fort' || t.building === 'earthen_fort') return true;
+
                 if (type === 'void' || type === 'inscription') return true;
 
                 const gateType = bm.getGateTypeFromTile(t);
@@ -10294,7 +10390,10 @@ class DungeonPage extends React.Component {
             }, () => {
                 try {
                     this.props.boardManager.placePlayer(location);
-                    this.updateFloatingPlayerPosition(location);
+                    const spawnCoords = this.props.boardManager.playerTile ? this.props.boardManager.playerTile.location : null;
+                    if (spawnCoords) {
+                        this.updateFloatingPlayerPosition(spawnCoords);
+                    }
                 } catch (e) {
                     console.warn('Tutorial player position error:', e);
                 }
@@ -10307,10 +10406,10 @@ class DungeonPage extends React.Component {
     };
 
     runDungeonTutorialSequence = () => {
-        const moveStep = (direction, ms = 200) => new Promise(resolve => {
+        const moveStep = (direction, ms = 250) => new Promise(resolve => {
             this._setTimeout(() => {
-                this.handleDirectionalMove(direction, { fromQueue: false });
-                resolve();
+                this.handleDirectionalMove(direction, { fromQueue: false, fromTutorial: true });
+                this._setTimeout(resolve, ms);
             }, ms);
         });
 
@@ -11002,6 +11101,7 @@ class DungeonPage extends React.Component {
         })
     }
     toggleLeftSidePanel = async (val = null) => {
+        if (this.state.isTutorialMode) return;
         // toggle left side panel
         // If called as an onClick handler it may receive an event object.
         // Accept either an object like { expanded: true } or no arg to toggle.
@@ -11015,6 +11115,7 @@ class DungeonPage extends React.Component {
         await updateUserRequest(getUserId(), meta)
     }
     toggleRightSidePanel = async (val = null) => {
+        if (this.state.isTutorialMode) return;
         // Handle event objects from onClick; accept { expanded } objects or toggle when no arg
         const newVal = (val && typeof val === 'object' && Object.prototype.hasOwnProperty.call(val, 'expanded')) ? val.expanded : !this.state.rightPanelExpanded
         this.setState({rightPanelExpanded: newVal}, () => {
@@ -11376,6 +11477,7 @@ class DungeonPage extends React.Component {
     // ── Breadcrumb trail ────────────────────────────────────────────
     // Persist breadcrumbs in meta so they survive browser refreshes.
     persistBreadcrumbsToMeta = () => {
+        if (this.state?.isTutorialMode || this._isTutorialSession) return;
         try {
             const meta = getMeta() || {};
             const dungeonId = meta.dungeonId || null;
@@ -11574,6 +11676,7 @@ class DungeonPage extends React.Component {
     // Each unique (levelId, orientation, boardIndex, row, col) cell gets one entry;
     // revisiting a cell just refreshes its timestamp (keeping the most-recent visit).
     recordBreadcrumb = () => {
+        if (this.state?.isTutorialMode || this._isTutorialSession) return;
         try {
             const bm = this.props.boardManager;
             if (!bm || !bm.playerTile) return;
@@ -13531,61 +13634,51 @@ class DungeonPage extends React.Component {
                         pointerEvents: 'auto',
                         cursor: 'wait'
                     }} onClick={e => { e.stopPropagation(); e.preventDefault(); }} />
-                    <div style={{
-                        position: 'fixed',
-                        top: '16px',
-                        left: '50%',
-                        transform: 'translateX(-50%)',
-                        zIndex: 10000,
-                        background: 'rgba(0, 0, 0, 0.85)',
-                        border: '1px solid #f9b115',
-                        color: '#f9b115',
-                        padding: '8px 24px',
-                        borderRadius: '20px',
-                        fontWeight: 'bold',
-                        letterSpacing: '1px',
-                        textTransform: 'uppercase',
-                        boxShadow: '0 4px 20px rgba(0,0,0,0.8)',
-                        pointerEvents: 'none',
-                        fontFamily: "'Cinzel', 'Outfit', sans-serif"
-                    }}>
-                        {this.state.tutorialBannerText || 'Dungeon Tutorial — Auto-Play Sequence'}
-                    </div>
                     {this.state.tutorialNarrativeText && (
                         <div style={{
                             position: 'fixed',
-                            left: '28px',
-                            top: '200px',
-                            width: '320px',
+                            top: '24px',
+                            left: '50%',
+                            transform: 'translateX(-50%)',
                             zIndex: 10001,
-                            background: 'linear-gradient(135deg, rgba(20, 15, 12, 0.95) 0%, rgba(10, 8, 6, 0.97) 100%)',
-                            border: '1px solid #d4a844',
-                            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.9), 0 0 15px rgba(212, 168, 68, 0.25)',
-                            borderRadius: '10px',
-                            padding: '20px 22px',
-                            color: '#f5efe6',
                             pointerEvents: 'none',
-                            animation: 'smoothCardScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
-                            willChange: 'transform, opacity'
+                            display: 'flex',
+                            justifyContent: 'center',
+                            width: '90%',
+                            maxWidth: '480px'
                         }}>
                             <div style={{
-                                fontSize: '11px',
-                                textTransform: 'uppercase',
-                                letterSpacing: '1.5px',
-                                color: '#d4a844',
-                                fontWeight: '700',
-                                marginBottom: '8px',
-                                fontFamily: "'Outfit', sans-serif"
+                                width: '100%',
+                                background: 'linear-gradient(135deg, rgba(20, 15, 12, 0.95) 0%, rgba(10, 8, 6, 0.97) 100%)',
+                                border: '1px solid #d4a844',
+                                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.9), 0 0 15px rgba(212, 168, 68, 0.25)',
+                                borderRadius: '10px',
+                                padding: '16px 24px',
+                                color: '#f5efe6',
+                                textAlign: 'center',
+                                animation: 'smoothCardScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both',
+                                willChange: 'transform, opacity'
                             }}>
-                                Tutorial Guidance
-                            </div>
-                            <div style={{
-                                fontSize: '14px',
-                                color: '#e2d5c3',
-                                lineHeight: '1.5',
-                                fontFamily: "'Outfit', sans-serif"
-                            }}>
-                                <Typewriter text={this.state.tutorialNarrativeText} delay={28} />
+                                <div style={{
+                                    fontSize: '11px',
+                                    textTransform: 'uppercase',
+                                    letterSpacing: '1.5px',
+                                    color: '#d4a844',
+                                    fontWeight: '700',
+                                    marginBottom: '6px',
+                                    fontFamily: "'Outfit', sans-serif"
+                                }}>
+                                    Tutorial Guidance
+                                </div>
+                                <div style={{
+                                    fontSize: '15px',
+                                    color: '#e2d5c3',
+                                    lineHeight: '1.5',
+                                    fontFamily: "'Outfit', sans-serif",
+                                    fontWeight: '500'
+                                }}>
+                                    <Typewriter text={this.state.tutorialNarrativeText} delay={28} />
+                                </div>
                             </div>
                         </div>
                     )}
@@ -14030,7 +14123,7 @@ class DungeonPage extends React.Component {
                     sage:     [{ key: 'herbalism', name: 'Herbalism', desc: 'Camp costs 1 less food per member' }, { key: 'mend', name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' }, { key: 'ritual_efficiency', name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' }, { key: 'revive', name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }],
                     soldier:  [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open a Minor Key gate once per level' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
                     wizard:   [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
-                    barbarian:[{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%' }],
+                    barbarian:[{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.' }],
                     monk:     [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
                     summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tap', name: 'Soul Tap', desc: 'Transfers accumulated power of fallen friendly units to the Summoner' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],
                 };
@@ -15997,9 +16090,9 @@ class DungeonPage extends React.Component {
                                             {/* <ExpositionPane></ExpositionPane> */}
                                             {this.props.boardManager.currentOrientation === 'B' && <div className="dark-mask"></div>}
                                             {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
-            <div className={`left-side-panel ${this.state.leftPanelExpanded ? 'expanded' : ''}`}>
+            <div className={`left-side-panel ${(this.state.leftPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`}>
                 <div className="expand-collapse-button icon-container" onClick={this.toggleLeftSidePanel}>
-                    <CIcon icon={cilCaretRight} className={`expand-icon ${this.state.leftPanelExpanded ? 'expanded' : ''}`} size="sm"/>
+                    <CIcon icon={cilCaretRight} className={`expand-icon ${(this.state.leftPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`} size="sm"/>
                 </div>
                 {this.state.selectedCrewMember && this.state.selectedCrewMember.name && (
                     <div className="crew-info-section" style={{ width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -16044,10 +16137,10 @@ class DungeonPage extends React.Component {
                 </div>
             )}
             {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
-            <div className={`right-side-panel ${this.state.rightPanelExpanded ? 'expanded' : ''}`}>
+            <div className={`right-side-panel ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`}>
                 {this.renderPanelSections('right')}
                 <div className="expand-collapse-button icon-container" onClick={this.toggleRightSidePanel}>
-                    <CIcon icon={cilCaretLeft} className={`expand-icon ${this.state.rightPanelExpanded ? 'expanded' : ''}`} size="sm"/>
+                    <CIcon icon={cilCaretLeft} className={`expand-icon ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`} size="sm"/>
                 </div>
             </div>
             )}
@@ -16133,9 +16226,20 @@ class DungeonPage extends React.Component {
                                 : null;
                             const isPlayerTile = playerIdx !== null && tile.id === playerIdx && !this.state.playerFloatVisible;
                             const meta = getMeta() || {};
-                            const playerImgKey = (meta && meta.camping) ? 'campfire' : 'avatar';
+                            const crew = Array.isArray(meta.crew) ? meta.crew : (Array.isArray(this.props?.crewManager?.crew) ? this.props.crewManager.crew : []);
+                            const leader = crew.find(m => m && m.isLeader);
+                            let playerImgKey = '';
+                            if (meta && meta.camping) {
+                                playerImgKey = 'campfire';
+                            } else if (leader && (leader.portrait || leader.image)) {
+                                playerImgKey = leader.portrait || leader.image;
+                            } else {
+                                playerImgKey = 'avatar';
+                            }
 
-                            const rawColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : 'black';
+                            const hasTerritory = tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null);
+                            const defaultEmptyColor = hasTerritory ? 'transparent' : 'black';
+                            const rawColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : defaultEmptyColor;
                             const isMonsterTile = bm && typeof bm.isMonster === 'function' ? bm.isMonster(tile) : false;
                             const safeColor = (String(rawColor).includes('ff0000') && (!isMonsterTile || !this.state.debugMode)) ? 'black' : rawColor;
 
@@ -16150,6 +16254,7 @@ class DungeonPage extends React.Component {
                             image={boardImage}
                             imageOverride={boardImage && boardImage.includes ? (boardImage.includes('/') ? boardImage : null) : null}
                             contains={tile.contains}
+                            territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                             boardTiles={this.state.tiles}
                             terrain={tile.terrain}
                             color={safeColor}

@@ -1405,7 +1405,15 @@ export function BoardManager(){
             item = this.availableItems[idx];
             return item;
         }
-        let spawnCoords = this.getCoordinatesFromIndex(spawnTileIndex);
+        let spawnCoords = (spawnTileIndex !== null && spawnTileIndex !== undefined) ? this.getCoordinatesFromIndex(spawnTileIndex) : null;
+        if (boardIndex !== null && boardIndex !== undefined) {
+            if (!this.playerTile) this.playerTile = {};
+            this.playerTile.boardIndex = boardIndex;
+        }
+        if (spawnCoords) {
+            if (!this.playerTile) this.playerTile = {};
+            this.playerTile.location = spawnCoords;
+        }
         let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
         if (!plane) {
             plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
@@ -1703,6 +1711,7 @@ export function BoardManager(){
                 contains: tileContains,
                 image: tileImage,
                 inscriptions: tile.inscriptions || null,
+                territory: tile.territory || null,
                 borders: null,
                 hasTrap: hasTrapFlag,
                 trapRevealed: trapRevealedFlag
@@ -1776,8 +1785,21 @@ export function BoardManager(){
         }
     }
     this.placePlayer = (coordinates) => {
-        let index = this.getIndexFromCoordinates(coordinates)
-        this.tiles[index].playerTile = true;
+        let index;
+        if (typeof coordinates === 'number') {
+            index = coordinates;
+        } else if (coordinates && typeof coordinates === 'object') {
+            if (typeof coordinates.tileIndex === 'number') {
+                index = coordinates.tileIndex;
+            } else if (Array.isArray(coordinates.location)) {
+                index = this.getIndexFromCoordinates(coordinates.location);
+            } else if (Array.isArray(coordinates)) {
+                index = this.getIndexFromCoordinates(coordinates);
+            }
+        }
+        if (typeof index === 'number' && index >= 0 && this.tiles && this.tiles[index]) {
+            this.tiles[index].playerTile = true;
+        }
         // Player image now rendered as floating overlay, not as tile
     }
     this.isMonster = (tile => {
@@ -1850,6 +1872,16 @@ export function BoardManager(){
 
         const type = this.getContainsType(destinationTile.contains);
         const subtype = this.getContainsSubtype(destinationTile.contains);
+        
+        if (type === 'building' && subtype !== 'hut') {
+            if (this.messaging) this.messaging('This building obstructs movement.');
+            return 'impassable';
+        }
+        if (type !== 'hut' && subtype !== 'hut' && destinationTile.building && destinationTile.building !== 'hut') {
+            if (this.messaging) this.messaging('This building obstructs movement.');
+            return 'impassable';
+        }
+        
         const gateType = this.getGateTypeFromTile(destinationTile);
         
         // Check if this is a closed gate that requires a key

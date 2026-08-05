@@ -1,4 +1,5 @@
 import React from 'react'
+import ReactDOM from 'react-dom'
 import '@coreui/coreui/dist/css/coreui.min.css'
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
@@ -17,10 +18,43 @@ class DungeonView extends React.Component {
     constructor(props){
       super(props)
       this.state = {
-        hoveredPlane : null
+        hoveredPlane : null,
+        showTeleporterInterface: false
       }
       this.clickTimer = null;
       this.lastClickInfo = null;
+    }
+
+    getTeleporters = () => {
+        if (!this.props.loadedDungeon || !Array.isArray(this.props.loadedDungeon.levels)) return [];
+        const teleporters = [];
+        this.props.loadedDungeon.levels.forEach(level => {
+            ['front', 'back'].forEach(orientation => {
+                const plane = level[orientation];
+                if (plane && Array.isArray(plane.miniboards)) {
+                    plane.miniboards.forEach((mb, mbIndex) => {
+                        if (mb && Array.isArray(mb.tiles)) {
+                            mb.tiles.forEach(tile => {
+                                if (tile.contains && (tile.contains.type === 'dungeon_portal' || tile.contains.type === 'dungeon portal')) {
+                                    teleporters.push({
+                                        portalId: tile.contains.portalId,
+                                        subtype: tile.contains.subtype || 'Unnamed',
+                                        levelId: level.id,
+                                        orientation: orientation,
+                                        miniboardIndex: mbIndex,
+                                        coordinates: tile.coordinates || [tile.id % 15, Math.floor(tile.id / 15)],
+                                        targetPortalId: tile.contains.targetPortalId,
+                                        targetLevelId: tile.contains.targetLevelId,
+                                        targetOrientation: tile.contains.targetOrientation
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        });
+        return teleporters;
     }
 
     componentWillUnmount() {
@@ -91,12 +125,15 @@ class DungeonView extends React.Component {
             nextProps.hoveredDungeonSection !== this.props.hoveredDungeonSection ||
             nextProps.dungeons !== this.props.dungeons ||
             nextProps.loadingData !== this.props.loadingData ||
+            nextProps.isSavingDungeon !== this.props.isSavingDungeon ||
             nextProps.planeSyncInProgress !== this.props.planeSyncInProgress ||
             nextProps.generatingDungeon !== this.props.generatingDungeon ||
             nextProps.tileSize !== this.props.tileSize ||
             nextProps.boardSize !== this.props.boardSize ||
             nextProps.imagesMatrix !== this.props.imagesMatrix ||
-            nextProps.dungeonHasUnsavedChanges !== this.props.dungeonHasUnsavedChanges
+            nextProps.dungeonHasUnsavedChanges !== this.props.dungeonHasUnsavedChanges ||
+            nextProps.activeDungeonLevel !== this.props.activeDungeonLevel ||
+            nextProps.dungeonOverlayOn !== this.props.dungeonOverlayOn
         );
     }
     onClickHandler = event => {
@@ -312,6 +349,10 @@ class DungeonView extends React.Component {
 
         allPortals.forEach((p) => {
             if (!p.portalId || !p.targetPortalId) return;
+
+            // Require link reciprocity: ensure target portal exists and points back to this portal
+            const targetPortal = allPortals.find(x => x.portalId === p.targetPortalId);
+            if (!targetPortal || targetPortal.targetPortalId !== p.portalId) return;
 
             const pairKey = [p.portalId, p.targetPortalId].sort().join('-');
             if (drawnPairs.has(pairKey)) return;
@@ -539,9 +580,9 @@ class DungeonView extends React.Component {
         }
     }
 
-    render (){
+    render() {
         return (
-            <div className="board-view-container">
+            <div className="board-view-container" style={{ position: 'relative' }}>
                 <div className="center-board-container">
                     <div 
                     onMouseLeave={() => {return this.props.setHover(null)}}
@@ -582,6 +623,12 @@ class DungeonView extends React.Component {
                                             <CDropdownItem onClick={() => this.props.deleteDungeon()}>Delete Dungeon</CDropdownItem>
                                             <CDropdownItem onClick={() => this.props.downloadDungeon()}>⬇ Export as JSON</CDropdownItem>
                                             <CDropdownItem onClick={() => this.props.importDungeon()}>⬆ Import from JSON</CDropdownItem>
+                                            <CDropdownItem onClick={(e) => {
+                                                e.preventDefault();
+                                                this.props.toggleTeleporterInterface();
+                                            }}>
+                                                {this.props.showTeleporterInterface ? 'Hide Teleporter Interface' : 'Show Teleporter Interface'}
+                                            </CDropdownItem>
                                         </CDropdownMenu>
                                     </CDropdown>
                                 </div>
@@ -896,9 +943,10 @@ class DungeonView extends React.Component {
                                          />
                                      );
                                  })()}
-                                </div>
+                                 </div>
                              </div>}
-                            {!this.props.loadedDungeon && !this.props.loadingData && <div className="empty-dungeons-container">
+
+                             {!this.props.loadedDungeon && !this.props.loadingData && <div className="empty-dungeons-container">
                                 Select a dungeon, or create a new one
                             </div>}
 

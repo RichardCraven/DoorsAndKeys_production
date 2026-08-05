@@ -102,7 +102,10 @@ function Tile(props) {
             vctBorder = '2px solid white';
         }
     }
+
+    // Determine if the current image is a portal that should render above walls/items
     const foregroundPortalImages = ['archway', 'gryphon_gate_opened', 'bat_gate_opened', 'evil_gate_opened', 'dungeon_door_opened'];
+    const portraitZIndex = foregroundPortalImages.includes(props.image) ? 25 : 20;
     const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
     const isVendorCell = !!(containsObj && containsObj.type === 'vendor');
 
@@ -156,7 +159,7 @@ function Tile(props) {
         }
         let normalizedUrl = String(unwrapped).trim().replace(/^['"]|['"]$/g, '');
 
-        // Resolve cross-environment/build asset path hashes
+        let keyStr = normalizedUrl;
         if (normalizedUrl.includes('/') || normalizedUrl.includes('.')) {
             let filename = normalizedUrl.substring(normalizedUrl.lastIndexOf('/') + 1);
             filename = decodeURIComponent(filename);
@@ -166,32 +169,32 @@ function Tile(props) {
             }
             // Strip Webpack build hashes (e.g. .c03f8c82 or -c03f8c82)
             filename = filename.replace(/[-.][a-f0-9]{8,32}$/i, '');
-
-            // Convert to matching key format (lowercase and underscores)
-            let key = filename.trim().toLowerCase().replace(/[\s-]+/g, '_');
-
-            if (images[key]) {
-                normalizedUrl = images[key];
-            } else {
-                // Remove trailing underscores/dots
-                const cleanKey = key.replace(/_+$/, '');
-                if (images[cleanKey]) {
-                    normalizedUrl = images[cleanKey];
-                } else if (cleanKey === 'tier_1' && images['tier_1_armor']) {
-                    normalizedUrl = images['tier_1_armor'];
-                } else if (cleanKey === 'tier_2' && images['tier_2_armor']) {
-                    normalizedUrl = images['tier_2_armor'];
-                } else if (cleanKey === 'tier_3' && images['tier_3_armor']) {
-                    normalizedUrl = images['tier_3_armor'];
-                } else if (images[cleanKey + '_portrait']) {
-                    normalizedUrl = images[cleanKey + '_portrait'];
-                } else if (images[cleanKey + '_gate']) {
-                    normalizedUrl = images[cleanKey + '_gate'];
-                } else if (images[cleanKey + '_key']) {
-                    normalizedUrl = images[cleanKey + '_key'];
-                } else if (images[cleanKey + '_chest']) {
-                    normalizedUrl = images[cleanKey + '_chest'];
-                }
+            keyStr = filename;
+        }
+        
+        let key = keyStr.trim().toLowerCase().replace(/[\s-]+/g, '_');
+        
+        if (images[key]) {
+            normalizedUrl = images[key];
+        } else {
+            // Remove trailing underscores/dots
+            const cleanKey = key.replace(/_+$/, '');
+            if (images[cleanKey]) {
+                normalizedUrl = images[cleanKey];
+            } else if (cleanKey === 'tier_1' && images['tier_1_armor']) {
+                normalizedUrl = images['tier_1_armor'];
+            } else if (cleanKey === 'tier_2' && images['tier_2_armor']) {
+                normalizedUrl = images['tier_2_armor'];
+            } else if (cleanKey === 'tier_3' && images['tier_3_armor']) {
+                normalizedUrl = images['tier_3_armor'];
+            } else if (images[cleanKey + '_portrait']) {
+                normalizedUrl = images[cleanKey + '_portrait'];
+            } else if (images[cleanKey + '_gate']) {
+                normalizedUrl = images[cleanKey + '_gate'];
+            } else if (images[cleanKey + '_key']) {
+                normalizedUrl = images[cleanKey + '_key'];
+            } else if (images[cleanKey + '_chest']) {
+                normalizedUrl = images[cleanKey + '_chest'];
             }
         }
 
@@ -397,7 +400,6 @@ function Tile(props) {
 
     const isChargingAmbush = !!(currentTile && currentTile.isChargingAmbush) || !!props.isChargingAmbush;
 
-    const portraitZIndex = foregroundPortalImages.includes(props.image) ? 12 : 3;
 
     const imageString = String(props.imageOverride || props.image || '').toLowerCase();
     const isItemImage = imageString.includes('key') ||
@@ -614,20 +616,23 @@ function Tile(props) {
                      { (props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory) && (() => {
                          const rawClan = props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory;
                          const clan = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : String(rawClan);
-                         let territoryBg = 'rgba(180, 110, 40, 0.45)'; // mud default
-                         let borderColor = 'rgba(210, 130, 50, 0.65)';
+                         let territoryBg = 'rgba(139, 90, 43, 0.45)';
+                         let borderColor = 'rgba(179, 120, 73, 0.65)';
                          if (clan === 'cave' || clan === 'cave_clan') {
-                             territoryBg = 'rgba(90, 110, 160, 0.45)';
-                             borderColor = 'rgba(110, 130, 190, 0.65)';
+                             territoryBg = 'rgba(100, 110, 140, 0.45)';
+                             borderColor = 'rgba(130, 140, 170, 0.65)';
                          } else if (clan === 'woodland' || clan === 'woodland_clan') {
-                             territoryBg = 'rgba(34, 160, 34, 0.45)';
-                             borderColor = 'rgba(50, 190, 50, 0.65)';
+                             territoryBg = 'rgba(34, 139, 34, 0.45)';
+                             borderColor = 'rgba(54, 179, 54, 0.65)';
                          } else if (clan === 'shadow' || clan === 'shadow_clan') {
-                             territoryBg = 'rgba(120, 20, 180, 0.45)';
-                             borderColor = 'rgba(150, 30, 210, 0.65)';
+                             territoryBg = 'rgba(80, 0, 120, 0.45)';
+                             borderColor = 'rgba(110, 20, 160, 0.65)';
                          } else if (clan === 'paradox' || clan === 'paradox_clan') {
-                             territoryBg = 'rgba(210, 20, 210, 0.45)';
-                             borderColor = 'rgba(230, 40, 230, 0.65)';
+                             territoryBg = 'rgba(180, 0, 180, 0.45)';
+                             borderColor = 'rgba(220, 40, 220, 0.65)';
+                         } else if (clan === 'mud' || clan === 'mud_clan') {
+                             territoryBg = 'rgba(139, 90, 43, 0.45)';
+                             borderColor = 'rgba(179, 120, 73, 0.65)';
                          }
                          return (
                              <div 
@@ -1103,7 +1108,7 @@ function Tile(props) {
                       <div style={{
                           width: '65%',
                           height: '65%',
-                          backgroundImage: toCssUrl(images[props.imageOverride] || images[props.image] || (props.contains && images[props.contains.type]) || images.narrative),
+                          backgroundImage: toCssUrl(images[props.imageOverride] || images[props.image] || (props.contains && ((props.contains.type === 'avatar' || props.contains.type === 'camp') && props.playerImgKey ? (images[props.playerImgKey] || props.playerImgKey) : images[props.contains.type])) || images.narrative),
                           backgroundSize: 'contain',
                           backgroundRepeat: 'no-repeat',
                           backgroundPosition: 'center',
@@ -1214,7 +1219,7 @@ function Tile(props) {
                     backgroundSize: 'contain',
                     backgroundRepeat: 'no-repeat',
                     backgroundPosition: 'center',
-                    zIndex: 10,
+                    zIndex: 35,
                     filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.8))',
                     pointerEvents: 'none'
                 }} title="Unlock spell active" />

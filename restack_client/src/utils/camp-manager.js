@@ -32,19 +32,54 @@ export async function setUpCamp(component, maybeDuration) {
         }
         const currentFood = typeof meta.food === 'number' ? meta.food : 55;
         let fortifyLevel = 0;
+        let endureMember = null;
         crew.forEach(member => {
             if (member && !member.dead && member.globalSkills) {
-                const s = member.globalSkills.find(sk => (typeof sk === 'string' ? sk : sk.key) === 'fortify');
-                if (s) {
-                    const lvl = (typeof s === 'object' && typeof s.level === 'number') ? s.level : 1;
-                    if (lvl > fortifyLevel) {
-                        fortifyLevel = lvl;
-                    }
+                const fSkill = member.globalSkills.find(sk => (typeof sk === 'string' ? sk : sk.key) === 'fortify');
+                if (fSkill) {
+                    const lvl = (typeof fSkill === 'object' && typeof fSkill.level === 'number') ? fSkill.level : 1;
+                    if (lvl > fortifyLevel) fortifyLevel = lvl;
+                }
+                const eSkill = member.globalSkills.find(sk => (typeof sk === 'string' ? sk : sk.key) === 'endure');
+                if (eSkill) {
+                    endureMember = member;
                 }
             }
         });
 
-        if (currentFood < foodCost) {
+        let endureSuccess = false;
+        let endureMessage = null;
+
+        if (endureMember) {
+            const TEN_MIN_MS = 10 * 60 * 1000;
+            const lastEndureUse = typeof meta.lastEndureUseTimestamp === 'number' ? meta.lastEndureUseTimestamp : 0;
+            const timeSinceEndure = Date.now() - lastEndureUse;
+            const isExhausted = timeSinceEndure < TEN_MIN_MS;
+
+            const chance = isExhausted ? 0.20 : 1.0;
+            if (Math.random() < chance) {
+                endureSuccess = true;
+                meta.lastEndureUseTimestamp = Date.now();
+                meta.isEndureCamp = true;
+                foodCost = 0; // Zero food cost
+                if (!isExhausted) {
+                    endureMessage = `Endure auto-triggered! Zero food consumed, crew healed to 50% HP.`;
+                } else {
+                    endureMessage = `Endure succeeded (20% chance during 10m exhaustion window)! Zero food consumed.`;
+                }
+            } else {
+                const remainingMin = Math.ceil((TEN_MIN_MS - timeSinceEndure) / 60000);
+                endureMessage = `Endure failed to trigger (20% chance during 10m exhaustion window, ${remainingMin}m remaining).`;
+            }
+        }
+
+        if (endureSuccess) {
+            try {
+                component.setState({ campWarningMessage: endureMessage });
+                const setTimeoutFn = (component._setTimeout && typeof component._setTimeout === 'function') ? component._setTimeout : setTimeout;
+                setTimeoutFn(() => { try { component.setState({ campWarningMessage: null }); } catch(e){} }, 4500);
+            } catch(e) {}
+        } else if (currentFood < foodCost) {
             let fortifySuccess = false;
             let cooldownRemainingMin = 0;
 
@@ -69,9 +104,10 @@ export async function setUpCamp(component, maybeDuration) {
 
             if (fortifySuccess) {
                 try {
-                    component.setState({ campWarningMessage: `Insufficient food! Fortify prevented the Resolve penalty.` });
+                    const msg = endureMessage ? `Insufficient food! ${endureMessage} Fortify prevented the Resolve penalty.` : `Insufficient food! Fortify prevented the Resolve penalty.`;
+                    component.setState({ campWarningMessage: msg });
                     const setTimeoutFn = (component._setTimeout && typeof component._setTimeout === 'function') ? component._setTimeout : setTimeout;
-                    setTimeoutFn(() => { try { component.setState({ campWarningMessage: null }); } catch(e){} }, 4000);
+                    setTimeoutFn(() => { try { component.setState({ campWarningMessage: null }); } catch(e){} }, 4500);
                 } catch(e) {}
             } else {
                 const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
@@ -80,13 +116,15 @@ export async function setUpCamp(component, maybeDuration) {
                 storeMeta(meta);
                 try {
                     let msg = `Not enough food to camp (need ${foodCost}, have ${currentFood}). Resolve decreased by ${penalty}!`;
-                    if (fortifyLevel > 0) {
+                    if (endureMessage) {
+                        msg = `Not enough food to camp (${endureMessage}). Resolve decreased by ${penalty}!`;
+                    } else if (fortifyLevel > 0) {
                         msg = `Not enough food to camp. Fortify on cooldown for another ${cooldownRemainingMin}m. Resolve decreased by ${penalty}!`;
                     }
                     component.setState({ campWarningMessage: msg });
-                    // auto-clear after 4s
+                    // auto-clear after 4.5s
                     const setTimeoutFn = (component._setTimeout && typeof component._setTimeout === 'function') ? component._setTimeout : setTimeout;
-                    setTimeoutFn(() => { try { component.setState({ campWarningMessage: null }); } catch(e){} }, 4000);
+                    setTimeoutFn(() => { try { component.setState({ campWarningMessage: null }); } catch(e){} }, 4500);
                 } catch(e) {}
                 try { if (component.props.saveUserData) component.props.saveUserData(); } catch (e) {}
                 return; // block camping
@@ -94,6 +132,21 @@ export async function setUpCamp(component, maybeDuration) {
         }
         // Deduct food cost
         meta.food = Math.max(0, currentFood - foodCost);
+
+        // Apply Endure 50% HP heal if Endure triggered
+        if (meta.isEndureCamp) {
+            const updatedCrew = crew.map(member => {
+                if (!member || member.dead) return member;
+                const maxHp = (member.stats && typeof member.stats.hp === 'number') ? member.stats.hp : member.hp || 0;
+                const targetHp = Math.floor(maxHp * 0.5);
+                if ((member.hp || 0) < targetHp) {
+                    return { ...member, hp: targetHp };
+                }
+                return member;
+            });
+            meta.crew = updatedCrew;
+            if (component.props.crewManager) component.props.crewManager.crew = updatedCrew;
+        }
         // --- End food cost ---
 
         const now = new Date();
@@ -238,6 +291,7 @@ export async function endCamp(component) {
         delete m.campingEnd;
         delete m.campElapsedSeconds;
         delete m.campTotalSeconds;
+        delete m.isEndureCamp;
         const currentResolve = typeof m.resolve === 'number' ? m.resolve : 100;
         let awakeRefreshedBonus = 0;
         let fortifyLevel = 0;

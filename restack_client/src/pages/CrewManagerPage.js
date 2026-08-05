@@ -318,6 +318,11 @@ submit = async () => {
     const meta = getMeta();
     let selectedCrew = this.state.selectedCrew.filter(e=> e !== null);
 
+    // Ensure only the first member in the selected crew has isLeader set to true
+    selectedCrew.forEach((member, idx) => {
+        member.isLeader = (idx === 0);
+    });
+
     // Provide starting items
     const im = new InventoryManager();
     im.initializeItems();
@@ -483,7 +488,7 @@ goBack = () => {
                         );
                     })}
                 </div>
-                <div className="member-panel">
+                <div className="member-panel" style={{ display: 'flex', alignItems: 'flex-start' }}>
                                         {this.state.selectedCrewMember &&
                                             <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: 15}}>
                                                 <div
@@ -584,22 +589,6 @@ goBack = () => {
                     </div> */}
                 </div>
                 <div className="crew-tray" style={{ position: 'relative', alignItems: 'flex-end' }}>
-                    {/* Leader label above slot 0 */}
-                    <div style={{
-                        position: 'absolute',
-                        top: '-26px',
-                        left: '0',
-                        width: '125px',
-                        textAlign: 'center',
-                        fontSize: '11px',
-                        fontWeight: 'bold',
-                        color: '#f9b115',
-                        fontFamily: "'Cinzel', serif",
-                        letterSpacing: '0.1em',
-                        textTransform: 'uppercase'
-                    }}>
-                        Leader
-                    </div>
                     {this.state.crewSlots.map((slot, i)=>{
                         const member = this.state.selectedCrew[i];
                         const isLeader = i === 0;
@@ -617,6 +606,25 @@ goBack = () => {
                                     } : {})
                                 }}
                             >
+                                {isLeader && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '-26px',
+                                        left: '0',
+                                        right: '0',
+                                        textAlign: 'center',
+                                        fontSize: '11px',
+                                        fontWeight: 'bold',
+                                        color: '#f9b115',
+                                        fontFamily: "'Cinzel', serif",
+                                        letterSpacing: '0.1em',
+                                        textTransform: 'uppercase',
+                                        whiteSpace: 'nowrap',
+                                        pointerEvents: 'none'
+                                    }}>
+                                        Leader
+                                    </div>
+                                )}
                                 {(i === 3 && !this.state.advancedUser) === false && (
                                     <div className={`add-button ${!this.state.selectedCrewMember ? 'disabled' : ''}`} onClick={()=>this.addMember(i)}>&oplus;</div>
                                 )}

@@ -827,6 +827,10 @@ export function MapMaker(props){
                                         levelId: level.id,
                                         portalId: tile.contains.portalId || null,
                                         targetPortalId: tile.contains.targetPortalId || null,
+                                        targetLevelId: tile.contains.targetLevelId ?? null,
+                                        targetOrientation: tile.contains.targetOrientation ?? null,
+                                        targetMiniboardIndex: tile.contains.targetMiniboardIndex ?? null,
+                                        targetCoordinates: tile.contains.targetCoordinates ?? null,
                                         portalName: tile.contains.portalName || `Lvl ${level.id} (${orientation === 'front' ? 'Front' : 'Back'}) Board ${mbIndex + 1} at [${tile.coordinates}]`
                                     });
                                 }

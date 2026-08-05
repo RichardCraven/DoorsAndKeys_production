@@ -53,6 +53,8 @@ class PlanesPanel extends React.Component {
             nextProps.boardSize !== this.props.boardSize ||
             nextProps.showPlanesNames !== this.props.showPlanesNames ||
             nextProps.adjacencyHoverIdx !== this.props.adjacencyHoverIdx ||
+            nextProps.showTeleporterInterface !== this.props.showTeleporterInterface ||
+            nextProps.loadedDungeon !== this.props.loadedDungeon ||
             nextState.hoveredPlane !== this.state.hoveredPlane ||
             nextState.localFolderExpanded !== this.state.localFolderExpanded
         );
@@ -140,6 +142,38 @@ class PlanesPanel extends React.Component {
         if (aNum !== null) return -1;
         if (bNum !== null) return 1;
         return `${a?.title ?? a}`.localeCompare(`${b?.title ?? b}`, undefined, { sensitivity: 'base' });
+    }
+
+    getTeleporters = () => {
+        if (!this.props.loadedDungeon || !this.props.loadedDungeon.levels) return [];
+        let portals = [];
+        this.props.loadedDungeon.levels.forEach((lvl, lvlIdx) => {
+            ['front', 'back'].forEach(orientation => {
+                if (lvl[orientation] && lvl[orientation].miniboards) {
+                    lvl[orientation].miniboards.forEach((mb, mbIdx) => {
+                        if (mb && mb.tiles) {
+                            mb.tiles.forEach(t => {
+                                if (t.contains) {
+                                    const ctype = t.contains.type || t.contains;
+                                    if (ctype === 'dungeon_portal' || ctype === 'dungeon portal' || ctype === 'portal' || ctype === 'teleporter') {
+                                        portals.push({
+                                            id: t.id,
+                                            levelId: lvl.id,
+                                            orientation: orientation,
+                                            miniboardIndex: mbIdx,
+                                            portalId: t.contains.portalId,
+                                            targetPortalId: t.contains.targetPortalId,
+                                            subtype: t.contains.subtype || ctype
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        });
+        return portals;
     }
 
     getSortedPlaneFolders = (folders) => {
@@ -380,9 +414,11 @@ class PlanesPanel extends React.Component {
         return (
             <div className="palette right-palette" 
             style={{
-                width: this.props.tileSize*4.5+'px', height: (this.props.boardSize + 35) + 'px',
+                display: 'flex',
+                flexDirection: 'column',
+                width: this.props.tileSize*4.5+'px', 
+                height: (this.props.boardSize + 35) + 'px',
                 backgroundColor: '#0b0a09',
-                overflow: 'scroll',
                 marginLeft: '20px',
                 borderRadius: '6px',
                 border: '1px solid rgba(255, 255, 255, 0.08)'
@@ -393,9 +429,9 @@ class PlanesPanel extends React.Component {
                 }
             }}
             >
-                <div className="planes-title">Planes</div>
+                <div className="planes-title" style={{ flexShrink: 0 }}>Planes</div>
                 <div className="planes-options-buttons-container" 
-                style={{width: (this.props.tileSize*4.5 - 2)+'px'}}
+                style={{width: (this.props.tileSize*4.5 - 2)+'px', flexShrink: 0}}
                 >
                     <CDropdown>
                         <CDropdownToggle color="secondary">Actions</CDropdownToggle>
@@ -414,7 +450,9 @@ class PlanesPanel extends React.Component {
                 
                 <div className="board-previews-container previews-container"
                     style={{
-                        height: (this.props.boardSize - 78)+ 'px'
+                        flex: 1,
+                        overflowY: 'auto',
+                        minHeight: 0
                     }}
                 >
                     {sortedPlaneFolders && sortedPlaneFolders.length > 0 && sortedPlaneFolders.map((folder, idx) => {
@@ -450,6 +488,94 @@ class PlanesPanel extends React.Component {
                     })}
                     {rootPlanes.map((plane, planeIndex) => this.renderPlanePreview(plane, `root_${planeIndex}`))}
                 </div>
+                
+                {this.props.showTeleporterInterface && (
+                    <div style={{
+                        flexShrink: 0,
+                        maxHeight: '40vh',
+                        overflowY: 'auto',
+                        background: 'rgba(12, 10, 9, 0.95)',
+                        borderTop: '1px solid rgba(0, 243, 255, 0.4)',
+                        padding: '12px',
+                        color: '#e0e0e0',
+                    }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', borderBottom: '1px solid rgba(0, 243, 255, 0.2)', paddingBottom: '8px' }}>
+                            <h3 style={{ margin: 0, fontSize: '1rem', color: '#00f3ff' }}>
+                                Teleporter Interface
+                            </h3>
+                            {this.props.unlinkAllTeleporters && (
+                                <button 
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        if (window.confirm("Are you sure you want to unlink all teleporters? This cannot be undone.")) {
+                                            this.props.unlinkAllTeleporters();
+                                        }
+                                    }}
+                                    style={{
+                                        background: 'rgba(255, 68, 68, 0.2)',
+                                        border: '1px solid rgba(255, 68, 68, 0.5)',
+                                        color: '#ff4444',
+                                        borderRadius: '4px',
+                                        padding: '2px 8px',
+                                        fontSize: '11px',
+                                        cursor: 'pointer',
+                                        textTransform: 'uppercase',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    Unlink All
+                                </button>
+                            )}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '12px' }}>
+                            {(() => {
+                                try {
+                                    const teleporters = this.getTeleporters();
+                                    if (teleporters.length === 0) {
+                                        return <div style={{ fontStyle: 'italic', color: '#888', fontSize: '13px' }}>No teleporters found in this dungeon.</div>;
+                                    }
+                                    return teleporters.map((tp, i) => {
+                                        const target = tp.targetPortalId ? teleporters.find(t => t.portalId == tp.targetPortalId) : null;
+                                        const isLinked = !!tp.targetPortalId;
+                                        return (
+                                            <div key={i} style={{
+                                                display: 'flex', flexDirection: 'column',
+                                                background: 'rgba(255, 255, 255, 0.05)',
+                                                padding: '8px 12px',
+                                                borderRadius: '4px',
+                                                borderLeft: isLinked ? '3px solid #00f3ff' : '3px solid #ff4444'
+                                            }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                    <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '13px' }}>{tp.subtype}</div>
+                                                    <div style={{ fontSize: '11px', color: '#aaa' }}>
+                                                        Lvl {tp.levelId} • {tp.orientation === 'front' ? 'F' : 'B'} • MB {tp.miniboardIndex + 1}
+                                                    </div>
+                                                </div>
+                                                <div style={{ marginTop: '8px', padding: '6px', background: isLinked ? 'rgba(0, 243, 255, 0.1)' : 'rgba(255, 68, 68, 0.1)', borderRadius: '4px' }}>
+                                                    {isLinked ? (
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                            <div style={{ fontSize: '10px', color: '#00f3ff', textTransform: 'uppercase' }}>Linked</div>
+                                                            <div style={{ fontSize: '12px', color: '#fff', textAlign: 'right' }}>
+                                                                {target ? target.subtype : 'Unknown'}
+                                                                <div style={{ color: '#888', fontSize: '10px' }}>
+                                                                    Lvl {target ? target.levelId : '?'} • {target ? (target.orientation === 'front' ? 'F' : 'B') : '?'}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#ff4444', fontStyle: 'italic', textAlign: 'center' }}>Unlinked</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    });
+                                } catch (e) {
+                                    return <div style={{ color: 'red', fontSize: '12px' }}>Error: {e.message}</div>;
+                                }
+                            })()}
+                        </div>
+                    </div>
+                )}
             </div>
         )}
 
