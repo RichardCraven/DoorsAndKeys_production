@@ -69,23 +69,48 @@ export default class ProjectileCanvas extends React.Component {
     };
 
     update = () => {
+        const { playerTileIdx, tileSize } = this.props;
+        let px = null;
+        let py = null;
+        if (playerTileIdx !== null && playerTileIdx !== undefined && tileSize) {
+            const cols = 15;
+            const playerRow = Math.floor(playerTileIdx / cols);
+            const playerCol = playerTileIdx % cols;
+            px = playerCol * tileSize + tileSize / 2;
+            py = playerRow * tileSize + tileSize / 2;
+        }
+
         // Update projectiles
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const p = this.projectiles[i];
             p.traveled += p.speed;
 
-            if (p.traveled >= p.distance) {
-                // Hit! Trigger callback and explosion
-                if (p.onHit) {
-                    try { p.onHit(); } catch(e) { console.error(e); }
+            // Move projectile first
+            const ratio = Math.min(1.0, p.traveled / p.distance);
+            p.x = p.startX + p.dx * ratio;
+            p.y = p.startY + p.dy * ratio;
+
+            // Check collision with player's current location
+            if (px !== null && py !== null) {
+                const dx = px - p.x;
+                const dy = py - p.y;
+                const distToPlayer = Math.sqrt(dx * dx + dy * dy);
+                
+                // If it hits the player within 40% of tile size
+                if (distToPlayer < tileSize * 0.4) {
+                    if (p.onHit) {
+                        try { p.onHit(); } catch(e) { console.error(e); }
+                    }
+                    this.createExplosion(p.x, p.y);
+                    this.projectiles.splice(i, 1);
+                    continue;
                 }
+            }
+
+            // If it reached destination without hitting the player, it's a miss
+            if (p.traveled >= p.distance) {
                 this.createExplosion(p.endX, p.endY);
                 this.projectiles.splice(i, 1);
-            } else {
-                // Move projectile
-                const ratio = p.traveled / p.distance;
-                p.x = p.startX + p.dx * ratio;
-                p.y = p.startY + p.dy * ratio;
             }
         }
 
@@ -128,6 +153,11 @@ export default class ProjectileCanvas extends React.Component {
             });
         }
         this.explosions.push({ particles });
+    };
+
+    clearProjectiles = () => {
+        this.projectiles = [];
+        this.explosions = [];
     };
 
     draw = () => {

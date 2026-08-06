@@ -1874,11 +1874,17 @@ export function BoardManager(){
         const subtype = this.getContainsSubtype(destinationTile.contains);
         
         if (type === 'building' && subtype !== 'hut') {
-            if (this.messaging) this.messaging('This building obstructs movement.');
+            const rawBldg = subtype || destinationTile.building || 'building';
+            const bldgName = rawBldg.replace(/_/g, ' ');
+            const article = ['a', 'e', 'i', 'o', 'u'].includes(bldgName.charAt(0).toLowerCase()) ? 'An' : 'A';
+            if (this.messaging) this.messaging(`${article} ${bldgName} obstructs your movement.`);
             return 'impassable';
         }
         if (type !== 'hut' && subtype !== 'hut' && destinationTile.building && destinationTile.building !== 'hut') {
-            if (this.messaging) this.messaging('This building obstructs movement.');
+            const rawBldg = subtype || destinationTile.building || 'building';
+            const bldgName = rawBldg.replace(/_/g, ' ');
+            const article = ['a', 'e', 'i', 'o', 'u'].includes(bldgName.charAt(0).toLowerCase()) ? 'An' : 'A';
+            if (this.messaging) this.messaging(`${article} ${bldgName} obstructs your movement.`);
             return 'impassable';
         }
         

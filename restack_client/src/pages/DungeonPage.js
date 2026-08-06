@@ -2644,6 +2644,11 @@ class DungeonPage extends React.Component {
                     this.checkMobileViewportCentering(coords, true);
                 }
             }
+            if (this.state.tiles !== prevState.tiles) {
+                if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
+                    this.projectileCanvasRef.current.clearProjectiles();
+                }
+            }
     }
     UNSAFE_componentWillMount(){
         let tileSize = this.getTileSize(),
@@ -5473,13 +5478,13 @@ class DungeonPage extends React.Component {
                 // Set fading flag
                 tile.isFadingOut = true;
                 if (typeof this.props.boardManager.refreshTiles === 'function') this.props.boardManager.refreshTiles();
-                this.forceUpdate();
+                this.setState({ tiles: [...this.props.boardManager.tiles] });
 
                 setTimeout(() => {
                     tile.isFadingOut = false;
                     tile.contains = null;
                     if (typeof this.props.boardManager.refreshTiles === 'function') this.props.boardManager.refreshTiles();
-                    this.forceUpdate();
+                    this.setState({ tiles: [...this.props.boardManager.tiles] });
                 }, 350); // Matches transition duration
             }
         }
@@ -16660,6 +16665,9 @@ class DungeonPage extends React.Component {
                         ref={this.projectileCanvasRef}
                         boardSize={this.state.boardSize}
                         tileSize={this.state.tileSize}
+                        playerTileIdx={(this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location && typeof this.props.boardManager.getIndexFromCoordinates === 'function')
+                            ? this.props.boardManager.getIndexFromCoordinates(this.props.boardManager.playerTile.location)
+                            : null}
                     />
                 </div>
             </div>}

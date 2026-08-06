@@ -386,6 +386,9 @@ function Tile(props) {
                                  props.optionType === 'monster';
 
     const isBlackTile = isBlackRenderedTile(currentContains, currentTileColor);
+    const targetTileId = props.index !== undefined ? props.index : props.id;
+    const mainTile = props.boardTiles?.[targetTileId];
+    const isMainTileBlack = mainTile ? (mainTile.color === 'black' || mainTile.color === 'null' || mainTile.color === 'undefined' || !mainTile.color) : (color === 'black');
 
     const isNearbyMonster = (() => {
         if (!isMonsterOrPygmyTile) return false;
@@ -645,7 +648,7 @@ function Tile(props) {
                                      border: `1px dashed ${borderColor}`,
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
-                                     opacity: color === 'black' ? 0 : 1, 
+                                     opacity: (color === 'black' || isMainTileBlack) ? 0 : 1, 
                                      transition: 'opacity 0.35s ease-in-out'
                                  }} 
                              />
