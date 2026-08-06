@@ -2537,6 +2537,7 @@ class DungeonPage extends React.Component {
             , showBuildMenu: false
             , showAvatarRadialMenu: false
             , showPygmiesAttackPopup: false
+            , isAvatarDamaged: false
             , attackingPygmySubtype: null
             , campWarningMessage: null
             , showSkillTreePopup: false
@@ -3558,6 +3559,13 @@ class DungeonPage extends React.Component {
         this.props.boardManager.establishVendorEncounterCallback(this.triggerVendorEncounter)
         this.props.boardManager.establishShrineEncounterCallback(this.triggerShrineEncounter)
         this.props.boardManager.establishLoreTabletEncounterCallback(this.triggerLoreTabletEncounter)
+        if (this.props.boardManager) {
+            if (typeof this.props.boardManager.establishTriggerPygmyAmbushCallback === 'function') {
+                this.props.boardManager.establishTriggerPygmyAmbushCallback(this.triggerPygmyAmbush);
+            } else {
+                this.props.boardManager.triggerPygmyAmbush = this.triggerPygmyAmbush;
+            }
+        }
 
         this.props.boardManager.establishBoardTransitionCallback(this.boardTransition)
         this.props.boardManager.establishLevelChangeCallback(this.handleLevelChange)
@@ -4943,6 +4951,7 @@ class DungeonPage extends React.Component {
         try { if (this.realTimeSpecialActionCheckInterval) { clearInterval(this.realTimeSpecialActionCheckInterval); } } catch(e){}
         try { if (this.pygmiesInterval) { clearInterval(this.pygmiesInterval); this.pygmiesInterval = null; } } catch(e){}
         try { if (this.outpostAttackInterval) { clearInterval(this.outpostAttackInterval); this.outpostAttackInterval = null; } } catch(e){}
+        try { if (this.avatarDamageTimeout) { clearTimeout(this.avatarDamageTimeout); this.avatarDamageTimeout = null; } } catch(e){}
         try { if (this.prepCompleteTimeout) { clearTimeout(this.prepCompleteTimeout); this.prepCompleteTimeout = null; } } catch(e){}
         try { if (this.campTimeout) { clearTimeout(this.campTimeout); this.campTimeout = null; } } catch(e){}
         try { if (this.state && this.state.respawnUpdateInterval) { clearInterval(this.state.respawnUpdateInterval); } } catch(e){}
@@ -5427,6 +5436,37 @@ class DungeonPage extends React.Component {
         }
     };
 
+    triggerPygmyAmbush = (tileIdx) => {
+        const bm = this.props.boardManager;
+        if (!bm || !bm.tiles) return;
+        const tile = bm.tiles[tileIdx];
+        if (!tile) return;
+
+        // Check if player is protected by a Hut on their current tile before ambush triggers
+        const playerTileIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+        const playerTileObj = bm.tiles[playerTileIdx];
+        const isHutProtected = playerTileObj && (
+            playerTileObj.building === 'hut' ||
+            (playerTileObj.contains && (playerTileObj.contains.subtype === 'hut' || playerTileObj.contains.building === 'hut'))
+        );
+
+        if (isHutProtected) {
+            this.displayMessage('⛺ Your Hut protected your crew from the Pygmy ambush!');
+            tile.contains = null;
+            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+            this.setState({ tiles: [...bm.tiles] });
+            return;
+        }
+
+        const isGroupUnit = !!(tile.contains && (tile.contains.isGroup || tile.contains.subtype?.includes('group') || tile.contains.subtype?.includes('party') || tile.contains.group));
+        this.setState({
+            showPygmiesAttackPopup: true,
+            attackingPygmySubtype: bm.getContainsSubtype(tile.contains) || 'woodland',
+            attackingPygmyIsGroup: isGroupUnit,
+            attackingPygmyTileIdx: tileIdx
+        });
+    };
+
     handleClosePygmiesAttackPopup = () => {
         try {
             let meta = getMeta() || {};
@@ -5498,14 +5538,14 @@ class DungeonPage extends React.Component {
             const playerTileIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
             if (playerTileIdx === null || playerTileIdx === undefined) return;
 
-            // Outpost criteria: building that is not a hut
+            // Outpost criteria: only buildings that are explicitly of type/subtype 'outpost'
             const outposts = bm.tiles.filter(tile => {
                 if (!tile) return false;
                 const type = bm.getContainsType(tile.contains);
                 const subtype = bm.getContainsSubtype(tile.contains);
                 
-                if (type === 'building' && subtype !== 'hut') return true;
-                if (type !== 'hut' && subtype !== 'hut' && tile.building && tile.building !== 'hut') return true;
+                if (type === 'building' && subtype === 'outpost') return true;
+                if (subtype === 'outpost' || tile.building === 'outpost') return true;
                 return false;
             });
 
@@ -5525,6 +5565,26 @@ class DungeonPage extends React.Component {
 
     handleProjectileHitPlayer = () => {
         try {
+            const bm = this.props.boardManager;
+            if (bm && bm.playerTile && bm.playerTile.location && bm.tiles) {
+                const playerTileIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+                const playerTileObj = bm.tiles[playerTileIdx];
+                const isHutProtected = playerTileObj && (
+                    playerTileObj.building === 'hut' ||
+                    (playerTileObj.contains && (playerTileObj.contains.subtype === 'hut' || playerTileObj.contains.building === 'hut'))
+                );
+                if (isHutProtected) {
+                    this.displayMessage('⛺ A projectile hit your Hut, but your crew was shielded!');
+                    return;
+                }
+            }
+
+            this.setState({ isAvatarDamaged: true });
+            if (this.avatarDamageTimeout) clearTimeout(this.avatarDamageTimeout);
+            this.avatarDamageTimeout = setTimeout(() => {
+                this.setState({ isAvatarDamaged: false });
+            }, 500);
+
             let meta = getMeta() || {};
             const crew = (this.props.crewManager && this.props.crewManager.crew) || meta.crew || [];
             let totalDamageDealt = 0;
@@ -13710,6 +13770,17 @@ class DungeonPage extends React.Component {
     render(){
         const crew = ((this.props.crewManager && this.props.crewManager.crew) || []);
 
+        const bm = this.props.boardManager;
+        let isPlayerInHut = false;
+        if (bm && bm.playerTile && bm.playerTile.location && bm.tiles) {
+            const pIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+            const pTile = bm.tiles[pIdx];
+            isPlayerInHut = !!(pTile && (
+                pTile.building === 'hut' ||
+                (pTile.contains && (pTile.contains.subtype === 'hut' || pTile.contains.building === 'hut'))
+            ));
+        }
+
         const hasLivingSummoner = crew.some(m => {
             if (m && !m.dead && ((m.type || '').toLowerCase() === 'summoner' || (m.image || '').toLowerCase() === 'summoner')) {
                 if (m.globalSkills) {
@@ -16379,7 +16450,7 @@ class DungeonPage extends React.Component {
                     {this.state.playerFloatVisible && (
                         <div
                             ref={this.playerFloatRef}
-                            className="floating-player"
+                            className={`floating-player ${this.state.isAvatarDamaged ? 'damaged' : ''}`}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 this.setState((prev) => ({ showAvatarRadialMenu: !prev.showAvatarRadialMenu }));
@@ -16390,16 +16461,27 @@ class DungeonPage extends React.Component {
                                 top: this.state.playerFloatStyle.top,
                                 width: this.state.tileSize,
                                 height: this.state.tileSize,
-                                backgroundSize: 'contain',
-                                backgroundRepeat: 'no-repeat',
-                                backgroundPosition: 'center',
                                 pointerEvents: 'auto',
                                 cursor: 'pointer',
                                 transform: this.state.playerFloatStyle.transform,
                                 zIndex: 25,
-                                backgroundImage: this.state.playerFloatStyle.backgroundImage
                             }}
-                        />
+                        >
+                            <div
+                                style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundImage: this.state.playerFloatStyle.backgroundImage,
+                                    backgroundSize: 'contain',
+                                    backgroundRepeat: 'no-repeat',
+                                    backgroundPosition: 'center',
+                                }}
+                                className="avatar-image-inner"
+                            />
+                            {isPlayerInHut && (
+                                <div className="avatar-shield-overlay" />
+                            )}
+                        </div>
                     )}
 
                     {/* Avatar Radial Menu (Camp, Rest & Build Options) */}

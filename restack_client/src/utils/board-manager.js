@@ -202,6 +202,9 @@ export function BoardManager(){
     this.establishUseConsumableFromInventoryCallback = (callback) => {
         this.broadcastUseConsumableFromInventory = callback;
     }
+    this.establishTriggerPygmyAmbushCallback = (callback) => {
+        this.triggerPygmyAmbush = callback;
+    }
     this.playerTile = {
         location: [0,0],
         boardIndex: null,
@@ -1943,6 +1946,8 @@ export function BoardManager(){
                 // initiate the encounter. That ordering ensures the player
                 // visibly occupies the tile before the battle UI appears.
                 return 'monster';
+            case 'pygmies':
+                return 'pygmies';
             case 'item':
                 if (this.isChest(subtype)) {
                     const keyDetails = this.getRequiredKeyForChest(subtype);
@@ -2567,6 +2572,15 @@ export function BoardManager(){
                 this.setMonster(subtype);
             } catch (e) { /* best-effort */ }
             try { this.triggerMonsterBattle(true, destinationTile.id); } catch (e) { /* best-effort */ }
+        }
+        if (interaction === 'pygmies') {
+            try {
+                if (typeof this.triggerPygmyAmbush === 'function') {
+                    this.triggerPygmyAmbush(destinationTile.id);
+                }
+            } catch (e) {
+                console.error("Failed to trigger pygmy ambush on movement:", e);
+            }
         }
         this.overlayTiles.forEach(t=>t.image = null)
         // Player image now rendered as floating overlay, not in overlayTiles
