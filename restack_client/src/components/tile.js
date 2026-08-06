@@ -389,6 +389,9 @@ function Tile(props) {
     const targetTileId = props.index !== undefined ? props.index : props.id;
     const mainTile = props.boardTiles?.[targetTileId];
     const isMainTileBlack = mainTile ? (mainTile.color === 'black' || mainTile.color === 'null' || mainTile.color === 'undefined' || !mainTile.color) : (color === 'black');
+    const isHut = props.building === 'hut' || 
+                  (containsObj && (containsObj.subtype === 'hut' || containsObj.building === 'hut' || containsObj.type === 'hut')) ||
+                  (currentContains && (currentContains.subtype === 'hut' || currentContains.building === 'hut' || currentContains.type === 'hut'));
 
     const isNearbyMonster = (() => {
         if (!isMonsterOrPygmyTile) return false;
@@ -494,7 +497,7 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: (isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v))) ? 'visible' : 'hidden',
+            overflow: (isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || (props.isPlayerOnTile && isHut)) ? 'visible' : 'hidden',
             zIndex: isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : undefined),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
@@ -705,7 +708,19 @@ function Tile(props) {
 
                       {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
                       {resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
-                          <div className="portrait" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: toCssUrl(resolvedPortraitUrl), backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'), backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'), backgroundRepeat: 'no-repeat', zIndex: isVendorCell ? 40 : portraitZIndex, opacity: (color === 'black' || props.isFadingOut) ? 0 : 1, transition: 'opacity 0.35s ease-in-out'}} />
+                          <div className="portrait" style={{
+                               position: 'absolute',
+                               top: 0, left: 0, right: 0, bottom: 0,
+                               backgroundImage: toCssUrl(resolvedPortraitUrl),
+                               backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'),
+                               backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
+                               backgroundRepeat: 'no-repeat',
+                               zIndex: isVendorCell ? 40 : (isHut && props.isPlayerOnTile ? 4 : portraitZIndex),
+                               opacity: (color === 'black' || props.isFadingOut) ? 0 : 1,
+                               transform: isHut && props.isPlayerOnTile ? 'scale(2.0)' : 'none',
+                               transformOrigin: isHut && props.isPlayerOnTile ? 'bottom center' : 'center center',
+                               transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out'
+                           }} />
                       )}
 
             {/* Soul Shard custom overlay */}
@@ -1273,7 +1288,8 @@ export function propsAreEqual(prevProps, nextProps) {
         'isPreview', 'passThrough', 'backgroundColor', 'terrain', 'territory',
         'isShrine', 'isLoreTablet', 'trapRevealed', 'connectedEdge',
         'partialObscured', 'showCoordinates', 'image', 'imageOverride',
-        'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level'
+        'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
+        'isPlayerOnTile', 'className'
     ];
 
     for (let key of keysToCompare) {

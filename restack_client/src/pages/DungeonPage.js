@@ -3947,12 +3947,13 @@ class DungeonPage extends React.Component {
             let meta = getMeta() || {};
             const crew = Array.isArray(meta.crew) ? meta.crew : (Array.isArray(this.props?.crewManager?.crew) ? this.props.crewManager.crew : []);
             const leader = crew.find(m => m && m.isLeader);
+            const selectedMember = (this.state && this.state.selectedCrewMember) || crew.find(m => m && m.selected) || leader;
             
             let playerImgSrc = '';
             if (meta && meta.camping) {
                 playerImgSrc = images['campfire'];
-            } else if (leader && (leader.portrait || leader.image)) {
-                const p = leader.portrait || leader.image;
+            } else if (selectedMember && (selectedMember.portrait || selectedMember.image)) {
+                const p = selectedMember.portrait || selectedMember.image;
                 playerImgSrc = images[p] || p;
             } else {
                 playerImgSrc = images['avatar'];
@@ -4086,7 +4087,7 @@ class DungeonPage extends React.Component {
 
     enqueueDirectionalMove = (direction) => {
         if (!direction) return;
-        if (this.state.keysLocked || this.state.inMonsterBattle) return;
+        if (this.state.keysLocked || this.state.inMonsterBattle || this.state.activeConstruction) return;
         if (this._isMoving) {
             if (!this._movementQueue) this._movementQueue = [];
             if (this._movementQueue.length < 2) {
@@ -4098,7 +4099,7 @@ class DungeonPage extends React.Component {
     }
 
     processMovementQueue = () => {
-        if (this.state.keysLocked || this.state.inMonsterBattle) return;
+        if (this.state.keysLocked || this.state.inMonsterBattle || this.state.activeConstruction) return;
         if (Array.isArray(this._movementQueue) && this._movementQueue.length > 0) {
             const nextDirection = this._movementQueue.shift();
             if (nextDirection) this.handleDirectionalMove(nextDirection, { fromQueue: true });
@@ -8658,7 +8659,7 @@ class DungeonPage extends React.Component {
         });
 
         if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
-            this.props.crewManager.crew = [...this.props.crewManager.crew];
+                    this.props.crewManager.crew = [...this.props.crewManager.crew];
         }
 
         // Persist HP/dead changes
@@ -8711,70 +8712,191 @@ class DungeonPage extends React.Component {
     
     handleLevelChange = (newLevelId) => {
         const levelTracker = this.state.levelTracker;
-        levelTracker.forEach(e=>e.active = false)
-        const level = levelTracker.find(e=>e.id === newLevelId);
-        if(!level){
-            // level missing -- initialize better
-            debugger
-        }
-        level.active = true;
+        const oldLevel = levelTracker.find(e => e.active);
+        const oldLevelId = oldLevel ? oldLevel.id : (getMeta()?.location?.levelId || 0);
 
-
-        const meta = getMeta();
-        let orientation = this.props.boardManager.currentOrientation;
-        let indicatorsGroup = meta.minimapIndicators.find(e=>e.level === level.id && e.orientation === orientation)
-        
-
-        
-
-        if(!indicatorsGroup){
-            let newIndicators = []
-            for(let i = 0; i < 9; i++){
-                newIndicators.push({
-                    enemies: [],
-                    gates: [],
-                    merchant: [],
-                    stairs: [],
-                    misc: [],
-                    custom: []
-                })
-            }
-            indicatorsGroup = {
-                level: level.id,
-                orientation,
-                indicators: newIndicators
-            }
-            meta.minimapIndicators.push(indicatorsGroup)
-            storeMeta(meta)
-        }
-        // Keep meta.location.levelId in sync so other code reading meta gets the right level
-        if (meta.location) {
-            meta.location.levelId = newLevelId;
-            storeMeta(meta);
-        }
-
-        // Progress travel quests
-        if (this.props.questManager) {
-            const activeQuests = this.props.questManager.getActiveQuests() || [];
-            const travelQuests = activeQuests.filter(q => q.type === 'travel');
-            travelQuests.forEach(q => {
-                const targetLvl = parseInt(q.context?.level, 10);
-                const currentLvl = parseInt(newLevelId, 10);
-                if (!isNaN(targetLvl) && !isNaN(currentLvl) && currentLvl >= targetLvl) {
-                    this.props.questManager.updateProgress(q.id, 1);
-                } else if (q.context?.level === newLevelId) {
-                    this.props.questManager.updateProgress(q.id, 1);
-                }
+        if (oldLevelId === newLevelId) {
+            levelTracker.forEach(e => e.active = false);
+            const level = levelTracker.find(e => e.id === newLevelId);
+            if (level) level.active = true;
+            this.setState({
+                levelTracker,
+                minimapZoomedTile: null,
             });
+            this.refreshTiles(newLevelId);
+            return;
         }
 
-        this.setState({
-            levelTracker,
-            minimapZoomedTile: null,
-            minimapIndicators: indicatorsGroup.indicators
-        })
-        // Re-assign terrain now that the level is confirmed, bypassing the stale meta.
-        this.refreshTiles(newLevelId);
+        const isGoingUp = newLevelId > oldLevelId;
+        const boardSize = this.state.boardSize || 500;
+        const el = this.playerFloatRef.current;
+
+        if (el) {
+            // Lock inputs during animation
+            this.setState({ keysLocked: true });
+
+            // Calculate origin position on the old board
+            const bm = this.props.boardManager;
+            const originCoords = bm.playerTile.location;
+            const originIndex = bm.getIndexFromCoordinates(originCoords);
+            const originPixel = this.getPixelForIndex(originIndex);
+            const tileSize = this.state.tileSize || 30;
+
+            // 1. Shoot off-screen (upwards for going up, downwards for going down)
+            el.style.transition = 'transform 500ms cubic-bezier(0.55, 0.055, 0.675, 0.19)';
+            const deltaY = isGoingUp ? (-originPixel.top - tileSize) : (boardSize - originPixel.top);
+            el.style.transform = `translate3d(0px, ${deltaY}px, 0px)`;
+
+            // 2. Wait for shoot animation to finish, then swap levels
+            setTimeout(() => {
+                const elClean = this.playerFloatRef.current;
+                if (elClean) {
+                    elClean.style.transition = 'none';
+                    elClean.style.transform = 'none';
+                    // Force a DOM style calculation reflow to apply it instantly
+                    elClean.getBoundingClientRect();
+                }
+
+                levelTracker.forEach(e => e.active = false);
+                const level = levelTracker.find(e => e.id === newLevelId);
+                if (level) level.active = true;
+
+                const meta = getMeta();
+                let orientation = this.props.boardManager.currentOrientation;
+                let indicatorsGroup = meta.minimapIndicators.find(e => e.level === level.id && e.orientation === orientation);
+
+                if (!indicatorsGroup) {
+                    let newIndicators = [];
+                    for (let i = 0; i < 9; i++) {
+                        newIndicators.push({
+                            enemies: [],
+                            gates: [],
+                            merchant: [],
+                            stairs: [],
+                            misc: [],
+                            custom: []
+                        });
+                    }
+                    indicatorsGroup = {
+                        level: level.id,
+                        orientation,
+                        indicators: newIndicators
+                    };
+                    meta.minimapIndicators.push(indicatorsGroup);
+                    storeMeta(meta);
+                }
+
+                if (meta.location) {
+                    meta.location.levelId = newLevelId;
+                    storeMeta(meta);
+                }
+
+                if (this.props.questManager) {
+                    const activeQuests = this.props.questManager.getActiveQuests() || [];
+                    const travelQuests = activeQuests.filter(q => q.type === 'travel');
+                    travelQuests.forEach(q => {
+                        const targetLvl = parseInt(q.context?.level, 10);
+                        const currentLvl = parseInt(newLevelId, 10);
+                        if (!isNaN(targetLvl) && !isNaN(currentLvl) && currentLvl >= targetLvl) {
+                            this.props.questManager.updateProgress(q.id, 1);
+                        } else if (q.context?.level === newLevelId) {
+                            this.props.questManager.updateProgress(q.id, 1);
+                        }
+                    });
+                }
+
+                this.setState({
+                    levelTracker,
+                    minimapZoomedTile: null,
+                    minimapIndicators: indicatorsGroup.indicators
+                }, () => {
+                    this.refreshTiles(newLevelId);
+
+                    const bmNew = this.props.boardManager;
+                    const destCoords = bmNew.playerTile.location;
+                    const destIndex = bmNew.getIndexFromCoordinates(destCoords);
+                    const destPixel = this.getPixelForIndex(destIndex);
+                    const floatStyle = this.getFloatingPlayerStyle(destCoords);
+
+                    if (floatStyle) {
+                        // Start off-screen (bottom of the board if going up, top of the board if going down)
+                        const startY = isGoingUp ? (boardSize - destPixel.top) : (-destPixel.top - tileSize);
+                        this.setState({
+                            playerFloatVisible: true,
+                            playerFloatStyle: {
+                                ...floatStyle,
+                                transform: `translate3d(0px, ${startY}px, 0px)`
+                            }
+                        }, () => {
+                            this.checkMobileViewportCentering(destCoords);
+
+                            // Trigger reflow/animation in next tick
+                            requestAnimationFrame(() => {
+                                const newEl = this.playerFloatRef.current;
+                                if (newEl) {
+                                    newEl.style.transition = 'transform 600ms cubic-bezier(0.215, 0.61, 0.355, 1)';
+                                    newEl.style.transform = 'translate3d(0px, 0px, 0px)';
+                                }
+                            });
+
+                            setTimeout(() => {
+                                const finalEl = this.playerFloatRef.current;
+                                if (finalEl) {
+                                    finalEl.style.transition = '';
+                                    finalEl.style.transform = 'translate3d(0px, 0px, 0px)';
+                                    finalEl.style.willChange = 'auto';
+                                }
+                                this.setState({ keysLocked: false });
+                            }, 600);
+                        });
+                    } else {
+                        this.setState({ keysLocked: false });
+                    }
+                });
+            }, 500);
+        } else {
+            // Fallback: standard immediate level swap
+            levelTracker.forEach(e => e.active = false);
+            const level = levelTracker.find(e => e.id === newLevelId);
+            if (level) level.active = true;
+
+            const meta = getMeta();
+            let orientation = this.props.boardManager.currentOrientation;
+            let indicatorsGroup = meta.minimapIndicators.find(e => e.level === level.id && e.orientation === orientation);
+
+            if (!indicatorsGroup) {
+                let newIndicators = [];
+                for (let i = 0; i < 9; i++) {
+                    newIndicators.push({
+                        enemies: [],
+                        gates: [],
+                        merchant: [],
+                        stairs: [],
+                        misc: [],
+                        custom: []
+                    });
+                }
+                indicatorsGroup = {
+                    level: level.id,
+                    orientation,
+                    indicators: newIndicators
+                };
+                meta.minimapIndicators.push(indicatorsGroup);
+                storeMeta(meta);
+            }
+
+            if (meta.location) {
+                meta.location.levelId = newLevelId;
+                storeMeta(meta);
+            }
+
+            this.setState({
+                levelTracker,
+                minimapZoomedTile: null,
+                minimapIndicators: indicatorsGroup.indicators
+            });
+            this.refreshTiles(newLevelId);
+        }
     }
     boardTransition = (direction) => {
         const minimap = this.state.minimap;
@@ -9016,7 +9138,7 @@ class DungeonPage extends React.Component {
             return;
         }
 
-        if (dirMap[key] && !isModifierHeld && !isInputFocused && !this.state.devConsoleOpen && !this.state.inMonsterBattle && !this.state.keysLocked) {
+        if (dirMap[key] && !isModifierHeld && !isInputFocused && !this.state.devConsoleOpen && !this.state.inMonsterBattle && !this.state.keysLocked && !this.state.activeConstruction) {
             event.preventDefault();
             if (this._pathfindStepTimeout) {
                 clearTimeout(this._pathfindStepTimeout);
@@ -9035,7 +9157,7 @@ class DungeonPage extends React.Component {
             if (wasEmpty || !this._movementRepeatInterval) {
                 if (this._movementRepeatInterval) clearInterval(this._movementRepeatInterval);
                 this._movementRepeatInterval = setInterval(() => {
-                    if (this.state.keysLocked || this.state.inMonsterBattle || !this._activeDirectionKeys || this._activeDirectionKeys.size === 0) {
+                    if (this.state.keysLocked || this.state.inMonsterBattle || this.state.activeConstruction || !this._activeDirectionKeys || this._activeDirectionKeys.size === 0) {
                         if (this._movementRepeatInterval) {
                             clearInterval(this._movementRepeatInterval);
                             this._movementRepeatInterval = null;
@@ -9493,7 +9615,7 @@ class DungeonPage extends React.Component {
     }
     handleClick = (tile) => {
         if (!tile || !tile.coordinates) return;
-        if (this.state.keysLocked || this.state.inMonsterBattle || this.state.playerAnimating) return;
+        if (this.state.keysLocked || this.state.inMonsterBattle || this.state.playerAnimating || this.state.activeConstruction) return;
 
         const bm = this.props.boardManager;
         if (!bm || !bm.playerTile) return;
@@ -9737,6 +9859,17 @@ class DungeonPage extends React.Component {
                 c.selected = false;
             })
             foundMember.selected = true;
+            
+            if (!meta.panelConfig) {
+                meta.panelConfig = {
+                    left: ["character", "stats", "actions", "equipment"],
+                    right: ["minimap", "status_summary", "crew_list", "quick_actions", "poi", "toggles"],
+                    collapsed: {}
+                };
+            }
+            if (!meta.panelConfig.collapsed) meta.panelConfig.collapsed = {};
+            meta.panelConfig.collapsed['character'] = false;
+            
             meta.crew = this.props.crewManager.crew;
             meta.leftExpanded = expand;
             storeMeta(meta);
@@ -9754,7 +9887,12 @@ class DungeonPage extends React.Component {
             brewBuilderOpen: expanded.includes('brew'),
             tacticsBuilderOpen: expanded.includes('tactics'),
             innerDisciplineBuilderOpen: expanded.includes('inner_discipline'),
-        })
+        }, () => {
+            const bm = this.props.boardManager;
+            if (bm && bm.playerTile && bm.playerTile.location) {
+                this.updateFloatingPlayerPosition(bm.playerTile.location);
+            }
+        });
     }
 
     cycleSelectedCrewMember = (direction = 'next') => {
@@ -9803,6 +9941,11 @@ class DungeonPage extends React.Component {
             brewBuilderOpen: expanded.includes('brew'),
             tacticsBuilderOpen: expanded.includes('tactics'),
             innerDisciplineBuilderOpen: expanded.includes('inner_discipline'),
+        }, () => {
+            const bm = this.props.boardManager;
+            if (bm && bm.playerTile && bm.playerTile.location) {
+                this.updateFloatingPlayerPosition(bm.playerTile.location);
+            }
         })
     }
     handleEquipmentItemClick = (item) => {
@@ -16391,7 +16534,8 @@ class DungeonPage extends React.Component {
                         backgroundColor: 'white'
                         }}>
                         {this.state.tiles && this.state.tiles.map((tile, i) => {
-                            let boardImage = tile.image ? tile.image : (tile.icon ? tile.icon : null);
+                            const isBeingBuilt = this.state.activeConstruction && this.state.activeConstruction.targetTileIdx === tile.id;
+                            let boardImage = isBeingBuilt ? 'building' : (tile.image ? tile.image : (tile.icon ? tile.icon : null));
                             const bm = this.props.boardManager;
                             const playerIdx = (bm && bm.playerTile && bm.playerTile.location && typeof bm.getIndexFromCoordinates === 'function')
                                 ? bm.getIndexFromCoordinates(bm.playerTile.location)
@@ -16400,11 +16544,12 @@ class DungeonPage extends React.Component {
                             const meta = getMeta() || {};
                             const crew = Array.isArray(meta.crew) ? meta.crew : (Array.isArray(this.props?.crewManager?.crew) ? this.props.crewManager.crew : []);
                             const leader = crew.find(m => m && m.isLeader);
+                            const selectedMember = this.state.selectedCrewMember || crew.find(m => m && m.selected) || leader;
                             let playerImgKey = '';
                             if (meta && meta.camping) {
                                 playerImgKey = 'campfire';
-                            } else if (leader && (leader.portrait || leader.image)) {
-                                playerImgKey = leader.portrait || leader.image;
+                            } else if (selectedMember && (selectedMember.portrait || selectedMember.image)) {
+                                playerImgKey = selectedMember.portrait || selectedMember.image;
                             } else {
                                 playerImgKey = 'avatar';
                             }
@@ -16415,16 +16560,19 @@ class DungeonPage extends React.Component {
                             const isMonsterTile = bm && typeof bm.isMonster === 'function' ? bm.isMonster(tile) : false;
                             const safeColor = (String(rawColor).includes('ff0000') && (!isMonsterTile || !this.state.debugMode)) ? 'black' : rawColor;
 
+                            const isPlayerOnTile = playerIdx !== null && tile.id === playerIdx;
+
                             return <Tile 
                             key={i}
                             debugMode={this.state.debugMode}
                             isPlayerTile={isPlayerTile}
+                            isPlayerOnTile={isPlayerOnTile}
                             hasLivingSummoner={hasLivingSummoner}
                             playerImgKey={playerImgKey}
                             cursor={this.state.minimapPlaceMapMarkerStarted ? 'crosshair' : 'default'}
                             tileSize={this.state.tileSize}
                             image={boardImage}
-                            imageOverride={boardImage && boardImage.includes ? (boardImage.includes('/') ? boardImage : null) : null}
+                            imageOverride={isBeingBuilt ? 'building' : (boardImage && boardImage.includes ? (boardImage.includes('/') ? boardImage : null) : null)}
                             contains={tile.contains}
                             territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                             boardTiles={this.state.tiles}
@@ -16447,7 +16595,7 @@ class DungeonPage extends React.Component {
                         })}
                     </div>
                     {/* Floating player overlay element - positioned absolutely within board wrapper */}
-                    {this.state.playerFloatVisible && (
+                    {this.state.playerFloatVisible && !this.state.activeConstruction && (
                         <div
                             ref={this.playerFloatRef}
                             className={`floating-player ${this.state.isAvatarDamaged ? 'damaged' : ''}`}
