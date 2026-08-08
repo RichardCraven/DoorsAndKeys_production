@@ -36,13 +36,16 @@ exports.findOne = (req, res) => {
 };
 
 // Update User
-exports.update = (req, res) => {
+exports.update = (req, res, next) => {
+  if (!req.params.id || req.params.id === 'undefined') {
+    return res.status(400).json({ error: 'Invalid user ID' });
+  }
   userSchema.findOneAndUpdate({'_id': req.params.id}, {
     $set: req.body
   }, (error, data) => {
     if (error) {
       console.log('error:', error)
-      return error;
+      return next(error);
     } else {
       res.json(data)
       console.log('User updated successfully !')

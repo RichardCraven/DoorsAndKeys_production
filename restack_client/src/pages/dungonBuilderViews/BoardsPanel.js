@@ -57,58 +57,78 @@ class BoardsPanel extends React.Component {
     }
 
     parseBoardPlacement = (board) => {
-        let folderPath = board.folderPath;
+        if (!board) return { dungeon: '', level: '', slot: '', orientation: 'front' };
+
+        let folderPath = board.folderPath || '';
         let name = board.name || '';
-        const isBack = (folderPath && (folderPath.toLowerCase().includes('/back') || folderPath.toLowerCase().includes('_back'))) || 
-                       name.toLowerCase().includes('_back') || 
-                       name.includes('_B_');
-        
+
         if (folderPath) {
             const parts = folderPath.split('/');
             if (parts.length >= 2) {
                 const dungeon = parts[0];
                 const level = parts[1];
-                const slot = parts.slice(2).join('/');
-                return {
-                    dungeon,
-                    level,
-                    slot: slot || '',
-                    orientation: isBack ? 'back' : 'front'
-                };
+                
+                let orientation = 'front';
+                let slotParts = parts.slice(2);
+
+                if (slotParts.length >= 1) {
+                    const seg = slotParts[0].toUpperCase();
+                    if (seg === 'B' || seg === 'BACK') {
+                        orientation = 'back';
+                        slotParts = slotParts.slice(1);
+                    } else if (seg === 'F' || seg === 'FRONT') {
+                        orientation = 'front';
+                        slotParts = slotParts.slice(1);
+                    } else {
+                        const fpLower = folderPath.toLowerCase();
+                        if (fpLower.includes('/back') || fpLower.includes('_back') || fpLower.includes('/b/') || fpLower.endsWith('/b') || name.includes('_B_') || name.toLowerCase().includes('_back')) {
+                            orientation = 'back';
+                        }
+                    }
+                } else {
+                    const fpLower = folderPath.toLowerCase();
+                    if (fpLower.includes('/back') || fpLower.includes('_back') || fpLower.includes('/b/') || fpLower.endsWith('/b') || name.includes('_B_') || name.toLowerCase().includes('_back')) {
+                        orientation = 'back';
+                    }
+                }
+
+                const slot = slotParts.join('/');
+                return { dungeon, level, slot, orientation };
             }
         }
         
         if (name.includes('_')) {
             const parts = name.split('_');
-            const dungeon = parts[0];
-            const level = parts[1];
-            
-            const lastPart = parts[parts.length - 1].toLowerCase();
-            const endsWithBack = lastPart === 'back';
-            
-            const endIdx = endsWithBack ? parts.length - 1 : parts.length;
-            const slotParts = parts.slice(2, endIdx);
-            
-            let slotPartsFiltered = [...slotParts];
-            if (slotPartsFiltered[0] === 'F' || slotPartsFiltered[0] === 'B') {
-                slotPartsFiltered = slotPartsFiltered.slice(1);
+            if (parts.length >= 2) {
+                const dungeon = parts[0];
+                const level = parts[1];
+                
+                let orientation = 'front';
+                let slotIdxStart = 2;
+                
+                if (parts.length >= 3) {
+                    const p2Upper = parts[2].toUpperCase();
+                    if (p2Upper === 'B' || p2Upper === 'BACK') {
+                        orientation = 'back';
+                        slotIdxStart = 3;
+                    } else if (p2Upper === 'F' || p2Upper === 'FRONT') {
+                        orientation = 'front';
+                        slotIdxStart = 3;
+                    } else if (name.toLowerCase().includes('_back') || name.includes('_B_')) {
+                        orientation = 'back';
+                    }
+                }
+
+                const lastPart = parts[parts.length - 1].toLowerCase();
+                const endsWithBack = lastPart === 'back';
+                const slotIdxEnd = endsWithBack ? parts.length - 1 : parts.length;
+
+                const slot = parts.slice(slotIdxStart, slotIdxEnd).join('_');
+                return { dungeon, level, slot, orientation };
             }
-            const slot = slotPartsFiltered.join('/');
-            
-            return {
-                dungeon,
-                level,
-                slot,
-                orientation: isBack ? 'back' : 'front'
-            };
         }
         
-        return {
-            dungeon: '',
-            level: '',
-            slot: '',
-            orientation: 'front'
-        };
+        return { dungeon: '', level: '', slot: '', orientation: 'front' };
     }
 
     getLevelGrids = (subfolder) => {
@@ -163,6 +183,20 @@ class BoardsPanel extends React.Component {
         return { front, back };
     }
 
+    onFolderDragStart = (e, dungeonTitle, levelTitle = '') => {
+        e.stopPropagation();
+        const folderPath = levelTitle !== '' ? `${dungeonTitle}/${levelTitle}` : `${dungeonTitle}`;
+        const payload = JSON.stringify({
+            type: 'dungeon_folder',
+            dungeon: dungeonTitle,
+            level: levelTitle,
+            path: folderPath
+        });
+        e.dataTransfer.setData('application/json', payload);
+        e.dataTransfer.setData('text/plain', folderPath);
+        e.dataTransfer.effectAllowed = 'copy';
+    }
+
     renderLevelGrids = (subfolder, folderTitle) => {
         const { front, back } = this.getLevelGrids(subfolder);
         
@@ -206,6 +240,18 @@ class BoardsPanel extends React.Component {
             return false;
         };
         
+        const slotNames = [
+            'top_left',
+            'top_mid',
+            'top_right',
+            'middle_left',
+            'middle',
+            'middle_right',
+            'bottom_left',
+            'bottom_mid',
+            'bottom_right'
+        ];
+
         const renderGrid = (gridData, orientation) => {
             return (
                 <div className="plane-mini-grid">
@@ -215,16 +261,36 @@ class BoardsPanel extends React.Component {
                             const isHovered = this.state.hoveredSlot === `${folderTitle}_${subfolder.title}_${orientation}_${idx}`;
                             const isSelected = this.props.loadedBoard && board && (board.id === this.props.loadedBoard.id);
                             const isEmptyBoard = isBoardEmpty(board);
+                            const slotName = slotNames[idx];
+                            const orientCode = orientation === 'back' ? 'B' : 'F';
+                            const slotFolderPath = `${folderTitle}/${subfolder.title}/${orientCode}/${slotName}`;
+                            const slotLabel = `${folderTitle} > Level ${subfolder.title} > ${orientation.toUpperCase()} > ${slotName.replace(/_/g, ' ')}`;
+
                             return (
                                 <div
                                     key={idx}
                                     className={`grid-cell ${board ? (isEmptyBoard ? 'empty-board' : 'filled') : 'empty'} ${isHovered ? 'hovered' : ''} ${isSelected ? 'selected' : ''}`}
-                                    title={board ? `${board.displayName || board.name}` : 'Empty Slot'}
+                                    title={board ? `${board.displayName || board.name} (${slotLabel})` : `Empty Slot (${slotLabel}) — Drag to modal to auto-fill path`}
                                     onClick={() => board && this.props.loadBoard(board)}
                                     onMouseEnter={() => this.setState({ hoveredSlot: `${folderTitle}_${subfolder.title}_${orientation}_${idx}` })}
                                     onMouseLeave={() => this.setState({ hoveredSlot: null })}
-                                    draggable={!!board}
-                                    onDragStart={(e) => board && this.props.onDragStart && this.props.onDragStart(e, board, null)}
+                                    draggable={true}
+                                    onDragStart={(e) => {
+                                        if (board && this.props.onDragStart) {
+                                            this.props.onDragStart(e, board, null);
+                                        }
+                                        const payload = JSON.stringify({
+                                            type: 'slot_folder',
+                                            dungeon: folderTitle,
+                                            level: subfolder.title,
+                                            slot: slotName,
+                                            orientation: orientation,
+                                            path: slotFolderPath
+                                        });
+                                        e.dataTransfer.setData('application/json', payload);
+                                        e.dataTransfer.setData('text/plain', slotFolderPath);
+                                        e.dataTransfer.effectAllowed = 'copy';
+                                    }}
                                     onDragOver={(e) => e.preventDefault()}
                                     onDrop={(e) => {
                                         e.preventDefault();
@@ -310,8 +376,29 @@ class BoardsPanel extends React.Component {
                     >
                         {this.props.boardsFolders.length > 0 && this.props.boardsFolders.map((folder, idx) => {
                         return  <div key={idx}>
-                                    <div className="boards-folder-headline"  onClick={() => this.props.expandCollapseBoardFolders(folder.title)}> 
+                                    <div 
+                                        className="boards-folder-headline draggable" 
+                                        draggable={true}
+                                        onDragStart={(e) => this.onFolderDragStart(e, folder.title)}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.currentTarget.classList.add('folder-drag-over');
+                                        }}
+                                        onDragLeave={(e) => {
+                                            e.currentTarget.classList.remove('folder-drag-over');
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            e.currentTarget.classList.remove('folder-drag-over');
+                                            if (this.props.draggedBoard && this.props.onAssignBoardToSlot) {
+                                                this.props.onAssignBoardToSlot(this.props.draggedBoard.id, folder.title, '');
+                                            }
+                                        }}
+                                        onClick={() => this.props.expandCollapseBoardFolders(folder.title)}
+                                        title="Click to expand | Drag folder to modal or drop board here"
+                                    > 
                                         <div className="folder-color-line" style={{backgroundColor: idx % 2 ? 'magenta' : 'aqua'}}></div>
+                                        <span className="folder-drag-handle" title="Drag folder to modal input">⋮⋮</span>
                                         <div className="icon-container">
                                             <CIcon icon={cilCaretRight} className={`expand-icon ${this.props.boardsFoldersExpanded[folder.title] ? 'expanded' : ''}`} size="sm"/>
                                         </div>
@@ -336,8 +423,29 @@ class BoardsPanel extends React.Component {
                                           return sortedSubfolders.map((subfolder, i) => {
                                             return (
                                               <div key={i} className="subfolder-wrapper">
-                                                <div className="boards-folder-headline subfolder-headline" onClick={() => this.props.expandCollapseBoardFolders(`${folder.title}_${subfolder.title}`)}> 
+                                                <div 
+                                                  className="boards-folder-headline subfolder-headline draggable" 
+                                                  draggable={true}
+                                                  onDragStart={(e) => this.onFolderDragStart(e, folder.title, subfolder.title)}
+                                                  onDragOver={(e) => {
+                                                      e.preventDefault();
+                                                      e.currentTarget.classList.add('folder-drag-over');
+                                                  }}
+                                                  onDragLeave={(e) => {
+                                                      e.currentTarget.classList.remove('folder-drag-over');
+                                                  }}
+                                                  onDrop={(e) => {
+                                                      e.preventDefault();
+                                                      e.currentTarget.classList.remove('folder-drag-over');
+                                                      if (this.props.draggedBoard && this.props.onAssignBoardToSlot) {
+                                                          this.props.onAssignBoardToSlot(this.props.draggedBoard.id, folder.title, subfolder.title);
+                                                      }
+                                                  }}
+                                                  onClick={() => this.props.expandCollapseBoardFolders(`${folder.title}_${subfolder.title}`)}
+                                                  title="Click to expand | Drag level to modal or drop board here"
+                                                > 
                                                   <div className="folder-color-line" style={{backgroundColor: i % 2 ? '#199595' : '#13c2c2'}}></div>
+                                                  <span className="folder-drag-handle" title="Drag level to modal input">⋮⋮</span>
                                                   <div className="icon-container">
                                                     <CIcon icon={cilCaretRight} className={`expand-icon ${this.props.boardsFoldersExpanded[`${folder.title}_${subfolder.title}`] ? 'expanded' : ''}`} size="sm"/>
                                                   </div>
@@ -430,9 +538,9 @@ class BoardsPanel extends React.Component {
                                     </CCollapse>
                                 </div>
                         })}
-                        {this.props.boards && this.props.compatibilityMatrix.show === false && this.props.boards.filter(board => {
+                        {!!this.props.showUnstagedBoards && this.props.boards && this.props.compatibilityMatrix.show === false && this.props.boards.filter(board => {
                             const info = this.getBoardFolderInfo(board);
-                            return !info.folderPath;
+                            return !info.folderPath || info.folderPath.trim() === '';
                         }).map((board, i) => {
                         return (<div key={i} className="board-preview-wrapper">
                                     <div 

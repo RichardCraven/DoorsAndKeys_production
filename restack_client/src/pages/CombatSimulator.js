@@ -1178,9 +1178,15 @@ class CrewManagerPage extends React.Component {
                             </div>
                             <div className="crew-tray">
                                 {this.state.crewSlots.map((slot, i) => {
-                                    return <div key={i} className={`selected-crew-portrait-container ${!this.state.selectedCrew[i] ? 'empty' : 'filled'}`}>
+                                    const member = this.state.selectedCrew[i];
+                                    return <div key={i} className={`selected-crew-portrait-container ${!member ? 'empty' : 'filled'}`}>
 
-                                        <div className={`add-button ${!this.state.selectedCrewMember ? 'disabled' : ''}`} onClick={() => this.addMember(i)}>&oplus;</div>
+                                        <div 
+                                            className={`add-button ${member ? 'occupied' : (!this.state.selectedCrewMember ? 'disabled' : '')}`} 
+                                            onClick={() => member ? this.removeMember(i) : this.addMember(i)}
+                                        >
+                                            {member ? '\u2296' : '\u2295'}
+                                        </div>
 
                                         {this.state.selectedCrew[i] && <ProgressiveBgImage
                                             className="portrait"

@@ -205,6 +205,8 @@ $bot-level-zIndex: 2; // doubletall containers
     background-color: transparent;
     padding-left: 8px;
     border-right: 1px solid black;
+    position: relative;
+    z-index: 1060;
 }
 .right-palette{
     border-left: 1px solid black;
@@ -1479,6 +1481,52 @@ ul.dropdown-menu.show{
                 box-shadow: 0 0 10px rgba(229, 181, 79, 0.2);
             }
         }
+    }
+}
+
+/* --- Drag & Drop Folder Assignment Styles --- */
+.boards-folder-headline {
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    
+    &.draggable {
+        cursor: grab;
+        &:active {
+            cursor: grabbing;
+        }
+    }
+
+    &.folder-drag-over {
+        background: rgba(249, 177, 21, 0.25) !important;
+        border: 1px dashed #f9b115 !important;
+        box-shadow: 0 0 12px rgba(249, 177, 21, 0.45);
+        color: #fff !important;
+
+        .folder-headline-text, .subfolder-headline-text {
+            color: #f9b115 !important;
+            font-weight: bold;
+        }
+    }
+}
+
+.folder-drag-handle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 6px;
+    color: rgba(249, 177, 21, 0.6);
+    font-size: 13px;
+    letter-spacing: -2px;
+    user-select: none;
+    cursor: grab;
+    
+    &:hover {
+        color: #f9b115;
+    }
+}
+
+.folder-path-drop-zone {
+    &.active {
+        box-shadow: 0 0 16px rgba(249, 177, 21, 0.4);
     }
 }
 

@@ -388,7 +388,7 @@ function Tile(props) {
     const isBlackTile = isBlackRenderedTile(currentContains, currentTileColor);
     const targetTileId = props.index !== undefined ? props.index : props.id;
     const mainTile = props.boardTiles?.[targetTileId];
-    const isMainTileBlack = mainTile ? (mainTile.color === 'black' || mainTile.color === 'null' || mainTile.color === 'undefined' || !mainTile.color) : (color === 'black');
+    const isMainTileBlack = mainTile ? isBlackRenderedTile(mainTile.contains, mainTile.color) : isBlackTile;
     const isHut = props.building === 'hut' || 
                   (containsObj && (containsObj.subtype === 'hut' || containsObj.building === 'hut' || containsObj.type === 'hut')) ||
                   (currentContains && (currentContains.subtype === 'hut' || currentContains.building === 'hut' || currentContains.type === 'hut'));
@@ -651,7 +651,7 @@ function Tile(props) {
                                      border: `1px dashed ${borderColor}`,
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
-                                     opacity: (color === 'black' || isMainTileBlack) ? 0 : 1, 
+                                     opacity: (isBlackTile || isMainTileBlack) ? 0 : 1, 
                                      transition: 'opacity 0.35s ease-in-out'
                                  }} 
                              />
@@ -676,8 +676,8 @@ function Tile(props) {
                                           : 'radial-gradient(circle at center, rgba(240, 40, 40, 0.75) 0%, rgba(190, 25, 25, 0.48) 38%, rgba(130, 15, 15, 0.22) 65%, transparent 88%)'),
                                   zIndex: 2,
                                   pointerEvents: 'none',
-                                  opacity: (color === 'black' || props.type === 'overlay-tile') ? 0 : (props.partialObscured ? 0.35 : 1),
-                                  transition: 'opacity 0.2s ease-in-out, background 0.2s ease-in-out, top 0.2s ease-in-out, left 0.2s ease-in-out',
+                                  opacity: (color === 'black' || props.type === 'overlay-tile' || props.isFadingOut) ? 0 : 1,
+                                  transition: 'opacity 0.35s ease-in-out, background 0.2s ease-in-out, top 0.2s ease-in-out, left 0.2s ease-in-out',
                                   animation: isChargingAmbush
                                       ? 'pygmyChargePulse 0.35s ease-in-out infinite alternate'
                                       : (isNearbyMonster ? 'monsterGlowPulse 1.1s ease-in-out infinite alternate' : 'monsterGlowPulse 1.8s ease-in-out infinite alternate')
@@ -699,12 +699,13 @@ function Tile(props) {
                                   background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.85) 0%, rgba(218, 165, 32, 0.55) 38%, rgba(180, 130, 15, 0.25) 65%, transparent 88%)',
                                   zIndex: 2,
                                   pointerEvents: 'none',
-                                  opacity: (color === 'black' || props.type === 'overlay-tile') ? 0 : (props.partialObscured ? 0.35 : 1),
+                                  opacity: (color === 'black' || props.type === 'overlay-tile') ? 0 : 1,
                                   transition: 'opacity 0.2s ease-in-out, background 0.2s ease-in-out',
                                   animation: 'keyGlowPulse 1.8s ease-in-out infinite alternate'
                               }}
                           />
                       )}
+
 
                       {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
                       {resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
@@ -719,7 +720,8 @@ function Tile(props) {
                                opacity: (color === 'black' || props.isFadingOut) ? 0 : 1,
                                transform: isHut && props.isPlayerOnTile ? 'scale(2.0)' : 'none',
                                transformOrigin: isHut && props.isPlayerOnTile ? 'bottom center' : 'center center',
-                               transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out'
+                               transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
+                               pointerEvents: 'none'
                            }} />
                       )}
 
@@ -973,9 +975,10 @@ function Tile(props) {
                    const isConnected = !!props.connectedEdge;
                    let edge = null;
 
-                   if (props.id !== undefined && props.id !== null) {
-                       const x = props.id % 15;
-                       const y = Math.floor(props.id / 15);
+                   const currentIdx = (typeof props.index === 'number') ? props.index : props.id;
+                   if (currentIdx !== undefined && currentIdx !== null) {
+                       const x = currentIdx % 15;
+                       const y = Math.floor(currentIdx / 15);
 
                        // Match Dungeon Builder (DungeonView / PlaneView) exact priority:
                        // x === 0 (West edge) -> left (Horizontal)
@@ -991,10 +994,10 @@ function Tile(props) {
                            let hasLeftRightNeighbor = false;
                            let hasTopBottomNeighbor = false;
                            if (Array.isArray(boardTiles)) {
-                               if (x > 0 && boardTiles[props.id - 1] && boardTiles[props.id - 1].color !== 'black') hasLeftRightNeighbor = true;
-                               if (x < 14 && boardTiles[props.id + 1] && boardTiles[props.id + 1].color !== 'black') hasLeftRightNeighbor = true;
-                               if (y > 0 && boardTiles[props.id - 15] && boardTiles[props.id - 15].color !== 'black') hasTopBottomNeighbor = true;
-                               if (y < 14 && boardTiles[props.id + 15] && boardTiles[props.id + 15].color !== 'black') hasTopBottomNeighbor = true;
+                               if (x > 0 && boardTiles[currentIdx - 1] && boardTiles[currentIdx - 1].color !== 'black') hasLeftRightNeighbor = true;
+                               if (x < 14 && boardTiles[currentIdx + 1] && boardTiles[currentIdx + 1].color !== 'black') hasLeftRightNeighbor = true;
+                               if (y > 0 && boardTiles[currentIdx - 15] && boardTiles[currentIdx - 15].color !== 'black') hasTopBottomNeighbor = true;
+                               if (y < 14 && boardTiles[currentIdx + 15] && boardTiles[currentIdx + 15].color !== 'black') hasTopBottomNeighbor = true;
                            }
                            if (hasLeftRightNeighbor) edge = 'right';
                            else if (hasTopBottomNeighbor) edge = 'bottom';

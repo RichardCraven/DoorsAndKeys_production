@@ -38,6 +38,7 @@ import {
 import * as images from '../utils/images'
 import BoardsPalette from './dungonBuilderViews/BoardsPalette'
 import { generateRandomDungeon } from '../utils/dungeon-generator'
+import { getRandomInscription } from '../utils/inscriptions-manager'
 
 const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__';
 const GENERATE_DUNGEON_VALUE = '__generate_dungeon__';
@@ -755,8 +756,8 @@ class MapMakerPage extends React.Component {
       const orientation = ORIENTATION_MAP[orientationPart.toLowerCase().trim()];
       const slot = SLOT_MAP[slotPart.toLowerCase().trim().replace(/-/g, '_')];
       if (orientation && slot) {
-        const suffix = orientation === 'back' ? '_back' : '';
-        return `${dungeonPart.trim()}/${levelPart.trim()}/${slot}${suffix}`;
+        const orientCode = orientation === 'back' ? 'B' : 'F';
+        return `${dungeonPart.trim()}/${levelPart.trim()}/${orientCode}/${slot}`;
       }
     }
 
@@ -765,7 +766,7 @@ class MapMakerPage extends React.Component {
       const [dungeonPart, levelPart, slotPart] = parts;
       const slot = SLOT_MAP[slotPart.toLowerCase().trim().replace(/-/g, '_')];
       if (slot) {
-        return `${dungeonPart.trim()}/${levelPart.trim()}/${slot}`;
+        return `${dungeonPart.trim()}/${levelPart.trim()}/F/${slot}`;
       }
     }
 
@@ -2257,6 +2258,32 @@ class MapMakerPage extends React.Component {
           const updatedPlane = this.state.planes.find(p => p.id === currentPlane.id || p.name === currentPlane.name);
           this.loadPlane(updatedPlane || currentPlane);
         })
+      } else if (this.state.loadedBoard) {
+        let obj = {
+          name: this.state.loadedBoard.name,
+          folderPath: this.state.loadedBoard.folderPath || '',
+          tiles: clone(this.state.tiles),
+          config: clone(config)
+        }
+        const boardRes = await addBoardRequest(obj);
+        const newId = boardRes.data._id || boardRes.data.id;
+        let newBoard = { ...obj, id: newId };
+        
+        await new Promise(resolve => {
+          this.setState({ loadedBoard: newBoard }, resolve);
+        });
+        
+        if (this.registerCreatedBoard) {
+          await this.registerCreatedBoard(newBoard);
+        }
+        
+        if (this.state.loadedDungeon) {
+          let syncedDungeon = this.syncDungeonPlanesWithBoards(this.state.loadedDungeon, this.state.boards);
+          await new Promise(resolve => this.setState({ loadedDungeon: syncedDungeon }, resolve));
+          if (this.writeDungeon) {
+            await this.writeDungeon();
+          }
+        }
       }
     } finally {
       this.setState({ isSavingBoard: false });
@@ -2441,10 +2468,11 @@ class MapMakerPage extends React.Component {
       if (this.state.selectedView !== 'board') {
         this.setViewState('board')
       }
+      const boardRef = this.findBoardRefInFolders(board.id) || board;
       const nextState = {
         loadedBoard: clone(board),
         tiles: clone(board.tiles),
-        selectedThingTitle: `Board: ${board.name}`
+        selectedThingTitle: `Board: ${boardRef.name}`
       };
       if (associatedPlane) {
         nextState.loadedPlane = associatedPlane;
@@ -2471,7 +2499,7 @@ class MapMakerPage extends React.Component {
     const nextState = {
       loadedBoard: boardRef,
       tiles: boardRef.tiles,
-      selectedThingTitle: `Board: ${board.name}`
+      selectedThingTitle: `Board: ${boardRef.name}`
     };
     if (associatedPlane) {
       nextState.loadedPlane = associatedPlane;
@@ -2685,6 +2713,79 @@ class MapMakerPage extends React.Component {
     };
   }
 
+  getExistingFolderPaths = () => {
+    const paths = new Set();
+    const activeDungeonName = this.state.loadedDungeon ? this.state.loadedDungeon.name : null;
+    const currentBoard = this.state.loadedBoard;
+    const currentBoardDungeon = currentBoard && currentBoard.folderPath ? currentBoard.folderPath.split('/')[0] : null;
+    const targetDungeon = activeDungeonName || currentBoardDungeon;
+
+    if (Array.isArray(this.state.boardsFolders)) {
+      this.state.boardsFolders.forEach(folder => {
+        if (folder.title) {
+          if (targetDungeon && folder.title.toLowerCase() !== targetDungeon.toLowerCase()) {
+            return;
+          }
+          paths.add(folder.title);
+          if (Array.isArray(folder.subfolders)) {
+            folder.subfolders.forEach(sub => {
+              if (sub.title !== undefined && sub.title !== null) {
+                paths.add(`${folder.title}/${sub.title}`);
+              }
+            });
+          }
+        }
+      });
+    }
+
+    if (paths.size === 0 && targetDungeon) {
+      paths.add(targetDungeon);
+      paths.add(`${targetDungeon}/0`);
+    }
+
+    return Array.from(paths);
+  };
+
+  handleFolderPathDragOver = (e) => {
+    e.preventDefault();
+    if (e.dataTransfer) {
+      e.dataTransfer.dropEffect = 'copy';
+    }
+    if (!this.state.isDraggingOverFolderPathInput) {
+      this.setState({ isDraggingOverFolderPathInput: true });
+    }
+  };
+
+  handleFolderPathDragLeave = (e) => {
+    e.preventDefault();
+    this.setState({ isDraggingOverFolderPathInput: false });
+  };
+
+  handleFolderPathDrop = (e) => {
+    e.preventDefault();
+    this.setState({ isDraggingOverFolderPathInput: false });
+
+    let droppedText = '';
+    try {
+      const jsonData = e.dataTransfer.getData('application/json');
+      if (jsonData) {
+        const parsed = JSON.parse(jsonData);
+        if (parsed && parsed.path) {
+          droppedText = parsed.path;
+        }
+      }
+    } catch (err) {}
+
+    if (!droppedText) {
+      droppedText = e.dataTransfer.getData('text/plain') || '';
+    }
+
+    if (droppedText && this.state.boardFolderPathInput && this.state.boardFolderPathInput.current) {
+      this.state.boardFolderPathInput.current.value = droppedText;
+      this.flashLeftReadout(`Folder path set to: ${droppedText}`);
+    }
+  };
+
   onAssignBoardToSlot = async (boardId, dungeonName, levelName, slotIndex, orientation) => {
     console.log('assigning board', boardId, 'to', dungeonName, levelName, slotIndex, orientation);
     
@@ -2709,10 +2810,19 @@ class MapMakerPage extends React.Component {
       'bottom_mid',
       'bottom_right'
     ];
-    const slotName = slotNames[slotIndex];
-    const suffix = orientation === 'back' ? '_BACK' : '';
+
+    let folderPathStr = '';
+    if (slotIndex !== undefined && slotIndex !== null && slotIndex >= 0) {
+      const slotName = slotNames[slotIndex] || 'middle';
+      const orientCode = orientation === 'back' ? 'B' : 'F';
+      folderPathStr = `${dungeonName}/${levelName}/${orientCode}/${slotName}`;
+    } else if (levelName !== undefined && levelName !== null && levelName !== '') {
+      folderPathStr = `${dungeonName}/${levelName}`;
+    } else if (dungeonName) {
+      folderPathStr = `${dungeonName}`;
+    }
     
-    board.folderPath = `${dungeonName}/${levelName}/${slotName}${suffix}`;
+    board.folderPath = folderPathStr;
     
     if (this.state.loadedBoard && this.state.loadedBoard.id === boardId) {
       this.setState({
@@ -2729,44 +2839,78 @@ class MapMakerPage extends React.Component {
     
     await updateBoardRequest(board.id, obj);
     await this.loadAllBoards();
-    this.flashLeftReadout(`Assigned to Lvl ${levelName} (${orientation === 'front' ? 'Front' : 'Back'})`);
+    if (levelName) {
+      this.flashLeftReadout(`Assigned to Lvl ${levelName} (${orientation === 'back' ? 'Back' : 'Front'})`);
+    } else if (dungeonName) {
+      this.flashLeftReadout(`Assigned to ${dungeonName}`);
+    }
   }
 
   parseBoardPlacement = (board) => {
-    let folderPath = board.folderPath;
+    if (!board) return { dungeon: '', level: '', slot: '', orientation: 'front' };
+
+    let folderPath = board.folderPath || '';
     let name = board.name || '';
-    
+
     if (folderPath) {
       const parts = folderPath.split('/');
       if (parts.length >= 2) {
-        const dungeonName = parts[0];
+        const dungeon = parts[0];
         const level = parts[1];
-        const slot = parts.slice(2).join('/');
-        const isBack = folderPath.toLowerCase().includes('/back') || folderPath.toLowerCase().includes('_back') || name.toLowerCase().includes('_back');
-        return {
-          dungeon: dungeonName,
-          level,
-          slot: slot || '',
-          orientation: isBack ? 'back' : 'front'
-        };
+        
+        let orientation = 'front';
+        let slotParts = parts.slice(2);
+
+        if (slotParts.length >= 1) {
+          const seg = slotParts[0].toUpperCase();
+          if (seg === 'B' || seg === 'BACK') {
+            orientation = 'back';
+            slotParts = slotParts.slice(1);
+          } else if (seg === 'F' || seg === 'FRONT') {
+            orientation = 'front';
+            slotParts = slotParts.slice(1);
+          } else {
+            const fpLower = folderPath.toLowerCase();
+            if (fpLower.includes('/back') || fpLower.includes('_back') || fpLower.includes('/b/') || fpLower.endsWith('/b') || name.includes('_B_') || name.toLowerCase().includes('_back')) {
+              orientation = 'back';
+            }
+          }
+        }
+
+        const slot = slotParts.join('/');
+        return { dungeon, level, slot, orientation };
       }
     }
     
     if (name.includes('_')) {
       const parts = name.split('_');
-      const dungeonName = parts[0];
-      const level = parts[1];
-      const lastPart = parts[parts.length - 1].toLowerCase();
-      const isBack = lastPart === 'back';
-      const endIdx = isBack ? parts.length - 1 : parts.length;
-      const slotParts = parts.slice(2, endIdx);
-      const slot = slotParts.join('/');
-      return {
-        dungeon: dungeonName,
-        level,
-        slot,
-        orientation: isBack ? 'back' : 'front'
-      };
+      if (parts.length >= 2) {
+        const dungeon = parts[0];
+        const level = parts[1];
+        
+        let orientation = 'front';
+        let slotIdxStart = 2;
+        
+        if (parts.length >= 3) {
+          const p2Upper = parts[2].toUpperCase();
+          if (p2Upper === 'B' || p2Upper === 'BACK') {
+            orientation = 'back';
+            slotIdxStart = 3;
+          } else if (p2Upper === 'F' || p2Upper === 'FRONT') {
+            orientation = 'front';
+            slotIdxStart = 3;
+          } else if (name.toLowerCase().includes('_back') || name.includes('_B_')) {
+            orientation = 'back';
+          }
+        }
+
+        const lastPart = parts[parts.length - 1].toLowerCase();
+        const endsWithBack = lastPart === 'back';
+        const slotIdxEnd = endsWithBack ? parts.length - 1 : parts.length;
+
+        const slot = parts.slice(slotIdxStart, slotIdxEnd).join('_');
+        return { dungeon, level, slot, orientation };
+      }
     }
     
     return { dungeon: '', level: '', slot: '', orientation: 'front' };
@@ -3774,54 +3918,51 @@ class MapMakerPage extends React.Component {
       board.id = e._id;
       allBoards.push(board);
 
-      if (this.state.loadedDungeon) {
-        if (!this.boardBelongsToDungeon(board, this.state.loadedDungeon)) return;
-      } else {
-        return;
-      }
-
+      // Build boardsFolders for all staged/folder-assigned boards
       const info = this.getBoardFolderInfo(board);
       board.displayName = info.displayName;
 
       if (info.folderPath) {
-        const parts = info.folderPath.split('/');
-        let title = parts[0] || null,
-          subtitle = parts[1] || null,
-          deeptitle = parts.slice(2).join('/') || null,
-          folderExists = boardsFolders.map(e => e.title).includes(title),
-          existingSubfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle),
-          existingDeepfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle)?.deepfolders.find(e => e.title === deeptitle)
+        if (!this.state.loadedDungeon || this.boardBelongsToDungeon(board, this.state.loadedDungeon)) {
+          const parts = info.folderPath.split('/');
+          let title = parts[0] || null,
+            subtitle = parts[1] || null,
+            deeptitle = parts.slice(2).join('/') || null,
+            folderExists = boardsFolders.map(e => e.title).includes(title),
+            existingSubfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle),
+            existingDeepfolder = boardsFolders.find(e => e.title === title)?.subfolders.find(e => e.title === subtitle)?.deepfolders.find(e => e.title === deeptitle)
 
-        if (!folderExists) {
-          boardsFolders.push({
-            title,
-            contents: [],
-            subfolders: [],
-            expanded: false
-          })
-        }
-        if (!existingSubfolder && subtitle) {
-          boardsFolders.find(e => e.title === title).subfolders.push({
-            title: subtitle,
-            contents: [],
-            deepfolders: []
-          })
-        }
-        if (!existingDeepfolder && deeptitle) {
-          boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).deepfolders.push({
-            title: deeptitle,
-            contents: []
-          })
-        }
+          if (!folderExists) {
+            boardsFolders.push({
+              title,
+              contents: [],
+              subfolders: [],
+              expanded: false
+            })
+          }
+          if (!existingSubfolder && subtitle) {
+            boardsFolders.find(e => e.title === title).subfolders.push({
+              title: subtitle,
+              contents: [],
+              deepfolders: []
+            })
+          }
+          if (!existingDeepfolder && deeptitle) {
+            boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).deepfolders.push({
+              title: deeptitle,
+              contents: []
+            })
+          }
 
-        if (!subtitle) {
-          boardsFolders.find(e => e.title === title).contents.push(board)
-        }
-        if (subtitle && !deeptitle) {
-          boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).contents.push(board)
-        }
-        if (deeptitle) {
-          boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).deepfolders.find(e => e.title === deeptitle).contents.push(board)
+          if (!subtitle) {
+            boardsFolders.find(e => e.title === title).contents.push(board)
+          }
+          if (subtitle && !deeptitle) {
+            boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).contents.push(board)
+          }
+          if (deeptitle) {
+            boardsFolders.find(e => e.title === title).subfolders.find(e => e.title === subtitle).deepfolders.find(e => e.title === deeptitle).contents.push(board)
+          }
         }
       } else {
         boards.push(board)
@@ -3896,9 +4037,10 @@ class MapMakerPage extends React.Component {
     let n = d.getTime();
     let rand = n.toString().slice(9, 13);
 
+    const activeDungeonPath = (this.state.loadedDungeon && this.state.loadedDungeon.name) ? this.state.loadedDungeon.name : '';
     let newBoard = {
       name: `board${rand}`,
-      folderPath: '',
+      folderPath: activeDungeonPath,
       config: [[], [], [], []],
       tiles: []
     }
@@ -4877,7 +5019,13 @@ class MapMakerPage extends React.Component {
     if (Array.isArray(dungeon.levels)) {
       const isAssigned = dungeon.levels.some(lvl => {
         const checkPlane = (plane) => {
-          return plane && Array.isArray(plane.miniboards) && plane.miniboards.some(mb => mb && (mb.id === board.id || mb._id === board.id || mb.id === board._id || mb._id === board._id || mb.name === board.name));
+          return plane && Array.isArray(plane.miniboards) && plane.miniboards.some(mb => {
+            if (!mb || Object.keys(mb).length === 0 || Array.isArray(mb)) return false;
+            if (board.id && (mb.id === board.id || mb._id === board.id)) return true;
+            if (board._id && (mb.id === board._id || mb._id === board._id)) return true;
+            if (mb.name && board.name && mb.name === board.name) return true;
+            return false;
+          });
         };
         return checkPlane(lvl.front) || checkPlane(lvl.back);
       });
@@ -5701,107 +5849,106 @@ class MapMakerPage extends React.Component {
     // Deep clone to avoid direct mutations
     const loadedPlane = clone(this.state.loadedPlane);
     let minis = loadedPlane.miniboards;
-    minis[index] = [];
     
     const origin = this.state.draggedBoardOrigin;
+    const dragged = this.state.draggedBoard;
+    if (!dragged) return;
+
+    // Capture what's currently in the target slot
+    const targetBoard = minis[index] ? clone(minis[index]) : {};
+
     if (origin !== null && origin !== undefined && origin >= 0 && origin < 9) {
-      minis[origin] = [];
+      // Swapping case: drag from one slot to another within the plane
+      minis[index] = dragged;
+      minis[origin] = targetBoard;
+    } else {
+      // Sidebar drag case: just place it, remove from other slots if it exists
+      for (let i = 0; i < 9; i++) {
+        if (i !== index && minis[i] && minis[i].id === dragged.id) {
+          minis[i] = {};
+        }
+      }
+      minis[index] = dragged;
+    }
+
+    const planeId = loadedPlane.id;
+    let dungeonName = '';
+    let levelName = '';
+    let orientation = 'front';
+    
+    // 1. Primary Strategy: Parse from the plane's name directly (e.g. dream_0_back)
+    if (loadedPlane.name && loadedPlane.name.includes('_')) {
+      const parts = loadedPlane.name.split('_');
+      if (parts.length >= 3) {
+        dungeonName = parts[0];
+        levelName = parts[1];
+        const lastPart = parts[parts.length - 1].toLowerCase();
+        orientation = lastPart === 'back' ? 'back' : 'front';
+      }
     }
     
-    // Scan all slots in the current plane and remove any existing instances of this board
-    // This ensures dragging a board from the sidebar to a new slot *moves* it instead of duplicating it
-    if (this.state.draggedBoard && this.state.draggedBoard.id) {
-      for (let i = 0; i < 9; i++) {
-        if (i !== index && minis[i] && minis[i].id === this.state.draggedBoard.id) {
-          minis[i] = [];
+    // 2. Fallback: Search in dungeons list (prioritize loadedDungeon)
+    if (!dungeonName && Array.isArray(this.state.dungeons)) {
+      const candidateDungeons = [...this.state.dungeons];
+      if (this.state.loadedDungeon) {
+        candidateDungeons.unshift(this.state.loadedDungeon);
+      }
+      for (const d of candidateDungeons) {
+        if (Array.isArray(d.levels)) {
+          for (const lvl of d.levels) {
+            if (lvl.front && (lvl.front.id === planeId || (lvl.front.name && lvl.front.name === loadedPlane.name))) {
+              dungeonName = d.name;
+              levelName = String(lvl.id);
+              orientation = 'front';
+              break;
+            }
+            if (lvl.back && (lvl.back.id === planeId || (lvl.back.name && lvl.back.name === loadedPlane.name))) {
+              dungeonName = d.name;
+              levelName = String(lvl.id);
+              orientation = 'back';
+              break;
+            }
+          }
         }
+        if (dungeonName) break;
+      }
+    }
+    
+    if (dungeonName && levelName) {
+      const normalizedLevel = levelName.replace(/^[Ll]evel\s*/, '');
+      const slotNames = [
+        'top_left', 'top_mid', 'top_right',
+        'middle_left', 'middle_mid', 'middle_right',
+        'bottom_left', 'bottom_mid', 'bottom_right'
+      ];
+      const suffix = orientation === 'back' ? '_back' : '';
+
+      // Helper to update a single board's folderPath
+      const updateBoardLocation = async (boardToUpdate, slotIndex) => {
+        if (!boardToUpdate || !boardToUpdate.id) return;
+        const slotName = slotNames[slotIndex];
+        const folderPath = `${dungeonName}/${normalizedLevel}/${slotName}${suffix}`;
+        try {
+          let updatedBoard = {
+            name: boardToUpdate.name,
+            folderPath: folderPath,
+            tiles: clone(boardToUpdate.tiles),
+            config: clone(boardToUpdate.config || [[], [], [], []])
+          };
+          await updateBoardRequest(boardToUpdate.id, updatedBoard);
+        } catch (err) {
+          console.error('Failed to update board folderPath:', err);
+        }
+      };
+
+      // Update both the dragged board and the target board (if we swapped)
+      await updateBoardLocation(dragged, index);
+      if (origin !== null && origin !== undefined && origin >= 0 && origin < 9) {
+        await updateBoardLocation(targetBoard, origin);
       }
     }
 
-    let sections = loadedPlane.miniboards;
-    const dragged = this.state.draggedBoard;
-    if (dragged) {
-      sections[index] = dragged;
-      
-      const planeId = loadedPlane.id;
-      let dungeonName = '';
-      let levelName = '';
-      let orientation = 'front';
-      
-      // 1. Primary Strategy: Parse from the plane's name directly (e.g. dream_0_back)
-      if (loadedPlane.name && loadedPlane.name.includes('_')) {
-        const parts = loadedPlane.name.split('_');
-        if (parts.length >= 3) {
-          dungeonName = parts[0];
-          levelName = parts[1];
-          const lastPart = parts[parts.length - 1].toLowerCase();
-          orientation = lastPart === 'back' ? 'back' : 'front';
-        }
-      }
-      
-      // 2. Fallback: Search in dungeons list (prioritize loadedDungeon)
-      if (!dungeonName && Array.isArray(this.state.dungeons)) {
-        const candidateDungeons = [...this.state.dungeons];
-        if (this.state.loadedDungeon) {
-          // Put the loaded dungeon at the front to prioritize matching it
-          candidateDungeons.unshift(this.state.loadedDungeon);
-        }
-        
-        for (const d of candidateDungeons) {
-          if (Array.isArray(d.levels)) {
-            for (const lvl of d.levels) {
-              if (lvl.front && (lvl.front.id === planeId || (lvl.front.name && lvl.front.name === loadedPlane.name))) {
-                dungeonName = d.name;
-                levelName = String(lvl.id);
-                orientation = 'front';
-                break;
-              }
-              if (lvl.back && (lvl.back.id === planeId || (lvl.back.name && lvl.back.name === loadedPlane.name))) {
-                dungeonName = d.name;
-                levelName = String(lvl.id);
-                orientation = 'back';
-                break;
-              }
-            }
-          }
-          if (dungeonName) break;
-        }
-      }
-      
-      console.log('onDrop resolved details:', { dungeonName, levelName, orientation, planeName: loadedPlane.name, index });
-
-      if (dungeonName && levelName) {
-          // Normalize levelName to raw number segment (e.g., 'Level 0' -> '0')
-          const normalizedLevel = levelName.replace(/^[Ll]evel\s*/, '');
-
-          const slotNames = [
-            'top_left', 'top_mid', 'top_right',
-            'middle_left', 'middle_mid', 'middle_right',
-            'bottom_left', 'bottom_mid', 'bottom_right'
-          ];
-          const slotName = slotNames[index];
-          const suffix = orientation === 'back' ? '_back' : '';
-          const folderPath = `${dungeonName}/${normalizedLevel}/${slotName}${suffix}`;
-          
-          console.log('onDrop updating board folderPath to:', folderPath, 'for board:', dragged.name, 'id:', dragged.id);
-
-          try {
-            let updatedBoard = {
-              name: dragged.name,
-              folderPath: folderPath,
-              tiles: clone(dragged.tiles),
-              config: clone(dragged.config || [[], [], [], []])
-            };
-            await updateBoardRequest(dragged.id, updatedBoard);
-          } catch (err) {
-            console.error('Failed to update board folderPath in onDrop:', err);
-          }
-        } else {
-          console.warn('onDrop could not resolve dungeonName or levelName for plane:', loadedPlane.name);
-        }
-      }
-
-    loadedPlane.miniboards = sections;
+    loadedPlane.miniboards = minis;
     this.setState({
       draggedBoard: null,
       draggedBoardOrigin: null,
@@ -5827,6 +5974,97 @@ class MapMakerPage extends React.Component {
       })
     }
     event.preventDefault();
+  }
+
+  onDragOverBoardDungeon = (event, levelId, orientation, slotIndex) => {
+    const val = `${levelId}_${orientation}_${slotIndex}`;
+    if (this.state.hoveredDungeonSection !== val) {
+      this.setState({
+        hoveredDungeonSection: val
+      });
+    }
+    event.stopPropagation();
+    event.preventDefault();
+  }
+
+  onDropBoardDungeon = async (event, levelId, orientation, slotIndex) => {
+    event.stopPropagation();
+    event.preventDefault();
+    
+    if (!this.state.loadedDungeon) return;
+    
+    const dungeon = clone(this.state.loadedDungeon);
+    const levelIndex = dungeon.levels.findIndex(l => l.id === levelId);
+    if (levelIndex === -1) return;
+    
+    const plane = dungeon.levels[levelIndex][orientation];
+    if (!plane || !Array.isArray(plane.miniboards)) return;
+
+    let minis = plane.miniboards;
+    const origin = this.state.draggedBoardOrigin;
+    const dragged = this.state.draggedBoard;
+    
+    if (!dragged) return;
+
+    const targetBoard = minis[slotIndex] ? clone(minis[slotIndex]) : {};
+
+    if (origin !== null && origin !== undefined && origin >= 0 && origin < 9) {
+      // Swapping case
+      minis[slotIndex] = dragged;
+      minis[origin] = targetBoard;
+    } else {
+      // Sidebar drag case
+      for (let i = 0; i < 9; i++) {
+        if (i !== slotIndex && minis[i] && minis[i].id === dragged.id) {
+          minis[i] = {};
+        }
+      }
+      minis[slotIndex] = dragged;
+    }
+
+    const dungeonName = dungeon.name;
+    const normalizedLevel = String(levelId);
+    
+    if (dungeonName && normalizedLevel) {
+      const slotNames = [
+        'top_left', 'top_mid', 'top_right',
+        'middle_left', 'middle_mid', 'middle_right',
+        'bottom_left', 'bottom_mid', 'bottom_right'
+      ];
+      const suffix = orientation === 'back' ? '_back' : '';
+
+      const updateBoardLocation = async (boardToUpdate, sIndex) => {
+        if (!boardToUpdate || !boardToUpdate.id) return;
+        const slotName = slotNames[sIndex];
+        const folderPath = `${dungeonName}/${normalizedLevel}/${slotName}${suffix}`;
+        try {
+          let updatedBoard = {
+            name: boardToUpdate.name,
+            folderPath: folderPath,
+            tiles: clone(boardToUpdate.tiles),
+            config: clone(boardToUpdate.config || [[], [], [], []])
+          };
+          await updateBoardRequest(boardToUpdate.id, updatedBoard);
+        } catch (err) {
+          console.error('Failed to update board folderPath:', err);
+        }
+      };
+
+      await updateBoardLocation(dragged, slotIndex);
+      if (origin !== null && origin !== undefined && origin >= 0 && origin < 9) {
+        await updateBoardLocation(targetBoard, origin);
+      }
+    }
+
+    this.setState({
+      draggedBoard: null,
+      draggedBoardOrigin: null,
+      hoveredDungeonSection: null,
+      loadedDungeon: dungeon,
+      dungeonHasUnsavedChanges: true,
+    });
+    
+    await this.loadAllBoards();
   }
 
   onDropDungeon = async (levelIndex, frontOrBack) => {
@@ -6220,16 +6458,21 @@ class MapMakerPage extends React.Component {
           console.log('no loaded board, investigate');
           debugger
         }
-        const boardId = board.id;
+        
         board.name = this.state.boardNameInput.current.value.trim();
         const rawFolderPath = this.state.boardFolderPathInput.current.value.trim();
-        board.folderPath = this.parseFolderPathShorthand(rawFolderPath);
+        let folderPath = this.parseFolderPathShorthand(rawFolderPath);
+        if ((!folderPath || folderPath.trim() === '') && this.state.loadedDungeon && this.state.loadedDungeon.name) {
+          folderPath = this.state.loadedDungeon.name;
+        }
+        board.folderPath = folderPath;
         this.setState({
           loadedBoard: board,
           showModal: false
         }, async () => {
           await this.writeBoard();
           await this.loadAllBoards();
+          const boardId = this.state.loadedBoard ? this.state.loadedBoard.id : null;
           const renamedBoard = this.findBoardRefInFolders(boardId);
           if (renamedBoard) {
             this.loadBoard(renamedBoard);
@@ -6547,15 +6790,15 @@ class MapMakerPage extends React.Component {
             }}>
               {/* Row 1: empty, Top, empty */}
               <div />
-              <div style={btnStyle(!!ins.top)} onClick={() => this.selectInscriptionSide('top')} title={ins.top ? '✍ ' + ins.top : 'Inscribe north wall'}>↑</div>
+              <div style={btnStyle(!!ins.top)} onClick={() => this.selectInscriptionSide('top')} title={ins.top ? ins.top : 'Inscribe north wall'}>↑</div>
               <div />
               {/* Row 2: Left, Cancel-X, Right */}
-              <div style={btnStyle(!!ins.left)} onClick={() => this.selectInscriptionSide('left')} title={ins.left ? '✍ ' + ins.left : 'Inscribe west wall'}>←</div>
+              <div style={btnStyle(!!ins.left)} onClick={() => this.selectInscriptionSide('left')} title={ins.left ? ins.left : 'Inscribe west wall'}>←</div>
               <div style={cancelBtnStyle} onClick={this.cancelInscription} title="Cancel">✕</div>
-              <div style={btnStyle(!!ins.right)} onClick={() => this.selectInscriptionSide('right')} title={ins.right ? '✍ ' + ins.right : 'Inscribe east wall'}>→</div>
+              <div style={btnStyle(!!ins.right)} onClick={() => this.selectInscriptionSide('right')} title={ins.right ? ins.right : 'Inscribe east wall'}>→</div>
               {/* Row 3: empty, Bottom, empty */}
               <div />
-              <div style={btnStyle(!!ins.bottom)} onClick={() => this.selectInscriptionSide('bottom')} title={ins.bottom ? '✍ ' + ins.bottom : 'Inscribe south wall'}>↓</div>
+              <div style={btnStyle(!!ins.bottom)} onClick={() => this.selectInscriptionSide('bottom')} title={ins.bottom ? ins.bottom : 'Inscribe south wall'}>↓</div>
               <div />
             </div>
           );
@@ -6563,29 +6806,174 @@ class MapMakerPage extends React.Component {
 
         {/* Inscription Text Modal */}
         {this.state.showInscriptionModal && (
-          <CModal alignment="center" backdrop="static" visible={this.state.showInscriptionModal} onClose={this.cancelInscription}>
-            <CModalHeader>
-              <CModalTitle><span role="img" aria-label="Writing Hand">✍</span> Wall Inscription</CModalTitle>
-            </CModalHeader>
-            <CModalBody>
-              <p style={{ color: '#888', fontSize: '13px', marginBottom: '10px' }}>
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              backgroundColor: 'rgba(5, 4, 10, 0.85)',
+              backdropFilter: 'blur(8px)',
+              zIndex: 10000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: "'Inter', sans-serif",
+              animation: 'fadeIn 0.2s ease-out'
+            }}
+            onClick={this.cancelInscription}
+          >
+            <div
+              style={{
+                position: 'relative',
+                width: '92%',
+                maxWidth: '520px',
+                background: 'linear-gradient(145deg, rgba(22, 18, 14, 0.98) 0%, rgba(12, 9, 7, 0.99) 100%)',
+                border: '2px solid #e5b54f',
+                borderRadius: '16px',
+                boxShadow: '0 20px 60px rgba(0,0,0,0.9), 0 0 30px rgba(229, 181, 79, 0.25)',
+                padding: '24px 28px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '16px',
+                color: '#f0ede5'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(229, 181, 79, 0.3)', paddingBottom: '14px' }}>
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: '20px', fontWeight: '700', color: '#f9b115', letterSpacing: '0.08em' }}>
+                  WALL INSCRIPTION
+                </div>
+
+                <button
+                  onClick={this.cancelInscription}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#ccc',
+                    borderRadius: '50%',
+                    width: '36px',
+                    height: '36px',
+                    minWidth: '36px',
+                    minHeight: '36px',
+                    aspectRatio: '1 / 1',
+                    boxSizing: 'border-box',
+                    padding: 0,
+                    fontSize: '16px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#f9b115'; e.currentTarget.style.color = '#fff'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = '#ccc'; }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Body */}
+              <p style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: '13px', margin: 0, lineHeight: 1.45 }}>
                 Enter the text that will be carved into this wall. Players will read it when they walk up to it in the dungeon.
               </p>
               <textarea
                 className="dungeonname-input"
                 rows={4}
-                style={{ width: '100%', resize: 'vertical', fontFamily: 'serif', fontSize: '14px' }}
+                style={{
+                  width: '100%',
+                  resize: 'vertical',
+                  fontFamily: "'Inter', sans-serif",
+                  fontSize: '14px',
+                  background: 'rgba(0, 0, 0, 0.5)',
+                  color: '#f0ede5',
+                  border: '1px solid rgba(229, 181, 79, 0.4)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  boxSizing: 'border-box',
+                  outline: 'none',
+                  transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+                }}
+                onFocus={e => { e.currentTarget.style.borderColor = '#f9b115'; e.currentTarget.style.boxShadow = '0 0 10px rgba(249, 177, 21, 0.3)'; }}
+                onBlur={e => { e.currentTarget.style.borderColor = 'rgba(229, 181, 79, 0.4)'; e.currentTarget.style.boxShadow = 'none'; }}
                 value={this.state.inscriptionTextInput}
                 onChange={this.handleInscriptionTextChange}
                 placeholder="e.g. 'Beware the shadow that walks in three...' "
                 autoFocus
               />
-            </CModalBody>
-            <CModalFooter>
-              <CButton color="secondary" onClick={this.cancelInscription}>Cancel</CButton>
-              <CButton color="warning" onClick={this.confirmInscription}>Carve Inscription</CButton>
-            </CModalFooter>
-          </CModal>
+
+              {/* Footer */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginTop: '6px' }}>
+                <button
+                  onClick={this.cancelInscription}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: '20px',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    background: 'rgba(255, 255, 255, 0.06)',
+                    color: '#ccc',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    fontFamily: "'Cinzel', serif",
+                    letterSpacing: '0.05em',
+                    cursor: 'pointer',
+                    transition: 'all 0.18s ease'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.borderColor = '#f9b115'; e.currentTarget.style.color = '#fff'; }}
+                  onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = '#ccc'; }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => this.setState({ inscriptionTextInput: getRandomInscription() })}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: '20px',
+                    border: '1px solid rgba(229, 181, 79, 0.4)',
+                    background: 'rgba(229, 181, 79, 0.12)',
+                    color: '#e5b54f',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    fontFamily: "'Cinzel', serif",
+                    letterSpacing: '0.05em',
+                    cursor: 'pointer',
+                    transition: 'all 0.18s ease'
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(229, 181, 79, 0.25)'; e.currentTarget.style.color = '#fff'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(229, 181, 79, 0.12)'; e.currentTarget.style.color = '#e5b54f'; }}
+                >
+                  Random
+                </button>
+                <button
+                  onClick={this.confirmInscription}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: '20px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, rgba(201, 132, 10, 0.35) 0%, rgba(249, 177, 21, 0.5) 100%)',
+                    outline: '1px solid rgba(249, 177, 21, 0.6)',
+                    color: '#f9b115',
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    fontFamily: "'Cinzel', serif",
+                    letterSpacing: '0.05em',
+                    cursor: 'pointer',
+                    transition: 'all 0.18s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(201, 132, 10, 0.55) 0%, rgba(249, 177, 21, 0.75) 100%)';
+                    e.currentTarget.style.color = '#fff';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(201, 132, 10, 0.35) 0%, rgba(249, 177, 21, 0.5) 100%)';
+                    e.currentTarget.style.color = '#f9b115';
+                  }}
+                >
+                  Carve Inscription
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {this.state.showPortalModal && (
@@ -6932,7 +7320,184 @@ class MapMakerPage extends React.Component {
                         </div>
                       </div>
                     </div>
-                    <input ref={this.state.boardFolderPathInput} className="dungeonname-input" type="text" defaultValue={info.folderPath} placeholder="e.g. primari/0/b/tr  or  dream/0/middle_right_back" style={{ width: '100%' }} />
+                    {(() => {
+                      const existingPaths = this.getExistingFolderPaths();
+                      if (existingPaths.length === 0) return null;
+                      const slotButtons = [
+                        { code: 'TL', full: 'top_left', label: 'Top Left' },
+                        { code: 'TM', full: 'top_mid', label: 'Top Mid' },
+                        { code: 'TR', full: 'top_right', label: 'Top Right' },
+                        { code: 'ML', full: 'middle_left', label: 'Mid Left' },
+                        { code: 'MM', full: 'middle', label: 'Center' },
+                        { code: 'MR', full: 'middle_right', label: 'Mid Right' },
+                        { code: 'BL', full: 'bottom_left', label: 'Bot Left' },
+                        { code: 'BM', full: 'bottom_mid', label: 'Bot Mid' },
+                        { code: 'BR', full: 'bottom_right', label: 'Bot Right' }
+                      ];
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px', marginTop: '4px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
+                            <span style={{ fontSize: '11px', color: '#9da5b1', fontWeight: '600' }}>Select Folder:</span>
+                            {existingPaths.map(p => (
+                              <button
+                                key={p}
+                                type="button"
+                                onClick={() => {
+                                  if (this.state.boardFolderPathInput && this.state.boardFolderPathInput.current) {
+                                    this.state.boardFolderPathInput.current.value = p;
+                                    this.flashLeftReadout(`Folder path set to: ${p}`);
+                                  }
+                                }}
+                                style={{
+                                  background: 'rgba(249, 177, 21, 0.12)',
+                                  border: '1px solid rgba(249, 177, 21, 0.4)',
+                                  borderRadius: '12px',
+                                  color: '#f9b115',
+                                  fontSize: '11px',
+                                  padding: '2px 9px',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(249, 177, 21, 0.3)'; e.currentTarget.style.color = '#fff'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(249, 177, 21, 0.12)'; e.currentTarget.style.color = '#f9b115'; }}
+                                title={`Click to set folder path to ${p}`}
+                              >
+                                📁 {p}
+                              </button>
+                            ))}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '4px' }}>
+                            <span style={{ fontSize: '11px', color: '#9da5b1', fontWeight: '600' }}>Slot Position:</span>
+                            {slotButtons.map(sb => (
+                              <button
+                                key={sb.code}
+                                type="button"
+                                onClick={() => {
+                                  if (this.state.boardFolderPathInput && this.state.boardFolderPathInput.current) {
+                                    const currentVal = (this.state.boardFolderPathInput.current.value || '').trim();
+                                    let dungeon = 'Dungeon';
+                                    let level = '0';
+                                    let orient = 'F';
+                                    const parts = currentVal.split('/').filter(Boolean);
+                                    if (parts.length >= 1 && parts[0]) dungeon = parts[0];
+                                    if (parts.length >= 2 && parts[1]) level = parts[1];
+                                    if (parts.length >= 3 && (parts[2].toUpperCase() === 'F' || parts[2].toUpperCase() === 'B')) {
+                                      orient = parts[2].toUpperCase();
+                                    }
+                                    const newPath = `${dungeon}/${level}/${orient}/${sb.full}`;
+                                    this.state.boardFolderPathInput.current.value = newPath;
+                                    this.flashLeftReadout(`Slot set to: ${sb.label} (${newPath})`);
+                                  }
+                                }}
+                                style={{
+                                  background: 'rgba(255, 255, 255, 0.06)',
+                                  border: '1px solid rgba(249, 177, 21, 0.3)',
+                                  borderRadius: '4px',
+                                  color: '#d4a844',
+                                  fontSize: '10px',
+                                  fontWeight: 'bold',
+                                  padding: '2px 6px',
+                                  cursor: 'pointer',
+                                  fontFamily: 'monospace'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(249, 177, 21, 0.25)'; e.currentTarget.style.color = '#fff'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'; e.currentTarget.style.color = '#d4a844'; }}
+                                title={`Set slot to ${sb.label} (${sb.full})`}
+                              >
+                                {sb.code}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (this.state.boardFolderPathInput && this.state.boardFolderPathInput.current) {
+                                  const currentVal = (this.state.boardFolderPathInput.current.value || '').trim();
+                                  const parts = currentVal.split('/').filter(Boolean);
+                                  if (parts.length >= 3 && (parts[2].toUpperCase() === 'F' || parts[2].toUpperCase() === 'B')) {
+                                    const currOrient = parts[2].toUpperCase();
+                                    const nextOrient = currOrient === 'B' ? 'F' : 'B';
+                                    parts[2] = nextOrient;
+                                    const newPath = parts.join('/');
+                                    this.state.boardFolderPathInput.current.value = newPath;
+                                    this.flashLeftReadout(`Set to ${nextOrient === 'B' ? 'Back' : 'Front'} plane`);
+                                  } else if (parts.length >= 2) {
+                                    const newPath = `${parts[0]}/${parts[1]}/B${parts.slice(2).length ? '/' + parts.slice(2).join('/') : ''}`;
+                                    this.state.boardFolderPathInput.current.value = newPath;
+                                    this.flashLeftReadout(`Set to Back plane`);
+                                  } else if (currentVal) {
+                                    const newPath = `${currentVal}/0/B`;
+                                    this.state.boardFolderPathInput.current.value = newPath;
+                                    this.flashLeftReadout(`Set to Back plane`);
+                                  }
+                                }
+                              }}
+                              style={{
+                                background: 'rgba(220, 53, 69, 0.15)',
+                                border: '1px solid rgba(220, 53, 69, 0.4)',
+                                borderRadius: '4px',
+                                color: '#ff8585',
+                                fontSize: '10px',
+                                fontWeight: 'bold',
+                                padding: '2px 6px',
+                                cursor: 'pointer',
+                                marginLeft: '4px'
+                              }}
+                              title="Toggle Front / Back plane"
+                            >
+                              🔄 Back
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <div
+                      onDragOver={this.handleFolderPathDragOver}
+                      onDragLeave={this.handleFolderPathDragLeave}
+                      onDrop={this.handleFolderPathDrop}
+                      className={`folder-path-drop-zone ${this.state.isDraggingOverFolderPathInput ? 'active' : ''}`}
+                      style={{
+                        position: 'relative',
+                        borderRadius: '6px',
+                        padding: '4px',
+                        border: this.state.isDraggingOverFolderPathInput ? '2px dashed #f9b115' : '1px solid transparent',
+                        background: this.state.isDraggingOverFolderPathInput ? 'rgba(249, 177, 21, 0.12)' : 'transparent',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <input
+                        ref={this.state.boardFolderPathInput}
+                        className="dungeonname-input"
+                        type="text"
+                        defaultValue={info.folderPath}
+                        placeholder="e.g. primari/0/b/tr (or drag a folder from left sidebar here)"
+                        style={{ width: '100%' }}
+                      />
+                      {this.state.isDraggingOverFolderPathInput && (
+                        <div style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'rgba(28, 28, 30, 0.95)',
+                          color: '#f9b115',
+                          fontWeight: 'bold',
+                          fontSize: '13px',
+                          borderRadius: '6px',
+                          pointerEvents: 'none',
+                          boxShadow: '0 0 16px rgba(249, 177, 21, 0.5)',
+                          border: '2px dashed #f9b115'
+                        }}>
+                          🎯 Drop Folder Here to Auto-Fill Path
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -7479,6 +8044,8 @@ class MapMakerPage extends React.Component {
                 onDragOverDungeon={this.onDragOverDungeon}
                 onDropDungeon={this.onDropDungeon}
                 onDragStartDungeon={this.onDragStartDungeon}
+                onDragOverBoardDungeon={this.onDragOverBoardDungeon}
+                onDropBoardDungeon={this.onDropBoardDungeon}
                 saveDungeonLevel={this.saveDungeonLevel}
                 toggleDungeonLevelOverlay={this.toggleDungeonLevelOverlay}
                 clearDungeonLevel={this.clearDungeonLevel}

@@ -154,6 +154,9 @@ export function BoardManager(){
     this.establishGetCrewCallback = (callback) => {
         this.getCrew = callback
     }
+    this.establishGetBreadcrumbsCallback = (callback) => {
+        this.getBreadcrumbs = callback;
+    }
     this.establishSaveCrewCallback = (callback) => {
         this.saveCrew = callback;
     }
@@ -314,6 +317,32 @@ export function BoardManager(){
         return null;
     }
 
+    this.hasBreacherSkill = () => {
+        let crew = [];
+        try {
+            crew = (typeof this.getCrew === 'function' && this.getCrew()) || [];
+        } catch (e) {
+            crew = [];
+        }
+        return crew.some(member => {
+            if (!member || member.dead) return false;
+            const checkSkill = (list) => Array.isArray(list) && list.some(s => {
+                const k = typeof s === 'string' ? s : (s && (s.key || s.id));
+                return k === 'breacher';
+            });
+            return checkSkill(member.globalSkills) || checkSkill(member.skills) || checkSkill(member.knownSkills) || checkSkill(member.passives);
+        });
+    };
+
+    this.canBreachGate = (tile, gateType) => {
+        const config = GATE_CONFIG[gateType];
+        if (!config || config.requires !== 'minor_key') return false;
+        if (!this.hasBreacherSkill()) return false;
+        const levelId = this.currentLevel ? this.currentLevel.id : 0;
+        this.breacherUsedLevels = this.breacherUsedLevels || new Set();
+        return !this.breacherUsedLevels.has(levelId);
+    };
+
     // Returns true when a tile is a closed gate and the player does not currently
     // have the key required to open it.
     this.isLockedGateTile = (tile) => {
@@ -339,7 +368,12 @@ export function BoardManager(){
             e._im_key === 'master_key'
         );
 
-        return !hasKey;
+        if (hasKey) return false;
+        if (config.requires === 'minor_key' && this.canBreachGate && this.canBreachGate(tile, gateType)) {
+            return false;
+        }
+
+        return true;
     }
 
     this.isChest = (subtype) => {
@@ -2123,13 +2157,38 @@ export function BoardManager(){
                 break;
         }
     }
-    this.removeDefeatedMonsterTile = (tileId) => {
-    
-        const tile = this.tiles[tileId];
+    this.removePygmyTile = (tileOrId, onComplete) => {
+        const tile = typeof tileOrId === 'number' ? this.tiles[tileOrId] : tileOrId;
+        if (!tile) {
+            if (typeof onComplete === 'function') onComplete();
+            return;
+        }
+
+        tile.isFadingOut = true;
+        if (typeof this.refreshTiles === 'function') this.refreshTiles();
+
+        setTimeout(() => {
+            tile.isFadingOut = false;
+            this.removeTileFromBoard(tile);
+            if (typeof onComplete === 'function') onComplete();
+        }, 350);
+    };
+
+    this.removeDefeatedMonsterTile = (tileId, onComplete) => {
+        const tile = typeof tileId === 'number' ? this.tiles[tileId] : tileId;
+        if (!tile) {
+            if (typeof onComplete === 'function') onComplete();
+            return;
+        }
+
         this.removeTileFromBoard(tile);
-    }
+        if (typeof onComplete === 'function') onComplete();
+    };
+
     this.removeTileFromBoard = (tile) => {
+        if (!tile) return;
         // Clear runtime monster/image and restore floor appearance.
+        tile.isFadingOut = false;
         tile.image = null;
         tile.contains = null;
 
@@ -2300,6 +2359,37 @@ export function BoardManager(){
             // Clear pending state
             this.pending = null;
             if (this.setPending) this.setPending(null);
+        } else if (requiredKeySubtype === 'minor_key' && this.hasBreacherSkill()) {
+            this.breacherUsedLevels = this.breacherUsedLevels || new Set();
+            const levelId = this.currentLevel ? this.currentLevel.id : 0;
+            if (!this.breacherUsedLevels.has(levelId)) {
+                this.breacherUsedLevels.add(levelId);
+                this.messaging(`🔨 Breacher: Forced open the minor key gate! (1/1 for Level ${levelId})`);
+                tile.contains = openedVersion;
+                tile.image = openedVersion;
+                this.activeInteractionTile = tile;
+                this.refreshTiles();
+                this.tiles[tile.id] = tile;
+                
+                if (this.currentOrientation === 'F') {
+                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
+                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
+                } else {
+                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
+                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
+                }
+                this.updateDungeon(this.dungeon);
+
+                this.pending = null;
+                if (this.setPending) this.setPending(null);
+                if (this.saveCrew) this.saveCrew();
+            } else {
+                tile.color = 'lightyellow';
+                this.messaging(`Breacher already used on Level ${levelId}. This gate requires a ${keyName}`);
+                const p = { type: gateType };
+                this.pending = p;
+                if (this.setPending) this.setPending(p);
+            }
         } else {
             tile.color = 'lightyellow';
             this.messaging(`This gate requires a ${keyName}`);
@@ -2369,29 +2459,57 @@ export function BoardManager(){
                 } catch (e) {}
             }
 
+            // Helper to check if movement to an adjacent board is valid
+            const canTransitionBoard = (direction) => {
+                const currentTileIdx = this.getIndexFromCoordinates(pCoords);
+                const currentTile = this.tiles[currentTileIdx];
+                
+                // Only explicitly placed connecting paths can transition boards
+                if (this.getContainsType(currentTile.contains) !== 'connecting_path') return false;
+
+                let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
+                if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+                if (!plane || !plane.miniboards) return false;
+                
+                if (direction === 'up') {
+                    if (this.hasSolidBorder(currentTile, 'top') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
+                    return !!plane.miniboards[this.playerTile.boardIndex - 3];
+                } else if (direction === 'down') {
+                    if (this.hasSolidBorder(currentTile, 'bottom') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
+                    return !!plane.miniboards[this.playerTile.boardIndex + 3];
+                } else if (direction === 'left') {
+                    if (this.hasSolidBorder(currentTile, 'left') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
+                    return !!plane.miniboards[this.playerTile.boardIndex - 1];
+                } else if (direction === 'right') {
+                    if (this.hasSolidBorder(currentTile, 'right') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
+                    return !!plane.miniboards[this.playerTile.boardIndex + 1];
+                }
+                return false;
+            };
+
             // Left edge
-            if (py === EDGE_MIN) {
+            if (py === EDGE_MIN && canTransitionBoard('left')) {
                 for (let d = -1; d <= 1; d++) {
                     const nx = px + d;
                     if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MIN], 'left');
                 }
             }
             // Right edge
-            if (py === EDGE_MAX) {
+            if (py === EDGE_MAX && canTransitionBoard('right')) {
                 for (let d = -1; d <= 1; d++) {
                     const nx = px + d;
                     if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MAX], 'right');
                 }
             }
             // Top edge
-            if (px === EDGE_MIN) {
+            if (px === EDGE_MIN && canTransitionBoard('up')) {
                 for (let d = -1; d <= 1; d++) {
                     const ny = py + d;
                     if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MIN, ny], 'top');
                 }
             }
             // Bottom edge
-            if (px === EDGE_MAX) {
+            if (px === EDGE_MAX && canTransitionBoard('down')) {
                 for (let d = -1; d <= 1; d++) {
                     const ny = py + d;
                     if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MAX, ny], 'bottom');
@@ -2619,6 +2737,17 @@ export function BoardManager(){
     }
     this.moveUp = () => {
         if(this.playerTile.location[0] === 15){
+            const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
+            const currentTile = this.tiles[currentTileIdx];
+            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'top') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
+            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+            if (!plane || !plane.miniboards || !plane.miniboards[this.playerTile.boardIndex - 3]) {
+                return;
+            }
             this.moveBoardUp()
             return
         }
@@ -2627,6 +2756,17 @@ export function BoardManager(){
     }
     this.moveDown = () => {
         if(this.playerTile.location[0] === 29){
+            const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
+            const currentTile = this.tiles[currentTileIdx];
+            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'bottom') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
+            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+            if (!plane || !plane.miniboards || !plane.miniboards[this.playerTile.boardIndex + 3]) {
+                return;
+            }
             this.moveBoardDown()
             return
         }
@@ -2635,6 +2775,17 @@ export function BoardManager(){
     }
     this.moveLeft = () => {
         if(this.playerTile.location[1] === 15){
+            const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
+            const currentTile = this.tiles[currentTileIdx];
+            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'left') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
+            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+            if (!plane || !plane.miniboards || !plane.miniboards[this.playerTile.boardIndex - 1]) {
+                return;
+            }
             this.moveBoardLeft()
             return
         }
@@ -2643,6 +2794,17 @@ export function BoardManager(){
     }
     this.moveRight = () => {
         if(this.playerTile.location[1] === 29){
+            const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
+            const currentTile = this.tiles[currentTileIdx];
+            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'right') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
+            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+            if (!plane || !plane.miniboards || !plane.miniboards[this.playerTile.boardIndex + 1]) {
+                return;
+            }
             this.moveBoardRight()
             return
         }
@@ -2778,6 +2940,19 @@ export function BoardManager(){
             }
         } catch (e) {}
 
+        let hasBreadcrumbsPassive = false;
+        try {
+            const crew = typeof this.getCrew === 'function' ? this.getCrew() : [];
+            hasBreadcrumbsPassive = crew.some(member => {
+                if (!member || member.dead) return false;
+                const globalSkills = Array.isArray(member.globalSkills) ? member.globalSkills : [];
+                const skills = Array.isArray(member.skills) ? member.skills : [];
+                const passives = Array.isArray(member.passives) ? member.passives : [];
+                const allSkills = [...globalSkills, ...skills, ...passives].map(s => typeof s === 'string' ? s : (s && s.key)).filter(Boolean);
+                return allSkills.includes('breadcrumbs');
+            });
+        } catch (e) {}
+
         const destCoords = this.getCoordinatesFromIndex(destinationTile.id);
 
         this.tiles.forEach((e) => {
@@ -2804,9 +2979,24 @@ export function BoardManager(){
                 const isDebugMode = !!(this.debugMode || (typeof window !== 'undefined' && window.debugMode === true));
                 const revealByDebugPygmies = isDebugMode && isPygmies;
 
+                let inBreadcrumbPassiveReveal = false;
+                if (hasBreadcrumbsPassive && typeof this.getBreadcrumbs === 'function') {
+                    const breadcrumbsMap = this.getBreadcrumbs();
+                    if (breadcrumbsMap) {
+                        const key = `${this.currentLevel.id}:${this.currentOrientation}:${this.playerTile.boardIndex}:${coords[0]}:${coords[1]}`;
+                        const entry = breadcrumbsMap.get(key);
+                        if (entry && (Date.now() - entry.ts <= 20000)) {
+                            inBreadcrumbPassiveReveal = true;
+                        }
+                    }
+                }
+
                 const isVoid = this.isVoidTile(e);
                 const hasInscriptions = e.inscriptions && Object.values(e.inscriptions).some(v => !!v);
-                if ((revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id))) && (!isVoid || hasInscriptions)) {
+                const isRevealed = revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
+                const isPath = this.getContainsType(e.contains) === 'path' || e.type === 'path';
+
+                if (isRevealed && (!isVoid || hasInscriptions)) {
 
                     const persistedColor = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].color);
                     const persistedBorders = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].borders);
@@ -2826,6 +3016,27 @@ export function BoardManager(){
                     e.color = boardColor || (isVoid ? '#0e0e0e' : '#6b6057');
                     e.image = this.getImageForContains(e.contains, e);
                     e.borders = this.normalizeFogBorders(persistedBorders);
+
+                    if (inBreadcrumbPassiveReveal && !(revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id)))) {
+                        e.partialObscured = true;
+                    }
+                } else if (isPath) {
+                    const persistedColor = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].color);
+                    const persistedBorders = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].borders);
+                    const runtimeColor = (e.color && e.color !== 'black' && e.color !== 'white' && e.color !== 'null') ? e.color : null;
+                    let boardColor = (persistedColor && persistedColor !== 'black' && persistedColor !== 'white' && persistedColor !== 'null') ? persistedColor : (runtimeColor || null);
+                    
+                    if (boardColor && String(boardColor).includes('ff0000') && !isDebugMode) {
+                        boardColor = null;
+                        if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id]) {
+                            this.currentBoard.tiles[e.id].color = '#6b6057';
+                        }
+                    }
+
+                    e.color = boardColor || '#6b6057';
+                    e.image = null; // Hide monsters/items on the path under fog
+                    e.borders = this.normalizeFogBorders(persistedBorders);
+                    e.partialObscured = true;
                 }
             } catch (err) {}
         });

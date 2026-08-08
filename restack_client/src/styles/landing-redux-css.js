@@ -848,7 +848,7 @@ export const LANDING_REDUX_CSS = `
   }
 
   .redux-landing-container .menu-card {
-    padding: 6px 10px !important;
+    padding: 18px 10px !important;
     justify-content: center !important;
     align-items: center !important;
     min-height: 0 !important;

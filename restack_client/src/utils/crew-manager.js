@@ -603,6 +603,10 @@ export function CrewManager() {
             case 'sharpen_blades': {
                 const prepTime = 2 * 60 * 60 * 1000; // 2 hours
                 endDate = new Date(Date.now() + prepTime);
+                // Only one sharpen_blades action at a time
+                member.specialActions = (member.specialActions || []).filter(
+                    a => a.type !== 'sharpen_blades'
+                );
                 member.specialActions.push({
                     type: 'sharpen_blades',
                     name: 'Sharpening Blades',
@@ -785,7 +789,7 @@ export function CrewManager() {
             portrait: images['sage_portrait'],
             inventory: [],
             skills: ['heal', 'circle_of_protection'],
-            passives: ["owls_insight", "herbalism"],
+            passives: ["owls_insight", "herbalism", "breadcrumbs"],
             weaknesses: ['fire', 'electricity', 'ice', 'blood_magic', 'crushing'],
             description: "Loryastes is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe",
             specialActions: [],
