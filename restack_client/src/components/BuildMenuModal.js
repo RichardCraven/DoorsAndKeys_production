@@ -480,22 +480,22 @@ class BuildMenuModal extends Component {
                                                     <>
                                                         {b.costs.wood > 0 && (
                                                             <span style={{ color: available.wood >= b.costs.wood ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                                🪵 {b.costs.wood}
+                                                                <img src={images.wood} alt="Wood" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {b.costs.wood}
                                                             </span>
                                                         )}
                                                         {b.costs.stone > 0 && (
                                                             <span style={{ color: available.stone >= b.costs.stone ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                                🪨 {b.costs.stone}
+                                                                <img src={images.stone} alt="Stone" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {b.costs.stone}
                                                             </span>
                                                         )}
                                                         {b.costs.slate > 0 && (
                                                             <span style={{ color: available.slate >= b.costs.slate ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                                📄 {b.costs.slate}
+                                                                <img src={images.slate} alt="Slate" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {b.costs.slate}
                                                             </span>
                                                         )}
                                                         {b.costs.dust > 0 && (
                                                             <span style={{ color: available.dust >= b.costs.dust ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                                ✨ {b.costs.dust}
+                                                                <img src={images.spectral_dust} alt="Dust" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {b.costs.dust}
                                                             </span>
                                                         )}
                                                     </>

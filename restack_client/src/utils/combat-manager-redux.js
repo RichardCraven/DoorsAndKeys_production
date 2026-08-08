@@ -5493,21 +5493,34 @@ export function CombatManagerRedux() {
         }
 
         // Priority 4: Duplicate/triplicate existing minions
-        const hasMinions = Object.values(this.combatants).some(
-            c => c && !c.dead && c.isMinion && c.type !== 'archaic_familiar'
+        const minionsToDupe = Object.values(this.combatants).filter(
+            c => c && !c.dead && c.isMinion && c.type !== 'archaic_familiar' && (!!c.isMonster === !!unit.isMonster)
         );
-        if (hasMinions && this._abilityReady(unit, 'summoner_duplicate')) {
-            const pick = this.resolveSpecial(unit, 'summoner_duplicate');
-            if (pick) {
-                this._duplicateMinion(unit, pick, false);
-                return;
-            }
-        }
-        if (hasMinions && this._abilityReady(unit, 'summoner_triplicate')) {
-            const pick = this.resolveSpecial(unit, 'summoner_triplicate');
-            if (pick) {
-                this._duplicateMinion(unit, pick, true);
-                return;
+        
+        if (minionsToDupe.length > 0) {
+            const minionToDupe = minionsToDupe[0];
+            const pickDupe = this.resolveSpecial(unit, 'summoner_duplicate');
+            const pickTrip = this.resolveSpecial(unit, 'summoner_triplicate');
+            
+            const isTripReady = pickTrip && this._abilityReady(unit, 'summoner_triplicate');
+            const isDupeReady = pickDupe && this._abilityReady(unit, 'summoner_duplicate');
+
+            if (isTripReady || isDupeReady) {
+                const pick = isTripReady ? pickTrip : pickDupe;
+                const abilityRange = pick.range || 'close'; 
+                
+                if (!this.isWithinRange(unit, minionToDupe, abilityRange)) {
+                    if (!unit.ensnared && !this.isUnitInWeb(unit) && unit.movesTakenThisRound < 1) {
+                        this.moveCloser(unit, minionToDupe);
+                    }
+                }
+
+                if (this.isWithinRange(unit, minionToDupe, abilityRange)) {
+                    this._duplicateMinion(unit, pick, isTripReady);
+                    return;
+                } else if (unit.movesTakenThisRound > 0) {
+                    return;
+                }
             }
         }
 
@@ -8393,8 +8406,8 @@ export function CombatManagerRedux() {
             unit.queuedSkillIsUltimate = false;
             unit.power = 0; // Reset power to 0 upon ultimate activation!
             unit.ultimateCasting = true;
-            console.log(`%c 💥 ULTIMATE ACTIVATED: ${this.getCombatantLogName(unit)} executed ${ability.name || ability.id || normAbilityId}! 💥`, 'background: #ff5500; color: #fff; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
-            this.appendCombatLog(`💥 ${this.getCombatantLogName(unit)} ACTIVATES their Ultimate: ${ability.name || ability.id || normAbilityId}!`);
+            console.log(`%c 💥 ULTIMATE ACTIVATED: ${this.getCombatantLogName(unit)} executed Ultimate ${ability.name || ability.id || normAbilityId}! 💥`, 'background: #ff5500; color: #fff; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
+            this.appendCombatLog(`💥 ${this.getCombatantLogName(unit)} executed Ultimate ${ability.name || ability.id || normAbilityId}!`);
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
 
             const animDurationMs = (normAbilityId.includes('magic_missile')) ? 2200 : 2000;

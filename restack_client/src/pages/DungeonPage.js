@@ -6383,21 +6383,28 @@ class DungeonPage extends React.Component {
                                             const baseEnemies = (this.state.minimapIndicators[i] && Array.isArray(this.state.minimapIndicators[i].enemies))
                                                 ? this.state.minimapIndicators[i].enemies
                                                 : [];
+                                            const baseMerchants = (this.state.minimapIndicators[i] && Array.isArray(this.state.minimapIndicators[i].merchant))
+                                                ? this.state.minimapIndicators[i].merchant
+                                                : [];
                                             const sightingEnemies = this.getMonsterSightingsForBoard(currentLevelId, currentOrientation, i);
                                             const mergedByTile = new Map();
                                             baseEnemies.forEach((indicator) => {
                                                 if (!indicator || typeof indicator.tileId !== 'number') return;
-                                                if (!mergedByTile.has(indicator.tileId)) mergedByTile.set(indicator.tileId, indicator);
+                                                if (!mergedByTile.has(`enemy_${indicator.tileId}`)) mergedByTile.set(`enemy_${indicator.tileId}`, { ...indicator, indicatorType: 'enemy' });
                                             });
                                             sightingEnemies.forEach((indicator) => {
                                                 if (!indicator || typeof indicator.tileId !== 'number') return;
-                                                if (!mergedByTile.has(indicator.tileId)) mergedByTile.set(indicator.tileId, indicator);
+                                                if (!mergedByTile.has(`enemy_${indicator.tileId}`)) mergedByTile.set(`enemy_${indicator.tileId}`, { ...indicator, indicatorType: 'enemy' });
+                                            });
+                                            baseMerchants.forEach((indicator) => {
+                                                if (!indicator || typeof indicator.tileId !== 'number') return;
+                                                if (!mergedByTile.has(`merchant_${indicator.tileId}`)) mergedByTile.set(`merchant_${indicator.tileId}`, { ...indicator, indicatorType: 'merchant' });
                                             });
 
                                             return Array.from(mergedByTile.values()).map((indicator, idx) => (
                                                 <div
-                                                    key={`${indicator.tileId}_${idx}`}
-                                                    className="minimap-indicator enemy"
+                                                    key={`${indicator.indicatorType}_${indicator.tileId}_${idx}`}
+                                                    className={`minimap-indicator ${indicator.indicatorType}`}
                                                     style={{
                                                         left: this.calcIndicator(indicator.tileId).left,
                                                         top: this.calcIndicator(indicator.tileId).top
@@ -7923,9 +7930,16 @@ class DungeonPage extends React.Component {
                     const w = r.width;
                     const h = r.height;
                     
-                    // draw a semi-opaque overlay matching the original style
+                    // draw a semi-opaque overlay matching the original style with rounded corners
                     ctx.fillStyle = 'rgba(249,177,21,0.6)';
-                    ctx.fillRect(x, y, w * pct, h);
+                    const radius = 6;
+                    ctx.beginPath();
+                    if (ctx.roundRect) {
+                        ctx.roundRect(x, y, w * pct, h, [radius, 0, 0, radius]);
+                    } else {
+                        ctx.rect(x, y, w * pct, h);
+                    }
+                    ctx.fill();
                     // debug: draw logging disabled to avoid frequent console output
                 } catch (inner) {
                     // skip problematic element
@@ -8311,17 +8325,14 @@ class DungeonPage extends React.Component {
             inventoryHoverMatrix: matrix
         })
 
-        const isChestOrTreasure = this.props.boardManager && (this.props.boardManager.chestPickupInProgress || this.props.boardManager.treasurePickupInProgress);
-        const isKey = typeof tileContains === 'string' && tileContains.toLowerCase().includes('key');
-        if (isChestOrTreasure || isKey) {
-            const iconKey = itemDefinition?.icon || tileContains;
-            this.triggerLootRadialArc({
-                type: 'item',
-                id: tileContains + '_' + Math.random(),
-                icon: images[iconKey] || images[tileContains] || images['treasure'] || null,
-                name: itemDisplayName
-            }, tile);
-        }
+        const iconKey = itemDefinition?.icon || tileContains;
+        const resolvedIcon = (typeof iconKey === 'string' && images[iconKey]) || (typeof tileContains === 'string' && images[tileContains]) || images['treasure'] || null;
+        this.triggerLootRadialArc({
+            type: 'item',
+            id: tileContains + '_' + Math.random(),
+            icon: resolvedIcon,
+            name: itemDisplayName
+        }, tile);
     }
     addTreasureToInventory = (treasure, tile = null) => {
         let item = treasure.item;
@@ -9357,6 +9368,13 @@ class DungeonPage extends React.Component {
             if ((maybeKey === 'Enter' || maybeKey === 'Return') && this.state.showTrapPopup) {
                 event.preventDefault();
                 this.dismissTrapPopup();
+                return;
+            }
+            // Enter/Return should dismiss process complete popups if visible
+            const processCompleteTypes = ['PrepComplete', 'RitualComplete', 'FoodComplete', 'Updates', 'SharpenBladesDetails'];
+            if ((maybeKey === 'Enter' || maybeKey === 'Return') && this.state.showModal && processCompleteTypes.includes(this.state.modalType)) {
+                event.preventDefault();
+                this.onUpdateModalClosed();
                 return;
             }
             if ((maybeKey === 'Enter' || maybeKey === 'Return') && this.state.showPygmiesAttackPopup) {
@@ -14784,6 +14802,33 @@ class DungeonPage extends React.Component {
                             <button aria-label="Close vendor" className="camp-close" onClick={() => this.onUpdateModalClosed()} style={{background:'transparent', border:'none', color:'#fff', fontSize:20}}>✕</button>
                         </div>
                     </CModalHeader>
+                )}
+                {['PrepComplete', 'RitualComplete', 'FoodComplete', 'Updates', 'SharpenBladesDetails'].includes(this.state.modalType) && (
+                    <button
+                        aria-label="Close popup"
+                        className="camp-close process-complete-close-btn"
+                        onClick={() => this.onUpdateModalClosed()}
+                        style={{
+                            position: 'absolute',
+                            top: '16px',
+                            right: '16px',
+                            background: 'none',
+                            border: 'none',
+                            color: 'rgba(255, 255, 255, 0.7)',
+                            fontSize: '22px',
+                            cursor: 'pointer',
+                            zIndex: 100,
+                            width: '32px',
+                            height: '32px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            borderRadius: '50%',
+                            transition: 'all 0.2s ease'
+                        }}
+                    >
+                        ✕
+                    </button>
                 )}
                 <ModalInner
                     modalType={this.state.modalType}

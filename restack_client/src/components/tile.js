@@ -388,7 +388,7 @@ function Tile(props) {
     const isBlackTile = isBlackRenderedTile(currentContains, currentTileColor);
     const targetTileId = props.index !== undefined ? props.index : props.id;
     const mainTile = props.boardTiles?.[targetTileId];
-    const isMainTileBlack = mainTile ? (mainTile.color === 'black' || mainTile.color === 'null' || mainTile.color === 'undefined' || !mainTile.color) : (color === 'black');
+    const isMainTileBlack = mainTile ? isBlackRenderedTile(mainTile.contains, mainTile.color) : isBlackTile;
     const isHut = props.building === 'hut' || 
                   (containsObj && (containsObj.subtype === 'hut' || containsObj.building === 'hut' || containsObj.type === 'hut')) ||
                   (currentContains && (currentContains.subtype === 'hut' || currentContains.building === 'hut' || currentContains.type === 'hut'));
@@ -651,7 +651,7 @@ function Tile(props) {
                                      border: `1px dashed ${borderColor}`,
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
-                                     opacity: (color === 'black' || isMainTileBlack) ? 0 : 1, 
+                                     opacity: (isBlackTile || isMainTileBlack) ? 0 : 1, 
                                      transition: 'opacity 0.35s ease-in-out'
                                  }} 
                              />
@@ -975,9 +975,10 @@ function Tile(props) {
                    const isConnected = !!props.connectedEdge;
                    let edge = null;
 
-                   if (props.id !== undefined && props.id !== null) {
-                       const x = props.id % 15;
-                       const y = Math.floor(props.id / 15);
+                   const currentIdx = (typeof props.index === 'number') ? props.index : props.id;
+                   if (currentIdx !== undefined && currentIdx !== null) {
+                       const x = currentIdx % 15;
+                       const y = Math.floor(currentIdx / 15);
 
                        // Match Dungeon Builder (DungeonView / PlaneView) exact priority:
                        // x === 0 (West edge) -> left (Horizontal)
@@ -993,10 +994,10 @@ function Tile(props) {
                            let hasLeftRightNeighbor = false;
                            let hasTopBottomNeighbor = false;
                            if (Array.isArray(boardTiles)) {
-                               if (x > 0 && boardTiles[props.id - 1] && boardTiles[props.id - 1].color !== 'black') hasLeftRightNeighbor = true;
-                               if (x < 14 && boardTiles[props.id + 1] && boardTiles[props.id + 1].color !== 'black') hasLeftRightNeighbor = true;
-                               if (y > 0 && boardTiles[props.id - 15] && boardTiles[props.id - 15].color !== 'black') hasTopBottomNeighbor = true;
-                               if (y < 14 && boardTiles[props.id + 15] && boardTiles[props.id + 15].color !== 'black') hasTopBottomNeighbor = true;
+                               if (x > 0 && boardTiles[currentIdx - 1] && boardTiles[currentIdx - 1].color !== 'black') hasLeftRightNeighbor = true;
+                               if (x < 14 && boardTiles[currentIdx + 1] && boardTiles[currentIdx + 1].color !== 'black') hasLeftRightNeighbor = true;
+                               if (y > 0 && boardTiles[currentIdx - 15] && boardTiles[currentIdx - 15].color !== 'black') hasTopBottomNeighbor = true;
+                               if (y < 14 && boardTiles[currentIdx + 15] && boardTiles[currentIdx + 15].color !== 'black') hasTopBottomNeighbor = true;
                            }
                            if (hasLeftRightNeighbor) edge = 'right';
                            else if (hasTopBottomNeighbor) edge = 'bottom';

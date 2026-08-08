@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
-import { getMeta, storeMeta } from '../utils/session-handler';
-import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest } from '../utils/api-handler';
+import { getMeta, storeMeta, getUserId } from '../utils/session-handler';
+import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest } from '../utils/api-handler';
 
 import skillsMatrix from '../utils/skills-matrix';
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';

@@ -1767,6 +1767,12 @@ export {
     yazatas_focus,
     mishnes_focus,
     masekets_focus,
+    yazatas_focus as yazatas_focus_shards,
+    mishnes_focus as mishnes_focus_shards,
+    masekets_focus as masekets_focus_shards,
+    abyssal_crystal as abyssal_crystal_shards,
+    reagent_mushroom as mushroom,
+    reagent_mushroom as mushroom_cap,
     moxadite_banner,
     benthachite_banner,
     pyremnite_banner,
@@ -2426,3 +2432,4 @@ export {
     eidolon_death6,
     eidolon_death7,
 };
+

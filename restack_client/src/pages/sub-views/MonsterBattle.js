@@ -3350,7 +3350,7 @@ class MonsterBattle extends React.Component {
             a => a && consumableTypes.has(a.type) && a.available
         );
 
-        // Build regular skills (specials + attacks, de-duped, no consumables)
+        // Build regular skills (specials + attacks, de-duped, no consumables, no passives/breacher)
         const allSpecials = [
             ...(liveSelectedFighter.specials || []),
             ...(liveSelectedFighter.attacks || []),
@@ -3361,6 +3361,13 @@ class MonsterBattle extends React.Component {
             const nk = String(key).trim().toLowerCase().replaceAll(' ', '_');
             if (!nk || seenKeys.has(nk)) return false;
             seenKeys.add(nk);
+
+            // Exclude passive skills and breacher from active combat skill icons
+            const { spec } = resolveSpec(entry);
+            if (spec.isPassive || spec.type === 'passive' || nk === 'breacher') {
+                return false;
+            }
+
             return true;
         });
 

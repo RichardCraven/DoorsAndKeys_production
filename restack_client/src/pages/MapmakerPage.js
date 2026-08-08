@@ -2258,6 +2258,32 @@ class MapMakerPage extends React.Component {
           const updatedPlane = this.state.planes.find(p => p.id === currentPlane.id || p.name === currentPlane.name);
           this.loadPlane(updatedPlane || currentPlane);
         })
+      } else if (this.state.loadedBoard) {
+        let obj = {
+          name: this.state.loadedBoard.name,
+          folderPath: this.state.loadedBoard.folderPath || '',
+          tiles: clone(this.state.tiles),
+          config: clone(config)
+        }
+        const boardRes = await addBoardRequest(obj);
+        const newId = boardRes.data._id || boardRes.data.id;
+        let newBoard = { ...obj, id: newId };
+        
+        await new Promise(resolve => {
+          this.setState({ loadedBoard: newBoard }, resolve);
+        });
+        
+        if (this.registerCreatedBoard) {
+          await this.registerCreatedBoard(newBoard);
+        }
+        
+        if (this.state.loadedDungeon) {
+          let syncedDungeon = this.syncDungeonPlanesWithBoards(this.state.loadedDungeon, this.state.boards);
+          await new Promise(resolve => this.setState({ loadedDungeon: syncedDungeon }, resolve));
+          if (this.writeDungeon) {
+            await this.writeDungeon();
+          }
+        }
       }
     } finally {
       this.setState({ isSavingBoard: false });
@@ -2442,10 +2468,11 @@ class MapMakerPage extends React.Component {
       if (this.state.selectedView !== 'board') {
         this.setViewState('board')
       }
+      const boardRef = this.findBoardRefInFolders(board.id) || board;
       const nextState = {
         loadedBoard: clone(board),
         tiles: clone(board.tiles),
-        selectedThingTitle: `Board: ${board.name}`
+        selectedThingTitle: `Board: ${boardRef.name}`
       };
       if (associatedPlane) {
         nextState.loadedPlane = associatedPlane;
@@ -2472,7 +2499,7 @@ class MapMakerPage extends React.Component {
     const nextState = {
       loadedBoard: boardRef,
       tiles: boardRef.tiles,
-      selectedThingTitle: `Board: ${board.name}`
+      selectedThingTitle: `Board: ${boardRef.name}`
     };
     if (associatedPlane) {
       nextState.loadedPlane = associatedPlane;
@@ -6431,7 +6458,7 @@ class MapMakerPage extends React.Component {
           console.log('no loaded board, investigate');
           debugger
         }
-        const boardId = board.id;
+        
         board.name = this.state.boardNameInput.current.value.trim();
         const rawFolderPath = this.state.boardFolderPathInput.current.value.trim();
         let folderPath = this.parseFolderPathShorthand(rawFolderPath);
@@ -6445,6 +6472,7 @@ class MapMakerPage extends React.Component {
         }, async () => {
           await this.writeBoard();
           await this.loadAllBoards();
+          const boardId = this.state.loadedBoard ? this.state.loadedBoard.id : null;
           const renamedBoard = this.findBoardRefInFolders(boardId);
           if (renamedBoard) {
             this.loadBoard(renamedBoard);

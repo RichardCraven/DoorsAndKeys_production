@@ -779,8 +779,8 @@
                         width: 3px;
                         height: 3px;
                         border-radius: 3px;
-                        background-color: rgb(120, 255, 134);
-                        box-shadow: 0 0 2px rgba(120, 255, 134, 0.9);
+                        background-color: #ffd700;
+                        box-shadow: 0 0 2px rgba(255, 215, 0, 0.9);
                     }
                 }
             }
@@ -1096,8 +1096,12 @@
                 height: 5px;
                 width: 100%;
                 align-self: flex-start;
-                padding: 0px 25px;
+                padding: 0;
                 box-sizing: border-box;
+                margin-bottom: 4px;
+                background: rgba(255,255,255,0.04);
+                border-radius: 3px;
+                overflow: hidden;
                 .experience-line{
                     height: 100%;
                     background: #f9b115e3;
@@ -1109,10 +1113,12 @@
                 height: 6px;
                 width: 100%;
                 align-self: flex-start;
-                padding: 0px 25px;
+                padding: 0;
                 box-sizing: border-box;
                 margin-bottom: 8px;
                 background: rgba(255,255,255,0.08);
+                border-radius: 3px;
+                overflow: hidden;
                 .hp-line{
                     height: 100%;
                     background: #2eb85c; /* requested HP color */
@@ -1155,22 +1161,16 @@
                     align-items: stretch;
                     justify-content: center;
                     margin: 0;
-                    padding: 0;
-                    width: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: stretch;
-                    justify-content: center;
-                    margin: auto 0;
-                    padding: 0;
+                    padding: 2px 0;
+                    gap: 6px;
                     .action-wrapper{
                         position: relative;
                         width: 100%;
                         overflow: hidden;
+                        border-radius: 6px;
+                        margin: 1px 0;
                         .info-icon{
                             position: absolute;
-                            // top: 11px;
-                            // right: 7px;
                             top: 5px;
                             right: -10px;
                             height: 25px;
@@ -1188,8 +1188,12 @@
                             justify-content: flex-start;
                             align-items: center;
                             cursor: pointer;
-                            padding: 4px 6px;
+                            padding: 6px 8px;
                             position: relative;
+                            border-radius: 6px;
+                            overflow: hidden;
+                            background: rgba(255, 255, 255, 0.04);
+                            box-sizing: border-box;
                             &:hover{
                                 background-color: rgba(143, 143, 135, 0.488);
                             }
@@ -1206,8 +1210,9 @@
                                 left: 0;
                                 height: 100%;
                                 width: 100%;
-                                // background-color: #f9b11554;
                                 border: 1px solid transparent;
+                                border-radius: 6px;
+                                overflow: hidden;
                             }
 
                             /* debug helper: visually highlight debug placeholders */
