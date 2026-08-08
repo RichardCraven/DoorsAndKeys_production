@@ -26,14 +26,14 @@ const DEFAULT_CLASS_SKILLS = {
   engineer: ['sword_swing', 'axe_throw', 'force_back', 'inspiring_force'],
   wizard: ['fireball', 'ice_bolt', 'arcane_shield', 'mana_overflow'],
   ranger: ['loose', 'notch', 'mark', 'nimble_dodge', 'eagle_eye'],
-  sage: ['heal', 'circle_of_protection', 'owls_insight', 'herbalism']
+  sage: ['heal', 'circle_of_protection', 'owls_insight', 'herbalism', 'breadcrumbs']
 };
 
 const DEFAULT_CLASS_STATS = {
-  summoner: { str: 3, int: 8, dex: 5, fort: 6, baseHp: 10 },
+  summoner: { str: 3, int: 8, dex: 5, fort: 6, baseHp: 11 },
   monk: { str: 6, int: 6, dex: 8, fort: 6, baseHp: 12 },
   soldier: { str: 7, int: 4, dex: 5, fort: 8, baseHp: 16 },
-  barbarian: { str: 8, int: 3, dex: 4, fort: 6, baseHp: 52 },
+  barbarian: { str: 8, int: 3, dex: 4, fort: 6, baseHp: 16 },
   engineer: { str: 5, int: 6, dex: 7, fort: 6, baseHp: 10 },
   wizard: { str: 3, int: 9, dex: 5, fort: 4, baseHp: 10 },
   ranger: { str: 5, int: 5, dex: 6, fort: 3, baseHp: 10 },
@@ -274,6 +274,37 @@ export default function LandingPage(props) {
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+
+    // TEMP SCRIPT: Grant 'breadcrumbs' to any Sage in the party
+    try {
+        const meta = getMeta() || {};
+        let changed = false;
+        if (Array.isArray(meta.crew)) {
+            meta.crew.forEach(member => {
+                if (member && typeof member.class === 'string' && member.class.toLowerCase() === 'sage') {
+                    member.skills = member.skills || [];
+                    if (!member.skills.includes('breadcrumbs')) {
+                        member.skills.push('breadcrumbs');
+                        changed = true;
+                    }
+                }
+            });
+        }
+        if (changed) {
+            storeMeta(meta);
+            try {
+                if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+                    updateUserRequest(getUserId(), meta).catch(() => {});
+                }
+            } catch(err) {}
+            if (props.crewManager) {
+                props.crewManager.crew = meta.crew;
+            }
+        }
+    } catch (e) {
+        console.error('Failed to run temp script for breadcrumbs:', e);
+    }
+
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
     };
@@ -661,7 +692,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.4.0 BETA</span>
+          <span className="logo-subtitle">v 0.4.1 BETA</span>
         </div>
         <div className="header-user">
           <div className="user-info">

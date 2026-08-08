@@ -216,6 +216,19 @@ const skillsMatrix = {
         isPassive: true,
         knownByDefault: true
     },
+    breadcrumbs: {
+        class: 'sage',
+        id: 'breadcrumbs',
+        tier: 1,
+        name: 'Breadcrumbs',
+        desc: 'Leaves a faint trail that stays visible for 20 seconds.',
+        icon: images.astral_map_monk,
+        cooldown: 0,
+        type: 'passive',
+        treePath: 'global',
+        isPassive: true,
+        knownByDefault: false
+    },
     mend: {
         class: 'sage',
         id: 'mend',
@@ -368,6 +381,44 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'medium',
         type: 'utility'
+    },
+    theurgy: {
+        class: 'sage',
+        treePath: 'global',
+        id: 'theurgy',
+        tier: 3,
+        name: 'Theurgy I',
+        desc: 'Doubles the chances of prayers to succeed.',
+        icon: images.herbalism_sage, // fallback to a known image if holy_light isn't available
+        cooldown: 0,
+        type: 'passive',
+        isPassive: true
+    },
+    theurgy_2: {
+        class: 'sage',
+        treePath: 'global',
+        id: 'theurgy_2',
+        tier: 3,
+        name: 'Theurgy II',
+        desc: 'Triples the chances of prayers to succeed.',
+        icon: images.herbalism_sage,
+        cooldown: 0,
+        type: 'passive',
+        isPassive: true,
+        requires: 'theurgy'
+    },
+    theurgy_3: {
+        class: 'sage',
+        treePath: 'global',
+        id: 'theurgy_3',
+        tier: 3,
+        name: 'Theurgy III',
+        desc: 'Quadruples the chances of prayers to succeed.',
+        icon: images.herbalism_sage,
+        cooldown: 0,
+        type: 'passive',
+        isPassive: true,
+        requires: 'theurgy_2'
     },
 
     // === SOLDIER ===
@@ -1429,7 +1480,7 @@ const skillsMatrix = {
         cooldown: 10,
         initialCooldown: 4,
         duration: 'instant',
-        range: 'medium',
+        range: 'close',
         type: 'utility'
     },
     summoner_triplicate: {
@@ -2312,6 +2363,76 @@ const skillsMatrix = {
         duration: 4,
         range: 'medium',
         type: 'utility'
+    },
+    // === ENGINEER ===
+    build_turret: {
+        class: 'engineer',
+        id: 'build_turret',
+        tier: 1,
+        name: 'Build Turret',
+        desc: 'Creates a stationary mechanical turret that fires projectiles at enemies. Has an initial hp of 20, and a damage of 10 per projectile. It can fire 1 projectile per round and there is no range restriction.',
+        icon: images.terrain_1, // Placeholder
+        cooldown: 4,
+        type: 'summon_type',
+        treePath: 'engineer'
+    },
+    build_walker: {
+        class: 'engineer',
+        id: 'build_walker',
+        tier: 1,
+        name: 'Build Walker',
+        desc: 'Creates a slow moving construct (with 30 hp) that moves one tile per round and swings a sword in a 360 degree arc around itself (10 damage). Moves in a straight line from left to right.',
+        icon: images.terrain_2, // Placeholder
+        cooldown: 4,
+        type: 'summon_type',
+        treePath: 'engineer'
+    },
+    engineer_repair: {
+        class: 'engineer',
+        id: 'engineer_repair',
+        tier: 1,
+        name: 'Repair',
+        desc: 'Moves up to a construct and restores 10 hp.',
+        icon: images.potion, // Placeholder
+        cooldown: 4,
+        type: 'repair_type',
+        treePath: 'engineer'
+    },
+    master_builder: {
+        class: 'engineer',
+        id: 'master_builder',
+        tier: 1,
+        name: 'Master Builder',
+        desc: 'L1: Reduces construction time for in-dungeon buildings by 50%. L2: Reduces material usage by 50%. L3: Unlocks advanced buildings.',
+        icon: images.wood, // Placeholder
+        cooldown: 0,
+        type: 'passive',
+        treePath: 'engineer',
+        isPassive: true,
+        knownByDefault: true
+    },
+    // Construct specific skills
+    turret_fire: {
+        id: 'turret_fire',
+        name: 'Turret Fire',
+        desc: 'Fires a projectile at an enemy with no range restriction.',
+        icon: images.bow_and_arrow,
+        cooldown: 1,
+        initialCooldown: 0,
+        type: 'ranged_damage',
+        flatDamage: 10,
+        range: 'far' // acts as global in _basicAttack fallback or custom logic
+    },
+    walker_cleave: {
+        id: 'walker_cleave',
+        name: 'Walker Cleave',
+        desc: 'Swings a sword in a 360 degree arc dealing 10 damage to adjacent enemies.',
+        icon: images.sword,
+        cooldown: 1,
+        initialCooldown: 0,
+        type: 'melee_whirlwind_effect',
+        flatDamage: 10,
+        range: 'close'
     }
 };
 

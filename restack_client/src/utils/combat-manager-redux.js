@@ -873,7 +873,22 @@ export function CombatManagerRedux() {
 
             const fighter = createFighter(e, callbacks, this.FIGHT_INTERVAL);
             fighter.maxEndurance = e.stats.vitality || 30;
-            fighter.endurance = fighter.maxEndurance;
+
+            // Check for building stamina penalty (lasts 1 hour or next battle, whichever comes first)
+            let startingEndurance = fighter.maxEndurance;
+            if (e.buildingStaminaPenalty) {
+                const now = Date.now();
+                const { penaltyPct, expiresAt } = e.buildingStaminaPenalty;
+                if (now <= expiresAt && typeof penaltyPct === 'number' && penaltyPct > 0) {
+                    const penaltyRatio = Math.min(0.99, penaltyPct / 100);
+                    startingEndurance = Math.max(1, Math.round(fighter.maxEndurance * (1 - penaltyRatio)));
+                    this.appendCombatLog(`🔨 ${e.name || fighter.id} starting stamina reduced by ${penaltyPct}% (${startingEndurance}/${fighter.maxEndurance}) from recent building construction.`);
+                }
+                // Clear penalty from member object so it only affects next battle
+                delete e.buildingStaminaPenalty;
+            }
+
+            fighter.endurance = startingEndurance;
             fighter.enduranceFrozenRounds = 0;
             fighter.cooldowns = {};
             fighter.movesTakenThisRound = 0;
@@ -3837,6 +3852,9 @@ export function CombatManagerRedux() {
             case 'sage': return this._aiSage(unit);
             case 'ranger': return this._aiRanger(unit);
             case 'summoner': return this._aiSummoner(unit);
+            case 'engineer': return this._aiEngineer(unit);
+            case 'turret': return this._aiTurret(unit);
+            case 'walker': return this._aiWalker(unit);
             case 'vampire': return this._aiVampire(unit);
             case 'sphinx': return this._aiSphinx(unit);
             case 'ogre': return this._aiOgre(unit);
@@ -5499,6 +5517,228 @@ export function CombatManagerRedux() {
         if (target) this._basicAttack(unit, target);
     };
 
+    this._aiTurret = (unit) => {
+        // Turret just fires at any enemy in range
+        if (this._abilityReady(unit, 'turret_fire')) {
+            const pick = this.resolveSpecial(unit, 'turret_fire');
+            if (pick) {
+                const enemies = Object.values(this.combatants).filter(c => c && !c.dead && !!c.isMonster !== !!unit.isMonster);
+                const target = enemies.find(e => this.isWithinRange(unit, e, 'far'));
+                if (target) {
+                    this.useAbility(unit, pick, target);
+                    return;
+                }
+            }
+        }
+        this.acquireTarget(unit, true);
+        const target = this.combatants[unit.targetId];
+        if (target) this._basicAttack(unit, target);
+    };
+
+    this._aiWalker = (unit) => {
+        // Walker moves straight and uses cleave if enemies are nearby
+        const maxMoves = 1;
+        const canMove = !unit.ensnared && !this.isUnitInWeb(unit) && !unit.shieldWallActive && unit.movesTakenThisRound < maxMoves;
+        if (canMove) {
+            const dx = unit.isMonster ? -1 : 1;
+            const nx = unit.coordinates.x + dx;
+            if (nx >= 0 && nx <= MAX_DEPTH) {
+                if (!this.isTileOccupied(nx, unit.coordinates.y)) {
+                    this.updateUnitCoordinates(unit, nx, unit.coordinates.y);
+                    unit.movesTakenThisRound += 1;
+                    this.applyEnduranceCost(unit, this.MOVE_ENDURANCE_COST, 'move');
+                    if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+                }
+            }
+        }
+
+        if (this._abilityReady(unit, 'walker_cleave')) {
+            const pick = this.resolveSpecial(unit, 'walker_cleave');
+            if (pick) {
+                const enemies = Object.values(this.combatants).filter(c => c && !c.dead && !!c.isMonster !== !!unit.isMonster);
+                const adjacentEnemy = enemies.find(e => this.isWithinRange(unit, e, 'close'));
+                if (adjacentEnemy) {
+                    this.useAbility(unit, pick, adjacentEnemy);
+                    return;
+                }
+            }
+        }
+        this.acquireTarget(unit, true);
+        const target = this.combatants[unit.targetId];
+        if (target) this._basicAttack(unit, target);
+    };
+
+    this._aiEngineer = (unit) => {
+        // ── Movement AI ──
+        const maxMoves = (unit.etherealSpeedActive || unit.isDemonMode) ? 2 : 1;
+        const canMove = !unit.ensnared && !this.isUnitInWeb(unit) && !unit.shieldWallActive && unit.movesTakenThisRound < maxMoves;
+        if (canMove) {
+            const isUnitMonster = !!unit.isMonster;
+            const backlineX = isUnitMonster ? MAX_DEPTH : 0;
+            if (unit.coordinates.x !== backlineX && this.canFitAt(unit, backlineX, unit.coordinates.y)) {
+                const moved = this.getPathfindNextStep(unit, backlineX, unit.coordinates.y);
+                if (moved) {
+                    this.updateUnitCoordinates(unit, moved.x, moved.y);
+                    unit.movesTakenThisRound += 1;
+                    this.applyEnduranceCost(unit, this.MOVE_ENDURANCE_COST, 'move');
+                    this.appendCombatLog(`${this.getCombatantLogName(unit)} retreats to the backline.`);
+                    if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+                }
+            }
+        }
+
+        const friendlyConstructs = Object.values(this.combatants).filter(c => c && !c.dead && !!c.isMonster === !!unit.isMonster && c.isConstruct);
+
+        // Priority 1: Repair
+        if (this._abilityReady(unit, 'engineer_repair')) {
+            const damagedConstruct = friendlyConstructs.find(c => c.hp < (c.starting_hp || c.hp));
+            if (damagedConstruct && this.isWithinRange(unit, damagedConstruct, 'close')) {
+                const pick = this.resolveSpecial(unit, 'engineer_repair');
+                if (pick) {
+                    this.useAbility(unit, pick, damagedConstruct);
+                    return;
+                }
+            }
+        }
+
+        // Priority 2: Build Turret
+        if (this._abilityReady(unit, 'build_turret')) {
+            const pick = this.resolveSpecial(unit, 'build_turret');
+            if (pick && this._canEngineerBuild(unit)) {
+                this._executeEngineerSummon(unit, pick, 'build_turret');
+                return;
+            }
+        }
+
+        // Priority 3: Build Walker
+        if (this._abilityReady(unit, 'build_walker')) {
+            const pick = this.resolveSpecial(unit, 'build_walker');
+            if (pick && this._canEngineerBuild(unit)) {
+                this._executeEngineerSummon(unit, pick, 'build_walker');
+                return;
+            }
+        }
+
+        // Fallback: basic attack
+        this.acquireTarget(unit, true);
+        const target = this.combatants[unit.targetId];
+        if (target) this._basicAttack(unit, target);
+    };
+
+    this._canEngineerBuild = (unit) => {
+        if (unit.isMonster) return true; // Enemy engineers don't need inventory
+        const inventory = (typeof this.getCurrentInventory === 'function') ? this.getCurrentInventory() : [];
+        const woodCount = inventory.filter(i => i && (i._im_key === 'wood' || i.id === 'wood' || i.name === 'Wood')).length;
+        const stoneCount = inventory.filter(i => i && (i._im_key === 'stone' || i.id === 'stone' || i.name === 'Stone')).length;
+        
+        let cost = 2;
+        if (this.hasPassive(unit, 'master_builder')) {
+            const lvl = this.getSkillLevel(unit, 'master_builder');
+            if (lvl >= 2) cost = 1;
+        }
+        
+        return woodCount >= cost && stoneCount >= cost;
+    };
+
+    this._executeEngineerSummon = (unit, ability, abilityKey) => {
+        let cost = 2;
+        if (this.hasPassive(unit, 'master_builder')) {
+            const lvl = this.getSkillLevel(unit, 'master_builder');
+            if (lvl >= 2) cost = 1;
+        }
+
+        if (!unit.isMonster) {
+            const inventory = (typeof this.getCurrentInventory === 'function') ? this.getCurrentInventory() : [];
+            let woodItems = inventory.filter(i => i && (i._im_key === 'wood' || i.id === 'wood' || i.name === 'Wood'));
+            let stoneItems = inventory.filter(i => i && (i._im_key === 'stone' || i.id === 'stone' || i.name === 'Stone'));
+            
+            if (woodItems.length < cost || stoneItems.length < cost) {
+                this.appendCombatLog(`${this.getCombatantLogName(unit)} lacks materials to build.`);
+                return;
+            }
+
+            for (let i = 0; i < cost; i++) {
+                if (typeof this.useConsumable === 'function') {
+                    this.useConsumable(woodItems[i]);
+                    this.useConsumable(stoneItems[i]);
+                }
+            }
+        }
+
+        const isMonster = !!unit.isMonster;
+        const forwardDX = isMonster ? -1 : 1;
+        const adjacentTiles = [
+            { x: unit.coordinates.x + forwardDX, y: unit.coordinates.y },
+            { x: unit.coordinates.x, y: unit.coordinates.y - 1 },
+            { x: unit.coordinates.x, y: unit.coordinates.y + 1 },
+            { x: unit.coordinates.x + (isMonster ? 1 : -1), y: unit.coordinates.y }
+        ];
+
+        const filteredTiles = adjacentTiles.filter(t => t.x >= 0 && t.x <= MAX_DEPTH && t.y >= 0 && t.y < MAX_LANES);
+        const freeTile = filteredTiles.find(t => !this.isTileOccupied(t.x, t.y));
+
+        if (!freeTile) {
+            this.appendCombatLog(`${this.getCombatantLogName(unit)} tried to build but no space available.`);
+            return;
+        }
+
+        const constructId = `construct_${abilityKey}_${Date.now()}`;
+        const isTurret = abilityKey === 'build_turret';
+        
+        let stats = { atk: 10, def: 5, speed: isTurret ? 0 : 1 }; // Base speed is extremely low
+        
+        const newConstruct = {
+            id: constructId,
+            type: isTurret ? 'turret' : 'walker',
+            name: isTurret ? 'Mechanical Turret' : 'Mechanical Walker',
+            isMinion: true,
+            isConstruct: true,
+            hasStamina: false, // NO STAMINA EFFECTS
+            isMonster: isMonster,
+            summonedBy: unit.id,
+            dead: false,
+            coordinates: { ...freeTile },
+            hp: isTurret ? 20 : 30,
+            starting_hp: isTurret ? 20 : 30,
+            stats: stats,
+            attacks: [],
+            specials: isTurret ? ['turret_fire'] : ['walker_cleave'],
+            portrait: isTurret ? images.terrain_1 : images.terrain_2,
+            cooldowns: {},
+            movesTakenThisRound: 0,
+            actionsTakenThisRound: 0,
+            endurance: 99,
+            maxEndurance: 99,
+            enduranceFrozenRounds: 0,
+            damageIndicators: [],
+            activeBuffs: [],
+            activeDebuffs: [],
+            invisible: true
+        };
+
+        this.combatants[constructId] = newConstruct;
+        this._setCombatantOccupiedCoords(newConstruct);
+        this._setCooldown(unit, abilityKey, ability.cooldown || 4);
+        unit.actionsTakenThisRound += 1;
+        this.appendCombatLog(`${this.getCombatantLogName(unit)} built a ${newConstruct.name}!`);
+
+        if (this.animManagerRedux && typeof this.animManagerRedux.triggerSummon === 'function') {
+            this.animManagerRedux.triggerSummon(freeTile, newConstruct.type, isTurret ? images.terrain_1 : images.terrain_2);
+        }
+
+        if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+
+        setTimeout(() => {
+            newConstruct.invisible = false;
+            newConstruct.fadingIn = true;
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            setTimeout(() => {
+                newConstruct.fadingIn = false;
+                if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+            }, 500);
+        }, 1200);
+    };
+
     this._executeSummon = (unit, ability, abilityKey) => {
         // Resolve ability special object to check if ultimate / superSize is configured
         const resolvedAbility = this.resolveSpecial ? (this.resolveSpecial(unit, abilityKey) || ability) : ability;
@@ -6612,7 +6852,7 @@ export function CombatManagerRedux() {
 
             // Try using 'feed_the_masses' if a friendly has lost >= 10% HP and skill is ready
             if (damagedFriendly && this._abilityReady(unit, 'feed_the_masses')) {
-                // Find target tile adjacent to the damaged friendly unit that does NOT already contain food
+                // Find target tile adjacent to the damaged friendly unit that does NOT contain food and is NOT occupied by ANY unit
                 const fCoords = damagedFriendly.coordinates;
                 const possibleTiles = [
                     { x: fCoords.x + 1, y: fCoords.y },
@@ -6623,23 +6863,25 @@ export function CombatManagerRedux() {
                 ];
 
                 const hasFoodAt = (tx, ty) => Array.isArray(this.meatTiles) && this.meatTiles.some(m => m.x === tx && m.y === ty);
+                const isOccupiedTile = (tx, ty) => this.isTileOccupied(tx, ty);
 
-                // First priority: adjacent tile within bounds, within range, and NO food currently on it
+                // First priority: adjacent tile within bounds, within range, NO food, and NOT occupied by ANY unit
                 let targetTile = possibleTiles.find(tile => {
                     if (tile.x < 0 || tile.x > MAX_DEPTH || tile.y < 0 || tile.y >= MAX_LANES) return false;
                     if (hasFoodAt(tile.x, tile.y)) return false;
+                    if (isOccupiedTile(tile.x, tile.y)) return false;
                     const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
                     return dist <= 4;
                 });
 
-                // Second priority: any tile within 2 spaces of damaged friendly without food
+                // Second priority: any tile within 2 spaces of damaged friendly without food and unoccupied
                 if (!targetTile) {
                     const radius2Tiles = [];
                     for (let dx = -2; dx <= 2; dx++) {
                         for (let dy = -2; dy <= 2; dy++) {
                             const tx = fCoords.x + dx;
                             const ty = fCoords.y + dy;
-                            if (tx >= 0 && tx <= MAX_DEPTH && ty >= 0 && ty < MAX_LANES && !hasFoodAt(tx, ty)) {
+                            if (tx >= 0 && tx <= MAX_DEPTH && ty >= 0 && ty < MAX_LANES && !hasFoodAt(tx, ty) && !isOccupiedTile(tx, ty)) {
                                 radius2Tiles.push({ x: tx, y: ty });
                             }
                         }
@@ -6650,7 +6892,7 @@ export function CombatManagerRedux() {
                     });
                 }
 
-                if (!targetTile) targetTile = fCoords;
+                if (!targetTile) return;
 
                 // Trigger lob animation
                 if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
@@ -8389,6 +8631,11 @@ export function CombatManagerRedux() {
         // Delegate summon/duplicate/triplicate actions for Summoner
         if (abilityId.startsWith('summon_') && abilityId !== 'summon_spiders' && abilityId !== 'summon_skulls') {
             this._executeSummon(unit, ability, abilityId);
+            return;
+        }
+
+        if (abilityId === 'build_turret' || abilityId === 'build_walker') {
+            this._executeEngineerSummon(unit, ability, abilityId);
             return;
         }
 

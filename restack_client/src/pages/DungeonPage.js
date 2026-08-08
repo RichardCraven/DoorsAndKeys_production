@@ -38,6 +38,7 @@ import  CIcon  from '@coreui/icons-react';
 
 import { CButton, CFormSelect, CFormInput, CModal, CModalHeader, CModalTitle, CModalBody, CModalFooter} from '@coreui/react';
 import * as images from '../utils/images'
+import { getRandomInscription } from '../utils/inscriptions-manager';
 import { RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, DISCIPLINE_CATEGORIES, SCRY_OPTIONS } from '../utils/spells-table'
 import { RECIPES } from '../utils/spells-table'
 import skillsMatrix from '../utils/skills-matrix'
@@ -58,6 +59,7 @@ import '../styles/narrative-overlay.scss'
 import MapRedux from '../components/MapRedux';
 import '../styles/map-redux.scss';
 import { FLAGS } from '../flags';
+import { getAdjustedBuildTime, applyBuildingStaminaPenalty } from '../utils/building-utils';
 
 const getPstDate = () => {
     const formatter = new Intl.DateTimeFormat('en-US', {
@@ -219,6 +221,7 @@ function hexToRgba(hex, alpha = 1){
 // Small subcomponent to render modal header + body based on modalType
 const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose }) => {
     const [merchantStock, setMerchantStock] = React.useState([]);
+    const [buybackStock, setBuybackStock] = React.useState([]);
     const [feedbackMsg, setFeedbackMsg] = React.useState('');
     const [feedbackColor, setFeedbackColor] = React.useState('#fff');
     const [showContent, setShowContent] = React.useState(false);
@@ -226,6 +229,33 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
     const [isAssembled, setIsAssembled] = React.useState(false);
     // eslint-disable-next-line no-unused-vars
     const [activeMerchantTab, setActiveMerchantTab] = React.useState('buy');
+
+    // eslint-disable-next-line no-unused-vars
+    const getFoodLimitForModal = () => {
+        const crewList = Array.isArray(crew) ? crew : [];
+        const collectiveLevel = crewList.reduce((sum, member) => {
+            const level = Number(member && member.level);
+            return sum + (Number.isFinite(level) ? level : 0);
+        }, 0);
+        let limit = 100 + collectiveLevel * 50;
+        crewList.forEach(member => {
+            if (!member) return;
+            const type = String(member.type || '').toLowerCase();
+            if (type === 'ranger' || type === 'sage') {
+                limit += 50;
+            }
+            const globalSkills = Array.isArray(member.globalSkills) ? member.globalSkills : [];
+            const skills = Array.isArray(member.skills) ? member.skills : [];
+            const allMemberSkills = [...globalSkills, ...skills].map(s => typeof s === 'string' ? s : (s && s.key)).filter(Boolean);
+            if (allMemberSkills.includes('hunters_quarry')) {
+                limit += 100;
+            }
+            if (allMemberSkills.includes('scrounging_rat')) {
+                limit += 50;
+            }
+        });
+        return limit;
+    };
 
     React.useEffect(() => {
         if (modalType === 'Merchant' || modalType === 'Alchemist') {
@@ -290,6 +320,10 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
             
             stock.push({ name: 'shimmering dust', icon: 'shimmering_dust', type: 'currency', currencyType: 'shimmering_dust', price: 10, description: 'Magical dust used for brewing potions.' });
             
+            // Add food bundles
+            stock.push({ name: 'Rations Bundle', icon: 'food', type: 'food', amount: 10, price: 20, description: 'A package of travel rations. Restores 10 food supply.' });
+            stock.push({ name: 'Feast Pack', icon: 'food', type: 'food', amount: 30, price: 55, description: 'A rich assortment of preserved meat and bread. Restores 30 food supply.' });
+
             setMerchantStock(stock);
         }
     }, [modalType, inventoryManager]);
@@ -316,23 +350,52 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
             setFeedbackColor('#ff4d4d');
             return;
         }
-        inventoryManager.gold -= item.price;
-        if (item.type === 'currency') {
-            inventoryManager.addCurrency({ type: item.currencyType, amount: 1 });
+        if (item.type === 'food') {
+            const meta = getMeta() || {};
+            const foodLimit = getFoodLimitForModal();
+            const currentFood = typeof meta.food === 'number' ? meta.food : 55;
+            if (currentFood >= foodLimit) {
+                setFeedbackMsg('Your food supply is already full!');
+                setFeedbackColor('#ff4d4d');
+                return;
+            }
+            inventoryManager.gold -= item.price;
+            meta.food = Math.min(foodLimit, currentFood + item.amount);
+            storeMeta(meta);
+            setFeedbackMsg(`Purchased ${item.name} (+${item.amount} Food)!`);
+            setFeedbackColor('#2ecc71');
         } else {
-            const { price, ...cleanItem } = item;
-            inventoryManager.addItem(cleanItem);
+            inventoryManager.gold -= item.price;
+            if (item.type === 'currency') {
+                inventoryManager.addCurrency({ type: item.currencyType, amount: 1 });
+            } else {
+                const { price, isBuyback, buybackId, ...cleanItem } = item;
+                inventoryManager.addItem(cleanItem);
+            }
+            if (item.isBuyback) {
+                setBuybackStock(prev => prev.filter(i => (i.buybackId && item.buybackId) ? i.buybackId !== item.buybackId : i !== item));
+                setFeedbackMsg(`Bought back ${item.name}!`);
+            } else {
+                setFeedbackMsg(`Purchased ${item.name}!`);
+            }
+            setFeedbackColor('#2ecc71');
         }
-        setFeedbackMsg(`Purchased ${item.name}!`);
-        setFeedbackColor('#2ecc71');
         if (saveUserData) saveUserData().catch(() => {});
         if (onForceUpdate) onForceUpdate();
     };
 
     const handleSellItem = (item, invIndex) => {
         const sellPrice = getItemSellPrice(item);
+        const buybackPrice = Math.max(sellPrice + 2, Math.ceil(sellPrice * 1.2));
+        const buybackItem = {
+            ...item,
+            price: buybackPrice,
+            isBuyback: true,
+            buybackId: `buyback_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+        };
         inventoryManager.removeItemByIndex(invIndex);
         inventoryManager.gold += sellPrice;
+        setBuybackStock(prev => [...prev, buybackItem]);
         setFeedbackMsg(`Sold ${item.name} for ${sellPrice} gold!`);
         setFeedbackColor('#2ecc71');
         if (saveUserData) saveUserData().catch(() => {});
@@ -721,15 +784,22 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                         <div className="vendor-panel">
                             <h3 className="panel-title">Merchant's Stock</h3>
                             <div className="item-list scroll-container">
-                                {merchantStock.map((item, idx) => (
-                                    <div key={idx} className="item-card">
+                                {[...merchantStock, ...buybackStock].map((item, idx) => (
+                                    <div key={idx} className={`item-card ${item.isBuyback ? 'buyback-item-card' : ''}`}>
                                         {renderItemIcon(item.icon)}
                                         <div className="item-details">
-                                            <div className="item-name">{item.name}</div>
-                                            <div className="item-description">{item.description}</div>
+                                            <div className="item-name" style={{ display: 'flex', alignItems: 'center' }}>
+                                                <span>{item.name}</span>
+                                                {item.isBuyback && (
+                                                    <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px', background: 'rgba(249, 177, 21, 0.2)', color: '#f9b115', border: '1px solid rgba(249, 177, 21, 0.4)', marginLeft: '8px' }}>
+                                                        Buyback
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="item-description">{item.description || item.type}</div>
                                         </div>
                                         <button className="buy-btn" onClick={() => handleBuyItem(item)}>
-                                            <span>Buy</span>
+                                            <span>{item.isBuyback ? 'Buy Back' : 'Buy'}</span>
                                             <span className="price-tag"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> {item.price}</span>
                                         </button>
                                     </div>
@@ -1528,16 +1598,7 @@ class DungeonPage extends React.Component {
             return actionCount >= 3;
         };
 
-        // ── Helper: count reagents in inventory ─────────────────────────────
-        const getReagentCount = (reagentId) => {
-            const inv = (this.props.inventoryManager && this.props.inventoryManager.inventory) || [];
-            return inv.filter(item => item && item.id === reagentId && item.category === 'reagent').length;
-        };
 
-        // ── Compound builder: current recipe match ──────────────────────────
-        const compoundSlots = this.state.compoundBuilderSlots || [];
-        const matchedRecipe = matchRecipe(compoundSlots);
-        const matchedPotion = matchedRecipe ? POTIONS[matchedRecipe.potionId] : null;
 
         return <div className='actions-container'>
             {actions.map((action, i) => {
@@ -1769,142 +1830,6 @@ class DungeonPage extends React.Component {
                             </React.Fragment>
                         )
                     })}
-
-                        {/* ── Compound Potions builder (Sage) ───────────────────────────── */}
-                        {action.type === 'compound' && this.state.compoundBuilderOpen && (() => {
-                            const inv = (this.props.inventoryManager && this.props.inventoryManager.inventory) || [];
-                            const allSlotsFull = compoundSlots.length >= 3;
-                            const isReagentCompatible = (rKey) => {
-                                if (compoundSlots.length === 0) return true;
-                                if (compoundSlots.includes(rKey)) return true;
-                                return POTION_RECIPES.some(recipe => {
-                                    const containsSlots = compoundSlots.every(s => recipe.reagents.includes(s));
-                                    const containsCandidate = recipe.reagents.includes(rKey);
-                                    return containsSlots && containsCandidate;
-                                });
-                            };
-                            return (
-                            <div className="compound-builder-panel">
-                                {/* TOP: 3 reagent slots */}
-                                <div className="compound-slot-row">
-                                    {[0, 1, 2].map(i => {
-                                        const slotId = compoundSlots[i];
-                                        const slotReagent = slotId ? REAGENTS[slotId] : null;
-                                        const iconUrl = slotReagent ? images[slotReagent.icon] : null;
-                                        return (
-                                            <div
-                                                key={i}
-                                                className={`compound-slot ${slotReagent ? 'filled' : 'empty'}`}
-                                                title={slotReagent ? `${slotReagent.name} (click to remove)` : 'Empty slot'}
-                                                onClick={() => slotReagent && this.handleCompoundSlotRemove(i)}
-                                            >
-                                                {slotReagent && (
-                                                    <div className="compound-slot-icon"
-                                                         style={{ backgroundImage: iconUrl ? `url(${iconUrl})` : 'none' }} />
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* MIDDLE: available reagents from inventory */}
-                                <div className="compound-reagent-grid">
-                                    {REAGENT_KEYS.map(rKey => {
-                                        const reagent = REAGENTS[rKey];
-                                        const count = getReagentCount(rKey);
-                                        const isSelected = compoundSlots.includes(rKey);
-                                        const isDepleted = count === 0;
-
-                                        const hasSelection = compoundSlots.length > 0;
-                                        const isCompatible = !hasSelection || isReagentCompatible(rKey);
-
-                                        const isBlocked = (!isSelected && allSlotsFull) || (!isSelected && hasSelection && !isCompatible);
-                                        const isCompatibleHighlight = hasSelection && isCompatible && !isSelected && !isDepleted;
-                                        const isIncompatibleDim = hasSelection && !isCompatible && !isSelected;
-
-                                        const iconUrl = images[reagent.icon];
-                                        return (
-                                            <div
-                                                key={rKey}
-                                                className={`compound-reagent-cell ${isSelected ? 'selected' : ''} ${isCompatibleHighlight ? 'compatible' : ''} ${isIncompatibleDim ? 'incompatible' : ''} ${(isDepleted || isBlocked) ? 'depleted' : ''}`}
-                                                onClick={() => !isDepleted && !isBlocked && this.handleCompoundReagentClick(rKey)}
-                                                title={`${reagent.name} (×${count})${isDepleted ? ' — none in inventory' : ''}`}
-                                            >
-                                                <div className="compound-reagent-icon"
-                                                     style={{ backgroundImage: iconUrl ? `url(${iconUrl})` : 'none' }} />
-                                                <span className="compound-reagent-name">{reagent.name}</span>
-                                                {count > 0 && <span className="compound-reagent-count">×{count}</span>}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-
-                                {/* BOTTOM: recipe match + brew button */}
-                                {matchedPotion && (
-                                    <div className="compound-recipe-label">→ {matchedPotion.name}</div>
-                                )}
-                                <button
-                                    className={`compound-brew-btn ${matchedPotion ? 'ready' : 'disabled'}`}
-                                    onClick={this.handleCompoundBrew}
-                                    disabled={!matchedPotion}
-                                >
-                                    {matchedPotion ? `Brew: ${matchedPotion.name}` : (compoundSlots.length === 0 ? 'Select reagents above' : 'No matching recipe')}
-                                </button>
-
-                                {/* Potion Combining Section */}
-                                <div className="potion-combining-section" style={{ marginTop: '20px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '15px' }}>
-                                    <h4 style={{ color: '#ffb830', fontSize: '14px', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Combine Potions</h4>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                        {[
-                                            { source: 'minor_health_potion', target: 'major_health_potion', label: 'Minor → Major', desc: 'Combine 2 Minor to get 1 Major' },
-                                            { source: 'major_health_potion', target: 'grand_health_potion', label: 'Major → Grand', desc: 'Combine 2 Major to get 1 Grand' },
-                                            { source: 'grand_health_potion', target: 'supreme_health_potion', label: 'Grand → Supreme', desc: 'Combine 2 Grand to get 1 Supreme' }
-                                        ].map(combo => {
-                                            const sourceCount = inv.filter(item => item && (item._im_key === combo.source || item.id === combo.source)).length;
-                                            const canCombine = sourceCount >= 2;
-                                            return (
-                                                <div 
-                                                    key={combo.source}
-                                                    style={{ 
-                                                        display: 'flex', 
-                                                        alignItems: 'center', 
-                                                        justifyContent: 'space-between', 
-                                                        background: 'rgba(255,255,255,0.02)', 
-                                                        border: '1px solid rgba(255,255,255,0.05)', 
-                                                        borderRadius: '6px', 
-                                                        padding: '8px 12px',
-                                                        opacity: canCombine ? 1 : 0.6
-                                                    }}
-                                                >
-                                                    <div style={{ textAlign: 'left' }}>
-                                                        <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#fff' }}>{combo.label}</div>
-                                                        <div style={{ fontSize: '11px', color: '#888' }}>{combo.desc} (Held: {sourceCount})</div>
-                                                    </div>
-                                                    <button
-                                                        onClick={() => this.handleCombinePotions(combo.source, combo.target)}
-                                                        disabled={!canCombine}
-                                                        style={{
-                                                            background: canCombine ? '#ffb830' : 'rgba(255,255,255,0.05)',
-                                                            color: canCombine ? '#121215' : '#666',
-                                                            border: 'none',
-                                                            borderRadius: '4px',
-                                                            padding: '4px 10px',
-                                                            fontSize: '11px',
-                                                            fontWeight: 'bold',
-                                                            cursor: canCombine ? 'pointer' : 'default',
-                                                            transition: 'all 0.2s ease'
-                                                        }}
-                                                    >
-                                                        Combine
-                                                    </button>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })()}
 
                     {/* ── Brews builder (Barbarian) ───────────────────────────── */}
                     {action.type === 'brew' && this.state.brewBuilderOpen && (() => {
@@ -2517,6 +2442,12 @@ class DungeonPage extends React.Component {
             // floating player animation state
             , playerFloatVisible: false
             , playerFloatStyle: { left: 0, top: 0, transform: 'translate3d(0px, 0px, 0px)' }
+            , showAvatarRadialMenu: false
+            , showPygmiesAttackPopup: false
+            , isAvatarDamaged: false
+            , showDamageHpBar: false
+            , damageHpBarPct: 100
+            , damageHpBarOpacity: 0
             , showPrayOverlay: false
             , prayerResult: null
             , prayerFeedback: ''
@@ -2535,9 +2466,6 @@ class DungeonPage extends React.Component {
             , showQuestsPopup: false
             , showCampPopup: false
             , showBuildMenu: false
-            , showAvatarRadialMenu: false
-            , showPygmiesAttackPopup: false
-            , isAvatarDamaged: false
             , attackingPygmySubtype: null
             , campWarningMessage: null
             , showSkillTreePopup: false
@@ -3282,6 +3210,55 @@ class DungeonPage extends React.Component {
         } catch (e) {
             console.error('Failed to update dungeonEntryTimestamp or check timeouts:', e);
         }
+
+        // TEMP SCRIPT: Grant 'breadcrumbs' to any Sage in the party
+        try {
+            const meta = getMeta() || {};
+            let changed = false;
+            if (Array.isArray(meta.crew)) {
+                meta.crew.forEach(member => {
+                    if (member && typeof member.class === 'string' && member.class.toLowerCase() === 'sage') {
+                        member.skills = member.skills || [];
+                        if (!member.skills.includes('breadcrumbs')) {
+                            member.skills.push('breadcrumbs');
+                            changed = true;
+                        }
+                    }
+                });
+            }
+            if (changed) {
+                storeMeta(meta);
+                try {
+                    if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+                        updateUserRequest(getUserId(), meta).catch(() => {});
+                    }
+                } catch(err) {}
+            }
+            
+            // Also mutate the live Redux crew so boardManager sees it immediately
+            const liveCrew = this.props.crewManager?.crew || [];
+            if (Array.isArray(liveCrew)) {
+                let liveChanged = false;
+                liveCrew.forEach(member => {
+                    if (member && typeof member.class === 'string' && member.class.toLowerCase() === 'sage') {
+                        member.skills = member.skills || [];
+                        if (!member.skills.includes('breadcrumbs')) {
+                            member.skills.push('breadcrumbs');
+                            liveChanged = true;
+                        }
+                    }
+                });
+                if (liveChanged) {
+                    this.forceUpdate();
+                    if (typeof this.props.saveUserData === 'function') {
+                        this.props.saveUserData();
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to run temp script for breadcrumbs:', e);
+        }
+
         // Migration: normalize legacy equippedSlot keys to 'pet'
         try {
             const metaForMigration = getMeta() || {};
@@ -3540,6 +3517,9 @@ class DungeonPage extends React.Component {
         this.props.boardManager.establishAddCurrencyToInventoryCallback(this.addCurrencyToInventory)
         this.props.boardManager.establishAddFoodToSuppliesCallback(this.addFoodToSupplies)
         this.props.boardManager.establishGetCrewCallback(() => this.props.crewManager?.crew || [])
+        if (typeof this.props.boardManager.establishGetBreadcrumbsCallback === 'function') {
+            this.props.boardManager.establishGetBreadcrumbsCallback(() => this._breadcrumbs);
+        }
         this.props.boardManager.establishSaveCrewCallback(() => {
             const meta = getMeta();
             meta.crew = this.props.crewManager.crew;
@@ -3628,6 +3608,21 @@ class DungeonPage extends React.Component {
 
         // Breadcrumb decay: prune stale trail entries every 60 seconds and re-render.
         this._breadcrumbDecayInterval = this._setInterval(this._pruneBreadcrumbs, 60 * 1000);
+
+        this._breadcrumbsPassiveInterval = this._setInterval(() => {
+            if (this.hasBreadcrumbsPassive()) {
+                const now = Date.now();
+                let hasLiveBreadcrumbs = false;
+                this._breadcrumbs.forEach(val => {
+                    if (now - val.ts <= 21000) {
+                        hasLiveBreadcrumbs = true;
+                    }
+                });
+                if (hasLiveBreadcrumbs) {
+                    this.refreshTiles();
+                }
+            }
+        }, 1000);
 
         // ── Console / keyboard commands for Level Up testing ─────────────────
         try {
@@ -4953,6 +4948,10 @@ class DungeonPage extends React.Component {
         try { if (this.pygmiesInterval) { clearInterval(this.pygmiesInterval); this.pygmiesInterval = null; } } catch(e){}
         try { if (this.outpostAttackInterval) { clearInterval(this.outpostAttackInterval); this.outpostAttackInterval = null; } } catch(e){}
         try { if (this.avatarDamageTimeout) { clearTimeout(this.avatarDamageTimeout); this.avatarDamageTimeout = null; } } catch(e){}
+        try { if (this.hpBarTimer1) { clearTimeout(this.hpBarTimer1); this.hpBarTimer1 = null; } } catch(e){}
+        try { if (this.hpBarTimer2) { clearTimeout(this.hpBarTimer2); this.hpBarTimer2 = null; } } catch(e){}
+        try { if (this.hpBarTimer3) { clearTimeout(this.hpBarTimer3); this.hpBarTimer3 = null; } } catch(e){}
+        try { if (this.hpBarTimer4) { clearTimeout(this.hpBarTimer4); this.hpBarTimer4 = null; } } catch(e){}
         try { if (this.prepCompleteTimeout) { clearTimeout(this.prepCompleteTimeout); this.prepCompleteTimeout = null; } } catch(e){}
         try { if (this.campTimeout) { clearTimeout(this.campTimeout); this.campTimeout = null; } } catch(e){}
         try { if (this.state && this.state.respawnUpdateInterval) { clearInterval(this.state.respawnUpdateInterval); } } catch(e){}
@@ -5119,7 +5118,8 @@ class DungeonPage extends React.Component {
 
                 const type = bm.getContainsType(tile.contains);
                 const subtype = bm.getContainsSubtype(tile.contains);
-                if (type === 'building' && subtype === 'earthen_fort') return false;
+                if (type === 'building') return false;
+                if (tile.building && tile.building !== 'null' && tile.building !== 'undefined') return false;
                 if (type === 'earthen_fort' || subtype === 'earthen_fort' || tile.building === 'earthen_fort') return false;
 
                 const isBlocked = type && ['monster', 'pygmies', 'item', 'door', 'gate', 'shrine', 'narrative', 'way_up', 'way_down', 'vendor', 'spawn', 'stairs', 'chest', 'dead_campfire'].includes(type);
@@ -5394,8 +5394,12 @@ class DungeonPage extends React.Component {
 
                             if (isHutProtected) {
                                 this.displayMessage('⛺ Your Hut protected your crew from the Pygmy ambush!');
-                                toTile.contains = null;
-                                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                                if (typeof bm.removePygmyTile === 'function') {
+                                    bm.removePygmyTile(toTile);
+                                } else {
+                                    toTile.contains = null;
+                                    if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                                }
                                 ambushed = false;
                                 break;
                             }
@@ -5453,9 +5457,13 @@ class DungeonPage extends React.Component {
 
         if (isHutProtected) {
             this.displayMessage('⛺ Your Hut protected your crew from the Pygmy ambush!');
-            tile.contains = null;
-            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
-            this.setState({ tiles: [...bm.tiles] });
+            if (typeof bm.removePygmyTile === 'function') {
+                bm.removePygmyTile(tile, () => this.setState({ tiles: [...bm.tiles] }));
+            } else {
+                tile.contains = null;
+                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                this.setState({ tiles: [...bm.tiles] });
+            }
             return;
         }
 
@@ -5513,21 +5521,12 @@ class DungeonPage extends React.Component {
             attackingPygmyTileIdx: null
         });
 
-        if (attackTileIdx !== null && attackTileIdx !== undefined && this.props.boardManager && this.props.boardManager.tiles) {
-            const tile = this.props.boardManager.tiles[attackTileIdx];
-            if (tile) {
-                // Set fading flag
-                tile.isFadingOut = true;
-                if (typeof this.props.boardManager.refreshTiles === 'function') this.props.boardManager.refreshTiles();
-                this.setState({ tiles: [...this.props.boardManager.tiles] });
-
-                setTimeout(() => {
-                    tile.isFadingOut = false;
-                    tile.contains = null;
-                    if (typeof this.props.boardManager.refreshTiles === 'function') this.props.boardManager.refreshTiles();
+        if (attackTileIdx !== null && attackTileIdx !== undefined && this.props.boardManager) {
+            this.props.boardManager.removePygmyTile(attackTileIdx, () => {
+                if (this.props.boardManager && this.props.boardManager.tiles) {
                     this.setState({ tiles: [...this.props.boardManager.tiles] });
-                }, 350); // Matches transition duration
-            }
+                }
+            });
         }
     };
 
@@ -5553,6 +5552,44 @@ class DungeonPage extends React.Component {
             if (outposts.length === 0) return;
 
             outposts.forEach(outpost => {
+                const rawClan = outpost.territory || outpost.contains?.territory;
+                const clan = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : (rawClan ? String(rawClan) : null);
+
+                if (clan) {
+                    const contiguousTerritory = this.getContiguousTerritoryTileIds(outpost.id, clan);
+                    
+                    const isPlayerInTerritory = contiguousTerritory.has(playerTileIdx);
+                    let isPlayerAdjacentToTerritory = false;
+                    
+                    if (!isPlayerInTerritory) {
+                        const rowP = Math.floor(playerTileIdx / 15);
+                        const colP = playerTileIdx % 15;
+                        const playerNeighbors = [];
+                        if (rowP > 0) playerNeighbors.push((rowP - 1) * 15 + colP);
+                        if (rowP < 14) playerNeighbors.push((rowP + 1) * 15 + colP);
+                        if (colP > 0) playerNeighbors.push(rowP * 15 + (colP - 1));
+                        if (colP < 14) playerNeighbors.push(rowP * 15 + (colP + 1));
+                        
+                        for (const n of playerNeighbors) {
+                            if (contiguousTerritory.has(n)) {
+                                isPlayerAdjacentToTerritory = true;
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if (!isPlayerInTerritory && !isPlayerAdjacentToTerritory) {
+                        return;
+                    }
+                } else {
+                    const rowO = Math.floor(outpost.id / 15), colO = outpost.id % 15;
+                    const rowP = Math.floor(playerTileIdx / 15), colP = playerTileIdx % 15;
+                    const dist = Math.abs(rowO - rowP) + Math.abs(colO - colP);
+                    if (dist > 1) {
+                        return;
+                    }
+                }
+
                 if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
                     this.projectileCanvasRef.current.fireProjectile(outpost.id, playerTileIdx, () => {
                         this.handleProjectileHitPlayer();
@@ -5590,6 +5627,24 @@ class DungeonPage extends React.Component {
             const crew = (this.props.crewManager && this.props.crewManager.crew) || meta.crew || [];
             let totalDamageDealt = 0;
 
+            // Calculate collective HP before damage
+            let totalMaxHp = 0;
+            let initialCurrentHp = 0;
+            crew.forEach(member => {
+                if (!member) return;
+                const maxHp = (member.stats && typeof member.stats.hp === 'number')
+                    ? member.stats.hp
+                    : (typeof member.starting_hp === 'number'
+                        ? member.starting_hp
+                        : (typeof member.max_hp === 'number'
+                            ? member.max_hp
+                            : 10));
+                totalMaxHp += maxHp;
+                if (!member.dead) {
+                    initialCurrentHp += (typeof member.hp !== 'undefined') ? member.hp : maxHp;
+                }
+            });
+
             const updatedCrew = crew.map(member => {
                 if (!member || member.dead) return member;
                 const dmg = Math.floor(Math.random() * 10) + 1; // 1-10 damage
@@ -5602,6 +5657,46 @@ class DungeonPage extends React.Component {
                     dead: isDead
                 };
             });
+
+            // Calculate collective HP after damage
+            let finalCurrentHp = 0;
+            updatedCrew.forEach(member => {
+                if (!member) return;
+                if (!member.dead) {
+                    finalCurrentHp += member.hp;
+                }
+            });
+
+            const initialPct = totalMaxHp > 0 ? (initialCurrentHp / totalMaxHp) * 100 : 0;
+            const finalPct = totalMaxHp > 0 ? (finalCurrentHp / totalMaxHp) * 100 : 0;
+
+            // Trigger HP bar animation sequence
+            if (this.hpBarTimer1) clearTimeout(this.hpBarTimer1);
+            if (this.hpBarTimer2) clearTimeout(this.hpBarTimer2);
+            if (this.hpBarTimer3) clearTimeout(this.hpBarTimer3);
+            if (this.hpBarTimer4) clearTimeout(this.hpBarTimer4);
+
+            this.setState({
+                showDamageHpBar: true,
+                damageHpBarPct: initialPct,
+                damageHpBarOpacity: 0
+            });
+
+            this.hpBarTimer1 = setTimeout(() => {
+                this.setState({ damageHpBarOpacity: 1 });
+
+                this.hpBarTimer2 = setTimeout(() => {
+                    this.setState({ damageHpBarPct: finalPct });
+
+                    this.hpBarTimer3 = setTimeout(() => {
+                        this.setState({ damageHpBarOpacity: 0 });
+
+                        this.hpBarTimer4 = setTimeout(() => {
+                            this.setState({ showDamageHpBar: false });
+                        }, 300);
+                    }, 1200); // 1.2s pause at the reduced level
+                }, 400); // 400ms showing collective HP level they were at
+            }, 50);
 
             meta.crew = updatedCrew;
             storeMeta(meta);
@@ -6383,6 +6478,28 @@ class DungeonPage extends React.Component {
                             }} /> Resolve</span><span className="ql-value">{resolve}</span></div>
                             <div className="ql-row"><span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span><span className="ql-value" style={{color: '#ffd700'}}>{this.props.inventoryManager?.gold || 0}</span></div>
                             <div className="ql-row"><span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span><span className="ql-value" style={{color: '#b388ff'}}>{this.props.inventoryManager?.shimmering_dust || 0}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span style={{
+                                display: 'inline-block',
+                                backgroundImage: `url(${images.wood})`,
+                                backgroundSize: 'contain',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'center',
+                                width: '16px',
+                                height: '16px',
+                                verticalAlign: 'middle',
+                                marginRight: '4px'
+                            }} /> Wood</span><span className="ql-value" style={{color: '#a0522d'}}>{(this.props.inventoryManager?.inventory || []).filter(item => item && (item._im_key === 'wood' || item.id === 'wood' || item.name === 'Wood')).length}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span style={{
+                                display: 'inline-block',
+                                backgroundImage: `url(${images.stone})`,
+                                backgroundSize: 'contain',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'center',
+                                width: '16px',
+                                height: '16px',
+                                verticalAlign: 'middle',
+                                marginRight: '4px'
+                            }} /> Stone</span><span className="ql-value" style={{color: '#95a5a6'}}>{(this.props.inventoryManager?.inventory || []).filter(item => item && (item._im_key === 'stone' || item.id === 'stone' || item.name === 'Stone')).length}</span></div>
                         </div>
                     </div>
                 )}
@@ -8347,6 +8464,23 @@ class DungeonPage extends React.Component {
         nextIndicators[activeMinimapIndex].merchant = Array.from(mergedByKey.values());
         return nextIndicators;
     }
+    hasBreadcrumbsPassive = () => {
+        try {
+            const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew))
+                ? this.props.crewManager.crew
+                : [];
+            return crew.some(member => {
+                if (!member || member.dead) return false;
+                const globalSkills = Array.isArray(member.globalSkills) ? member.globalSkills : [];
+                const skills = Array.isArray(member.skills) ? member.skills : [];
+                const passives = Array.isArray(member.passives) ? member.passives : [];
+                const allSkills = [...globalSkills, ...skills, ...passives].map(s => typeof s === 'string' ? s : (s && s.key)).filter(Boolean);
+                return allSkills.includes('breadcrumbs');
+            });
+        } catch (e) {
+            return false;
+        }
+    }
     refreshTiles = (levelIdOverride) => {
         const bm = this.props.boardManager;
         // Use the board-manager's array references directly — never spread them.
@@ -8923,7 +9057,9 @@ class DungeonPage extends React.Component {
         if(this.state.minimapZoomedTile !== null){
             zoomed = newIndex;
         }
-        minimap[newIndex].active = true;
+        if (newIndex >= 0 && newIndex < minimap.length && minimap[newIndex]) {
+            minimap[newIndex].active = true;
+        }
         this.setState({
             minimap,
             minimapZoomedTile: zoomed
@@ -13260,11 +13396,14 @@ class DungeonPage extends React.Component {
                 }
             });
         });
+        if (typeof bm.refreshTiles === 'function') {
+            bm.refreshTiles();
+        }
     };
 
     finishConstruction = (constructionState) => {
         if (!constructionState || !constructionState.buildingDef) return;
-        const { buildingDef, targetTileIdx } = constructionState;
+        const { buildingDef, targetTileIdx, actualBuildTimeSec, livingContributorIds } = constructionState;
         const bm = this.props.boardManager;
 
         if (buildingDef.key === 'hut') {
@@ -13289,9 +13428,21 @@ class DungeonPage extends React.Component {
                 bm.currentBoard.tiles[targetTileIdx].building = buildingDef.key;
             }
             if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
-            if (typeof bm.messaging === 'function') {
-                bm.messaging(`🔨 Construction complete! Built ${buildingDef.name}.`);
-            }
+        }
+
+        // Apply post-construction stamina penalty to all living crew contributors
+        const meta = getMeta() || {};
+        const crew = (meta && meta.crew) || (this.props.crewManager && this.props.crewManager.crew) || [];
+        const updatedCrew = applyBuildingStaminaPenalty(crew, actualBuildTimeSec, livingContributorIds);
+        meta.crew = updatedCrew;
+        storeMeta(meta);
+        if (this.props.crewManager) {
+            this.props.crewManager.crew = updatedCrew;
+        }
+
+        const penaltyPct = Math.max(30, Math.round(actualBuildTimeSec || 30));
+        if (bm && typeof bm.messaging === 'function') {
+            bm.messaging(`🔨 Construction complete! Built ${buildingDef.name}. Crew members taxed ${penaltyPct}% stamina for next battle.`);
         }
 
         this.setState({ activeConstruction: null });
@@ -13307,6 +13458,22 @@ class DungeonPage extends React.Component {
 
         const bm = this.props.boardManager;
         if (!bm || !bm.playerTile || !bm.playerTile.location) return;
+
+        const meta = getMeta() || {};
+        const crew = (meta && meta.crew) || (this.props.crewManager && this.props.crewManager.crew) || [];
+        const livingContributors = crew.filter(m => m && !(m.dead === true || (typeof m.hp === 'number' && m.hp <= 0)));
+
+        if (crew.length > 0 && livingContributors.length === 0) {
+            if (typeof bm.messaging === 'function') {
+                bm.messaging(`❌ Cannot build ${buildingDef.name}: All crew members are dead!`);
+            }
+            return;
+        }
+
+        if (buildingDef.key === 'hut') {
+            // Replaces any hut the crew has placed previously immediately
+            this.removeExistingHuts();
+        }
 
         const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
         if (playerIdx === null || playerIdx === undefined) return;
@@ -13339,15 +13506,18 @@ class DungeonPage extends React.Component {
             }
         }
 
-        const buildTimeSec = buildingDef.buildTime || 20;
-        const durationMs = buildTimeSec * 1000;
+        const baseBuildTimeSec = buildingDef.buildTime || 20;
+        const actualBuildTimeSec = getAdjustedBuildTime(baseBuildTimeSec, crew);
+        const durationMs = actualBuildTimeSec * 1000;
         const constructionState = {
             buildingDef,
             targetTileIdx: playerIdx,
             startTime: Date.now(),
             durationMs,
             progressPct: 0,
-            secondsRemaining: buildTimeSec
+            secondsRemaining: actualBuildTimeSec,
+            actualBuildTimeSec,
+            livingContributorIds: livingContributors.map(m => m.id)
         };
 
         if (this._constructionTicker) {
@@ -13360,7 +13530,7 @@ class DungeonPage extends React.Component {
         });
 
         if (typeof bm.messaging === 'function') {
-            bm.messaging(`🔨 Construction started: ${buildingDef.name} (${buildTimeSec}s remaining)...`);
+            bm.messaging(`🔨 Construction started: ${buildingDef.name} (${actualBuildTimeSec}s remaining)...`);
         }
 
         this._constructionTicker = setInterval(() => {
@@ -13464,9 +13634,22 @@ class DungeonPage extends React.Component {
             let success = false;
             let feedback = '';
 
+            // Check if any crew member has the Theurgy skill
+            const crew = Array.isArray(meta.crew) ? meta.crew : (this.props.crewManager && Array.isArray(this.props.crewManager.crew) ? this.props.crewManager.crew : []);
+            
+            let theurgyMultiplier = 1;
+            if (crew.some(member => member && Array.isArray(member.skills) && member.skills.includes('theurgy_3'))) {
+                theurgyMultiplier = 4;
+            } else if (crew.some(member => member && Array.isArray(member.skills) && member.skills.includes('theurgy_2'))) {
+                theurgyMultiplier = 3;
+            } else if (crew.some(member => member && Array.isArray(member.skills) && member.skills.includes('theurgy'))) {
+                theurgyMultiplier = 2;
+            }
+
             if (prayerType === 'food') {
                 const roll = Math.random() * 100;
-                if (roll < 25) {
+                const chance = Math.min(100, 25 * theurgyMultiplier);
+                if (roll < chance) {
                     success = true;
                     meta.food = (typeof meta.food === 'number' ? meta.food : 55) + 50;
                     feedback = 'Your prayer was heard! 50 food has been granted by alchemical spirits.';
@@ -13476,7 +13659,8 @@ class DungeonPage extends React.Component {
                 }
             } else if (prayerType === 'key') {
                 const roll = Math.random() * 100;
-                if (roll < 15) {
+                const chance = Math.min(100, 15 * theurgyMultiplier);
+                if (roll < chance) {
                     success = true;
                     const keyType = Math.random() < 0.5 ? 'minor_key' : 'major_key';
                     const keyName = keyType === 'minor_key' ? 'minor key' : 'major key';
@@ -14785,6 +14969,8 @@ class DungeonPage extends React.Component {
             {this.state.showBuildMenu && (
                 <BuildMenuModal
                     inventoryManager={this.props.inventoryManager}
+                    crewManager={this.props.crewManager}
+                    crew={this.props.crewManager?.crew || this.state.crew}
                     activeConstruction={this.state.activeConstruction}
                     onClose={() => this.setState({ showBuildMenu: false })}
                     onBuild={this.handleBuildBuilding}
@@ -16627,7 +16813,44 @@ class DungeonPage extends React.Component {
                                 className="avatar-image-inner"
                             />
                             {isPlayerInHut && (
-                                <div className="avatar-shield-overlay" />
+                                <div className="avatar-shield-overlay" style={{ pointerEvents: 'none' }} />
+                            )}
+                            {this.state.showDamageHpBar && (
+                                <div
+                                    style={{
+                                        position: 'absolute',
+                                        top: '-15px',
+                                        left: '50%',
+                                        transform: 'translateX(-50%)',
+                                        width: '100%',
+                                        height: '8px',
+                                        backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                                        border: '1px solid rgba(255, 255, 255, 0.25)',
+                                        borderRadius: '4px',
+                                        padding: '1px',
+                                        boxSizing: 'border-box',
+                                        opacity: this.state.damageHpBarOpacity,
+                                        transition: 'opacity 0.3s ease-in-out',
+                                        zIndex: 30,
+                                        pointerEvents: 'none',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+                                    }}
+                                    className="projectile-damage-hp-bar"
+                                >
+                                    <div
+                                        style={{
+                                            width: `${this.state.damageHpBarPct}%`,
+                                            height: '100%',
+                                            backgroundColor: '#ff3333',
+                                            backgroundImage: 'linear-gradient(to right, #ff3333, #ff6666)',
+                                            borderRadius: '2px',
+                                            transition: 'width 0.4s ease-out',
+                                            boxShadow: '0 0 4px rgba(255, 51, 51, 0.6)'
+                                        }}
+                                    />
+                                </div>
                             )}
                         </div>
                     )}
@@ -16903,30 +17126,175 @@ class DungeonPage extends React.Component {
             </div>}
 
             {this.state.showDungeonInscriptionModal && (
-                <CModal alignment="center" backdrop="static" visible={this.state.showDungeonInscriptionModal} onClose={() => this.setState({ showDungeonInscriptionModal: false })}>
-                    <CModalHeader>
-                        <CModalTitle><span role="img" aria-label="Writing Hand">✍</span> Wall Inscription</CModalTitle>
-                    </CModalHeader>
-                    <CModalBody style={{ backgroundColor: '#141517', color: '#ffffff', padding: '20px' }}>
-                        <p style={{ color: '#aaa', fontSize: '13px', marginBottom: '10px' }}>
+                <div
+                    style={{
+                        position: 'fixed',
+                        inset: 0,
+                        backgroundColor: 'rgba(5, 4, 10, 0.85)',
+                        backdropFilter: 'blur(8px)',
+                        zIndex: 10000,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontFamily: "'Inter', sans-serif",
+                        animation: 'fadeIn 0.2s ease-out'
+                    }}
+                    onClick={() => this.setState({ showDungeonInscriptionModal: false })}
+                >
+                    <div
+                        style={{
+                            position: 'relative',
+                            width: '92%',
+                            maxWidth: '520px',
+                            background: 'linear-gradient(145deg, rgba(22, 18, 14, 0.98) 0%, rgba(12, 9, 7, 0.99) 100%)',
+                            border: '2px solid #e5b54f',
+                            borderRadius: '16px',
+                            boxShadow: '0 20px 60px rgba(0,0,0,0.9), 0 0 30px rgba(229, 181, 79, 0.25)',
+                            padding: '24px 28px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '16px',
+                            color: '#f0ede5'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                    >
+                        {/* Header */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(229, 181, 79, 0.3)', paddingBottom: '14px' }}>
+                            <div style={{ fontFamily: "'Cinzel', serif", fontSize: '20px', fontWeight: '700', color: '#f9b115', letterSpacing: '0.08em' }}>
+                                WALL INSCRIPTION
+                            </div>
+
+                            <button
+                                onClick={() => this.setState({ showDungeonInscriptionModal: false })}
+                                style={{
+                                    background: 'rgba(255, 255, 255, 0.06)',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    color: '#ccc',
+                                    borderRadius: '50%',
+                                    width: '36px',
+                                    height: '36px',
+                                    minWidth: '36px',
+                                    minHeight: '36px',
+                                    aspectRatio: '1 / 1',
+                                    boxSizing: 'border-box',
+                                    padding: 0,
+                                    fontSize: '16px',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0,
+                                    transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#f9b115'; e.currentTarget.style.color = '#fff'; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = '#ccc'; }}
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <p style={{ color: 'rgba(255, 255, 255, 0.65)', fontSize: '13px', margin: 0, lineHeight: 1.45 }}>
                             Enter the text (max 100 characters) that will be carved into this wall. Other players will see it when they explore the dungeon.
                         </p>
                         <textarea
                             className="dungeonname-input"
                             rows={3}
                             maxLength={100}
-                            style={{ width: '100%', resize: 'vertical', fontFamily: 'serif', fontSize: '14px', backgroundColor: '#1b1c1e', color: '#fff', border: '1px solid #444', borderRadius: '4px', padding: '8px' }}
+                            style={{
+                                width: '100%',
+                                resize: 'vertical',
+                                fontFamily: "'Inter', sans-serif",
+                                fontSize: '14px',
+                                background: 'rgba(0, 0, 0, 0.5)',
+                                color: '#f0ede5',
+                                border: '1px solid rgba(229, 181, 79, 0.4)',
+                                borderRadius: '10px',
+                                padding: '12px 14px',
+                                boxSizing: 'border-box',
+                                outline: 'none',
+                                transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+                            }}
+                            onFocus={e => { e.currentTarget.style.borderColor = '#f9b115'; e.currentTarget.style.boxShadow = '0 0 10px rgba(249, 177, 21, 0.3)'; }}
+                            onBlur={e => { e.currentTarget.style.borderColor = 'rgba(229, 181, 79, 0.4)'; e.currentTarget.style.boxShadow = 'none'; }}
                             value={this.state.dungeonInscriptionTextInput}
                             onChange={(e) => this.setState({ dungeonInscriptionTextInput: e.target.value })}
                             placeholder="e.g. 'Turn back, the beast awaits ahead...' "
                             autoFocus
                         />
-                    </CModalBody>
-                    <CModalFooter style={{ backgroundColor: '#141517', borderTop: '1px solid #222' }}>
-                        <CButton color="secondary" onClick={() => this.setState({ showDungeonInscriptionModal: false })}>Cancel</CButton>
-                        <CButton color="warning" onClick={this.confirmDungeonInscription}>Carve Inscription</CButton>
-                    </CModalFooter>
-                </CModal>
+
+                        {/* Footer */}
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginTop: '6px' }}>
+                            <button
+                                onClick={() => this.setState({ showDungeonInscriptionModal: false })}
+                                style={{
+                                    padding: '8px 20px',
+                                    borderRadius: '20px',
+                                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                                    background: 'rgba(255, 255, 255, 0.06)',
+                                    color: '#ccc',
+                                    fontSize: '13px',
+                                    fontWeight: '700',
+                                    fontFamily: "'Cinzel', serif",
+                                    letterSpacing: '0.05em',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.18s ease'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.borderColor = '#f9b115'; e.currentTarget.style.color = '#fff'; }}
+                                onMouseLeave={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = '#ccc'; }}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => this.setState({ dungeonInscriptionTextInput: getRandomInscription() })}
+                                style={{
+                                    padding: '8px 20px',
+                                    borderRadius: '20px',
+                                    border: '1px solid rgba(229, 181, 79, 0.4)',
+                                    background: 'rgba(229, 181, 79, 0.12)',
+                                    color: '#e5b54f',
+                                    fontSize: '13px',
+                                    fontWeight: '700',
+                                    fontFamily: "'Cinzel', serif",
+                                    letterSpacing: '0.05em',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.18s ease'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(229, 181, 79, 0.25)'; e.currentTarget.style.color = '#fff'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(229, 181, 79, 0.12)'; e.currentTarget.style.color = '#e5b54f'; }}
+                            >
+                                Random
+                            </button>
+                            <button
+                                onClick={this.confirmDungeonInscription}
+                                style={{
+                                    padding: '8px 20px',
+                                    borderRadius: '20px',
+                                    border: 'none',
+                                    background: 'linear-gradient(135deg, rgba(201, 132, 10, 0.35) 0%, rgba(249, 177, 21, 0.5) 100%)',
+                                    outline: '1px solid rgba(249, 177, 21, 0.6)',
+                                    color: '#f9b115',
+                                    fontSize: '13px',
+                                    fontWeight: '700',
+                                    fontFamily: "'Cinzel', serif",
+                                    letterSpacing: '0.05em',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.18s ease'
+                                }}
+                                onMouseEnter={e => {
+                                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(201, 132, 10, 0.55) 0%, rgba(249, 177, 21, 0.75) 100%)';
+                                    e.currentTarget.style.color = '#fff';
+                                }}
+                                onMouseLeave={e => {
+                                    e.currentTarget.style.background = 'linear-gradient(135deg, rgba(201, 132, 10, 0.35) 0%, rgba(249, 177, 21, 0.5) 100%)';
+                                    e.currentTarget.style.color = '#f9b115';
+                                }}
+                            >
+                                Carve Inscription
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
             
             
@@ -17630,7 +17998,6 @@ class DungeonPage extends React.Component {
                                                             const item = items[0];
                                                             const isShardStack = item && item.shard === true && (item.type === 'jewel' || item.type === 'rune');
                                                             const itemKey = `${item.name || item.type || 'item'}_${firstIndex}_${sIdx}`;
-                                                            
                                                             return (
                                                                 <div key={itemKey} className="expanded-item-slot-wrapper">
                                                                     <Tile
@@ -17667,6 +18034,190 @@ class DungeonPage extends React.Component {
                     </div>
                 </div>
             </CModal>
+
+            {/* ── Pop-out Mix Potions Modal (Sage) ───────────────────────────── */}
+            {(() => {
+                const compoundSlots = this.state.compoundBuilderSlots || [];
+                const matchedRecipe = matchRecipe ? matchRecipe(compoundSlots) : null;
+                const matchedPotion = (matchedRecipe && POTIONS) ? POTIONS[matchedRecipe.potionId] : null;
+
+                const inv = (this.props.inventoryManager && this.props.inventoryManager.inventory) || [];
+                const getReagentCount = (reagentId) => {
+                    return inv.filter(item => item && item.id === reagentId && item.category === 'reagent').length;
+                };
+
+                const allSlotsFull = compoundSlots.length >= 3;
+                const isReagentCompatible = (rKey) => {
+                    if (compoundSlots.length === 0) return true;
+                    if (compoundSlots.includes(rKey)) return true;
+                    if (!POTION_RECIPES) return false;
+                    return POTION_RECIPES.some(recipe => {
+                        const containsSlots = compoundSlots.every(s => recipe.reagents.includes(s));
+                        const containsCandidate = recipe.reagents.includes(rKey);
+                        return containsSlots && containsCandidate;
+                    });
+                };
+
+                return (
+                    <CModal
+                        visible={!!this.state.compoundBuilderOpen}
+                        onClose={() => this.setState({ compoundBuilderOpen: false, compoundBuilderSlots: [] })}
+                        alignment="center"
+                        backdrop={true}
+                        size="lg"
+                        className="mix-potions-modal"
+                    >
+                        <CModalHeader style={{ borderBottom: '1px solid rgba(255, 180, 60, 0.2)', backgroundColor: '#18120a', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px' }}>
+                            <CModalTitle style={{ color: '#ffb830', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '18px', fontWeight: 'bold', margin: 0 }}>
+                                <span style={{ fontSize: '20px' }}>🧪</span> Mix Potions
+                            </CModalTitle>
+                            <button 
+                                type="button" 
+                                onClick={() => this.setState({ compoundBuilderOpen: false, compoundBuilderSlots: [] })}
+                                style={{ background: 'none', border: 'none', color: '#ffb830', fontSize: '22px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}
+                            >
+                                &times;
+                            </button>
+                        </CModalHeader>
+                        <CModalBody style={{ backgroundColor: '#140f09', color: '#ffffff', padding: '24px' }}>
+                            <div className="compound-modal-layout" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '30px' }}>
+                                {/* Left Column: Brewing */}
+                                <div className="brewing-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                    <h4 style={{ color: '#ffb830', fontSize: '15px', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0, borderBottom: '1px solid rgba(255, 180, 60, 0.1)', paddingBottom: '6px' }}>Select Reagents</h4>
+                                    
+                                    {/* 3 slots */}
+                                    <div className="compound-slot-row" style={{ display: 'flex', gap: '12px' }}>
+                                        {[0, 1, 2].map(i => {
+                                            const slotId = compoundSlots[i];
+                                            const slotReagent = (slotId && REAGENTS) ? REAGENTS[slotId] : null;
+                                            const iconUrl = (slotReagent && images) ? images[slotReagent.icon] : null;
+                                            return (
+                                                <div
+                                                    key={i}
+                                                    className={`compound-slot ${slotReagent ? 'filled' : 'empty'}`}
+                                                    title={slotReagent ? `${slotReagent.name} (click to remove)` : 'Empty slot'}
+                                                    onClick={() => slotReagent && this.handleCompoundSlotRemove(i)}
+                                                >
+                                                    {slotReagent && (
+                                                        <div className="compound-slot-icon"
+                                                             style={{ backgroundImage: iconUrl ? `url(${iconUrl})` : 'none' }} />
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Reagent Grid */}
+                                    <div className="compound-reagent-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(68px, 1fr))', gap: '8px', maxHeight: '300px', overflowY: 'auto', paddingRight: '4px' }}>
+                                        {REAGENT_KEYS && REAGENT_KEYS.map(rKey => {
+                                            const reagent = REAGENTS[rKey];
+                                            const count = getReagentCount(rKey);
+                                            const isSelected = compoundSlots.includes(rKey);
+                                            const isDepleted = count === 0;
+
+                                            const hasSelection = compoundSlots.length > 0;
+                                            const isCompatible = !hasSelection || isReagentCompatible(rKey);
+
+                                            const isBlocked = (!isSelected && allSlotsFull) || (!isSelected && hasSelection && !isCompatible);
+                                            const isCompatibleHighlight = hasSelection && isCompatible && !isSelected && !isDepleted;
+                                            const isIncompatibleDim = hasSelection && !isCompatible && !isSelected;
+
+                                            const iconUrl = images ? images[reagent.icon] : null;
+                                            return (
+                                                <div
+                                                    key={rKey}
+                                                    className={`compound-reagent-cell ${isSelected ? 'selected' : ''} ${isCompatibleHighlight ? 'compatible' : ''} ${isIncompatibleDim ? 'incompatible' : ''} ${(isDepleted || isBlocked) ? 'depleted' : ''}`}
+                                                    onClick={() => !isDepleted && !isBlocked && this.handleCompoundReagentClick(rKey)}
+                                                    title={`${reagent.name} (×${count})${isDepleted ? ' — none in inventory' : ''}`}
+                                                    style={{ width: 'auto', height: '80px', padding: '6px' }}
+                                                >
+                                                    <div className="compound-reagent-icon"
+                                                         style={{ backgroundImage: iconUrl ? `url(${iconUrl})` : 'none', width: '38px', height: '38px' }} />
+                                                    <span className="compound-reagent-name" style={{ fontSize: '10px' }}>{reagent.name}</span>
+                                                    {count > 0 && <span className="compound-reagent-count">×{count}</span>}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+
+                                    {/* Brew Action */}
+                                    <div style={{ marginTop: '10px' }}>
+                                        {matchedPotion && (
+                                            <div className="compound-recipe-label" style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '8px', color: '#ffb830' }}>
+                                                → Brewing: {matchedPotion.name}
+                                            </div>
+                                        )}
+                                        <button
+                                            className={`compound-brew-btn ${matchedPotion ? 'ready' : 'disabled'}`}
+                                            onClick={() => {
+                                                this.handleCompoundBrew();
+                                            }}
+                                            disabled={!matchedPotion}
+                                            style={{ padding: '10px', fontSize: '12px' }}
+                                        >
+                                            {matchedPotion ? `Brew: ${matchedPotion.name}` : (compoundSlots.length === 0 ? 'Select reagents above' : 'No matching recipe')}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Right Column: Combining */}
+                                <div className="combining-section" style={{ display: 'flex', flexDirection: 'column', gap: '16px', borderLeft: '1px solid rgba(255, 180, 60, 0.15)', paddingLeft: '30px' }}>
+                                    <h4 style={{ color: '#ffb830', fontSize: '15px', textTransform: 'uppercase', letterSpacing: '0.5px', margin: 0, borderBottom: '1px solid rgba(255, 180, 60, 0.1)', paddingBottom: '6px' }}>Combine Potions</h4>
+                                    
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', justifyContent: 'center', height: '100%' }}>
+                                        {[
+                                            { source: 'minor_health_potion', target: 'major_health_potion', label: 'Minor → Major', desc: 'Combine 2 Minor to get 1 Major' },
+                                            { source: 'major_health_potion', target: 'grand_health_potion', label: 'Major → Grand', desc: 'Combine 2 Major to get 1 Grand' },
+                                            { source: 'grand_health_potion', target: 'supreme_health_potion', label: 'Grand → Supreme', desc: 'Combine 2 Grand to get 1 Supreme' }
+                                        ].map(combo => {
+                                            const sourceCount = inv.filter(item => item && (item._im_key === combo.source || item.id === combo.source)).length;
+                                            const canCombine = sourceCount >= 2;
+                                            return (
+                                                <div 
+                                                    key={combo.source}
+                                                    style={{ 
+                                                        display: 'flex', 
+                                                        alignItems: 'center', 
+                                                        justifyContent: 'space-between', 
+                                                        background: 'rgba(255, 255, 255, 0.03)', 
+                                                        border: '1px solid rgba(255, 180, 60, 0.1)', 
+                                                        borderRadius: '8px', 
+                                                        padding: '12px 16px',
+                                                        opacity: canCombine ? 1 : 0.65
+                                                    }}
+                                                >
+                                                    <div style={{ textAlign: 'left' }}>
+                                                        <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#fff' }}>{combo.label}</div>
+                                                        <div style={{ fontSize: '12px', color: '#aaa', marginTop: '2px' }}>{combo.desc} (Held: {sourceCount})</div>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => this.handleCombinePotions(combo.source, combo.target)}
+                                                        disabled={!canCombine}
+                                                        style={{
+                                                            background: canCombine ? 'linear-gradient(135deg, #ffc850, #ffb830)' : 'rgba(255,255,255,0.05)',
+                                                            color: canCombine ? '#121215' : '#777',
+                                                            border: 'none',
+                                                            borderRadius: '6px',
+                                                            padding: '8px 16px',
+                                                            fontSize: '12px',
+                                                            fontWeight: 'bold',
+                                                            cursor: canCombine ? 'pointer' : 'default',
+                                                            transition: 'all 0.2s ease',
+                                                            boxShadow: canCombine ? '0 2px 6px rgba(255, 184, 48, 0.2)' : 'none'
+                                                        }}
+                                                    >
+                                                        Combine
+                                                    </button>
+                                                </div>
+                                            );
+                                        })}
+                                </div>
+                            </div>
+                        </div>
+                </CModalBody>
+            </CModal>
+                );
+            })()}
 
             {/* Card duel fullscreen overlay - Rendered at root for clean stacking context */}
             {this.state.showCardDuelModal && (

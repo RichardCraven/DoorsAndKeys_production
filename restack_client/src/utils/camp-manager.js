@@ -4,6 +4,7 @@
 
 import { storeMeta, getMeta, getUserId, applyResolvePenalty } from './session-handler';
 import { updateUserRequest, updateDungeonRequest } from './api-handler';
+import { clearBuildingStaminaPenalties } from './building-utils';
 
 export async function setUpCamp(component, maybeDuration) {
     let durationSeconds = 10;
@@ -351,7 +352,7 @@ export async function endCamp(component) {
         try {
             const crew = (component.props.crewManager && component.props.crewManager.crew) || [];
             // Build a new array of spread objects so React sees new prop references on Tile
-            const restoredCrew = crew.map(member => {
+            let restoredCrew = crew.map(member => {
                 if (!member) return member;
                 if (member.dead) {
                     return { ...member, dead: false, hp: 1 };
@@ -360,6 +361,8 @@ export async function endCamp(component) {
                     return member;
                 }
             });
+            // Resting at camp erases any building stamina penalty
+            restoredCrew = clearBuildingStaminaPenalties(restoredCrew);
             m.crew = restoredCrew;
             try { if (component.props.crewManager) component.props.crewManager.crew = restoredCrew; } catch(e){}
         } catch(e){}

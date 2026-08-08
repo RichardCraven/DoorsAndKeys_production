@@ -172,6 +172,7 @@ function getUnlockableSkills(skillsMatrix, memberType, memberLevel, knownSkills)
         if (sk.class !== memberType) return false;
         if (sk.knownByDefault) return false;
         if (known.includes(sk.id)) return false;
+        if (sk.requires && !known.includes(sk.requires)) return false;
         // Show skills within a reasonable level window
         if (sk.tier > Math.min(4, Math.ceil(memberLevel / 2) + 1)) return false;
         return true;

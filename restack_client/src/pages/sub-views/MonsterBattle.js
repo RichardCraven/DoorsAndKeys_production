@@ -1700,6 +1700,21 @@ class MonsterBattle extends React.Component {
                     }
                 } catch (e) { console.warn('shard drop failed', e); }
 
+                // ── Engineer Construct Salvage ──────────────────────────────────
+                try {
+                    const engineers = Object.values(latestBattleData || {}).filter(c => c && !c.dead && !c.isMonster && c.class === 'engineer');
+                    if (engineers.length > 0) {
+                        const survivingConstructs = Object.values(latestBattleData || {}).filter(c => c && c.isConstruct && !c.dead && !c.isMonster);
+                        if (survivingConstructs.length > 0) {
+                            if (!itemsGained) itemsGained = [];
+                            survivingConstructs.forEach(c => {
+                                itemsGained.push('wood');
+                                itemsGained.push('stone');
+                            });
+                        }
+                    }
+                } catch (e) { console.warn('engineer salvage failed', e); }
+
                 if (itemsGained && itemsGained.length > 0) {
                     const normalItems = itemsGained.filter(itemKey => !itemKey.endsWith('_soul_shard'));
                     this.props.inventoryManager.addItemsByName(normalItems);

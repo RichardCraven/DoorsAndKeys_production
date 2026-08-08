@@ -734,6 +734,10 @@ class DungeonView extends React.Component {
                                                         {[1,2,3,4,5,6,7,8,9].map((e,i)=>{
                                                         return <div 
                                                                     key={i}
+                                                                    draggable={true}
+                                                                    onDragStart={(event) => this.props.onDragStart && this.props.onDragStart(event, level.front.miniboards[i], i)}
+                                                                    onDragOver={(event) => this.props.onDragOverBoardDungeon && this.props.onDragOverBoardDungeon(event, level.id, 'front', i)}
+                                                                    onDrop={(event) => this.props.onDropBoardDungeon && this.props.onDropBoardDungeon(event, level.id, 'front', i)}
                                                                     style={{
                                                                         height: this.props.tileSize*2,
                                                                         width: this.props.tileSize*2
@@ -835,6 +839,10 @@ class DungeonView extends React.Component {
                                                         {[1,2,3,4,5,6,7,8,9].map((e,i)=>{
                                                         return <div
                                                                     key={i}
+                                                                    draggable={true}
+                                                                    onDragStart={(event) => this.props.onDragStart && this.props.onDragStart(event, level.back.miniboards[i], i)}
+                                                                    onDragOver={(event) => this.props.onDragOverBoardDungeon && this.props.onDragOverBoardDungeon(event, level.id, 'back', i)}
+                                                                    onDrop={(event) => this.props.onDropBoardDungeon && this.props.onDropBoardDungeon(event, level.id, 'back', i)}
                                                                     style={{
                                                                         height: this.props.tileSize*2,
                                                                         width: this.props.tileSize*2

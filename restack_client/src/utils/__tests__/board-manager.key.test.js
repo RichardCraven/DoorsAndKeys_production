@@ -102,4 +102,44 @@ describe('BoardManager key normalization and pickup', () => {
     // The master key should be consumed via broadcast callback
     expect(bm.broadcastUseConsumableFromInventory).toHaveBeenCalledWith(masterKey);
   });
+
+  test('Breacher skill allows forcing open a minor key gate once per level when no key is in inventory', () => {
+    const bm = new BoardManager();
+    bm.getCurrentInventory = jest.fn().mockReturnValue([]);
+    bm.getCrew = jest.fn().mockReturnValue([
+      { id: 1, type: 'soldier', globalSkills: [{ key: 'breacher', level: 1 }] }
+    ]);
+    bm.messaging = jest.fn();
+    bm.refreshTiles = jest.fn();
+    bm.updateDungeon = jest.fn();
+
+    const gateTile1 = { id: 1, contains: { type: 'gate', subtype: 'minor_gate' }, image: 'minor_gate' };
+    const gateTile2 = { id: 2, contains: { type: 'gate', subtype: 'minor_gate' }, image: 'minor_gate' };
+    bm.tiles = { 1: gateTile1, 2: gateTile2 };
+
+    bm.currentLevel = { id: 1 };
+    bm.currentBoard = { id: 1 };
+    bm.currentOrientation = 'F';
+    bm.dungeon = {
+      levels: [{
+        id: 1,
+        front: {
+          miniboards: [{
+            id: 1,
+            tiles: { 1: gateTile1, 2: gateTile2 }
+          }]
+        }
+      }]
+    };
+
+    // First minor gate on level 1: Breacher forces it open!
+    bm.handleGate(gateTile1, 'minor_gate');
+    expect(gateTile1.contains).toBe('archway');
+    expect(bm.messaging).toHaveBeenCalledWith(expect.stringContaining('Breacher: Forced open the minor key gate'));
+
+    // Second minor gate on level 1: Breacher already used for level 1
+    bm.handleGate(gateTile2, 'minor_gate');
+    expect(gateTile2.contains).not.toBe('archway');
+    expect(bm.messaging).toHaveBeenCalledWith(expect.stringContaining('Breacher already used on Level 1'));
+  });
 });

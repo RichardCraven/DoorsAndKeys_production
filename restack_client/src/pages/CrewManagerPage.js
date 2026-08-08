@@ -1,12 +1,12 @@
 import React from 'react'
 import { Redirect } from "react-router-dom";
-import {storeMeta, getMeta, getUserId} from '../utils/session-handler';
+import { storeMeta, getMeta, getUserId } from '../utils/session-handler';
 import {
-//   loadAllDungeonsRequest,
-//   loadDungeonRequest,
-//   updateDungeonRequest,
-  updateUserRequest,
-//   addDungeonRequest
+    //   loadAllDungeonsRequest,
+    //   loadDungeonRequest,
+    //   updateDungeonRequest,
+    updateUserRequest,
+    //   addDungeonRequest
 } from '../utils/api-handler';
 import { InventoryManager } from '../utils/inventory-manager';
 import '../styles/codex.scss';
@@ -14,16 +14,16 @@ import '../styles/codex.scss';
 const renderPowerRatingsPanel = (crewMember) => {
     if (!crewMember) return null;
     const s = crewMember.stats || {};
-    
+
     const strVal = typeof s.str === 'number' ? s.str : 0;
     const dexVal = typeof s.dex === 'number' ? s.dex : 0;
     const intVal = typeof s.int === 'number' ? s.int : 0;
     const fortVal = typeof s.fort === 'number' ? s.fort : 0;
-    
+
     // Derived stats
     const spdVal = typeof s.speed === 'number' ? s.speed : dexVal;
     const defVal = typeof s.def === 'number' ? s.def : Math.round((strVal + dexVal) / 2);
-    
+
     const items = [
         { label: 'STRENGTH', val: strVal, max: 15 },
         { label: 'SPEED', val: spdVal, max: 15 },
@@ -162,15 +162,15 @@ const renderWeaknessSymbols = (weaknesses) => {
         const symbol = WEAKNESS_SYMBOLS[normalized] || WEAKNESS_SYMBOLS[type] || '❓';
         const label = type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
         return (
-            <span 
-                key={idx} 
-                title={label} 
+            <span
+                key={idx}
+                title={label}
                 onClick={() => showWeaknessPopup(type, label)}
-                style={{ 
-                    marginRight: '6px', 
-                    fontSize: '1.2em', 
-                    cursor: 'pointer', 
-                    display: 'inline-block' 
+                style={{
+                    marginRight: '6px',
+                    fontSize: '1.2em',
+                    cursor: 'pointer',
+                    display: 'inline-block'
                 }}
             >
                 {symbol}
@@ -185,20 +185,21 @@ const formatRosterSkillName = (e) => {
     return stripped.replace(/_/g, ' ');
 };
 
-class CrewManagerPage extends React.Component{
-  constructor(props){
-    super(props)
-    this.state = {
-        // dungeon: null,
-        user: null,
-        options: [],
-        selectedCrew: [],
-        selectedCrewMember: null,
-        navToLanding: false,
-        crewSlots: [null, null, null, null],
-        advancedUser: false
+class CrewManagerPage extends React.Component {
+    constructor(props) {
+        super(props)
+        this.state = {
+            // dungeon: null,
+            user: null,
+            options: [],
+            selectedCrew: [],
+            selectedCrewMember: null,
+            navToLanding: false,
+            crewSlots: [null, null, null, null],
+            advancedUser: false,
+            removalWarningModal: null
+        }
     }
-  }
 
     timer = null
 
@@ -213,423 +214,397 @@ class CrewManagerPage extends React.Component{
     //     }
     // }
 
-  componentDidMount(){
-    window.addEventListener('keydown', this.handleKeyDown);
-    let options = this.props.crewManager.adventurers;
-    const meta = getMeta();
-    let selectedCrew = [];
-    if(meta && meta.crew && meta.crew.length){
-        // Re-hydrate portrait from the live adventurers list so stale sessionStorage
-        // URLs (from a previous webpack build) don't cause blank portraits in the tray.
-        const adventurers = this.props.crewManager.adventurers || [];
-        meta.crew.forEach((e,i) => {
-            const template = adventurers.find(a =>
-                (a.id && a.id === e.id) ||
-                (a.image && a.image === (e.image || e.type)) ||
-                (a.type && a.type === (e.type || e.image))
-            );
-            if (template) e.portrait = template.portrait;
-            selectedCrew[i] = e;
-        });
+    componentDidMount() {
+        window.addEventListener('keydown', this.handleKeyDown);
+        let options = this.props.crewManager.adventurers;
+        const meta = getMeta();
+        let selectedCrew = [];
+        if (meta && meta.crew && meta.crew.length) {
+            // Re-hydrate portrait from the live adventurers list so stale sessionStorage
+            // URLs (from a previous webpack build) don't cause blank portraits in the tray.
+            const adventurers = this.props.crewManager.adventurers || [];
+            meta.crew.forEach((e, i) => {
+                const template = adventurers.find(a =>
+                    (a.id && a.id === e.id) ||
+                    (a.image && a.image === (e.image || e.type)) ||
+                    (a.type && a.type === (e.type || e.image))
+                );
+                if (template) e.portrait = template.portrait;
+                selectedCrew[i] = e;
+            });
+        }
+        this.setState({
+            options,
+            selectedCrew,
+            selectedCrewMember: selectedCrew[0]
+        })
     }
-    this.setState({
-        options,
-        selectedCrew,
-        selectedCrewMember: selectedCrew[0]
-    })
-  }
 
-  componentWillUnmount() {
-    window.removeEventListener('keydown', this.handleKeyDown);
-  }
-
-  handleKeyDown = (event) => {
-    if (event.key === 'Enter' || event.keyCode === 13) {
-      event.preventDefault();
-      this.submit();
+    componentWillUnmount() {
+        window.removeEventListener('keydown', this.handleKeyDown);
     }
-  }
 
-  getDungeonDetails = async () => {
-    // const user = getMeta();
-    // user.name = 'Henry'
-    // ...existing code...
-    
-    // if(!user.dungeonId){
-    //   this.setState({
-    //     user,
-    //     dungeon: null
-    //   })
-    // } else {
-    //   const res = await loadDungeonRequest(user.dungeonId)
-    // ...existing code...
-    //   const dungeon = JSON.parse(res.data[0].content)
-    //   console.log('dungeon:', dungeon)
-    //   this.setState({
-    //     user,
-    //     dungeon
-    //   })
-    // }
-  }
-  singleClick = (crewMember) => {
-    this.setState({
-        selectedCrewMember: crewMember
-    })
-  }
-  selectCrewMember = (event, crewMember) => {
-    clearTimeout(this.timer);
-    const savedMember = this.state.selectedCrew.find(c => c && (c.id === crewMember.id || c.name === crewMember.name));
-    const memberToUse = savedMember || crewMember;
+    handleKeyDown = (event) => {
+        if (event.key === 'Enter' || event.keyCode === 13) {
+            event.preventDefault();
+            this.submit();
+        }
+    }
 
-    if (event.detail === 1) {
-        this.timer = setTimeout(() => this.singleClick(memberToUse), 200)
-    } else if (event.detail === 2) {
+    getDungeonDetails = async () => {
+        // const user = getMeta();
+        // user.name = 'Henry'
+        // ...existing code...
+
+        // if(!user.dungeonId){
+        //   this.setState({
+        //     user,
+        //     dungeon: null
+        //   })
+        // } else {
+        //   const res = await loadDungeonRequest(user.dungeonId)
+        // ...existing code...
+        //   const dungeon = JSON.parse(res.data[0].content)
+        //   console.log('dungeon:', dungeon)
+        //   this.setState({
+        //     user,
+        //     dungeon
+        //   })
+        // }
+    }
+    singleClick = (crewMember) => {
+        this.setState({
+            selectedCrewMember: crewMember
+        })
+    }
+    selectCrewMember = (event, crewMember) => {
+        clearTimeout(this.timer);
+        const savedMember = this.state.selectedCrew.find(c => c && (c.id === crewMember.id || c.name === crewMember.name));
+        const memberToUse = savedMember || crewMember;
+
+        if (event.detail === 1) {
+            this.timer = setTimeout(() => this.singleClick(memberToUse), 200)
+        } else if (event.detail === 2) {
+            let crew = this.state.selectedCrew;
+            if (crew.length === 3 && !this.state.advancedUser) return
+            if (!crew.includes(memberToUse)) crew.push(memberToUse)
+            this.setState({
+                selectedCrew: crew
+            })
+        }
+        this.setState({
+            selectedCrewMember: memberToUse
+        })
+    }
+    addMember = (index) => {
+        let member = this.state.selectedCrewMember
         let crew = this.state.selectedCrew;
-        if(crew.length === 3 && !this.state.advancedUser) return
-        if(!crew.includes(memberToUse)) crew.push(memberToUse)
+        if (!crew.includes(member)) crew.push(member)
         this.setState({
             selectedCrew: crew
         })
     }
-    this.setState({
-        selectedCrewMember: memberToUse
-    })
-  }
-  addMember = (index) => {
-    let member = this.state.selectedCrewMember
-    let crew = this.state.selectedCrew;
-    if(!crew.includes(member)) crew.push(member)
-    this.setState({
-        selectedCrew: crew
-    })
-  }
-//   clearDungeon = () => {
-//     console.log('clearing dungeon')
-//     if(this.state.dungeon){
-//       let user = getMeta();
-//       user.dungeonId = null;
-//       storeMeta(user);
-//       setTimeout(()=>{
-//         this.getDungeonDetails();
-//       })
-//     }
-//   }
-submit = async () => {
-    const meta = getMeta();
-    let selectedCrew = this.state.selectedCrew.filter(e=> e !== null);
+    getInProcessAction = (member) => {
+        if (!member) return null;
+        const now = new Date();
 
-    // Ensure only the first member in the selected crew has isLeader set to true
-    selectedCrew.forEach((member, idx) => {
-        member.isLeader = (idx === 0);
-    });
-
-    // Provide starting items
-    const im = new InventoryManager();
-    im.initializeItems();
-    const allItems = im.allItems || {};
-
-    selectedCrew.forEach(member => {
-        if (!member.inventory) member.inventory = [];
-        if (member.inventory.length === 0) {
-            let itemKey = null;
-            const isBow = (k, item) => k.endsWith('_bow') || k === 'merklins_peacekeeper' || item.range === 'far';
-            
-            if (member.type === 'soldier' || member.type === 'barbarian') {
-                // Melee Fighter: swords/axes (no bows) and helms/shields
-                const pool = Object.keys(allItems).filter(k => {
-                    const item = allItems[k];
-                    if (!item || item.tier !== 1) return false;
-                    const isMartialWeapon = item.type === 'weapon' && !isBow(k, item);
-                    const isMartialArmor = item.type === 'armor' && (item.subtype === 'shield' || item.subtype === 'helm');
-                    return isMartialWeapon || isMartialArmor;
-                });
-                if (pool.length) itemKey = pool[Math.floor(Math.random() * pool.length)];
-            } else if (member.type === 'ranger') {
-                // Ranger Fighter: bows only and helms/shields
-                const pool = Object.keys(allItems).filter(k => {
-                    const item = allItems[k];
-                    if (!item || item.tier !== 1) return false;
-                    const isRangerWeapon = item.type === 'weapon' && isBow(k, item);
-                    const isMartialArmor = item.type === 'armor' && (item.subtype === 'shield' || item.subtype === 'helm');
-                    return isRangerWeapon || isMartialArmor;
-                });
-                if (pool.length) itemKey = pool[Math.floor(Math.random() * pool.length)];
-            } else if (['sage', 'wizard', 'monk', 'summoner', 'engineer'].includes(member.type)) {
-                // Non-martial: amulets, masks, tabards, boots
-                const pool = Object.keys(allItems).filter(k => {
-                    const item = allItems[k];
-                    if (!item || item.tier !== 1) return false;
-                    return ['amulet', 'mask', 'tabard', 'boots'].includes(item.subtype);
-                });
-                if (pool.length) itemKey = pool[Math.floor(Math.random() * pool.length)];
-            }
-
-            if (itemKey && allItems[itemKey]) {
-                const item = JSON.parse(JSON.stringify(allItems[itemKey]));
-                item.equippedBy = member.id;
-                
-                // Determine accurate equippedSlot
-                if (item.type === 'weapon') {
-                    item.equippedSlot = 'right';
-                } else if (item.subtype === 'shield') {
-                    item.equippedSlot = 'left';
-                } else if (item.subtype === 'helm' || item.subtype === 'mask') {
-                    item.equippedSlot = 'head';
-                } else if (item.subtype === 'tabard') {
-                    item.equippedSlot = 'chest';
-                } else if (item.subtype === 'boots') {
-                    item.equippedSlot = 'boots';
-                } else if (item.subtype === 'amulet' || item.subtype === 'charm') {
-                    item.equippedSlot = 'ancillary-left';
-                } else {
-                    item.equippedSlot = 'right'; // fallback
+        // Check specialActions
+        if (Array.isArray(member.specialActions)) {
+            const active = member.specialActions.find(a => a && !a.available && a.endDate && new Date(a.endDate) > now);
+            if (active) {
+                switch (active.type) {
+                    case 'glyph':
+                        return 'glyph etching';
+                    case 'sharpen_blades':
+                        return 'weapon sharpening';
+                    case 'prepare_poison':
+                    case 'acid_bomb':
+                        return 'poison preparation';
+                    case 'deploy_animal':
+                    case 'rat_agent':
+                        return 'animal deployment';
+                    case 'ritual':
+                        return 'ritual preparation';
+                    case 'scry':
+                        return 'scrying';
+                    case 'tactics':
+                        return 'battle tactics training';
+                    case 'brew':
+                        return 'brewing';
+                    case 'compound':
+                        return 'potion mixing';
+                    default:
+                        return active.name || active.type || 'special action';
                 }
-                
-                member.inventory.push(item);
             }
         }
-    });
 
-    meta.crew = selectedCrew;
-    await updateUserRequest(getUserId(), meta);
-    storeMeta(meta);
-    this.goBack();
-}
-clear = () => {
-    const meta = getMeta();
-    meta.crew = [];
-    storeMeta(meta);
-    this.setState({
-        selectedCrew: []
-    })
-}
-goBack = () => {
-    this.setState({
-        navToLanding: true
-    })
-}
-  handleNameChange = (event) => {
-    const newName = event.target.value;
-    const { selectedCrewMember, selectedCrew, options } = this.state;
-    if (!selectedCrewMember) return;
-
-    const targetId = selectedCrewMember.id;
-    const updatedSelectedMember = { ...selectedCrewMember, name: newName };
-
-    const updatedSelectedCrew = selectedCrew.map(c => {
-        if (c && (c.id === targetId || (c.type === selectedCrewMember.type && c.id === selectedCrewMember.id))) {
-            return { ...c, name: newName };
+        // Check tattooImprinting (barbarian)
+        if (member.tattooImprinting && member.tattooImprinting.endDate && new Date(member.tattooImprinting.endDate) > now) {
+            return 'tattoo imprinting';
         }
-        return c;
-    });
 
-    const updatedOptions = options.map(o => {
-        if (o && o.id === targetId) {
-            return { ...o, name: newName };
-        }
-        return o;
-    });
-
-    this.setState({
-        selectedCrewMember: updatedSelectedMember,
-        selectedCrew: updatedSelectedCrew,
-        options: updatedOptions
-    });
-
-    // Also update adventurers array in crewManager prop if available
-    if (this.props.crewManager && Array.isArray(this.props.crewManager.adventurers)) {
-        const adv = this.props.crewManager.adventurers.find(a => a.id === targetId);
-        if (adv) adv.name = newName;
+        return null;
     }
-  };
 
-  render(){
-    return (
-    <div className="crew-manager">
-        { this.state.navToLanding && <Redirect to='/'/> }
-        <div className="content-container">
-            <div className="button-row-top">
-                <button onClick={() => this.submit()}>Back</button>
-            </div>
-            <div className="title" style={{ marginTop: '-24px', marginBottom: '12px', fontSize: '1.4em', fontWeight: 'bold', fontFamily: "'Cinzel', serif", color: '#f9b115', letterSpacing: '0.06em' }}>
-                Choose your crew
-            </div>
-            <div className="crew-selector">
-                <div className="crew-options">
-                    {this.state.options.map((e,i)=> {
-                        const isSelected = this.state.selectedCrewMember && (
-                            this.state.selectedCrewMember.id === e.id || this.state.selectedCrewMember.name === e.name
-                        );
-                        const savedMember = this.state.selectedCrew.find(c => c && (c.id === e.id || c.name === e.name));
-                        const displayLevel = savedMember ? (savedMember.level || 1) : (e.level || 1);
-                        return (
-                            <div 
-                                className={`portrait${isSelected ? ' selected' : ''}`} 
-                                key={i}
-                                style={{backgroundImage: "url(" + e.portrait + ")", position: 'relative'}}
-                                onClick={(event) => this.selectCrewMember(event, e)}
-                            >
-                                <span style={{
-                                    position: 'absolute',
-                                    bottom: '2px',
-                                    right: '4px',
-                                    background: 'rgba(0,0,0,0.85)',
-                                    color: '#f9b115',
-                                    padding: '1px 5px',
-                                    borderRadius: '3px',
-                                    fontSize: '9px',
-                                    fontWeight: 'bold',
-                                    fontFamily: 'Outfit, sans-serif',
-                                    border: '1px solid rgba(249,177,21,0.2)'
-                                }}>
-                                    Lvl {displayLevel}
-                                </span>
-                            </div>
-                        );
-                    })}
-                </div>
-                <div className="member-panel" style={{ display: 'flex', alignItems: 'flex-start' }}>
-                                        {this.state.selectedCrewMember &&
-                                            <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: 15}}>
-                                                <div
-                                                    className="giant-portrait"
-                                                    style={{
-                                                        backgroundImage: "url(" + this.state.selectedCrewMember.portrait + ")",
-                                                        ...(this.state.selectedCrewMember.name === 'Sardonis' ? {
-                                                            backgroundSize: '90% 90%',
-                                                            backgroundPosition: 'center'
-                                                        } : {
-                                                            backgroundSize: '100% 100%',
-                                                            backgroundPosition: 'center'
-                                                        }),
-                                                        backgroundRepeat: 'no-repeat'
-                                                    }}
-                                                >
-                                                        {/* <div className="add-button" onClick={()=>this.addMember()}>+</div> */}
-                                                </div>
-                                            </div>
-                                        }
-                    {this.state.selectedCrewMember && <div className="details-pane" style={{ marginRight: '15px' }}>
-                        <div className="member-name" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <input
-                                    type="text"
-                                    value={this.state.selectedCrewMember.name || ''}
-                                    onChange={this.handleNameChange}
-                                    style={{
-                                        background: 'rgba(0, 0, 0, 0.55)',
-                                        border: '1px solid rgba(249, 177, 21, 0.45)',
-                                        borderRadius: '6px',
-                                        color: '#fff',
-                                        fontSize: '18px',
-                                        fontWeight: 'bold',
-                                        fontFamily: "'Cinzel', serif",
-                                        padding: '4px 10px',
-                                        width: '210px',
-                                        height: '36px',
-                                        boxSizing: 'border-box',
-                                        letterSpacing: '0.04em',
-                                        outline: 'none',
-                                        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
-                                        transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
-                                    }}
-                                    onFocus={e => { e.target.style.borderColor = '#f9b115'; e.target.style.boxShadow = '0 0 8px rgba(249, 177, 21, 0.5)'; }}
-                                    onBlur={e => { e.target.style.borderColor = 'rgba(249, 177, 21, 0.45)'; e.target.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.5)'; }}
-                                    title="Click to edit name"
-                                />
-                                <span style={{ fontSize: '14px', opacity: 0.6 }} title="Editable name">✏️</span>
-                            </div>
-                            <span style={{ fontSize: '11px', color: '#f9b115', fontWeight: 'bold', background: 'rgba(249,177,21,0.1)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(249,177,21,0.2)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                                Level {this.state.selectedCrewMember.level || 1} {this.state.selectedCrewMember.type ? this.state.selectedCrewMember.type : ''}
-                            </span>
-                        </div>
-                        <div className="description" style={{ marginTop: '8px', fontSize: '13px', color: '#ccc', lineHeight: '1.4', maxWidth: '200px' }}>
-                            {this.state.selectedCrewMember.description}
-                        </div>
-                    </div>}
-                    {this.state.selectedCrewMember && <div className="stats-pane" style={{ minWidth: '260px', marginRight: '15px' }}>
-                        {renderPowerRatingsPanel(this.state.selectedCrewMember)}
-                    </div>}
-                    {this.state.selectedCrewMember && <div className="abilities-pane">
-                        {this.state.selectedCrewMember.skills ? (
-                            <div className="specials">Skills: &nbsp;
-                                {this.state.selectedCrewMember.skills.map((e, i) => {
-                                    const name = formatRosterSkillName(e);
-                                    return <div key={i}>{name}{i !== this.state.selectedCrewMember.skills.length - 1 ? ',' : ''} &nbsp; </div>
-                                })}
-                            </div>
-                        ) : (
-                            <>
-                                <div className="attacks">Attacks: &nbsp;
-                                    {(this.state.selectedCrewMember.attacks || []).map((e,i)=> {
-                                        const name = formatRosterSkillName(e);
-                                        return <div key={i}>{ name }{i !== this.state.selectedCrewMember.attacks.length-1 ?  ',' : ''} &nbsp; </div>
-                                    })}
-                                </div>
-                                <div className="specials">Specials: &nbsp;
-                                    {(this.state.selectedCrewMember.specials || []).map((e,i)=> {
-                                        const name = formatRosterSkillName(e);
-                                        return <div key={i}>{ name }{i !== this.state.selectedCrewMember.specials.length-1 ?  ',' : ''} &nbsp; </div>
-                                    })}
-                                </div>
-                            </>
-                        )}
-                        <div className="passives">Passives: &nbsp;
-                            {(this.state.selectedCrewMember.passives || []).map((e,i)=> {
-                                const name = formatRosterSkillName(e);
-                                return <div key={i}>{ name }{i !== this.state.selectedCrewMember.passives.length-1 ?  ',' : ''} &nbsp; </div>
-                            })}
-                        </div>
-                        <div className="weaknesses" style={{ display: 'flex', alignItems: 'center' }}>Weaknesses: &nbsp;
-                            {renderWeaknessSymbols(this.state.selectedCrewMember.weaknesses)}
-                        </div>
-                    </div>}
-                    {/* <div className="button-container">
-                        <button>+</button>
-                    </div> */}
-                </div>
-                <div className="crew-tray" style={{ position: 'relative', alignItems: 'flex-end' }}>
-                    {this.state.crewSlots.map((slot, i)=>{
-                        const member = this.state.selectedCrew[i];
-                        const isLeader = i === 0;
-                        const slotSize = isLeader ? '125px' : '101px';
-                        return (
-                            <div 
-                                key={i} 
-                                className={`selected-crew-portrait-container ${i === 3 && !this.state.advancedUser ? 'closed' : ''}`}
-                                style={{
-                                    width: slotSize,
-                                    height: slotSize,
-                                    ...(isLeader ? {
-                                        border: '1.5px solid #f9b115',
-                                        boxShadow: '0 0 12px rgba(249, 177, 21, 0.45)'
-                                    } : {})
-                                }}
-                            >
-                                {isLeader && (
-                                    <div style={{
-                                        position: 'absolute',
-                                        top: '-26px',
-                                        left: '0',
-                                        right: '0',
-                                        textAlign: 'center',
-                                        fontSize: '11px',
-                                        fontWeight: 'bold',
-                                        color: '#f9b115',
-                                        fontFamily: "'Cinzel', serif",
-                                        letterSpacing: '0.1em',
-                                        textTransform: 'uppercase',
-                                        whiteSpace: 'nowrap',
-                                        pointerEvents: 'none'
-                                    }}>
-                                        Leader
-                                    </div>
-                                )}
-                                {(i === 3 && !this.state.advancedUser) === false && (
-                                    <div className={`add-button ${!this.state.selectedCrewMember ? 'disabled' : ''}`} onClick={()=>this.addMember(i)}>&oplus;</div>
-                                )}
-                                {member && (
-                                    <div className="portrait" style={{backgroundImage: "url(" + member.portrait + ")", position: 'relative', width: '100%', height: '100%'}}>
+    confirmRemoveMember = () => {
+        const { index, member } = this.state.removalWarningModal;
+        if (member) {
+            const now = new Date();
+            // Clear in-process timers on the member object in the crew list
+            if (Array.isArray(member.specialActions)) {
+                member.specialActions = member.specialActions.filter(a => {
+                    if (!a || a.available) return true;
+                    if (a.endDate && new Date(a.endDate) > now) {
+                        return false; // remove in-progress action
+                    }
+                    return true;
+                });
+            }
+            if (member.tattooImprinting && member.tattooImprinting.endDate && new Date(member.tattooImprinting.endDate) > now) {
+                delete member.tattooImprinting;
+            }
+
+            // Synchronize with options list (the pool) and live adventurers templates
+            const targetId = member.id;
+            if (this.props.crewManager && Array.isArray(this.props.crewManager.adventurers)) {
+                const adv = this.props.crewManager.adventurers.find(a => a.id === targetId);
+                if (adv) {
+                    if (Array.isArray(adv.specialActions)) {
+                        adv.specialActions = adv.specialActions.filter(a => {
+                            if (!a || a.available) return true;
+                            if (a.endDate && new Date(a.endDate) > now) {
+                                return false;
+                            }
+                            return true;
+                        });
+                    }
+                    if (adv.tattooImprinting && adv.tattooImprinting.endDate && new Date(adv.tattooImprinting.endDate) > now) {
+                        delete adv.tattooImprinting;
+                    }
+                }
+            }
+
+            // Also update in component options state
+            if (Array.isArray(this.state.options)) {
+                const updatedOptions = this.state.options.map(o => {
+                    if (o && o.id === targetId) {
+                        const cloned = { ...o };
+                        if (Array.isArray(cloned.specialActions)) {
+                            cloned.specialActions = cloned.specialActions.filter(a => {
+                                if (!a || a.available) return true;
+                                if (a.endDate && new Date(a.endDate) > now) {
+                                    return false;
+                                }
+                                return true;
+                            });
+                        }
+                        if (cloned.tattooImprinting && cloned.tattooImprinting.endDate && new Date(cloned.tattooImprinting.endDate) > now) {
+                            delete cloned.tattooImprinting;
+                        }
+                        return cloned;
+                    }
+                    return o;
+                });
+                this.setState({ options: updatedOptions });
+            }
+        }
+
+        this.executeRemoveMember(index);
+        this.setState({ removalWarningModal: null });
+    }
+
+    executeRemoveMember = (index) => {
+        let crew = [...this.state.selectedCrew];
+        crew.splice(index, 1);
+        this.setState({
+            selectedCrew: crew
+        });
+    }
+
+    removeMember = (index) => {
+        const member = this.state.selectedCrew[index];
+        if (member) {
+            const inProcessAction = this.getInProcessAction(member);
+            if (inProcessAction) {
+                this.setState({
+                    removalWarningModal: {
+                        index,
+                        member,
+                        actionName: inProcessAction
+                    }
+                });
+                return;
+            }
+        }
+        this.executeRemoveMember(index);
+    }
+    //   clearDungeon = () => {
+    //     console.log('clearing dungeon')
+    //     if(this.state.dungeon){
+    //       let user = getMeta();
+    //       user.dungeonId = null;
+    //       storeMeta(user);
+    //       setTimeout(()=>{
+    //         this.getDungeonDetails();
+    //       })
+    //     }
+    //   }
+    submit = async () => {
+        const meta = getMeta();
+        let selectedCrew = this.state.selectedCrew.filter(e => e !== null);
+
+        // Ensure only the first member in the selected crew has isLeader set to true
+        selectedCrew.forEach((member, idx) => {
+            member.isLeader = (idx === 0);
+        });
+
+        // Provide starting items
+        const im = new InventoryManager();
+        im.initializeItems();
+        const allItems = im.allItems || {};
+
+        selectedCrew.forEach(member => {
+            if (!member.inventory) member.inventory = [];
+            if (member.inventory.length === 0) {
+                let itemKey = null;
+                const isBow = (k, item) => k.endsWith('_bow') || k === 'merklins_peacekeeper' || item.range === 'far';
+
+                if (member.type === 'soldier' || member.type === 'barbarian') {
+                    // Melee Fighter: swords/axes (no bows) and helms/shields
+                    const pool = Object.keys(allItems).filter(k => {
+                        const item = allItems[k];
+                        if (!item || item.tier !== 1) return false;
+                        const isMartialWeapon = item.type === 'weapon' && !isBow(k, item);
+                        const isMartialArmor = item.type === 'armor' && (item.subtype === 'shield' || item.subtype === 'helm');
+                        return isMartialWeapon || isMartialArmor;
+                    });
+                    if (pool.length) itemKey = pool[Math.floor(Math.random() * pool.length)];
+                } else if (member.type === 'ranger') {
+                    // Ranger Fighter: bows only and helms/shields
+                    const pool = Object.keys(allItems).filter(k => {
+                        const item = allItems[k];
+                        if (!item || item.tier !== 1) return false;
+                        const isRangerWeapon = item.type === 'weapon' && isBow(k, item);
+                        const isMartialArmor = item.type === 'armor' && (item.subtype === 'shield' || item.subtype === 'helm');
+                        return isRangerWeapon || isMartialArmor;
+                    });
+                    if (pool.length) itemKey = pool[Math.floor(Math.random() * pool.length)];
+                } else if (['sage', 'wizard', 'monk', 'summoner', 'engineer'].includes(member.type)) {
+                    // Non-martial: amulets, masks, tabards, boots
+                    const pool = Object.keys(allItems).filter(k => {
+                        const item = allItems[k];
+                        if (!item || item.tier !== 1) return false;
+                        return ['amulet', 'mask', 'tabard', 'boots'].includes(item.subtype);
+                    });
+                    if (pool.length) itemKey = pool[Math.floor(Math.random() * pool.length)];
+                }
+
+                if (itemKey && allItems[itemKey]) {
+                    const item = JSON.parse(JSON.stringify(allItems[itemKey]));
+                    item.equippedBy = member.id;
+
+                    // Determine accurate equippedSlot
+                    if (item.type === 'weapon') {
+                        item.equippedSlot = 'right';
+                    } else if (item.subtype === 'shield') {
+                        item.equippedSlot = 'left';
+                    } else if (item.subtype === 'helm' || item.subtype === 'mask') {
+                        item.equippedSlot = 'head';
+                    } else if (item.subtype === 'tabard') {
+                        item.equippedSlot = 'chest';
+                    } else if (item.subtype === 'boots') {
+                        item.equippedSlot = 'boots';
+                    } else if (item.subtype === 'amulet' || item.subtype === 'charm') {
+                        item.equippedSlot = 'ancillary-left';
+                    } else {
+                        item.equippedSlot = 'right'; // fallback
+                    }
+
+                    member.inventory.push(item);
+                }
+            }
+        });
+
+        meta.crew = selectedCrew;
+        await updateUserRequest(getUserId(), meta);
+        storeMeta(meta);
+        this.goBack();
+    }
+    clear = () => {
+        const meta = getMeta();
+        meta.crew = [];
+        storeMeta(meta);
+        this.setState({
+            selectedCrew: []
+        })
+    }
+    goBack = () => {
+        this.setState({
+            navToLanding: true
+        })
+    }
+    handleNameChange = (event) => {
+        const newName = event.target.value;
+        const { selectedCrewMember, selectedCrew, options } = this.state;
+        if (!selectedCrewMember) return;
+
+        const targetId = selectedCrewMember.id;
+        const updatedSelectedMember = { ...selectedCrewMember, name: newName };
+
+        const updatedSelectedCrew = selectedCrew.map(c => {
+            if (c && (c.id === targetId || (c.type === selectedCrewMember.type && c.id === selectedCrewMember.id))) {
+                return { ...c, name: newName };
+            }
+            return c;
+        });
+
+        const updatedOptions = options.map(o => {
+            if (o && o.id === targetId) {
+                return { ...o, name: newName };
+            }
+            return o;
+        });
+
+        this.setState({
+            selectedCrewMember: updatedSelectedMember,
+            selectedCrew: updatedSelectedCrew,
+            options: updatedOptions
+        });
+
+        // Also update adventurers array in crewManager prop if available
+        if (this.props.crewManager && Array.isArray(this.props.crewManager.adventurers)) {
+            const adv = this.props.crewManager.adventurers.find(a => a.id === targetId);
+            if (adv) adv.name = newName;
+        }
+    };
+
+    render() {
+        return (
+            <div className="crew-manager">
+                {this.state.navToLanding && <Redirect to='/' />}
+                <div className="content-container">
+                    <div className="button-row-top">
+                        <button onClick={() => this.submit()}>Back</button>
+                    </div>
+                    <div className="title" style={{ marginTop: '-24px', marginBottom: '12px', fontSize: '1.4em', fontWeight: 'bold', fontFamily: "'Cinzel', serif", color: '#f9b115', letterSpacing: '0.06em' }}>
+                        Choose your crew
+                    </div>
+                    <div className="crew-selector">
+                        <div className="crew-options">
+                            {this.state.options.map((e, i) => {
+                                const isSelected = this.state.selectedCrewMember && (
+                                    this.state.selectedCrewMember.id === e.id || this.state.selectedCrewMember.name === e.name
+                                );
+                                const savedMember = this.state.selectedCrew.find(c => c && (c.id === e.id || c.name === e.name));
+                                const displayLevel = savedMember ? (savedMember.level || 1) : (e.level || 1);
+                                return (
+                                    <div
+                                        className={`portrait${isSelected ? ' selected' : ''}`}
+                                        key={i}
+                                        style={{ backgroundImage: "url(" + e.portrait + ")", position: 'relative' }}
+                                        onClick={(event) => this.selectCrewMember(event, e)}
+                                    >
                                         <span style={{
                                             position: 'absolute',
                                             bottom: '2px',
@@ -643,25 +618,272 @@ goBack = () => {
                                             fontFamily: 'Outfit, sans-serif',
                                             border: '1px solid rgba(249,177,21,0.2)'
                                         }}>
-                                            Lvl {member.level || 1}
+                                            Lvl {displayLevel}
                                         </span>
                                     </div>
+                                );
+                            })}
+                        </div>
+                        <div className="member-panel" style={{ display: 'flex', alignItems: 'flex-start' }}>
+                            {this.state.selectedCrewMember &&
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginRight: 15 }}>
+                                    <div
+                                        className="giant-portrait"
+                                        style={{
+                                            backgroundImage: "url(" + this.state.selectedCrewMember.portrait + ")",
+                                            ...(this.state.selectedCrewMember.name === 'Sardonis' ? {
+                                                backgroundSize: '90% 90%',
+                                                backgroundPosition: 'center'
+                                            } : {
+                                                backgroundSize: '100% 100%',
+                                                backgroundPosition: 'center'
+                                            }),
+                                            backgroundRepeat: 'no-repeat'
+                                        }}
+                                    >
+                                        {/* <div className="add-button" onClick={()=>this.addMember()}>+</div> */}
+                                    </div>
+                                </div>
+                            }
+                            {this.state.selectedCrewMember && <div className="details-pane" style={{ marginRight: '15px' }}>
+                                <div className="member-name" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '4px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <input
+                                            type="text"
+                                            value={this.state.selectedCrewMember.name || ''}
+                                            onChange={this.handleNameChange}
+                                            style={{
+                                                background: 'rgba(0, 0, 0, 0.55)',
+                                                border: '1px solid rgba(249, 177, 21, 0.45)',
+                                                borderRadius: '6px',
+                                                color: '#fff',
+                                                fontSize: '18px',
+                                                fontWeight: 'bold',
+                                                fontFamily: "'Cinzel', serif",
+                                                padding: '4px 10px',
+                                                width: '210px',
+                                                height: '36px',
+                                                boxSizing: 'border-box',
+                                                letterSpacing: '0.04em',
+                                                outline: 'none',
+                                                boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
+                                                transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+                                            }}
+                                            onFocus={e => { e.target.style.borderColor = '#f9b115'; e.target.style.boxShadow = '0 0 8px rgba(249, 177, 21, 0.5)'; }}
+                                            onBlur={e => { e.target.style.borderColor = 'rgba(249, 177, 21, 0.45)'; e.target.style.boxShadow = 'inset 0 1px 3px rgba(0,0,0,0.5)'; }}
+                                            title="Click to edit name"
+                                        />
+                                        <span style={{ fontSize: '14px', opacity: 0.6 }} title="Editable name">✏️</span>
+                                    </div>
+                                    <span style={{ fontSize: '11px', color: '#f9b115', fontWeight: 'bold', background: 'rgba(249,177,21,0.1)', padding: '2px 8px', borderRadius: '4px', border: '1px solid rgba(249,177,21,0.2)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                        Level {this.state.selectedCrewMember.level || 1} {this.state.selectedCrewMember.type ? this.state.selectedCrewMember.type : ''}
+                                    </span>
+                                </div>
+                                <div className="description" style={{ marginTop: '8px', fontSize: '13px', color: '#ccc', lineHeight: '1.4', maxWidth: '200px' }}>
+                                    {this.state.selectedCrewMember.description}
+                                </div>
+                            </div>}
+                            {this.state.selectedCrewMember && <div className="stats-pane" style={{ minWidth: '260px', marginRight: '15px' }}>
+                                {renderPowerRatingsPanel(this.state.selectedCrewMember)}
+                            </div>}
+                            {this.state.selectedCrewMember && <div className="abilities-pane">
+                                {this.state.selectedCrewMember.skills ? (
+                                    <div className="specials">Skills: &nbsp;
+                                        {this.state.selectedCrewMember.skills.map((e, i) => {
+                                            const name = formatRosterSkillName(e);
+                                            return <div key={i}>{name}{i !== this.state.selectedCrewMember.skills.length - 1 ? ',' : ''} &nbsp; </div>
+                                        })}
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="attacks">Attacks: &nbsp;
+                                            {(this.state.selectedCrewMember.attacks || []).map((e, i) => {
+                                                const name = formatRosterSkillName(e);
+                                                return <div key={i}>{name}{i !== this.state.selectedCrewMember.attacks.length - 1 ? ',' : ''} &nbsp; </div>
+                                            })}
+                                        </div>
+                                        <div className="specials">Specials: &nbsp;
+                                            {(this.state.selectedCrewMember.specials || []).map((e, i) => {
+                                                const name = formatRosterSkillName(e);
+                                                return <div key={i}>{name}{i !== this.state.selectedCrewMember.specials.length - 1 ? ',' : ''} &nbsp; </div>
+                                            })}
+                                        </div>
+                                    </>
                                 )}
+                                <div className="passives">Passives: &nbsp;
+                                    {(this.state.selectedCrewMember.passives || []).map((e, i) => {
+                                        const name = formatRosterSkillName(e);
+                                        return <div key={i}>{name}{i !== this.state.selectedCrewMember.passives.length - 1 ? ',' : ''} &nbsp; </div>
+                                    })}
+                                </div>
+                                <div className="weaknesses" style={{ display: 'flex', alignItems: 'center' }}>Weaknesses: &nbsp;
+                                    {renderWeaknessSymbols(this.state.selectedCrewMember.weaknesses)}
+                                </div>
+                            </div>}
+                            {/* <div className="button-container">
+                        <button>+</button>
+                    </div> */}
+                        </div>
+                        <div className="crew-tray" style={{ position: 'relative', alignItems: 'flex-end' }}>
+                            {this.state.crewSlots.map((slot, i) => {
+                                const member = this.state.selectedCrew[i];
+                                const isLeader = i === 0;
+                                const slotSize = isLeader ? '125px' : '101px';
+                                return (
+                                    <div
+                                        key={i}
+                                        className={`selected-crew-portrait-container ${i === 3 && !this.state.advancedUser ? 'closed' : ''}`}
+                                        style={{
+                                            width: slotSize,
+                                            height: slotSize,
+                                            ...(isLeader ? {
+                                                border: '1.5px solid #f9b115',
+                                                boxShadow: '0 0 12px rgba(249, 177, 21, 0.45)'
+                                            } : {})
+                                        }}
+                                    >
+                                        {isLeader && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: '-26px',
+                                                left: '0',
+                                                right: '0',
+                                                textAlign: 'center',
+                                                fontSize: '11px',
+                                                fontWeight: 'bold',
+                                                color: '#f9b115',
+                                                fontFamily: "'Cinzel', serif",
+                                                letterSpacing: '0.1em',
+                                                textTransform: 'uppercase',
+                                                whiteSpace: 'nowrap',
+                                                pointerEvents: 'none'
+                                            }}>
+                                                Leader
+                                            </div>
+                                        )}
+                                        {(i === 3 && !this.state.advancedUser) === false && (
+                                            <div
+                                                className={`add-button ${member ? 'occupied' : (!this.state.selectedCrewMember ? 'disabled' : '')}`}
+                                                onClick={() => member ? this.removeMember(i) : this.addMember(i)}
+                                            >
+                                                {member ? '\u2296' : '\u2295'}
+                                            </div>
+                                        )}
+                                        {member && (
+                                            <div className="portrait" style={{ backgroundImage: "url(" + member.portrait + ")", position: 'relative', width: '100%', height: '100%' }}>
+                                                <span style={{
+                                                    position: 'absolute',
+                                                    bottom: '2px',
+                                                    right: '4px',
+                                                    background: 'rgba(0,0,0,0.85)',
+                                                    color: '#f9b115',
+                                                    padding: '1px 5px',
+                                                    borderRadius: '3px',
+                                                    fontSize: '9px',
+                                                    fontWeight: 'bold',
+                                                    fontFamily: 'Outfit, sans-serif',
+                                                    border: '1px solid rgba(249,177,21,0.2)'
+                                                }}>
+                                                    Lvl {member.level || 1}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <div className="button-row-bottom-left">
+                        <button onClick={() => this.clear()}>Clear</button>
+                    </div>
+                    <div className="button-row">
+                        <button onClick={() => this.submit()}>Submit</button>
+                    </div>
+                    {this.state.removalWarningModal && (
+                        <div style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            width: '100vw',
+                            height: '100vh',
+                            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                            backdropFilter: 'blur(3px)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            zIndex: 999999
+                        }}>
+                            <div style={{
+                                background: '#140f09',
+                                border: '1.5px solid #ffb830',
+                                borderRadius: '12px',
+                                boxShadow: '0 10px 25px rgba(0, 0, 0, 0.5), 0 0 15px rgba(255, 184, 48, 0.2)',
+                                padding: '24px',
+                                maxWidth: '420px',
+                                width: '90%',
+                                textAlign: 'center',
+                                fontFamily: "'Inter', system-ui, -apple-system, sans-serif"
+                            }}>
+                                <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚠️</div>
+                                <h3 style={{
+                                    color: '#ffb830',
+                                    margin: '0 0 12px 0',
+                                    fontSize: '18px',
+                                    fontFamily: "'Cinzel', serif",
+                                    letterSpacing: '0.04em'
+                                }}>
+                                    Abandon Progress?
+                                </h3>
+                                <p style={{
+                                    color: '#ddd',
+                                    fontSize: '14px',
+                                    lineHeight: '1.5',
+                                    margin: '0 0 24px 0'
+                                }}>
+                                    If you remove this unit from your crew you will lose all progress on the <strong>{this.state.removalWarningModal.actionName}</strong>.
+                                </p>
+                                <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                                    <button
+                                        onClick={() => this.confirmRemoveMember()}
+                                        style={{
+                                            background: 'linear-gradient(135deg, #ffc850, #ffb830)',
+                                            color: '#121215',
+                                            border: 'none',
+                                            borderRadius: '6px',
+                                            padding: '10px 20px',
+                                            fontSize: '13px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s ease',
+                                            boxShadow: '0 2px 6px rgba(255, 184, 48, 0.2)'
+                                        }}
+                                    >
+                                        Confirm
+                                    </button>
+                                    <button
+                                        onClick={() => this.setState({ removalWarningModal: null })}
+                                        style={{
+                                            background: 'rgba(255, 255, 255, 0.08)',
+                                            color: '#fff',
+                                            border: '1px solid rgba(255, 255, 255, 0.15)',
+                                            borderRadius: '6px',
+                                            padding: '10px 20px',
+                                            fontSize: '13px',
+                                            fontWeight: 'bold',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
-                        );
-                    })}
+                        </div>
+                    )}
                 </div>
             </div>
-            <div className="button-row-bottom-left">
-                <button onClick={() => this.clear()}>Clear</button>
-            </div>
-            <div className="button-row">
-                <button onClick={() => this.submit()}>Submit</button>
-            </div>
-        </div>
-    </div>
-    )
-  }
+        )
+    }
 }
 
 export default CrewManagerPage;

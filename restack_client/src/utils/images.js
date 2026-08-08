@@ -1196,6 +1196,14 @@ import buildable_storage from '../assets/icons/buildings/buildable/storage.png';
 import buildable_temple from '../assets/icons/buildings/buildable/temple.png';
 import buildable_war_camp from '../assets/icons/buildings/buildable/war camp.png';
 import buildable_war_fort from '../assets/icons/buildings/buildable/war fort.png';
+
+import frozen_locus from '../assets/icons/buildings/frozen locus.png';
+import emerald_locus from '../assets/icons/buildings/emerald locus.png';
+import cosmic_locus from '../assets/icons/buildings/cosmic locus.png';
+import infernal_tower from '../assets/icons/buildings/infernal tower.png';
+import infernal_pit from '../assets/icons/buildings/infernal pit.png';
+import temple from '../assets/icons/buildings/temple.png';
+
 // ── Card Duel Health Orbs ──────────────────────────────────────────────────
 import reaper_health_orb from '../assets/icons/reaper-health-orb.png';
 import crew_health_orb from '../assets/icons/crew-health-orb.png';
@@ -2365,6 +2373,13 @@ export {
     buildable_temple,
     buildable_war_camp,
     buildable_war_fort,
+
+    frozen_locus,
+    emerald_locus,
+    cosmic_locus,
+    infernal_tower,
+    infernal_pit,
+    temple,
 
     earthen_fort,
     observer_platform,

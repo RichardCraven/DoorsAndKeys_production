@@ -4269,3 +4269,171 @@
     display: inline-block;
     filter: sepia(1) saturate(7) hue-rotate(15deg) brightness(1.1);
 }
+
+/* Sage Pop-out Mix Potions Modal */
+.mix-potions-modal {
+    .modal-content {
+        background-color: #140f09 !important;
+        border: 2px solid rgba(255, 180, 60, 0.35) !important;
+        box-shadow: 0 0 25px rgba(255, 180, 60, 0.15) !important;
+        border-radius: 8px !important;
+    }
+
+    .compound-slot-row {
+        display: flex;
+        gap: 12px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(255, 180, 60, 0.15);
+    }
+    .compound-slot {
+        width: 50px;
+        height: 50px;
+        border-radius: 6px;
+        border: 2px solid rgba(255, 255, 255, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+        flex-shrink: 0;
+
+        &.empty {
+            background: rgba(255, 255, 255, 0.02);
+            cursor: default;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        &.filled {
+            border-color: rgba(255, 200, 80, 0.85);
+            background: rgba(255, 180, 60, 0.08);
+            &:hover { background: rgba(255, 180, 60, 0.18); }
+
+            .compound-slot-icon {
+                width: 38px;
+                height: 38px;
+                background-size: contain;
+                background-repeat: no-repeat;
+                background-position: center;
+                filter: drop-shadow(0 0 3px rgba(255, 200, 80, 0.5));
+            }
+        }
+    }
+
+    .compound-reagent-grid {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        max-height: 320px;
+        overflow-y: auto;
+        padding-right: 4px;
+        &::-webkit-scrollbar { width: 4px; }
+        &::-webkit-scrollbar-thumb { background: rgba(255, 180, 60, 0.3); border-radius: 2px; }
+    }
+
+    .compound-reagent-cell {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        width: 68px;
+        cursor: pointer;
+        border-radius: 6px;
+        padding: 8px 4px;
+        border: 1px solid transparent;
+        transition: all 0.12s ease;
+        position: relative;
+        background: rgba(255, 255, 255, 0.02);
+
+        &:hover:not(.depleted):not(.selected) {
+            background: rgba(255, 180, 60, 0.08);
+            border-color: rgba(255, 180, 60, 0.3);
+        }
+        &.selected {
+            background: rgba(255, 180, 60, 0.16);
+            border-color: rgba(255, 200, 80, 0.75);
+            .compound-reagent-icon {
+                filter: brightness(1.2) drop-shadow(0 0 4px rgba(255, 200, 80, 0.5));
+            }
+        }
+        &.compatible {
+            border-color: rgba(255, 200, 80, 0.4);
+            background: rgba(255, 180, 60, 0.06);
+            box-shadow: 0 0 6px rgba(255, 200, 80, 0.25);
+        }
+        &.incompatible {
+            opacity: 0.35;
+            pointer-events: none;
+        }
+        &.depleted {
+            opacity: 0.25;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .compound-reagent-icon {
+            width: 36px;
+            height: 36px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            border-radius: 4px;
+        }
+        .compound-reagent-name {
+            font-size: 9px;
+            color: rgba(255, 220, 160, 0.85);
+            text-align: center;
+            line-height: 1.2;
+            word-break: break-word;
+            max-width: 100%;
+        }
+        .compound-reagent-count {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(0,0,0,0.65);
+            color: rgba(255, 220, 120, 1);
+            font-size: 9px;
+            font-weight: 700;
+            min-width: 14px;
+            height: 14px;
+            border-radius: 7px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+    }
+
+    .compound-recipe-label {
+        font-size: 13px;
+        color: rgba(255, 220, 120, 0.95);
+        font-weight: 600;
+    }
+
+    .compound-brew-btn {
+        width: 100%;
+        padding: 10px;
+        background: rgba(255, 180, 60, 0.1);
+        border: 1px solid rgba(255, 180, 60, 0.3);
+        border-radius: 6px;
+        color: rgba(255, 220, 160, 0.9);
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        letter-spacing: 0.05em;
+        transition: all 0.15s ease;
+        &:hover:not(:disabled) {
+            background: rgba(255, 180, 60, 0.25);
+            border-color: rgba(255, 200, 80, 0.75);
+            color: #fff;
+        }
+        &.ready {
+            border-color: rgba(255, 200, 80, 0.75);
+            color: rgba(255, 240, 180, 1);
+            background: rgba(255, 180, 60, 0.15);
+        }
+        &.disabled, &:disabled {
+            opacity: 0.35;
+            cursor: not-allowed;
+        }
+    }
+}
