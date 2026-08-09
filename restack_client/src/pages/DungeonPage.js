@@ -53,6 +53,7 @@ import '../styles/quests-modal.scss'
 import '../styles/camp-modal.scss'
 import '../styles/codex.scss'
 import SkillTree from '../components/SkillTree';
+import CharacterProfileModal from '../components/CharacterProfileModal';
 import CodexModal from '../components/CodexModal';
 import AssemblyAnimation from '../components/assembly-animation';
 import '../styles/narrative-overlay.scss'
@@ -3538,7 +3539,6 @@ class DungeonPage extends React.Component {
         this.props.boardManager.establishNarrativeEncounterCallback(this.triggerNarrativeEncounter)
         this.props.boardManager.establishVendorEncounterCallback(this.triggerVendorEncounter)
         this.props.boardManager.establishShrineEncounterCallback(this.triggerShrineEncounter)
-        this.props.boardManager.establishLoreTabletEncounterCallback(this.triggerLoreTabletEncounter)
         if (this.props.boardManager) {
             if (typeof this.props.boardManager.establishTriggerPygmyAmbushCallback === 'function') {
                 this.props.boardManager.establishTriggerPygmyAmbushCallback(this.triggerPygmyAmbush);
@@ -6862,7 +6862,7 @@ class DungeonPage extends React.Component {
                                     'monster', 'chest', 'item', 'shop', 'vendor', 'shrine', 'portal',
                                     'boss', 'npc', 'well', 'altar', 'trap', 'treasure',
                                     'campfire', 'camp', 'artifact', 'event', 'dungeon_entrance',
-                                    'spawn', 'narrative', 'lore_tablet', 'spell',
+                                    'spawn', 'narrative', 'lore_tablet', 'tablet', 'spell',
                                     'dungeon_portal', 'dungeon portal',
                                     ...GATE_TYPES,
                                 ]);
@@ -6894,6 +6894,7 @@ class DungeonPage extends React.Component {
                                     'dungeon portal':{ tab: 'interactables', entryId: 'dungeon_portal', search: 'teleporter' },
                                     narrative:    { tab: 'interactables', entryId: 'narrative',    search: 'narrative' },
                                     lore_tablet:  { tab: 'interactables', entryId: 'lore_tablet',  search: 'lore tablet' },
+                                    tablet:       { tab: 'interactables', entryId: 'lore_tablet',  search: 'tablet' },
                                     spawn:        { tab: 'interactables', entryId: 'spawn_point',  search: 'spawn' },
                                     camp:     { tab: 'interactables', entryId: 'camp',     search: 'camp' },
                                     campfire: { tab: 'interactables', entryId: 'camp',     search: 'camp' },
@@ -7038,7 +7039,7 @@ class DungeonPage extends React.Component {
                                             const isChest    = type === 'chest' || (type === 'item' && CHEST_SUBTYPES.has(subtype));
                                             const isGate     = GATE_TYPES.has(type);
                                             const isVendor   = type === 'vendor' || type === 'shop';
-                                            const isNarrative = type === 'narrative' || type === 'lore_tablet';
+                                            const isNarrative = type === 'narrative' || type === 'lore_tablet' || type === 'tablet';
                                             const isSpawn    = type === 'spawn';
                                             const isPortal   = type === 'dungeon_portal' || type === 'dungeon portal';
                                             const isItem     = type === 'item' && !CHEST_SUBTYPES.has(subtype);
@@ -9370,11 +9371,35 @@ class DungeonPage extends React.Component {
                 this.dismissTrapPopup();
                 return;
             }
-            // Enter/Return should dismiss process complete popups if visible
             const processCompleteTypes = ['PrepComplete', 'RitualComplete', 'FoodComplete', 'Updates', 'SharpenBladesDetails'];
             if ((maybeKey === 'Enter' || maybeKey === 'Return') && this.state.showModal && processCompleteTypes.includes(this.state.modalType)) {
                 event.preventDefault();
                 this.onUpdateModalClosed();
+                return;
+            }
+            if (this.state.showModal && this.state.modalType === 'Inscription') {
+                if (maybeKey === 'Enter' || maybeKey === 'Return') {
+                    event.preventDefault();
+                    this.closeInscriptionModal();
+                    return;
+                }
+                
+                // Track typing for secrets
+                if (maybeKey.length === 1 && !this.state.inscriptionSolved && this.state.currentInscriptionData && this.state.currentInscriptionData.secret && this.state.currentInscriptionData.secret.answer) {
+                    const newAnswer = (this.state.inscriptionTypedAnswer || '') + maybeKey;
+                    this.setState({ inscriptionTypedAnswer: newAnswer }, () => {
+                        const answerTarget = this.state.currentInscriptionData.secret.answer;
+                        if (newAnswer.toLowerCase().includes(answerTarget.toLowerCase())) {
+                            this.setState({ inscriptionSolved: true });
+                        }
+                    });
+                } else if (maybeKey === 'Backspace' && !this.state.inscriptionSolved) {
+                    this.setState(prev => ({
+                        inscriptionTypedAnswer: (prev.inscriptionTypedAnswer || '').slice(0, -1)
+                    }));
+                }
+                
+                // Allow typing but prevent other global hotkeys
                 return;
             }
             if ((maybeKey === 'Enter' || maybeKey === 'Return') && this.state.showPygmiesAttackPopup) {
@@ -13360,33 +13385,57 @@ class DungeonPage extends React.Component {
 
     }
 
-    triggerLoreTabletEncounter = (tile) => {
-        const domain = (tile && tile.contains && tile.contains.subtype) || 'unknown';
-        const meta = getMeta() || {};
-        const selectedMember = this.state.selectedCrewMember;
-        if (!selectedMember) return;
 
-        // Award a domain token to the active crew member
-        const crew = Array.isArray(meta.crew) ? meta.crew : [];
-        const memberIdx = crew.findIndex(m => m.id === selectedMember.id);
-        if (memberIdx !== -1) {
-            const member = crew[memberIdx];
-            const loreTokens = { ...(member.loreTokens || {}) };
-            loreTokens[domain] = (loreTokens[domain] || 0) + 1;
-            crew[memberIdx] = { ...member, loreTokens };
-            meta.crew = crew;
-            try { storeMeta(meta); } catch(e) {}
-            try { if (typeof this.props.saveUserData === 'function') this.props.saveUserData(); } catch(e) {}
-            // Remove tablet from board
-            try { this.props.boardManager.removeTileFromBoard(tile); } catch(e) {}
-            
-            // Progress lore quests
-            if (this.props.questManager) {
-                this.props.questManager.updateProgressByType('lore', 1);
+    triggerInscriptionModal = (inscriptionData) => {
+        let text = typeof inscriptionData === 'string' ? inscriptionData : (inscriptionData.text || '');
+        if (!text) return;
+        
+        let data = typeof inscriptionData === 'string' ? { text } : inscriptionData;
+        
+        this.setState({
+            showModal: true,
+            modalType: 'Inscription',
+            currentInscriptionData: data,
+            inscriptionTypedAnswer: '',
+            inscriptionSolved: false
+        });
+    }
+
+    closeInscriptionModal = () => {
+        const { currentInscriptionData, inscriptionSolved } = this.state;
+        
+        if (inscriptionSolved && currentInscriptionData && currentInscriptionData.secret && currentInscriptionData.secret.reward) {
+            this.grantReward(currentInscriptionData.secret.reward);
+        }
+        
+        this.setState({
+            showModal: false,
+            modalType: '',
+            currentInscriptionData: null,
+            inscriptionTypedAnswer: '',
+            inscriptionSolved: false
+        }, () => this._cleanupModalBodyClass());
+    }
+
+    grantReward = (rewardStr) => {
+        if (!rewardStr) return;
+        
+        // Parse "soul_shards:100", "100", or "health_potion"
+        let amount = parseInt(rewardStr, 10);
+        let isNumber = !isNaN(amount);
+        
+        if (isNumber || rewardStr.includes('soul_shards')) {
+            const num = isNumber ? amount : parseInt(rewardStr.split(':')[1] || '0', 10);
+            if (num > 0) {
+                this.addCurrencyToInventory('soul_shards', num);
+                this.displayMessage(`You found ${num} soul shards!`);
             }
-
-            const count = loreTokens[domain];
-            try { if (this.props.boardManager.messaging) this.props.boardManager.messaging(`📜 ${selectedMember.name} absorbs the lore of ${domain}. (${count}/3 tokens)`); } catch(e) {}
+        } else {
+            // Assume it's an item ID
+            if (this.props.inventoryManager && typeof this.props.inventoryManager.addItem === 'function') {
+                this.props.inventoryManager.addItem(rewardStr, 1);
+                this.displayMessage(`You found an item: ${rewardStr.replace(/_/g, ' ')}!`);
+            }
         }
     }
 
@@ -13596,11 +13645,11 @@ class DungeonPage extends React.Component {
         try { this.setState({ showCampPopup: true }); } catch(e) {}
     }
 
-    handleOpenSkillTree = (crewMember) => {
-        try { this.setState({ showSkillTreePopup: true, selectedSkillTreeCrewMember: crewMember }); } catch(e) {}
+    handleOpenSkillTree = (crewMember, initialTab = 'character') => {
+        try { this.setState({ showSkillTreePopup: true, selectedSkillTreeCrewMember: crewMember, skillTreeInitialTab: initialTab }); } catch(e) {}
     }
     handleCloseSkillTree = () => {
-        try { this.setState({ showSkillTreePopup: false, selectedSkillTreeCrewMember: null }); } catch(e) {}
+        try { this.setState({ showSkillTreePopup: false, selectedSkillTreeCrewMember: null, skillTreeInitialTab: 'character' }); } catch(e) {}
     }
     handleCloseCampPopup = () => {
         try { this.setState({ showCampPopup: false, showFoodPrepOverlay: false, showSpellsOverlay: false, showMapOverlay: false, showPrayOverlay: false, mapZoomedLevelId: null, mapUnzoomingLevelId: null, mapRevealAfterUnzoom: false, mapPendingZoomLevelId: null, mapSelectedLevelId: null, mapBoardDetailStage: null, mapBoardDetailBoardIndex: null }, () => this._cleanupModalBodyClass()); } catch(e) {}
@@ -14845,6 +14894,75 @@ class DungeonPage extends React.Component {
                     onClose={() => this.onUpdateModalClosed()}
                 />
             </CModal>
+            {/* Inscription popup */}
+            <CModal
+                className="inscription-modal"
+                alignment="center"
+                visible={this.state.modalType === 'Inscription'}
+                onClose={() => this.closeInscriptionModal()}
+            >
+                {this.state.modalType === 'Inscription' && this.state.currentInscriptionData && (
+                    <div style={{
+                        background: 'rgba(20, 20, 20, 0.95)',
+                        border: '1px solid #d4a844',
+                        padding: '30px',
+                        borderRadius: '8px',
+                        fontFamily: "'Cinzel', serif",
+                        color: '#f0ede5',
+                        textAlign: 'center',
+                        position: 'relative'
+                    }}>
+                        <button
+                            aria-label="Close inscription"
+                            onClick={() => this.closeInscriptionModal()}
+                            style={{
+                                position: 'absolute',
+                                top: '10px',
+                                right: '10px',
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#ccc',
+                                cursor: 'pointer',
+                                fontSize: '18px'
+                            }}
+                        >✕</button>
+                        
+                        <h2 style={{ color: '#d4a844', marginBottom: '20px', letterSpacing: '2px', borderBottom: '1px solid rgba(212, 168, 68, 0.3)', paddingBottom: '10px' }}>
+                            Inscription
+                        </h2>
+                        
+                        <p style={{ fontSize: '18px', lineHeight: '1.6', fontStyle: 'italic', marginBottom: '25px', whiteSpace: 'pre-wrap' }}>
+                            {this.state.inscriptionSolved 
+                                ? this.state.currentInscriptionData.secret.confirmation 
+                                : (this.state.currentInscriptionData.text || this.state.currentInscriptionData)}
+                        </p>
+                        
+                        {!this.state.inscriptionSolved && this.state.currentInscriptionData.secret && this.state.currentInscriptionData.secret.answer && (
+                            <div style={{ marginTop: '20px', minHeight: '30px', fontSize: '20px', letterSpacing: '4px', borderBottom: '1px solid #666', width: '80%', margin: '0 auto', color: '#d4a844' }}>
+                                {this.state.inscriptionTypedAnswer}
+                                <span style={{ opacity: 0.7, display: 'inline-block', width: '10px', borderBottom: '2px solid #d4a844', marginLeft: '5px' }}></span>
+                            </div>
+                        )}
+                        
+                        <button
+                            onClick={() => this.closeInscriptionModal()}
+                            style={{
+                                marginTop: '30px',
+                                background: 'rgba(212, 168, 68, 0.1)',
+                                border: '1px solid #d4a844',
+                                color: '#d4a844',
+                                padding: '8px 20px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontFamily: "'Cinzel', serif",
+                                fontWeight: 'bold'
+                            }}
+                        >
+                            {this.state.inscriptionSolved ? 'Take Reward' : 'Depart'}
+                        </button>
+                    </div>
+                )}
+            </CModal>
             {/* Teleport popup */}
             <CModal 
                 className="teleport-modal" 
@@ -15127,7 +15245,7 @@ class DungeonPage extends React.Component {
                                     color={member.color}
                                     editMode={false}
                                     type={'crew-tile'}
-                                    handleClick={() => this.handleOpenSkillTree(member)}
+                                    handleClick={() => this.handleOpenSkillTree(member, 'character')}
                                     handleHover={() => {}}
                                 />
                                 <div className="camp-crew-name">{member.name}</div>
@@ -15766,7 +15884,7 @@ class DungeonPage extends React.Component {
                                                 const groupKey = (typeof c === 'object' && c.vendorGroupId) ? c.vendorGroupId : `vendor_${vendorType}_${tile.id}`;
                                                 pushVendorMarker(groupKey, tile.id, vendorType);
                                             }
-                                        } else if ((cType === 'shrine' || cType === 'lore_tablet') && tile.color !== 'black') {
+                                        } else if ((cType === 'shrine' || cType === 'lore_tablet' || cType === 'tablet') && tile.color !== 'black') {
                                             pushMarker({ tileId: tile.id, type: 'shrine' }, 'shrine');
                                         }
                                     });
@@ -16053,7 +16171,7 @@ class DungeonPage extends React.Component {
                                             const groupKey = (typeof c === 'object' && c.vendorGroupId) ? c.vendorGroupId : `vendor_${vendorType}_${tile.id}`;
                                             pushVendorMarker(groupKey, tile.id, vendorType);
                                         }
-                                    } else if ((cType === 'shrine' || cType === 'lore_tablet') && tile.color !== 'black') {
+                                    } else if ((cType === 'shrine' || cType === 'lore_tablet' || cType === 'tablet') && tile.color !== 'black') {
                                         pushMarker({ tileId: tile.id, type: 'shrine' }, 'shrine');
                                     }
                                 });
@@ -16627,12 +16745,15 @@ class DungeonPage extends React.Component {
                 })()}
                                             </CModal>
 
-                                            {/* Skill Tree popup */}
-                                            <CModal size="xl" className="skill-tree-modal" alignment="center" visible={this.state.showSkillTreePopup} onClose={this.handleCloseSkillTree} backdrop={true}>
-                                                {this.state.selectedSkillTreeCrewMember && (
-                                                    <SkillTree crewMember={this.state.selectedSkillTreeCrewMember} onClose={this.handleCloseSkillTree} />
-                                                )}
-                                            </CModal>
+                                            {/* Character Profile & Skill Tree Dual-Tab Modal */}
+                                            {this.state.showSkillTreePopup && this.state.selectedSkillTreeCrewMember && (
+                                                <CharacterProfileModal
+                                                    crewMember={this.state.selectedSkillTreeCrewMember}
+                                                    initialTab={this.state.skillTreeInitialTab || 'character'}
+                                                    onClose={this.handleCloseSkillTree}
+                                                    onUpdateCrewMember={() => this.forceUpdate()}
+                                                />
+                                            )}
                                             {/* <ExpositionPane></ExpositionPane> */}
                                             {this.props.boardManager.currentOrientation === 'B' && <div className="dark-mask"></div>}
                                             {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (

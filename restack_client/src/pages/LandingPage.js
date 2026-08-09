@@ -3,6 +3,7 @@ import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
 import { getMeta, storeMeta, getUserId } from '../utils/session-handler';
 import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest } from '../utils/api-handler';
+import FreeWillStatBar from '../components/FreeWillStatBar';
 
 import skillsMatrix from '../utils/skills-matrix';
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
@@ -398,6 +399,7 @@ export default function LandingPage(props) {
   const [validDungeons, setValidDungeons] = useState([])
   const [showDungeonPicker, setShowDungeonPicker] = useState(false)
   const [selectedDungeonTemplateId, setSelectedDungeonTemplateId] = useState(null)
+  const [pendingDungeonSelection, setPendingDungeonSelection] = useState(null)
   const [skipIntro, setSkipIntro] = useState(() => {
     try {
       const isAdminUser = localStorage.getItem('isAdmin') === 'true';
@@ -615,12 +617,41 @@ export default function LandingPage(props) {
       return;
     }
 
+    if (meta.dungeonId && meta.selectedDungeonTemplateId !== dungeon.id) {
+      setPendingDungeonSelection(dungeon);
+      setShowDungeonPicker(false);
+      return;
+    }
+
     setSelectedDungeonTemplateId(dungeon.id);
     meta.selectedDungeonTemplateId = dungeon.id;
     meta.selectedDungeonTemplateName = dungeon.name;
     storeMeta(meta);
     setShowDungeonPicker(false);
   }
+
+  const confirmDungeonChange = () => {
+    if (!pendingDungeonSelection) return;
+    const dungeon = pendingDungeonSelection;
+    const meta = getMeta() || {};
+    delete meta.dungeonId;
+    delete meta.dungeonEntryTimestamp;
+    delete meta.boardIndex;
+    delete meta.tileIndex;
+    delete meta.location;
+    delete meta.spawnPoint;
+    delete meta.visitedBoards;
+    delete meta.deathTracker;
+    delete meta.scroungeActive;
+    delete meta.scoutActive;
+
+    setSelectedDungeonTemplateId(dungeon.id);
+    meta.selectedDungeonTemplateId = dungeon.id;
+    meta.selectedDungeonTemplateName = dungeon.name;
+    storeMeta(meta);
+    setPendingDungeonSelection(null);
+    setShowDungeonPicker(false);
+  };
 
   const triggerInstall = () => {
     if (deferredPrompt) {
@@ -694,8 +725,11 @@ export default function LandingPage(props) {
           <span className="logo-title">Dream Tower</span>
           <span className="logo-subtitle">v 0.4.1 BETA</span>
         </div>
-        <div className="header-user">
-          <div className="user-info">
+        <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          <div style={{ width: '320px' }}>
+            <FreeWillStatBar freeWill={getMeta()?.freeWill || 0} animateOnMount={true} delayMs={400} />
+          </div>
+          <div className="user-info" style={{ cursor: 'pointer' }} onClick={() => setNavUserProfile(true)} title="View User Profile">
             Welcome <span>{username}</span>
           </div>
           <button className="btn-logout" onClick={handleLogout}>
@@ -705,6 +739,60 @@ export default function LandingPage(props) {
       </header>
 
       <main className="landing-main-grid">
+        {/* Dungeon Change Warning Modal */}
+        {pendingDungeonSelection && (
+          <div className="crew-showcase-overlay" style={{ zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setPendingDungeonSelection(null)}>
+            <div className="crew-showcase-modal" style={{ maxWidth: '400px', textAlign: 'center', padding: '30px', margin: 'auto', backgroundColor: '#1c1917', border: '1px solid rgba(229, 181, 79, 0.3)', borderRadius: '8px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }} onClick={(e) => e.stopPropagation()}>
+              <h3 style={{ color: '#e5b54f', fontFamily: "'Outfit', sans-serif", marginBottom: '20px', fontSize: '1.5rem', marginTop: '0', textTransform: 'uppercase', letterSpacing: '1px' }}>Warning</h3>
+              <p style={{ color: '#d6d3d1', marginBottom: '30px', lineHeight: '1.5', fontFamily: "'Inter', sans-serif", fontSize: '0.95rem' }}>
+                Choosing a new dungeon will clear all progress in the current dungeon, though the crew remains.<br/><br/>
+                Are you sure you want to change dungeons?
+              </p>
+              <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+                <button 
+                  onClick={() => setPendingDungeonSelection(null)}
+                  style={{ 
+                    padding: '10px 20px', 
+                    background: 'rgba(255, 255, 255, 0.05)', 
+                    border: '1px solid #78716c', 
+                    color: '#a8a29e', 
+                    borderRadius: '4px', 
+                    cursor: 'pointer',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '1rem',
+                    minWidth: '100px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'; e.currentTarget.style.color = '#fff'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = '#a8a29e'; }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={confirmDungeonChange}
+                  style={{ 
+                    padding: '10px 20px', 
+                    background: '#e5b54f', 
+                    border: 'none', 
+                    color: '#0c0a09', 
+                    borderRadius: '4px', 
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '1rem',
+                    minWidth: '100px',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 0 10px rgba(229, 181, 79, 0.3)'
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 0 15px rgba(229, 181, 79, 0.6)'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(229, 181, 79, 0.3)'; }}
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="hero-column">
           <div className="hero-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -734,7 +822,7 @@ export default function LandingPage(props) {
                         className={`menu-item ${selectedDungeonTemplateId === d.id ? 'active' : ''}`}
                         onClick={() => selectDungeonTemplate(d)}
                       >
-                        🏰 {d.name}
+                        {d.name}
                       </div>
                     ))}
                   </div>
@@ -1037,7 +1125,7 @@ export default function LandingPage(props) {
                               color: '#ffffff',
                               fontFamily: "'Outfit', sans-serif"
                             }}>
-                              🏰 {inst.name}
+                              {inst.name}
                             </span>
                             {isCurrentActive && (
                               <span style={{
@@ -1285,7 +1373,6 @@ export default function LandingPage(props) {
                 <div className="crew-showcase-portrait-container">
                   <div className={`crew-showcase-portrait theme-${uType}`}>
                     <img src={showcaseUnit.portrait || showcaseUnit.image} alt={showcaseUnit.name} className="crew-avatar-img" />
-                    <span className="crew-showcase-level-badge">Lvl {showcaseUnit.level || 1}</span>
                   </div>
                 </div>
                 <div className="crew-showcase-identity">

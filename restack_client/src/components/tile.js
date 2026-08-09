@@ -251,6 +251,7 @@ function Tile(props) {
         return normalized === 'black' ||
             normalized === '#000' ||
             normalized === '#000000' ||
+            normalized === '#0e0e0e' ||
             compact === 'rgb(0,0,0)' ||
             compact.startsWith('rgba(0,0,0,') ||
             compact.startsWith('rgb(0,0,0,') ||
@@ -944,29 +945,23 @@ function Tile(props) {
                  </div>
             )}
 
-            {/* Lore Tablet marker */}
-            { ((props.contains && props.contains.type === 'lore_tablet') || props.optionType === 'lore_tablet' || props.isLoreTablet) && (
+            {/* Tablet marker */}
+            { ((props.contains && (props.contains.type === 'tablet' || props.contains.type === 'lore_tablet')) || props.optionType === 'tablet' || props.optionType === 'lore_tablet' || props.isTablet || props.isLoreTablet) && (
                  <div style={{
                      position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                      zIndex: 10, pointerEvents: 'none',
                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                     fontSize: Math.max(8, (props.tileSize || 30) * 0.45) + 'px',
                      opacity: color === 'black' ? 0 : 1,
                      transition: 'opacity 0.35s ease-in-out'
                  }}>
                      <div style={{
                          width: '70%',
                          height: '70%',
-                         backgroundImage: `url(${images.lore_tablet})`,
+                         backgroundImage: `url(${images.tablet || images.lore_tablet})`,
                          backgroundSize: 'contain',
                          backgroundRepeat: 'no-repeat',
                          backgroundPosition: 'center'
                      }} />
-                     <span style={{
-                         fontSize: Math.max(5, (props.tileSize || 30) * 0.2) + 'px',
-                         color: '#d4a844', fontWeight: 'bold',
-                         textTransform: 'uppercase', lineHeight: 1.2
-                     }}>{(props.contains && props.contains.subtype ? props.contains.subtype.slice(0,3) : '')}</span>
                  </div>
             )}
 

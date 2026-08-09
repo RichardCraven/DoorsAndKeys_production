@@ -89,6 +89,7 @@ export default class CardDuel extends React.Component {
 
     // ─── Duel Initialization ──────────────────────────────────────────────────
     initializeDuel = () => {
+        this.equippedRunes = this.getEquippedCrewRunes();
         const rawCrew = (Array.isArray(this.props.crew) && this.props.crew.length > 0)
             ? this.props.crew
             : ((this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : []);
@@ -1155,7 +1156,10 @@ export default class CardDuel extends React.Component {
             selectedUnitKey, grid
         } = this.state;
 
-        const equippedRunes = this.getEquippedCrewRunes();
+        if (!this.equippedRunes) {
+            this.equippedRunes = this.getEquippedCrewRunes();
+        }
+        const equippedRunes = this.equippedRunes;
 
         // Check if selected player unit can perform a Direct Attack on Reaper (Row 0)
         let canDirectAttackReaper = false;

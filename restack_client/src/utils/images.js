@@ -1204,6 +1204,17 @@ import infernal_tower from '../assets/icons/buildings/infernal tower.png';
 import infernal_pit from '../assets/icons/buildings/infernal pit.png';
 import temple from '../assets/icons/buildings/temple.png';
 
+// ── Generators ─────────────────────────────────────────────────────────────
+import cultivation_vat from '../assets/icons/buildings/cultivation vat.png';
+import larder from '../assets/icons/buildings/larder.png';
+import dust_collector from '../assets/icons/buildings/dust collector.png';
+import domain_monolith from '../assets/icons/buildings/domain monolith.png';
+import dark_domain_monolith from '../assets/icons/buildings/dark domain monolith.png';
+import lumber_mill from '../assets/icons/buildings/lumber mill.png';
+import ore_mine from '../assets/icons/buildings/ore mine.png';
+import slate_mine from '../assets/icons/buildings/slate mine.png';
+import fungal_nursery from '../assets/icons/buildings/fungal nursery.png';
+
 // ── Card Duel Health Orbs ──────────────────────────────────────────────────
 import reaper_health_orb from '../assets/icons/reaper-health-orb.png';
 import crew_health_orb from '../assets/icons/crew-health-orb.png';
@@ -1300,6 +1311,16 @@ export {
     narrative,
     narrative_visited,
     lore_tablet,
+    lore_tablet as tablet,
+    cultivation_vat,
+    larder,
+    dust_collector,
+    domain_monolith,
+    dark_domain_monolith,
+    lumber_mill,
+    ore_mine,
+    slate_mine,
+    fungal_nursery,
     beholder,
     beholder_portrait,
     beholder_minion,

@@ -163,6 +163,9 @@ class MapMakerPage extends React.Component {
       inscriptionPendingSide: null,      // 'top'|'bottom'|'left'|'right'
       inscriptionWallPicker: null,       // { tileId } — shows compass picker on that tile
       inscriptionTextInput: '',
+      inscriptionSecretAnswer: '',
+      inscriptionSecretConfirmation: '',
+      inscriptionSecretReward: '',
       toastMessage: '',
       // Portal configuration state
       showPortalModal: false,
@@ -1038,12 +1041,9 @@ class MapMakerPage extends React.Component {
       vendorOption = this.props.mapMaker.vendorOptions[pinnedOption.id];
     }
 
-    let shrineOption = null, loreTabletOption = null, territoryOption = null, buildingOption = null;
+    let shrineOption = null, territoryOption = null, buildingOption = null, generatorOption = null;
     if (pinnedOption.type === 'shrine-tile') {
       shrineOption = this.props.mapMaker.shrineOptions[pinnedOption.id];
-    }
-    if (pinnedOption.type === 'lore-tablet-tile') {
-      loreTabletOption = this.props.mapMaker.loreTabletOptions[pinnedOption.id];
     }
     if (pinnedOption.type === 'territory-tile') {
       territoryOption = this.props.mapMaker.territoryOptions[pinnedOption.id];
@@ -1051,8 +1051,11 @@ class MapMakerPage extends React.Component {
     if (pinnedOption.type === 'building-tile') {
       buildingOption = this.props.mapMaker.buildingOptions[pinnedOption.id];
     }
+    if (pinnedOption.type === 'generator-tile') {
+      generatorOption = this.props.mapMaker.generatorOptions[pinnedOption.id];
+    }
 
-    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || loreTabletOption || territoryOption || buildingOption;
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || generatorOption;
     if (!isSpecialOption && !pinned) return null;
 
     let arr = this.state.tiles.map(t => ({ ...t }));
@@ -1095,10 +1098,7 @@ class MapMakerPage extends React.Component {
       arr[tileId].contains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
       arr[tileId].color = shrineOption.color;
       arr[tileId].image = null;
-    } else if (loreTabletOption) {
-      arr[tileId].contains = { type: 'lore_tablet', subtype: loreTabletOption.domain, key: loreTabletOption.key };
-      arr[tileId].color = loreTabletOption.color;
-      arr[tileId].image = null;
+
     } else if (territoryOption) {
       const currentTile = arr[tileId];
       const containsType = this.getContainsType(currentTile?.contains);
@@ -1121,6 +1121,10 @@ class MapMakerPage extends React.Component {
       }
       arr[tileId].contains = { type: 'building', subtype: buildingOption.key, level: fortLevel };
       arr[tileId].image = images[buildingOption.image] || buildingOption.image;
+      arr[tileId].color = null;
+    } else if (generatorOption) {
+      arr[tileId].contains = { type: 'building', subtype: generatorOption.key };
+      arr[tileId].image = images[generatorOption.image] || generatorOption.image;
       arr[tileId].color = null;
     } else if (pinned.optionType === 'passage') {
       let prevTileIdx = this.state.hoveredTileIdx;
@@ -1207,7 +1211,7 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'lore-tablet-tile', 'territory-tile', 'building-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'generator-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
@@ -1313,13 +1317,32 @@ class MapMakerPage extends React.Component {
     const tileId = this.state.inscriptionWallPicker?.tileId;
     if (tileId === null || tileId === undefined) return;
     const tile = this.state.tiles[tileId];
-    const existing = tile?.inscriptions?.[side] || '';
+    const existing = tile?.inscriptions?.[side];
+    let existingText = '';
+    let existingAnswer = '';
+    let existingConfirmation = '';
+    let existingReward = '';
+    
+    if (existing) {
+      if (typeof existing === 'string') {
+        existingText = existing;
+      } else {
+        existingText = existing.text || '';
+        existingAnswer = existing.secret?.answer || '';
+        existingConfirmation = existing.secret?.confirmation || '';
+        existingReward = existing.secret?.reward || '';
+      }
+    }
+
     this.setState({
       inscriptionWallPicker: null,
       showInscriptionModal: true,
       inscriptionPendingTileId: tileId,
       inscriptionPendingSide: side,
-      inscriptionTextInput: existing,
+      inscriptionTextInput: existingText,
+      inscriptionSecretAnswer: existingAnswer,
+      inscriptionSecretConfirmation: existingConfirmation,
+      inscriptionSecretReward: existingReward,
     });
   }
 
@@ -1331,7 +1354,18 @@ class MapMakerPage extends React.Component {
       let arr = [...this.state.tiles];
       const t = { ...arr[tileId] };
       // Store inscriptions as a map: tile.inscriptions = { top: '...', left: '...', etc. }
-      t.inscriptions = { ...(t.inscriptions || {}), [side]: text };
+      let inscriptionData = text;
+      if (text && text.trim().endsWith('?')) {
+          inscriptionData = {
+              text: text,
+              secret: {
+                  answer: this.state.inscriptionSecretAnswer || '',
+                  confirmation: this.state.inscriptionSecretConfirmation || '',
+                  reward: this.state.inscriptionSecretReward || ''
+              }
+          };
+      }
+      t.inscriptions = { ...(t.inscriptions || {}), [side]: inscriptionData };
       // Add a visual marker border highlight so the inscribed wall shows in the mapmaker
       const borderColor = text ? '3px solid #d4a844' : (t.borders?.[side] || '1px solid transparent');
       t.borders = {
@@ -1345,7 +1379,10 @@ class MapMakerPage extends React.Component {
         showInscriptionModal: false,
         inscriptionPendingTileId: null,
         inscriptionPendingSide: null,
-        inscriptionTextInput: ''
+        inscriptionTextInput: '',
+        inscriptionSecretAnswer: '',
+        inscriptionSecretConfirmation: '',
+        inscriptionSecretReward: ''
       });
     }
   }
@@ -1356,7 +1393,10 @@ class MapMakerPage extends React.Component {
       inscriptionWallPicker: null,
       inscriptionPendingTileId: null,
       inscriptionPendingSide: null,
-      inscriptionTextInput: ''
+      inscriptionTextInput: '',
+      inscriptionSecretAnswer: '',
+      inscriptionSecretConfirmation: '',
+      inscriptionSecretReward: ''
     });
   }
 
@@ -1820,7 +1860,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'lore-tablet-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'generator-tile') {
       this.setState({
         pinnedOption: tile
       })
@@ -6901,6 +6941,36 @@ class MapMakerPage extends React.Component {
                 placeholder="e.g. 'Beware the shadow that walks in three...' "
                 autoFocus
               />
+
+              {this.state.inscriptionTextInput && this.state.inscriptionTextInput.trim().endsWith('?') && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px', background: 'rgba(229, 181, 79, 0.05)', padding: '12px', borderRadius: '8px', border: '1px dashed rgba(229, 181, 79, 0.3)' }}>
+                  <div style={{ color: '#e5b54f', fontSize: '13px', fontWeight: 'bold' }}>Secret Puzzle Detected</div>
+                  
+                  <input
+                    type="text"
+                    value={this.state.inscriptionSecretAnswer || ''}
+                    onChange={(e) => this.setState({ inscriptionSecretAnswer: e.target.value })}
+                    placeholder="Secret Answer (e.g. truth)"
+                    style={{ background: 'rgba(0,0,0,0.5)', color: '#f0ede5', border: '1px solid rgba(229, 181, 79, 0.4)', padding: '8px 12px', borderRadius: '6px', fontFamily: "'Inter', sans-serif", fontSize: '13px' }}
+                  />
+                  
+                  <input
+                    type="text"
+                    value={this.state.inscriptionSecretConfirmation || ''}
+                    onChange={(e) => this.setState({ inscriptionSecretConfirmation: e.target.value })}
+                    placeholder="Confirmation Text (e.g. You are correct...)"
+                    style={{ background: 'rgba(0,0,0,0.5)', color: '#f0ede5', border: '1px solid rgba(229, 181, 79, 0.4)', padding: '8px 12px', borderRadius: '6px', fontFamily: "'Inter', sans-serif", fontSize: '13px' }}
+                  />
+                  
+                  <input
+                    type="text"
+                    value={this.state.inscriptionSecretReward || ''}
+                    onChange={(e) => this.setState({ inscriptionSecretReward: e.target.value })}
+                    placeholder="Reward (e.g. 100 or health_potion)"
+                    style={{ background: 'rgba(0,0,0,0.5)', color: '#f0ede5', border: '1px solid rgba(229, 181, 79, 0.4)', padding: '8px 12px', borderRadius: '6px', fontFamily: "'Inter', sans-serif", fontSize: '13px' }}
+                  />
+                </div>
+              )}
 
               {/* Footer */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginTop: '6px' }}>

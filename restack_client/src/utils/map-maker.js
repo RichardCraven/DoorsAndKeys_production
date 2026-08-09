@@ -11,6 +11,7 @@ export function MapMaker(props){
         'connecting path',
         'territory',
         'buildings',
+        'generators',
         'delete',
         'door',
         'way up',
@@ -33,7 +34,7 @@ export function MapMaker(props){
         'dungeon portal',
         'inscription',
         'shrine',
-        'lore_tablet'
+        'tablet'
     ]
 
     this.tierOptions = [
@@ -126,13 +127,6 @@ export function MapMaker(props){
         { key: 'shrine_summoner', name: 'Summoner Shrine',  classKey: 'summoner',  color: '#1C1C3A' },
     ];
 
-    this.loreTabletOptions = [
-        { key: 'lore_tablet_endurance',  name: 'Endurance Tablet',  domain: 'endurance',  color: '#3A2A00' },
-        { key: 'lore_tablet_perception', name: 'Perception Tablet', domain: 'perception', color: '#003A3A' },
-        { key: 'lore_tablet_willpower',  name: 'Willpower Tablet',  domain: 'willpower',  color: '#3A003A' },
-        { key: 'lore_tablet_cunning',    name: 'Cunning Tablet',    domain: 'cunning',    color: '#2A3A00' },
-        { key: 'lore_tablet_fortitude',  name: 'Fortitude Tablet',  domain: 'fortitude',  color: '#001A3A' },
-    ];
 
     this.territoryOptions = [
         { key: 'mud_clan', name: 'Mud Clan', clan: 'mud', disabled: false },
@@ -149,6 +143,18 @@ export function MapMaker(props){
         { key: 'earthen_fort', name: 'Earthen Fort', image: 'buildable_earthen_fort' },
         { key: 'war_camp', name: 'War Camp', image: 'buildable_war_camp' },
         { key: 'war_fort', name: 'War Fort', image: 'buildable_war_fort' },
+    ];
+
+    this.generatorOptions = [
+        { key: 'cultivation_vat', name: 'Cultivation Vat', image: 'cultivation_vat' },
+        { key: 'larder', name: 'Larder', image: 'larder' },
+        { key: 'dust_collector', name: 'Dust Collector', image: 'dust_collector' },
+        { key: 'domain_monolith', name: 'Domain Monolith', image: 'domain_monolith' },
+        { key: 'dark_domain_monolith', name: 'Dark Domain Monolith', image: 'dark_domain_monolith' },
+        { key: 'lumber_mill', name: 'Lumber Mill', image: 'lumber_mill' },
+        { key: 'ore_mine', name: 'Ore Mine', image: 'ore_mine' },
+        { key: 'slate_mine', name: 'Slate Mine', image: 'slate_mine' },
+        { key: 'fungal_nursery', name: 'Fungal Nursery', image: 'fungal_nursery' },
     ];
 
     this.paletteTiles = [];
@@ -418,13 +424,13 @@ export function MapMaker(props){
                     isShrine: true,
                     id: i
                 })
-            } else if(key === 'lore_tablet'){
+            } else if(key === 'tablet'){
                 this.paletteTiles.push({
                     type: 'palette-tile',
-                    optionType: 'lore_tablet',
-                    image: null,
+                    optionType: 'tablet',
+                    image: 'tablet',
                     color: null,
-                    isLoreTablet: true,
+                    isTablet: true,
                     id: i
                 })
             } else if(key === 'territory'){
@@ -782,12 +788,14 @@ export function MapMaker(props){
                 return 'inscription'
             case 'shrine':
                 return 'shrine'
-            case 'lore_tablet':
-                return 'lore_tablet'
+            case 'tablet':
+                return 'tablet'
             case 'territory':
                 return 'woodland_warband'
             case 'buildings':
                 return 'buildable_outpost'
+            case 'generators':
+                return 'dust_collector'
             default:
                 return false
         }

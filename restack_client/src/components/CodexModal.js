@@ -179,12 +179,12 @@ const INTERACTABLES = [
         tags: ['navigation', 'stairs'],
     },
     {
-        id: 'lore_tablet',
-        name: 'Lore Tablet',
+        id: 'tablet',
+        name: 'Tablet',
         icon: images.lore_tablet,
         category: 'interactable',
-        desc: 'Ancient stone tablets. Reading them reveals lost lore and grants domain tokens.',
-        tags: ['lore', 'buff'],
+        desc: 'An ancient stone tablet. Pick it up to store it in crew inventory.',
+        tags: ['tablet', 'item'],
     },
     {
         id: 'narrative',

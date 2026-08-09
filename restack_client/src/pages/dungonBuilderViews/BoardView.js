@@ -100,6 +100,9 @@ class BoardView extends React.Component {
             const runeMatch = (this.props.mapMaker?.runeOptions || []).find((entry) => entry.key === subtype);
             if (runeMatch?.name) return runeMatch.name;
 
+            const generatorMatch = (this.props.mapMaker?.generatorOptions || []).find((entry) => entry.key === subtype);
+            if (generatorMatch?.name) return generatorMatch.name;
+
             return this.formatHoverLabel(subtype);
         }
 
@@ -168,18 +171,18 @@ class BoardView extends React.Component {
                 vendorOption = this.props.mapMaker?.vendorOptions?.[pinnedOption.id];
             }
 
-            let shrineOption = null, loreTabletOption = null, territoryOption = null, buildingOption = null;
+            let shrineOption = null, territoryOption = null, buildingOption = null, generatorOption = null;
             if (pinnedOption.type === 'shrine-tile') {
                 shrineOption = this.props.mapMaker?.shrineOptions?.[pinnedOption.id];
-            }
-            if (pinnedOption.type === 'lore-tablet-tile') {
-                loreTabletOption = this.props.mapMaker?.loreTabletOptions?.[pinnedOption.id];
             }
             if (pinnedOption.type === 'territory-tile') {
                 territoryOption = this.props.mapMaker?.territoryOptions?.[pinnedOption.id];
             }
             if (pinnedOption.type === 'building-tile') {
                 buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'generator-tile') {
+                generatorOption = this.props.mapMaker?.generatorOptions?.[pinnedOption.id];
             }
 
             if (monster) {
@@ -209,14 +212,17 @@ class BoardView extends React.Component {
             } else if (shrineOption) {
                 previewContains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
                 previewColor = shrineOption.color;
-            } else if (loreTabletOption) {
-                previewContains = { type: 'lore_tablet', subtype: loreTabletOption.domain, key: loreTabletOption.key };
-                previewColor = loreTabletOption.color;
+            } else if (pinned.optionType === 'tablet') {
+                previewContains = { type: 'tablet', subtype: null };
+                previewImage = 'tablet';
             } else if (territoryOption) {
                 previewContains = { territory: territoryOption.clan };
             } else if (buildingOption) {
                 previewContains = { type: 'building', subtype: buildingOption.key };
                 previewImage = images[buildingOption.image] || buildingOption.image;
+            } else if (generatorOption) {
+                previewContains = { type: 'building', subtype: generatorOption.key };
+                previewImage = images[generatorOption.image] || generatorOption.image;
             } else if (pinned.optionType === 'passage') {
                 previewContains = { type: 'passage', subtype: null };
             } else if (pinned.optionType === 'empty space') {

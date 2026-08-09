@@ -6,6 +6,7 @@ import {
   deleteDungeonRequest,
   updateUserRequest
 } from '../utils/api-handler';
+import FreeWillStatBar from '../components/FreeWillStatBar';
 class UserProfilePage extends React.Component{
   constructor(props){
     super(props)
@@ -298,6 +299,11 @@ class UserProfilePage extends React.Component{
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Free Will User Level Stat Bar */}
+          <div style={{ padding: '0 20px 20px 20px', width: '100%', boxSizing: 'border-box' }}>
+            <FreeWillStatBar freeWill={getMeta()?.freeWill || 0} animateOnMount={true} delayMs={300} />
           </div>
           
           <div className="profile-section">

@@ -1960,6 +1960,15 @@ export function InventoryManager() {
             power: 5,
             description: `A folio inscribed with frost-laced incantations`
         },
+        tablet: {
+            tier: 1,
+            type: 'magical',
+            icon: 'tablet',
+            name: 'Tablet',
+            equippedBy: null,
+            subtype: 'tablet',
+            description: 'An ancient stone tablet inscribed with faint runes.'
+        },
         emerald_tablet: {
             tier: 2,
             type: 'magical',

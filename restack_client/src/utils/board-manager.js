@@ -196,6 +196,24 @@ export function BoardManager(){
     this.establishLoreTabletEncounterCallback = (callback) => {
         this.triggerLoreTabletEncounter = callback;
     }
+    this.establishTriggerInscriptionModalCallback = (callback) => {
+        this.triggerInscriptionModal = callback;
+    }
+    this.handleInscriptionRead = (inscriptionData) => {
+        if (!inscriptionData) return false;
+        
+        // Log to message panel for flavor
+        const text = typeof inscriptionData === 'string' ? inscriptionData : (inscriptionData.text || '');
+        if (text) {
+            try { if (this.messaging) this.messaging(`✍ ${text}`); } catch (e) {}
+        }
+        
+        // Trigger modal
+        if (this.triggerInscriptionModal) {
+            this.triggerInscriptionModal(inscriptionData);
+        }
+        return true;
+    }
     this.establishSetMonsterCallback = (callback) => {
         this.setMonster = callback;
     }
@@ -260,8 +278,13 @@ export function BoardManager(){
     }
     this.isVoidTile = (tile) => {
         if (!tile) return false;
+        if (tile.isVoid) return true;
         const contains = tile.contains;
-        if (!contains) return false;
+        if (!contains) {
+            // Also treat null color as void if no contains/image (mapmaker empty tiles)
+            if ((!tile.color || tile.color === 'null' || tile.color === 'undefined' || tile.color === 'black') && !tile.image) return true;
+            return false;
+        }
         const cType = typeof contains === 'string' ? contains : contains.type;
         return cType === 'void' || cType === 'empty';
     };
@@ -557,7 +580,8 @@ export function BoardManager(){
                 const tile = this.tiles[nextIdx] || (boardTiles && boardTiles[nextIdx]);
                 if (!tile) return;
 
-                if (this.isVoidTile(tile)) return;
+                const hasInscriptions = tile.inscriptions && Object.values(tile.inscriptions).some(v => !!v);
+                if (this.isVoidTile(tile) && !hasInscriptions) return;
                 const containsType = this.getContainsType(tile.contains);
                 if (containsType === 'inscription') return;
 
@@ -565,6 +589,9 @@ export function BoardManager(){
 
                 // Locked gates are visible but block propagation past themselves.
                 if (this.isLockedGateTile(tile)) return;
+                
+                // Inscribed void tiles are visible but block propagation past themselves.
+                if (this.isVoidTile(tile)) return;
 
                 queue.push({ idx: nextIdx, steps: steps + 1 });
             });
@@ -2146,13 +2173,16 @@ export function BoardManager(){
                 } catch (e) {}
                 return 'shrine';
             case 'lore_tablet':
-                // Lore Tablet: award a domain token to the crew, then messaging
+            case 'tablet':
+                // Tablet: store item in inventory and remove tile from board
                 try {
-                    const domain = subtype || 'unknown';
-                    if (this.messaging) this.messaging(`📜 Ancient lore is inscribed here — a tablet of ${domain}.`);
-                    if (this.triggerLoreTabletEncounter) this.triggerLoreTabletEncounter(destinationTile);
-                } catch (e) {}
-                return 'lore_tablet';
+                    this.addItemToInventory({ contains: 'tablet', name: 'Tablet', type: 'item', subtype: 'tablet' });
+                } catch (e) {
+                    this.addItemToInventory(destinationTile);
+                }
+                this.removeTileFromBoard(destinationTile);
+                if (this.messaging) this.messaging(`📜 You collected a Tablet.`);
+                return 'item';
             default:
                 break;
         }
@@ -2576,13 +2606,13 @@ export function BoardManager(){
         if (destType === 'void' || destType === 'inscription') {
             const anyDestInscription = destinationTile.inscriptions && Object.values(destinationTile.inscriptions).find(v => !!v);
             if (destType === 'inscription' && destinationTile.contains.subtype) {
-                try { if (this.messaging) this.messaging(`✍ ${destinationTile.contains.subtype}`); } catch (e) {}
+                this.handleInscriptionRead(destinationTile.contains.subtype);
             } else if (destTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${destTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(destTileInscription);
             } else if (anyDestInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${anyDestInscription}`); } catch (e) {}
+                this.handleInscriptionRead(anyDestInscription);
             } else if (currentTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${currentTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(currentTileInscription);
             } else {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             }
@@ -2590,9 +2620,9 @@ export function BoardManager(){
         }
         if (this.isPassageWallBlockingBetween(tile.id, destinationIndex)) {
             if (destTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${destTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(destTileInscription);
             } else if (currentTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${currentTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(currentTileInscription);
             } else {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             }
@@ -2602,9 +2632,9 @@ export function BoardManager(){
         const isDiagonal = Math.abs(destinationCoords[0] - this.playerTile.location[0]) === 1 && Math.abs(destinationCoords[1] - this.playerTile.location[1]) === 1;
         if (isDiagonal && this.isDiagonalPassageBlocked(tile.id, destinationIndex)) {
             if (destTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${destTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(destTileInscription);
             } else if (currentTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${currentTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(currentTileInscription);
             } else {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             }
