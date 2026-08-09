@@ -698,8 +698,8 @@ const MonstersCombatGrid = ({
                                                     const needFlip = isFighterTarget
                                                         ? (liveUnit.facing === 'left' || liveUnit.facing !== 'right')
                                                         : (liveUnit.facing === 'right');
-                                                    return needFlip ? 'scaleX(-1) scaleY(-1)' : 'scaleY(-1)';
-                                                })(),
+                                                        return needFlip ? 'scaleX(-1)' : 'none';
+                                                    })(),
                                                 transformOrigin: 'center center',
                                                 opacity: (battleData[monster.id]?.mimicryActive && !battleData[monster.id]?.dead) ? 1 : 0,
                                                 transition: 'opacity 0.6s ease-in-out',

@@ -278,15 +278,22 @@ export function BoardManager(){
     }
     this.isVoidTile = (tile) => {
         if (!tile) return false;
-        if (tile.isVoid) return true;
+        
         const contains = tile.contains;
+        const cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
+        
+        // EXPLICITLY ignore empty_space, obscured_space, connecting_path, and passage
+        if (cType === 'empty_space' || cType === 'obscured_space' || cType === 'connecting_path' || cType === 'passage') return false;
+
+        if (tile.isVoid) return true;
+        if (cType === 'void' || cType === 'empty' || cType === 'void_fill' || cType === 'voidfill') return true;
+
         if (!contains) {
-            // Also treat null color as void if no contains/image (mapmaker empty tiles)
-            if ((!tile.color || tile.color === 'null' || tile.color === 'undefined' || tile.color === 'black') && !tile.image) return true;
+            if (tile.original === 'void' || tile.isVoid) return true;
             return false;
         }
-        const cType = typeof contains === 'string' ? contains : contains.type;
-        return cType === 'void' || cType === 'empty';
+        
+        return false;
     };
     this.getContainsSubtype = (contains) => {
         if (!contains && contains !== null) return null;
@@ -470,7 +477,10 @@ export function BoardManager(){
     this.hasSolidBorder = (tileData, side) => {
         if (!tileData || !tileData.borders) return false;
         const borderValue = tileData.borders[side];
-        return !!borderValue && !String(borderValue).includes('transparent');
+        if (!borderValue || String(borderValue).includes('transparent') || String(borderValue) === 'none') return false;
+        const str = String(borderValue).toLowerCase();
+        if (str.includes('d4a844') || str.includes('e5b54f') || str.includes('gold')) return false;
+        return str.includes('black') || str.includes('#000') || str.includes('rgb(0,0,0)') || str.includes('2px solid');
     }
 
     this.isPassageWallBlockingBetween = (fromIdx, toIdx) => {
@@ -582,8 +592,6 @@ export function BoardManager(){
 
                 const hasInscriptions = tile.inscriptions && Object.values(tile.inscriptions).some(v => !!v);
                 if (this.isVoidTile(tile) && !hasInscriptions) return;
-                const containsType = this.getContainsType(tile.contains);
-                if (containsType === 'inscription') return;
 
                 visited.set(nextIdx, steps + 1);
 
@@ -1767,6 +1775,25 @@ export function BoardManager(){
                 tile.color = '#6b6057';
             }
 
+            // Sanitize tiles stored with type: 'inscription' into passable empty floor space
+            const currentContainsType = this.getContainsType(tileContains);
+            if (currentContainsType === 'inscription' || (tileContains && tileContains.type === 'inscription') || (tile.contains && tile.contains.type === 'inscription')) {
+                let insData = tile.inscriptions || null;
+                if (!insData && tileContains && tileContains.subtype) {
+                    insData = { top: typeof tileContains.subtype === 'string' ? tileContains.subtype : (tileContains.subtype.text || 'Inscription') };
+                }
+                tileContains = { type: 'empty_space', subtype: null };
+                tileImage = null;
+                tileColor = null;
+                tile.inscriptions = insData;
+                tile.contains = { type: 'empty_space', subtype: null };
+                if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id]) {
+                    this.currentBoard.tiles[tile.id].contains = { type: 'empty_space', subtype: null };
+                    this.currentBoard.tiles[tile.id].inscriptions = insData;
+                    this.currentBoard.tiles[tile.id].color = null;
+                }
+            }
+
             this.tiles.push({
                 type: 'board-tile',
                 id: tile.id,
@@ -2570,8 +2597,8 @@ export function BoardManager(){
             const type = this.getContainsType(destTile.contains);
             const gateType = this.getGateTypeFromTile(destTile);
             
-            // Check for void or inscription (wall with text)
-            if (type === 'void' || type === 'inscription') return true;
+            // Check for void wall
+            if (type === 'void') return true;
             
             // Check for large monster blocking
             if (destTile.blockedByLargeMonster) return true;
@@ -2603,11 +2630,9 @@ export function BoardManager(){
         const destTileInscription = destInscribedSide && destinationTile.inscriptions && destinationTile.inscriptions[destInscribedSide];
 
         const destType = this.getContainsType(destinationTile.contains);
-        if (destType === 'void' || destType === 'inscription') {
+        if (destType === 'void') {
             const anyDestInscription = destinationTile.inscriptions && Object.values(destinationTile.inscriptions).find(v => !!v);
-            if (destType === 'inscription' && destinationTile.contains.subtype) {
-                this.handleInscriptionRead(destinationTile.contains.subtype);
-            } else if (destTileInscription) {
+            if (destTileInscription) {
                 this.handleInscriptionRead(destTileInscription);
             } else if (anyDestInscription) {
                 this.handleInscriptionRead(anyDestInscription);
@@ -3033,6 +3058,13 @@ export function BoardManager(){
                     const runtimeColor = (e.color && e.color !== 'black' && e.color !== 'white' && e.color !== 'null') ? e.color : null;
                     let boardColor = (persistedColor && persistedColor !== 'black' && persistedColor !== 'white' && persistedColor !== 'null') ? persistedColor : (runtimeColor || null);
                     
+                    if (!isVoid && (boardColor === '#111012' || boardColor === '#0e0e0e')) {
+                        boardColor = '#6b6057';
+                        if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id]) {
+                            this.currentBoard.tiles[e.id].color = '#6b6057';
+                        }
+                    }
+
                     // Sanitize red monster/pygmy indicator colors unless in debug mode.
                     // In normal play, the red highlight should never be visible to the player —
                     // the monster/pygmy image is still rendered via e.image below.
@@ -3043,7 +3075,7 @@ export function BoardManager(){
                         }
                     }
 
-                    e.color = boardColor || (isVoid ? '#0e0e0e' : '#6b6057');
+                    e.color = (!isVoid ? '#6b6057' : (boardColor || '#0e0e0e'));
                     e.image = this.getImageForContains(e.contains, e);
                     e.borders = this.normalizeFogBorders(persistedBorders);
 

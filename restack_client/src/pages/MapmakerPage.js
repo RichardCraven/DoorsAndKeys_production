@@ -818,7 +818,8 @@ class MapMakerPage extends React.Component {
       color: null,
       contains: { type: 'empty_space', subtype: null },
       borders: null,
-      territory: null
+      territory: null,
+      inscriptions: null
     };
   }
 
@@ -1181,11 +1182,9 @@ class MapMakerPage extends React.Component {
       arr[tileId].color = '#111012';
       arr[tileId].contains = { type: 'obscured_space', subtype: null };
       arr[tileId].borders = preservedBorders;
-    } else if (pinned.optionType === 'void') {
-      arr[tileId].image = null;
-      arr[tileId].color = 'black';
-      arr[tileId].contains = { type: 'void', subtype: null };
-      arr[tileId].borders = null;
+    } else if (pinned.optionType === 'inscription') {
+      // Inscription tool: do not alter tile contains/type (inscriptions are managed via wall picker modal)
+      return arr;
     } else if (pinned.optionType === 'delete') {
       arr = this.deleteTileWithVendorSupport(arr, tileId);
     } else {
@@ -1346,13 +1345,91 @@ class MapMakerPage extends React.Component {
     });
   }
 
+  deleteInscription = () => {
+    const tileId = this.state.inscriptionPendingTileId;
+    const side = this.state.inscriptionPendingSide;
+    if (tileId !== null && tileId !== undefined && side) {
+      let arr = [...this.state.tiles];
+      const t = { ...arr[tileId] };
+      const updatedInscriptions = { ...(t.inscriptions || {}) };
+      delete updatedInscriptions[side];
+
+      const updatedBorders = { ...(t.borders || {}) };
+      delete updatedBorders[side];
+
+      t.inscriptions = Object.keys(updatedInscriptions).length > 0 ? updatedInscriptions : null;
+      t.borders = Object.keys(updatedBorders).length > 0 ? updatedBorders : null;
+      arr[tileId] = t;
+
+      const updatedLoadedBoard = this.state.loadedBoard ? {
+        ...this.state.loadedBoard,
+        tiles: arr
+      } : null;
+
+      this.setState({
+        tiles: arr,
+        loadedBoard: updatedLoadedBoard,
+        dungeonHasUnsavedChanges: true,
+        boardHasUnsavedChanges: true,
+        showInscriptionModal: false,
+        hoveredTileIdx: null,
+        inscriptionPendingTileId: null,
+        inscriptionPendingSide: null,
+        inscriptionTextInput: '',
+        inscriptionSecretAnswer: '',
+        inscriptionSecretConfirmation: '',
+        inscriptionSecretReward: ''
+      });
+      this.toast('Inscription deleted.');
+    }
+  }
+
+  clearAllTileInscriptions = (tileId) => {
+    if (tileId === null || tileId === undefined) return;
+    let arr = [...this.state.tiles];
+    const t = { ...arr[tileId] };
+    t.inscriptions = null;
+    t.borders = null;
+    arr[tileId] = t;
+
+    const updatedLoadedBoard = this.state.loadedBoard ? {
+      ...this.state.loadedBoard,
+      tiles: arr
+    } : null;
+
+    this.setState({
+      tiles: arr,
+      loadedBoard: updatedLoadedBoard,
+      dungeonHasUnsavedChanges: true,
+      boardHasUnsavedChanges: true,
+      hoveredTileIdx: null,
+      inscriptionWallPicker: null
+    });
+    this.toast('All wall inscriptions cleared.');
+  }
+
   confirmInscription = () => {
     const tileId = this.state.inscriptionPendingTileId;
     const side = this.state.inscriptionPendingSide;
     const text = this.state.inscriptionTextInput;
+
+    if (!text || !text.trim()) {
+      this.deleteInscription();
+      return;
+    }
+
     if (tileId !== null && tileId !== undefined && side) {
       let arr = [...this.state.tiles];
       const t = { ...arr[tileId] };
+      
+      // Ensure tile contains is a passable floor space, not an impassable void/inscription type
+      const currentType = this.getContainsType(t.contains);
+      if (!currentType || currentType === 'inscription' || currentType === 'void') {
+        t.contains = { type: 'empty_space', subtype: null };
+        t.color = null;
+        t.image = null;
+      }
+
       // Store inscriptions as a map: tile.inscriptions = { top: '...', left: '...', etc. }
       let inscriptionData = text;
       if (text && text.trim().endsWith('?')) {
@@ -1374,9 +1451,19 @@ class MapMakerPage extends React.Component {
         [side]: borderColor
       };
       arr[tileId] = t;
+
+      const updatedLoadedBoard = this.state.loadedBoard ? {
+        ...this.state.loadedBoard,
+        tiles: arr
+      } : null;
+
       this.setState({
         tiles: arr,
+        loadedBoard: updatedLoadedBoard,
+        dungeonHasUnsavedChanges: true,
+        boardHasUnsavedChanges: true,
         showInscriptionModal: false,
+        hoveredTileIdx: null,
         inscriptionPendingTileId: null,
         inscriptionPendingSide: null,
         inscriptionTextInput: '',
@@ -1384,6 +1471,7 @@ class MapMakerPage extends React.Component {
         inscriptionSecretConfirmation: '',
         inscriptionSecretReward: ''
       });
+      this.toast('Inscription saved.');
     }
   }
 
@@ -6793,53 +6881,124 @@ class MapMakerPage extends React.Component {
         {/* Inscription Wall-Picker — compass overlay on the clicked tile */}
         {this.state.inscriptionWallPicker && (() => {
           const tileId = this.state.inscriptionWallPicker.tileId;
-          const tileSize = this.state.tileSize || 30;
-          const col = tileId % 15;
-          const row = Math.floor(tileId / 15);
-          // Calculate pixel position relative to the board grid container
-          // The board grid is a flex-wrap grid; we compute top/left from row/col
-          const pickerSize = tileSize * 3;
-          const left = col * tileSize - tileSize;
-          const top = row * tileSize - tileSize;
+          const tileEl = document.querySelector(`[data-tile-id="${tileId}"]`) || document.querySelector(`.tile[data-id="${tileId}"]`);
+          let top = window.innerHeight / 2 - 90;
+          let left = window.innerWidth / 2 - 90;
+
+          if (tileEl) {
+            const rect = tileEl.getBoundingClientRect();
+            top = rect.top + rect.height / 2 - 75;
+            left = rect.left + rect.width / 2 - 75;
+          }
+
+          // Clamp within viewport so it never goes off-screen or under sidebars
+          const pickerW = 160;
+          const pickerH = 160;
+          const minX = 260; // keep right of left folder panel
+          const maxX = Math.max(minX, window.innerWidth - pickerW - 20);
+          const minY = 60;  // keep below top header
+          const maxY = Math.max(minY, window.innerHeight - pickerH - 20);
+
+          left = Math.min(Math.max(left, minX), maxX);
+          top = Math.min(Math.max(top, minY), maxY);
+
           const btnStyle = (active) => ({
-            width: tileSize + 'px', height: tileSize + 'px',
-            background: active ? 'rgba(212,168,68,0.92)' : 'rgba(30,20,5,0.85)',
-            border: '1px solid #d4a844',
-            color: '#fff', fontSize: Math.max(10, tileSize * 0.4) + 'px',
+            width: '42px', height: '42px',
+            background: active ? 'linear-gradient(135deg, rgba(212,168,68,0.95), rgba(249,177,21,0.95))' : 'rgba(30,20,10,0.9)',
+            border: active ? '1px solid #ffe082' : '1px solid rgba(229,181,79,0.5)',
+            color: '#fff', fontSize: '16px', fontWeight: 'bold',
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: '3px', transition: 'background 0.15s'
+            borderRadius: '6px', transition: 'all 0.15s ease',
+            boxShadow: active ? '0 0 10px rgba(249,177,21,0.5)' : 'none'
           });
           const cancelBtnStyle = {
             ...btnStyle(false),
-            background: 'rgba(80,20,20,0.85)', fontSize: Math.max(8, tileSize * 0.3) + 'px'
+            background: 'rgba(90, 20, 20, 0.9)',
+            borderColor: 'rgba(255, 100, 100, 0.6)',
+            color: '#ffaaaa',
+            fontSize: '14px'
           };
           const tile = this.state.tiles[tileId] || {};
           const ins = tile.inscriptions || {};
           return (
-            <div style={{
-              position: 'absolute',
-              left: left + 'px',
-              top: top + 'px',
-              width: pickerSize + 'px',
-              height: pickerSize + 'px',
-              display: 'grid',
-              gridTemplateColumns: `repeat(3, ${tileSize}px)`,
-              gridTemplateRows: `repeat(3, ${tileSize}px)`,
-              zIndex: 500,
-              pointerEvents: 'all'
-            }}>
-              {/* Row 1: empty, Top, empty */}
-              <div />
-              <div style={btnStyle(!!ins.top)} onClick={() => this.selectInscriptionSide('top')} title={ins.top ? ins.top : 'Inscribe north wall'}>↑</div>
-              <div />
-              {/* Row 2: Left, Cancel-X, Right */}
-              <div style={btnStyle(!!ins.left)} onClick={() => this.selectInscriptionSide('left')} title={ins.left ? ins.left : 'Inscribe west wall'}>←</div>
-              <div style={cancelBtnStyle} onClick={this.cancelInscription} title="Cancel">✕</div>
-              <div style={btnStyle(!!ins.right)} onClick={() => this.selectInscriptionSide('right')} title={ins.right ? ins.right : 'Inscribe east wall'}>→</div>
-              {/* Row 3: empty, Bottom, empty */}
-              <div />
-              <div style={btnStyle(!!ins.bottom)} onClick={() => this.selectInscriptionSide('bottom')} title={ins.bottom ? ins.bottom : 'Inscribe south wall'}>↓</div>
-              <div />
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 10000,
+                background: 'rgba(0, 0, 0, 0.35)',
+                backdropFilter: 'blur(2px)'
+              }}
+              onClick={this.cancelInscription}
+            >
+              <div
+                style={{
+                  position: 'fixed',
+                  top: `${top}px`,
+                  left: `${left}px`,
+                  background: 'linear-gradient(145deg, rgba(22, 18, 14, 0.98) 0%, rgba(12, 9, 7, 0.99) 100%)',
+                  border: '2px solid #e5b54f',
+                  borderRadius: '12px',
+                  boxShadow: '0 12px 40px rgba(0,0,0,0.85), 0 0 25px rgba(229, 181, 79, 0.3)',
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px',
+                  zIndex: 10001,
+                  animation: 'fadeIn 0.15s ease-out'
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: '11px', fontWeight: '700', color: '#f9b115', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  Select Wall
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 42px)',
+                  gridTemplateRows: 'repeat(3, 42px)',
+                  gap: '4px'
+                }}>
+                  {/* Row 1: empty, Top, empty */}
+                  <div />
+                  <button style={btnStyle(!!ins.top)} onClick={() => this.selectInscriptionSide('top')} title={ins.top ? ins.top : 'Inscribe north wall'}>↑</button>
+                  <div />
+
+                  {/* Row 2: Left, Cancel-X, Right */}
+                  <button style={btnStyle(!!ins.left)} onClick={() => this.selectInscriptionSide('left')} title={ins.left ? ins.left : 'Inscribe west wall'}>←</button>
+                  <button style={cancelBtnStyle} onClick={this.cancelInscription} title="Cancel">✕</button>
+                  <button style={btnStyle(!!ins.right)} onClick={() => this.selectInscriptionSide('right')} title={ins.right ? ins.right : 'Inscribe east wall'}>→</button>
+
+                  {/* Row 3: empty, Bottom, empty */}
+                  <div />
+                  <button style={btnStyle(!!ins.bottom)} onClick={() => this.selectInscriptionSide('bottom')} title={ins.bottom ? ins.bottom : 'Inscribe south wall'}>↓</button>
+                  <div />
+                </div>
+
+                {Object.keys(ins).length > 0 && (
+                  <button
+                    onClick={() => this.clearAllTileInscriptions(tileId)}
+                    style={{
+                      marginTop: '2px',
+                      padding: '4px 10px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(220, 53, 69, 0.5)',
+                      background: 'rgba(220, 53, 69, 0.15)',
+                      color: '#ff6b6b',
+                      fontSize: '10px',
+                      fontWeight: '700',
+                      fontFamily: "'Cinzel', serif",
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(220, 53, 69, 0.35)'; e.currentTarget.style.color = '#fff'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(220, 53, 69, 0.15)'; e.currentTarget.style.color = '#ff6b6b'; }}
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
             </div>
           );
         })()}
@@ -6974,6 +7133,29 @@ class MapMakerPage extends React.Component {
 
               {/* Footer */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px', marginTop: '6px' }}>
+                {Boolean(this.state.tiles[this.state.inscriptionPendingTileId]?.inscriptions?.[this.state.inscriptionPendingSide]) && (
+                  <button
+                    onClick={this.deleteInscription}
+                    style={{
+                      padding: '8px 18px',
+                      borderRadius: '20px',
+                      border: '1px solid rgba(220, 53, 69, 0.6)',
+                      background: 'rgba(220, 53, 69, 0.15)',
+                      color: '#ff6b6b',
+                      fontSize: '13px',
+                      fontWeight: '700',
+                      fontFamily: "'Cinzel', serif",
+                      letterSpacing: '0.05em',
+                      cursor: 'pointer',
+                      marginRight: 'auto',
+                      transition: 'all 0.18s ease'
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(220, 53, 69, 0.35)'; e.currentTarget.style.color = '#fff'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(220, 53, 69, 0.15)'; e.currentTarget.style.color = '#ff6b6b'; }}
+                  >
+                    🗑 Delete Inscription
+                  </button>
+                )}
                 <button
                   onClick={this.cancelInscription}
                   style={{

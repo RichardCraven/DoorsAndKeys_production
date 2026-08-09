@@ -5023,11 +5023,38 @@ class DungeonPage extends React.Component {
             if (!bm || !bm.tiles) return new Set();
             const territorySet = new Set();
             const getTileClan = (tId) => {
-                const tile = bm.tiles[tId];
+                const tile = bm.tiles[tId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]);
                 if (!tile) return null;
-                const raw = tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null);
+                let raw = tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null);
+                if (!raw && bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
+                    raw = bm.currentBoard.tiles[tId].territory || (typeof bm.currentBoard.tiles[tId].contains === 'object' ? bm.currentBoard.tiles[tId].contains?.territory : null);
+                }
+                // If the tile itself does not have a territory tag, check adjacent tiles for territory clan
+                if (!raw) {
+                    const row = Math.floor(tId / 15), col = tId % 15;
+                    const neighbors = [];
+                    if (row > 0) neighbors.push((row - 1) * 15 + col);
+                    if (row < 14) neighbors.push((row + 1) * 15 + col);
+                    if (col > 0) neighbors.push(row * 15 + (col - 1));
+                    if (col < 14) neighbors.push(row * 15 + (col + 1));
+                    for (const nId of neighbors) {
+                        const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
+                        if (nTile) {
+                            const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
+                            if (nRaw) { raw = nRaw; break; }
+                        }
+                    }
+                }
                 if (!raw) return null;
-                return typeof raw === 'object' ? raw.clan || raw.type : String(raw);
+                const str = typeof raw === 'object' ? raw.clan || raw.type : String(raw);
+                if (!str) return null;
+                const lower = str.toLowerCase();
+                if (lower.includes('cave')) return 'cave';
+                if (lower.includes('woodland')) return 'woodland';
+                if (lower.includes('mud')) return 'mud';
+                if (lower.includes('shadow')) return 'shadow';
+                if (lower.includes('paradox')) return 'paradox';
+                return lower.replace(/_clan$/i, '');
             };
 
             const targetClan = clan || getTileClan(startTileIdx);
@@ -5538,22 +5565,51 @@ class DungeonPage extends React.Component {
             const playerTileIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
             if (playerTileIdx === null || playerTileIdx === undefined) return;
 
-            // Outpost criteria: only buildings that are explicitly of type/subtype 'outpost'
+            // Outpost criteria: ONLY buildings explicitly of type/subtype/image 'outpost'
             const outposts = bm.tiles.filter(tile => {
                 if (!tile) return false;
                 const type = bm.getContainsType(tile.contains);
                 const subtype = bm.getContainsSubtype(tile.contains);
+                const bldg = tile.building || (typeof tile.contains === 'object' ? tile.contains?.building : null);
+                const img = String(tile.image || '').toLowerCase();
                 
-                if (type === 'building' && subtype === 'outpost') return true;
-                if (subtype === 'outpost' || tile.building === 'outpost') return true;
+                if (subtype === 'outpost' || bldg === 'outpost' || tile.building === 'outpost') return true;
+                if (img.includes('outpost') || img.includes('buildable_outpost')) return true;
                 return false;
             });
 
             if (outposts.length === 0) return;
 
             outposts.forEach(outpost => {
-                const rawClan = outpost.territory || outpost.contains?.territory;
-                const clan = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : (rawClan ? String(rawClan) : null);
+                let rawClan = outpost.territory || outpost.contains?.territory;
+                if (!rawClan && bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[outpost.id]) {
+                    rawClan = bm.currentBoard.tiles[outpost.id].territory || bm.currentBoard.tiles[outpost.id].contains?.territory;
+                }
+                // If not directly on outpost tile, check 4 orthogonal neighbor tiles for territory clan
+                if (!rawClan) {
+                    const rowO = Math.floor(outpost.id / 15), colO = outpost.id % 15;
+                    const neighbors = [];
+                    if (rowO > 0) neighbors.push((rowO - 1) * 15 + colO);
+                    if (rowO < 14) neighbors.push((rowO + 1) * 15 + colO);
+                    if (colO > 0) neighbors.push(rowO * 15 + (colO - 1));
+                    if (colO < 14) neighbors.push(rowO * 15 + (colO + 1));
+                    for (const nId of neighbors) {
+                        const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
+                        if (nTile) {
+                            const nRaw = nTile.territory || (typeof nTile.contains === 'object' ? nTile.contains?.territory : null);
+                            if (nRaw) { rawClan = nRaw; break; }
+                        }
+                    }
+                }
+                const rawClanStr = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : (rawClan ? String(rawClan) : null);
+                const clan = rawClanStr ? (
+                    rawClanStr.toLowerCase().includes('cave') ? 'cave' :
+                    rawClanStr.toLowerCase().includes('woodland') ? 'woodland' :
+                    rawClanStr.toLowerCase().includes('mud') ? 'mud' :
+                    rawClanStr.toLowerCase().includes('shadow') ? 'shadow' :
+                    rawClanStr.toLowerCase().includes('paradox') ? 'paradox' :
+                    rawClanStr.toLowerCase().replace(/_clan$/i, '')
+                ) : null;
 
                 if (clan) {
                     const contiguousTerritory = this.getContiguousTerritoryTileIds(outpost.id, clan);
@@ -9802,9 +9858,12 @@ class DungeonPage extends React.Component {
         const tileIndex = tile.index !== undefined ? tile.index : (tile.id !== undefined ? tile.id : null);
         if (tileIndex !== null && bm.tiles[tileIndex]) {
             const actualTile = bm.tiles[tileIndex];
-            const isVoid = bm.getContainsType(actualTile.contains) === 'void';
+            const cType = bm.getContainsType(actualTile.contains);
+            const isVoid = cType === 'void';
             const isFogged = actualTile.color === 'black';
-            if (isVoid || isFogged) return;
+            if (cType !== 'empty_space' && cType !== 'obscured_space') {
+                if (isVoid || isFogged) return;
+            }
         }
 
         const startCoords = bm.playerTile.location;

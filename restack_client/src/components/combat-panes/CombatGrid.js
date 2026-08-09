@@ -2529,7 +2529,7 @@ export default function CombatGrid(props) {
                                         const needFlip = isFighterTarget
                                             ? (unit.facing === 'left' || unit.facing !== 'right')
                                             : (unit.facing === 'right');
-                                        return needFlip ? 'scaleX(-1) scaleY(-1)' : 'scaleY(-1)';
+                                        return needFlip ? 'scaleX(-1)' : 'none';
                                     })(),
                                     transformOrigin: 'center center',
                                     opacity: (unit.mimicryActive && !isDead) ? 1 : 0,

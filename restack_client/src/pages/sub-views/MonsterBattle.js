@@ -1652,6 +1652,8 @@ class MonsterBattle extends React.Component {
                 const initMeta = getMeta() || {};
                 initialFreeWill = typeof initMeta.freeWill === 'number' ? initMeta.freeWill : 0;
             } catch (e) { }
+
+            let experienceGained,
                 goldGained,
                 foodGained = 0,
                 itemsGained,

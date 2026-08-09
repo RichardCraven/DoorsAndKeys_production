@@ -2519,7 +2519,7 @@ export default function SiegeCombatGrid(props) {
                                         const needFlip = isFighterTarget
                                             ? (f === 'left' || f !== 'right')
                                             : (f === 'right');
-                                        return needFlip ? 'scaleX(-1) scaleY(-1)' : 'scaleY(-1)';
+                                        return needFlip ? 'scaleX(-1)' : 'none';
                                     })(),
                                     transformOrigin: 'center center',
                                     opacity: (unit.mimicryActive && !isDead) ? 1 : 0,

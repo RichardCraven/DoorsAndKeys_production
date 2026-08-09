@@ -138,7 +138,7 @@ class BoardView extends React.Component {
         const pinnedOption = this.props.pinnedOption;
         const pinned = pinnedOption && this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
         
-        if (pinnedOption && pinned) {
+        if (pinnedOption && pinned && pinned.optionType !== 'inscription') {
             hasPreview = true;
             let monster, gate, key, tierOption, jewelOption, runeOption, treasureOption, vendorOption;
             if (pinnedOption.type === 'monster-tile') {
