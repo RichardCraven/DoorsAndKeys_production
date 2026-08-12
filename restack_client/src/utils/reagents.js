@@ -113,6 +113,15 @@ export const REAGENTS = {
         category: 'reagent',
         equippedBy: null,
     },
+    mushrooms: {
+        id: 'mushrooms',
+        name: 'Mushrooms',
+        description: 'Edible fungi grown in a nursery.',
+        icon: 'mushroom1',
+        type: 'consumable',
+        category: 'reagent',
+        equippedBy: null,
+    },
     stone: {
         id: 'stone',
         name: 'Stone',

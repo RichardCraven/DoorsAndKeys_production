@@ -220,6 +220,9 @@ export function BoardManager(){
     this.establishLevelChangeCallback = (callback) => {
         this.broadcastLevelChange = callback;
     }
+    this.establishDoorTransitionCallback = (callback) => {
+        this.doorTransitionCallback = callback;
+    }
     this.establishUseConsumableFromInventoryCallback = (callback) => {
         this.broadcastUseConsumableFromInventory = callback;
     }
@@ -288,11 +291,52 @@ export function BoardManager(){
         if (tile.isVoid) return true;
         if (cType === 'void' || cType === 'empty' || cType === 'void_fill' || cType === 'voidfill') return true;
 
+        if (tile.building || tile.isBuilding || this.isImpassableBuildingTile(tile)) return false;
+
         if (!contains) {
             if (tile.original === 'void' || tile.isVoid) return true;
             return false;
         }
         
+        return false;
+    };
+    this.isImpassableBuildingTile = (tile) => {
+        if (!tile) return false;
+        const containsType = this.getContainsType(tile.contains) || tile.contains?.type;
+        const containsSubtype = this.getContainsSubtype(tile.contains) || tile.contains?.subtype;
+        const bldg = tile.building || tile.contains?.building;
+        const img = tile.image || tile.contains?.image;
+
+        // 'hut' and 'buildable_hut' are EXPLICITLY passable
+        if (containsSubtype === 'hut' || containsSubtype === 'buildable_hut' || bldg === 'hut' || img === 'hut' || img === 'buildable_hut') {
+            return false;
+        }
+
+        const buildingSubtypes = [
+            'outpost', 'buildable_outpost',
+            'observer_platform', 'buildable_observer_platform',
+            'earthen_fort', 'buildable_earthen_fort',
+            'war_camp', 'buildable_war_camp',
+            'war_fort', 'buildable_war_fort',
+            'blacksmith_camp', 'buildable_blacksmith_camp',
+            'builders_house', 'buildable_builders_house',
+            'captains_tower', 'buildable_captains_tower',
+            'house', 'buildable_house',
+            'stone_tower', 'buildable_stone_tower',
+            'storage', 'buildable_storage',
+            'temple', 'buildable_temple',
+            'larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine',
+            'dust_collector', 'fungal_nursery', 'cultivation_vat',
+            'domain_monolith', 'dark_domain_monolith',
+            'infernal_tower', 'infernal_pit', 'frozen_locus', 'emerald_locus', 'cosmic_locus'
+        ];
+
+        if (containsType === 'building' || containsType === 'generator') return true;
+        if (containsSubtype && buildingSubtypes.includes(containsSubtype)) return true;
+        if (bldg && buildingSubtypes.includes(bldg)) return true;
+        if (img && buildingSubtypes.includes(img)) return true;
+        if (tile.isBuilding) return true;
+
         return false;
     };
     this.getContainsSubtype = (contains) => {
@@ -483,7 +527,7 @@ export function BoardManager(){
         return str.includes('black') || str.includes('#000') || str.includes('rgb(0,0,0)') || str.includes('2px solid');
     }
 
-    this.isPassageWallBlockingBetween = (fromIdx, toIdx) => {
+    this.isPassageWallBlockingBetween = (fromIdx, toIdx, options = {}) => {
         try {
             if (fromIdx === toIdx) return false;
             if (fromIdx == null || toIdx == null) return false;
@@ -517,6 +561,9 @@ export function BoardManager(){
             const boardTiles = (this.currentBoard && this.currentBoard.tiles) ? this.currentBoard.tiles : null;
             const fromTile = (boardTiles && boardTiles[fromIdx]) ? boardTiles[fromIdx] : this.tiles[fromIdx];
             const toTile = (boardTiles && boardTiles[toIdx]) ? boardTiles[toIdx] : this.tiles[toIdx];
+
+            // If destination is an impassable building (outpost, observer platform, etc. except hut), block movement onto it
+            if (!options.ignoreBuilding && this.isImpassableBuildingTile(toTile)) return true;
 
             // If one tile is void and the other is non-void, there is a solid wall between them
             const fromIsVoid = this.isVoidTile(fromTile);
@@ -585,7 +632,7 @@ export function BoardManager(){
             neighbors.forEach((nextIdx) => {
                 const existing = visited.get(nextIdx);
                 if (existing !== undefined && existing <= steps + 1) return;
-                if (this.isPassageWallBlockingBetween(idx, nextIdx)) return;
+                if (this.isPassageWallBlockingBetween(idx, nextIdx, { ignoreBuilding: true })) return;
 
                 const tile = this.tiles[nextIdx] || (boardTiles && boardTiles[nextIdx]);
                 if (!tile) return;
@@ -594,6 +641,9 @@ export function BoardManager(){
                 if (this.isVoidTile(tile) && !hasInscriptions) return;
 
                 visited.set(nextIdx, steps + 1);
+
+                // Impassable buildings (outpost, etc.) are visible in fog of war, but block propagation past themselves.
+                if (this.isImpassableBuildingTile(tile)) return;
 
                 // Locked gates are visible but block propagation past themselves.
                 if (this.isLockedGateTile(tile)) return;
@@ -1794,6 +1844,15 @@ export function BoardManager(){
                 }
             }
 
+            let generatorData = tile.generatorData || null;
+            try {
+                const tileKey = `${this.currentLevel?.id || 1}_${this.currentBoard?.id || 0}_${tile.id}`;
+                const meta = getMeta() || {};
+                if (meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
+                    generatorData = meta.activatedGenerators[tileKey];
+                }
+            } catch (e) {}
+
             this.tiles.push({
                 type: 'board-tile',
                 id: tile.id,
@@ -1801,6 +1860,8 @@ export function BoardManager(){
                 showCoordinates: false,
                 contains: tileContains,
                 image: tileImage,
+                building: tile.building || null,
+                generatorData: generatorData,
                 inscriptions: tile.inscriptions || null,
                 territory: tile.territory || null,
                 borders: null,
@@ -2456,13 +2517,21 @@ export function BoardManager(){
         }
     }
     this.handlePassingThroughDoor = () => {
-        if(this.currentOrientation === 'F'){
-            this.currentOrientation = 'B'
-        } else if(this.currentOrientation === 'B'){
-            this.currentOrientation = 'F'
+        const executeDoorTransition = () => {
+            if(this.currentOrientation === 'F'){
+                this.currentOrientation = 'B'
+            } else if(this.currentOrientation === 'B'){
+                this.currentOrientation = 'F'
+            }
+            this.tiles = [];
+            this.initializeTilesFromMap(this.playerTile.boardIndex, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1]]))
+        };
+
+        if (typeof this.doorTransitionCallback === 'function') {
+            this.doorTransitionCallback(executeDoorTransition);
+        } else {
+            executeDoorTransition();
         }
-        this.tiles = [];
-        this.initializeTilesFromMap(this.playerTile.boardIndex, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1]]))
     }
     
     this.handlePassingThroughWayUp = () => {
@@ -2488,31 +2557,60 @@ export function BoardManager(){
         this.broadcastLevelChange(this.currentLevel.id)
     }
     this.checkAdjacency = (reachableOverride = null) => {
-        // Clear any previous overlay indicators (we will set edge indicators here)
-        try { this.overlayTiles.forEach(t => { if (t) { t.color = null; t.borders = null } }) } catch (e) {}
-        try { this.tiles.forEach(t => { if (t && t.color === '#ff000078') { t.color = null; } }) } catch (e) {}
+        // Clear any previous overlay indicators
+        if (this._activeEdgeIndicators) {
+            try {
+                this._activeEdgeIndicators.forEach(idx => {
+                    const t = this.overlayTiles[idx];
+                    if (t) {
+                        t.color = null;
+                        t.borders = null;
+                    }
+                });
+            } catch (e) {}
+            this._activeEdgeIndicators = [];
+        } else {
+            this._activeEdgeIndicators = [];
+            try { this.overlayTiles.forEach(t => { if (t) { t.color = null; t.borders = null } }) } catch (e) {}
+        }
+        
+        if (this._activeColorTiles) {
+            try {
+                this._activeColorTiles.forEach(idx => {
+                    const t = this.tiles[idx];
+                    if (t && t.color === '#ff000078') {
+                        t.color = null;
+                    }
+                });
+            } catch (e) {}
+            this._activeColorTiles = [];
+        } else {
+            this._activeColorTiles = [];
+            try { this.tiles.forEach(t => { if (t && t.color === '#ff000078') { t.color = null; } }) } catch (e) {}
+        }
 
-        // Edge indicator: when the player is adjacent to the board boundary, show a
-        // 3-tile red indicator along that edge centered on the player's row/column.
+        // Edge indicator: when the player is on a connecting passage, light up the border
+        // leading to the next board with a red color.
         try {
             const pCoords = this.playerTile.location; // [x, y]
             const px = pCoords[0], py = pCoords[1];
-            const EDGE_MIN = 15, EDGE_MAX = 29;
-            const indicatorColor = '#ff000088';
+            const EDGE_MIN = 0, EDGE_MAX = 14;
+            const indicatorColor = '#ff0000';
 
             const markOverlayAt = (coords, side) => {
                 try {
                     if (!coords) return;
                     const idx = this.getIndexFromCoordinates(coords);
                     if (!this.overlayTiles[idx]) return;
-                    // set a single thick border on the given side to render the 3-tile edge line
-                    const borderStyle = `3px solid ${indicatorColor}`;
+                    // set a thick red border on the given side to render the edge line
+                    const borderStyle = `4px solid ${indicatorColor}`;
                     const borders = { left: null, right: null, top: null, bottom: null };
                     if (side === 'left') borders.left = borderStyle;
                     if (side === 'right') borders.right = borderStyle;
                     if (side === 'top') borders.top = borderStyle;
                     if (side === 'bottom') borders.bottom = borderStyle;
                     this.overlayTiles[idx].borders = borders;
+                    this._activeEdgeIndicators.push(idx);
                 } catch (e) {}
             }
 
@@ -2520,53 +2618,56 @@ export function BoardManager(){
             const canTransitionBoard = (direction) => {
                 const currentTileIdx = this.getIndexFromCoordinates(pCoords);
                 const currentTile = this.tiles[currentTileIdx];
+                if (!currentTile) return false;
                 
-                // Only explicitly placed connecting paths can transition boards
-                if (this.getContainsType(currentTile.contains) !== 'connecting_path') return false;
+                const cType = this.getContainsType(currentTile.contains) || currentTile.contains?.type;
+                const isPassage = cType === 'connecting_path' || cType === 'passage' || currentTile.building === 'connecting_path' || currentTile.optionType === 'passage';
+                if (!isPassage) return false;
 
-                let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-                if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+                let plane = this.currentOrientation === 'F' ? this.currentLevel?.front : this.currentLevel?.back;
+                if (!plane) plane = this.currentLevel?.front || this.currentLevel?.back || this.currentLevel;
                 if (!plane || !plane.miniboards) return false;
                 
+                const bIdx = this.playerTile.boardIndex;
                 if (direction === 'up') {
                     if (this.hasSolidBorder(currentTile, 'top') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
-                    return !!plane.miniboards[this.playerTile.boardIndex - 3];
+                    return (bIdx >= 3) && !!plane.miniboards[bIdx - 3];
                 } else if (direction === 'down') {
                     if (this.hasSolidBorder(currentTile, 'bottom') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
-                    return !!plane.miniboards[this.playerTile.boardIndex + 3];
+                    return (bIdx <= 5) && !!plane.miniboards[bIdx + 3];
                 } else if (direction === 'left') {
                     if (this.hasSolidBorder(currentTile, 'left') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
-                    return !!plane.miniboards[this.playerTile.boardIndex - 1];
+                    return (bIdx % 3 !== 0) && !!plane.miniboards[bIdx - 1];
                 } else if (direction === 'right') {
                     if (this.hasSolidBorder(currentTile, 'right') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
-                    return !!plane.miniboards[this.playerTile.boardIndex + 1];
+                    return (bIdx % 3 !== 2) && !!plane.miniboards[bIdx + 1];
                 }
                 return false;
             };
 
             // Left edge
-            if (py === EDGE_MIN && canTransitionBoard('left')) {
+            if (py <= 2 && canTransitionBoard('left')) {
                 for (let d = -1; d <= 1; d++) {
                     const nx = px + d;
                     if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MIN], 'left');
                 }
             }
             // Right edge
-            if (py === EDGE_MAX && canTransitionBoard('right')) {
+            if (py >= 12 && canTransitionBoard('right')) {
                 for (let d = -1; d <= 1; d++) {
                     const nx = px + d;
                     if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MAX], 'right');
                 }
             }
             // Top edge
-            if (px === EDGE_MIN && canTransitionBoard('up')) {
+            if (px <= 2 && canTransitionBoard('up')) {
                 for (let d = -1; d <= 1; d++) {
                     const ny = py + d;
                     if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MIN, ny], 'top');
                 }
             }
             // Bottom edge
-            if (px === EDGE_MAX && canTransitionBoard('down')) {
+            if (px >= 12 && canTransitionBoard('down')) {
                 for (let d = -1; d <= 1; d++) {
                     const ny = py + d;
                     if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MAX, ny], 'bottom');
@@ -2902,8 +3003,6 @@ export function BoardManager(){
                 return 'narrative_visited'
             case 'stairs':
                 return 'stairs_down'
-            case 'door':
-                return 'closed_door'
             case 'dream den':
                 return 'moon_castle'
             case 'dream_den':
@@ -3151,7 +3250,7 @@ export function BoardManager(){
                     const manhattan = Math.abs(coords[0] - playerCoords[0]) + Math.abs(coords[1] - playerCoords[1]);
                     if (manhattan !== 1) return false;
                     if (!visibleTileIds.has(tile.id)) return false;
-                    if (this.isPassageWallBlockingBetween(destinationTile.id, tile.id)) return false;
+                    if (this.isPassageWallBlockingBetween(destinationTile.id, tile.id, { ignoreBuilding: true })) return false;
                     return true;
                 });
 
@@ -3197,7 +3296,7 @@ export function BoardManager(){
                 if (targetTile.color === 'black') return true;
                 const cType = targetTile.contains && (targetTile.contains.type || targetTile.contains);
                 if (cType === 'void_fill' || cType === 'void' || targetTile.type === 'void') return true;
-                if (fromTile && this.isPassageWallBlockingBetween(fromTile.id, targetTile.id)) return true;
+                if (fromTile && this.isPassageWallBlockingBetween(fromTile.id, targetTile.id, { ignoreBuilding: true })) return true;
                 return false;
             };
 
@@ -3218,7 +3317,7 @@ export function BoardManager(){
 
                 // Direct cardinal neighbors
                 if (manhattan === 1) {
-                    tile.partialObscured = this.isPassageWallBlockingBetween(destinationTile.id, tile.id);
+                    tile.partialObscured = this.isPassageWallBlockingBetween(destinationTile.id, tile.id, { ignoreBuilding: true });
                     return;
                 }
 
@@ -3231,8 +3330,8 @@ export function BoardManager(){
                     const horizBlocked = isVoidOrBlackOrBlocked(destinationTile, horizNeighbor);
 
                     if (vertBlocked || horizBlocked ||
-                        (vertNeighbor && this.isPassageWallBlockingBetween(vertNeighbor.id, tile.id)) ||
-                        (horizNeighbor && this.isPassageWallBlockingBetween(horizNeighbor.id, tile.id))) {
+                        (vertNeighbor && this.isPassageWallBlockingBetween(vertNeighbor.id, tile.id, { ignoreBuilding: true })) ||
+                        (horizNeighbor && this.isPassageWallBlockingBetween(horizNeighbor.id, tile.id, { ignoreBuilding: true }))) {
                         tile.partialObscured = true;
                     } else {
                         tile.partialObscured = false;
@@ -3247,7 +3346,7 @@ export function BoardManager(){
                     const midTile = getTileAtCoords(midRow, midCol);
 
                     if (isVoidOrBlackOrBlocked(destinationTile, midTile) ||
-                        (midTile && this.isPassageWallBlockingBetween(midTile.id, tile.id))) {
+                        (midTile && this.isPassageWallBlockingBetween(midTile.id, tile.id, { ignoreBuilding: true }))) {
                         tile.partialObscured = true;
                     } else {
                         tile.partialObscured = false;

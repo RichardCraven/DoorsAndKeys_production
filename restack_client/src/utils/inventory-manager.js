@@ -2875,6 +2875,10 @@ export function InventoryManager() {
         items.forEach(e => {
             if (this.allItems[e]) {
                 const v = copy(this.allItems[e]);
+                if (e === 'mushrooms') {
+                    const mIcons = ['mushroom1', 'mushroom2', 'mushroom3', 'mushroom4', 'mushroom5', 'mushroom6', 'mushroom7', 'mushroom8'];
+                    if (v) v.icon = mIcons[Math.floor(Math.random() * mIcons.length)];
+                }
                 if (v) arr.push(v);
             } else {
                 console.warn('addItemsByName: unknown item key:', e);
@@ -2903,18 +2907,38 @@ export function InventoryManager() {
         if (idx !== -1) this.inventory.splice(idx, 1);
     }
     this.addCurrency = (data) => {
+        const amt = typeof data.amount === 'number' ? data.amount : 1;
         switch (data.type) {
             case 'gold':
-                this.gold += data.amount;
+                this.gold = (this.gold || 0) + amt;
                 break;
             case 'shimmering_dust':
-                this.shimmering_dust += data.amount;
-                break;
             case 'shimmering dust':
-                this.shimmering_dust += data.amount;
+            case 'dust':
+                this.shimmering_dust = (this.shimmering_dust || 0) + amt;
                 break;
             case 'totems':
-                this.totems += data.amount;
+                this.totems = (this.totems || 0) + amt;
+                break;
+            case 'food':
+                this.food = (this.food || 0) + amt;
+                break;
+            case 'wood':
+                this.wood = (this.wood || 0) + amt;
+                break;
+            case 'stone':
+                this.stone = (this.stone || 0) + amt;
+                break;
+            case 'slate':
+                this.slate = (this.slate || 0) + amt;
+                break;
+            case 'mushrooms':
+                this.mushrooms = (this.mushrooms || 0) + amt;
+                if (typeof this.addItemsByName === 'function') {
+                    for (let i = 0; i < Math.min(amt, 10); i++) {
+                        this.addItemsByName(['mushrooms']);
+                    }
+                }
                 break;
             default:
                 break;

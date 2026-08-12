@@ -2506,8 +2506,8 @@ class DungeonPage extends React.Component {
             , isMobileLandscape: window.innerWidth <= 1024 && window.innerHeight < window.innerWidth
             , draggingSectionId: null
             , dragOverPanel: null
-            , dragOverIndex: null
             , metaPanelConfigVersion: 0
+            , illuminatedTileId: null
         }
     // Native browser tooltip will be used for death-tracker; no custom tooltip state required.
         // Track timers/intervals created by this component so we can clear on unmount
@@ -3549,6 +3549,9 @@ class DungeonPage extends React.Component {
 
         this.props.boardManager.establishBoardTransitionCallback(this.boardTransition)
         this.props.boardManager.establishLevelChangeCallback(this.handleLevelChange)
+        if (typeof this.props.boardManager.establishDoorTransitionCallback === 'function') {
+            this.props.boardManager.establishDoorTransitionCallback(this.handleDoorTransition)
+        }
 
         this.props.boardManager.establishUseConsumableFromInventoryCallback(this.useConsumableFromInventory)
         // this.props.inventoryManager.establishUseConsumableFromInventoryCallback(this.useConsumableFromInventory)
@@ -4192,9 +4195,79 @@ class DungeonPage extends React.Component {
 
             const playerMoved = bm.playerTile.location[0] !== originCoords[0] || bm.playerTile.location[1] !== originCoords[1];
             
+            if (!playerMoved) {
+                // Track double arrow press / movement attempt into wall
+                const now = Date.now();
+                const lastAttempt = this._lastDirectionalWallAttempt || { dir: null, ts: 0 };
+                const isDoubleAttempt = (lastAttempt.dir === direction && (now - lastAttempt.ts) < 500);
+                this._lastDirectionalWallAttempt = { dir: direction, ts: now };
+
+                const playerIdx = bm.getIndexFromCoordinates(originCoords);
+                const playerTileObj = bm.tiles[playerIdx];
+                const destTileObj = bm.tiles[destIndex];
+
+                const sideMap = {
+                    up: { self: 'top', opp: 'bottom' },
+                    down: { self: 'bottom', opp: 'top' },
+                    left: { self: 'left', opp: 'right' },
+                    right: { self: 'right', opp: 'left' }
+                };
+                const sides = sideMap[direction];
+
+                const selfInscription = sides?.self && playerTileObj?.inscriptions?.[sides.self];
+                const oppInscription = sides?.opp && destTileObj?.inscriptions?.[sides.opp];
+                const anyInscription = oppInscription || selfInscription || (destTileObj?.inscriptions && Object.values(destTileObj.inscriptions).find(v => !!v));
+
+                if (this.isBuildingOrGeneratorTile(destTileObj) || this.isBuildingOrGeneratorTile(playerTileObj)) {
+                    const targetBuilding = this.isBuildingOrGeneratorTile(destTileObj) ? destTileObj : playerTileObj;
+                    const isAlreadyIlluminated = (this.state.illuminatedTileId === targetBuilding.id || targetBuilding.illuminated);
+
+                    this._isMoving = false;
+                    this._processingQueuedMove = false;
+                    this._movementQueue = [];
+                    if (this._movementRepeatInterval) {
+                        clearInterval(this._movementRepeatInterval);
+                        this._movementRepeatInterval = null;
+                    }
+
+                    if (isAlreadyIlluminated) {
+                        this.clearIlluminatedTile();
+                        this.openGeneratorModal(targetBuilding);
+                    } else {
+                        this.illuminateBuildingTile(targetBuilding);
+                    }
+                    return;
+                }
+
+                if (anyInscription) {
+                    this._isMoving = false;
+                    this._processingQueuedMove = false;
+                    this._movementQueue = [];
+                    if (this._movementRepeatInterval) {
+                        clearInterval(this._movementRepeatInterval);
+                        this._movementRepeatInterval = null;
+                    }
+                    this.triggerInscriptionModal(anyInscription);
+                    return;
+                } else if (isDoubleAttempt) {
+                    this._isMoving = false;
+                    this._processingQueuedMove = false;
+                    this._movementQueue = [];
+                    if (this._movementRepeatInterval) {
+                        clearInterval(this._movementRepeatInterval);
+                        this._movementRepeatInterval = null;
+                    }
+                    const candidates = this.getAdjacentWalls(playerIdx);
+                    if (candidates && candidates.length > 0) {
+                        this.setState({ dungeonInscriptionPicker: { tileId: playerIdx, candidates } });
+                    }
+                }
+            }
+            
             let ambushTriggered = false;
             let ambushMonster = null;
             if (playerMoved) {
+                this.clearIlluminatedTile();
                 let destTileObj = bm.tiles[destIndex];
                 const isHutProtected = destTileObj && (
                     destTileObj.building === 'hut' ||
@@ -4274,7 +4347,6 @@ class DungeonPage extends React.Component {
 
             if (isFastMove) {
                 const floatStyle = this.getFloatingPlayerStyle(bm.playerTile.location);
-                this.recordBreadcrumb();
                 const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                 const currentTile = bm.tiles[playerIdx];
                 const ctype = currentTile && currentTile.contains && (currentTile.contains.type || currentTile.contains);
@@ -4301,8 +4373,9 @@ class DungeonPage extends React.Component {
                         } catch (e) { return {}; }
                     })() : {})
                 }, () => {
-                    this._isMoving = false;
                     this.checkMobileViewportCentering(bm.playerTile.location);
+                    this.recordBreadcrumb();
+                    
                     if (ambushTriggered) {
                         this.ambushTimeout = setTimeout(() => {
                             this.startAmbushCombat();
@@ -5559,6 +5632,7 @@ class DungeonPage extends React.Component {
 
     tickOutpostAttacks = () => {
         try {
+            if (this._isMoving) return;
             const bm = this.props.boardManager;
             if (!bm || !bm.tiles || !bm.playerTile || !bm.playerTile.location) return;
 
@@ -5566,7 +5640,8 @@ class DungeonPage extends React.Component {
             if (playerTileIdx === null || playerTileIdx === undefined) return;
 
             // Outpost criteria: ONLY buildings explicitly of type/subtype/image 'outpost'
-            const outposts = bm.tiles.filter(tile => {
+            const sourceTiles = (bm.currentBoard && bm.currentBoard.tiles) ? Object.values(bm.currentBoard.tiles) : bm.tiles;
+            const outposts = sourceTiles.filter(tile => {
                 if (!tile) return false;
                 const type = bm.getContainsType(tile.contains);
                 const subtype = bm.getContainsSubtype(tile.contains);
@@ -6314,6 +6389,9 @@ class DungeonPage extends React.Component {
 
     renderMinimapSection = () => {
         const collapsed = this.isSectionCollapsed('minimap');
+        const bm = this.props.boardManager;
+        const isBackside = bm && (bm.currentOrientation === 'B' || bm.currentOrientation === 'back');
+        const titleText = isBackside ? 'Minimap (backside)' : 'Minimap';
         return (
             <div className="dungeon-panel-section section-minimap">
                 <div 
@@ -6323,7 +6401,7 @@ class DungeonPage extends React.Component {
                     onDragEnd={this.handleDragEnd}
                     onClick={() => this.toggleSectionCollapse('minimap')}
                 >
-                    Minimap {collapsed ? '[+]' : '[-]'}
+                    {titleText} {collapsed ? '[+]' : '[-]'}
                 </div>
                 {!collapsed && (
                     <div className="section-content">
@@ -6552,6 +6630,17 @@ class DungeonPage extends React.Component {
                                 verticalAlign: 'middle',
                                 marginRight: '4px'
                             }} /> Wood</span><span className="ql-value" style={{color: '#a0522d'}}>{(this.props.inventoryManager?.inventory || []).filter(item => item && (item._im_key === 'wood' || item.id === 'wood' || item.name === 'Wood')).length}</span></div>
+                            <div className="ql-row"><span className="ql-label"><span style={{
+                                display: 'inline-block',
+                                backgroundImage: `url(${images.mushroom1})`,
+                                backgroundSize: 'contain',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'center',
+                                width: '16px',
+                                height: '16px',
+                                verticalAlign: 'middle',
+                                marginRight: '4px'
+                            }} /> Mushrooms</span><span className="ql-value" style={{color: '#d488ff'}}>{(this.props.inventoryManager?.inventory || []).filter(item => item && (item._im_key === 'mushrooms' || item.id === 'mushrooms' || item.name === 'Mushrooms')).length}</span></div>
                             <div className="ql-row"><span className="ql-label"><span style={{
                                 display: 'inline-block',
                                 backgroundImage: `url(${images.stone})`,
@@ -6919,7 +7008,7 @@ class DungeonPage extends React.Component {
                                     'boss', 'npc', 'well', 'altar', 'trap', 'treasure',
                                     'campfire', 'camp', 'artifact', 'event', 'dungeon_entrance',
                                     'spawn', 'narrative', 'lore_tablet', 'tablet', 'spell',
-                                    'dungeon_portal', 'dungeon portal',
+                                    'dungeon_portal', 'dungeon portal', 'building', 'outpost',
                                     ...GATE_TYPES,
                                 ]);
 
@@ -6985,7 +7074,8 @@ class DungeonPage extends React.Component {
                                     }
                                 };
 
-                                const getType = (contains) => {
+                                const getType = (contains, tile) => {
+                                    if (!contains && tile && tile.building) return 'building';
                                     if (!contains) return null;
                                     if (typeof contains === 'object') {
                                         if (contains.type === 'gate' && contains.subtype) return contains.subtype;
@@ -6993,7 +7083,8 @@ class DungeonPage extends React.Component {
                                     }
                                     return contains;
                                 };
-                                const getSubtype = (contains) => {
+                                const getSubtype = (contains, tile) => {
+                                    if (!contains && tile && tile.building) return tile.building;
                                     if (!contains) return null;
                                     if (typeof contains === 'object') return contains.subtype || null;
                                     return null;
@@ -7002,7 +7093,7 @@ class DungeonPage extends React.Component {
                                 const poi = liveTiles.filter((t, idx) => {
                                     if (!t) return false;
                                     if (t.color === 'black' || t.fog === true) return false;
-                                    const type = getType(t.contains);
+                                    const type = getType(t.contains, t);
                                     if (!type || !NOTABLE_TYPES.has(type)) return false;
                                     if (playerCoords && bm && typeof bm.getCoordinatesFromIndex === 'function') {
                                         const tileId = t.id != null ? t.id : idx;
@@ -7018,8 +7109,8 @@ class DungeonPage extends React.Component {
 
                                 const seenPoi = new Set();
                                 const basePoi = poi.filter(t => {
-                                    const type    = getType(t.contains);
-                                    const subtype = getSubtype(t.contains);
+                                    const type    = getType(t.contains, t);
+                                    const subtype = getSubtype(t.contains, t);
                                     const key = `${type}|${subtype || ''}|${t.image || ''}`;
                                     if (seenPoi.has(key)) return false;
                                     seenPoi.add(key);
@@ -7053,8 +7144,8 @@ class DungeonPage extends React.Component {
                                 return (
                                     <div className="poi-list">
                                         {uniquePoi.map((t, i) => {
-                                            const type = getType(t.contains);
-                                            const subtype = getSubtype(t.contains);
+                                            const type = getType(t.contains, t);
+                                            const subtype = getSubtype(t.contains, t);
                                             const isShrine = type === 'shrine';
 
                                             if (isShrine) {
@@ -7102,7 +7193,7 @@ class DungeonPage extends React.Component {
                                             const icon = t.image
                                                 ? (images[t.image] || images[`${t.image}_portrait`] || (typeof t.image === 'string' && t.image.includes('/') ? t.image : null))
                                                 : (images[subtype] || images[`${subtype}_portrait`] || images[type] || images[`${type}_portrait`] || null);
-                                            const label = isGate
+                                            const rawLabel = isGate
                                                 ? (type || 'Gate').replace(/_/g, ' ')
                                                 : isSpawn
                                                     ? 'Spawn Point'
@@ -7115,6 +7206,8 @@ class DungeonPage extends React.Component {
                                                                 : subtype
                                                                     ? subtype.replace(/_/g, ' ')
                                                                     : (type ? type.replace(/_/g, ' ') : 'Unknown');
+                                            const isGenActive = !!(t.generatorData && t.generatorData.activated);
+                                            const label = isGenActive ? `${rawLabel} (Active)` : rawLabel;
                                             const cardClass = isChest     ? ' poi-chest-card'
                                                 : isGate      ? ' poi-gate-card'
                                                 : isVendor    ? ' poi-vendor-card'
@@ -8195,23 +8288,52 @@ class DungeonPage extends React.Component {
             }, 3500);
         });
     }
-    addCurrencyToInventory = (data, tile = null) => {
+    addCurrencyToInventory = (data, tile = null, suppressMessage = false) => {
         let type;
         switch(data.type){
             case 'gold':
                 type = 'gold';
             break;
             case 'shimmering_dust':
-                type = 'shimmering dust'
+            case 'shimmering dust':
+            case 'dust':
+                type = 'shimmering dust';
             break;
             case 'totems':
-                type = data.amount > 1 ? 'totems' : 'totem'
+                type = data.amount > 1 ? 'totems' : 'totem';
+            break;
+            case 'food':
+                type = 'food';
+            break;
+            case 'wood':
+                type = 'wood';
+            break;
+            case 'stone':
+                type = 'stone';
+            break;
+            case 'slate':
+                type = 'slate';
+            break;
+            case 'mushrooms':
+                type = data.amount > 1 ? 'mushrooms' : 'mushroom';
             break;
             default:
+                type = data.type || 'resources';
             break;
         }
-        this.displayMessage(`You found ${data.amount} ${type}!`)
+        if (!suppressMessage) {
+            this.displayMessage(`You found ${data.amount} ${type}!`)
+        }
         this.props.inventoryManager.addCurrency(data)
+
+        if (type === 'food') {
+            const meta = getMeta() || {};
+            meta.food = (typeof meta.food === 'number' ? meta.food : 55) + data.amount;
+            storeMeta(meta);
+            try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch (e) {}
+            this.forceUpdate();
+        }
+
 
         if (this.props.boardManager && (this.props.boardManager.chestPickupInProgress || this.props.boardManager.treasurePickupInProgress)) {
             let iconKey = 'gold';
@@ -8912,6 +9034,29 @@ class DungeonPage extends React.Component {
         return inv;
     }
     
+    handleDoorTransition = (executeDoorTransition) => {
+        // Play the out animation
+        this.setState({ keysLocked: true, portalTransitionClass: 'door-transition-out' });
+        
+        this._setTimeout(() => {
+            // Swap the tiles and orientation
+            if (typeof executeDoorTransition === 'function') {
+                executeDoorTransition();
+            }
+
+            // Play the in animation
+            this.setState({
+                portalTransitionClass: 'door-transition-in'
+            }, () => {
+                this.refreshTiles();
+                
+                this._setTimeout(() => {
+                    this.setState({ portalTransitionClass: '', keysLocked: false });
+                }, 400); // Wait for the in animation to finish
+            });
+        }, 400); // Wait for the out animation to finish
+    }
+
     handleLevelChange = (newLevelId) => {
         const levelTracker = this.state.levelTracker;
         const oldLevel = levelTracker.find(e => e.active);
@@ -9315,7 +9460,7 @@ class DungeonPage extends React.Component {
                 this.props.combatManager.moveFighterOneSpace(direction);
             }
         } else {
-            if (this.state.keysLocked) return;
+            if (this.state.keysLocked || this.state.showModal || this.state.dungeonInscriptionPicker || this.state.showGeneratorModal) return;
             this.enqueueDirectionalMove(direction);
         }
     };
@@ -9335,6 +9480,29 @@ class DungeonPage extends React.Component {
         };
         const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
         const isInputFocused = activeTag === 'input' || activeTag === 'textarea';
+
+        // Ignore all hotkeys & movement while Inscription popup modal is visible (except Return/Enter to submit or dismiss)
+        if (this.state.showModal && this.state.modalType === 'Inscription') {
+            if (key === 'Enter' || key === 'Return') {
+                event.preventDefault();
+                this.closeInscriptionModal();
+            }
+            return;
+        }
+
+        if (key === 'Escape') {
+            if (this.state.dungeonInscriptionPicker) {
+                this.setState({ dungeonInscriptionPicker: null });
+                return;
+            }
+        }
+
+        // Suppress directional movement and game hotkeys when an input is focused or any modal is open
+        if (isInputFocused || (this.state.showModal && this.state.modalType) || this.state.dungeonInscriptionPicker || this.state.showGeneratorModal) {
+            if (!isModifierHeld && (dirMap[key] || key === 'b' || key === 'B')) {
+                return;
+            }
+        }
 
         if ((key === 'b' || key === 'B') && !isModifierHeld && !isInputFocused && !this.state.devConsoleOpen && !this.state.inMonsterBattle && !this.state.keysLocked) {
             event.preventDefault();
@@ -9431,31 +9599,6 @@ class DungeonPage extends React.Component {
             if ((maybeKey === 'Enter' || maybeKey === 'Return') && this.state.showModal && processCompleteTypes.includes(this.state.modalType)) {
                 event.preventDefault();
                 this.onUpdateModalClosed();
-                return;
-            }
-            if (this.state.showModal && this.state.modalType === 'Inscription') {
-                if (maybeKey === 'Enter' || maybeKey === 'Return') {
-                    event.preventDefault();
-                    this.closeInscriptionModal();
-                    return;
-                }
-                
-                // Track typing for secrets
-                if (maybeKey.length === 1 && !this.state.inscriptionSolved && this.state.currentInscriptionData && this.state.currentInscriptionData.secret && this.state.currentInscriptionData.secret.answer) {
-                    const newAnswer = (this.state.inscriptionTypedAnswer || '') + maybeKey;
-                    this.setState({ inscriptionTypedAnswer: newAnswer }, () => {
-                        const answerTarget = this.state.currentInscriptionData.secret.answer;
-                        if (newAnswer.toLowerCase().includes(answerTarget.toLowerCase())) {
-                            this.setState({ inscriptionSolved: true });
-                        }
-                    });
-                } else if (maybeKey === 'Backspace' && !this.state.inscriptionSolved) {
-                    this.setState(prev => ({
-                        inscriptionTypedAnswer: (prev.inscriptionTypedAnswer || '').slice(0, -1)
-                    }));
-                }
-                
-                // Allow typing but prevent other global hotkeys
                 return;
             }
             if ((maybeKey === 'Enter' || maybeKey === 'Return') && this.state.showPygmiesAttackPopup) {
@@ -9856,18 +9999,93 @@ class DungeonPage extends React.Component {
         if (!bm || !bm.playerTile) return;
 
         const tileIndex = tile.index !== undefined ? tile.index : (tile.id !== undefined ? tile.id : null);
-        if (tileIndex !== null && bm.tiles[tileIndex]) {
-            const actualTile = bm.tiles[tileIndex];
-            const cType = bm.getContainsType(actualTile.contains);
-            const isVoid = cType === 'void';
-            const isFogged = actualTile.color === 'black';
-            if (cType !== 'empty_space' && cType !== 'obscured_space') {
-                if (isVoid || isFogged) return;
-            }
-        }
-
         const startCoords = bm.playerTile.location;
         const endCoords = tile.coordinates;
+
+        // Check if clicked tile is orthogonally adjacent to avatar (distance === 1)
+        const dx = endCoords[0] - startCoords[0];
+        const dy = endCoords[1] - startCoords[1];
+        const manhattanDist = Math.abs(dx) + Math.abs(dy);
+
+        const actualTile = tileIndex !== null ? bm.tiles[tileIndex] : null;
+        const isFogged = actualTile?.fog === true || actualTile?.color === 'black';
+        const isVoid = bm.isVoidTile(actualTile) || bm.getContainsType(actualTile?.contains) === 'void';
+        const isAdjacent = manhattanDist === 1 || (Math.abs(dx) === 1 && Math.abs(dy) === 1);
+
+        if ((isFogged || isVoid) && !isAdjacent) {
+            return;
+        }
+
+        const now = Date.now();
+        this._lastTileClickInfo = { tileIdx: tileIndex, ts: now };
+
+        const targetBuilding = (this.isBuildingOrGeneratorTile(actualTile) ? actualTile : (tileIndex !== null && this.isBuildingOrGeneratorTile(bm.tiles[tileIndex]) ? bm.tiles[tileIndex] : null));
+        if (targetBuilding) {
+            const isAlreadyIlluminated = (this.state.illuminatedTileId === targetBuilding.id || targetBuilding.illuminated);
+            if (isAlreadyIlluminated) {
+                this.clearIlluminatedTile();
+                this.openGeneratorModal(targetBuilding);
+            } else {
+                this.illuminateBuildingTile(targetBuilding);
+            }
+            return;
+        } else {
+            this.clearIlluminatedTile();
+        }
+
+        if (manhattanDist === 1) {
+            const playerIdx = bm.getIndexFromCoordinates(startCoords);
+            const playerTileObj = bm.tiles[playerIdx];
+
+            const sideMap = {
+                '0,-1': { self: 'top', opp: 'bottom' },
+                '0,1': { self: 'bottom', opp: 'top' },
+                '-1,0': { self: 'left', opp: 'right' },
+                '1,0': { self: 'right', opp: 'left' }
+            };
+            const sides = sideMap[`${dx},${dy}`];
+
+            const isWallBlocked = (tileIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, tileIndex)) ||
+                (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
+                (sides?.opp && bm.hasSolidBorder(actualTile, sides.opp));
+
+            if (isVoid || isWallBlocked) {
+                const selfInscription = sides?.self && playerTileObj?.inscriptions?.[sides.self];
+                const oppInscription = sides?.opp && actualTile?.inscriptions?.[sides.opp];
+                const anyInscription = oppInscription || selfInscription || (actualTile?.inscriptions && Object.values(actualTile.inscriptions).find(v => !!v));
+
+                const lastWallClick = this._lastWallClickInfo || { tileIdx: null, ts: 0 };
+                const isDoubleTap = (lastWallClick.tileIdx === tileIndex && (now - lastWallClick.ts) < 500);
+                this._lastWallClickInfo = { tileIdx: tileIndex, ts: now };
+
+                if (isDoubleTap) {
+                    if (this.isBuildingOrGeneratorTile(actualTile)) {
+                        this.openGeneratorModal(actualTile);
+                        return;
+                    }
+                    if (anyInscription) {
+                        this.triggerInscriptionModal(anyInscription);
+                    } else {
+                        const candidates = this.getAdjacentWalls(playerIdx);
+                        if (candidates && candidates.length > 0) {
+                            this.setState({ dungeonInscriptionPicker: { tileId: playerIdx, candidates } });
+                        } else {
+                            this.displayMessage('A wall blocks your way.');
+                        }
+                    }
+                    return;
+                }
+
+                if (anyInscription) {
+                    this.props.boardManager.handleInscriptionRead(anyInscription);
+                } else if (bm.isImpassableBuildingTile && bm.isImpassableBuildingTile(actualTile)) {
+                    this.displayMessage('A structure blocks your way.');
+                } else {
+                    this.displayMessage('A wall blocks your way.');
+                }
+                return;
+            }
+        }
 
         // If clicked on the tile the player is already on, toggle avatar radial menu
         if (startCoords[0] === endCoords[0] && startCoords[1] === endCoords[1]) {
@@ -13466,6 +13684,15 @@ class DungeonPage extends React.Component {
         if (inscriptionSolved && currentInscriptionData && currentInscriptionData.secret && currentInscriptionData.secret.reward) {
             this.grantReward(currentInscriptionData.secret.reward);
         }
+
+        this._isMoving = false;
+        this._processingQueuedMove = false;
+        this._movementQueue = [];
+        if (this._activeDirectionKeys) this._activeDirectionKeys.clear();
+        if (this._movementRepeatInterval) {
+            clearInterval(this._movementRepeatInterval);
+            this._movementRepeatInterval = null;
+        }
         
         this.setState({
             showModal: false,
@@ -13473,8 +13700,429 @@ class DungeonPage extends React.Component {
             currentInscriptionData: null,
             inscriptionTypedAnswer: '',
             inscriptionSolved: false
-        }, () => this._cleanupModalBodyClass());
+        }, () => {
+            this._cleanupModalBodyClass();
+            try {
+                if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                    document.activeElement.blur();
+                }
+            } catch (e) {}
+        });
     }
+
+    illuminateBuildingTile = (tile) => {
+        if (!tile) return;
+        const tileId = typeof tile === 'number' ? tile : tile.id;
+        const bm = this.props.boardManager;
+        
+        if (this.state.illuminatedTileId !== null && bm && bm.tiles && bm.tiles[this.state.illuminatedTileId]) {
+            bm.tiles[this.state.illuminatedTileId].illuminated = false;
+        }
+
+        if (bm && bm.tiles && bm.tiles[tileId]) {
+            bm.tiles[tileId].illuminated = true;
+        }
+        
+        const def = this.getGeneratorDef(tile);
+        const bName = def?.name || (tile.contains?.subtype ? tile.contains.subtype.replace(/_/g, ' ') : 'Structure');
+        this.displayMessage(`${bName} illuminated. Tap or move into it again to interact.`);
+        
+        this.setState({ illuminatedTileId: tileId });
+    };
+
+    clearIlluminatedTile = () => {
+        const bm = this.props.boardManager;
+        if (this.state.illuminatedTileId !== null) {
+            if (bm && bm.tiles && bm.tiles[this.state.illuminatedTileId]) {
+                bm.tiles[this.state.illuminatedTileId].illuminated = false;
+            }
+            this.setState({ illuminatedTileId: null });
+        }
+    };
+
+    isBuildingOrGeneratorTile = (tile) => {
+        if (!tile) return false;
+        const bm = this.props.boardManager;
+        const containsType = bm?.getContainsType(tile.contains) || tile.contains?.type;
+        const containsSubtype = bm?.getContainsSubtype(tile.contains) || tile.contains?.subtype;
+        const bldg = tile.building || tile.contains?.building;
+        const img = tile.image;
+
+        const generatorKeys = ['larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith'];
+        const buildingKeys = ['hut', 'outpost', 'observer_platform', 'earthen_fort', 'war_camp', 'war_fort'];
+
+        const hasGenerator = generatorKeys.includes(containsSubtype) || generatorKeys.includes(bldg) || generatorKeys.includes(img) || generatorKeys.some(k => img === 'buildable_' + k);
+        const hasBuilding = buildingKeys.includes(containsSubtype) || buildingKeys.includes(bldg) || buildingKeys.includes(img) || buildingKeys.some(k => img === 'buildable_' + k);
+
+        return (
+            containsType === 'building' ||
+            containsType === 'generator' ||
+            hasGenerator ||
+            hasBuilding
+        );
+    };
+
+    getGeneratorDef = (tile) => {
+        if (!tile) return null;
+        const bm = this.props.boardManager;
+        const containsType = bm?.getContainsType(tile.contains) || tile.contains?.type;
+        const containsSubtype = bm?.getContainsSubtype(tile.contains) || tile.contains?.subtype;
+        const bldg = tile.building || tile.contains?.building;
+        const img = tile.image;
+
+        const key = String(containsSubtype || bldg || img || containsType || '').toLowerCase();
+
+        const GENERATOR_DEFS = {
+            larder: {
+                key: 'larder',
+                name: 'Larder',
+                resource: 'Food',
+                currencyType: 'food',
+                rate: 5,
+                cap: 300,
+                imageKey: 'larder',
+                iconEmoji: '🍖',
+                description: 'A cool stone cellar for storing and preserving meat and provisions over time. Generates 5 food per hour (capped at 300).'
+            },
+            sawmill: {
+                key: 'sawmill',
+                name: 'Sawmill',
+                resource: 'Wood',
+                currencyType: 'wood',
+                rate: 5,
+                cap: 300,
+                imageKey: 'lumber_mill',
+                iconEmoji: '🪵',
+                description: 'A water-powered mill for processing raw timber into sturdy construction wood. Generates 5 wood per hour (capped at 300).'
+            },
+            lumber_mill: {
+                key: 'lumber_mill',
+                name: 'Sawmill',
+                resource: 'Wood',
+                currencyType: 'wood',
+                rate: 5,
+                cap: 300,
+                imageKey: 'lumber_mill',
+                iconEmoji: '🪵',
+                description: 'A water-powered mill for processing raw timber into sturdy construction wood. Generates 5 wood per hour (capped at 300).'
+            },
+            ore_mine: {
+                key: 'ore_mine',
+                name: 'Ore Mine',
+                resource: 'Stone',
+                currencyType: 'stone',
+                rate: 5,
+                cap: 300,
+                imageKey: 'ore_mine',
+                iconEmoji: '🪨',
+                description: 'An excavation pit extracting mineral ore and heavy masonry stone. Generates 5 stone per hour (capped at 300).'
+            },
+            slate_mine: {
+                key: 'slate_mine',
+                name: 'Slate Mine',
+                resource: 'Slate',
+                currencyType: 'slate',
+                rate: 5,
+                cap: 300,
+                imageKey: 'slate_mine',
+                iconEmoji: '🧱',
+                description: 'A subterranean quarry carving fine slate tiles for heavy fortifications. Generates 5 slate per hour (capped at 300).'
+            },
+            dust_collector: {
+                key: 'dust_collector',
+                name: 'Dust Collector',
+                resource: 'Shimmering Dust',
+                currencyType: 'shimmering_dust',
+                rate: 5,
+                cap: 300,
+                imageKey: 'dust_collector',
+                iconEmoji: '✨',
+                description: 'An arcane apparatus gathering ambient magical essence and shimmering dust. Generates 5 dust per hour (capped at 300).'
+            },
+            fungal_nursery: {
+                key: 'fungal_nursery',
+                name: 'Fungal Nursery',
+                resource: 'Mushrooms',
+                currencyType: 'mushrooms',
+                rate: 5,
+                cap: 300,
+                imageKey: 'fungal_nursery',
+                iconEmoji: '🍄',
+                description: 'A damp subterranean bed cultivating edible and alchemy mushrooms. Generates 5 mushrooms per hour (capped at 300).'
+            },
+            cultivation_vat: {
+                key: 'cultivation_vat',
+                name: 'Cultivation Vat',
+                resource: 'Food',
+                currencyType: 'food',
+                rate: 5,
+                cap: 300,
+                imageKey: 'cultivation_vat',
+                iconEmoji: '🧪',
+                description: 'A glowing bio-vat synthesizing organic nutrients. Generates 5 food per hour (capped at 300).'
+            },
+            domain_monolith: {
+                key: 'domain_monolith',
+                name: 'Domain Monolith',
+                resource: 'Shimmering Dust',
+                currencyType: 'shimmering_dust',
+                rate: 5,
+                cap: 300,
+                imageKey: 'domain_monolith',
+                iconEmoji: '🗿',
+                description: 'A towering stone monolith channeling domain power and magical dust. Generates 5 dust per hour (capped at 300).'
+            },
+            dark_domain_monolith: {
+                key: 'dark_domain_monolith',
+                name: 'Dark Domain Monolith',
+                resource: 'Shimmering Dust',
+                currencyType: 'shimmering_dust',
+                rate: 5,
+                cap: 300,
+                imageKey: 'dark_domain_monolith',
+                iconEmoji: '🔮',
+                description: 'An ominous shadow pillar drawing ethereal energy from the void. Generates 5 dust per hour (capped at 300).'
+            },
+            hut: {
+                key: 'hut',
+                name: 'Hut',
+                resource: 'Rest & Shelter',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                imageKey: 'buildable_hut',
+                iconEmoji: '⛺',
+                description: 'Safe haven for the crew. Prevents Pygmy ambushes on this tile.'
+            },
+            outpost: {
+                key: 'outpost',
+                name: 'Outpost',
+                resource: 'Territory Control',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                imageKey: 'buildable_outpost',
+                iconEmoji: '🏰',
+                description: 'A fortified wooden outpost for securing territory.'
+            },
+            observer_platform: {
+                key: 'observer_platform',
+                name: 'Observer Platform',
+                resource: 'Vantage Point',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                imageKey: 'buildable_observer_platform',
+                iconEmoji: '🔭',
+                description: 'An elevated wooden watchtower with a wide vantage point.'
+            },
+            earthen_fort: {
+                key: 'earthen_fort',
+                name: 'Earthen Fort',
+                resource: 'Fortification',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                imageKey: 'buildable_earthen_fort',
+                iconEmoji: '🛡️',
+                description: 'A reinforced earthen mound with defensive palisades.'
+            },
+            war_camp: {
+                key: 'war_camp',
+                name: 'War Camp',
+                resource: 'Military Base',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                imageKey: 'buildable_war_camp',
+                iconEmoji: '⛺',
+                description: 'A sprawling military encampment for housing crew and forces.'
+            },
+            war_fort: {
+                key: 'war_fort',
+                name: 'War Fort',
+                resource: 'Stronghold',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                imageKey: 'buildable_war_fort',
+                iconEmoji: '🏛️',
+                description: 'An impenetrable stone-and-slate stronghold capable of enduring sieges.'
+            }
+        };
+
+        for (const [defKey, def] of Object.entries(GENERATOR_DEFS)) {
+            if (key.includes(defKey)) return def;
+        }
+
+        return GENERATOR_DEFS.larder;
+    };
+
+    getAccumulatedGeneratorAmount = (generatorData) => {
+        if (!generatorData || !generatorData.activated) return 0;
+        const lastTime = generatorData.lastCollectedAt || generatorData.activatedAt || Date.now();
+        const elapsedMs = Math.max(0, Date.now() - lastTime);
+        const hours = elapsedMs / (1000 * 60 * 60);
+        const generated = Math.floor(hours * 5);
+        const baseStored = generatorData.accumulated || 0;
+        return Math.min(300, Math.max(0, baseStored + generated));
+    };
+
+    openGeneratorModal = (tile) => {
+        if (!tile) return;
+        this.clearIlluminatedTile();
+        this._isMoving = false;
+        this._processingQueuedMove = false;
+        this._movementQueue = [];
+        if (this._activeDirectionKeys) this._activeDirectionKeys.clear();
+        if (this._movementRepeatInterval) {
+            clearInterval(this._movementRepeatInterval);
+            this._movementRepeatInterval = null;
+        }
+
+        const bm = this.props.boardManager;
+        if (!tile.generatorData && bm && bm.currentLevel && bm.currentBoard) {
+            try {
+                const meta = getMeta() || {};
+                const tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
+                if (meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
+                    tile.generatorData = { ...meta.activatedGenerators[tileKey] };
+                }
+            } catch (e) {}
+        }
+
+        this.setState({
+            showGeneratorModal: true,
+            activeGeneratorTile: tile
+        });
+    };
+
+    closeGeneratorModal = () => {
+        this._isMoving = false;
+        this._processingQueuedMove = false;
+        this._movementQueue = [];
+        if (this._activeDirectionKeys) this._activeDirectionKeys.clear();
+        if (this._movementRepeatInterval) {
+            clearInterval(this._movementRepeatInterval);
+            this._movementRepeatInterval = null;
+        }
+        this.setState({
+            showGeneratorModal: false,
+            activeGeneratorTile: null
+        }, () => {
+            try {
+                if (document.activeElement && typeof document.activeElement.blur === 'function') {
+                    document.activeElement.blur();
+                }
+            } catch (e) {}
+        });
+    };
+
+    handleActivateGenerator = () => {
+        const tile = this.state.activeGeneratorTile;
+        if (!tile) return;
+        const def = this.getGeneratorDef(tile);
+        if (!def) return;
+
+        const bm = this.props.boardManager;
+        const tileId = tile.id;
+
+        const genData = {
+            activated: true,
+            owned: true,
+            activatedAt: Date.now(),
+            lastCollectedAt: Date.now(),
+            accumulated: 0
+        };
+
+        tile.generatorData = genData;
+
+        if (bm) {
+            if (bm.tiles && bm.tiles[tileId]) {
+                bm.tiles[tileId].generatorData = genData;
+            }
+            if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) {
+                bm.currentBoard.tiles[tileId].generatorData = genData;
+            }
+            if (bm.dungeon && bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
+                try {
+                    const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
+                    if (levelEntry) {
+                        const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
+                        if (targetPlane && targetPlane.miniboards) {
+                            const b = targetPlane.miniboards.find(bi => bi.id === bm.currentBoard.id);
+                            if (b && b.tiles && b.tiles[tileId]) {
+                                b.tiles[tileId].generatorData = genData;
+                            }
+                        }
+                    }
+                } catch (e) {}
+            }
+        }
+
+        try {
+            const meta = getMeta() || {};
+            meta.activatedGenerators = meta.activatedGenerators || {};
+            const key = `${bm?.currentLevel?.id || 1}_${bm?.currentBoard?.id || 0}_${tileId}`;
+            meta.activatedGenerators[key] = genData;
+            storeMeta(meta);
+        } catch (e) {}
+
+        this.displayMessage(`Activated ${def.name}! Generating 5 ${def.resource} per hour.`);
+        if (typeof this.props.saveUserData === 'function') {
+            this.props.saveUserData();
+        }
+        this.forceUpdate();
+    };
+
+    handleCollectGenerator = () => {
+        const tile = this.state.activeGeneratorTile;
+        if (!tile || !tile.generatorData) return;
+        const def = this.getGeneratorDef(tile);
+        if (!def) return;
+
+        const amount = this.getAccumulatedGeneratorAmount(tile.generatorData);
+        if (amount <= 0) {
+            this.displayMessage(`No ${def.resource} ready for collection yet.`);
+            return;
+        }
+
+        if (def.currencyType) {
+            this.addCurrencyToInventory({ type: def.currencyType, amount }, tile, true);
+        }
+        this.displayMessage(`The crew gained ${amount} ${def.resource}!`);
+        
+        this.closeGeneratorModal();
+
+        const now = Date.now();
+        tile.generatorData.lastCollectedAt = now;
+        tile.generatorData.accumulated = 0;
+
+        const bm = this.props.boardManager;
+        if (bm) {
+            const tileId = tile.id;
+            if (bm.tiles && bm.tiles[tileId]) {
+                bm.tiles[tileId].generatorData = { ...tile.generatorData };
+            }
+            if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) {
+                bm.currentBoard.tiles[tileId].generatorData = { ...tile.generatorData };
+            }
+        }
+
+        try {
+            const meta = getMeta() || {};
+            meta.activatedGenerators = meta.activatedGenerators || {};
+            const key = `${bm?.currentLevel?.id || 1}_${bm?.currentBoard?.id || 0}_${tile.id}`;
+            meta.activatedGenerators[key] = { ...tile.generatorData };
+            storeMeta(meta);
+        } catch (e) {}
+
+        if (typeof this.props.saveUserData === 'function') {
+            this.props.saveUserData();
+        }
+
+        this.forceUpdate();
+    };
 
     grantReward = (rewardStr) => {
         if (!rewardStr) return;
@@ -14333,13 +14981,15 @@ class DungeonPage extends React.Component {
                     className="food-gone-bad-modal"
                 >
                     <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#1a120b', border: '2px solid #8f5c38', color: '#f5efe6', borderRadius: '8px' }}>
-                        <div style={{ fontSize: '48px', marginBottom: '16px' }} role="img" aria-label="rotten meat">🤢</div>
-                        <h3 style={{ color: '#e74c3c', fontSize: '24px', margin: '0 0 12px 0', fontFamily: 'Outfit, sans-serif' }}>Food Has Gone Bad!</h3>
-                        <p style={{ fontSize: '16px', lineHeight: '1.5', margin: '0 0 20px 0' }}>
-                            Your food supply exceeded the fresh storage limit of <strong style={{ color: '#2ecc71' }}>{this.state.foodGoneBadLimit}</strong> units.
+                        <div style={{ marginBottom: '16px' }}>
+                            <img src={images['poison']} alt="Spoiled Food" style={{ width: '64px', height: '64px', filter: 'drop-shadow(0 0 8px rgba(46, 204, 113, 0.4))' }} />
+                        </div>
+                        <h3 style={{ color: '#e74c3c', fontSize: '26px', margin: '0 0 16px 0', fontFamily: "'Cinzel', serif", fontWeight: '700', letterSpacing: '0.05em', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>Food Has Gone Bad!</h3>
+                        <p style={{ fontSize: '16px', lineHeight: '1.5', margin: '0 0 20px 0', fontFamily: "'Inter', sans-serif" }}>
+                            Your food supply exceeded the fresh storage limit of <strong style={{ color: '#2ecc71', fontSize: '18px' }}>{this.state.foodGoneBadLimit}</strong> units.
                         </p>
-                        <div style={{ backgroundColor: '#2c1e12', padding: '12px', borderRadius: '4px', border: '1px dashed #d35400', marginBottom: '24px' }}>
-                            <span style={{ fontSize: '18px', color: '#e67e22', fontWeight: 'bold' }}>-{this.state.foodGoneBadAmount} Food Spoiled</span>
+                        <div style={{ backgroundColor: '#2c1e12', padding: '14px', borderRadius: '4px', border: '1px solid #d35400', marginBottom: '24px', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)' }}>
+                            <span style={{ fontSize: '18px', color: '#e67e22', fontWeight: 'bold', fontFamily: "'Cinzel', serif", letterSpacing: '0.05em' }}>-{this.state.foodGoneBadAmount} Food Spoiled</span>
                         </div>
                         <button
                             onClick={() => this.setState({ showFoodGoneBadPopup: false })}
@@ -14347,15 +14997,24 @@ class DungeonPage extends React.Component {
                                 padding: '10px 24px',
                                 fontSize: '16px',
                                 backgroundColor: '#8f5c38',
-                                border: 'none',
-                                color: 'white',
+                                border: '1px solid #c78b5a',
+                                color: '#f5efe6',
                                 borderRadius: '4px',
                                 cursor: 'pointer',
                                 fontWeight: 'bold',
-                                transition: 'background-color 0.2s'
+                                fontFamily: "'Cinzel', serif",
+                                letterSpacing: '0.05em',
+                                transition: 'background-color 0.2s, box-shadow 0.2s',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
                             }}
-                            onMouseEnter={(e) => e.target.style.backgroundColor = '#a06d4a'}
-                            onMouseLeave={(e) => e.target.style.backgroundColor = '#8f5c38'}
+                            onMouseEnter={(e) => {
+                                e.target.style.backgroundColor = '#a06d4a';
+                                e.target.style.boxShadow = '0 4px 8px rgba(0,0,0,0.6)';
+                            }}
+                            onMouseLeave={(e) => {
+                                e.target.style.backgroundColor = '#8f5c38';
+                                e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.5)';
+                            }}
                         >
                             Understood
                         </button>
@@ -14997,9 +15656,39 @@ class DungeonPage extends React.Component {
                         </p>
                         
                         {!this.state.inscriptionSolved && this.state.currentInscriptionData.secret && this.state.currentInscriptionData.secret.answer && (
-                            <div style={{ marginTop: '20px', minHeight: '30px', fontSize: '20px', letterSpacing: '4px', borderBottom: '1px solid #666', width: '80%', margin: '0 auto', color: '#d4a844' }}>
-                                {this.state.inscriptionTypedAnswer}
-                                <span style={{ opacity: 0.7, display: 'inline-block', width: '10px', borderBottom: '2px solid #d4a844', marginLeft: '5px' }}></span>
+                            <div style={{ marginTop: '20px', width: '80%', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                                <input
+                                    type="text"
+                                    autoFocus
+                                    value={this.state.inscriptionTypedAnswer || ''}
+                                    onChange={(e) => {
+                                        const newAnswer = e.target.value;
+                                        this.setState({ inscriptionTypedAnswer: newAnswer }, () => {
+                                            const answerTarget = this.state.currentInscriptionData.secret.answer;
+                                            if (newAnswer.toLowerCase().includes(answerTarget.toLowerCase())) {
+                                                this.setState({ inscriptionSolved: true });
+                                            }
+                                        });
+                                    }}
+                                    placeholder="Type answer..."
+                                    style={{
+                                        width: '100%',
+                                        background: 'rgba(0,0,0,0.6)',
+                                        border: '1px solid #d4a844',
+                                        color: '#d4a844',
+                                        padding: '10px 14px',
+                                        borderRadius: '6px',
+                                        textAlign: 'center',
+                                        fontFamily: "'Cinzel', serif",
+                                        fontSize: '16px',
+                                        letterSpacing: '2px',
+                                        outline: 'none',
+                                        boxShadow: '0 0 10px rgba(212, 168, 68, 0.2)'
+                                    }}
+                                />
+                                <div style={{ fontSize: '12px', color: '#aaa', fontStyle: 'italic' }}>
+                                    Type the secret answer to unlock reward
+                                </div>
                             </div>
                         )}
                         
@@ -16965,8 +17654,7 @@ class DungeonPage extends React.Component {
                                 playerImgKey = 'avatar';
                             }
 
-                            const hasTerritory = tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null);
-                            const defaultEmptyColor = hasTerritory ? 'transparent' : 'black';
+                            const defaultEmptyColor = 'black';
                             const rawColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : defaultEmptyColor;
                             const isMonsterTile = bm && typeof bm.isMonster === 'function' ? bm.isMonster(tile) : false;
                             const safeColor = (String(rawColor).includes('ff0000') && (!isMonsterTile || !this.state.debugMode)) ? 'black' : rawColor;
@@ -16993,6 +17681,7 @@ class DungeonPage extends React.Component {
                             inscriptions={tile.inscriptions}
                             partialObscured={!!tile.partialObscured}
                             trapRevealed={!!tile.trapRevealed}
+                            illuminated={this.state.illuminatedTileId === tile.id || !!tile.illuminated}
                             coordinates={tile.coordinates}
                             index={tile.id}
                             showCoordinates={this.props.showCoordinates}
@@ -17312,18 +18001,23 @@ class DungeonPage extends React.Component {
                         const eastCand = candidates.find(c => c.direction === 'East');
                         
                         return (
-                            <div style={{
-                                position: 'absolute',
-                                left: left + 'px',
-                                top: top + 'px',
-                                width: pickerSize + 'px',
-                                height: pickerSize + 'px',
-                                display: 'grid',
-                                gridTemplateColumns: `repeat(3, ${tileSize}px)`,
-                                gridTemplateRows: `repeat(3, ${tileSize}px)`,
-                                zIndex: 500,
-                                pointerEvents: 'all'
-                            }}>
+                            <React.Fragment>
+                                <div style={{
+                                    position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                                    zIndex: 499, cursor: 'default'
+                                }} onClick={(e) => { e.stopPropagation(); this.setState({ dungeonInscriptionPicker: null }); }} />
+                                <div style={{
+                                    position: 'absolute',
+                                    left: left + 'px',
+                                    top: top + 'px',
+                                    width: pickerSize + 'px',
+                                    height: pickerSize + 'px',
+                                    display: 'grid',
+                                    gridTemplateColumns: `repeat(3, ${tileSize}px)`,
+                                    gridTemplateRows: `repeat(3, ${tileSize}px)`,
+                                    zIndex: 500,
+                                    pointerEvents: 'all'
+                                }}>
                                 {/* Row 1: empty, North, empty */}
                                 <div />
                                 <div style={btnStyle(false, !!northCand)} onClick={() => northCand && this.selectDungeonInscriptionSide(northCand)} title="Inscribe north wall">↑</div>
@@ -17337,6 +18031,7 @@ class DungeonPage extends React.Component {
                                 <div style={btnStyle(false, !!southCand)} onClick={() => southCand && this.selectDungeonInscriptionSide(southCand)} title="Inscribe south wall">↓</div>
                                 <div />
                             </div>
+                            </React.Fragment>
                         );
                     })()}
                     <ProjectileCanvas
@@ -17521,6 +18216,173 @@ class DungeonPage extends React.Component {
                     </div>
                 </div>
             )}
+            
+            {/* Generator & Structure Activation Modal */}
+            {this.state.showGeneratorModal && this.state.activeGeneratorTile && (() => {
+                const tile = this.state.activeGeneratorTile;
+                const def = this.getGeneratorDef(tile);
+                if (!def) return null;
+                const gData = tile.generatorData || { activated: false, owned: false };
+                const isActivated = !!gData.activated;
+                const isOwner = gData.owned !== false;
+                const accumulated = this.getAccumulatedGeneratorAmount(gData);
+                const imgUrl = images[def.imageKey] || images.building;
+
+                return (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            backgroundColor: 'rgba(5, 4, 10, 0.85)',
+                            backdropFilter: 'blur(8px)',
+                            zIndex: 10000,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontFamily: "'Inter', sans-serif",
+                            animation: 'fadeIn 0.2s ease-out'
+                        }}
+                        onClick={() => this.closeGeneratorModal()}
+                    >
+                        <div
+                            style={{
+                                position: 'relative',
+                                width: '92%',
+                                maxWidth: '480px',
+                                background: 'linear-gradient(145deg, rgba(22, 18, 14, 0.98) 0%, rgba(12, 9, 7, 0.99) 100%)',
+                                border: '2px solid #e5b54f',
+                                borderRadius: '16px',
+                                boxShadow: '0 20px 60px rgba(0,0,0,0.9), 0 0 30px rgba(229, 181, 79, 0.25)',
+                                padding: '28px',
+                                color: '#f0ede5',
+                                textAlign: 'center'
+                            }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <button
+                                aria-label="Close generator interface"
+                                onClick={() => this.closeGeneratorModal()}
+                                style={{
+                                    position: 'absolute',
+                                    top: '14px',
+                                    right: '14px',
+                                    background: 'rgba(255,255,255,0.06)',
+                                    border: '1px solid rgba(255,255,255,0.2)',
+                                    color: '#ccc',
+                                    borderRadius: '50%',
+                                    width: '32px',
+                                    height: '32px',
+                                    cursor: 'pointer',
+                                    fontSize: '16px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >✕</button>
+
+                            {/* Building Icon */}
+                            <div style={{
+                                width: '80px',
+                                height: '80px',
+                                margin: '0 auto 16px auto',
+                                borderRadius: '16px',
+                                background: 'radial-gradient(circle, #2a1f14 0%, #120c06 100%)',
+                                border: '2px solid #e5b54f',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 6px 16px rgba(0,0,0,0.8)'
+                            }}>
+                                {imgUrl ? (
+                                    <img src={imgUrl} alt={def.name} style={{ width: '60px', height: '60px', objectFit: 'contain' }} />
+                                ) : (
+                                    <span style={{ fontSize: '36px' }}>{def.iconEmoji}</span>
+                                )}
+                            </div>
+
+                            <h2 style={{ color: '#f9b115', marginBottom: '8px', letterSpacing: '2px', fontSize: '22px', fontFamily: "'Cinzel', serif" }}>
+                                {def.iconEmoji} {def.name.toUpperCase()}
+                            </h2>
+
+                            <p style={{ fontSize: '14px', lineHeight: '1.6', color: 'rgba(240, 237, 229, 0.85)', marginBottom: '20px' }}>
+                                {def.description}
+                            </p>
+
+                            {def.rate > 0 && (
+                                <div style={{
+                                    background: 'rgba(0,0,0,0.5)',
+                                    border: '1px solid rgba(229, 181, 79, 0.3)',
+                                    borderRadius: '10px',
+                                    padding: '14px',
+                                    marginBottom: '20px'
+                                }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                                        <span style={{ color: 'rgba(255,255,255,0.7)' }}>Status:</span>
+                                        <span style={{ color: isActivated ? '#4ade80' : '#f87171', fontWeight: '700' }}>
+                                            {isActivated ? (isOwner ? 'Active (Owned)' : 'Active (Domain)') : 'Inactive'}
+                                        </span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                                        <span style={{ color: 'rgba(255,255,255,0.7)' }}>Production Rate:</span>
+                                        <span style={{ color: '#f9b115', fontWeight: '600' }}>5 {def.resource} / hour</span>
+                                    </div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                        <span style={{ color: 'rgba(255,255,255,0.7)' }}>Stored Resources:</span>
+                                        <span style={{ color: '#f9b115', fontWeight: '700' }}>{accumulated} / {def.cap} {def.resource}</span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Interaction Action Button */}
+                            {isActivated ? (
+                                <button
+                                    onClick={this.handleCollectGenerator}
+                                    style={{
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                        padding: '12px 24px',
+                                        borderRadius: '12px',
+                                        border: '1px solid #f9b115',
+                                        background: 'linear-gradient(135deg, rgba(201, 132, 10, 0.4) 0%, rgba(249, 177, 21, 0.7) 100%)',
+                                        color: '#ffffff',
+                                        fontFamily: "'Cinzel', serif",
+                                        fontSize: '15px',
+                                        fontWeight: '700',
+                                        letterSpacing: '1px',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 15px rgba(249, 177, 21, 0.3)',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    📦 COLLECT {def.resource.toUpperCase()} ({accumulated}/{def.cap})
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={this.handleActivateGenerator}
+                                    style={{
+                                        width: '100%',
+                                        boxSizing: 'border-box',
+                                        padding: '12px 24px',
+                                        borderRadius: '12px',
+                                        border: '1px solid #4ade80',
+                                        background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.4) 0%, rgba(74, 222, 128, 0.7) 100%)',
+                                        color: '#ffffff',
+                                        fontFamily: "'Cinzel', serif",
+                                        fontSize: '15px',
+                                        fontWeight: '700',
+                                        letterSpacing: '1px',
+                                        cursor: 'pointer',
+                                        boxShadow: '0 4px 15px rgba(74, 222, 128, 0.3)',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    ⚡ ACTIVATE {def.name.toUpperCase()}
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                );
+            })()}
             
             
             {/* /// ANIMATION GRID ///  */}

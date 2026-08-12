@@ -652,7 +652,7 @@ function Tile(props) {
                                      border: `1px dashed ${borderColor}`,
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
-                                     opacity: (isBlackTile || isMainTileBlack) ? 0 : 1, 
+                                     opacity: (isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') ? 0 : 1, 
                                      transition: 'opacity 0.35s ease-in-out'
                                  }} 
                              />
@@ -803,6 +803,19 @@ function Tile(props) {
                     opacity: color === 'black' ? 0 : 0.7,
                     pointerEvents: 'none',
                     transition: 'opacity 0.35s ease-in-out'
+                }} />
+           )}
+
+           {/* Interactive Building Illumination Glow Overlay */}
+           { (props.illuminated || props.isIlluminated || (props.contains && props.contains.illuminated) || (props.data && props.data.illuminated)) && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    boxShadow: 'inset 0 0 16px rgba(255, 215, 0, 0.95), 0 0 12px rgba(255, 215, 0, 0.9)',
+                    border: '2px solid #ffd700',
+                    borderRadius: '2px',
+                    zIndex: 22,
+                    pointerEvents: 'none',
+                    boxSizing: 'border-box'
                 }} />
            )}
 
@@ -1287,18 +1300,35 @@ export function propsAreEqual(prevProps, nextProps) {
         'isShrine', 'isLoreTablet', 'trapRevealed', 'connectedEdge',
         'partialObscured', 'showCoordinates', 'image', 'imageOverride',
         'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
-        'isPlayerOnTile', 'className'
+        'isPlayerOnTile', 'className', 'illuminated'
     ];
 
     for (let key of keysToCompare) {
         if (prevProps[key] !== nextProps[key]) return false;
     }
 
+    const isContainsEqual = (a, b) => {
+        if (a === b) return true;
+        if (!a || !b) return false;
+        if (typeof a !== 'object' || typeof b !== 'object') return false;
+        
+        // Fast shallow compare for contains object instead of JSON.stringify
+        const keysA = Object.keys(a);
+        const keysB = Object.keys(b);
+        if (keysA.length !== keysB.length) return false;
+        
+        for (let i = 0; i < keysA.length; i++) {
+            const k = keysA[i];
+            if (a[k] !== b[k]) return false;
+        }
+        return true;
+    };
+
     const prevContains = prevProps.contains;
     const nextContains = nextProps.contains;
     if (typeof prevContains !== typeof nextContains) return false;
     if (typeof prevContains === 'object' && prevContains !== null) {
-        if (JSON.stringify(prevContains) !== JSON.stringify(nextContains)) return false;
+        if (!isContainsEqual(prevContains, nextContains)) return false;
     } else if (prevContains !== nextContains) {
         return false;
     }
@@ -1339,7 +1369,7 @@ export function propsAreEqual(prevProps, nextProps) {
                     if (!prevN && !nextN) continue;
                     if (!prevN || !nextN) return false;
                     if (prevN.color !== nextN.color) return false;
-                    if (JSON.stringify(prevN.contains) !== JSON.stringify(nextN.contains)) return false;
+                    if (!isContainsEqual(prevN.contains, nextN.contains)) return false;
                 }
             }
         }

@@ -235,6 +235,15 @@ import reagent_seaweed from '../assets/icons/potions/reagents/seaweed.png'
 import reagent_stinger from '../assets/icons/potions/reagents/stinger.png'
 import reagent_twig from '../assets/icons/potions/reagents/twig.png'
 
+import mushroom1 from '../assets/icons/food/mushroom1.png'
+import mushroom2 from '../assets/icons/food/mushroom2.png'
+import mushroom3 from '../assets/icons/food/mushroom3.png'
+import mushroom4 from '../assets/icons/food/mushroom4.png'
+import mushroom5 from '../assets/icons/food/mushroom5.png'
+import mushroom6 from '../assets/icons/food/mushroom6.png'
+import mushroom7 from '../assets/icons/food/mushroom7.png'
+import mushroom8 from '../assets/icons/food/mushroom8.png'
+
 // ── Brew ingredients ────────────────────────────────────────────────────────
 import brew_spices from '../assets/icons/brews/spices.png'
 import brew_meat from '../assets/icons/brews/meat.png'
@@ -2346,6 +2355,14 @@ export {
     reagent_nuts,
     reagent_seaweed,
     reagent_stinger,
+    mushroom1,
+    mushroom2,
+    mushroom3,
+    mushroom4,
+    mushroom5,
+    mushroom6,
+    mushroom7,
+    mushroom8,
     reagent_twig,
 
     // ── Brew ingredients ───────────────────────────────────────────────────
