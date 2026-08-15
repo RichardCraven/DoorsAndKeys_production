@@ -6,6 +6,7 @@ import {
   deleteDungeonRequest,
   updateUserRequest
 } from '../utils/api-handler';
+import FreeWillStatBar from '../components/FreeWillStatBar';
 class UserProfilePage extends React.Component{
   constructor(props){
     super(props)
@@ -103,102 +104,60 @@ class UserProfilePage extends React.Component{
     }
   }
   
+  resetResourcesAndKeepItems = (meta) => {
+    const resourceKeys = ['wood', 'lumber', 'mushrooms', 'mushroom', 'stone', 'ore', 'slate'];
+
+    if (this.props.inventoryManager) {
+      if (Array.isArray(this.props.inventoryManager.inventory)) {
+        this.props.inventoryManager.inventory = this.props.inventoryManager.inventory.filter(item => {
+          if (!item) return false;
+          const k = String(item._im_key || item.id || item.name || item.type || item.subtype || '').toLowerCase();
+          return !resourceKeys.some(rk => k === rk || k.includes(rk));
+        });
+      }
+      this.props.inventoryManager.gold = 0;
+      this.props.inventoryManager.shimmering_dust = 0;
+      this.props.inventoryManager.totems = 0;
+    }
+
+    meta.food = 0;
+    meta.inventory = {
+      items: (this.props.inventoryManager && Array.isArray(this.props.inventoryManager.inventory))
+        ? [...this.props.inventoryManager.inventory]
+        : (meta.inventory?.items || []).filter(item => {
+            if (!item) return false;
+            const k = String(item._im_key || item.id || item.name || item.type || item.subtype || '').toLowerCase();
+            return !resourceKeys.some(rk => k === rk || k.includes(rk));
+          }),
+      gold: 0,
+      shimmering_dust: 0,
+      totems: 0
+    };
+
+    delete meta.activatedGenerators;
+    delete meta.disabledOutposts;
+    delete meta.failedMonolithActivations;
+  };
+
   clearDungeon = async () => {
-    console.log('clearing dungeon', this.state.dungeon)
+    console.log('clearing dungeon', this.state.dungeon);
     this.setState({ isClearing: true, clearSuccess: false });
     
-    let meta = getMeta();
-    if(this.state.dungeon){
-      try { await deleteDungeonRequest(meta.dungeonId); } catch (e) {}
-
-      this.props.boardManager.dungeon.id = null;
-      this.props.inventoryManager.inventory = [];
-
-      meta.dungeonId = null;
-      meta.location = null
-      meta.inventory = { 
-        items: [], 
-        gold: 0,
-        shimmering_dust: 0,
-        totems: 0
-      }
-      
-      // Revive and keep crew
-      if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
-        this.props.crewManager.crew.forEach(c => {
-          if (c) {
-            c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
-            c.dead = false;
-          }
-        });
-        meta.crew = this.props.crewManager.crew;
-        try { this.props.crewManager.initializeCrew(meta.crew); } catch(e) {}
-      }
-
-      await updateUserRequest(getUserId(), meta)
-      storeMeta(meta);
-      
-      setTimeout(()=>{
-        this.getDungeonDetails();
-        this.setState({ isClearing: false, clearSuccess: true });
-        setTimeout(() => this.setState({ clearSuccess: false }), 2000);
-      })
-    } else {
-      console.log('no state dungeon, second block');
-      meta.dungeonId = null;
-      meta.location = null
-      meta.inventory = { 
-        items: [], 
-        gold: 0,
-        shimmering_dust: 0,
-        totems: 0
-      }
-      
-      // Revive and keep crew
-      if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
-        this.props.crewManager.crew.forEach(c => {
-          if (c) {
-            c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
-            c.dead = false;
-          }
-        });
-        meta.crew = this.props.crewManager.crew;
-        try { this.props.crewManager.initializeCrew(meta.crew); } catch(e) {}
-      }
-
-      await updateUserRequest(getUserId(), meta)
-      storeMeta(meta);
-      
-      setTimeout(()=>{
-        this.getDungeonDetails();
-        this.setState({ isClearing: false, clearSuccess: true });
-        setTimeout(() => this.setState({ clearSuccess: false }), 2000);
-      })
-    }
-  }
-
-  leaveDungeon = async () => {
-    console.log('leaving dungeon', this.state.dungeon);
-    this.setState({ isLeaving: true, leaveSuccess: false });
-    
-    let meta = getMeta();
+    let meta = getMeta() || {};
     if (meta.dungeonId) {
       try { await deleteDungeonRequest(meta.dungeonId); } catch (e) {}
     }
 
-    this.props.boardManager.dungeon.id = null;
-    this.props.inventoryManager.inventory = [];
+    if (this.props.boardManager && this.props.boardManager.dungeon) {
+      this.props.boardManager.dungeon.id = null;
+    }
 
     meta.dungeonId = null;
-    meta.location = null
-    meta.inventory = { 
-      items: [], 
-      gold: 0,
-      shimmering_dust: 0,
-      totems: 0
-    }
-    
-    // Revive and keep crew
+    meta.location = null;
+
+    this.resetResourcesAndKeepItems(meta);
+
+    // Revive and keep crew intact with all their equipped items & stats
     if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
       this.props.crewManager.crew.forEach(c => {
         if (c) {
@@ -207,10 +166,50 @@ class UserProfilePage extends React.Component{
         }
       });
       meta.crew = this.props.crewManager.crew;
-      try { this.props.crewManager.initializeCrew(meta.crew); } catch(e) {}
+      try { this.props.crewManager.initializeCrew(meta.crew); } catch (e) {}
     }
 
-    await updateUserRequest(getUserId(), meta)
+    await updateUserRequest(getUserId(), meta);
+    storeMeta(meta);
+    
+    setTimeout(() => {
+      this.getDungeonDetails();
+      this.setState({ isClearing: false, clearSuccess: true });
+      setTimeout(() => this.setState({ clearSuccess: false }), 2000);
+    });
+  }
+
+  leaveDungeon = async () => {
+    console.log('leaving dungeon', this.state.dungeon);
+    this.setState({ isLeaving: true, leaveSuccess: false });
+    
+    let meta = getMeta() || {};
+    if (meta.dungeonId) {
+      try { await deleteDungeonRequest(meta.dungeonId); } catch (e) {}
+    }
+
+    if (this.props.boardManager && this.props.boardManager.dungeon) {
+      this.props.boardManager.dungeon.id = null;
+    }
+
+    meta.dungeonId = null;
+    meta.location = null;
+
+    this.resetResourcesAndKeepItems(meta);
+
+    // Revive and keep crew intact with all their equipped items & stats
+    if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
+      this.props.crewManager.crew.forEach(c => {
+        if (c) {
+          c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
+          c.dead = false;
+        }
+      });
+      meta.crew = this.props.crewManager.crew;
+      try { this.props.crewManager.initializeCrew(meta.crew); } catch (e) {}
+    }
+
+    await updateUserRequest(getUserId(), meta);
     storeMeta(meta);
     
     setTimeout(() => {
@@ -298,6 +297,11 @@ class UserProfilePage extends React.Component{
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Free Will User Level Stat Bar */}
+          <div style={{ padding: '0 20px 20px 20px', width: '100%', boxSizing: 'border-box' }}>
+            <FreeWillStatBar freeWill={getMeta()?.freeWill || 0} animateOnMount={true} delayMs={300} />
           </div>
           
           <div className="profile-section">

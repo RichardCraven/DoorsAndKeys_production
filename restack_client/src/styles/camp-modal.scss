@@ -1572,7 +1572,6 @@
     border-radius: 10px;
     overflow: hidden;
     position: relative;
-    min-height: 580px;
     box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6), 0 0 50px rgba(0, 0, 0, 0.4);
   }
 
@@ -1592,6 +1591,18 @@
 
   .modal-body {
     padding: 24px;
+  }
+}
+
+.merchant-modal, .alchemist-modal, .ritual-encounter-modal {
+  .modal-content {
+    min-height: 580px;
+  }
+}
+
+.prep-complete-modal, .ritual-complete-modal, .food-complete-modal, .sharpen-blades-details-modal {
+  .modal-content {
+    min-height: auto !important;
   }
 }
 
@@ -1683,10 +1694,232 @@
 }
 
 @media (max-width: 1024px) {
+  /* Process Complete Popups mobile containment */
+  .prep-complete-modal, .ritual-complete-modal, .food-complete-modal, .sharpen-blades-details-modal {
+    .modal-dialog {
+      width: min(calc(100vw - 20px), 440px) !important;
+      max-width: 440px !important;
+      margin: 10px auto !important;
+      max-height: calc(100vh - 20px) !important;
+    }
+
+    .modal-content {
+      min-height: auto !important;
+      max-height: calc(100vh - 20px) !important;
+      overflow-y: auto !important;
+      border-radius: 12px !important;
+    }
+
+    .modal-body {
+      padding: 12px 14px !important;
+    }
+  }
+
+  .prep-complete-zone, .ritual-complete-zone, .food-complete-zone {
+    padding: 8px 6px !important;
+
+    .prep-complete-icon, .ritual-complete-icon, .food-complete-icon {
+      font-size: 32px !important;
+      margin-bottom: 4px !important;
+    }
+
+    .prep-complete-custom-img {
+      width: 44px !important;
+      height: 44px !important;
+      margin-bottom: 4px !important;
+    }
+
+    .prep-complete-title, .ritual-complete-title, .food-complete-title {
+      font-size: 15px !important;
+      letter-spacing: 1px !important;
+      margin: 0 0 8px !important;
+    }
+
+    .prep-complete-card {
+      padding: 8px 10px !important;
+      margin-bottom: 8px !important;
+    }
+
+    .prep-complete-text, .ritual-complete-text, .food-complete-text {
+      font-size: 12px !important;
+      line-height: 1.4 !important;
+    }
+
+    .prep-complete-note, .ritual-complete-note, .food-complete-note {
+      font-size: 10.5px !important;
+      margin-top: 6px !important;
+    }
+  }
+
+  .sharpen-blades-details-zone {
+    padding: 12px 14px !important;
+
+    h3 {
+      font-size: 1.1rem !important;
+    }
+
+    p {
+      font-size: 11px !important;
+      margin-bottom: 6px !important;
+      line-height: 1.4 !important;
+    }
+
+    h4 {
+      font-size: 12px !important;
+    }
+
+    ul {
+      font-size: 10.5px !important;
+      padding-left: 14px !important;
+
+      li {
+        margin-bottom: 3px !important;
+      }
+    }
+
+    .camp-action-btn {
+      padding: 6px 12px !important;
+      font-size: 11.5px !important;
+    }
+  }
+
+  /* Merchant Screen Mobile height containment */
   .merchant-modal {
     .modal-dialog {
+      width: min(calc(100vw - 16px), 500px) !important;
       max-width: 500px !important;
-      margin: 1.75rem auto;
+      margin: 8px auto !important;
+      height: calc(100vh - 16px) !important;
+      max-height: calc(100vh - 16px) !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+
+    .modal-content {
+      min-height: 0 !important;
+      height: 100% !important;
+      max-height: 100% !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+      border-radius: 10px !important;
+    }
+
+    .modal-header {
+      padding: 8px 12px !important;
+      flex-shrink: 0 !important;
+
+      .modal-title {
+        font-size: 15px !important;
+        letter-spacing: 1px !important;
+      }
+    }
+
+    .modal-body {
+      padding: 8px 10px !important;
+      flex: 1 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+      min-height: 0 !important;
+    }
+  }
+
+  .merchant-screen {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+
+    .vendor-tabs {
+      display: flex !important;
+      padding: 3px !important;
+      gap: 3px !important;
+      flex-shrink: 0 !important;
+
+      .vendor-tab-btn {
+        padding: 6px 8px !important;
+        font-size: 12px !important;
+      }
+    }
+
+    .vendor-split-container {
+      flex: 1 !important;
+      min-height: 0 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 6px !important;
+      overflow: hidden !important;
+    }
+
+    .vendor-panel {
+      flex: 1 !important;
+      min-height: 0 !important;
+      padding: 8px 10px !important;
+      gap: 6px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+
+      .panel-title {
+        font-size: 12px !important;
+        letter-spacing: 0.5px !important;
+        padding-bottom: 4px !important;
+        flex-shrink: 0 !important;
+      }
+
+      .item-list {
+        flex: 1 !important;
+        min-height: 0 !important;
+        max-height: none !important;
+        overflow-y: auto !important;
+        gap: 6px !important;
+        padding-right: 2px !important;
+      }
+    }
+
+    .item-card {
+      padding: 6px 8px !important;
+      gap: 8px !important;
+
+      .item-name {
+        font-size: 11.5px !important;
+      }
+
+      .item-description {
+        font-size: 9.5px !important;
+        -webkit-line-clamp: 1 !important;
+      }
+
+      .buy-btn, .sell-btn {
+        padding: 4px 8px !important;
+        font-size: 10px !important;
+        min-width: 68px !important;
+
+        .price-tag {
+          font-size: 9px !important;
+        }
+      }
+    }
+
+    .vendor-status-bar {
+      flex-shrink: 0 !important;
+      padding: 6px 10px !important;
+      font-size: 11px !important;
+      flex-direction: row !important;
+      justify-content: space-between !important;
+      align-items: center !important;
+      gap: 6px !important;
+
+      .wallet-info {
+        gap: 10px !important;
+      }
+
+      .feedback-message {
+        font-size: 10.5px !important;
+      }
     }
   }
 }

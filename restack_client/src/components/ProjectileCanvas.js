@@ -20,8 +20,16 @@ export default class ProjectileCanvas extends React.Component {
     }
 
     startLoop = () => {
-        const loop = () => {
-            this.update();
+        let lastTime = performance.now();
+        const loop = (currentTime) => {
+            if (!lastTime) lastTime = currentTime;
+            const dt = (currentTime - lastTime) / 1000; // seconds
+            lastTime = currentTime;
+            
+            // Limit dt to max 0.1s to prevent huge jumps if tab is inactive
+            const safeDt = Math.min(dt, 0.1);
+            
+            this.update(safeDt);
             this.draw();
             this.animationFrameId = requestAnimationFrame(loop);
         };
@@ -49,8 +57,8 @@ export default class ProjectileCanvas extends React.Component {
         const dy = endY - startY;
         const distance = Math.sqrt(dx * dx + dy * dy);
         
-        // Speed in pixels per frame (approx 300px/sec at 60fps => ~5px per frame)
-        const speed = 6; 
+        // Speed in pixels per second (approx 450px/sec)
+        const speed = 450; 
 
         this.projectiles.push({
             x: startX,
@@ -68,7 +76,7 @@ export default class ProjectileCanvas extends React.Component {
         });
     };
 
-    update = () => {
+    update = (dt) => {
         const { playerTileIdx, tileSize } = this.props;
         let px = null;
         let py = null;
@@ -83,7 +91,8 @@ export default class ProjectileCanvas extends React.Component {
         // Update projectiles
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const p = this.projectiles[i];
-            p.traveled += p.speed;
+            // Move based on delta time
+            p.traveled += p.speed * (dt || 0.016);
 
             // Move projectile first
             const ratio = Math.min(1.0, p.traveled / p.distance);

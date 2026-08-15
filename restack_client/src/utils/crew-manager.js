@@ -1,6 +1,7 @@
 
 import * as images from '../utils/images'
 import { SPELLS, RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, SCRY_OPTIONS } from './spells-table'
+import { getMeta, storeMeta } from './session-handler'
 
 // eslint-disable-next-line no-extend-native
 Date.prototype.addHours = function (h) {
@@ -369,6 +370,18 @@ export function CrewManager() {
         } catch (e) {
             console.warn('levelUp: failed to increment baseHp', e, crewMember);
         }
+        // Award 1 Free Will point to the user profile (max 100)
+        try {
+            const meta = getMeta() || {};
+            const curFW = typeof meta.freeWill === 'number' ? meta.freeWill : 0;
+            if (curFW < 100) {
+                meta.freeWill = curFW + 1;
+                storeMeta(meta);
+            }
+        } catch (e) {
+            console.warn('levelUp: failed to update freeWill meta', e);
+        }
+
         try { this.computeDerivedStats(crewMember); } catch (e) { console.warn('levelUp: computeDerivedStats failed', e, crewMember); }
         return gains;
     }

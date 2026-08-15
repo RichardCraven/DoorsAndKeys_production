@@ -8,6 +8,7 @@ import { CModal } from '@coreui/react';
 import '../../styles/inventory-modal.scss';
 import DUST_TYPES from '../../utils/dusts';
 import LevelUpScreen from '../../components/LevelUpScreen';
+import FreeWillStatBar from '../../components/FreeWillStatBar';
 import skillsMatrix from '../../utils/skills-matrix';
 import { Redirect } from "react-router-dom";
 import { shardDropChance } from '../../utils/card-manager';
@@ -1646,6 +1647,12 @@ class MonsterBattle extends React.Component {
         this._setTimeout(() => {
             executeTeardown();
 
+            let initialFreeWill = 0;
+            try {
+                const initMeta = getMeta() || {};
+                initialFreeWill = typeof initMeta.freeWill === 'number' ? initMeta.freeWill : 0;
+            } catch (e) { }
+
             let experienceGained,
                 goldGained,
                 foodGained = 0,
@@ -1951,6 +1958,14 @@ class MonsterBattle extends React.Component {
                 meta.crew = this.props.crewManager.crew;
                 storeMeta(meta);
                 updateUserRequest();
+
+                let currentFreeWill = initialFreeWill;
+                try {
+                    const freshMeta = getMeta() || {};
+                    currentFreeWill = typeof freshMeta.freeWill === 'number' ? freshMeta.freeWill : initialFreeWill;
+                } catch (e) { }
+
+                this.setState({ initialFreeWill, currentFreeWill });
 
 
             } else {
@@ -4106,6 +4121,18 @@ class MonsterBattle extends React.Component {
                                                 </div>
                                             )}
                                         </div>
+
+                                        {/* Free Will Progress Bar */}
+                                        {isVictory && (
+                                            <div className="summary-freewill-container" style={{ marginTop: '16px', width: '100%' }}>
+                                                <FreeWillStatBar
+                                                    freeWill={typeof this.state.currentFreeWill === 'number' ? this.state.currentFreeWill : (getMeta()?.freeWill || 0)}
+                                                    initialFreeWill={typeof this.state.initialFreeWill === 'number' ? this.state.initialFreeWill : (getMeta()?.freeWill || 0)}
+                                                    animateOnMount={true}
+                                                    delayMs={600}
+                                                />
+                                            </div>
+                                        )}
 
                                         {/* Items Gained */}
                                         {((this.state.itemsGained && this.state.itemsGained.length > 0) || (this.state.stolenItems && this.state.stolenItems.length > 0)) && (

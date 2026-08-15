@@ -893,11 +893,11 @@ export function CombatManagerRedux() {
             fighter.cooldowns = {};
             fighter.movesTakenThisRound = 0;
             fighter.actionsTakenThisRound = 0;
-            const isWizard = e.type === 'wizard' || e.image === 'wizard' || e.class === 'wizard' || String(e.name || '').toLowerCase().includes('wizard') || String(e.id || '').toLowerCase().includes('zildjikan');
-            fighter.power = isWizard ? 100 : 0;  // Power resource: hardwired to 100 for wizard testing
-            fighter.ultimateActive = isWizard;
-            if (isWizard) {
-                console.log(`%c 🧙 HARDWIRED: ${fighter.name || fighter.id} starts with 100 POWER & ULTIMATE READY! 🧙`, 'background: #a370f7; color: #fff; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
+            const isRanger = e.type === 'ranger' || e.image === 'ranger' || e.class === 'ranger' || String(e.name || '').toLowerCase().includes('ranger') || String(e.id || '').toLowerCase().includes('ranger');
+            fighter.power = isRanger ? 100 : 0;  // Ranger starts combat with 100 Power (Ultimate Ready)
+            fighter.ultimateActive = isRanger;
+            if (isRanger) {
+                console.log(`%c 🏹 RANGER: ${fighter.name || fighter.id} starts with 100 POWER & ULTIMATE READY! 🏹`, 'background: #5aab5a; color: #fff; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
             }
 
             this.combatants[e.id] = fighter;
@@ -3521,6 +3521,25 @@ export function CombatManagerRedux() {
                     unit.actionsTakenThisRound = (unit.actionsTakenThisRound || 0) + 1;
                     this.appendCombatLog(`${this.getCombatantLogName(unit)} is at low health and uses a ${potion.name} to heal.`);
                     return;
+                }
+            }
+
+            // ── PC Power Boost Grab Logic ──
+            if (unit.movesTakenThisRound === 0 && Array.isArray(this.powerBoostTiles) && this.powerBoostTiles.length > 0) {
+                // Find an adjacent power boost tile
+                const adjacentPowerUp = this.powerBoostTiles.find(t => {
+                    const uCoords = unit.coordinates;
+                    const manhattan = Math.abs(uCoords.x - t.x) + Math.abs(uCoords.y - t.y);
+                    return manhattan === 1;
+                });
+                
+                if (adjacentPowerUp) {
+                    if (this.canFitAt(unit, adjacentPowerUp.x, adjacentPowerUp.y)) {
+                        this.updateUnitCoordinates(unit, adjacentPowerUp.x, adjacentPowerUp.y);
+                        unit.movesTakenThisRound += 1;
+                        this.applyEnduranceCost(unit, this.MOVE_ENDURANCE_COST, 'move');
+                        this.appendCombatLog(`${this.getCombatantLogName(unit)} moves to grab a Power Up!`);
+                    }
                 }
             }
         }
@@ -12877,11 +12896,16 @@ export function CombatManagerRedux() {
     /**
      * Check if any monster/minion unit is standing on a Meat Tile and restore up to 30 HP.
      */
+    /**
+     * Check if any unit is standing on a Meat Tile.
+     * Enemy monster units consume meat and recover up to 30 HP.
+     * PC units and summoned units (skeletons, imps, pets) step over and remove the food from the board with NO life gain.
+     */
     this._checkMeatTilePickup = () => {
         if (!Array.isArray(this.meatTiles) || this.meatTiles.length === 0) return;
         const toRemove = new Set();
         Object.values(this.combatants).forEach(unit => {
-            if (!unit || unit.dead || (!unit.isMonster && !unit.isMinion) || unit.isVCT) return;
+            if (!unit || unit.dead || unit.isVCT) return;
             if (!unit.coordinates) return;
             const coords = typeof this.getCombatantOccupiedCoords === 'function'
                 ? this.getCombatantOccupiedCoords(unit)
@@ -12889,29 +12913,39 @@ export function CombatManagerRedux() {
             this.meatTiles.forEach(tile => {
                 if (coords.some(c => c && c.x === tile.x && c.y === tile.y) && !toRemove.has(tile.id)) {
                     toRemove.add(tile.id);
-                    const maxHp = unit.starting_hp || (unit.stats && unit.stats.hp) || 100;
-                    const healAmount = Math.min(30, maxHp - unit.hp);
-                    if (healAmount > 0) {
-                        unit.hp = Math.min(maxHp, unit.hp + healAmount);
-                        this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} consumes meat and recovers ${healAmount} HP! (${unit.hp}/${maxHp})`);
-                        unit.damageIndicators = unit.damageIndicators || [];
-                        const indId = Date.now() + Math.random();
-                        unit.damageIndicators.push({
-                            id: indId,
-                            value: `+${healAmount}`,
-                            source: 'Meat',
-                            type: 'heal',
-                            timestamp: Date.now()
-                        });
-                        setTimeout(() => {
-                            if (Array.isArray(unit.damageIndicators)) {
-                                const idx = unit.damageIndicators.findIndex(e => e && e.id === indId);
-                                if (idx !== -1) unit.damageIndicators.splice(idx, 1);
-                                if (typeof this.broadcastDataUpdate === 'function') this.broadcastDataUpdate();
-                            }
-                        }, 2000);
+
+                    // Check if unit is a PC unit or a summoned unit (skeleton, imp, pet, minion)
+                    const isPCSummon = !!(unit.isSummoned || unit.summonedBy || unit.isPet || unit.isFamiliar);
+                    const isEnemyMonster = unit.isMonster === true && !isPCSummon && (unit.isMinion !== true || !unit.summonedBy);
+
+                    if (isEnemyMonster) {
+                        const maxHp = unit.starting_hp || (unit.stats && unit.stats.hp) || 100;
+                        const healAmount = Math.min(30, maxHp - unit.hp);
+                        if (healAmount > 0) {
+                            unit.hp = Math.min(maxHp, unit.hp + healAmount);
+                            this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} consumes meat and recovers ${healAmount} HP! (${unit.hp}/${maxHp})`);
+                            unit.damageIndicators = unit.damageIndicators || [];
+                            const indId = Date.now() + Math.random();
+                            unit.damageIndicators.push({
+                                id: indId,
+                                value: `+${healAmount}`,
+                                source: 'Meat',
+                                type: 'heal',
+                                timestamp: Date.now()
+                            });
+                            setTimeout(() => {
+                                if (Array.isArray(unit.damageIndicators)) {
+                                    const idx = unit.damageIndicators.findIndex(e => e && e.id === indId);
+                                    if (idx !== -1) unit.damageIndicators.splice(idx, 1);
+                                    if (typeof this.broadcastDataUpdate === 'function') this.broadcastDataUpdate();
+                                }
+                            }, 2000);
+                        } else {
+                            this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} consumes meat!`);
+                        }
                     } else {
-                        this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} consumes meat!`);
+                        // PC unit or summoned unit (skeleton, imp) moves over food: food tile is removed from board, NO HP restoration!
+                        this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} steps over the food, removing it from the board.`);
                     }
                 }
             });

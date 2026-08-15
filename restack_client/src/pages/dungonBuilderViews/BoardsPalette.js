@@ -19,11 +19,13 @@ class BoardsPalette extends React.Component {
     }
 
     getOptionLabel = (optionType) => {
+        if (optionType === 'tablet') return 'Tablet';
         if (optionType === 'jewels') return 'Jewels';
         if (optionType === 'runes') return 'Runes';
         if (optionType === 'connecting path') return 'Connecting Path';
         if (optionType === 'territory') return 'Territory';
         if (optionType === 'buildings') return 'Buildings';
+        if (optionType === 'generators') return 'Generators';
         return optionType;
     }
 
@@ -92,7 +94,7 @@ class BoardsPalette extends React.Component {
                                 }}
                                 >{this.getOptionLabel(tile.optionType)}</span>
                             </div>
-                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'lore_tablet', 'territory', 'buildings'].includes(tile.optionType) && (() => {
+                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'territory', 'buildings', 'generators'].includes(tile.optionType) && (() => {
                                 const isExpanded = this.props.optionClickedIdx === i;
                                 return (
                                     <div style={{ marginRight: '15px', display: 'flex', alignItems: 'center', userSelect: 'none' }}>
@@ -488,34 +490,6 @@ class BoardsPalette extends React.Component {
                                 </div>
                             })}
                         </div>}
-                        {tile.optionType === 'lore_tablet' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
-                            {(this.props.mapMaker.loreTabletOptions || []).map((tabletItem, li) => {
-                                const isHovered = this.state.hoveredSubItem?.type === 'lore_tablet' && this.state.hoveredSubItem?.id === li;
-                                const isSelected = this.props.pinnedOption?.type === 'lore-tablet-tile' && this.props.pinnedOption?.id === li;
-                                return <div
-                                key={`lore-tablet-${li}`}
-                                className={`palette-option-subcontainer${isHovered ? ' sub-hovered' : ''}${isSelected ? ' sub-selected' : ''}`}
-                                onMouseEnter={() => this.setState({ hoveredSubItem: { type: 'lore_tablet', id: li } })}
-                                onMouseLeave={() => this.setState({ hoveredSubItem: null })}
-                                onClick={() => {
-                                    this.props.handleClick({
-                                        type: 'lore-tablet-tile',
-                                        id: li
-                                    })
-                                }}
-                                >
-                                    <div className="text-container">{tabletItem.name}</div>
-                                    <div style={{
-                                        width: this.props.tileSize + 'px',
-                                        height: this.props.tileSize + 'px',
-                                        backgroundColor: tabletItem.color,
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: Math.max(8, this.props.tileSize * 0.35) + 'px',
-                                        flexShrink: 0
-                                    }}><span role="img" aria-label="scroll">📜</span></div>
-                                </div>
-                            })}
-                        </div>}
                         {tile.optionType === 'territory' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
                             {(this.props.mapMaker.territoryOptions || []).map((tItem, ti) => {
                                 const isHovered = this.state.hoveredSubItem?.type === 'territory' && this.state.hoveredSubItem?.id === ti;
@@ -585,6 +559,36 @@ class BoardsPalette extends React.Component {
                                     index={bi}
                                     image={images[bItem.image]}
                                     imageOverride={images[bItem.image]}
+                                    handleHover={null}
+                                    handleClick={null}
+                                    type={'item'}>
+                                    </Tile>
+                                </div>
+                            })}
+                        </div>}
+                        {tile.optionType === 'generators' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
+                            {(this.props.mapMaker.generatorOptions || []).map((gItem, gi) => {
+                                const isHovered = this.state.hoveredSubItem?.type === 'generator' && this.state.hoveredSubItem?.id === gi;
+                                const isSelected = this.props.pinnedOption?.type === 'generator-tile' && this.props.pinnedOption?.id === gi;
+                                return <div
+                                key={`generator-${gi}`}
+                                className={`palette-option-subcontainer${isHovered ? ' sub-hovered' : ''}${isSelected ? ' sub-selected' : ''}`}
+                                onMouseEnter={() => this.setState({ hoveredSubItem: { type: 'generator', id: gi } })}
+                                onMouseLeave={() => this.setState({ hoveredSubItem: null })}
+                                onClick={() => {
+                                    this.props.handleClick({
+                                        type: 'generator-tile',
+                                        id: gi
+                                    })
+                                }}
+                                >
+                                    <div className="text-container">{gItem.name}</div>
+                                    <Tile
+                                    id={gi}
+                                    tileSize={this.props.tileSize}
+                                    index={gi}
+                                    image={images[gItem.image]}
+                                    imageOverride={images[gItem.image]}
                                     handleHover={null}
                                     handleClick={null}
                                     type={'item'}>

@@ -196,11 +196,32 @@ export function BoardManager(){
     this.establishLoreTabletEncounterCallback = (callback) => {
         this.triggerLoreTabletEncounter = callback;
     }
+    this.establishTriggerInscriptionModalCallback = (callback) => {
+        this.triggerInscriptionModal = callback;
+    }
+    this.handleInscriptionRead = (inscriptionData) => {
+        if (!inscriptionData) return false;
+        
+        // Log to message panel for flavor
+        const text = typeof inscriptionData === 'string' ? inscriptionData : (inscriptionData.text || '');
+        if (text) {
+            try { if (this.messaging) this.messaging(`✍ ${text}`); } catch (e) {}
+        }
+        
+        // Trigger modal
+        if (this.triggerInscriptionModal) {
+            this.triggerInscriptionModal(inscriptionData);
+        }
+        return true;
+    }
     this.establishSetMonsterCallback = (callback) => {
         this.setMonster = callback;
     }
     this.establishLevelChangeCallback = (callback) => {
         this.broadcastLevelChange = callback;
+    }
+    this.establishDoorTransitionCallback = (callback) => {
+        this.doorTransitionCallback = callback;
     }
     this.establishUseConsumableFromInventoryCallback = (callback) => {
         this.broadcastUseConsumableFromInventory = callback;
@@ -258,12 +279,132 @@ export function BoardManager(){
         }
         return null;
     }
+    this.isConnectingPathTile = (tile) => {
+        if (!tile) return false;
+        const boardTile = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id]) || tile;
+        
+        const isMatch = (str) => {
+            if (!str || typeof str !== 'string') return false;
+            const norm = str.toLowerCase().replace(/\s+/g, '_');
+            return norm === 'connecting_path' || norm === 'passage' || norm === 'path' || norm === 'connecting_path_tile';
+        };
+
+        // Check runtime tile
+        const contains = tile.contains;
+        let cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
+        let cSubtype = contains && typeof contains === 'object' ? contains.subtype : null;
+        const bldg = tile.building || (contains && contains.building);
+        const opt = tile.optionType;
+
+        if (isMatch(cType) || isMatch(cSubtype) || isMatch(bldg) || isMatch(opt)) return true;
+        if (tile.isConnectingPath || tile.isPassage || tile.type === 'path' || tile.type === 'connecting_path') return true;
+
+        // Check persistent boardTile
+        if (boardTile && boardTile !== tile) {
+            const bContains = boardTile.contains;
+            let bcType = typeof bContains === 'string' ? bContains : (bContains ? bContains.type : null);
+            let bcSubtype = bContains && typeof bContains === 'object' ? bContains.subtype : null;
+            const bbldg = boardTile.building || (bContains && bContains.building);
+            const bopt = boardTile.optionType;
+
+            if (isMatch(bcType) || isMatch(bcSubtype) || isMatch(bbldg) || isMatch(bopt)) return true;
+            if (boardTile.isConnectingPath || boardTile.isPassage || boardTile.type === 'path' || boardTile.type === 'connecting_path') return true;
+        }
+
+        return false;
+    };
+
     this.isVoidTile = (tile) => {
         if (!tile) return false;
+
+        // Connecting path tiles and passages are NEVER void tiles!
+        if (this.isConnectingPathTile(tile)) return false;
+
         const contains = tile.contains;
-        if (!contains) return false;
-        const cType = typeof contains === 'string' ? contains : contains.type;
-        return cType === 'void' || cType === 'empty';
+        let cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
+        if (typeof cType === 'string') cType = cType.toLowerCase().replace(/\s+/g, '_');
+
+        // EXPLICITLY ignore empty_space, obscured_space, connecting_path, and passage
+        if (cType === 'empty_space' || cType === 'obscured_space' || cType === 'connecting_path' || cType === 'passage' || cType === 'path') return false;
+
+        // If explicitly marked as NOT void
+        if (tile.isVoid === false || tile.type === 'empty_space' || tile.type === 'path' || tile.type === 'connecting_path') return false;
+
+        // 'empty' usually means Mapmaker void, UNLESS it has a painted terrain
+        if (cType === 'empty') {
+            if (tile.terrain && tile.terrain !== 'void') return false;
+            if (tile.terrain === 'void' || tile.type === 'void' || tile.isVoid || tile.original === 'void') return true;
+            return false;
+        }
+
+        // 'void' explicitly in contains
+        if (cType === 'void' || cType === 'void_fill' || cType === 'voidfill') return true;
+
+        // Mapmaker painted items (spawn, chest, door, monster, item, food) leave tile.type === 'void'.
+        // If it has a non-void 'contains', it is an item/entity, NOT a void!
+        if (contains && cType && cType !== 'empty' && cType !== 'void') {
+            return false;
+        }
+
+        // Check persistent boardTile properties
+        const boardTile = this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id];
+        if (boardTile) {
+            if (boardTile.isVoid === false || boardTile.type === 'empty_space' || boardTile.type === 'path' || boardTile.type === 'connecting_path') return false;
+            if (this.isConnectingPathTile(boardTile)) return false;
+            const bColor = boardTile.color;
+            if (bColor && bColor !== 'black' && bColor !== 'white' && bColor !== 'null' && bColor !== '#0e0e0e') {
+                return false;
+            }
+        }
+
+        // If explicitly set to isVoid = true
+        if (tile.isVoid === true) return true;
+
+        // Fallback: tile.type === 'void' without any non-void overrides
+        if (tile.type === 'void') return true;
+
+        if (tile.building || tile.isBuilding || this.isImpassableBuildingTile(tile)) return false;
+
+        return false;
+    };
+    this.isImpassableBuildingTile = (tile) => {
+        if (!tile) return false;
+        const containsType = this.getContainsType(tile.contains) || tile.contains?.type;
+        const containsSubtype = this.getContainsSubtype(tile.contains) || tile.contains?.subtype;
+        const bldg = tile.building || tile.contains?.building;
+        const img = tile.image || tile.contains?.image;
+
+        // 'hut' and 'buildable_hut' are EXPLICITLY passable
+        if (containsSubtype === 'hut' || containsSubtype === 'buildable_hut' || bldg === 'hut' || img === 'hut' || img === 'buildable_hut') {
+            return false;
+        }
+
+        const buildingSubtypes = [
+            'outpost', 'buildable_outpost',
+            'observer_platform', 'buildable_observer_platform',
+            'earthen_fort', 'buildable_earthen_fort',
+            'war_camp', 'buildable_war_camp',
+            'war_fort', 'buildable_war_fort',
+            'blacksmith_camp', 'buildable_blacksmith_camp',
+            'builders_house', 'buildable_builders_house',
+            'captains_tower', 'buildable_captains_tower',
+            'house', 'buildable_house',
+            'stone_tower', 'buildable_stone_tower',
+            'storage', 'buildable_storage',
+            'temple', 'buildable_temple',
+            'larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine',
+            'dust_collector', 'fungal_nursery', 'cultivation_vat',
+            'domain_monolith', 'dark_domain_monolith',
+            'infernal_tower', 'infernal_pit', 'frozen_locus', 'emerald_locus', 'cosmic_locus'
+        ];
+
+        if (containsType === 'building' || containsType === 'generator') return true;
+        if (containsSubtype && buildingSubtypes.includes(containsSubtype)) return true;
+        if (bldg && buildingSubtypes.includes(bldg)) return true;
+        if (img && buildingSubtypes.includes(img)) return true;
+        if (tile.isBuilding) return true;
+
+        return false;
     };
     this.getContainsSubtype = (contains) => {
         if (!contains && contains !== null) return null;
@@ -447,10 +588,13 @@ export function BoardManager(){
     this.hasSolidBorder = (tileData, side) => {
         if (!tileData || !tileData.borders) return false;
         const borderValue = tileData.borders[side];
-        return !!borderValue && !String(borderValue).includes('transparent');
+        if (!borderValue || String(borderValue).includes('transparent') || String(borderValue) === 'none') return false;
+        const str = String(borderValue).toLowerCase();
+        if (str.includes('d4a844') || str.includes('e5b54f') || str.includes('gold')) return false;
+        return str.includes('black') || str.includes('#000') || str.includes('rgb(0,0,0)') || str.includes('2px solid');
     }
 
-    this.isPassageWallBlockingBetween = (fromIdx, toIdx) => {
+    this.isPassageWallBlockingBetween = (fromIdx, toIdx, options = {}) => {
         try {
             if (fromIdx === toIdx) return false;
             if (fromIdx == null || toIdx == null) return false;
@@ -484,6 +628,9 @@ export function BoardManager(){
             const boardTiles = (this.currentBoard && this.currentBoard.tiles) ? this.currentBoard.tiles : null;
             const fromTile = (boardTiles && boardTiles[fromIdx]) ? boardTiles[fromIdx] : this.tiles[fromIdx];
             const toTile = (boardTiles && boardTiles[toIdx]) ? boardTiles[toIdx] : this.tiles[toIdx];
+
+            // If destination is an impassable building (outpost, observer platform, etc. except hut), block movement onto it
+            if (!options.ignoreBuilding && this.isImpassableBuildingTile(toTile)) return true;
 
             // If one tile is void and the other is non-void, there is a solid wall between them
             const fromIsVoid = this.isVoidTile(fromTile);
@@ -552,19 +699,24 @@ export function BoardManager(){
             neighbors.forEach((nextIdx) => {
                 const existing = visited.get(nextIdx);
                 if (existing !== undefined && existing <= steps + 1) return;
-                if (this.isPassageWallBlockingBetween(idx, nextIdx)) return;
+                if (this.isPassageWallBlockingBetween(idx, nextIdx, { ignoreBuilding: true })) return;
 
                 const tile = this.tiles[nextIdx] || (boardTiles && boardTiles[nextIdx]);
                 if (!tile) return;
 
-                if (this.isVoidTile(tile)) return;
-                const containsType = this.getContainsType(tile.contains);
-                if (containsType === 'inscription') return;
+                const hasInscriptions = tile.inscriptions && Object.values(tile.inscriptions).some(v => !!v);
+                if (this.isVoidTile(tile) && !hasInscriptions) return;
 
                 visited.set(nextIdx, steps + 1);
 
+                // Impassable buildings (outpost, etc.) are visible in fog of war, but block propagation past themselves.
+                if (this.isImpassableBuildingTile(tile)) return;
+
                 // Locked gates are visible but block propagation past themselves.
                 if (this.isLockedGateTile(tile)) return;
+                
+                // Inscribed void tiles are visible but block propagation past themselves.
+                if (this.isVoidTile(tile)) return;
 
                 queue.push({ idx: nextIdx, steps: steps + 1 });
             });
@@ -1740,6 +1892,34 @@ export function BoardManager(){
                 tile.color = '#6b6057';
             }
 
+            // Sanitize tiles stored with type: 'inscription' into passable empty floor space
+            const currentContainsType = this.getContainsType(tileContains);
+            if (currentContainsType === 'inscription' || (tileContains && tileContains.type === 'inscription') || (tile.contains && tile.contains.type === 'inscription')) {
+                let insData = tile.inscriptions || null;
+                if (!insData && tileContains && tileContains.subtype) {
+                    insData = { top: typeof tileContains.subtype === 'string' ? tileContains.subtype : (tileContains.subtype.text || 'Inscription') };
+                }
+                tileContains = { type: 'empty_space', subtype: null };
+                tileImage = null;
+                tileColor = null;
+                tile.inscriptions = insData;
+                tile.contains = { type: 'empty_space', subtype: null };
+                if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id]) {
+                    this.currentBoard.tiles[tile.id].contains = { type: 'empty_space', subtype: null };
+                    this.currentBoard.tiles[tile.id].inscriptions = insData;
+                    this.currentBoard.tiles[tile.id].color = null;
+                }
+            }
+
+            let generatorData = tile.generatorData || null;
+            try {
+                const tileKey = `${this.currentLevel?.id || 1}_${this.currentBoard?.id || 0}_${tile.id}`;
+                const meta = getMeta() || {};
+                if (meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
+                    generatorData = meta.activatedGenerators[tileKey];
+                }
+            } catch (e) {}
+
             this.tiles.push({
                 type: 'board-tile',
                 id: tile.id,
@@ -1747,6 +1927,8 @@ export function BoardManager(){
                 showCoordinates: false,
                 contains: tileContains,
                 image: tileImage,
+                building: tile.building || null,
+                generatorData: generatorData,
                 inscriptions: tile.inscriptions || null,
                 territory: tile.territory || null,
                 borders: null,
@@ -1848,6 +2030,7 @@ export function BoardManager(){
         return (typeof c === 'string' && (this.monstersArr.includes(c) || c === 'pygmies'));
     })
     this.handleInteraction = (destinationTile) => {
+        if (!destinationTile) return null;
         // Intercept visited/used narrative and shrines for the current user to bypass interactions
         try {
             const rawType = this.getContainsType(destinationTile.contains);
@@ -2067,9 +2250,9 @@ export function BoardManager(){
             break;
             case 'food':
                 if (this.addFoodToSupplies) {
-                    this.addFoodToSupplies();
+                    this.addFoodToSupplies(destinationTile);
                 }
-                this.removeTileFromBoard(destinationTile)
+                this.removeTileFromBoard(destinationTile);
             break;
             case 'treasure':
                 this.treasurePickupInProgress = true;
@@ -2146,13 +2329,16 @@ export function BoardManager(){
                 } catch (e) {}
                 return 'shrine';
             case 'lore_tablet':
-                // Lore Tablet: award a domain token to the crew, then messaging
+            case 'tablet':
+                // Tablet: store item in inventory and remove tile from board
                 try {
-                    const domain = subtype || 'unknown';
-                    if (this.messaging) this.messaging(`📜 Ancient lore is inscribed here — a tablet of ${domain}.`);
-                    if (this.triggerLoreTabletEncounter) this.triggerLoreTabletEncounter(destinationTile);
-                } catch (e) {}
-                return 'lore_tablet';
+                    this.addItemToInventory({ contains: 'tablet', name: 'Tablet', type: 'item', subtype: 'tablet' });
+                } catch (e) {
+                    this.addItemToInventory(destinationTile);
+                }
+                this.removeTileFromBoard(destinationTile);
+                if (this.messaging) this.messaging(`📜 You collected a Tablet.`);
+                return 'item';
             default:
                 break;
         }
@@ -2191,6 +2377,9 @@ export function BoardManager(){
         tile.isFadingOut = false;
         tile.image = null;
         tile.contains = null;
+        tile.isVoid = false;
+        if (tile.type === 'void') tile.type = 'empty_space';
+        if (tile.original === 'void') delete tile.original;
 
         // Restore the tile's original floor color from the persisted board data.
         // 'white' was the previous hard-coded fallback — that value leaked into
@@ -2232,6 +2421,9 @@ export function BoardManager(){
             if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id]) {
                 this.currentBoard.tiles[tile.id].contains = null;
                 this.currentBoard.tiles[tile.id].color = tile.color;
+                this.currentBoard.tiles[tile.id].isVoid = false;
+                if (this.currentBoard.tiles[tile.id].type === 'void') this.currentBoard.tiles[tile.id].type = 'empty_space';
+                if (this.currentBoard.tiles[tile.id].original === 'void') delete this.currentBoard.tiles[tile.id].original;
             }
             // Also update the dungeon structure so persistence will include the cleared tile
             const levelEntry = this.dungeon.levels.find(e => e.id === this.currentLevel.id);
@@ -2241,12 +2433,18 @@ export function BoardManager(){
                     if (b && b.tiles && b.tiles[tile.id]) {
                         b.tiles[tile.id].contains = null;
                         b.tiles[tile.id].color = tile.color;
+                        b.tiles[tile.id].isVoid = false;
+                        if (b.tiles[tile.id].type === 'void') b.tiles[tile.id].type = 'empty_space';
+                        if (b.tiles[tile.id].original === 'void') delete b.tiles[tile.id].original;
                     }
                 } else if (this.currentOrientation === 'B' && levelEntry.back && levelEntry.back.miniboards) {
                     const b = levelEntry.back.miniboards.find(bi => bi.id === this.currentBoard.id);
                     if (b && b.tiles && b.tiles[tile.id]) {
                         b.tiles[tile.id].contains = null;
                         b.tiles[tile.id].color = tile.color;
+                        b.tiles[tile.id].isVoid = false;
+                        if (b.tiles[tile.id].type === 'void') b.tiles[tile.id].type = 'empty_space';
+                        if (b.tiles[tile.id].original === 'void') delete b.tiles[tile.id].original;
                     }
                 }
             }
@@ -2399,13 +2597,21 @@ export function BoardManager(){
         }
     }
     this.handlePassingThroughDoor = () => {
-        if(this.currentOrientation === 'F'){
-            this.currentOrientation = 'B'
-        } else if(this.currentOrientation === 'B'){
-            this.currentOrientation = 'F'
+        const executeDoorTransition = () => {
+            if(this.currentOrientation === 'F'){
+                this.currentOrientation = 'B'
+            } else if(this.currentOrientation === 'B'){
+                this.currentOrientation = 'F'
+            }
+            this.tiles = [];
+            this.initializeTilesFromMap(this.playerTile.boardIndex, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1]]))
+        };
+
+        if (typeof this.doorTransitionCallback === 'function') {
+            this.doorTransitionCallback(executeDoorTransition);
+        } else {
+            executeDoorTransition();
         }
-        this.tiles = [];
-        this.initializeTilesFromMap(this.playerTile.boardIndex, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1]]))
     }
     
     this.handlePassingThroughWayUp = () => {
@@ -2431,31 +2637,60 @@ export function BoardManager(){
         this.broadcastLevelChange(this.currentLevel.id)
     }
     this.checkAdjacency = (reachableOverride = null) => {
-        // Clear any previous overlay indicators (we will set edge indicators here)
-        try { this.overlayTiles.forEach(t => { if (t) { t.color = null; t.borders = null } }) } catch (e) {}
-        try { this.tiles.forEach(t => { if (t && t.color === '#ff000078') { t.color = null; } }) } catch (e) {}
+        // Clear any previous overlay indicators
+        if (this._activeEdgeIndicators) {
+            try {
+                this._activeEdgeIndicators.forEach(idx => {
+                    const t = this.overlayTiles[idx];
+                    if (t) {
+                        t.color = null;
+                        t.borders = null;
+                    }
+                });
+            } catch (e) {}
+            this._activeEdgeIndicators = [];
+        } else {
+            this._activeEdgeIndicators = [];
+            try { this.overlayTiles.forEach(t => { if (t) { t.color = null; t.borders = null } }) } catch (e) {}
+        }
+        
+        if (this._activeColorTiles) {
+            try {
+                this._activeColorTiles.forEach(idx => {
+                    const t = this.tiles[idx];
+                    if (t && t.color === '#ff000078') {
+                        t.color = null;
+                    }
+                });
+            } catch (e) {}
+            this._activeColorTiles = [];
+        } else {
+            this._activeColorTiles = [];
+            try { this.tiles.forEach(t => { if (t && t.color === '#ff000078') { t.color = null; } }) } catch (e) {}
+        }
 
-        // Edge indicator: when the player is adjacent to the board boundary, show a
-        // 3-tile red indicator along that edge centered on the player's row/column.
+        // Edge indicator: when the player is on a connecting passage, light up the border
+        // leading to the next board with a red color.
         try {
             const pCoords = this.playerTile.location; // [x, y]
             const px = pCoords[0], py = pCoords[1];
-            const EDGE_MIN = 15, EDGE_MAX = 29;
-            const indicatorColor = '#ff000088';
+            const EDGE_MIN = 0, EDGE_MAX = 14;
+            const indicatorColor = '#ff0000';
 
             const markOverlayAt = (coords, side) => {
                 try {
                     if (!coords) return;
                     const idx = this.getIndexFromCoordinates(coords);
                     if (!this.overlayTiles[idx]) return;
-                    // set a single thick border on the given side to render the 3-tile edge line
-                    const borderStyle = `3px solid ${indicatorColor}`;
+                    // set a thick red border on the given side to render the edge line
+                    const borderStyle = `4px solid ${indicatorColor}`;
                     const borders = { left: null, right: null, top: null, bottom: null };
                     if (side === 'left') borders.left = borderStyle;
                     if (side === 'right') borders.right = borderStyle;
                     if (side === 'top') borders.top = borderStyle;
                     if (side === 'bottom') borders.bottom = borderStyle;
                     this.overlayTiles[idx].borders = borders;
+                    this._activeEdgeIndicators.push(idx);
                 } catch (e) {}
             }
 
@@ -2463,53 +2698,54 @@ export function BoardManager(){
             const canTransitionBoard = (direction) => {
                 const currentTileIdx = this.getIndexFromCoordinates(pCoords);
                 const currentTile = this.tiles[currentTileIdx];
-                
-                // Only explicitly placed connecting paths can transition boards
-                if (this.getContainsType(currentTile.contains) !== 'connecting_path') return false;
+                if (!currentTile) return false;
 
-                let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-                if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+                if (!this.isConnectingPathTile(currentTile)) return false;
+
+                let plane = this.currentOrientation === 'F' ? this.currentLevel?.front : this.currentLevel?.back;
+                if (!plane) plane = this.currentLevel?.front || this.currentLevel?.back || this.currentLevel;
                 if (!plane || !plane.miniboards) return false;
-                
+
+                const bIdx = this.playerTile.boardIndex;
                 if (direction === 'up') {
                     if (this.hasSolidBorder(currentTile, 'top') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
-                    return !!plane.miniboards[this.playerTile.boardIndex - 3];
+                    return (bIdx >= 3) && !!plane.miniboards[bIdx - 3];
                 } else if (direction === 'down') {
                     if (this.hasSolidBorder(currentTile, 'bottom') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
-                    return !!plane.miniboards[this.playerTile.boardIndex + 3];
+                    return (bIdx <= 5) && !!plane.miniboards[bIdx + 3];
                 } else if (direction === 'left') {
                     if (this.hasSolidBorder(currentTile, 'left') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
-                    return !!plane.miniboards[this.playerTile.boardIndex - 1];
+                    return (bIdx % 3 !== 0) && !!plane.miniboards[bIdx - 1];
                 } else if (direction === 'right') {
                     if (this.hasSolidBorder(currentTile, 'right') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
-                    return !!plane.miniboards[this.playerTile.boardIndex + 1];
+                    return (bIdx % 3 !== 2) && !!plane.miniboards[bIdx + 1];
                 }
                 return false;
             };
 
             // Left edge
-            if (py === EDGE_MIN && canTransitionBoard('left')) {
+            if (py <= 2 && canTransitionBoard('left')) {
                 for (let d = -1; d <= 1; d++) {
                     const nx = px + d;
                     if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MIN], 'left');
                 }
             }
             // Right edge
-            if (py === EDGE_MAX && canTransitionBoard('right')) {
+            if (py >= 12 && canTransitionBoard('right')) {
                 for (let d = -1; d <= 1; d++) {
                     const nx = px + d;
                     if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MAX], 'right');
                 }
             }
             // Top edge
-            if (px === EDGE_MIN && canTransitionBoard('up')) {
+            if (px <= 2 && canTransitionBoard('up')) {
                 for (let d = -1; d <= 1; d++) {
                     const ny = py + d;
                     if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MIN, ny], 'top');
                 }
             }
             // Bottom edge
-            if (px === EDGE_MAX && canTransitionBoard('down')) {
+            if (px >= 12 && canTransitionBoard('down')) {
                 for (let d = -1; d <= 1; d++) {
                     const ny = py + d;
                     if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MAX, ny], 'bottom');
@@ -2540,8 +2776,8 @@ export function BoardManager(){
             const type = this.getContainsType(destTile.contains);
             const gateType = this.getGateTypeFromTile(destTile);
             
-            // Check for void or inscription (wall with text)
-            if (type === 'void' || type === 'inscription') return true;
+            // Check for void wall
+            if (type === 'void') return true;
             
             // Check for large monster blocking
             if (destTile.blockedByLargeMonster) return true;
@@ -2573,16 +2809,14 @@ export function BoardManager(){
         const destTileInscription = destInscribedSide && destinationTile.inscriptions && destinationTile.inscriptions[destInscribedSide];
 
         const destType = this.getContainsType(destinationTile.contains);
-        if (destType === 'void' || destType === 'inscription') {
+        if (destType === 'void') {
             const anyDestInscription = destinationTile.inscriptions && Object.values(destinationTile.inscriptions).find(v => !!v);
-            if (destType === 'inscription' && destinationTile.contains.subtype) {
-                try { if (this.messaging) this.messaging(`✍ ${destinationTile.contains.subtype}`); } catch (e) {}
-            } else if (destTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${destTileInscription}`); } catch (e) {}
+            if (destTileInscription) {
+                this.handleInscriptionRead(destTileInscription);
             } else if (anyDestInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${anyDestInscription}`); } catch (e) {}
+                this.handleInscriptionRead(anyDestInscription);
             } else if (currentTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${currentTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(currentTileInscription);
             } else {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             }
@@ -2590,9 +2824,9 @@ export function BoardManager(){
         }
         if (this.isPassageWallBlockingBetween(tile.id, destinationIndex)) {
             if (destTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${destTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(destTileInscription);
             } else if (currentTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${currentTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(currentTileInscription);
             } else {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             }
@@ -2602,9 +2836,9 @@ export function BoardManager(){
         const isDiagonal = Math.abs(destinationCoords[0] - this.playerTile.location[0]) === 1 && Math.abs(destinationCoords[1] - this.playerTile.location[1]) === 1;
         if (isDiagonal && this.isDiagonalPassageBlocked(tile.id, destinationIndex)) {
             if (destTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${destTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(destTileInscription);
             } else if (currentTileInscription) {
-                try { if (this.messaging) this.messaging(`✍ ${currentTileInscription}`); } catch (e) {}
+                this.handleInscriptionRead(currentTileInscription);
             } else {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             }
@@ -2739,7 +2973,7 @@ export function BoardManager(){
         if(this.playerTile.location[0] === 15){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'top') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'top')) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -2758,7 +2992,7 @@ export function BoardManager(){
         if(this.playerTile.location[0] === 29){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'bottom') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'bottom')) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -2777,7 +3011,7 @@ export function BoardManager(){
         if(this.playerTile.location[1] === 15){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'left') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'left')) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -2796,7 +3030,7 @@ export function BoardManager(){
         if(this.playerTile.location[1] === 29){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'right') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'right')) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -2847,8 +3081,6 @@ export function BoardManager(){
                 return 'narrative_visited'
             case 'stairs':
                 return 'stairs_down'
-            case 'door':
-                return 'closed_door'
             case 'dream den':
                 return 'moon_castle'
             case 'dream_den':
@@ -3003,6 +3235,13 @@ export function BoardManager(){
                     const runtimeColor = (e.color && e.color !== 'black' && e.color !== 'white' && e.color !== 'null') ? e.color : null;
                     let boardColor = (persistedColor && persistedColor !== 'black' && persistedColor !== 'white' && persistedColor !== 'null') ? persistedColor : (runtimeColor || null);
                     
+                    if (!isVoid && (boardColor === '#111012' || boardColor === '#0e0e0e')) {
+                        boardColor = '#6b6057';
+                        if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id]) {
+                            this.currentBoard.tiles[e.id].color = '#6b6057';
+                        }
+                    }
+
                     // Sanitize red monster/pygmy indicator colors unless in debug mode.
                     // In normal play, the red highlight should never be visible to the player —
                     // the monster/pygmy image is still rendered via e.image below.
@@ -3013,7 +3252,7 @@ export function BoardManager(){
                         }
                     }
 
-                    e.color = boardColor || (isVoid ? '#0e0e0e' : '#6b6057');
+                    e.color = (!isVoid ? '#6b6057' : (boardColor || '#0e0e0e'));
                     e.image = this.getImageForContains(e.contains, e);
                     e.borders = this.normalizeFogBorders(persistedBorders);
 
@@ -3055,7 +3294,7 @@ export function BoardManager(){
                     }
                 }
             });
-            if (keenEyeLvl >= 2 && this.trapTileIds && this.trapTileIds.size > 0) {
+            if (keenEyeLvl >= 2 && keMetadata.trapVisionEnabled !== false && this.trapTileIds && this.trapTileIds.size > 0) {
                 this.tiles.forEach((tile) => {
                     if (!tile || tile.color === 'black') return; // not visible
                     if (tile.hasTrap) {
@@ -3089,7 +3328,7 @@ export function BoardManager(){
                     const manhattan = Math.abs(coords[0] - playerCoords[0]) + Math.abs(coords[1] - playerCoords[1]);
                     if (manhattan !== 1) return false;
                     if (!visibleTileIds.has(tile.id)) return false;
-                    if (this.isPassageWallBlockingBetween(destinationTile.id, tile.id)) return false;
+                    if (this.isPassageWallBlockingBetween(destinationTile.id, tile.id, { ignoreBuilding: true })) return false;
                     return true;
                 });
 
@@ -3135,7 +3374,7 @@ export function BoardManager(){
                 if (targetTile.color === 'black') return true;
                 const cType = targetTile.contains && (targetTile.contains.type || targetTile.contains);
                 if (cType === 'void_fill' || cType === 'void' || targetTile.type === 'void') return true;
-                if (fromTile && this.isPassageWallBlockingBetween(fromTile.id, targetTile.id)) return true;
+                if (fromTile && this.isPassageWallBlockingBetween(fromTile.id, targetTile.id, { ignoreBuilding: true })) return true;
                 return false;
             };
 
@@ -3156,7 +3395,7 @@ export function BoardManager(){
 
                 // Direct cardinal neighbors
                 if (manhattan === 1) {
-                    tile.partialObscured = this.isPassageWallBlockingBetween(destinationTile.id, tile.id);
+                    tile.partialObscured = this.isPassageWallBlockingBetween(destinationTile.id, tile.id, { ignoreBuilding: true });
                     return;
                 }
 
@@ -3169,8 +3408,8 @@ export function BoardManager(){
                     const horizBlocked = isVoidOrBlackOrBlocked(destinationTile, horizNeighbor);
 
                     if (vertBlocked || horizBlocked ||
-                        (vertNeighbor && this.isPassageWallBlockingBetween(vertNeighbor.id, tile.id)) ||
-                        (horizNeighbor && this.isPassageWallBlockingBetween(horizNeighbor.id, tile.id))) {
+                        (vertNeighbor && this.isPassageWallBlockingBetween(vertNeighbor.id, tile.id, { ignoreBuilding: true })) ||
+                        (horizNeighbor && this.isPassageWallBlockingBetween(horizNeighbor.id, tile.id, { ignoreBuilding: true }))) {
                         tile.partialObscured = true;
                     } else {
                         tile.partialObscured = false;
@@ -3185,7 +3424,7 @@ export function BoardManager(){
                     const midTile = getTileAtCoords(midRow, midCol);
 
                     if (isVoidOrBlackOrBlocked(destinationTile, midTile) ||
-                        (midTile && this.isPassageWallBlockingBetween(midTile.id, tile.id))) {
+                        (midTile && this.isPassageWallBlockingBetween(midTile.id, tile.id, { ignoreBuilding: true }))) {
                         tile.partialObscured = true;
                     } else {
                         tile.partialObscured = false;

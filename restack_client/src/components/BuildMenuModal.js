@@ -248,6 +248,7 @@ class BuildMenuModal extends Component {
                         width: '92%',
                         maxWidth: '780px',
                         maxHeight: '85vh',
+                        minHeight: '620px',
                         background: 'linear-gradient(145deg, rgba(22, 18, 14, 0.98) 0%, rgba(12, 9, 7, 0.99) 100%)',
                         border: '2px solid #e5b54f',
                         borderRadius: '16px',
@@ -413,7 +414,7 @@ class BuildMenuModal extends Component {
                     )}
 
                     {/* Buildings List Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '14px', minHeight: '440px', alignContent: 'start' }}>
                         {visibleBuildings.map((b) => {
                             const imgUrl = images[b.imageKey] || images[b.fallbackImageKey] || images.building;
                             const affordable = this.canAfford(b.costs, available) && !activeConstruction;

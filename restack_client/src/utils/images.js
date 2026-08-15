@@ -235,6 +235,15 @@ import reagent_seaweed from '../assets/icons/potions/reagents/seaweed.png'
 import reagent_stinger from '../assets/icons/potions/reagents/stinger.png'
 import reagent_twig from '../assets/icons/potions/reagents/twig.png'
 
+import mushroom1 from '../assets/icons/food/mushroom1.png'
+import mushroom2 from '../assets/icons/food/mushroom2.png'
+import mushroom3 from '../assets/icons/food/mushroom3.png'
+import mushroom4 from '../assets/icons/food/mushroom4.png'
+import mushroom5 from '../assets/icons/food/mushroom5.png'
+import mushroom6 from '../assets/icons/food/mushroom6.png'
+import mushroom7 from '../assets/icons/food/mushroom7.png'
+import mushroom8 from '../assets/icons/food/mushroom8.png'
+
 // ── Brew ingredients ────────────────────────────────────────────────────────
 import brew_spices from '../assets/icons/brews/spices.png'
 import brew_meat from '../assets/icons/brews/meat.png'
@@ -1204,6 +1213,17 @@ import infernal_tower from '../assets/icons/buildings/infernal tower.png';
 import infernal_pit from '../assets/icons/buildings/infernal pit.png';
 import temple from '../assets/icons/buildings/temple.png';
 
+// ── Generators ─────────────────────────────────────────────────────────────
+import cultivation_vat from '../assets/icons/buildings/cultivation vat.png';
+import larder from '../assets/icons/buildings/larder.png';
+import dust_collector from '../assets/icons/buildings/dust collector.png';
+import domain_monolith from '../assets/icons/buildings/domain monolith.png';
+import dark_domain_monolith from '../assets/icons/buildings/dark domain monolith.png';
+import lumber_mill from '../assets/icons/buildings/lumber mill.png';
+import ore_mine from '../assets/icons/buildings/ore mine.png';
+import slate_mine from '../assets/icons/buildings/slate mine.png';
+import fungal_nursery from '../assets/icons/buildings/fungal nursery.png';
+
 // ── Card Duel Health Orbs ──────────────────────────────────────────────────
 import reaper_health_orb from '../assets/icons/reaper-health-orb.png';
 import crew_health_orb from '../assets/icons/crew-health-orb.png';
@@ -1300,6 +1320,16 @@ export {
     narrative,
     narrative_visited,
     lore_tablet,
+    lore_tablet as tablet,
+    cultivation_vat,
+    larder,
+    dust_collector,
+    domain_monolith,
+    dark_domain_monolith,
+    lumber_mill,
+    ore_mine,
+    slate_mine,
+    fungal_nursery,
     beholder,
     beholder_portrait,
     beholder_minion,
@@ -2325,6 +2355,14 @@ export {
     reagent_nuts,
     reagent_seaweed,
     reagent_stinger,
+    mushroom1,
+    mushroom2,
+    mushroom3,
+    mushroom4,
+    mushroom5,
+    mushroom6,
+    mushroom7,
+    mushroom8,
     reagent_twig,
 
     // ── Brew ingredients ───────────────────────────────────────────────────

@@ -20,6 +20,7 @@ import React, { Component } from 'react';
 import * as images from '../utils/images';
 import DUST_TYPES from '../utils/dusts';
 import { getMeta, storeMeta } from '../utils/session-handler';
+import FreeWillStatBar from './FreeWillStatBar';
 
 // ─── Stat metadata ────────────────────────────────────────────────────────────
 const STAT_META = {
@@ -595,6 +596,9 @@ class LevelUpScreen extends Component {
                                     ))}
                                 </div>
                             </div>
+                        </div>
+                        <div style={{ marginTop: '12px', width: '100%' }}>
+                            <FreeWillStatBar freeWill={getMeta()?.freeWill || 0} animateOnMount={true} delayMs={400} />
                         </div>
                     </div>
 
