@@ -498,7 +498,7 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: (isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || (props.isPlayerOnTile && isHut)) ? 'visible' : 'hidden',
+            overflow: (isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || (props.isPlayerOnTile && isHut) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
             zIndex: isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : undefined),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
@@ -527,13 +527,6 @@ function Tile(props) {
                 if(props.type === 'crew-tile' || props.type === 'inventory-tile'){
                     return props.handleHover(null)
                 } 
-                // else if(props.handleHover && props.type !== 'inventory-tile'){
-                //     return props.handleHover(props.id, props.type, this)
-                // } else if(props.handleHover && props.type === 'inventory-tile'){
-                //     return props.handleHover(props)
-                // } else{
-                //     return null
-                // }
             }}
             onMouseDown={() => {
                 if(props.handleClick){
@@ -558,6 +551,80 @@ function Tile(props) {
                     {edgeLines.right && <div style={{position: 'absolute', top: 0, bottom: 0, right: 0, width: 1, backgroundColor: edgeLines.right, zIndex: 40, pointerEvents: 'none'}} />}
                     {edgeLines.bottom && <div style={{position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: edgeLines.bottom, zIndex: 40, pointerEvents: 'none'}} />}
                 </>
+           )}
+
+           {/* Sabotage Progress Bar under tile (in dungeon) */}
+           { (props.sabotageProgress !== undefined && props.sabotageProgress !== null) && (
+               <div style={{
+                   position: 'absolute',
+                   bottom: '-12px',
+                   left: '1px',
+                   right: '1px',
+                   height: '7px',
+                   backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                   border: '1px solid #f59e0b',
+                   borderRadius: '3px',
+                   padding: '1px',
+                   boxSizing: 'border-box',
+                   zIndex: 60,
+                   pointerEvents: 'none',
+                   boxShadow: '0 2px 6px rgba(0,0,0,0.9)'
+               }}>
+                   <div style={{
+                       width: `${Math.min(100, Math.max(0, props.sabotageProgress * 100))}%`,
+                       height: '100%',
+                       backgroundColor: '#f59e0b',
+                       backgroundImage: 'linear-gradient(90deg, #d97706, #fbbf24)',
+                       borderRadius: '2px',
+                       transition: 'width 0.1s linear',
+                       boxShadow: '0 0 6px rgba(245, 158, 11, 0.8)'
+                   }} />
+               </div>
+           )}
+
+           {/* Monolith Activation Progress Bar under tile (in dungeon) */}
+           { (props.monolithActivationProgress !== undefined && props.monolithActivationProgress !== null) && (
+               <div style={{
+                   position: 'absolute',
+                   bottom: '-12px',
+                   left: '1px',
+                   right: '1px',
+                   height: '7px',
+                   backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                   border: '1px solid #c084fc',
+                   borderRadius: '3px',
+                   padding: '1px',
+                   boxSizing: 'border-box',
+                   zIndex: 60,
+                   pointerEvents: 'none',
+                   boxShadow: '0 2px 6px rgba(0,0,0,0.9)'
+               }}>
+                   <div style={{
+                       width: `${Math.min(100, Math.max(0, props.monolithActivationProgress * 100))}%`,
+                       height: '100%',
+                       backgroundColor: '#c084fc',
+                       backgroundImage: 'linear-gradient(90deg, #9333ea, #d8b4fe)',
+                       borderRadius: '2px',
+                       transition: 'width 0.1s linear',
+                       boxShadow: '0 0 6px rgba(168, 85, 247, 0.8)'
+                   }} />
+               </div>
+           )}
+
+
+           {/* Disabled Outpost Broken Overlay */}
+           { color !== 'black' && (props.isDisabledOutpost || (props.disabledUntil && Date.now() < props.disabledUntil)) && (
+               <div style={{
+                   position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                   backgroundColor: 'rgba(25, 10, 10, 0.75)',
+                   border: '2px dashed #ef4444',
+                   boxShadow: 'inset 0 0 12px rgba(239, 68, 68, 0.7)',
+                   display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                   zIndex: 25, pointerEvents: 'none'
+               }}>
+                   <span style={{ fontSize: '18px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.9))' }}>💥</span>
+                   <span style={{ fontSize: '8px', color: '#fca5a5', fontWeight: 'bold', fontFamily: "'Inter', sans-serif", letterSpacing: '0.5px' }}>DISABLED</span>
+               </div>
            )}
 
            {/* Fog of war / void edge shading — Active when Debug Mode is ON */}
@@ -623,6 +690,7 @@ function Tile(props) {
                      { (props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory) && (() => {
                          const rawClan = props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory;
                          const clan = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : String(rawClan);
+                         if (color === 'black' && clan !== 'player' && clan !== 'crew') return null;
                          let territoryBg = 'rgba(139, 90, 43, 0.45)';
                          let borderColor = 'rgba(179, 120, 73, 0.65)';
                          if (clan === 'cave' || clan === 'cave_clan') {
@@ -640,6 +708,9 @@ function Tile(props) {
                          } else if (clan === 'mud' || clan === 'mud_clan') {
                              territoryBg = 'rgba(139, 90, 43, 0.45)';
                              borderColor = 'rgba(179, 120, 73, 0.65)';
+                         } else if (clan === 'player' || clan === 'crew') {
+                             territoryBg = 'rgba(50, 150, 255, 0.35)';
+                             borderColor = 'rgba(100, 200, 255, 0.65)';
                          }
                          return (
                              <div 
@@ -652,7 +723,7 @@ function Tile(props) {
                                      border: `1px dashed ${borderColor}`,
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
-                                     opacity: (isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') ? 0 : 1, 
+                                     opacity: (clan === 'player' || clan === 'crew') ? 1 : ((isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') ? 0 : 1), 
                                      transition: 'opacity 0.35s ease-in-out'
                                  }} 
                              />
@@ -872,6 +943,17 @@ function Tile(props) {
                 }}>
                     <div className="trap-indicator-overlay" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1}} />
                 </div>
+           )}
+
+           {/* Trap highlight overlay (always on for now) */}
+           { color !== 'black' && props.hasTrap && (
+                <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    border: '2px solid rgba(255, 0, 0, 0.5)',
+                    boxSizing: 'border-box',
+                    zIndex: 26, pointerEvents: 'none',
+                    transition: 'opacity 0.35s ease-in-out'
+                }} />
            )}
 
             {/* Delete option custom white X overlay */}
@@ -1297,10 +1379,12 @@ export function propsAreEqual(prevProps, nextProps) {
     const keysToCompare = [
         'id', 'index', 'type', 'color', 'tileSize', 'hovered', 'selected',
         'isPreview', 'passThrough', 'backgroundColor', 'terrain', 'territory',
-        'isShrine', 'isLoreTablet', 'trapRevealed', 'connectedEdge',
+        'isShrine', 'isLoreTablet', 'trapRevealed', 'hasTrap', 'connectedEdge',
         'partialObscured', 'showCoordinates', 'image', 'imageOverride',
         'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
-        'isPlayerOnTile', 'className', 'illuminated'
+        'isPlayerOnTile', 'className', 'illuminated', 'sabotageProgress', 'monolithActivationProgress',
+        'isDisabledOutpost', 'disabledUntil', 'inscriptions', 'debugMode',
+        'isPlayerTile', 'hasLivingSummoner', 'playerImgKey', 'cursor', 'isFadingOut'
     ];
 
     for (let key of keysToCompare) {

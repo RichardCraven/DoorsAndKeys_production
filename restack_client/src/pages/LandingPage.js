@@ -381,6 +381,18 @@ export default function LandingPage(props) {
       const meta = getMeta() || {};
       if (meta.dungeonId === id) {
         delete meta.dungeonId;
+        delete meta.dungeonEntryTimestamp;
+        delete meta.boardIndex;
+        delete meta.tileIndex;
+        delete meta.location;
+        delete meta.spawnPoint;
+        delete meta.visitedBoards;
+        delete meta.deathTracker;
+        delete meta.scroungeActive;
+        delete meta.scoutActive;
+        delete meta.activatedGenerators;
+        delete meta.disabledOutposts;
+        delete meta.failedMonolithActivations;
         storeMeta(meta);
       }
       setInstanceFeedbackMsg(`Deleted instance "${name}".`);
@@ -644,11 +656,17 @@ export default function LandingPage(props) {
     delete meta.deathTracker;
     delete meta.scroungeActive;
     delete meta.scoutActive;
+    delete meta.activatedGenerators;
+    delete meta.disabledOutposts;
+    delete meta.failedMonolithActivations;
 
     setSelectedDungeonTemplateId(dungeon.id);
     meta.selectedDungeonTemplateId = dungeon.id;
     meta.selectedDungeonTemplateName = dungeon.name;
     storeMeta(meta);
+    if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+        updateUserRequest(getUserId(), meta).catch(() => {});
+    }
     setPendingDungeonSelection(null);
     setShowDungeonPicker(false);
   };

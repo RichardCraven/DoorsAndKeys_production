@@ -5049,7 +5049,7 @@ export default function CombatGrid(props) {
                 }}>
                     {/* Intermediate wrapper that applies the vertical lob translation */}
                     <div style={{
-                        animation: 'acidBlastLobY 0.7s ease-in-out forwards',
+                        animation: 'acidBlastLobY 0.7s linear forwards',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center'
@@ -5097,7 +5097,7 @@ export default function CombatGrid(props) {
                 }}>
                     {/* Intermediate wrapper that applies the vertical lob translation */}
                     <div style={{
-                        animation: 'acidBlastLobY 0.7s ease-in-out forwards',
+                        animation: 'acidBlastLobY 0.7s linear forwards',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center'
@@ -5667,7 +5667,7 @@ export default function CombatGrid(props) {
                         <div style={{
                             width: '100%',
                             height: '100%',
-                            animation: `acidBlastLobY ${durSec} ease-in-out forwards`,
+                            animation: `acidBlastLobY ${durSec} linear forwards`,
                         }}>
                             <div style={{
                                 width: '100%',

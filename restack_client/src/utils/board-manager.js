@@ -279,25 +279,92 @@ export function BoardManager(){
         }
         return null;
     }
+    this.isConnectingPathTile = (tile) => {
+        if (!tile) return false;
+        const boardTile = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id]) || tile;
+        
+        const isMatch = (str) => {
+            if (!str || typeof str !== 'string') return false;
+            const norm = str.toLowerCase().replace(/\s+/g, '_');
+            return norm === 'connecting_path' || norm === 'passage' || norm === 'path' || norm === 'connecting_path_tile';
+        };
+
+        // Check runtime tile
+        const contains = tile.contains;
+        let cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
+        let cSubtype = contains && typeof contains === 'object' ? contains.subtype : null;
+        const bldg = tile.building || (contains && contains.building);
+        const opt = tile.optionType;
+
+        if (isMatch(cType) || isMatch(cSubtype) || isMatch(bldg) || isMatch(opt)) return true;
+        if (tile.isConnectingPath || tile.isPassage || tile.type === 'path' || tile.type === 'connecting_path') return true;
+
+        // Check persistent boardTile
+        if (boardTile && boardTile !== tile) {
+            const bContains = boardTile.contains;
+            let bcType = typeof bContains === 'string' ? bContains : (bContains ? bContains.type : null);
+            let bcSubtype = bContains && typeof bContains === 'object' ? bContains.subtype : null;
+            const bbldg = boardTile.building || (bContains && bContains.building);
+            const bopt = boardTile.optionType;
+
+            if (isMatch(bcType) || isMatch(bcSubtype) || isMatch(bbldg) || isMatch(bopt)) return true;
+            if (boardTile.isConnectingPath || boardTile.isPassage || boardTile.type === 'path' || boardTile.type === 'connecting_path') return true;
+        }
+
+        return false;
+    };
+
     this.isVoidTile = (tile) => {
         if (!tile) return false;
-        
-        const contains = tile.contains;
-        const cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
-        
-        // EXPLICITLY ignore empty_space, obscured_space, connecting_path, and passage
-        if (cType === 'empty_space' || cType === 'obscured_space' || cType === 'connecting_path' || cType === 'passage') return false;
 
-        if (tile.isVoid) return true;
-        if (cType === 'void' || cType === 'empty' || cType === 'void_fill' || cType === 'voidfill') return true;
+        // Connecting path tiles and passages are NEVER void tiles!
+        if (this.isConnectingPathTile(tile)) return false;
+
+        const contains = tile.contains;
+        let cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
+        if (typeof cType === 'string') cType = cType.toLowerCase().replace(/\s+/g, '_');
+
+        // EXPLICITLY ignore empty_space, obscured_space, connecting_path, and passage
+        if (cType === 'empty_space' || cType === 'obscured_space' || cType === 'connecting_path' || cType === 'passage' || cType === 'path') return false;
+
+        // If explicitly marked as NOT void
+        if (tile.isVoid === false || tile.type === 'empty_space' || tile.type === 'path' || tile.type === 'connecting_path') return false;
+
+        // 'empty' usually means Mapmaker void, UNLESS it has a painted terrain
+        if (cType === 'empty') {
+            if (tile.terrain && tile.terrain !== 'void') return false;
+            if (tile.terrain === 'void' || tile.type === 'void' || tile.isVoid || tile.original === 'void') return true;
+            return false;
+        }
+
+        // 'void' explicitly in contains
+        if (cType === 'void' || cType === 'void_fill' || cType === 'voidfill') return true;
+
+        // Mapmaker painted items (spawn, chest, door, monster, item, food) leave tile.type === 'void'.
+        // If it has a non-void 'contains', it is an item/entity, NOT a void!
+        if (contains && cType && cType !== 'empty' && cType !== 'void') {
+            return false;
+        }
+
+        // Check persistent boardTile properties
+        const boardTile = this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id];
+        if (boardTile) {
+            if (boardTile.isVoid === false || boardTile.type === 'empty_space' || boardTile.type === 'path' || boardTile.type === 'connecting_path') return false;
+            if (this.isConnectingPathTile(boardTile)) return false;
+            const bColor = boardTile.color;
+            if (bColor && bColor !== 'black' && bColor !== 'white' && bColor !== 'null' && bColor !== '#0e0e0e') {
+                return false;
+            }
+        }
+
+        // If explicitly set to isVoid = true
+        if (tile.isVoid === true) return true;
+
+        // Fallback: tile.type === 'void' without any non-void overrides
+        if (tile.type === 'void') return true;
 
         if (tile.building || tile.isBuilding || this.isImpassableBuildingTile(tile)) return false;
 
-        if (!contains) {
-            if (tile.original === 'void' || tile.isVoid) return true;
-            return false;
-        }
-        
         return false;
     };
     this.isImpassableBuildingTile = (tile) => {
@@ -1963,6 +2030,7 @@ export function BoardManager(){
         return (typeof c === 'string' && (this.monstersArr.includes(c) || c === 'pygmies'));
     })
     this.handleInteraction = (destinationTile) => {
+        if (!destinationTile) return null;
         // Intercept visited/used narrative and shrines for the current user to bypass interactions
         try {
             const rawType = this.getContainsType(destinationTile.contains);
@@ -2182,9 +2250,9 @@ export function BoardManager(){
             break;
             case 'food':
                 if (this.addFoodToSupplies) {
-                    this.addFoodToSupplies();
+                    this.addFoodToSupplies(destinationTile);
                 }
-                this.removeTileFromBoard(destinationTile)
+                this.removeTileFromBoard(destinationTile);
             break;
             case 'treasure':
                 this.treasurePickupInProgress = true;
@@ -2309,6 +2377,9 @@ export function BoardManager(){
         tile.isFadingOut = false;
         tile.image = null;
         tile.contains = null;
+        tile.isVoid = false;
+        if (tile.type === 'void') tile.type = 'empty_space';
+        if (tile.original === 'void') delete tile.original;
 
         // Restore the tile's original floor color from the persisted board data.
         // 'white' was the previous hard-coded fallback — that value leaked into
@@ -2350,6 +2421,9 @@ export function BoardManager(){
             if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id]) {
                 this.currentBoard.tiles[tile.id].contains = null;
                 this.currentBoard.tiles[tile.id].color = tile.color;
+                this.currentBoard.tiles[tile.id].isVoid = false;
+                if (this.currentBoard.tiles[tile.id].type === 'void') this.currentBoard.tiles[tile.id].type = 'empty_space';
+                if (this.currentBoard.tiles[tile.id].original === 'void') delete this.currentBoard.tiles[tile.id].original;
             }
             // Also update the dungeon structure so persistence will include the cleared tile
             const levelEntry = this.dungeon.levels.find(e => e.id === this.currentLevel.id);
@@ -2359,12 +2433,18 @@ export function BoardManager(){
                     if (b && b.tiles && b.tiles[tile.id]) {
                         b.tiles[tile.id].contains = null;
                         b.tiles[tile.id].color = tile.color;
+                        b.tiles[tile.id].isVoid = false;
+                        if (b.tiles[tile.id].type === 'void') b.tiles[tile.id].type = 'empty_space';
+                        if (b.tiles[tile.id].original === 'void') delete b.tiles[tile.id].original;
                     }
                 } else if (this.currentOrientation === 'B' && levelEntry.back && levelEntry.back.miniboards) {
                     const b = levelEntry.back.miniboards.find(bi => bi.id === this.currentBoard.id);
                     if (b && b.tiles && b.tiles[tile.id]) {
                         b.tiles[tile.id].contains = null;
                         b.tiles[tile.id].color = tile.color;
+                        b.tiles[tile.id].isVoid = false;
+                        if (b.tiles[tile.id].type === 'void') b.tiles[tile.id].type = 'empty_space';
+                        if (b.tiles[tile.id].original === 'void') delete b.tiles[tile.id].original;
                     }
                 }
             }
@@ -2619,15 +2699,13 @@ export function BoardManager(){
                 const currentTileIdx = this.getIndexFromCoordinates(pCoords);
                 const currentTile = this.tiles[currentTileIdx];
                 if (!currentTile) return false;
-                
-                const cType = this.getContainsType(currentTile.contains) || currentTile.contains?.type;
-                const isPassage = cType === 'connecting_path' || cType === 'passage' || currentTile.building === 'connecting_path' || currentTile.optionType === 'passage';
-                if (!isPassage) return false;
+
+                if (!this.isConnectingPathTile(currentTile)) return false;
 
                 let plane = this.currentOrientation === 'F' ? this.currentLevel?.front : this.currentLevel?.back;
                 if (!plane) plane = this.currentLevel?.front || this.currentLevel?.back || this.currentLevel;
                 if (!plane || !plane.miniboards) return false;
-                
+
                 const bIdx = this.playerTile.boardIndex;
                 if (direction === 'up') {
                     if (this.hasSolidBorder(currentTile, 'top') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
@@ -2895,7 +2973,7 @@ export function BoardManager(){
         if(this.playerTile.location[0] === 15){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'top') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'top')) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -2914,7 +2992,7 @@ export function BoardManager(){
         if(this.playerTile.location[0] === 29){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'bottom') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'bottom')) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -2933,7 +3011,7 @@ export function BoardManager(){
         if(this.playerTile.location[1] === 15){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'left') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'left')) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -2952,7 +3030,7 @@ export function BoardManager(){
         if(this.playerTile.location[1] === 29){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (this.getContainsType(currentTile.contains) !== 'connecting_path' || this.hasSolidBorder(currentTile, 'right') || (this.isVoidTile && this.isVoidTile(currentTile))) {
+            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'right')) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3216,7 +3294,7 @@ export function BoardManager(){
                     }
                 }
             });
-            if (keenEyeLvl >= 2 && this.trapTileIds && this.trapTileIds.size > 0) {
+            if (keenEyeLvl >= 2 && keMetadata.trapVisionEnabled !== false && this.trapTileIds && this.trapTileIds.size > 0) {
                 this.tiles.forEach((tile) => {
                     if (!tile || tile.color === 'black') return; // not visible
                     if (tile.hasTrap) {

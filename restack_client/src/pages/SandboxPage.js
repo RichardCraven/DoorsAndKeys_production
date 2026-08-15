@@ -5665,8 +5665,8 @@ const SandboxPage = () => {
           100% { opacity: 0.15; }
         }
         @keyframes acidBlastLobY {
-          0% { transform: translateY(0px); }
-          50% { transform: translateY(-70px); }
+          0% { transform: translateY(0px); animation-timing-function: ease-out; }
+          50% { transform: translateY(-70px); animation-timing-function: ease-in; }
           100% { transform: translateY(0px); }
         }
         @keyframes bubbleWobble {
