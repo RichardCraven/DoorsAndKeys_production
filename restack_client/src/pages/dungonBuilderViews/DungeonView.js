@@ -279,42 +279,47 @@ class DungeonView extends React.Component {
             : levelData.backPassages;
 
         passages.forEach((p, index) => {
+            if (!p) return;
             const boardIndex = p.miniboardIndex;
             if (typeof boardIndex !== 'number') return;
+
+            const pCoords = (p.coordinates && Array.isArray(p.coordinates) && p.coordinates.length >= 2 && p.coordinates[0] !== undefined && p.coordinates[0] !== null)
+                ? p.coordinates
+                : (typeof p.id === 'number' ? [p.id % 15, Math.floor(p.id / 15)] : [0, 0]);
 
             // pixel origin of this board within the full-plane canvas
             const originX = cols[boardIndex] * planeSize;
             const originY = rows[boardIndex] * planeSize;
 
-            const px = originX + unit * p.coordinates[0] + unit / 2;
-            const py = originY + unit * p.coordinates[1] + unit / 2;
+            const px = originX + unit * pCoords[0] + unit / 2;
+            const py = originY + unit * pCoords[1] + unit / 2;
 
             const isConnected = levelData.connected.some(c => c.locationCode === p.locationCode);
             const pType = this.getPassageType(p);
 
             if (pType === 'door' && isConnected) {
-                const dx = originX + unit * p.coordinates[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
-                const dy = originY + unit * p.coordinates[1];
+                const dx = originX + unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
+                const dy = originY + unit * pCoords[1];
                 const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
                 ctx.drawImage(this.props.imagesMatrix['doorImg'], dx, dy, size, size);
 
             } else if (pType === 'way_up') {
-                const dx = originX + unit * p.coordinates[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
-                const dy = originY + unit * p.coordinates[1];
+                const dx = originX + unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
+                const dy = originY + unit * pCoords[1];
                 const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
                 const imageKey = isConnected ? 'arrowUpImg' : 'arrowUpImgInvalid';
                 ctx.drawImage(this.props.imagesMatrix[imageKey], dx, dy, size, size);
 
             } else if (pType === 'way_down') {
-                const dx = originX + unit * p.coordinates[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
-                const dy = originY + unit * p.coordinates[1];
+                const dx = originX + unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
+                const dy = originY + unit * pCoords[1];
                 const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
                 const imageKey = isConnected ? 'arrowDownImg' : 'arrowDownImgInvalid';
                 ctx.drawImage(this.props.imagesMatrix[imageKey], dx, dy, size, size);
 
             } else if (pType === 'spawn_point') {
-                const dx = originX + unit * p.coordinates[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
-                const dy = originY + unit * p.coordinates[1];
+                const dx = originX + unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
+                const dy = originY + unit * pCoords[1];
                 const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
                 ctx.drawImage(this.props.imagesMatrix['spawnPointImg'], dx, dy, size, size);
 
@@ -328,21 +333,53 @@ class DungeonView extends React.Component {
         });
     }
 
+    getPortalCanvasPos = (p, ctxCanvas) => {
+        if (!p || !this.props.loadedDungeon || !Array.isArray(this.props.loadedDungeon.levels)) return null;
+
+        const tileSize = this.props.tileSize || 48;
+        const planeSize = tileSize * 6;
+        const mbSize = tileSize * 2;
+        const unit = mbSize / 15;
+
+        const mbIndex = (p.miniboardIndex !== null && p.miniboardIndex !== undefined) ? p.miniboardIndex : 0;
+        const mbCol = mbIndex % 3;
+        const mbRow = Math.floor(mbIndex / 3);
+
+        const coords = (p.coordinates && Array.isArray(p.coordinates) && p.coordinates.length >= 2 && p.coordinates[0] !== undefined)
+            ? p.coordinates
+            : (typeof p.tileId === 'number' ? [p.tileId % 15, Math.floor(p.tileId / 15)] : [0, 0]);
+
+        const isBack = p.orientation === 'back';
+        const planeX = isBack ? (planeSize + 40) : 0;
+        const tileX = planeX + mbCol * mbSize + coords[0] * unit + unit / 2;
+
+        const sortedLevels = this.props.loadedDungeon.levels.slice().sort((a, b) => b.id - a.id);
+        const levelIndex = sortedLevels.findIndex(l => String(l.id) === String(p.levelId));
+        const lvlIdx = levelIndex !== -1 ? levelIndex : 0;
+
+        const levelY = lvlIdx * (planeSize + 36);
+        const tileY = levelY + mbRow * mbSize + coords[1] * unit + unit / 2 + 45;
+
+        return { x: tileX, y: tileY };
+    }
+
     drawPortalConnections = (ctx, frameCount) => {
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
         if (!this.props.loadedDungeon || !this.props.overlayData) return;
 
         const allPortals = this.props.mapMaker.getAllPortalsInDungeon(this.props.loadedDungeon);
+        if (!allPortals || allPortals.length === 0) return;
+
         const canvasRect = ctx.canvas.getBoundingClientRect();
 
         ctx.save();
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 3.5;
         ctx.strokeStyle = '#a855f7'; // vibrant purple
         ctx.shadowColor = '#ec4899'; // glowing pink
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 10;
         ctx.lineJoin = 'round';
-        ctx.setLineDash([6, 6]);
+        ctx.setLineDash([8, 6]);
         ctx.lineDashOffset = -frameCount * 0.5;
 
         const drawnPairs = new Set();
@@ -350,24 +387,34 @@ class DungeonView extends React.Component {
         allPortals.forEach((p) => {
             if (!p.portalId || !p.targetPortalId) return;
 
-            // Require link reciprocity: ensure target portal exists and points back to this portal
-            const targetPortal = allPortals.find(x => x.portalId === p.targetPortalId);
-            if (!targetPortal || targetPortal.targetPortalId !== p.portalId) return;
+            const targetPortal = allPortals.find(x => x.portalId === p.targetPortalId || (x.targetPortalId === p.portalId && String(x.levelId) === String(p.targetLevelId)));
+            if (!targetPortal) return;
 
-            const pairKey = [p.portalId, p.targetPortalId].sort().join('-');
+            const targetId = targetPortal.portalId || p.targetPortalId;
+            const pairKey = [p.portalId, targetId].sort().join('-');
             if (drawnPairs.has(pairKey)) return;
 
-            const elA = document.querySelector(`[data-portal-id="${p.portalId}"]`);
-            const elB = document.querySelector(`[data-portal-id="${p.targetPortalId}"]`);
+            let posA = null;
+            let posB = null;
 
-            if (elA && elB) {
+            const elA = document.querySelector(`[data-portal-id="${p.portalId}"]`);
+            const elB = document.querySelector(`[data-portal-id="${targetId}"]`);
+
+            if (elA && elB && canvasRect.width > 0) {
                 const rectA = elA.getBoundingClientRect();
                 const rectB = elB.getBoundingClientRect();
+                posA = { x: rectA.left - canvasRect.left + rectA.width / 2, y: rectA.top - canvasRect.top + rectA.height / 2 };
+                posB = { x: rectB.left - canvasRect.left + rectB.width / 2, y: rectB.top - canvasRect.top + rectB.height / 2 };
+            } else {
+                posA = this.getPortalCanvasPos(p, ctx.canvas);
+                posB = this.getPortalCanvasPos(targetPortal, ctx.canvas);
+            }
 
-                const x1 = rectA.left - canvasRect.left + rectA.width / 2;
-                const y1 = rectA.top - canvasRect.top + rectA.height / 2;
-                const x2 = rectB.left - canvasRect.left + rectB.width / 2;
-                const y2 = rectB.top - canvasRect.top + rectB.height / 2;
+            if (posA && posB) {
+                const x1 = posA.x;
+                const y1 = posA.y;
+                const x2 = posB.x;
+                const y2 = posB.y;
 
                 ctx.beginPath();
                 ctx.moveTo(x1, y1);
@@ -423,57 +470,35 @@ class DungeonView extends React.Component {
                 const that = this;
                 ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
                 passages.forEach((p, index)=>{
-                    // if(data.levelId === 1 && data.orientation === 'front' && data.index === 4){
-                    // ...existing code...
-                    // ...existing code...
-                    // }
-                    // ctx.fillStyle = fillStyle
-                    let x = unit*p.coordinates[0] + unit/2
-                    let y = unit*p.coordinates[1] + unit/2
-                    let isConnected = levelData.connected.some(x => x.locationCode === p.locationCode)
+                    if (!p) return;
+                    const pCoords = (p.coordinates && Array.isArray(p.coordinates) && p.coordinates.length >= 2 && p.coordinates[0] !== undefined && p.coordinates[0] !== null)
+                        ? p.coordinates
+                        : (typeof p.id === 'number' ? [p.id % 15, Math.floor(p.id / 15)] : [0, 0]);
+                    let x = unit*pCoords[0] + unit/2
+                    let y = unit*pCoords[1] + unit/2
+                    let isConnected = levelData.connected ? levelData.connected.some(x => x && x.locationCode === p.locationCode) : false
                     const pType = this.getPassageType(p);
                     if(pType === 'door' && isConnected){
-                        let x = unit*p.coordinates[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
-                        let y = unit*p.coordinates[1]
+                        let x = unit*pCoords[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
+                        let y = unit*pCoords[1]
                         let size = 20 + Math.sin(frameCount * 0.04)**2 * 5
                         let imageKey = 'doorImg'
                         ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
                     } else if(pType === 'way_up'){
-                        let x = unit*p.coordinates[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
-                        let y = unit*p.coordinates[1]
+                        let x = unit*pCoords[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
+                        let y = unit*pCoords[1]
                         let imageKey = isConnected ? 'arrowUpImg' : 'arrowUpImgInvalid'
-
-                        
-
-                        // ...existing code...
                         let size = 20 + Math.sin(frameCount * 0.04)**2 * 5;
-                        if(data.levelId === 0 && data.orientation === 'front' && data.index === 4){
-                            // ...existing code...
-                            // ...existing code...
-                            // ...existing code...
-                            // x = 10; y = 10
-                            // ...existing code...
-                            // ctx.drawImage(this.props.imagesMatrix[imageKey], 100, 100, size, size);
-                        }
                         ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
                     } else if(pType === 'way_down'){
-                        let x = unit*p.coordinates[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
-                        let y = unit*p.coordinates[1]
+                        let x = unit*pCoords[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
+                        let y = unit*pCoords[1]
                         let size = 20 + Math.sin(frameCount * 0.04)**2 * 5
                         let imageKey = isConnected ? 'arrowDownImg' : 'arrowDownImgInvalid'
-                   
-                        if(data.levelId === 1 && data.orientation === 'front' && data.index === 4){
-                            // ...existing code...
-                            // x = 10; y = 10
-                            // ...existing code...
-                            // ...existing code...
-                            // ...existing code...
-                        }
-                        // ctx.drawImage(this.props.imagesMatrix[imageKey], 120, 120, size, size);
                         ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
                     } else if(pType === 'spawn_point'){
-                        let x = unit*p.coordinates[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
-                        let y = unit*p.coordinates[1]
+                        let x = unit*pCoords[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
+                        let y = unit*pCoords[1]
                         let size = 20 + Math.sin(frameCount * 0.04)**2 * 5
                         const imageKey = 'spawnPointImg';
                         ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
@@ -483,99 +508,101 @@ class DungeonView extends React.Component {
                         ctx.fillStyle = that.getPassageColors(p.contains)
                         ctx.arc(x, y, 3.5*Math.sin(frameCount*0.03 + index)**2 + minVal, 0, 2*Math.PI)
                         ctx.fill()  
-                        // x ** 2 is the x squared
                     }
                 }) 
             }
 
-            if(data.orientation === 'doublewide'){
-                let miniboardSize = this.props.tileSize*2;
-                let planeHeight = this.props.tileSize*6;
-                let unit = planeHeight/(this.props.tileSize*6);
-                ctx.fillStyle = 'red'
-                
-                let cols = [1,2,3,1,2,3,1,2,3]
-                let rows = [1,1,1,2,2,2,3,3,3]
+            if (data.orientation === 'doublewide' && Array.isArray(levelData.connected)) {
+                const tileSize = this.props.tileSize || 48;
+                const mbSize = tileSize * 2;
+                const microUnit = mbSize / 15;
+                const planeHeight = tileSize * 6;
 
-                levelData.connected.forEach((lim)=>{
-                    let row = rows[lim.miniboardIndex] 
-                    let col = cols[lim.miniboardIndex] 
-                    let originPointX = (miniboardSize * col) - miniboardSize + (unit * 2)
-                    let originPointX_back = ((3*miniboardSize) + miniboardSize * col) - miniboardSize + (unit * 2) 
-                    let originPointY = (miniboardSize * row) - miniboardSize + (unit * 2);
-                    let microUnit = miniboardSize/15;
-                    let connectedTo = lim.connectedTo;
-                    if(connectedTo.level !== lim.level) return
-                    // doors only for now ^
+                levelData.connected.forEach((lim) => {
+                    if (!lim) return;
+                    const connectedTo = lim.connectedTo;
+                    if (!connectedTo || connectedTo.level !== lim.level) return;
 
-                    let x = microUnit*lim.coordinates[0] + (unit * 2) 
-                    let y = microUnit*lim.coordinates[1] + (unit * 2) ,
-                    newOriginX = (originPointX + x) + (unit * 2) ,
-                    newOriginY = (originPointY + y) + (unit * 2) ,
-                    destinationX_back = (originPointX_back + x) + (unit * 4) ,
-                    destinationY_back = (originPointY + y) + (unit * 4) 
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = '#ca8a04'; // dark yellow / gold for front-to-back door connection
+                    const limCoords = (lim.coordinates && Array.isArray(lim.coordinates) && lim.coordinates.length >= 2 && lim.coordinates[0] !== undefined && lim.coordinates[0] !== null)
+                        ? lim.coordinates
+                        : (typeof lim.tileId === 'number' ? [lim.tileId % 15, Math.floor(lim.tileId / 15)] : (typeof lim.id === 'number' ? [lim.id % 15, Math.floor(lim.id / 15)] : [0, 0]));
+
+                    const targetCoords = (connectedTo.coordinates && Array.isArray(connectedTo.coordinates) && connectedTo.coordinates.length >= 2 && connectedTo.coordinates[0] !== undefined && connectedTo.coordinates[0] !== null)
+                        ? connectedTo.coordinates
+                        : (typeof connectedTo.tileId === 'number' ? [connectedTo.tileId % 15, Math.floor(connectedTo.tileId / 15)] : (typeof connectedTo.id === 'number' ? [connectedTo.id % 15, Math.floor(connectedTo.id / 15)] : limCoords));
+
+                    const limMbIdx = (lim.miniboardIndex !== undefined && lim.miniboardIndex !== null) ? lim.miniboardIndex : 0;
+                    const limMbCol = limMbIdx % 3;
+                    const limMbRow = Math.floor(limMbIdx / 3);
+
+                    const targetMbIdx = (connectedTo.miniboardIndex !== undefined && connectedTo.miniboardIndex !== null) ? connectedTo.miniboardIndex : limMbIdx;
+                    const targetMbCol = targetMbIdx % 3;
+                    const targetMbRow = Math.floor(targetMbIdx / 3);
+
+                    const startX = limMbCol * mbSize + limCoords[0] * microUnit + microUnit / 2;
+                    const startY = limMbRow * mbSize + limCoords[1] * microUnit + microUnit / 2;
+
+                    const endX = planeHeight + targetMbCol * mbSize + targetCoords[0] * microUnit + microUnit / 2;
+                    const endY = targetMbRow * mbSize + targetCoords[1] * microUnit + microUnit / 2;
+
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeStyle = '#ca8a04'; // dark yellow / gold
+                    ctx.shadowColor = '#fef08a';
+                    ctx.shadowBlur = 6;
                     ctx.beginPath();
-                    ctx.moveTo(newOriginX,newOriginY);
-                    
-                    // If the door is in the bottom half of the plane, arch the curve upwards
-                    // to prevent it from drooping below the bottom boundary.
-                    let bendDir = newOriginY > (planeHeight / 2) ? -1 : 1;
-                    let controlOffset = 100 * bendDir;
-                    let bezierControlPoint1 = {x: newOriginX, y: newOriginY + controlOffset}
-                    let bezierControlPoint2 = {x:destinationX_back, y: newOriginY + controlOffset}
-                    ctx.bezierCurveTo(bezierControlPoint1.x, bezierControlPoint1.y, bezierControlPoint2.x, bezierControlPoint2.y, destinationX_back, destinationY_back)
+                    ctx.moveTo(startX, startY);
+
+                    const midX = (startX + endX) / 2;
+                    const bendDir = startY > (planeHeight / 2) ? -1 : 1;
+                    const controlOffset = 40 * bendDir;
+
+                    const c1 = { x: midX, y: startY + controlOffset };
+                    const c2 = { x: midX, y: endY + controlOffset };
+                    ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, endX, endY);
                     ctx.stroke();
-                })
+                });
             }
-            if(data.orientation === 'doubletall_F' || data.orientation === 'doubletall_B'){
-                // const isFront = data.orientation.split('_')[1] === 'F'
-                // const isBack = data.orientation.split('_')[1] === 'B'
-                let miniboardSize = this.props.tileSize*2;
-                let planeHeight = this.props.tileSize*6;
-                let unit = planeHeight/(this.props.tileSize*6);
-                // ctx.fillStyle = 'red'
-                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-                let cols = [1,2,3,1,2,3,1,2,3]
-                let rows = [1,1,1,2,2,2,3,3,3]
-                // if(levelData.passages)
-                levelData.connected.filter(e=>e.type==='way_up').forEach((lim)=>{
-                    // ...existing code...
-                    let row = rows[lim.miniboardIndex] 
-                    let col = cols[lim.miniboardIndex] 
-                    let originPointX = (miniboardSize * col) - miniboardSize + (unit * 2)
-                    // let originPointX_back = ((3*miniboardSize) + miniboardSize * col) - miniboardSize + (unit * 2) 
-                    let originPointY = (miniboardSize * row) - miniboardSize + (unit * 2);
-                    let originPointY_up = ((3*miniboardSize) + miniboardSize * row) - miniboardSize + (unit * 2) 
-                    let microUnit = miniboardSize/15;
-                    // let connectedTo = lim.connectedTo;
-                    // if(connectedTo.level !== lim.level) return
-                    
-                    // doors only for now ^
 
-                    let x = microUnit*lim.coordinates[0] + (unit * 2) 
-                    let y = microUnit*lim.coordinates[1] + (unit * 2) ,
-                    newOriginX = (originPointX + x)  ,
-                    newOriginY = (originPointY + y) + (unit * 2) ,
-                    destinationX_up = (originPointX + x)  ,
-                    destinationY_up = (originPointY_up + y) + (unit * 2) 
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = 'lightgreen'
+            if ((data.orientation === 'doubletall_F' || data.orientation === 'doubletall_B') && Array.isArray(levelData.connected)) {
+                const tileSize = this.props.tileSize || 48;
+                const mbSize = tileSize * 2;
+                const microUnit = mbSize / 15;
+                const planeWidth = tileSize * 6;
+
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+
+                levelData.connected.filter(e => e && e.type === 'way_up').forEach((lim) => {
+                    if (!lim) return;
+
+                    const limCoords = (lim.coordinates && Array.isArray(lim.coordinates) && lim.coordinates.length >= 2 && lim.coordinates[0] !== undefined && lim.coordinates[0] !== null)
+                        ? lim.coordinates
+                        : (typeof lim.tileId === 'number' ? [lim.tileId % 15, Math.floor(lim.tileId / 15)] : (typeof lim.id === 'number' ? [lim.id % 15, Math.floor(lim.id / 15)] : [0, 0]));
+
+                    const limMbIdx = (lim.miniboardIndex !== undefined && lim.miniboardIndex !== null) ? lim.miniboardIndex : 0;
+                    const limMbCol = limMbIdx % 3;
+                    const limMbRow = Math.floor(limMbIdx / 3);
+
+                    const startX = limMbCol * mbSize + limCoords[0] * microUnit + microUnit / 2;
+                    const startY = limMbRow * mbSize + limCoords[1] * microUnit + microUnit / 2;
+
+                    const endX = startX;
+                    const endY = planeWidth + limMbRow * mbSize + limCoords[1] * microUnit + microUnit / 2;
+
+                    ctx.lineWidth = 2.5;
+                    ctx.strokeStyle = '#4ade80';
+                    ctx.shadowColor = '#86efac';
+                    ctx.shadowBlur = 6;
                     ctx.beginPath();
-                    ctx.moveTo(newOriginX,newOriginY);
-                    
-                    // If the door is on the right half of the plane, arch the curve to the left (-50)
-                    // If the door is on the left half of the plane, arch the curve to the right (+50)
-                    // to prevent the curve from going off the left/right boundaries of the canvas.
-                    let planeWidth = this.props.tileSize * 6;
-                    let bendDirH = newOriginX > (planeWidth / 2) ? -1 : 1;
-                    let controlOffsetH = 50 * bendDirH;
-                    let bezierControlPoint1 = {x: newOriginX + controlOffsetH, y: newOriginY}
-                    let bezierControlPoint2 = {x: newOriginX + controlOffsetH, y: destinationY_up}
-                    ctx.bezierCurveTo(bezierControlPoint1.x, bezierControlPoint1.y, bezierControlPoint2.x, bezierControlPoint2.y, destinationX_up, destinationY_up)
+                    ctx.moveTo(startX, startY);
+
+                    const bendDirH = startX > (planeWidth / 2) ? -1 : 1;
+                    const controlOffsetH = 50 * bendDirH;
+
+                    const c1 = { x: startX + controlOffsetH, y: startY };
+                    const c2 = { x: startX + controlOffsetH, y: endY };
+                    ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, endX, endY);
                     ctx.stroke();
-                })
+                });
             }
         }
     }
@@ -710,7 +737,7 @@ class DungeonView extends React.Component {
                                                 />
                                             </div>}
                                             <div className="horizontal-connecting-canvas-wrapper">
-                                               {this.props.overlayData && <Canvas 
+                                               {this.props.overlayData && level.back && Array.isArray(level.back.miniboards) && level.back.miniboards.some(mb => mb && !mb.isEmptyBoard && Array.isArray(mb.tiles) && mb.tiles.some(t => t && t.contains)) && <Canvas 
                                                 className="doublewide-canvas"
                                                 width={this.props.tileSize*12}
                                                 height={this.props.tileSize*6}

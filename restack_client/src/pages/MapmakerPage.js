@@ -975,7 +975,10 @@ class MapMakerPage extends React.Component {
     const targetTile = nextTiles[toTileId];
     let modified = false;
 
-    if (sourceTile && (sourceTile.contains?.type === 'passage' || sourceTile.contains?.type === 'obscured_space')) {
+    const sourceContainsType = sourceTile ? this.getContainsType(sourceTile.contains) : null;
+    const targetContainsType = targetTile ? this.getContainsType(targetTile.contains) : null;
+
+    if (sourceTile && sourceContainsType !== 'void' && sourceContainsType !== null) {
       const currentBorder = sourceTile.borders?.[fromSide];
       const isGold = currentBorder && String(currentBorder).includes('#d4a844');
       if (!isGold) {
@@ -990,7 +993,7 @@ class MapMakerPage extends React.Component {
       }
     }
 
-    if (targetTile && (targetTile.contains?.type === 'passage' || targetTile.contains?.type === 'obscured_space')) {
+    if (targetTile && targetContainsType !== 'void' && targetContainsType !== null) {
       const currentBorder = targetTile.borders?.[toSide];
       const isGold = currentBorder && String(currentBorder).includes('#d4a844');
       if (!isGold) {
@@ -1661,6 +1664,14 @@ class MapMakerPage extends React.Component {
       });
     }
 
+    const tileACoords = (tile.coordinates && Array.isArray(tile.coordinates) && tile.coordinates[0] !== undefined)
+      ? tile.coordinates
+      : [tile.id % 15, Math.floor(tile.id / 15)];
+
+    const tileBCoords = (target.coordinates && Array.isArray(target.coordinates) && target.coordinates[0] !== undefined)
+      ? target.coordinates
+      : (target.tileId !== undefined && target.tileId !== null ? [target.tileId % 15, Math.floor(target.tileId / 15)] : [0, 0]);
+
     const updatedPortalAContains = {
       ...portalA,
       type: 'dungeon_portal',
@@ -1669,7 +1680,8 @@ class MapMakerPage extends React.Component {
       targetLevelId: target.levelId,
       targetOrientation: target.orientation,
       targetMiniboardIndex: target.miniboardIndex,
-      targetCoordinates: target.coordinates
+      targetTileId: target.tileId,
+      targetCoordinates: tileBCoords
     };
 
     const updatedPortalBContains = {
@@ -1680,26 +1692,27 @@ class MapMakerPage extends React.Component {
       targetLevelId: currentLvlId,
       targetOrientation: currentOrientation,
       targetMiniboardIndex: currentMiniboardIdx,
-      targetCoordinates: tile.coordinates
+      targetTileId: tile.id,
+      targetCoordinates: tileACoords
     };
 
     // Update Portal A and Portal B in dungeon levels
     if (dungeon && Array.isArray(dungeon.levels)) {
       // Find and update Portal A in dungeon
       if (currentLvlId !== null && currentLvlId !== undefined) {
-        const curLvlObj = dungeon.levels.find(l => l.id === currentLvlId);
+        const curLvlObj = dungeon.levels.find(l => String(l.id) === String(currentLvlId));
         const curPlaneObj = curLvlObj && curLvlObj[currentOrientation];
-        const curMbObj = curPlaneObj && curPlaneObj.miniboards[currentMiniboardIdx];
-        if (curMbObj && curMbObj.tiles[tile.id]) {
+        const curMbObj = curPlaneObj && curPlaneObj.miniboards && curPlaneObj.miniboards[currentMiniboardIdx];
+        if (curMbObj && curMbObj.tiles && curMbObj.tiles[tile.id]) {
           curMbObj.tiles[tile.id].contains = updatedPortalAContains;
         }
       }
       // Find and update Portal B in dungeon
       if (target.levelId !== null && target.levelId !== undefined) {
-        const targetLvlObj = dungeon.levels.find(l => l.id === target.levelId);
+        const targetLvlObj = dungeon.levels.find(l => String(l.id) === String(target.levelId));
         const targetPlaneObj = targetLvlObj && targetLvlObj[target.orientation];
-        const targetMbObj = targetPlaneObj && targetPlaneObj.miniboards[target.miniboardIndex];
-        if (targetMbObj && targetMbObj.tiles[target.tileId]) {
+        const targetMbObj = targetPlaneObj && targetPlaneObj.miniboards && targetPlaneObj.miniboards[target.miniboardIndex];
+        if (targetMbObj && targetMbObj.tiles && targetMbObj.tiles[target.tileId]) {
           targetMbObj.tiles[target.tileId].contains = updatedPortalBContains;
         }
       } else {
@@ -1726,12 +1739,12 @@ class MapMakerPage extends React.Component {
     // Update loadedBoard
     if (loadedBoard && Array.isArray(loadedBoard.tiles)) {
       const isPortalAOnBoard = (currentLvlId === null) ||
-        (dungeon && loadedBoard && dungeon.levels.some(l => l.id === currentLvlId && ['front', 'back'].some(o => l[o]?.miniboards[currentMiniboardIdx]?.id === loadedBoard.id)));
+        (dungeon && loadedBoard && dungeon.levels.some(l => String(l.id) === String(currentLvlId) && ['front', 'back'].some(o => l[o]?.miniboards[currentMiniboardIdx]?.id === loadedBoard.id)));
       if (isPortalAOnBoard && loadedBoard.tiles[tile.id]) {
         loadedBoard.tiles[tile.id].contains = updatedPortalAContains;
       }
       const isPortalBOnBoard = (target.levelId === null) ||
-        (dungeon && loadedBoard && dungeon.levels.some(l => l.id === target.levelId && ['front', 'back'].some(o => l[o]?.miniboards[target.miniboardIndex]?.id === loadedBoard.id)));
+        (dungeon && loadedBoard && dungeon.levels.some(l => String(l.id) === String(target.levelId) && ['front', 'back'].some(o => l[o]?.miniboards[target.miniboardIndex]?.id === loadedBoard.id)));
       if (isPortalBOnBoard && loadedBoard.tiles[target.tileId]) {
         loadedBoard.tiles[target.tileId].contains = updatedPortalBContains;
       }
@@ -1743,8 +1756,9 @@ class MapMakerPage extends React.Component {
       ...nextTiles[tile.id],
       contains: updatedPortalAContains
     };
+
     const isSameBoard = (currentLvlId !== null)
-      ? (target.levelId === currentLvlId && target.orientation === currentOrientation && target.miniboardIndex === currentMiniboardIdx)
+      ? (String(target.levelId) === String(currentLvlId) && target.orientation === currentOrientation && target.miniboardIndex === currentMiniboardIdx)
       : (target.levelId === null && target.orientation === null && target.miniboardIndex === null);
 
     if (isSameBoard && nextTiles[target.tileId]) {
@@ -1762,6 +1776,10 @@ class MapMakerPage extends React.Component {
       boardHasUnsavedChanges: true,
       portalModalTile: nextTiles[tile.id]
     });
+
+    if (typeof this.props.writeDungeon === 'function' && dungeon) {
+      this.props.writeDungeon(dungeon);
+    }
     this.toast('Portals linked successfully!');
   }
 
@@ -2382,9 +2400,16 @@ class MapMakerPage extends React.Component {
         }
 
         setTimeout(() => {
-          const currentPlane = planesToUpdate.find(p => p.id === this.state.loadedPlane?.id || p.name === this.state.loadedPlane?.name) || planesToUpdate[0];
-          const updatedPlane = this.state.planes.find(p => p.id === currentPlane.id || p.name === currentPlane.name);
-          this.loadPlane(updatedPlane || currentPlane);
+          if (planesToUpdate.length > 0) {
+            const currentPlane = planesToUpdate.find(p => p.id === this.state.loadedPlane?.id || p.name === this.state.loadedPlane?.name) || planesToUpdate[0];
+            if (currentPlane) {
+              const updatedPlane = this.state.planes.find(p => p.id === currentPlane.id || p.name === currentPlane.name);
+              this.loadPlane(updatedPlane || currentPlane);
+            }
+          } else if (this.state.loadedPlane) {
+            const updatedPlane = this.state.planes.find(p => p.id === this.state.loadedPlane.id || p.name === this.state.loadedPlane.name);
+            if (updatedPlane) this.loadPlane(updatedPlane);
+          }
         })
       } else if (this.state.loadedBoard) {
         let obj = {
@@ -3146,7 +3171,7 @@ class MapMakerPage extends React.Component {
                 if (cTile && cTile.contains) {
                   const type = cTile.contains.type || cTile.contains;
                   if (type === 'dungeon_portal' || type === 'dungeon portal' || type === 'portal' || type === 'teleporter') {
-                    const matchedTile = cloned.tiles.find(t => t.id === cTile.id);
+                    const matchedTile = cloned.tiles.find(t => t && t.id === cTile.id);
                     if (matchedTile && matchedTile.contains) {
                       matchedTile.contains.targetPortalId = cTile.contains.targetPortalId;
                       matchedTile.contains.targetLevelId = cTile.contains.targetLevelId;
@@ -7259,16 +7284,23 @@ class MapMakerPage extends React.Component {
                   });
                 }
 
-                const locStr = currentLvlId !== null
-                  ? `Lvl ${currentLvlId} (${currentOrientation === 'front' ? 'Front' : 'Back'}) Board ${currentMiniboardIdx + 1} at [${tile.coordinates}]`
-                  : `Board Tile at [${tile.coordinates}]`;
+                const formatCoords = (c, tileId) => {
+                  if (Array.isArray(c) && c.length >= 2 && c[0] !== undefined && c[0] !== null) {
+                    return `${c[0]},${c[1]}`;
+                  }
+                  if (typeof c === 'string' && c && c !== 'undefined' && c !== '[undefined]') {
+                    return c;
+                  }
+                  if (typeof tileId === 'number' && !isNaN(tileId) && tileId >= 0) {
+                    return `${tileId % 15},${Math.floor(tileId / 15)}`;
+                  }
+                  return '0,0';
+                };
 
-                const isLinked = !!portal.targetPortalId;
-                const linkLocStr = portal.targetCoordinates
-                  ? (portal.targetLevelId !== null && portal.targetLevelId !== undefined
-                    ? `Lvl ${portal.targetLevelId} (${portal.targetOrientation === 'front' ? 'Front' : 'Back'}) Board ${portal.targetMiniboardIndex + 1} at [${portal.targetCoordinates}]`
-                    : `Board Tile at [${portal.targetCoordinates}]`)
-                  : 'N/A';
+                const currentTileCoords = formatCoords(tile.coordinates, tile.id);
+                const locStr = currentLvlId !== null
+                  ? `Lvl ${currentLvlId} (${currentOrientation === 'front' ? 'Front' : 'Back'}) Board ${currentMiniboardIdx + 1} at [${currentTileCoords}]`
+                  : `Board Tile at [${currentTileCoords}]`;
 
                 let allPortals = [];
                 if (this.state.loadedDungeon) {
@@ -7297,17 +7329,31 @@ class MapMakerPage extends React.Component {
                       const containsType = this.getContainsType(t.contains);
                       return containsType === 'dungeon_portal' || containsType === 'dungeon portal';
                     })
-                    .map(t => ({
-                      tileId: t.id,
-                      coordinates: t.coordinates,
-                      miniboardIndex: null,
-                      orientation: null,
-                      levelId: null,
-                      portalId: t.contains.portalId || null,
-                      targetPortalId: t.contains.targetPortalId || null,
-                      portalName: t.contains.portalName || `Board Tile at [${t.coordinates}]`
-                    }));
+                    .map(t => {
+                      const tcStr = formatCoords(t.coordinates, t.id);
+                      return {
+                        tileId: t.id,
+                        coordinates: t.coordinates || [t.id % 15, Math.floor(t.id / 15)],
+                        miniboardIndex: null,
+                        orientation: null,
+                        levelId: null,
+                        portalId: t.contains.portalId || null,
+                        targetPortalId: t.contains.targetPortalId || null,
+                        portalName: t.contains.portalName || `Board Tile at [${tcStr}]`
+                      };
+                    });
                 }
+
+                const isLinked = !!portal.targetPortalId;
+                const targetPortalObj = isLinked ? allPortals.find(x => x.portalId === portal.targetPortalId) : null;
+                const rawTargetCoords = portal.targetCoordinates || (targetPortalObj ? targetPortalObj.coordinates : null);
+                const rawTargetTileId = portal.targetTileId ?? (targetPortalObj ? targetPortalObj.tileId : null);
+                const linkCoordsStr = formatCoords(rawTargetCoords, rawTargetTileId);
+                const linkLocStr = isLinked
+                  ? (portal.targetLevelId !== null && portal.targetLevelId !== undefined
+                    ? `Lvl ${portal.targetLevelId} (${portal.targetOrientation === 'front' ? 'Front' : 'Back'}) Board ${(portal.targetMiniboardIndex ?? 0) + 1} at [${linkCoordsStr}]`
+                    : `Board Tile at [${linkCoordsStr}]`)
+                  : 'N/A';
 
                 const otherPortals = allPortals.filter(p => {
                   if (p.portalId && portal.portalId && p.portalId === portal.portalId) {
@@ -7320,13 +7366,13 @@ class MapMakerPage extends React.Component {
                   return !(isSameBoard && isSameTile);
                 });
 
-                const targetPortalObj = isLinked ? allPortals.find(x => x.portalId === portal.targetPortalId) : null;
                 const isSymmetric = isLinked && targetPortalObj && targetPortalObj.targetPortalId === portal.portalId;
                 const incomingPortalObj = allPortals.find(x => x.targetPortalId && portal.portalId && x.targetPortalId === portal.portalId);
+                const incomingCoordsStr = incomingPortalObj ? formatCoords(incomingPortalObj.coordinates, incomingPortalObj.tileId) : '';
                 const incomingLocStr = incomingPortalObj
-                  ? (incomingPortalObj.levelId !== null
-                    ? `Lvl ${incomingPortalObj.levelId} (${incomingPortalObj.orientation === 'front' ? 'Front' : 'Back'}) Board ${incomingPortalObj.miniboardIndex + 1} at [${incomingPortalObj.coordinates}]`
-                    : `Board Tile at [${incomingPortalObj.coordinates}]`)
+                  ? (incomingPortalObj.levelId !== null && incomingPortalObj.levelId !== undefined
+                    ? `Lvl ${incomingPortalObj.levelId} (${incomingPortalObj.orientation === 'front' ? 'Front' : 'Back'}) Board ${(incomingPortalObj.miniboardIndex ?? 0) + 1} at [${incomingCoordsStr}]`
+                    : `Board Tile at [${incomingCoordsStr}]`)
                   : null;
 
                 return (
@@ -7381,17 +7427,19 @@ class MapMakerPage extends React.Component {
                           </thead>
                           <tbody>
                             {otherPortals.map((p, idx) => {
-                              const pLoc = p.levelId !== null
-                                ? `Lvl ${p.levelId} (${p.orientation === 'front' ? 'Front' : 'Back'}) Board ${p.miniboardIndex + 1} at [${p.coordinates}]`
-                                : `Board Tile at [${p.coordinates}]`;
+                              const pCoordsStr = formatCoords(p.coordinates, p.tileId);
+                              const pLoc = (p.levelId !== null && p.levelId !== undefined)
+                                ? `Lvl ${p.levelId} (${p.orientation === 'front' ? 'Front' : 'Back'}) Board ${(p.miniboardIndex ?? 0) + 1} at [${pCoordsStr}]`
+                                : `Board Tile at [${pCoordsStr}]`;
                               const pLinked = !!p.targetPortalId;
                               let linkedToPortalName = '';
                               if (pLinked) {
                                 const targetPortal = allPortals.find(x => x.portalId === p.targetPortalId);
                                 if (targetPortal) {
-                                  linkedToPortalName = targetPortal.levelId !== null
-                                    ? `Lvl ${targetPortal.levelId} (${targetPortal.orientation === 'front' ? 'Front' : 'Back'}) Board ${targetPortal.miniboardIndex + 1} at [${targetPortal.coordinates}]`
-                                    : `Board Tile at [${targetPortal.coordinates}]`;
+                                  const tpCoordsStr = formatCoords(targetPortal.coordinates, targetPortal.tileId);
+                                  linkedToPortalName = (targetPortal.levelId !== null && targetPortal.levelId !== undefined)
+                                    ? `Lvl ${targetPortal.levelId} (${targetPortal.orientation === 'front' ? 'Front' : 'Back'}) Board ${(targetPortal.miniboardIndex ?? 0) + 1} at [${tpCoordsStr}]`
+                                    : `Board Tile at [${tpCoordsStr}]`;
                                 } else {
                                   linkedToPortalName = 'Unknown Portal';
                                 }

@@ -534,9 +534,15 @@ class PlanesPanel extends React.Component {
                                     if (teleporters.length === 0) {
                                         return <div style={{ fontStyle: 'italic', color: '#888', fontSize: '13px' }}>No teleporters found in this dungeon.</div>;
                                     }
+                                    const slotNames = [
+                                        'Top Left (TL)', 'Top Mid (TM)', 'Top Right (TR)',
+                                        'Mid Left (ML)', 'Center (MM)', 'Mid Right (MR)',
+                                        'Bot Left (BL)', 'Bot Mid (BM)', 'Bot Right (BR)'
+                                    ];
                                     return teleporters.map((tp, i) => {
                                         const target = tp.targetPortalId ? teleporters.find(t => t.portalId == tp.targetPortalId) : null;
                                         const isLinked = !!tp.targetPortalId;
+                                        const tpSlotName = slotNames[tp.miniboardIndex] || `MB ${tp.miniboardIndex + 1}`;
                                         return (
                                             <div key={i} style={{
                                                 display: 'flex', flexDirection: 'column',
@@ -548,7 +554,7 @@ class PlanesPanel extends React.Component {
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '13px' }}>{tp.subtype}</div>
                                                     <div style={{ fontSize: '11px', color: '#aaa' }}>
-                                                        Lvl {tp.levelId} • {tp.orientation === 'front' ? 'F' : 'B'} • MB {tp.miniboardIndex + 1}
+                                                        Lvl {tp.levelId} • {tp.orientation === 'front' ? 'F' : 'B'} • {tpSlotName} (MB {tp.miniboardIndex + 1})
                                                     </div>
                                                 </div>
                                                 <div style={{ marginTop: '8px', padding: '6px', background: isLinked ? 'rgba(0, 243, 255, 0.1)' : 'rgba(255, 68, 68, 0.1)', borderRadius: '4px' }}>
@@ -558,7 +564,7 @@ class PlanesPanel extends React.Component {
                                                             <div style={{ fontSize: '12px', color: '#fff', textAlign: 'right' }}>
                                                                 {target ? target.subtype : 'Unknown'}
                                                                 <div style={{ color: '#888', fontSize: '10px' }}>
-                                                                    Lvl {target ? target.levelId : '?'} • {target ? (target.orientation === 'front' ? 'F' : 'B') : '?'}
+                                                                    Lvl {target ? target.levelId : '?'} • {target ? (target.orientation === 'front' ? 'F' : 'B') : '?'} • {target ? (slotNames[target.miniboardIndex] || `MB ${target.miniboardIndex + 1}`) : '?'}
                                                                 </div>
                                                             </div>
                                                         </div>

@@ -218,7 +218,10 @@ export function MapMaker(props){
                 mb.tiles.forEach(t=> {
                     t.level = lvl.id
                     const type = this.getTilePassageType(t) || 'none';
-                    t.locationCode = `${type}_level-${lvl.id}_miniboard-${i}_F_[${t.coordinates}]`
+                    const cStr = (t.coordinates && Array.isArray(t.coordinates) && t.coordinates[0] !== undefined)
+                        ? `${t.coordinates[0]},${t.coordinates[1]}`
+                        : `${t.id % 15},${Math.floor(t.id / 15)}`;
+                    t.locationCode = `${type}_level-${lvl.id}_miniboard-${i}_F_[${cStr}]`
                 })
             })
             if(lvl.back) lvl.back.miniboards.forEach((mb, i) => {
@@ -226,7 +229,10 @@ export function MapMaker(props){
                 mb.tiles.forEach(t=> {
                     t.level = lvl.id
                     const type = this.getTilePassageType(t) || 'none';
-                    t.locationCode = `${type}_level-${lvl.id}_miniboard-${i}_B_[${t.coordinates}]`
+                    const cStr = (t.coordinates && Array.isArray(t.coordinates) && t.coordinates[0] !== undefined)
+                        ? `${t.coordinates[0]},${t.coordinates[1]}`
+                        : `${t.id % 15},${Math.floor(t.id / 15)}`;
+                    t.locationCode = `${type}_level-${lvl.id}_miniboard-${i}_B_[${cStr}]`
                 })
             })
         })
@@ -257,21 +263,23 @@ export function MapMaker(props){
                             case 'way_up': 
                                 if(aboveMatch){
                                     aboveMatch.miniboardIndex = i;
-                                    connected.push({locationCode: f.locationCode, miniboardIndex: i, type: frontType, coordinates: f.coordinates, orientation: 'front', connectedTo: aboveMatch, level: f.level})
+                                    connected.push({locationCode: f.locationCode, miniboardIndex: i, tileId: f.id, type: frontType, coordinates: f.coordinates, orientation: 'front', connectedTo: aboveMatch, level: f.level})
                                 }
                             break;
                             case 'way_down': 
                             if(belowMatch){
                                     belowMatch.miniboardIndex = i;
-                                    connected.push({locationCode: f.locationCode, miniboardIndex: i, type: frontType, coordinates: f.coordinates, orientation: 'front', connectedTo: belowMatch, level: f.level})
+                                    connected.push({locationCode: f.locationCode, miniboardIndex: i, tileId: f.id, type: frontType, coordinates: f.coordinates, orientation: 'front', connectedTo: belowMatch, level: f.level})
                                 }
                             break;
-                            case 'door': 
-                                if(backMatch){
+                            case 'door': {
+                                const isBackActive = l.back && Array.isArray(l.back.miniboards) && l.back.miniboards[i] && !l.back.miniboards[i].isEmptyBoard && Array.isArray(l.back.miniboards[i].tiles) && l.back.miniboards[i].tiles.some(t => t && t.contains);
+                                if(backMatch && isBackActive){
                                     backMatch.miniboardIndex = i;
-                                    connected.push({locationCode: f.locationCode, miniboardIndex: i, type: frontType, coordinates: f.coordinates, orientation: 'front', connectedTo: backMatch, level: f.level})
+                                    connected.push({locationCode: f.locationCode, miniboardIndex: i, tileId: f.id, type: frontType, coordinates: f.coordinates, orientation: 'front', connectedTo: backMatch, level: f.level})
                                 }
-                            break;
+                                break;
+                            }
                             default:
                                 break;
                         }
@@ -287,19 +295,19 @@ export function MapMaker(props){
                             case 'way_up': 
                                 if(aboveMatch){
                                     aboveMatch.miniboardIndex = i;
-                                    connected.push({locationCode: b.locationCode, miniboardIndex: i, type: backType, coordinates: b.coordinates, orientation: 'back', connectedTo: aboveMatch, level: b.level})
+                                    connected.push({locationCode: b.locationCode, miniboardIndex: i, tileId: b.id, type: backType, coordinates: b.coordinates, orientation: 'back', connectedTo: aboveMatch, level: b.level})
                                 }
                             break;
                             case 'way_down': 
                                 if(belowMatch){
                                     belowMatch.miniboardIndex = i;
-                                    connected.push({locationCode: b.locationCode, miniboardIndex: i, type: backType, coordinates: b.coordinates, orientation: 'back', connectedTo: belowMatch, level: b.level})
+                                    connected.push({locationCode: b.locationCode, miniboardIndex: i, tileId: b.id, type: backType, coordinates: b.coordinates, orientation: 'back', connectedTo: belowMatch, level: b.level})
                                 }
                             break;
                             case 'door': 
                                 if(frontMatch){
                                     frontMatch.miniboardIndex = i;
-                                    connected.push({locationCode: b.locationCode, miniboardIndex: i, type: backType, coordinates: b.coordinates, orientation: 'back', connectedTo: frontMatch, level: b.level})
+                                    connected.push({locationCode: b.locationCode, miniboardIndex: i, tileId: b.id, type: backType, coordinates: b.coordinates, orientation: 'back', connectedTo: frontMatch, level: b.level})
                                 }
                             break;
                             default:
@@ -827,9 +835,21 @@ export function MapMaker(props){
                             mb.tiles.forEach((tile) => {
                                 const type = tile.contains && (tile.contains.type || tile.contains);
                                 if (type === 'dungeon_portal' || type === 'dungeon portal') {
+                                    const tileCoords = (tile.coordinates && Array.isArray(tile.coordinates) && tile.coordinates.length >= 2 && tile.coordinates[0] !== undefined && tile.coordinates[0] !== null)
+                                        ? tile.coordinates
+                                        : [(typeof tile.id === 'number' ? tile.id % 15 : 0), (typeof tile.id === 'number' ? Math.floor(tile.id / 15) : 0)];
+
+                                    const targetCoords = (tile.contains && tile.contains.targetCoordinates && Array.isArray(tile.contains.targetCoordinates) && tile.contains.targetCoordinates.length >= 2 && tile.contains.targetCoordinates[0] !== undefined && tile.contains.targetCoordinates[0] !== null)
+                                        ? tile.contains.targetCoordinates
+                                        : (tile.contains && typeof tile.contains.targetTileId === 'number'
+                                            ? [tile.contains.targetTileId % 15, Math.floor(tile.contains.targetTileId / 15)]
+                                            : null);
+
+                                    const portalName = tile.contains.portalName || `Lvl ${level.id} (${orientation === 'front' ? 'Front' : 'Back'}) Board ${mbIndex + 1} at [${tileCoords[0]},${tileCoords[1]}]`;
+
                                     portals.push({
                                         tileId: tile.id,
-                                        coordinates: tile.coordinates,
+                                        coordinates: tileCoords,
                                         miniboardIndex: mbIndex,
                                         orientation: orientation,
                                         levelId: level.id,
@@ -838,8 +858,8 @@ export function MapMaker(props){
                                         targetLevelId: tile.contains.targetLevelId ?? null,
                                         targetOrientation: tile.contains.targetOrientation ?? null,
                                         targetMiniboardIndex: tile.contains.targetMiniboardIndex ?? null,
-                                        targetCoordinates: tile.contains.targetCoordinates ?? null,
-                                        portalName: tile.contains.portalName || `Lvl ${level.id} (${orientation === 'front' ? 'Front' : 'Back'}) Board ${mbIndex + 1} at [${tile.coordinates}]`
+                                        targetCoordinates: targetCoords,
+                                        portalName: portalName
                                     });
                                 }
                             });

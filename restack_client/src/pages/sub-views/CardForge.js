@@ -84,12 +84,12 @@ export default function CardForge({ crew, meta, onClose, onSave, highlightMonste
                 <div className="pf-header">
                     <div className="pf-header-left">
                         <div className="pf-header-icon">
-                            {images.pyre_echo_card && (
-                                <img src={images.pyre_echo_card} alt="" className="pf-title-img" />
+                            {images.the_duel_card && (
+                                <img src={images.the_duel_card} alt="" className="pf-title-img" />
                             )}
                         </div>
                         <div>
-                            <div className="pf-title">Pyre &amp; Echo</div>
+                            <div className="pf-title">The Duel</div>
                             <div className="pf-subtitle">Soul Shards &amp; Echo Forging</div>
                         </div>
                     </div>

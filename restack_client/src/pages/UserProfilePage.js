@@ -7,6 +7,8 @@ import {
   updateUserRequest
 } from '../utils/api-handler';
 import FreeWillStatBar from '../components/FreeWillStatBar';
+import { USER_PERKS_POOL, getUserPerks } from '../utils/user-perks';
+
 class UserProfilePage extends React.Component{
   constructor(props){
     super(props)
@@ -303,11 +305,48 @@ class UserProfilePage extends React.Component{
           <div style={{ padding: '0 20px 20px 20px', width: '100%', boxSizing: 'border-box' }}>
             <FreeWillStatBar freeWill={getMeta()?.freeWill || 0} animateOnMount={true} delayMs={300} />
           </div>
+
+          {/* Active User Perks Section */}
+          {(() => {
+            const perkIds = getUserPerks(getMeta());
+            const unlockedPerks = USER_PERKS_POOL.filter(p => perkIds.includes(p.id));
+            if (unlockedPerks.length === 0) return null;
+            return (
+              <div className="profile-section" style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', padding: '0 20px 16px 20px', boxSizing: 'border-box' }}>
+                <div className="section-label">Unlocked User Perks</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {unlockedPerks.map(p => (
+                    <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', background: 'rgba(255, 215, 0, 0.08)', border: '1px solid rgba(255, 215, 0, 0.25)', borderRadius: '8px' }}>
+                      <span style={{ fontSize: '20px' }}>{p.icon}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffd700' }}>{p.name}</span>
+                        <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)' }}>{p.shortDesc}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
           
           <div className="profile-section">
             <div className="section-label">Current Dungeon</div>
             <div className="section-value">
               {dungeon?.name || <span className="no-dungeon">No active dungeon</span>}
+            </div>
+          </div>
+
+          {/* Domain / Territory Stats */}
+          <div className="profile-section">
+            <div className="section-label" title="Total contiguous territory owned by you">Domain Value</div>
+            <div className="section-value" style={{ fontWeight: 'bold', color: '#2ecc71' }}>
+              {user?.domainValue || 0}
+            </div>
+          </div>
+          <div className="profile-section">
+            <div className="section-label">Domain Level</div>
+            <div className="section-value">
+              Level {user?.domainLevel || 0}
             </div>
           </div>
           

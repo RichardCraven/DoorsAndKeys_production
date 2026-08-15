@@ -363,13 +363,19 @@ export class AnimationManagerRedux {
       case 'axe_throw':
       case 'deadeye_shot':
       case 'spear_throw':
-      case 'loose':
       case 'execute':
         this._projectileThrow(sourceCoords, targetCoords, name, arrowType, spherePx, sourceUnitId);
         break;
+      case 'loose':
+        if (isUltimate) {
+          this._executeMultiShots(sourceCoords, targetCoords, name, arrowType, spherePx, 5, 333, sourceUnitId);
+        } else {
+          this._projectileThrow(sourceCoords, targetCoords, name, arrowType, spherePx, sourceUnitId);
+        }
+        break;
       case 'burst_shot':
       case 'burst_attack':
-        this._executeMultiShots(sourceCoords, targetCoords, name, arrowType, spherePx);
+        this._executeMultiShots(sourceCoords, targetCoords, name, arrowType, spherePx, 3, 167, sourceUnitId);
         break;
       case 'circle_of_protection':
         this._circleOfProtection(sourceCoords, targetCoords);
@@ -1192,7 +1198,7 @@ export class AnimationManagerRedux {
     });
   }
 
-  _executeMultiShots(src, tgt, name, arrowType = null, spherePx = null) {
+  _executeMultiShots(src, tgt, name, arrowType = null, spherePx = null, count = 3, delayMs = 167, sourceUnitId = null) {
     const srcPx = this._px(src);
     let tgtPx = this._getImpactTargetPx(tgt);
     tgtPx = this._adjustTgtPxForArcaneBarrier(srcPx, tgtPx);
@@ -1211,6 +1217,7 @@ export class AnimationManagerRedux {
         arrowType: activeArrow,
         duration: 467,
         spherePx,
+        sourceUnitId,
       });
       if (activeArrow === 'ice') {
         this._delay(() => {
@@ -1227,9 +1234,13 @@ export class AnimationManagerRedux {
       }
     };
 
-    fireArrow();
-    this._delay(fireArrow, 167);
-    this._delay(fireArrow, 333);
+    for (let i = 0; i < count; i++) {
+      if (i === 0) {
+        fireArrow();
+      } else {
+        this._delay(fireArrow, i * delayMs);
+      }
+    }
   }
 
   _heal(src, tgt) {

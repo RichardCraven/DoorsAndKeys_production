@@ -250,6 +250,14 @@ const INTERACTABLES = [
         desc: 'A marked location where encounters or creatures may be triggered. Sometimes tied to dungeon events.',
         tags: ['spawn', 'event'],
     },
+    {
+        id: 'domain_monolith',
+        name: 'Domain Monolith',
+        icon: images.domain_monolith,
+        category: 'interactable',
+        desc: 'Radiates territorial power, generating domain for your crew. When activated, the monolith surrounds itself with domain (up to 8 adjacent tiles). A 12-hour clock begins upon claiming. Every 12 hours, the domain expands to adjacent empty space (up to 16 tiles).\n\nDomain Value is the number of territory tiles you own in a contiguous area.\n• Level 1 Domain: 1-23 tiles. Growth period: 12 hours.\n• Level 2 Domain: >23 tiles. Growth period: 24 hours.\n• Level 3 Domain: >50 tiles. Growth period: 48 hours.\n• Level 4 Domain: >75 tiles. Growth period: 4 days.\n• Level 5 Domain: >100 tiles. Growth period: 8 days.\n• For each level of domain, you may place an additional outpost (e.g. Level 3 Domain = up to 3 outposts).\n• Non-contiguous domains are considered completely separate domains.\n\n**Overtaking Rules:**\n• If a Domain Monolith is claimed by another user, you can "Attempt to Overtake".\n• Overtaking duration takes 1 minute × the target domain\'s level.\n• Base success chance: 35%.\n• First failure reduces chance to 17.5%. Second failure reduces to 5%. Subsequent attempts are 1%.\n• Penalties reset after 24 hours × the target domain\'s level.\n• Upon success, the domain resets to a 1-tile radius under your control.',
+        tags: ['domain', 'territory', 'monolith', 'building'],
+    },
 ];
 
 // ── Monster descriptions ──────────────────────────────────────────────────────
@@ -300,7 +308,7 @@ const TABS = [
     { id: 'monsters', label: 'Monsters', emoji: '👹' },
     { id: 'classes', label: 'Classes', emoji: '🧑\u200d🤝\u200d🧑' },
     { id: 'interactables', label: 'World', emoji: '🗺️' },
-    { id: 'pyre_echo', label: 'Pyre & Echo', emoji: '🃏' },
+    { id: 'the_duel', label: 'The Duel', emoji: '🃏' },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -646,7 +654,7 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                     )}
 
                     {/* ── PYRE & ECHO tab ──────────────────────────── */}
-                    {activeTab === 'pyre_echo' && (
+                    {activeTab === 'the_duel' && (
                         <div className="codex-pyre-echo">
                             <PyreEchoRules />
                         </div>
@@ -923,7 +931,7 @@ function CodexStat({ label, value, color }) {
     );
 }
 
-// ── Pyre & Echo Rules component ───────────────────────────────────────────────
+// ── The Duel Rules component ───────────────────────────────────────────────
 function PyreEchoRules() {
     const ECHO_TABLE = [
         { monster: 'Goblin', effect: 'Frenzy — Deal 5 damage. Free to play (0 Energy).', rarity: 'Common' },
@@ -965,13 +973,13 @@ function PyreEchoRules() {
     return (
         <div className="pe-rules-scroll">
             {/* Title */}
-            <div className="pe-rules-title"><span role="img" aria-label="cards">🃏</span> Pyre &amp; Echo — How to Play</div>
+            <div className="pe-rules-title"><span role="img" aria-label="cards">🃏</span> The Duel — How to Play</div>
 
             {/* Overview */}
             <div className="pe-rules-section">
                 <div className="pe-rules-heading">Overview</div>
                 <p className="pe-rules-text">
-                    Pyre &amp; Echo is a soul card duel against the Reaper. Reduce the Reaper's <strong>Soul</strong> to 0 before he reduces yours. The cards in your deck are your actual crew members — the stronger they are in the dungeon, the stronger they are here.
+                    The Duel is a soul card duel against the Reaper. Reduce the Reaper's <strong>Soul</strong> to 0 before he reduces yours. The cards in your deck are your actual crew members — the stronger they are in the dungeon, the stronger they are here.
                 </p>
             </div>
 
@@ -1003,7 +1011,7 @@ function PyreEchoRules() {
             <div className="pe-rules-section">
                 <div className="pe-rules-heading">Echo Cards (Monster Cards)</div>
                 <p className="pe-rules-text">
-                    When you defeat a monster in combat, there's a chance a <strong>Soul Shard</strong> drops. Collect 3 Shards of the same monster type and visit the <em>Pyre &amp; Echo</em> camp station to forge an Echo Card. You can have up to 4 Echo Cards active in your deck at once.
+                    When you defeat a monster in combat, there's a chance a <strong>Soul Shard</strong> drops. Collect 3 Shards of the same monster type and visit the <em>The Duel</em> camp station to forge an Echo Card. You can have up to 4 Echo Cards active in your deck at once.
                 </p>
                 <p className="pe-rules-text" style={{ marginBottom: 8 }}>
                     Shard drop chances: Tier 1 (30%) → Tier 2 (20%) → Tier 3 (12%) → Tier 4+ (7%).
@@ -1025,7 +1033,7 @@ function PyreEchoRules() {
             {/* Global Skills */}
             <div className="pe-rules-section">
                 <div className="pe-rules-heading">Global Skill Cross-Overs</div>
-                <p className="pe-rules-text">Shrines unlock Global Skills that carry over into Pyre &amp; Echo:</p>
+                <p className="pe-rules-text">Shrines unlock Global Skills that carry over into The Duel:</p>
                 <div className="pe-gs-table">
                     {GLOBAL_SKILL_BONUSES.map(row => (
                         <div key={row.skill} className="pe-gs-row">

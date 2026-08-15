@@ -5528,13 +5528,13 @@ export function CombatManagerRedux() {
                 const pick = isTripReady ? pickTrip : pickDupe;
                 const abilityRange = pick.range || 'close'; 
                 
-                if (!this.isWithinRange(unit, minionToDupe, abilityRange)) {
+                if (!this.targetInRange(unit, minionToDupe, abilityRange)) {
                     if (!unit.ensnared && !this.isUnitInWeb(unit) && unit.movesTakenThisRound < 1) {
                         this.moveCloser(unit, minionToDupe);
                     }
                 }
 
-                if (this.isWithinRange(unit, minionToDupe, abilityRange)) {
+                if (this.targetInRange(unit, minionToDupe, abilityRange)) {
                     this._duplicateMinion(unit, pick, isTripReady);
                     return;
                 } else if (unit.movesTakenThisRound > 0) {
@@ -5555,7 +5555,7 @@ export function CombatManagerRedux() {
             const pick = this.resolveSpecial(unit, 'turret_fire');
             if (pick) {
                 const enemies = Object.values(this.combatants).filter(c => c && !c.dead && !!c.isMonster !== !!unit.isMonster);
-                const target = enemies.find(e => this.isWithinRange(unit, e, 'far'));
+                const target = enemies.find(e => this.targetInRange(unit, e, 'far'));
                 if (target) {
                     this.useAbility(unit, pick, target);
                     return;
@@ -5588,7 +5588,7 @@ export function CombatManagerRedux() {
             const pick = this.resolveSpecial(unit, 'walker_cleave');
             if (pick) {
                 const enemies = Object.values(this.combatants).filter(c => c && !c.dead && !!c.isMonster !== !!unit.isMonster);
-                const adjacentEnemy = enemies.find(e => this.isWithinRange(unit, e, 'close'));
+                const adjacentEnemy = enemies.find(e => this.targetInRange(unit, e, 'close'));
                 if (adjacentEnemy) {
                     this.useAbility(unit, pick, adjacentEnemy);
                     return;
@@ -5624,7 +5624,7 @@ export function CombatManagerRedux() {
         // Priority 1: Repair
         if (this._abilityReady(unit, 'engineer_repair')) {
             const damagedConstruct = friendlyConstructs.find(c => c.hp < (c.starting_hp || c.hp));
-            if (damagedConstruct && this.isWithinRange(unit, damagedConstruct, 'close')) {
+            if (damagedConstruct && this.targetInRange(unit, damagedConstruct, 'close')) {
                 const pick = this.resolveSpecial(unit, 'engineer_repair');
                 if (pick) {
                     this.useAbility(unit, pick, damagedConstruct);
@@ -11784,7 +11784,8 @@ export function CombatManagerRedux() {
             }
         } else if (abilityId === 'loose' || abilityId === 'deadeye_shot' || abilityId === 'execute') {
             for (let i = 0; i < hitCount; i++) {
-                setTimeout(() => performHit(i), 700 + (i * 200));
+                const hitDelay = (hitCount > 1) ? (367 + (i * 333)) : 700;
+                setTimeout(() => performHit(i), hitDelay);
             }
         } else if (abilityId === 'burst_shot' || abilityId === 'burst_attack') {
             setTimeout(() => performHit(0), 700);

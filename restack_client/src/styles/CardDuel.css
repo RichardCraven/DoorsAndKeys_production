@@ -2131,25 +2131,26 @@
 /* ── ACTION CARD ANIMATION OVERLAY ────────────────────────────── */
 .pe-action-card-overlay {
   position: absolute;
-  inset: 0;
+  top: 10%;
+  left: 0;
+  right: 0;
   z-index: 200;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(6px);
+  pointer-events: none; /* Let clicks pass through */
   animation: pe-overlay-fade-in 0.3s ease-out forwards;
 }
 
 .pe-action-card-modal {
   position: relative;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 12px;
-  padding: 24px 36px;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.9);
+  gap: 16px;
+  padding: 16px 32px;
+  border-radius: 12px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
   animation: pe-action-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 
