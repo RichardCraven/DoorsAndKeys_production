@@ -3,7 +3,7 @@ import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
 import { getMeta, storeMeta, getUserId } from '../utils/session-handler';
 import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest } from '../utils/api-handler';
-import FreeWillStatBar from '../components/FreeWillStatBar';
+
 
 import skillsMatrix from '../utils/skills-matrix';
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
@@ -744,9 +744,7 @@ export default function LandingPage(props) {
           <span className="logo-subtitle">v 0.4.1 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '320px' }}>
-            <FreeWillStatBar freeWill={getMeta()?.freeWill || 0} animateOnMount={true} delayMs={400} />
-          </div>
+
           <div className="user-info" style={{ cursor: 'pointer' }} onClick={() => setNavUserProfile(true)} title="View User Profile">
             Welcome <span>{username}</span>
           </div>

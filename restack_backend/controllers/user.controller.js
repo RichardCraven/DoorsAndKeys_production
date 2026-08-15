@@ -1,13 +1,19 @@
 const userSchema = require('../models/user.model')
+const { sendNotificationEmail } = require('../utils/email')
 
 // CREATE User
-exports.create = (req, res) => {
+exports.create = (req, res, next) => {
   console.log('creating user', req.body)
 
   userSchema.create(req.body, (error, data) => {
     if (error) {
       return next(error)
     } else {
+      // Send notification email asynchronously
+      sendNotificationEmail(
+        'New User Registration - Restack',
+        `A new user has registered on Restack!\n\nUsername: ${data.name || 'Unknown'}\nEmail: ${data.email || 'Unknown'}`
+      );
       res.json(data)
     }
   })

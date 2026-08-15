@@ -1,4 +1,4 @@
-require('dotenv').config(); 
+require('dotenv').config({ path: __dirname + '/.env' }); 
 const express = require("express");
 let mongoose = require('mongoose');
 let databaseConfig
@@ -62,6 +62,7 @@ require('./routes_new/users-routes.js')(app);
 require('./routes_new/dungeons-routes.js')(app);
 require('./routes_new/maps-routes.js')(app);
 require('./routes_new/planes-routes.js')(app);
+require('./routes_new/notifications-routes.js')(app);
 
 app.get('/', (req, res) => {
     res.send("doors and keys server running")

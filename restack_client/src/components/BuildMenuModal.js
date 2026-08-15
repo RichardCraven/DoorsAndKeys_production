@@ -27,10 +27,10 @@ export const BUILDINGS = [
         category: 'earthly',
         imageKey: 'buildable_outpost',
         fallbackImageKey: 'outpost',
-        costs: { wood: 5, stone: 3, slate: 0 },
-        buildTime: 35,
+        costs: { wood: 50, stone: 50, slate: 10 },
+        buildTime: 7200,
         tag: 'STRUCTURE',
-        description: 'A fortified wooden outpost for securing territory.',
+        description: 'A fortified wooden outpost for securing territory. Fires at enemy units within its contiguous territory. Only 1 allowed per contiguous territory block.',
     },
     {
         key: 'observer_platform',

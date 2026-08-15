@@ -224,6 +224,22 @@ const deletePlaneRequest = (id) => {
     })
 }
 
+// Notification APIs ---------------------------------------------------
+
+const sendDungeonEntryNotification = (username, dungeonName) => {
+  return axios.post(API_BASE + "/api/notifications/enter-dungeon", { username, dungeonName }, { timeout: 15000 })
+    .then(res => {
+      if (res.status === 200 || res.status === 201) {
+        return res;
+      }
+      return { status: res.status, data: null };
+    })
+    .catch(err => {
+      console.log(err);
+      return { status: 500, data: null, error: err };
+    });
+}
+
 // Dungeon APIs --------------------------------------------------------
 
 const addDungeonRequest = (dungeonObj) => {
@@ -332,5 +348,6 @@ export {
   updatePlaneRequest,
   updateManyPlanesRequest,
   loadAllPlanesRequest,
-  loadPlaneRequest
+  loadPlaneRequest,
+  sendDungeonEntryNotification
 };

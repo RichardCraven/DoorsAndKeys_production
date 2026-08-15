@@ -11,6 +11,8 @@ import MonsterBattle from './sub-views/MonsterBattle';
 import ShrineScreen from './sub-views/ShrineScreen';
 
 import LevelUpScreen from '../components/LevelUpScreen';
+import UserLevelUpScreen from '../components/UserLevelUpScreen';
+import { hasUserPerk, getPendingUserPerkLevels } from '../utils/user-perks';
 import BuildMenuModal from '../components/BuildMenuModal';
 import '../styles/level-up-screen.scss';
 import { CombatManagerRedux } from '../utils/combat-manager-redux';
@@ -26,9 +28,10 @@ import {
     updateUserRequest,
     addDungeonRequest,
     deleteDungeonRequest,
-    getAllUsersRequest
+    getAllUsersRequest,
+    sendDungeonEntryNotification
 } from '../utils/api-handler';
-import { storeMeta, getMeta, getUserId, applyResolvePenalty } from '../utils/session-handler';
+import { storeMeta, getMeta, getUserId, getUserName, applyResolvePenalty } from '../utils/session-handler';
 import { keyCleanup, itemCleanup, resolveItemPools, resolveMonsterPools } from '../utils/cache-cleanup';
 import * as CampManager from '../utils/camp-manager';
 import Typewriter from '../utils/typewriter';
@@ -2514,6 +2517,7 @@ class DungeonPage extends React.Component {
             , shrineData: null
             , inShrineScreen: false
             , contextMenu: { visible: false, x: 0, y: 0, slotName: '' }
+            , showUserLevelUpModal: false
             , mobileLeftPortraitCollapsed: false
             , mobileLeftStatsCollapsed: false
             , mobileLeftActionsCollapsed: false
@@ -2528,6 +2532,7 @@ class DungeonPage extends React.Component {
             , dragOverPanel: null
             , metaPanelConfigVersion: 0
             , illuminatedTileId: null
+            , popoutResources: (getMeta()?.popoutResources || false)
         }
         // Native browser tooltip will be used for death-tracker; no custom tooltip state required.
         // Track timers/intervals created by this component so we can clear on unmount
@@ -2643,7 +2648,7 @@ class DungeonPage extends React.Component {
 
                     const selectedDungeon = meta.selectedDungeon || (this.props.boardManager && this.props.boardManager.dungeon);
                     const resolvedRespawnPoints = this.getResolvedSpawnPoints(selectedDungeon);
-                    const spawnPoint = resolvedRespawnPoints[0] || meta.spawnPoint;
+                    const spawnPoint = this.getRandomSpawnPoint(resolvedRespawnPoints) || meta.spawnPoint;
                     if (spawnPoint && selectedDungeon) {
                         const levelId = spawnPoint.level;
                         const level = Array.isArray(selectedDungeon.levels)
@@ -2855,7 +2860,9 @@ class DungeonPage extends React.Component {
                 modalType: '',
                 showModal: false,
                 showDebugLevelUpScreen: pendingQueue.length > 0 ? true : false,
-                debugLevelUpQueue: pendingQueue
+                showUserLevelUpModal: getPendingUserPerkLevels() > 0,
+                debugLevelUpQueue: pendingQueue,
+                popoutResources: meta?.popoutResources || false
             };
         }, () => {
             this.checkFoodExpiry();
@@ -3558,6 +3565,69 @@ class DungeonPage extends React.Component {
                 }
             }
         } catch (e) { }
+
+        // Rehydrate active construction state if a build was in progress
+        try {
+            const meta = getMeta() || {};
+            if (meta.activeConstruction) {
+                const ac = meta.activeConstruction;
+                const now = Date.now();
+                const elapsed = now - ac.startTime;
+                
+                if (elapsed >= ac.durationMs) {
+                    // Construction finished while offline
+                    setTimeout(() => {
+                        this.finishConstruction(ac);
+                    }, 1000); // Give boardManager a moment to initialize
+                } else {
+                    // Resume construction
+                    this.setState({ activeConstruction: ac }, () => {
+                        this._constructionTicker = setInterval(() => {
+                            if (!this.state.activeConstruction) {
+                                clearInterval(this._constructionTicker);
+                                this._constructionTicker = null;
+                                return;
+                            }
+                
+                            const currElapsed = Date.now() - ac.startTime;
+                            const pct = Math.min(100, Math.floor((currElapsed / ac.durationMs) * 100));
+                            const secRem = Math.max(0, Math.ceil((ac.durationMs - currElapsed) / 1000));
+                
+                            if (currElapsed >= ac.durationMs) {
+                                clearInterval(this._constructionTicker);
+                                this._constructionTicker = null;
+                                this.finishConstruction(ac);
+                            } else {
+                                // Verify the tile hasn't been sabotaged
+                                if (this.props.boardManager && this.props.boardManager.tiles) {
+                                    const t = this.props.boardManager.tiles[ac.targetTileIdx];
+                                    if (t && t.building !== 'outpost_under_construction' && (!t.contains || t.contains.subtype !== 'outpost_under_construction')) {
+                                        // Tile was sabotaged!
+                                        clearInterval(this._constructionTicker);
+                                        this._constructionTicker = null;
+                                        this.setState({ activeConstruction: null });
+                                        const meta = getMeta() || {};
+                                        delete meta.activeConstruction;
+                                        storeMeta(meta);
+                                        this.displayMessage('Your construction project was sabotaged and destroyed!');
+                                        return;
+                                    }
+                                }
+                                this.setState(prev => ({
+                                    activeConstruction: prev.activeConstruction ? {
+                                        ...prev.activeConstruction,
+                                        progressPct: pct,
+                                        secondsRemaining: secRem
+                                    } : null
+                                }));
+                            }
+                        }, 1000);
+                    });
+                }
+            }
+        } catch (e) {
+            console.warn('Could not rehydrate active construction', e);
+        }
 
         this.props.boardManager.establishAddItemToInventoryCallback(this.addItemToInventory)
         this.props.boardManager.establishAddTreasureToInventoryCallback(this.addTreasureToInventory)
@@ -5219,6 +5289,24 @@ class DungeonPage extends React.Component {
             console.warn('Error in getContiguousTerritoryTileIds:', e);
             return new Set();
         }
+    }
+
+    getDomainLevelForMonolith = (monolithIdx) => {
+        const bm = this.props.boardManager;
+        const tile = bm.tiles[monolithIdx] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[monolithIdx]);
+        if (!tile) return 1;
+        
+        const rawClan = tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null);
+        if (!rawClan) return 1;
+        
+        const territory = this.getContiguousTerritoryTileIds(monolithIdx, rawClan);
+        const count = territory.size;
+        
+        if (count > 100) return 5;
+        if (count > 75) return 4;
+        if (count > 50) return 3;
+        if (count > 23) return 2;
+        return 1;
     };
 
     tickPygmiesMovement = async () => {
@@ -6595,6 +6683,35 @@ class DungeonPage extends React.Component {
                                                 if (!mergedByTile.has(`merchant_${indicator.tileId}`)) mergedByTile.set(`merchant_${indicator.tileId}`, { ...indicator, indicatorType: 'merchant' });
                                             });
 
+                                            try {
+                                                const dungeon = this.state.dungeon;
+                                                const levelObj = dungeon && dungeon.levels && dungeon.levels.find(l => Number(l.id) === Number(currentLevelId));
+                                                const plane = levelObj ? (currentOrientation === 'B' ? levelObj.back : levelObj.front) : null;
+                                                const boardObj = plane && plane.miniboards && plane.miniboards[i];
+                                                const boardTiles = boardObj && Array.isArray(boardObj.tiles) ? boardObj.tiles : [];
+
+                                                boardTiles.forEach((tile) => {
+                                                    if (!tile || typeof tile.id !== 'number') return;
+                                                    const contains = tile.contains;
+                                                    const containsType = contains?.type || tile.containsType;
+                                                    const containsSubtype = contains?.subtype || tile.containsSubtype;
+
+                                                    const isVendor = containsType === 'vendor' || containsType === 'shop' || ['merchant', 'alchemist', 'vendor'].includes(containsSubtype);
+                                                    if (isVendor) {
+                                                        if (!mergedByTile.has(`merchant_${tile.id}`)) {
+                                                            mergedByTile.set(`merchant_${tile.id}`, { tileId: tile.id, indicatorType: 'merchant' });
+                                                        }
+                                                    }
+
+                                                    const isGen = this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData;
+                                                    if (isGen && !isVendor) {
+                                                        if (!mergedByTile.has(`generator_${tile.id}`)) {
+                                                            mergedByTile.set(`generator_${tile.id}`, { tileId: tile.id, indicatorType: 'generator' });
+                                                        }
+                                                    }
+                                                });
+                                            } catch (err) { }
+
                                             return Array.from(mergedByTile.values()).map((indicator, idx) => (
                                                 <div
                                                     key={`${indicator.indicatorType}_${indicator.tileId}_${idx}`}
@@ -6617,19 +6734,176 @@ class DungeonPage extends React.Component {
         );
     };
 
-    renderStatusSummarySection = () => {
-        const collapsed = this.isSectionCollapsed('status_summary');
+    togglePopoutResources = (e) => {
+        if (e && typeof e.stopPropagation === 'function') {
+            e.stopPropagation();
+        }
+        const next = !this.state.popoutResources;
+        this.setState({ popoutResources: next }, () => {
+            try {
+                const meta = getMeta() || {};
+                meta.popoutResources = next;
+                storeMeta(meta);
+                if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+                    updateUserRequest(getUserId(), meta).catch(() => { });
+                }
+            } catch (err) { }
+        });
+    };
+
+    getResourcesData = () => {
         const meta = getMeta() || {};
-        const crew = this.props.crewManager.crew || [];
+        const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : (meta.crew || []);
         const totalAtk = crew.reduce((sum, m) => sum + (m && m.stats && typeof m.stats.atk === 'number' ? m.stats.atk : 0), 0);
         const totalDef = crew.reduce((sum, m) => sum + (m && m.stats && typeof m.stats.def === 'number' ? m.stats.def : 0), 0);
+
         const food = typeof meta.food === 'number' ? meta.food : 55;
         const foodLimit = this.getFoodLimit();
         const isOverLimit = food > foodLimit;
         const resolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
         const deaths = meta.deathTracker || 0;
         const tooltip = 'Your crew has met death and been spared. If this happens thrice, your journey is over';
-        const incomeRates = this.getResourceIncomeRates();
+        const incomeRates = this.getResourceIncomeRates ? this.getResourceIncomeRates() : {};
+
+        const inv = this.props.inventoryManager?.inventory || [];
+        const gold = this.props.inventoryManager?.gold || 0;
+        const dust = this.props.inventoryManager?.shimmering_dust || 0;
+        const wood = (this.props.inventoryManager?.wood || 0) + inv.filter(item => item && (item._im_key === 'wood' || item.id === 'wood' || item.name === 'Wood')).length;
+        const mushrooms = (this.props.inventoryManager?.mushrooms || 0) + inv.filter(item => item && (item._im_key === 'mushrooms' || item.id === 'mushrooms' || item.name === 'Mushrooms')).length;
+        const stone = (this.props.inventoryManager?.stone || 0) + inv.filter(item => item && (item._im_key === 'stone' || item.id === 'stone' || item.name === 'Stone')).length;
+        const slate = (this.props.inventoryManager?.slate || 0) + inv.filter(item => item && (item._im_key === 'slate' || item.id === 'slate' || item.name === 'Slate')).length;
+
+        return {
+            totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate
+        };
+    };
+
+    renderPoppedOutResourcesTopBar = () => {
+        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, incomeRates, gold, dust, wood, mushrooms, stone, slate } = this.getResourcesData();
+
+        return (
+            <div className="popped-out-resources-topbar">
+                <div className="topbar-resource-item" title="Attack">
+                    <span className="res-icon">⚔</span>
+                    <span className="res-val">{totalAtk}</span>
+                </div>
+                <div className="topbar-resource-item" title="Defense">
+                    <span className="res-icon">🛡</span>
+                    <span className="res-val">{totalDef}</span>
+                </div>
+                <div className="topbar-resource-item" title="Food">
+                    <span className="res-icon">🍖</span>
+                    <span className="res-val" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>
+                        {incomeRates.food > 0 && <span className="res-income">+{incomeRates.food}</span>}
+                        {food}/{foodLimit}
+                    </span>
+                </div>
+                <div className="topbar-resource-item" title="Resolve">
+                    <span className="res-icon resolve-icon" style={{
+                        display: 'inline-block',
+                        backgroundImage: `url(${images.resolve_icon})`,
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center',
+                        width: '13px',
+                        height: '13px',
+                        verticalAlign: 'middle'
+                    }} />
+                    <span className="res-val">{resolve}</span>
+                </div>
+                <div className="topbar-resource-item" title="Gold">
+                    <span className="res-icon">🪙</span>
+                    <span className="res-val" style={{ color: '#ffd700' }}>
+                        {incomeRates.gold > 0 && <span className="res-income">+{incomeRates.gold}</span>}
+                        {gold}
+                    </span>
+                </div>
+                <div className="topbar-resource-item" title="Dust">
+                    <span className="res-icon">✨</span>
+                    <span className="res-val" style={{ color: '#b388ff' }}>
+                        {incomeRates.shimmering_dust > 0 && <span className="res-income">+{incomeRates.shimmering_dust}</span>}
+                        {dust}
+                    </span>
+                </div>
+                <div className="topbar-resource-item" title="Wood">
+                    <span className="res-icon wood-icon" style={{
+                        display: 'inline-block',
+                        backgroundImage: `url(${images.wood})`,
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center',
+                        width: '13px',
+                        height: '13px',
+                        verticalAlign: 'middle'
+                    }} />
+                    <span className="res-val" style={{ color: '#a0522d' }}>
+                        {incomeRates.wood > 0 && <span className="res-income">+{incomeRates.wood}</span>}
+                        {wood}
+                    </span>
+                </div>
+                <div className="topbar-resource-item" title="Mushrooms">
+                    <span className="res-icon shroom-icon" style={{
+                        display: 'inline-block',
+                        backgroundImage: `url(${images.mushroom1})`,
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center',
+                        width: '13px',
+                        height: '13px',
+                        verticalAlign: 'middle'
+                    }} />
+                    <span className="res-val" style={{ color: '#d488ff' }}>
+                        {incomeRates.mushrooms > 0 && <span className="res-income">+{incomeRates.mushrooms}</span>}
+                        {mushrooms}
+                    </span>
+                </div>
+                <div className="topbar-resource-item" title="Stone">
+                    <span className="res-icon stone-icon" style={{
+                        display: 'inline-block',
+                        backgroundImage: `url(${images.stone})`,
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center',
+                        width: '13px',
+                        height: '13px',
+                        verticalAlign: 'middle'
+                    }} />
+                    <span className="res-val" style={{ color: '#95a5a6' }}>
+                        {incomeRates.stone > 0 && <span className="res-income">+{incomeRates.stone}</span>}
+                        {stone}
+                    </span>
+                </div>
+                <div className="topbar-resource-item" title="Slate">
+                    <span className="res-icon slate-icon" style={{
+                        display: 'inline-block',
+                        backgroundImage: `url(${images.slate})`,
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center',
+                        width: '13px',
+                        height: '13px',
+                        verticalAlign: 'middle'
+                    }} />
+                    <span className="res-val" style={{ color: '#7f8c8d' }}>
+                        {incomeRates.slate > 0 && <span className="res-income">+{incomeRates.slate}</span>}
+                        {slate}
+                    </span>
+                </div>
+                <button
+                    className="resources-popin-btn"
+                    onClick={this.togglePopoutResources}
+                    title="Pop back in to side panel"
+                >
+                    ↙
+                </button>
+            </div>
+        );
+    };
+
+    renderStatusSummarySection = () => {
+        const collapsed = this.isSectionCollapsed('status_summary');
+        const poppedOut = !!this.state.popoutResources;
+        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate } = this.getResourcesData();
 
         return (
             <div className="dungeon-panel-section section-status_summary">
@@ -6639,8 +6913,16 @@ class DungeonPage extends React.Component {
                     onDragStart={(e) => this.handleDragStart(e, 'status_summary')}
                     onDragEnd={this.handleDragEnd}
                     onClick={() => this.toggleSectionCollapse('status_summary')}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                 >
-                    Status Summary {collapsed ? '[+]' : '[-]'}
+                    <span>Status Summary {collapsed ? '[+]' : '[-]'}</span>
+                    <button
+                        className="resources-popout-btn"
+                        onClick={this.togglePopoutResources}
+                        title={poppedOut ? "Pop resources back into side panel" : "Pop out resources to top right bar"}
+                    >
+                        {poppedOut ? '↙' : '↗'}
+                    </button>
                 </div>
                 {!collapsed && (
                     <div className="section-content">
@@ -6663,45 +6945,33 @@ class DungeonPage extends React.Component {
                             </div>
                         )}
                         {this.state.toastMessage && <div className="dungeon-toast" style={{ marginTop: 8, padding: 8, background: '#2b1b1b', color: '#f0d', borderRadius: 4 }}>{this.state.toastMessage}</div>}
-                        <div className="quicklook-panel">
-                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="crossed swords">⚔</span> Attack</span><span className="ql-value">{totalAtk}</span></div>
-                            <div className="ql-row"><span className="ql-label"><span role="img" aria-label="shield">🛡</span> Defense</span><span className="ql-value">{totalDef}</span></div>
-                            <div className="ql-row">
-                                <span className="ql-label"><span role="img" aria-label="meat">🍖</span> Food</span>
-                                <span className="ql-value" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>
-                                    {incomeRates.food > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.food}</span>}
-                                    {food} / {foodLimit}
-                                </span>
+
+                        {poppedOut ? (
+                            <div className="resources-popped-out-notice">
+                                <div style={{ fontSize: 11, color: '#a0a0a0', marginBottom: 6, textAlign: 'center' }}>
+                                    Resources Popped Out to Top Right
+                                </div>
+                                <button
+                                    className="resources-popin-panel-btn"
+                                    onClick={this.togglePopoutResources}
+                                >
+                                    ↙ Pop In to Side Panel
+                                </button>
                             </div>
-                            <div className="ql-row"><span className="ql-label"><span style={{
-                                display: 'inline-block',
-                                backgroundImage: `url(${images.resolve_icon})`,
-                                backgroundSize: 'contain',
-                                backgroundRepeat: 'no-repeat',
-                                backgroundPosition: 'center',
-                                width: '16px',
-                                height: '16px',
-                                verticalAlign: 'middle',
-                                marginRight: '4px'
-                            }} /> Resolve</span><span className="ql-value">{resolve}</span></div>
-                            <div className="ql-row">
-                                <span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span>
-                                <span className="ql-value" style={{ color: '#ffd700' }}>
-                                    {incomeRates.gold > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.gold}</span>}
-                                    {this.props.inventoryManager?.gold || 0}
-                                </span>
-                            </div>
-                            <div className="ql-row">
-                                <span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span>
-                                <span className="ql-value" style={{ color: '#b388ff' }}>
-                                    {incomeRates.shimmering_dust > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.shimmering_dust}</span>}
-                                    {this.props.inventoryManager?.shimmering_dust || 0}
-                                </span>
-                            </div>
-                            <div className="ql-row">
-                                <span className="ql-label"><span style={{
+                        ) : (
+                            <div className="quicklook-panel">
+                                <div className="ql-row"><span className="ql-label"><span role="img" aria-label="crossed swords">⚔</span> Attack</span><span className="ql-value">{totalAtk}</span></div>
+                                <div className="ql-row"><span className="ql-label"><span role="img" aria-label="shield">🛡</span> Defense</span><span className="ql-value">{totalDef}</span></div>
+                                <div className="ql-row">
+                                    <span className="ql-label"><span role="img" aria-label="meat">🍖</span> Food</span>
+                                    <span className="ql-value" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>
+                                        {incomeRates.food > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.food}</span>}
+                                        {food} / {foodLimit}
+                                    </span>
+                                </div>
+                                <div className="ql-row"><span className="ql-label"><span style={{
                                     display: 'inline-block',
-                                    backgroundImage: `url(${images.wood})`,
+                                    backgroundImage: `url(${images.resolve_icon})`,
                                     backgroundSize: 'contain',
                                     backgroundRepeat: 'no-repeat',
                                     backgroundPosition: 'center',
@@ -6709,64 +6979,91 @@ class DungeonPage extends React.Component {
                                     height: '16px',
                                     verticalAlign: 'middle',
                                     marginRight: '4px'
-                                }} /> Wood</span>
-                                <span className="ql-value" style={{ color: '#a0522d' }}>
-                                    {incomeRates.wood > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.wood}</span>}
-                                    {(this.props.inventoryManager?.wood || 0) + (this.props.inventoryManager?.inventory || []).filter(item => item && (item._im_key === 'wood' || item.id === 'wood' || item.name === 'Wood')).length}
-                                </span>
+                                }} /> Resolve</span><span className="ql-value">{resolve}</span></div>
+                                <div className="ql-row">
+                                    <span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span>
+                                    <span className="ql-value" style={{ color: '#ffd700' }}>
+                                        {incomeRates.gold > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.gold}</span>}
+                                        {gold}
+                                    </span>
+                                </div>
+                                <div className="ql-row">
+                                    <span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span>
+                                    <span className="ql-value" style={{ color: '#b388ff' }}>
+                                        {incomeRates.shimmering_dust > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.shimmering_dust}</span>}
+                                        {dust}
+                                    </span>
+                                </div>
+                                <div className="ql-row">
+                                    <span className="ql-label"><span style={{
+                                        display: 'inline-block',
+                                        backgroundImage: `url(${images.wood})`,
+                                        backgroundSize: 'contain',
+                                        backgroundRepeat: 'no-repeat',
+                                        backgroundPosition: 'center',
+                                        width: '16px',
+                                        height: '16px',
+                                        verticalAlign: 'middle',
+                                        marginRight: '4px'
+                                    }} /> Wood</span>
+                                    <span className="ql-value" style={{ color: '#a0522d' }}>
+                                        {incomeRates.wood > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.wood}</span>}
+                                        {wood}
+                                    </span>
+                                </div>
+                                <div className="ql-row">
+                                    <span className="ql-label"><span style={{
+                                        display: 'inline-block',
+                                        backgroundImage: `url(${images.mushroom1})`,
+                                        backgroundSize: 'contain',
+                                        backgroundRepeat: 'no-repeat',
+                                        backgroundPosition: 'center',
+                                        width: '16px',
+                                        height: '16px',
+                                        verticalAlign: 'middle',
+                                        marginRight: '4px'
+                                    }} /> Mushrooms</span>
+                                    <span className="ql-value" style={{ color: '#d488ff' }}>
+                                        {incomeRates.mushrooms > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.mushrooms}</span>}
+                                        {mushrooms}
+                                    </span>
+                                </div>
+                                <div className="ql-row">
+                                    <span className="ql-label"><span style={{
+                                        display: 'inline-block',
+                                        backgroundImage: `url(${images.stone})`,
+                                        backgroundSize: 'contain',
+                                        backgroundRepeat: 'no-repeat',
+                                        backgroundPosition: 'center',
+                                        width: '16px',
+                                        height: '16px',
+                                        verticalAlign: 'middle',
+                                        marginRight: '4px'
+                                    }} /> Stone</span>
+                                    <span className="ql-value" style={{ color: '#95a5a6' }}>
+                                        {incomeRates.stone > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.stone}</span>}
+                                        {stone}
+                                    </span>
+                                </div>
+                                <div className="ql-row">
+                                    <span className="ql-label"><span style={{
+                                        display: 'inline-block',
+                                        backgroundImage: `url(${images.slate})`,
+                                        backgroundSize: 'contain',
+                                        backgroundRepeat: 'no-repeat',
+                                        backgroundPosition: 'center',
+                                        width: '16px',
+                                        height: '16px',
+                                        verticalAlign: 'middle',
+                                        marginRight: '4px'
+                                    }} /> Slate</span>
+                                    <span className="ql-value" style={{ color: '#7f8c8d' }}>
+                                        {incomeRates.slate > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.slate}</span>}
+                                        {slate}
+                                    </span>
+                                </div>
                             </div>
-                            <div className="ql-row">
-                                <span className="ql-label"><span style={{
-                                    display: 'inline-block',
-                                    backgroundImage: `url(${images.mushroom1})`,
-                                    backgroundSize: 'contain',
-                                    backgroundRepeat: 'no-repeat',
-                                    backgroundPosition: 'center',
-                                    width: '16px',
-                                    height: '16px',
-                                    verticalAlign: 'middle',
-                                    marginRight: '4px'
-                                }} /> Mushrooms</span>
-                                <span className="ql-value" style={{ color: '#d488ff' }}>
-                                    {incomeRates.mushrooms > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.mushrooms}</span>}
-                                    {(this.props.inventoryManager?.mushrooms || 0) + (this.props.inventoryManager?.inventory || []).filter(item => item && (item._im_key === 'mushrooms' || item.id === 'mushrooms' || item.name === 'Mushrooms')).length}
-                                </span>
-                            </div>
-                            <div className="ql-row">
-                                <span className="ql-label"><span style={{
-                                    display: 'inline-block',
-                                    backgroundImage: `url(${images.stone})`,
-                                    backgroundSize: 'contain',
-                                    backgroundRepeat: 'no-repeat',
-                                    backgroundPosition: 'center',
-                                    width: '16px',
-                                    height: '16px',
-                                    verticalAlign: 'middle',
-                                    marginRight: '4px'
-                                }} /> Stone</span>
-                                <span className="ql-value" style={{ color: '#95a5a6' }}>
-                                    {incomeRates.stone > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.stone}</span>}
-                                    {(this.props.inventoryManager?.stone || 0) + (this.props.inventoryManager?.inventory || []).filter(item => item && (item._im_key === 'stone' || item.id === 'stone' || item.name === 'Stone')).length}
-                                </span>
-                            </div>
-                            <div className="ql-row">
-                                <span className="ql-label"><span style={{
-                                    display: 'inline-block',
-                                    backgroundImage: `url(${images.slate})`,
-                                    backgroundSize: 'contain',
-                                    backgroundRepeat: 'no-repeat',
-                                    backgroundPosition: 'center',
-                                    width: '16px',
-                                    height: '16px',
-                                    verticalAlign: 'middle',
-                                    marginRight: '4px'
-                                }} /> Slate</span>
-                                <span className="ql-value" style={{ color: '#7f8c8d' }}>
-                                    {incomeRates.slate > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.slate}</span>}
-                                    {(this.props.inventoryManager?.slate || 0) + (this.props.inventoryManager?.inventory || []).filter(item => item && (item._im_key === 'slate' || item.id === 'slate' || item.name === 'Slate')).length}
-                                </span>
-                            </div>
-                        </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -7811,6 +8108,24 @@ class DungeonPage extends React.Component {
                     e.preventDefault();
                     return;
                 }
+                if (cmd === 'resources' || cmd === 'rs') {
+                    try {
+                        this.addCurrencyToInventory({ type: 'food', amount: 50 }, null, true);
+                        this.addCurrencyToInventory({ type: 'gold', amount: 50 }, null, true);
+                        this.addCurrencyToInventory({ type: 'shimmering_dust', amount: 50 }, null, true);
+                        this.addCurrencyToInventory({ type: 'wood', amount: 50 }, null, true);
+                        this.addCurrencyToInventory({ type: 'mushrooms', amount: 50 }, null, true);
+                        this.addCurrencyToInventory({ type: 'stone', amount: 50 }, null, true);
+                        this.addCurrencyToInventory({ type: 'slate', amount: 50 }, null, true);
+                        this.displayMessage('Added 50 of each resource (Food, Gold, Dust, Wood, Mushrooms, Stone, Slate)!');
+                        this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Added 50 of each resource (Food, Gold, Dust, Wood, Mushrooms, Stone, Slate)'], devConsoleInput: '' }));
+                    } catch (err) {
+                        this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error: ${err && err.message ? err.message : err}`], devConsoleInput: '' }));
+                    }
+                    try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
+                    e.preventDefault();
+                    return;
+                }
                 if (cmd === 'resolve') {
                     try {
                         const meta = getMeta() || {};
@@ -7836,6 +8151,7 @@ class DungeonPage extends React.Component {
                         'shrine respawn / shrinerespawn',
                         'shrine reset / reset shrines — reset all used shrines so they can be accessed again',
                         'resolve — set the crew\'s resolve to 100',
+                        'resources / rs — add 50 of each resource (Food, Gold, Dust, Wood, Mushrooms, Stone, Slate)',
                         'fullhealth / full-health / revive',
                         'food — fill food count to 55',
                         'key — add 1 master key to inventory',
@@ -9326,7 +9642,7 @@ class DungeonPage extends React.Component {
                         monsterType: monsterType,
                         count: count,
                         icon: images['sould_shards'] || 'sould_shards',
-                        description: `A soul shard of a ${monsterType}. Collect 3 to forge an Echo Card at the Pyre & Echo camp station.`
+                        description: `A soul shard of a ${monsterType}. Collect 3 to forge an Echo Card at the The Duel camp station.`
                     });
                 }
             }
@@ -11094,6 +11410,16 @@ class DungeonPage extends React.Component {
         return Array.isArray(dungeon?.spawn_points) ? dungeon.spawn_points : [];
     }
 
+    getRandomSpawnPoint = (dungeonOrSpawns) => {
+        const spawns = Array.isArray(dungeonOrSpawns)
+            ? dungeonOrSpawns
+            : this.getResolvedSpawnPoints(dungeonOrSpawns);
+        if (!Array.isArray(spawns) || spawns.length === 0) return null;
+        if (spawns.length === 1) return spawns[0];
+        const randomIndex = Math.floor(Math.random() * spawns.length);
+        return spawns[randomIndex];
+    }
+
     getSpawnOrientationCode = (spawnPoint) => {
         const fromLocationCode = spawnPoint?.locationCode && spawnPoint.locationCode.split('_')[4];
         if (fromLocationCode === 'F' || fromLocationCode === 'B') return fromLocationCode;
@@ -11165,9 +11491,8 @@ class DungeonPage extends React.Component {
         const disabledOutposts = meta.disabledOutposts || {};
         const activatedGenerators = meta.activatedGenerators || {};
 
-        if (shrinesUsed.length === 0 && narrativeVisited.length === 0 && Object.keys(disabledOutposts).length === 0 && Object.keys(activatedGenerators).length === 0) {
-            return tiles;
-        }
+        // We can't return early here anymore because Domain Monoliths need to be checked
+        // even if no other local state overrides exist.
 
         const activeLevel = this.state && this.state.levelTracker ? this.state.levelTracker.find(e => e.active) : null;
         const currentLevelId = this.props.boardManager?.currentLevel?.id ?? (levelIdOverride !== undefined
@@ -11208,6 +11533,11 @@ class DungeonPage extends React.Component {
             } else if (disabledOutposts[tileKey] && Date.now() >= disabledOutposts[tileKey]) {
                 tile.disabledUntil = null;
             }
+
+            // Restore activated generators
+            if (activatedGenerators[tileKey]) {
+                tile.generatorData = { ...activatedGenerators[tileKey] };
+            }
         }
         // ── Apply Domain Monolith Territory ──
         const activeMonoliths = [];
@@ -11226,7 +11556,8 @@ class DungeonPage extends React.Component {
             const bm = this.props.boardManager;
             const monolithRadii = activeMonoliths.map(m => {
                 const elapsed = Math.max(0, Date.now() - (m.data.activatedAt || Date.now()));
-                const radius = 1 + Math.floor(elapsed / (12 * 60 * 60 * 1000));
+                const calculatedRadius = 1 + Math.floor(elapsed / (12 * 60 * 60 * 1000));
+                const radius = Math.min(16, calculatedRadius);
                 const mCoords = bm.getCoordinatesFromIndex(m.tile.id);
                 return { x: mCoords[0], y: mCoords[1], radius };
             });
@@ -11332,7 +11663,7 @@ class DungeonPage extends React.Component {
         selectedDungeon = JSON.parse(newDungeonRes.data.content);
         selectedDungeon.id = newDungeonRes.data._id;
         selectedDungeon.spawn_points = this.getResolvedSpawnPoints(selectedDungeon);
-        spawnPoint = selectedDungeon.spawn_points[0]
+        spawnPoint = this.getRandomSpawnPoint(selectedDungeon.spawn_points);
 
         // Update the user's active dungeon reference in metadata
         delete meta.activatedGenerators;
@@ -11994,6 +12325,12 @@ class DungeonPage extends React.Component {
         }
         let dungeon = JSON.parse(res.data[0].content);
         dungeon.id = res.data[0]._id;
+        
+        // Send email notification that a user entered this dungeon
+        sendDungeonEntryNotification(getUserName() || 'Unknown User', dungeon.name || 'Unknown Dungeon').catch(err => {
+            console.error('Failed to send dungeon entry notification:', err);
+        });
+
         dungeon = await this.checkAndPerformRelock(dungeon);
         const resolvedSpawnPoints = this.getResolvedSpawnPoints(dungeon);
         const spawnFallbackForDiagnostics = resolvedSpawnPoints[0] || null;
@@ -12569,7 +12906,8 @@ class DungeonPage extends React.Component {
 
         this.setState({
             keysLocked: false,
-            inMonsterBattle: false
+            inMonsterBattle: false,
+            showUserLevelUpModal: getPendingUserPerkLevels() > 0
         }, () => {
             try {
                 const bm = this.props.boardManager;
@@ -14119,7 +14457,7 @@ class DungeonPage extends React.Component {
         const img = tile.image;
 
         const generatorKeys = ['larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith'];
-        const buildingKeys = ['hut', 'outpost', 'observer_platform', 'earthen_fort', 'war_camp', 'war_fort'];
+        const buildingKeys = ['hut', 'outpost', 'outpost_under_construction', 'observer_platform', 'earthen_fort', 'war_camp', 'war_fort'];
 
         const hasGenerator = generatorKeys.includes(containsSubtype) || generatorKeys.includes(bldg) || generatorKeys.includes(img) || generatorKeys.some(k => img === 'buildable_' + k);
         const hasBuilding = buildingKeys.includes(containsSubtype) || buildingKeys.includes(bldg) || buildingKeys.includes(img) || buildingKeys.some(k => img === 'buildable_' + k);
@@ -14275,6 +14613,17 @@ class DungeonPage extends React.Component {
                 iconEmoji: '🏰',
                 description: 'A fortified wooden outpost for securing territory.'
             },
+            outpost_under_construction: {
+                key: 'outpost_under_construction',
+                name: 'Outpost (Under Construction)',
+                resource: 'Construction',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                imageKey: 'buildable_outpost',
+                iconEmoji: '🏗️',
+                description: 'An outpost currently under construction by an enemy crew.'
+            },
             observer_platform: {
                 key: 'observer_platform',
                 name: 'Observer Platform',
@@ -14429,31 +14778,84 @@ class DungeonPage extends React.Component {
             const success = Math.random() < 0.5;
 
             if (success) {
-                const disabledUntil = Date.now() + 30 * 60 * 1000;
-                if (targetTile) targetTile.disabledUntil = disabledUntil;
-                if (bm.tiles && bm.tiles[tileId]) bm.tiles[tileId].disabledUntil = disabledUntil;
-                if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) {
-                    bm.currentBoard.tiles[tileId].disabledUntil = disabledUntil;
-                }
-
-                try {
+                const isUnderConstruction = targetTile && (targetTile.building === 'outpost_under_construction' || (targetTile.contains && targetTile.contains.subtype === 'outpost_under_construction'));
+                
+                if (isUnderConstruction) {
+                    // Destroy the under-construction outpost entirely
+                    if (targetTile) {
+                        targetTile.building = null;
+                        targetTile.contains = null;
+                    }
+                    if (bm.tiles && bm.tiles[tileId]) {
+                        bm.tiles[tileId].building = null;
+                        bm.tiles[tileId].contains = null;
+                    }
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) {
+                        bm.currentBoard.tiles[tileId].building = null;
+                        bm.currentBoard.tiles[tileId].contains = null;
+                    }
+                    
+                    // We don't have access to the other user's activeConstruction, so they will log in, see the tile is empty, 
+                    // and their local activeConstruction check will fail or they will realize it's gone.
+                    // To be safe, we also force a dungeon update immediately so other players see it removed.
                     const meta = getMeta() || {};
-                    meta.disabledOutposts = meta.disabledOutposts || {};
-                    const key = `${bm?.currentLevel?.id || 1}_${bm?.currentBoard?.id || 0}_${tileId}`;
-                    meta.disabledOutposts[key] = disabledUntil;
-                    storeMeta(meta);
-                    if (typeof this.props.saveUserData === 'function') this.props.saveUserData();
-                } catch (e) { }
+                    if (this.props.user && meta.dungeonId && typeof window.updateDungeonRequest === 'function') {
+                        setTimeout(async () => {
+                            try {
+                                const res = await window.getDungeonRequest(meta.dungeonId);
+                                if (res && res.data) {
+                                    let dData = JSON.parse(res.data.content);
+                                    const lvl = dData.levels.find(l => l.id === meta.location.levelId);
+                                    if (lvl) {
+                                        const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
+                                        const mb = plane.miniboards[meta.location.boardIndex];
+                                        if (mb && mb.tiles && mb.tiles[tileId]) {
+                                            mb.tiles[tileId].building = null;
+                                            mb.tiles[tileId].contains = null;
+                                            await window.updateDungeonRequest(res.data._id, dData);
+                                        }
+                                    }
+                                }
+                            } catch(e) { console.warn('Failed to sync destroyed outpost', e); }
+                        }, 500);
+                    }
 
-                this.setState({
-                    sabotageState: null,
-                    sabotageResultModal: {
-                        success: true,
-                        message: 'Sabotage Successful! The enemy outpost has been disabled for 30 minutes.'
-                    },
-                    tiles: bm.tiles ? [...bm.tiles] : this.state.tiles
-                });
-                this.displayMessage('Sabotage Successful! Outpost disabled for 30 minutes.');
+                    this.setState({
+                        sabotageState: null,
+                        sabotageResultModal: {
+                            success: true,
+                            message: 'Sabotage Successful! The enemy construction project was destroyed.'
+                        },
+                        tiles: bm.tiles ? [...bm.tiles] : this.state.tiles
+                    });
+                    this.displayMessage('Sabotage Successful! Enemy construction destroyed.');
+                } else {
+                    const disabledUntil = Date.now() + 30 * 60 * 1000;
+                    if (targetTile) targetTile.disabledUntil = disabledUntil;
+                    if (bm.tiles && bm.tiles[tileId]) bm.tiles[tileId].disabledUntil = disabledUntil;
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) {
+                        bm.currentBoard.tiles[tileId].disabledUntil = disabledUntil;
+                    }
+
+                    try {
+                        const meta = getMeta() || {};
+                        meta.disabledOutposts = meta.disabledOutposts || {};
+                        const key = `${bm?.currentLevel?.id || 1}_${bm?.currentBoard?.id || 0}_${tileId}`;
+                        meta.disabledOutposts[key] = disabledUntil;
+                        storeMeta(meta);
+                        if (typeof this.props.saveUserData === 'function') this.props.saveUserData();
+                    } catch (e) { }
+
+                    this.setState({
+                        sabotageState: null,
+                        sabotageResultModal: {
+                            success: true,
+                            message: 'Sabotage Successful! The enemy outpost has been disabled for 30 minutes.'
+                        },
+                        tiles: bm.tiles ? [...bm.tiles] : this.state.tiles
+                    });
+                    this.displayMessage('Sabotage Successful! Outpost disabled for 30 minutes.');
+                }
             } else {
                 this.setState({
                     sabotageState: null,
@@ -14469,6 +14871,21 @@ class DungeonPage extends React.Component {
 
     attemptMonolithActivation = (tile) => {
         if (!tile) return;
+        const meta = getMeta() || {};
+        const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+        const RESOLVE_COST = 80;
+        if (currentResolve < RESOLVE_COST) {
+            this.displayMessage(`❌ Insufficient Resolve! Activating a Domain Monolith requires ${RESOLVE_COST} Resolve (You have ${currentResolve}/${RESOLVE_COST}).`);
+            return;
+        }
+
+        // Deduct 80 Resolve
+        meta.resolve = currentResolve - RESOLVE_COST;
+        storeMeta(meta);
+        if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+            updateUserRequest(getUserId(), meta).catch(() => {});
+        }
+
         this.closeGeneratorModal();
 
         const bm = this.props.boardManager;
@@ -14485,7 +14902,7 @@ class DungeonPage extends React.Component {
         }, () => {
             if (this._monolithTimer) clearInterval(this._monolithTimer);
             this._monolithTimer = setInterval(() => this.tickMonolithActivationProgress(), 100);
-            this.displayMessage('⏳ Attuning to Domain Monolith... Stay on your tile for 10 seconds!');
+            this.displayMessage(`⚡ Spent ${RESOLVE_COST} Resolve! Attuning to Domain Monolith... Stay on your tile for 10 seconds!`);
         });
     };
 
@@ -14599,6 +15016,166 @@ class DungeonPage extends React.Component {
                 }
             } catch (e) { }
         });
+    };
+
+    handleAttemptOvertake = (tile) => {
+        if (!tile) return;
+        const meta = getMeta() || {};
+        const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+        const RESOLVE_COST = 80;
+        if (currentResolve < RESOLVE_COST) {
+            this.displayMessage(`❌ Insufficient Resolve! Overtaking a Domain Monolith requires ${RESOLVE_COST} Resolve (You have ${currentResolve}/${RESOLVE_COST}).`);
+            return;
+        }
+
+        // Deduct 80 Resolve
+        meta.resolve = currentResolve - RESOLVE_COST;
+        storeMeta(meta);
+        if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+            updateUserRequest(getUserId(), meta).catch(() => {});
+        }
+
+        this.closeGeneratorModal();
+
+        const bm = this.props.boardManager;
+        const playerLoc = bm && bm.playerTile && bm.playerTile.location ? bm.playerTile.location : null;
+
+        const level = this.getDomainLevelForMonolith(tile.id);
+        const duration = level * 60 * 1000;
+
+        this.setState({
+            domainOvertakeState: {
+                tileId: tile.id,
+                startTime: Date.now(),
+                duration: duration,
+                progress: 0,
+                targetLevel: level,
+                startPlayerLocation: playerLoc
+            }
+        });
+
+        this.displayMessage(`⚡ Spent ${RESOLVE_COST} Resolve! Attempting to overtake Domain Monolith (Level ${level}). Stay close for ${level} minute${level > 1 ? 's' : ''}...`);
+
+        if (this._overtakeInterval) clearInterval(this._overtakeInterval);
+        this._overtakeInterval = setInterval(this.tickOvertake, 1000);
+    };
+
+    tickOvertake = () => {
+        const { domainOvertakeState } = this.state;
+        if (!domainOvertakeState) {
+            clearInterval(this._overtakeInterval);
+            return;
+        }
+
+        const bm = this.props.boardManager;
+        const playerLoc = bm && bm.playerTile && bm.playerTile.location ? bm.playerTile.location : null;
+
+        if (!playerLoc || playerLoc[0] !== domainOvertakeState.startPlayerLocation[0] || playerLoc[1] !== domainOvertakeState.startPlayerLocation[1]) {
+            this.displayMessage("Overtake cancelled! You moved away.");
+            this.setState({ domainOvertakeState: null });
+            clearInterval(this._overtakeInterval);
+            return;
+        }
+
+        const elapsed = Date.now() - domainOvertakeState.startTime;
+        const progress = Math.min(1, elapsed / domainOvertakeState.duration);
+
+        if (elapsed < domainOvertakeState.duration) {
+            this.setState(prev => ({
+                domainOvertakeState: prev.domainOvertakeState ? { ...prev.domainOvertakeState, progress } : null
+            }));
+        } else {
+            clearInterval(this._overtakeInterval);
+            this.completeOvertake(domainOvertakeState);
+        }
+    };
+
+    completeOvertake = (stateData) => {
+        const { tileId, targetLevel } = stateData;
+        const bm = this.props.boardManager;
+        const tile = bm.tiles[tileId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]);
+        if (!tile) return;
+
+        const tileKey = `${bm?.currentLevel?.id ?? 0}_${bm?.currentBoard?.id ?? 0}_${tileId}`;
+
+        let meta;
+        try {
+            meta = getMeta() || {};
+        } catch (e) { meta = {}; }
+
+        meta.failedMonolithOvertakes = meta.failedMonolithOvertakes || {};
+        const failureData = meta.failedMonolithOvertakes[tileKey];
+
+        let failCount = 0;
+        if (failureData) {
+            const timeSinceFail = Date.now() - failureData.lastFailureAt;
+            const resetPeriod = 24 * 60 * 60 * 1000 * targetLevel;
+            if (timeSinceFail > resetPeriod) {
+                delete meta.failedMonolithOvertakes[tileKey];
+            } else {
+                failCount = failureData.count;
+            }
+        }
+
+        let successChance = 0.35; // base 35%
+        if (failCount === 1) successChance = 0.175;
+        else if (failCount === 2) successChance = 0.05;
+        else if (failCount >= 3) successChance = 0.01;
+
+        const success = Math.random() < successChance;
+
+        if (success) {
+            if (meta.failedMonolithOvertakes[tileKey]) {
+                delete meta.failedMonolithOvertakes[tileKey];
+            }
+            
+            // Delete enemy's generator data for this tile if stored globally
+            if (meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
+                delete meta.activatedGenerators[tileKey];
+            }
+
+            try { storeMeta(meta); } catch (e) { }
+
+            // Clear generatorData on the tile to "reset" it
+            tile.generatorData = null;
+            if (bm) {
+                if (bm.tiles && bm.tiles[tileId]) bm.tiles[tileId].generatorData = null;
+                if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) bm.currentBoard.tiles[tileId].generatorData = null;
+            }
+            
+            // Re-activate as player owned
+            this.setState({
+                domainOvertakeState: null,
+                monolithActivationResultModal: {
+                    success: true,
+                    message: `Overtake Successful! The Level ${targetLevel} Domain Monolith is now yours.`
+                },
+                activeGeneratorTile: tile
+            }, () => {
+                this.handleActivateGenerator();
+            });
+
+        } else {
+            const nextCount = failCount + 1;
+            meta.failedMonolithOvertakes[tileKey] = {
+                count: nextCount,
+                lastFailureAt: Date.now()
+            };
+            try { storeMeta(meta); } catch (e) { }
+            if (typeof this.props.saveUserData === 'function') this.props.saveUserData();
+
+            let nextChance = 17.5;
+            if (nextCount === 2) nextChance = 5;
+            else if (nextCount >= 3) nextChance = 1;
+
+            this.setState({
+                domainOvertakeState: null,
+                monolithActivationResultModal: {
+                    success: false,
+                    message: `Overtake Failed! The monolith's defenses held strong. Your next attempt will have a ${nextChance}% chance of success.`
+                }
+            });
+        }
     };
 
     handleActivateGenerator = () => {
@@ -14825,9 +15402,37 @@ class DungeonPage extends React.Component {
         }
 
         this.setState({ activeConstruction: null });
+        delete meta.activeConstruction;
+        storeMeta(meta);
 
+        if (this.props.user && typeof window.updateUserRequest === 'function') {
+            window.updateUserRequest(this.props.user.id, meta); // Sync cleared construction
+        }
+        
         if (typeof this.props.saveUserData === 'function') {
             this.props.saveUserData();
+        }
+        
+        // Also force dungeon state update immediately for the new building
+        if (this.props.user && meta.dungeonId && typeof window.updateDungeonRequest === 'function') {
+            setTimeout(async () => {
+                try {
+                    const res = await window.getDungeonRequest(meta.dungeonId);
+                    if (res && res.data) {
+                        let dData = JSON.parse(res.data.content);
+                        const lvl = dData.levels.find(l => l.id === meta.location.levelId);
+                        if (lvl) {
+                            const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
+                            const mb = plane.miniboards[meta.location.boardIndex];
+                            if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
+                                mb.tiles[targetTileIdx].contains = buildingObj;
+                                mb.tiles[targetTileIdx].building = buildingDef.key;
+                                await window.updateDungeonRequest(res.data._id, dData);
+                            }
+                        }
+                    }
+                } catch(e) { console.warn('Failed to sync finished building', e); }
+            }, 500);
         }
     };
 
@@ -14849,13 +15454,37 @@ class DungeonPage extends React.Component {
             return;
         }
 
+        const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+        if (playerIdx === null || playerIdx === undefined) return;
+
         if (buildingDef.key === 'hut') {
             // Replaces any hut the crew has placed previously immediately
             this.removeExistingHuts();
-        }
+        } else if (buildingDef.key === 'outpost') {
+            // Outpost territory rules
+            const playerTile = bm.tiles[playerIdx] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[playerIdx]);
+            const isPlayerTerritory = playerTile && (playerTile.territory === 'player' || (playerTile.contains && playerTile.contains.territory === 'player'));
+            if (!isPlayerTerritory) {
+                if (typeof bm.messaging === 'function') bm.messaging(`❌ Cannot build Outpost here: You must be standing on your own territory!`);
+                return;
+            }
 
-        const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
-        if (playerIdx === null || playerIdx === undefined) return;
+            // Check if there's already an outpost in this contiguous territory block
+            const contiguousTiles = this.getContiguousTerritoryTileIds(playerIdx, 'player');
+            let hasExistingOutpost = false;
+            for (const tId of contiguousTiles) {
+                const t = bm.tiles[tId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]);
+                if (t && (t.building === 'outpost' || t.building === 'outpost_under_construction' || (t.contains && (t.contains.subtype === 'outpost' || t.contains.subtype === 'outpost_under_construction')))) {
+                    hasExistingOutpost = true;
+                    break;
+                }
+            }
+
+            if (hasExistingOutpost) {
+                if (typeof bm.messaging === 'function') bm.messaging(`❌ Cannot build Outpost: This contiguous territory block already contains an outpost!`);
+                return;
+            }
+        }
 
         const invManager = this.props.inventoryManager;
         const inv = (invManager && invManager.inventory) || [];
@@ -14906,6 +15535,56 @@ class DungeonPage extends React.Component {
         this.setState({
             showBuildMenu: false,
             activeConstruction: constructionState
+        }, () => {
+            meta.activeConstruction = constructionState;
+            storeMeta(meta);
+            if (this.props.user && typeof window.updateUserRequest === 'function') {
+                window.updateUserRequest(this.props.user.id, meta); // Sync active construction
+            }
+
+            if (buildingDef.key === 'outpost') {
+                // Immediately push to dungeon state so it's visible for sabotage
+                const buildingObj = {
+                    type: 'building',
+                    subtype: 'outpost_under_construction',
+                    name: 'Outpost (Constructing)',
+                    placedBy: 'player',
+                    constructionStartTime: Date.now(),
+                    constructionDurationMs: durationMs
+                };
+                if (bm.tiles && bm.tiles[playerIdx]) {
+                    bm.tiles[playerIdx].contains = buildingObj;
+                    bm.tiles[playerIdx].building = 'outpost_under_construction';
+                }
+                if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[playerIdx]) {
+                    bm.currentBoard.tiles[playerIdx].contains = buildingObj;
+                    bm.currentBoard.tiles[playerIdx].building = 'outpost_under_construction';
+                }
+                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                
+                // Update Dungeon on backend immediately
+                if (this.props.user && meta.dungeonId && typeof window.updateDungeonRequest === 'function') {
+                    // Quick debounce/async sync
+                    setTimeout(async () => {
+                        try {
+                            const res = await window.getDungeonRequest(meta.dungeonId);
+                            if (res && res.data) {
+                                let dData = JSON.parse(res.data.content);
+                                const lvl = dData.levels.find(l => l.id === meta.location.levelId);
+                                if (lvl) {
+                                    const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
+                                    const mb = plane.miniboards[meta.location.boardIndex];
+                                    if (mb && mb.tiles && mb.tiles[playerIdx]) {
+                                        mb.tiles[playerIdx].contains = buildingObj;
+                                        mb.tiles[playerIdx].building = 'outpost_under_construction';
+                                        await window.updateDungeonRequest(res.data._id, dData);
+                                    }
+                                }
+                            }
+                        } catch(e) { console.warn('Failed to sync outpost under construction', e); }
+                    }, 500);
+                }
+            }
         });
 
         if (typeof bm.messaging === 'function') {
@@ -14928,6 +15607,21 @@ class DungeonPage extends React.Component {
                 this._constructionTicker = null;
                 this.finishConstruction(constructionState);
             } else {
+                // Verify the tile hasn't been sabotaged
+                if (this.props.boardManager && this.props.boardManager.tiles) {
+                    const t = this.props.boardManager.tiles[constructionState.targetTileIdx];
+                    if (t && t.building !== 'outpost_under_construction' && (!t.contains || t.contains.subtype !== 'outpost_under_construction')) {
+                        // Tile was sabotaged!
+                        clearInterval(this._constructionTicker);
+                        this._constructionTicker = null;
+                        this.setState({ activeConstruction: null });
+                        const meta = getMeta() || {};
+                        delete meta.activeConstruction;
+                        storeMeta(meta);
+                        this.displayMessage('Your construction project was sabotaged and destroyed!');
+                        return;
+                    }
+                }
                 this.setState(prev => ({
                     activeConstruction: prev.activeConstruction ? {
                         ...prev.activeConstruction,
@@ -15025,9 +15719,11 @@ class DungeonPage extends React.Component {
                 theurgyMultiplier = 2;
             }
 
+            const prayBonus = hasUserPerk('pray_success_boost') ? 10 : 0;
+
             if (prayerType === 'food') {
                 const roll = Math.random() * 100;
-                const chance = Math.min(100, 25 * theurgyMultiplier);
+                const chance = Math.min(100, (25 * theurgyMultiplier) + prayBonus);
                 if (roll < chance) {
                     success = true;
                     meta.food = (typeof meta.food === 'number' ? meta.food : 55) + 50;
@@ -15038,7 +15734,7 @@ class DungeonPage extends React.Component {
                 }
             } else if (prayerType === 'key') {
                 const roll = Math.random() * 100;
-                const chance = Math.min(100, 15 * theurgyMultiplier);
+                const chance = Math.min(100, (15 * theurgyMultiplier) + prayBonus);
                 if (roll < chance) {
                     success = true;
                     const keyType = Math.random() < 0.5 ? 'minor_key' : 'major_key';
@@ -16680,8 +17376,8 @@ class DungeonPage extends React.Component {
                                 <div className="camp-bottom-tile-label">Trophies</div>
                             </div>
                             <div className="camp-bottom-tile" style={{ cursor: 'pointer' }} onClick={() => this.setState({ showCardForge: true })}>
-                                <div className="camp-bottom-tile-icon" style={{ backgroundImage: `url(${images.pyre_echo_card || images.grimoire})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', width: 54, height: 54 }}></div>
-                                <div className="camp-bottom-tile-label">Pyre &amp; Echo</div>
+                                <div className="camp-bottom-tile-icon" style={{ backgroundImage: `url(${images.the_duel_card || images.grimoire})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', width: 54, height: 54 }}></div>
+                                <div className="camp-bottom-tile-label">The Duel</div>
                             </div>
                             <div className="camp-bottom-tile" style={{ cursor: 'pointer' }} onClick={() => this.setState({ showSiegeArmy: true })}>
                                 <div className="camp-bottom-tile-icon" style={{ backgroundImage: `url(${images.eclipse})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', width: 54, height: 54 }}></div>
@@ -17986,6 +18682,16 @@ class DungeonPage extends React.Component {
                         const minutes = Math.max(0, Math.floor((remainingMs % 3600000) / 60000));
                         const cooldownText = onCooldown ? `${hours}h ${minutes}m remaining` : null;
 
+                        const prayBonus = hasUserPerk('pray_success_boost') ? 10 : 0;
+                        const crewForPray = Array.isArray(meta.crew) ? meta.crew : (this.props.crewManager && Array.isArray(this.props.crewManager.crew) ? this.props.crewManager.crew : []);
+                        let prayMult = 1;
+                        if (crewForPray.some(m => m && Array.isArray(m.skills) && m.skills.includes('theurgy_3'))) prayMult = 4;
+                        else if (crewForPray.some(m => m && Array.isArray(m.skills) && m.skills.includes('theurgy_2'))) prayMult = 3;
+                        else if (crewForPray.some(m => m && Array.isArray(m.skills) && m.skills.includes('theurgy'))) prayMult = 2;
+
+                        const foodRate = Math.min(100, (25 * prayMult) + prayBonus);
+                        const keyRate = Math.min(100, (15 * prayMult) + prayBonus);
+
                         return (
                             <div className="pray-aid-overlay">
                                 <div className="pray-aid-header">
@@ -18033,8 +18739,8 @@ class DungeonPage extends React.Component {
                                             </div>
                                             <div className="pray-option-details">
                                                 <div className="pray-option-name">Prayer for Sustenance</div>
-                                                <div className="pray-option-desc">25% chance to materialize +50 Food supply.</div>
-                                                <div className="pray-option-meta">25% Success Rate</div>
+                                                <div className="pray-option-desc">{foodRate}% chance to materialize +50 Food supply.</div>
+                                                <div className="pray-option-meta">{foodRate}% Success Rate</div>
                                             </div>
                                             <button
                                                 className="pray-action-btn"
@@ -18054,8 +18760,8 @@ class DungeonPage extends React.Component {
                                             </div>
                                             <div className="pray-option-details">
                                                 <div className="pray-option-name">Prayer for Passage</div>
-                                                <div className="pray-option-desc">15% chance to materialize a minor or major key.</div>
-                                                <div className="pray-option-meta">15% Success Rate</div>
+                                                <div className="pray-option-desc">{keyRate}% chance to materialize a minor or major key.</div>
+                                                <div className="pray-option-meta">{keyRate}% Success Rate</div>
                                             </div>
                                             <button
                                                 className="pray-action-btn"
@@ -18199,6 +18905,7 @@ class DungeonPage extends React.Component {
                         <div className="message-container" style={{ opacity: this.state.showMessage ? 1 : 0, transition: 'opacity 0.5s' }}>
                             {this.state.messageToDisplay}
                         </div>
+                        {this.state.popoutResources && this.renderPoppedOutResourcesTopBar()}
                     </div>
                     <div className={`dungeon-board-container ${this.state.portalTransitionClass || ''}`} style={{
                         position: 'relative',
@@ -18287,7 +18994,10 @@ class DungeonPage extends React.Component {
                                     isDisabledOutpost={!!(tile.disabledUntil && Date.now() < tile.disabledUntil)}
                                     disabledUntil={tile.disabledUntil}
                                     sabotageProgress={this.state.sabotageState && this.state.sabotageState.tileId === tile.id ? this.state.sabotageState.progress : null}
-                                    monolithActivationProgress={this.state.monolithActivationState && this.state.monolithActivationState.tileId === tile.id ? this.state.monolithActivationState.progress : null}
+                                    monolithActivationProgress={
+                                        (this.state.monolithActivationState && this.state.monolithActivationState.tileId === tile.id ? this.state.monolithActivationState.progress : null) || 
+                                        (this.state.domainOvertakeState && this.state.domainOvertakeState.tileId === tile.id ? this.state.domainOvertakeState.progress : null)
+                                    }
                                     hasLivingSummoner={hasLivingSummoner}
                                     playerImgKey={playerImgKey}
                                     cursor={this.state.minimapPlaceMapMarkerStarted ? 'crosshair' : 'default'}
@@ -18963,9 +19673,43 @@ class DungeonPage extends React.Component {
 
                                 {/* Interaction Action Button */}
                                 {(() => {
+                                    const meta = getMeta() || {};
                                     const isUserOwned = gData.owned === true;
-                                    const isEnemyOutpost = def.key === 'outpost' && !isUserOwned;
+                                    const isEnemyOutpost = (def.key === 'outpost' || def.key === 'outpost_under_construction') && !isUserOwned;
+                                    const isEnemyMonolith = (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith') && !isUserOwned && isActivated;
                                     const isDisabled = tile.disabledUntil && Date.now() < tile.disabledUntil;
+
+                                    if (isEnemyMonolith) {
+                                        const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+                                        const canAfford = currentResolve >= 80;
+                                        return (
+                                            <button
+                                                onClick={() => this.handleAttemptOvertake(tile)}
+                                                disabled={!canAfford}
+                                                style={{
+                                                    width: '100%',
+                                                    boxSizing: 'border-box',
+                                                    padding: '12px 24px',
+                                                    borderRadius: '12px',
+                                                    border: `1px solid ${canAfford ? '#a855f7' : '#555555'}`,
+                                                    background: canAfford
+                                                        ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.6) 0%, rgba(168, 85, 247, 0.85) 100%)'
+                                                        : 'linear-gradient(135deg, rgba(60, 60, 60, 0.5) 0%, rgba(90, 90, 90, 0.5) 100%)',
+                                                    color: canAfford ? '#ffffff' : '#aaaaaa',
+                                                    fontFamily: "'Cinzel', serif",
+                                                    fontSize: '14px',
+                                                    fontWeight: '700',
+                                                    letterSpacing: '1px',
+                                                    cursor: canAfford ? 'pointer' : 'not-allowed',
+                                                    boxShadow: canAfford ? '0 4px 15px rgba(168, 85, 247, 0.4)' : 'none',
+                                                    opacity: canAfford ? 1 : 0.6,
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                            >
+                                                ATTEMPT TO OVERTAKE (80 RESOLVE)
+                                            </button>
+                                        );
+                                    }
 
                                     if (isEnemyOutpost) {
                                         if (isDisabled) {
@@ -19064,27 +19808,33 @@ class DungeonPage extends React.Component {
                                     }
 
                                     if (!isOwner && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith')) {
+                                        const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+                                        const canAfford = currentResolve >= 80;
                                         return (
                                             <button
                                                 onClick={() => this.attemptMonolithActivation(tile)}
+                                                disabled={!canAfford}
                                                 style={{
                                                     width: '100%',
                                                     boxSizing: 'border-box',
                                                     padding: '12px 24px',
                                                     borderRadius: '12px',
-                                                    border: '1px solid #c084fc',
-                                                    background: 'linear-gradient(135deg, rgba(147, 51, 234, 0.5) 0%, rgba(192, 132, 252, 0.8) 100%)',
-                                                    color: '#ffffff',
+                                                    border: `1px solid ${canAfford ? '#c084fc' : '#555555'}`,
+                                                    background: canAfford
+                                                        ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.5) 0%, rgba(192, 132, 252, 0.8) 100%)'
+                                                        : 'linear-gradient(135deg, rgba(60, 60, 60, 0.5) 0%, rgba(90, 90, 90, 0.5) 100%)',
+                                                    color: canAfford ? '#ffffff' : '#aaaaaa',
                                                     fontFamily: "'Cinzel', serif",
-                                                    fontSize: '15px',
+                                                    fontSize: '14px',
                                                     fontWeight: '700',
                                                     letterSpacing: '1px',
-                                                    cursor: 'pointer',
-                                                    boxShadow: '0 4px 15px rgba(168, 85, 247, 0.4)',
+                                                    cursor: canAfford ? 'pointer' : 'not-allowed',
+                                                    boxShadow: canAfford ? '0 4px 15px rgba(168, 85, 247, 0.4)' : 'none',
+                                                    opacity: canAfford ? 1 : 0.6,
                                                     transition: 'all 0.2s ease'
                                                 }}
                                             >
-                                                ATTEMPT TO ACTIVATE
+                                                ATTEMPT TO ACTIVATE (80 RESOLVE)
                                             </button>
                                         );
                                     }
@@ -20188,7 +20938,7 @@ class DungeonPage extends React.Component {
                     </div>
                 )}
 
-                {/* Pyre & Echo Forge overlay */}
+                {/* The Duel Forge overlay */}
                 {this.state.showCardForge && (
                     <CardForge
                         crew={this.props.crewManager ? this.props.crewManager.crew : []}
@@ -20268,6 +21018,15 @@ class DungeonPage extends React.Component {
                         skillsMatrix={skillsMatrix}
                         onComplete={this.handleDebugLevelUpComplete}
                         onSave={() => { try { this.props.saveUserData && this.props.saveUserData(); } catch (e) { } }}
+                    />
+                )}
+
+                {this.state.showUserLevelUpModal && (
+                    <UserLevelUpScreen
+                        onComplete={() => {
+                            const remaining = getPendingUserPerkLevels();
+                            this.setState({ showUserLevelUpModal: remaining > 0 });
+                        }}
                     />
                 )}
                 {/* Save Indicator */}

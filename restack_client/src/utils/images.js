@@ -451,7 +451,7 @@ import dungeon_portal from '../assets/icons/portals/dungeon portal.png';
 import black_magic from '../assets/icons/magic/black_magic.png';
 import fireball from '../assets/icons/combat-icons/specials/wizard/fireball.png';
 import grimoire from '../assets/icons/magic/grimoire.png';
-import pyre_echo_card from '../assets/icons/misc/pyre_echo_card.png';
+import the_duel_card from '../assets/icons/misc/pyre_echo_card.png';
 import necromancy from '../assets/icons/magic/necromancy.png';
 import exp from '../assets/icons/misc/exp related/exp.png';
 import spell from '../assets/icons/magic/spell.png';
@@ -1698,7 +1698,7 @@ export {
     black_magic,
     fireball,
     grimoire,
-    pyre_echo_card,
+    the_duel_card,
     necromancy,
     exp,
     spell,

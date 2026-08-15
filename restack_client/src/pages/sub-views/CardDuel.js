@@ -1,6 +1,7 @@
 import React from 'react';
 import * as images from '../../utils/images';
 import '../../styles/CardDuel.css';
+import { hasUserPerk } from '../../utils/user-perks';
 
 // ─── Tactical Card Duel Component (Threshold & Territory Overhaul) ───────────
 
@@ -14,10 +15,12 @@ export default class CardDuel extends React.Component {
     constructor(props) {
         super(props);
 
+        const basePlayerHp = hasUserPerk('card_duel_hp') ? 25 : 20;
+
         this.state = {
-            // Player & Reaper Health (Starting HP = 20)
-            playerHP: 20,
-            playerMaxHP: 20,
+            // Player & Reaper Health (Starting HP = 20, or 25 with Duelist Vitality User Perk)
+            playerHP: basePlayerHp,
+            playerMaxHP: basePlayerHp,
             reaperHP: 20,
             reaperMaxHP: 20,
 
@@ -34,6 +37,8 @@ export default class CardDuel extends React.Component {
             playerSpirit: 1,
             reaperSpirit: 1,
             maxSpirit: 1,
+            playerBonusAllowance: 0,
+            reaperBonusAllowance: 0,
 
             // First Player Choice Overlay
             firstPlayerOverlay: {
@@ -54,6 +59,8 @@ export default class CardDuel extends React.Component {
             reaperCarriedSpirit: 0,
             actionCardAnim: null,
             gameOver: null, // 'victory' or 'defeat'
+            aggressor: null,
+            finalTurnBeforeCombat: false,
 
             // Decks, Hands, Discards (12 cards each)
             playerDeck: [],
@@ -215,6 +222,9 @@ export default class CardDuel extends React.Component {
                 const isWizard = formattedType.toLowerCase().includes('wizard');
                 const isSage = formattedType.toLowerCase().includes('sage');
                 const isSummoner = formattedType.toLowerCase().includes('summoner');
+                const isSoldier = formattedType.toLowerCase().includes('soldier');
+                const isBarbarian = formattedType.toLowerCase().includes('barbarian');
+                const isMonk = formattedType.toLowerCase().includes('monk');
                 let profile;
                 if (isRanger) {
                     profile = { atk: 1, hp: 2 };
@@ -224,6 +234,12 @@ export default class CardDuel extends React.Component {
                     profile = { atk: 0, hp: 3 };
                 } else if (isSummoner) {
                     profile = { atk: 0, hp: 2 };
+                } else if (isSoldier) {
+                    profile = { atk: 2, hp: 3 };
+                } else if (isBarbarian) {
+                    profile = { atk: 4, hp: 2 };
+                } else if (isMonk) {
+                    profile = { atk: 2, hp: 2 };
                 } else {
                     profile = CREW_STAT_PROFILES[Math.floor(Math.random() * CREW_STAT_PROFILES.length)];
                 }
@@ -245,13 +261,16 @@ export default class CardDuel extends React.Component {
                     isRanger,
                     isWizard,
                     isSage,
-                    isSummoner
+                    isSummoner,
+                    isSoldier,
+                    isBarbarian,
+                    isMonk
                 });
             });
         }
 
         // Fill crew cards if less than 3
-        const fallbackTypes = ['soldier', 'wizard', 'ranger', 'summoner', 'sage'];
+        const fallbackTypes = ['soldier', 'wizard', 'ranger', 'summoner', 'sage', 'barbarian', 'monk'];
         while (crewCardsToAdd.length < 3) {
             const fallbackType = fallbackTypes[crewCardsToAdd.length % fallbackTypes.length];
             const formattedType = fallbackType.charAt(0).toUpperCase() + fallbackType.slice(1);
@@ -260,6 +279,9 @@ export default class CardDuel extends React.Component {
             const isWizard = fallbackType === 'wizard';
             const isSage = fallbackType === 'sage';
             const isSummoner = fallbackType === 'summoner';
+            const isSoldier = fallbackType === 'soldier';
+            const isBarbarian = fallbackType === 'barbarian';
+            const isMonk = fallbackType === 'monk';
             let profile;
             if (isRanger) {
                 profile = { atk: 1, hp: 2 };
@@ -269,6 +291,12 @@ export default class CardDuel extends React.Component {
                 profile = { atk: 0, hp: 3 };
             } else if (isSummoner) {
                 profile = { atk: 0, hp: 2 };
+            } else if (isSoldier) {
+                profile = { atk: 2, hp: 3 };
+            } else if (isBarbarian) {
+                profile = { atk: 4, hp: 2 };
+            } else if (isMonk) {
+                profile = { atk: 2, hp: 2 };
             } else {
                 profile = CREW_STAT_PROFILES[Math.floor(Math.random() * CREW_STAT_PROFILES.length)];
             }
@@ -291,7 +319,10 @@ export default class CardDuel extends React.Component {
                 isRanger,
                 isWizard,
                 isSage,
-                isSummoner
+                isSummoner,
+                isSoldier,
+                isBarbarian,
+                isMonk
             });
         }
 
@@ -346,6 +377,36 @@ export default class CardDuel extends React.Component {
             desc: 'Carries over all remaining unused Spirit in current turn to your next turn!'
         });
 
+        playerDeck.push({
+            id: `player_invest_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Invest',
+            type: 'action',
+            actionType: 'invest',
+            owner: 'player',
+            cost: 3,
+            atk: 0,
+            hp: 0,
+            width: 1,
+            height: 1,
+            art: resolveImage(images.volcanic_rune) || resolveImage(images.earthen_rune),
+            desc: 'Permanently increases maximum Spirit allowance by 1.'
+        });
+
+        playerDeck.push({
+            id: `player_inflate_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Inflate',
+            type: 'action',
+            actionType: 'inflate',
+            owner: 'player',
+            cost: 3,
+            atk: 0,
+            hp: 0,
+            width: 1,
+            height: 1,
+            art: resolveImage(images.shadow_rune) || resolveImage(images.earthen_rune),
+            desc: 'Draw 3 cards from your deck.'
+        });
+
         // Add 1 Overdrive Action Card & 1 Reap Action Card to Reaper Deck
         reaperDeck.push({
             id: `reaper_overdrive_${Math.random().toString(36).substring(2, 7)}`,
@@ -375,6 +436,36 @@ export default class CardDuel extends React.Component {
             height: 1,
             art: resolveImage(images.reaper_reap) || resolveImage(images.shadow_rune) || resolveImage(images.reaper_card_back),
             desc: 'Deals 3 direct damage to the Player!'
+        });
+
+        reaperDeck.push({
+            id: `reaper_invest_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Invest',
+            type: 'action',
+            actionType: 'invest',
+            owner: 'reaper',
+            cost: 3,
+            atk: 0,
+            hp: 0,
+            width: 1,
+            height: 1,
+            art: resolveImage(images.volcanic_rune) || resolveImage(images.earthen_rune),
+            desc: 'Permanently increases maximum Spirit allowance by 1.'
+        });
+
+        reaperDeck.push({
+            id: `reaper_inflate_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Inflate',
+            type: 'action',
+            actionType: 'inflate',
+            owner: 'reaper',
+            cost: 3,
+            atk: 0,
+            hp: 0,
+            width: 1,
+            height: 1,
+            art: resolveImage(images.shadow_rune) || resolveImage(images.earthen_rune),
+            desc: 'Draw 3 cards from your deck.'
         });
 
         // Fill remaining up to 12 with Cave Pygmies
@@ -420,9 +511,12 @@ export default class CardDuel extends React.Component {
         const firstPlayerKey = Math.random() < 0.5 ? 'player' : 'reaper';
         const firstPlayerName = firstPlayerKey === 'player' ? 'YOU GO FIRST!' : 'REAPER GOES FIRST!';
 
+        const basePlayerHp = hasUserPerk('card_duel_hp') ? 25 : 20;
+        const autoWin = hasUserPerk('reaper_auto_win') && Math.random() < 0.10;
+
         this.setState({
-            playerHP: 20,
-            playerMaxHP: 20,
+            playerHP: basePlayerHp,
+            playerMaxHP: basePlayerHp,
             reaperHP: 20,
             reaperMaxHP: 20,
             combatRound: 1,
@@ -433,6 +527,8 @@ export default class CardDuel extends React.Component {
             playerSpirit: 1,
             reaperSpirit: 1,
             maxSpirit: 1,
+            playerBonusAllowance: 0,
+            reaperBonusAllowance: 0,
             startingPlayer: firstPlayerKey,
             currentTurn: firstPlayerKey,
             playerOverdriveActive: false,
@@ -440,6 +536,8 @@ export default class CardDuel extends React.Component {
             playerCarriedSpirit: 0,
             reaperCarriedSpirit: 0,
             actionCardAnim: null,
+            aggressor: null,
+            finalTurnBeforeCombat: false,
             firstPlayerOverlay: {
                 active: true,
                 phase: 'selecting',
@@ -464,8 +562,17 @@ export default class CardDuel extends React.Component {
                 '🎲 Randomly selecting the starting player...'
             ]
         }, () => {
-            // Trigger first player visual animation overlay
-            this.runFirstPlayerChooserAnimation(firstPlayerKey);
+            if (autoWin) {
+                this.addLog('✨ Banishment Aura (User Perk): You banished the Reaper instantly!');
+                this.setState({
+                    gameOver: true,
+                    winner: 'player',
+                    bannerText: 'BANISHMENT AURA! REAPER BANISHED!'
+                });
+            } else {
+                // Trigger first player visual animation overlay
+                this.runFirstPlayerChooserAnimation(firstPlayerKey);
+            }
         });
     }
 
@@ -525,11 +632,23 @@ export default class CardDuel extends React.Component {
     }
 
     checkThresholdAndTriggerCombat = (grid = this.state.grid) => {
-        const { threshold, playerThresholdUsed, reaperThresholdUsed } = this.state;
+        const { threshold, playerThresholdUsed, reaperThresholdUsed, aggressor } = this.state;
 
-        if (playerThresholdUsed >= threshold || reaperThresholdUsed >= threshold) {
-            this.addLog(`⚡ COMBAT THRESHOLD REACHED (${Math.max(playerThresholdUsed, reaperThresholdUsed)}/${threshold})! Units march to battle!`);
-            this.startCombatPhase(grid);
+        if ((playerThresholdUsed >= threshold || reaperThresholdUsed >= threshold) && !aggressor) {
+            const triggeringPlayer = this.state.currentTurn;
+            const thresholdValue = Math.max(playerThresholdUsed, reaperThresholdUsed);
+            
+            this.addLog(`⚡ THRESHOLD REACHED (${thresholdValue}/${threshold})! ${triggeringPlayer === 'player' ? 'YOU' : 'REAPER'} became the AGGRESSOR!`);
+            this.addLog(`🛡️ Turn passed for a final response! (No Action cards allowed)`);
+            
+            this.setState({ 
+                aggressor: triggeringPlayer,
+                finalTurnBeforeCombat: true,
+                selectedCard: null,
+                draggedCardId: null
+            }, () => {
+                this.advanceToNextTurn(true); // pass `true` to indicate forced threshold trigger
+            });
             return true;
         }
         return false;
@@ -547,12 +666,23 @@ export default class CardDuel extends React.Component {
         this.advanceToNextTurn();
     }
 
-    advanceToNextTurn = (overrideGrid) => {
+    advanceToNextTurn = (isThresholdTrigger = false) => {
         if (this.state.gameOver) return;
+
+        if (this.state.finalTurnBeforeCombat && !isThresholdTrigger) {
+            // The responding player just ended their final turn. Combat starts now!
+            this.setState({ finalTurnBeforeCombat: false }, () => {
+                this.addLog(`⚔️ The final response is over! Units march to battle!`);
+                this.startCombatPhase();
+            });
+            return;
+        }
 
         const nextTurnNum = this.state.turnNumber + 1;
         // Alternating Spirit progression: Turn 1: 1, Turn 2: 1, Turn 3: 2, Turn 4: 2, Turn 5: 3...
-        const spiritAllowance = Math.floor((nextTurnNum + 1) / 2);
+        const baseAllowance = Math.floor((nextTurnNum + 1) / 2);
+        const playerSpiritAllowance = baseAllowance + (this.state.playerBonusAllowance || 0);
+        const reaperSpiritAllowance = baseAllowance + (this.state.reaperBonusAllowance || 0);
         
         let playerCarried = this.state.playerCarriedSpirit || 0;
         let reaperCarried = this.state.reaperCarriedSpirit || 0;
@@ -583,19 +713,23 @@ export default class CardDuel extends React.Component {
             updatedReaperHand.push(drawn);
         }
 
-        let playerSpiritForTurn = spiritAllowance;
-        let reaperSpiritForTurn = spiritAllowance;
+        let playerSpiritForTurn = this.state.playerSpirit;
+        let reaperSpiritForTurn = this.state.reaperSpirit;
 
-        if (nextTurnOwner === 'player' && playerCarried > 0) {
-            playerSpiritForTurn = spiritAllowance + playerCarried;
-            this.addLog(`⚡ OVERDRIVE SURGE! Carried over +${playerCarried} Spirit! Available Spirit: ${playerSpiritForTurn}/${spiritAllowance}.`);
-            playerCarried = 0;
-        }
-
-        if (nextTurnOwner === 'reaper' && reaperCarried > 0) {
-            reaperSpiritForTurn = spiritAllowance + reaperCarried;
-            this.addLog(`⚡ REAPER OVERDRIVE SURGE! Carried over +${reaperCarried} Spirit!`);
-            reaperCarried = 0;
+        if (nextTurnOwner === 'player') {
+            playerSpiritForTurn = playerSpiritAllowance;
+            if (playerCarried > 0) {
+                playerSpiritForTurn += playerCarried;
+                this.addLog(`⚡ OVERDRIVE SURGE! Carried over +${playerCarried} Spirit! Available Spirit: ${playerSpiritForTurn}/${playerSpiritAllowance}.`);
+                playerCarried = 0;
+            }
+        } else if (nextTurnOwner === 'reaper') {
+            reaperSpiritForTurn = reaperSpiritAllowance;
+            if (reaperCarried > 0) {
+                reaperSpiritForTurn += reaperCarried;
+                this.addLog(`⚡ REAPER OVERDRIVE SURGE! Carried over +${reaperCarried} Spirit!`);
+                reaperCarried = 0;
+            }
         }
 
         this.setState({
@@ -603,7 +737,7 @@ export default class CardDuel extends React.Component {
             currentTurn: nextTurnOwner,
             playerSpirit: playerSpiritForTurn,
             reaperSpirit: reaperSpiritForTurn,
-            maxSpirit: spiritAllowance,
+            maxSpirit: playerSpiritAllowance,
             playerOverdriveActive: false,
             reaperOverdriveActive: false,
             playerCarriedSpirit: playerCarried,
@@ -657,7 +791,14 @@ export default class CardDuel extends React.Component {
             return validAnchors;
         };
 
-        const playableIndex = reaperHand.findIndex(c => c.cost <= reaperSpirit);
+        // If Reaper is responding to player aggression, they cannot play Action cards
+        const isRespondingToAggressor = this.state.aggressor === 'player';
+
+        const playableIndex = reaperHand.findIndex(c => {
+            if (c.cost > reaperSpirit) return false;
+            if (isRespondingToAggressor && c.type === 'action') return false;
+            return true;
+        });
 
         if (playableIndex === -1) {
             // Reaper cannot play any cards -> end Reaper turn
@@ -674,7 +815,6 @@ export default class CardDuel extends React.Component {
             const nextSpirit = reaperSpirit - card.cost;
             const nextHand = reaperHand.filter((_, i) => i !== playableIndex);
             const nextDiscard = [...this.state.reaperDiscard, card];
-            const nextThreshold = (this.state.reaperThresholdUsed || 0) + (card.cost || 1);
 
             if (card.actionType === 'overdrive') {
                 this.addLog(`⚡ Reaper activated OVERDRIVE! Remaining Spirit will carry over to next turn.`);
@@ -682,7 +822,6 @@ export default class CardDuel extends React.Component {
                     reaperSpirit: nextSpirit,
                     reaperHand: nextHand,
                     reaperDiscard: nextDiscard,
-                    reaperThresholdUsed: nextThreshold,
                     reaperOverdriveActive: true,
                     actionCardAnim: { card, type: 'overdrive', owner: 'reaper' }
                 }, () => {
@@ -705,7 +844,6 @@ export default class CardDuel extends React.Component {
                     reaperSpirit: nextSpirit,
                     reaperHand: nextHand,
                     reaperDiscard: nextDiscard,
-                    reaperThresholdUsed: nextThreshold,
                     gameOver: nextPlayerHP <= 0 ? 'defeat' : null,
                     actionCardAnim: { card, type: 'reap', owner: 'reaper', damage: 3 }
                 }, () => {
@@ -718,6 +856,52 @@ export default class CardDuel extends React.Component {
                                 }
                             }
                         });
+                    }, 1300);
+                });
+                return;
+            }
+
+            if (card.actionType === 'invest') {
+                this.addLog(`📈 Reaper played INVEST! Maximum Spirit allowance permanently increased by 1.`);
+                this.setState({
+                    reaperSpirit: nextSpirit,
+                    reaperHand: nextHand,
+                    reaperDiscard: nextDiscard,
+                    reaperBonusAllowance: (this.state.reaperBonusAllowance || 0) + 1,
+                    actionCardAnim: { card, type: 'invest', owner: 'reaper' }
+                }, () => {
+                    setTimeout(() => {
+                        this.setState({ actionCardAnim: null });
+                        const triggered = this.checkThresholdAndTriggerCombat();
+                        if (!triggered) {
+                            setTimeout(() => { this.executeReaperTurn(); }, 400);
+                        }
+                    }, 1300);
+                });
+                return;
+            }
+
+            if (card.actionType === 'inflate') {
+                this.addLog(`🎈 Reaper played INFLATE! Draws 3 cards.`);
+                const drawnCards = [];
+                const newDeck = [...this.state.reaperDeck];
+                for (let i = 0; i < 3; i++) {
+                    if (newDeck.length > 0) drawnCards.push(newDeck.shift());
+                }
+                const newHand = [...nextHand, ...drawnCards].slice(0, 7);
+                this.setState({
+                    reaperSpirit: nextSpirit,
+                    reaperHand: newHand,
+                    reaperDeck: newDeck,
+                    reaperDiscard: nextDiscard,
+                    actionCardAnim: { card, type: 'inflate', owner: 'reaper' }
+                }, () => {
+                    setTimeout(() => {
+                        this.setState({ actionCardAnim: null });
+                        const triggered = this.checkThresholdAndTriggerCombat();
+                        if (!triggered) {
+                            setTimeout(() => { this.executeReaperTurn(); }, 400);
+                        }
                     }, 1300);
                 });
                 return;
@@ -808,7 +992,6 @@ export default class CardDuel extends React.Component {
         const nextSpirit = this.state.playerSpirit - card.cost;
         const nextHand = this.state.playerHand.filter(c => c.id !== card.id);
         const nextDiscard = [...this.state.playerDiscard, card];
-        const nextThreshold = (this.state.playerThresholdUsed || 0) + (card.cost || 1);
 
         if (card.actionType === 'overdrive') {
             this.addLog(`⚡ OVERDRIVE ACTIVATED! Remaining Spirit this turn will carry over to your next turn!`);
@@ -816,7 +999,6 @@ export default class CardDuel extends React.Component {
                 playerSpirit: nextSpirit,
                 playerHand: nextHand,
                 playerDiscard: nextDiscard,
-                playerThresholdUsed: nextThreshold,
                 playerOverdriveActive: true,
                 selectedCard: null,
                 actionCardAnim: { card, type: 'overdrive', owner: 'player' }
@@ -826,6 +1008,51 @@ export default class CardDuel extends React.Component {
                     this.checkThresholdAndTriggerCombat();
                 }, 1300);
             });
+            return;
+        }
+
+        if (card.actionType === 'invest') {
+            this.addLog(`📈 INVEST ACTIVATED! Maximum Spirit allowance permanently increased by 1.`);
+            const newMaxSpirit = (this.state.maxSpirit || 1) + 1;
+            this.setState({
+                playerSpirit: nextSpirit,
+                playerHand: nextHand,
+                playerDiscard: nextDiscard,
+                playerBonusAllowance: (this.state.playerBonusAllowance || 0) + 1,
+                maxSpirit: newMaxSpirit,
+                selectedCard: null,
+                actionCardAnim: { card, type: 'invest', owner: 'player' }
+            }, () => {
+                setTimeout(() => {
+                    this.setState({ actionCardAnim: null });
+                    this.checkThresholdAndTriggerCombat();
+                }, 1300);
+            });
+            return;
+        }
+
+        if (card.actionType === 'inflate') {
+            this.addLog(`🎈 INFLATE ACTIVATED! You drew 3 cards.`);
+            const drawnCards = [];
+            const newDeck = [...this.state.playerDeck];
+            for (let i = 0; i < 3; i++) {
+                if (newDeck.length > 0) drawnCards.push(newDeck.shift());
+            }
+            const newHand = [...nextHand, ...drawnCards].slice(0, 7);
+            this.setState({
+                playerSpirit: nextSpirit,
+                playerHand: newHand,
+                playerDeck: newDeck,
+                playerDiscard: nextDiscard,
+                selectedCard: null,
+                actionCardAnim: { card, type: 'inflate', owner: 'player' }
+            }, () => {
+                setTimeout(() => {
+                    this.setState({ actionCardAnim: null });
+                    this.checkThresholdAndTriggerCombat();
+                }, 1300);
+            });
+            return;
         }
     }
 
@@ -841,6 +1068,11 @@ export default class CardDuel extends React.Component {
 
         if (card.cost > this.state.playerSpirit) {
             this.addLog(`⚠️ Not enough Spirit to play ${card.name} (Requires ${card.cost} Spirit).`);
+            return;
+        }
+
+        if (this.state.aggressor === 'reaper' && card.type === 'action') {
+            this.addLog(`⚠️ You cannot play Action cards during a final response turn!`);
             return;
         }
 
@@ -1043,7 +1275,10 @@ export default class CardDuel extends React.Component {
 
         this.setState({ activeCombatColumn: colIndex });
 
-        const processedIds = new Set();
+        if (!this.processedUnitIdsThisRound || colIndex === 0) {
+            this.processedUnitIdsThisRound = new Set();
+        }
+
         const playerUnits = [];
         const reaperUnits = [];
 
@@ -1051,8 +1286,8 @@ export default class CardDuel extends React.Component {
         for (let r = 4; r >= 0; r--) {
             const key = `${r}_${colIndex}`;
             const u = currentGrid[key];
-            if (u && u.owner === 'player' && !processedIds.has(u.id)) {
-                processedIds.add(u.id);
+            if (u && u.owner === 'player' && !this.processedUnitIdsThisRound.has(u.id)) {
+                this.processedUnitIdsThisRound.add(u.id);
                 playerUnits.push(u);
             }
         }
@@ -1061,8 +1296,8 @@ export default class CardDuel extends React.Component {
         for (let r = 0; r <= 4; r++) {
             const key = `${r}_${colIndex}`;
             const u = currentGrid[key];
-            if (u && u.owner === 'reaper' && !processedIds.has(u.id)) {
-                processedIds.add(u.id);
+            if (u && u.owner === 'reaper' && !this.processedUnitIdsThisRound.has(u.id)) {
+                this.processedUnitIdsThisRound.add(u.id);
                 reaperUnits.push(u);
             }
         }
@@ -1098,20 +1333,45 @@ export default class CardDuel extends React.Component {
             const pRangersBehind = playerUnits.slice(1).filter(u => u.isRanger || (u.memberType && u.memberType.toLowerCase().includes('ranger')));
             const rRangersBehind = reaperUnits.slice(1).filter(u => u.isRanger || (u.memberType && u.memberType.toLowerCase().includes('ranger')));
 
-            const pWizardsBehind = playerUnits.slice(1).filter(u => u.isWizard || (u.memberType && u.memberType.toLowerCase().includes('wizard')));
-            const rWizardsBehind = reaperUnits.slice(1).filter(u => u.isWizard || (u.memberType && u.memberType.toLowerCase().includes('wizard')));
-
             let pRangerDmg = 0;
             pRangersBehind.forEach(r => { pRangerDmg += (typeof r.atk === 'number' ? r.atk : 1); });
 
             let rRangerDmg = 0;
             rRangersBehind.forEach(r => { rRangerDmg += (typeof r.atk === 'number' ? r.atk : 1); });
 
+            // Wizard Diagonal Attack Support: Check for Wizards in adjacent columns
+            const findWizardsInCol = (col, owner) => {
+                const wizards = [];
+                const processed = new Set();
+                for (let r = 0; r <= 4; r++) {
+                    const u = updatedGrid[`${r}_${col}`];
+                    if (u && u.owner === owner && !processed.has(u.id)) {
+                        processed.add(u.id);
+                        if (u.isWizard || (u.memberType && u.memberType.toLowerCase().includes('wizard'))) {
+                            wizards.push(u);
+                        }
+                    }
+                }
+                return wizards;
+            };
+
+            const pWizardsAdjacent = [];
+            const rWizardsAdjacent = [];
+
+            if (colIndex > 0) {
+                pWizardsAdjacent.push(...findWizardsInCol(colIndex - 1, 'player'));
+                rWizardsAdjacent.push(...findWizardsInCol(colIndex - 1, 'reaper'));
+            }
+            if (colIndex < 4) {
+                pWizardsAdjacent.push(...findWizardsInCol(colIndex + 1, 'player'));
+                rWizardsAdjacent.push(...findWizardsInCol(colIndex + 1, 'reaper'));
+            }
+
             let pWizardDmg = 0;
-            pWizardsBehind.forEach(w => { pWizardDmg += (typeof w.atk === 'number' ? w.atk : 2); });
+            pWizardsAdjacent.forEach(w => { pWizardDmg += (typeof w.atk === 'number' ? w.atk : 2); });
 
             let rWizardDmg = 0;
-            rWizardsBehind.forEach(w => { rWizardDmg += (typeof w.atk === 'number' ? w.atk : 2); });
+            rWizardsAdjacent.forEach(w => { rWizardDmg += (typeof w.atk === 'number' ? w.atk : 2); });
 
             // Determine frontier meeting tile
             const pMinRow = pUnit.anchorRow;
@@ -1153,8 +1413,94 @@ export default class CardDuel extends React.Component {
                     this.addLog(`🔮 [Col ${colIndex + 1}] Reaper's Wizard fires diagonal magic missiles dealing ${rWizardDmg} damage to ${pUnit.name}!`);
                 }
 
-                const totalPDmg = pUnit.atk + pRangerDmg + pWizardDmg;
-                const totalRDmg = rUnit.atk + rRangerDmg + rWizardDmg;
+                const isBehindSoldier = (unit, owner, grid, col) => {
+                    const rOffset = owner === 'player' ? -1 : 1; 
+                    const soldierRow = unit.anchorRow + rOffset;
+                    if (soldierRow < 0 || soldierRow > 4) return false;
+                    for (let c = col - 1; c <= col + 1; c++) {
+                        if (c < 0 || c > 4) continue;
+                        const potentialSoldier = grid[`${soldierRow}_${c}`];
+                        if (potentialSoldier && potentialSoldier.owner === owner && (potentialSoldier.isSoldier || (potentialSoldier.memberType && potentialSoldier.memberType.toLowerCase().includes('soldier')))) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                let totalPDmg = pUnit.atk + pRangerDmg + pWizardDmg;
+                let totalRDmg = rUnit.atk + rRangerDmg + rWizardDmg;
+
+                if (isBehindSoldier(pUnit, 'player', updatedGrid, colIndex)) {
+                    totalRDmg = Math.max(0, totalRDmg - 1);
+                    this.addLog(`🛡️ [Col ${colIndex + 1}] Soldier's shield wall protects ${pUnit.name} (-1 dmg taken)!`);
+                }
+                if (isBehindSoldier(rUnit, 'reaper', updatedGrid, colIndex)) {
+                    totalPDmg = Math.max(0, totalPDmg - 1);
+                    this.addLog(`🛡️ [Col ${colIndex + 1}] Reaper Soldier's shield wall protects ${rUnit.name} (-1 dmg taken)!`);
+                }
+
+                let pStunned = false;
+                let rStunned = false;
+
+                const pIsMonk = pUnit.isMonk || (pUnit.memberType && pUnit.memberType.toLowerCase().includes('monk'));
+                const rIsMonk = rUnit.isMonk || (rUnit.memberType && rUnit.memberType.toLowerCase().includes('monk'));
+
+                const originalPDmg = totalPDmg;
+                const originalRDmg = totalRDmg;
+
+                // Player Monk attacks Reaper
+                if (pIsMonk && originalPDmg > 0 && rUnit.hp > originalPDmg) {
+                    const targetRow = rUnit.anchorRow - 1;
+                    if (targetRow >= 0) {
+                        let canPush = true;
+                        for (let c = colIndex; c < colIndex + (rUnit.width || 1); c++) {
+                            if (updatedGrid[`${targetRow}_${c}`]) canPush = false;
+                        }
+                        if (canPush) {
+                            rStunned = true;
+                            rUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
+                            rUnit.anchorRow = targetRow;
+                            rUnit.occupiedKeys = [];
+                            for (let r = 0; r < (rUnit.height || 1); r++) {
+                                for (let c = 0; c < (rUnit.width || 1); c++) {
+                                    const key = `${targetRow + r}_${colIndex + c}`;
+                                    rUnit.occupiedKeys.push(key);
+                                    updatedGrid[key] = rUnit;
+                                }
+                            }
+                            this.addLog(`🥋 [Col ${colIndex + 1}] Your Monk's strike pushes ${rUnit.name} back and stuns them!`);
+                        }
+                    }
+                }
+
+                // Reaper Monk attacks Player
+                if (rIsMonk && originalRDmg > 0 && pUnit.hp > originalRDmg) {
+                    const targetRow = pUnit.anchorRow + (pUnit.height || 1);
+                    if (targetRow <= 4) {
+                        let canPush = true;
+                        for (let c = colIndex; c < colIndex + (pUnit.width || 1); c++) {
+                            if (updatedGrid[`${targetRow}_${c}`]) canPush = false;
+                        }
+                        if (canPush) {
+                            pStunned = true;
+                            const newAnchorRow = pUnit.anchorRow + 1;
+                            pUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
+                            pUnit.anchorRow = newAnchorRow;
+                            pUnit.occupiedKeys = [];
+                            for (let r = 0; r < (pUnit.height || 1); r++) {
+                                for (let c = 0; c < (pUnit.width || 1); c++) {
+                                    const key = `${newAnchorRow + r}_${colIndex + c}`;
+                                    pUnit.occupiedKeys.push(key);
+                                    updatedGrid[key] = pUnit;
+                                }
+                            }
+                            this.addLog(`💀🥋 [Col ${colIndex + 1}] Reaper Monk's strike pushes ${pUnit.name} back and stuns them!`);
+                        }
+                    }
+                }
+
+                if (pStunned) totalPDmg = 0;
+                if (rStunned) totalRDmg = 0;
 
                 if (isSimultaneous) {
                     // Simultaneous Blows
@@ -1280,6 +1626,45 @@ export default class CardDuel extends React.Component {
                                     }
                                     moveAnims[rUnit.occupiedKeys[0]] = 'down';
                                     if (rSageBehind.occupiedKeys[0]) moveAnims[rSageBehind.occupiedKeys[0]] = 'down';
+                                }
+                            }
+                        }
+                    }
+
+                    // Barbarian Advance Logic
+                    if (rDead && !pDead && reaperUnits.length === 0) {
+                        const isBarbarian = pUnit.isBarbarian || (pUnit.memberType && pUnit.memberType.toLowerCase().includes('barbarian'));
+                        if (isBarbarian) {
+                            if (pUnit.anchorRow > 0) {
+                                const targetRow = pUnit.anchorRow - 1;
+                                const targetKey = `${targetRow}_${colIndex}`;
+                                if (!updatedGrid[targetKey] || updatedGrid[targetKey].id === pUnit.id) {
+                                    this.addLog(`🪓 [Barbarian] ${pUnit.name} goes into a frenzy and advances an extra tile!`);
+                                    updatedTerritory[targetKey] = 'player';
+                                    pUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
+                                    pUnit.anchorRow = targetRow;
+                                    pUnit.occupiedKeys = [`${targetRow}_${colIndex}`];
+                                    updatedGrid[`${targetRow}_${colIndex}`] = pUnit;
+                                    moveAnims[pUnit.occupiedKeys[0]] = 'up';
+                                }
+                            }
+                        }
+                    }
+
+                    if (pDead && !rDead && playerUnits.length === 0) {
+                        const isBarbarian = rUnit.isBarbarian || (rUnit.memberType && rUnit.memberType.toLowerCase().includes('barbarian'));
+                        if (isBarbarian) {
+                            if (rUnit.anchorRow < 4) {
+                                const targetRow = rUnit.anchorRow + 1;
+                                const targetKey = `${targetRow}_${colIndex}`;
+                                if (!updatedGrid[targetKey] || updatedGrid[targetKey].id === rUnit.id) {
+                                    this.addLog(`🪓 [Barbarian] Reaper's ${rUnit.name} goes into a frenzy and advances an extra tile!`);
+                                    updatedTerritory[targetKey] = 'reaper';
+                                    rUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
+                                    rUnit.anchorRow = targetRow;
+                                    rUnit.occupiedKeys = [`${targetRow}_${colIndex}`];
+                                    updatedGrid[`${targetRow}_${colIndex}`] = rUnit;
+                                    moveAnims[rUnit.occupiedKeys[0]] = 'down';
                                 }
                             }
                         }
@@ -1466,6 +1851,8 @@ export default class CardDuel extends React.Component {
             threshold: nextThreshold,
             playerThresholdUsed: 0,
             reaperThresholdUsed: 0,
+            aggressor: null,
+            finalTurnBeforeCombat: false,
             isCombatPhase: false,
             activeCombatColumn: null
         }, () => {
@@ -1940,6 +2327,11 @@ export default class CardDuel extends React.Component {
                                             <div className="pe-spirit-value-text" style={{ color: '#34d399', textShadow: '0 0 10px rgba(52, 211, 153, 0.7)' }}>
                                                 {playerBoardVal} <span className="pe-spirit-max">/ {threshold}</span>
                                             </div>
+                                            {this.state.aggressor === 'player' && (
+                                                <div style={{ color: '#fbbf24', fontSize: '10px', fontWeight: 'bold', textShadow: '0 0 5px #fbbf24', marginTop: '2px' }}>
+                                                    🌟 AGGRESSOR
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="pe-spirit-pips">
@@ -1962,6 +2354,11 @@ export default class CardDuel extends React.Component {
                                             <div className="pe-spirit-value-text" style={{ color: '#f87171', textShadow: '0 0 10px rgba(248, 113, 113, 0.7)' }}>
                                                 {reaperBoardVal} <span className="pe-spirit-max">/ {threshold}</span>
                                             </div>
+                                            {this.state.aggressor === 'reaper' && (
+                                                <div style={{ color: '#fbbf24', fontSize: '10px', fontWeight: 'bold', textShadow: '0 0 5px #fbbf24', marginTop: '2px' }}>
+                                                    🌟 AGGRESSOR
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="pe-spirit-pips">
@@ -1986,6 +2383,24 @@ export default class CardDuel extends React.Component {
 
                         {/* ── CENTER: 5-Lane Tactical Arena ── */}
                         <div className="pe-tactical-arena">
+
+                            {this.state.finalTurnBeforeCombat && (
+                                <div style={{
+                                    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+                                    border: '1px solid #fbbf24',
+                                    color: '#fbbf24',
+                                    textAlign: 'center',
+                                    padding: '8px',
+                                    borderRadius: '6px',
+                                    marginBottom: '10px',
+                                    fontWeight: 'bold',
+                                    textShadow: '0 0 8px rgba(251,191,36,0.6)',
+                                    boxShadow: '0 0 15px rgba(251,191,36,0.2)',
+                                    animation: 'pulse 2s infinite'
+                                }}>
+                                    ⚠️ FINAL RESPONSE TURN: No Action Cards Allowed ⚠️
+                                </div>
+                            )}
 
                             {/* Reaper Fanned Hand Top */}
                             <div className="pe-reaper-hand-section">
@@ -2121,16 +2536,29 @@ export default class CardDuel extends React.Component {
                     <div className={`pe-action-card-overlay pe-action-overlay--${this.state.actionCardAnim.type}`}>
                         <div className="pe-action-card-modal">
                             <div className="pe-action-card-art" style={this.state.actionCardAnim.card.art ? { backgroundImage: `url(${this.state.actionCardAnim.card.art})` } : {}}>
-                                {!this.state.actionCardAnim.card.art && (this.state.actionCardAnim.type === 'overdrive' ? '⚡' : '💀')}
+                                {!this.state.actionCardAnim.card.art && (
+                                    this.state.actionCardAnim.type === 'overdrive' ? '⚡' : 
+                                    this.state.actionCardAnim.type === 'invest' ? '📈' :
+                                    this.state.actionCardAnim.type === 'inflate' ? '🎈' : '💀'
+                                )}
                             </div>
-                            <h2 className="pe-action-card-title">
-                                {this.state.actionCardAnim.type === 'overdrive' ? '⚡ OVERDRIVE ACTIVATED ⚡' : '💀 REAP CAST!'}
-                            </h2>
-                            <p className="pe-action-card-desc">
-                                {this.state.actionCardAnim.type === 'overdrive'
-                                    ? (this.state.actionCardAnim.owner === 'player' ? 'Unused Spirit this turn will carry over to your next turn!' : 'Reaper carries over unused Spirit to next turn!')
-                                    : 'Reaper deals 3 direct damage to your Health!'}
-                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <h2 className="pe-action-card-title">
+                                    {this.state.actionCardAnim.type === 'overdrive' ? '⚡ OVERDRIVE ACTIVATED ⚡' : 
+                                     this.state.actionCardAnim.type === 'invest' ? '📈 INVEST ACTIVATED 📈' :
+                                     this.state.actionCardAnim.type === 'inflate' ? '🎈 INFLATE ACTIVATED 🎈' :
+                                     '💥 REAP 💥'}
+                                </h2>
+                                <p className="pe-action-card-desc" style={{ margin: 0 }}>
+                                    {this.state.actionCardAnim.type === 'overdrive'
+                                        ? (this.state.actionCardAnim.owner === 'player' ? 'Unused Spirit this turn will carry over to your next turn!' : 'Reaper carries over unused Spirit to next turn!')
+                                        : this.state.actionCardAnim.type === 'invest'
+                                        ? (this.state.actionCardAnim.owner === 'player' ? 'Permanently increased your maximum Spirit allowance by 1!' : 'Reaper permanently increased maximum Spirit allowance by 1!')
+                                        : this.state.actionCardAnim.type === 'inflate'
+                                        ? (this.state.actionCardAnim.owner === 'player' ? 'You drew 3 cards from your deck!' : 'Reaper drew 3 cards from their deck!')
+                                        : `Dealt ${this.state.actionCardAnim.damage} direct damage to your Health!`}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 )}
