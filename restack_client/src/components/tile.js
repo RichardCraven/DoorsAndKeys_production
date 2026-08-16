@@ -107,28 +107,55 @@ function Tile(props) {
     const foregroundPortalImages = ['archway', 'gryphon_gate_opened', 'bat_gate_opened', 'evil_gate_opened', 'dungeon_door_opened'];
     const portraitZIndex = foregroundPortalImages.includes(props.image) ? 25 : 20;
     const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
-    const isVendorCell = !!(containsObj && containsObj.type === 'vendor');
+    const isPaletteTile = props.type === 'palette-tile';
+    const isVendorType = (val) => {
+        if (!val) return false;
+        const s = String(val).toLowerCase();
+        return s === 'vendor' || s === 'alchemist' || s === 'merchant' || s.includes('vendor') || s.includes('alchemist') || s.includes('merchant');
+    };
+    const isVendorCell = !isPaletteTile && (
+        isVendorType(props.contains) ||
+        isVendorType(containsObj?.type) ||
+        isVendorType(containsObj?.subtype) ||
+        isVendorType(containsObj?.key) ||
+        isVendorType(props.image) ||
+        isVendorType(props.optionType)
+    );
 
     const getVendorCellRole = () => {
         if (!isVendorCell) return null;
-        const explicitRole = containsObj.vendorCell;
-        if (explicitRole && explicitRole !== 'footprint') return explicitRole;
-        if (containsObj.vendorAnchorId !== null && containsObj.vendorAnchorId !== undefined && props.id !== null && props.id !== undefined) {
-            const delta = props.id - containsObj.vendorAnchorId;
-            if (delta === 0) return 'anchor';
-            if (delta === 1) return 'top_right';
-            if (delta === 15) return 'bottom_left';
-            if (delta === 16) return 'bottom_right';
-        }
+
+        let anchorId = null;
+
         if (props.hoveredTileFootprint && props.hoveredTileFootprint.length === 4 && props.id !== null && props.id !== undefined) {
-            const anchorId = props.hoveredTileFootprint[0];
-            const delta = props.id - anchorId;
-            if (delta === 0) return 'anchor';
-            if (delta === 1) return 'top_right';
-            if (delta === 15) return 'bottom_left';
-            if (delta === 16) return 'bottom_right';
+            if (props.hoveredTileFootprint.includes(props.id)) {
+                anchorId = props.hoveredTileFootprint[0];
+            }
         }
-        if (explicitRole === 'footprint') return 'top_right';
+
+        if (anchorId === null && containsObj && containsObj.vendorAnchorId !== null && containsObj.vendorAnchorId !== undefined) {
+            anchorId = containsObj.vendorAnchorId;
+        }
+
+        if (anchorId === null && containsObj && containsObj.vendorCell && containsObj.vendorCell !== 'footprint') {
+            return containsObj.vendorCell;
+        }
+
+        if (anchorId !== null && props.id !== null && props.id !== undefined) {
+            const anchorRow = Math.floor(anchorId / 15);
+            const anchorCol = anchorId % 15;
+            const tileRow = Math.floor(props.id / 15);
+            const tileCol = props.id % 15;
+
+            const dRow = tileRow - anchorRow;
+            const dCol = tileCol - anchorCol;
+
+            if (dRow === 0 && dCol === 0) return 'anchor';
+            if (dRow === 0 && dCol === 1) return 'top_right';
+            if (dRow === 1 && dCol === 0) return 'bottom_left';
+            if (dRow === 1 && dCol === 1) return 'bottom_right';
+        }
+
         return 'anchor';
     };
 

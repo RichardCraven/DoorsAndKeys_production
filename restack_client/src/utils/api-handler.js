@@ -27,6 +27,32 @@ const registerRequest = (regObj) => {
         return(err)
       })
 }
+const generateBotRequest = () => {
+    return axios.post(API_BASE + "/api/bots/generate")
+      .then(res=>{
+        if(res.status === 200){
+            return(res)
+        }
+      })
+      .catch(err=> {
+        console.log(err)
+        return(err)
+      })
+}
+
+const getBotReplaysRequest = () => {
+    return axios.get(API_BASE + "/api/bots/replays")
+      .then(res=>{
+        if(res.status === 200){
+          return(res)
+        }
+      })
+      .catch(err=> {
+        console.log(err)
+        return(err)
+      })
+}
+
 const loginRequest = (loginObj) => {
     return axios.post(API_BASE + "/api/login", loginObj)
       .then(res=>{
@@ -326,6 +352,34 @@ const loadAllUsersRequest = () => {
 
 // const isAuthorized = ()
 
+const checkDungeonBackupRequest = (identifier) => {
+  return axios.get(API_BASE + "/api/dungeon-backups/check/" + encodeURIComponent(identifier), { timeout: 15000 })
+    .then(res => {
+      if (res.status === 200) {
+        return res;
+      }
+      return { status: res.status, data: { hasBackup: false } };
+    })
+    .catch(err => {
+      console.log(err);
+      return { status: 500, data: { hasBackup: false }, error: err };
+    });
+};
+
+const restoreDungeonBackupRequest = (identifier) => {
+  return axios.post(API_BASE + "/api/dungeon-backups/restore/" + encodeURIComponent(identifier), {}, { timeout: 15000 })
+    .then(res => {
+      if (res.status === 200 || res.status === 201) {
+        return res;
+      }
+      return { status: res.status, data: null };
+    })
+    .catch(err => {
+      console.log(err);
+      return { status: 500, data: null, error: err };
+    });
+};
+
 export {
   registerRequest,
   loginRequest, 
@@ -349,5 +403,9 @@ export {
   updateManyPlanesRequest,
   loadAllPlanesRequest,
   loadPlaneRequest,
-  sendDungeonEntryNotification
+  sendDungeonEntryNotification,
+  generateBotRequest,
+  getBotReplaysRequest,
+  checkDungeonBackupRequest,
+  restoreDungeonBackupRequest
 };

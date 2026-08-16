@@ -1,5 +1,7 @@
 require('dotenv').config({ path: __dirname + '/.env' }); 
 const express = require("express");
+const http = require("http");
+const initSocketManager = require('./sockets/socketManager');
 let mongoose = require('mongoose');
 let databaseConfig
  = require('./config/database.config.json');
@@ -58,11 +60,27 @@ app.use(express.urlencoded({limit: "50mb", extended: true, parameterLimit:50000}
 
 app.use(cors(corsOptions))
 
+const cron = require('node-cron');
+const { runDailyBackup } = require('./services/backupService');
+
 require('./routes_new/users-routes.js')(app);
 require('./routes_new/dungeons-routes.js')(app);
 require('./routes_new/maps-routes.js')(app);
 require('./routes_new/planes-routes.js')(app);
 require('./routes_new/notifications-routes.js')(app);
+require('./routes_new/bots-routes.js')(app);
+require('./routes_new/backup-routes.js')(app);
+
+// Schedule daily automated backup job at midnight PST (America/Los_Angeles)
+cron.schedule('0 0 * * *', () => {
+  console.log('[Cron] Midnight PST trigger: Running automated daily dungeon backup...');
+  runDailyBackup().catch(err => {
+    console.error('[Cron] Midnight backup job error:', err);
+  });
+}, {
+  scheduled: true,
+  timezone: "America/Los_Angeles"
+});
 
 app.get('/', (req, res) => {
     res.send("doors and keys server running")
@@ -70,6 +88,9 @@ app.get('/', (req, res) => {
 
 
 const port = process.env.PORT || 5001;
-app.listen(port, ()=> console.log(`\n Running on port ${port}\n`))
+const server = http.createServer(app);
+initSocketManager(server);
+
+server.listen(port, () => console.log(`\n Running on port ${port} with WebSockets enabled!\n`));
 
 app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: err.message || err }); });

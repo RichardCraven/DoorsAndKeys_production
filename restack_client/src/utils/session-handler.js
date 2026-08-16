@@ -55,7 +55,7 @@ function sanitizeMeta(metadata){
     const safe = {};
     // Copy only small, commonly useful properties. Avoid large nested objects
     // like full dungeon boards, tile arrays, or other heavy structures.
-    const whitelistedKeys = ['dungeonId','boardIndex','tileIndex','crew','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp'];
+    const whitelistedKeys = ['skipIntro','dungeonId','boardIndex','tileIndex','crew','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp'];
     for (const k of whitelistedKeys) {
         if (k in metadata) safe[k] = metadata[k];
     }

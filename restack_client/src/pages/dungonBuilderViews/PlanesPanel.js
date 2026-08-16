@@ -61,9 +61,14 @@ class PlanesPanel extends React.Component {
     }
 
     isFolderExpanded = (folderKey) => {
+        if (Object.prototype.hasOwnProperty.call(this.state.localFolderExpanded, folderKey)) {
+            return !!this.state.localFolderExpanded[folderKey];
+        }
         const fromParent = this.props.planesFoldersExpanded || {};
-        if (Object.prototype.hasOwnProperty.call(fromParent, folderKey)) return !!fromParent[folderKey];
-        return !!this.state.localFolderExpanded[folderKey];
+        if (Object.prototype.hasOwnProperty.call(fromParent, folderKey)) {
+            return !!fromParent[folderKey];
+        }
+        return true;
     }
 
     toggleFolder = (event, folderKey) => {
@@ -85,13 +90,25 @@ class PlanesPanel extends React.Component {
     buildPlaneFolders = (planes) => {
         const roots = [];
         const folders = [];
+
+        if (this.props.loadingData) {
+            return { roots: [], folders: [] };
+        }
+
+        const activeDungeonName = this.props.loadedDungeon ? this.props.loadedDungeon.name : null;
+
         (planes || []).forEach((plane) => {
             if (!plane || !plane.name || !plane.name.includes('_')) {
+                if (activeDungeonName && plane && plane.name !== activeDungeonName) return;
                 roots.push(plane);
                 return;
             }
 
             const title = plane.name.split('_')[0];
+            if (activeDungeonName && title !== activeDungeonName) {
+                return;
+            }
+
             const subtitle = plane.name.split('_').length > 2 ? plane.name.split('_')[1] : null;
             const deeptitle = subtitle && plane.name.split('_').length > 3 ? plane.name.split('_')[2] : null;
 
@@ -124,6 +141,31 @@ class PlanesPanel extends React.Component {
             }
             deepfolder.contents.push(plane);
         });
+
+        // Ensure all levels in loadedDungeon are represented in the matching dungeon folder
+        if (this.props.loadedDungeon && this.props.loadedDungeon.name && Array.isArray(this.props.loadedDungeon.levels)) {
+            const dungeonTitle = this.props.loadedDungeon.name;
+            let folder = folders.find((f) => f.title === dungeonTitle);
+            if (!folder) {
+                folder = { title: dungeonTitle, contents: [], subfolders: [] };
+                folders.push(folder);
+            }
+
+            this.props.loadedDungeon.levels.forEach((lvl) => {
+                const lvlTitle = String(lvl.id);
+                let subfolder = folder.subfolders.find((s) => s.title === lvlTitle);
+                if (!subfolder) {
+                    subfolder = { title: lvlTitle, contents: [], deepfolders: [] };
+                    folder.subfolders.push(subfolder);
+                }
+                if (lvl.front && !subfolder.contents.some(p => p.id === lvl.front.id || p.name === lvl.front.name)) {
+                    subfolder.contents.push(lvl.front);
+                }
+                if (lvl.back && !subfolder.contents.some(p => p.id === lvl.back.id || p.name === lvl.back.name)) {
+                    subfolder.contents.push(lvl.back);
+                }
+            });
+        }
 
         return { roots, folders };
     }
@@ -242,21 +284,43 @@ class PlanesPanel extends React.Component {
             });
         }
 
+        const createEmptyTemplatePlane = (orientation) => {
+            const orientCode = orientation === 'front' ? 'F' : 'B';
+            const name = `${folderTitle}_${subfolder.title}_${orientCode}`;
+            return {
+                id: `template_${name}`,
+                name: name,
+                isTemplate: true,
+                valid: true,
+                miniboards: Array(9).fill(null).map((_, i) => ({
+                    id: `template_mb_${i}`,
+                    name: 'empty',
+                    isEmptyBoard: true,
+                    tiles: Array(15*15).fill(null).map((_, tIdx) => ({ id: tIdx, type: 'void', color: 'black', contains: 'empty', borders: [] })),
+                    config: [[], [], [], []]
+                }))
+            };
+        };
+
         const renderGrid = (plane, orientation) => {
-            const isSelected = this.props.loadedPlane && plane && (plane.id === this.props.loadedPlane.id);
+            const isTemplate = !plane;
+            const activePlane = plane || createEmptyTemplatePlane(orientation);
+            const isSelected = this.props.loadedPlane && activePlane && (activePlane.id === this.props.loadedPlane.id);
             const previewKey = `${folderTitle}_${subfolder.title}_${orientation}`;
             const isHovered = this.state.hoveredPlane === previewKey;
 
             return (
                 <div 
-                    className={`plane-mini-grid ${plane ? 'draggable' : ''}`}
-                    draggable={!!plane}
+                    className="plane-mini-grid draggable"
+                    draggable={true}
                     onDragStart={(e) => {
-                        if (plane) this.props.onDragStartDungeon(plane);
+                        if (typeof this.props.onDragStartDungeon === 'function') {
+                            this.props.onDragStartDungeon(activePlane);
+                        }
                     }}
                     onClick={() => {
-                        if (plane) {
-                            this.props.loadPlane(plane);
+                        if (!isTemplate) {
+                            this.props.loadPlane(activePlane);
                             if (this.props.selectedView === 'dungeon' && typeof this.props.setViewState === 'function') {
                                 this.props.setViewState('plane');
                             }
@@ -267,65 +331,43 @@ class PlanesPanel extends React.Component {
                         }
                     }}
                 >
-                    <div className="plane-grid-title">{orientation.toUpperCase()}</div>
-                    {plane ? (
-                        <div
-                            className={`grid-3x3 ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
-                            title={`${plane.name}${!plane.valid ? ' (Invalid)' : ''}`}
-                            onMouseEnter={() => this.setState({ hoveredPlane: previewKey })}
-                            onMouseLeave={() => this.setState({ hoveredPlane: null })}
-                        >
-                            {plane.miniboards.map((mb, idx) => {
-                                const isFilled = mb && (mb.id || mb._id || (mb.tiles && mb.tiles.length > 0) || mb.name);
-                                const isEmptyBoard = isBoardEmpty(mb);
-                                return (
-                                    <div
-                                        key={idx}
-                                        className={`grid-cell ${isFilled ? (isEmptyBoard ? 'empty-board' : 'filled') : 'empty'}`}
-                                        style={{ fontSize: '8px' }}
-                                        onDoubleClick={(e) => {
-                                            e.stopPropagation();
-                                            if (isFilled && !isEmptyBoard && mb) {
-                                                const fullBoard = (this.props.boards || []).find(
-                                                    (b) => b.id === mb.id || b.name === mb.name || b._id === mb.id
-                                                );
-                                                const boardToLoad = fullBoard || mb;
-                                                if (typeof this.props.loadBoard === 'function') {
-                                                    this.props.loadBoard(boardToLoad);
-                                                }
-                                                if (typeof this.props.setViewState === 'function') {
-                                                    this.props.setViewState('board');
-                                                }
+                    <div className="plane-grid-title">{orientation.toUpperCase()}{isTemplate ? ' (TEMPLATE)' : ''}</div>
+                    <div
+                        className={`grid-3x3 ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
+                        style={isTemplate ? { border: '1px dashed rgba(229, 181, 79, 0.5)', cursor: 'grab', background: 'rgba(0, 0, 0, 0.4)' } : {}}
+                        title={isTemplate ? `Drag empty ${orientation} template plane to Level ${subfolder.title}` : `${activePlane.name}${!activePlane.valid ? ' (Invalid)' : ''}`}
+                        onMouseEnter={() => this.setState({ hoveredPlane: previewKey })}
+                        onMouseLeave={() => this.setState({ hoveredPlane: null })}
+                    >
+                        {activePlane.miniboards.map((mb, idx) => {
+                            const isFilled = !isTemplate && mb && (mb.id || mb._id || (mb.tiles && mb.tiles.length > 0) || mb.name);
+                            const isEmptyBoard = isTemplate || isBoardEmpty(mb);
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`grid-cell ${isFilled ? (isEmptyBoard ? 'empty-board' : 'filled') : 'empty-board'}`}
+                                    style={{ fontSize: '8px' }}
+                                    onDoubleClick={(e) => {
+                                        e.stopPropagation();
+                                        if (!isTemplate && isFilled && !isEmptyBoard && mb) {
+                                            const fullBoard = (this.props.boards || []).find(
+                                                (b) => b.id === mb.id || b.name === mb.name || b._id === mb.id
+                                            );
+                                            const boardToLoad = fullBoard || mb;
+                                            if (typeof this.props.loadBoard === 'function') {
+                                                this.props.loadBoard(boardToLoad);
                                             }
-                                        }}
-                                    >
-                                        {mb && !isEmptyBoard && (mb.displayName || mb.name) ? (mb.displayName || mb.name).slice(0, 3) : ''}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    ) : (
-                        <div
-                            className="grid-3x3 empty"
-                            style={{
-                                border: '1px dashed rgba(255,255,255,0.15)',
-                                borderRadius: '4px',
-                                background: 'transparent',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyCenter: 'center',
-                                cursor: 'pointer',
-                                color: 'rgba(255,255,255,0.3)',
-                                fontSize: '20px',
-                                width: '108px',
-                                height: '108px',
-                                boxSizing: 'border-box'
-                            }}
-                            title={`Create ${orientation} plane for Level ${subfolder.title}`}
-                        >
-                            +
-                        </div>
-                    )}
+                                            if (typeof this.props.setViewState === 'function') {
+                                                this.props.setViewState('board');
+                                            }
+                                        }
+                                    }}
+                                >
+                                    {mb && !isEmptyBoard && (mb.displayName || mb.name) ? (mb.displayName || mb.name).slice(0, 3) : ''}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             );
         };
@@ -406,9 +448,7 @@ class PlanesPanel extends React.Component {
             if (!exists) planes.unshift(loadedPlane);
         }
         const derivedHierarchy = this.buildPlaneFolders(planes);
-        const planeFolders = (this.props.planesFolders && this.props.planesFolders.length > 0)
-            ? this.props.planesFolders
-            : derivedHierarchy.folders;
+        const planeFolders = derivedHierarchy.folders;
         const sortedPlaneFolders = this.getSortedPlaneFolders(planeFolders);
         const rootPlanes = derivedHierarchy.roots;
         return (

@@ -19,12 +19,14 @@ const sendNotificationEmail = async (subject, text) => {
       }
     });
 
-    let info = await transporter.sendMail({
-      from: `"Restack Notifications" <${emailUser}>`,
+    const mailOptions = {
+      from: `"DreamTower Notifications" <${emailUser}>`,
       to: adminEmail,
       subject: subject,
       text: text,
-    });
+    };
+
+    let info = await transporter.sendMail(mailOptions);
 
     console.log('Notification email sent: %s', info.messageId);
   } catch (error) {

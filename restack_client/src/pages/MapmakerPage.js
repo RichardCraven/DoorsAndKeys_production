@@ -33,7 +33,9 @@ import {
   addDungeonRequest,
   deleteDungeonRequest,
   updateDungeonRequest,
-  updateUserRequest
+  updateUserRequest,
+  checkDungeonBackupRequest,
+  restoreDungeonBackupRequest
 } from '../utils/api-handler';
 import * as images from '../utils/images'
 import BoardsPalette from './dungonBuilderViews/BoardsPalette'
@@ -222,6 +224,8 @@ class MapMakerPage extends React.Component {
       planesFoldersExpanded: {},
       visible: false,
       activeDungeonLevel: 0,
+      hasDungeonBackup: false,
+      backupTimestamp: null,
       dungeonOverlayOn: dungeonOverlayOnFromPrefs ?? false,
       overlayData: null,
       loadingData: true,
@@ -333,17 +337,23 @@ class MapMakerPage extends React.Component {
       this.loadAllBoards(),
       this.loadAllPlanes(),
       this.loadAllDungeons()
-    ]).then(() => {
+    ]).then(async () => {
       // Validate all dungeons now that both boards and dungeons are loaded
       const validatedDungeons = this.state.dungeons.map(d => {
         d = this.syncDungeonPlanesWithBoards(d, this.state.boards);
         return this.validateDungeon(d);
       });
-      this.setState({ dungeons: validatedDungeons }, () => {
-        this.restoreEditorSelection();
+      this.setState({ dungeons: validatedDungeons }, async () => {
+        await this.restoreEditorSelection();
+        if (this._isMounted !== false) {
+          this.setState({ loadingData: false });
+        }
       });
     }).catch(err => {
       console.error("Error loading editor selection:", err);
+      if (this._isMounted !== false) {
+        this.setState({ loadingData: false });
+      }
     });
     this.nameFilterClicked();
     // Mapmaker-local keyboard shortcuts
@@ -4311,16 +4321,92 @@ class MapMakerPage extends React.Component {
 
 
   }
-  deleteBoard = async (boardId) => {
-    if (this.state.loadedBoard) {
-      console.log('THIS FLOW SHOULD ONLY BE USED IF YOU WANT TO DELETE THE CURRENT LOADED BOARD, NOT FOR ITERATIVE METHOD');
+  isBoardInActiveGame = (boardId, boardObj) => {
+    const targetId = boardId || (boardObj ? (boardObj.id || boardObj._id) : null);
+    const targetName = boardObj ? (boardObj.name || boardObj.displayName) : null;
 
-      let board = this.state.loadedBoard;
-      this.removeBoardFromPanel(board)
-      let planesToUpdate = this.planesContainingBoard(this.state.loadedBoard)
-      await deleteBoardRequest(board.id);
+    const dungeons = Array.isArray(this.state.dungeons) ? [...this.state.dungeons] : [];
+    if (this.state.loadedDungeon) dungeons.push(this.state.loadedDungeon);
+
+    for (const dungeon of dungeons) {
+      if (!dungeon || !Array.isArray(dungeon.levels)) continue;
+      for (const level of dungeon.levels) {
+        for (const side of ['front', 'back']) {
+          const plane = level[side];
+          if (plane && Array.isArray(plane.miniboards)) {
+            const found = plane.miniboards.some(mb => {
+              if (!mb) return false;
+              const mbId = mb.id || mb._id;
+              if (targetId && mbId && String(mbId) === String(targetId)) return true;
+              if (targetName && mb.name && mb.name === targetName) return true;
+              return false;
+            });
+            if (found) {
+              return {
+                inUse: true,
+                dungeonName: dungeon.name,
+                levelId: level.id,
+                side: side
+              };
+            }
+          }
+        }
+      }
+    }
+
+    const planes = Array.isArray(this.state.planes) ? this.state.planes : [];
+    for (const plane of planes) {
+      if (plane && Array.isArray(plane.miniboards)) {
+        const found = plane.miniboards.some(mb => {
+          if (!mb) return false;
+          const mbId = mb.id || mb._id;
+          if (targetId && mbId && String(mbId) === String(targetId)) return true;
+          if (targetName && mb.name && mb.name === targetName) return true;
+          return false;
+        });
+        if (found) {
+          return {
+            inUse: true,
+            planeName: plane.name
+          };
+        }
+      }
+    }
+
+    return { inUse: false };
+  }
+
+  deleteBoard = async (boardId) => {
+    let board = this.state.loadedBoard || (this.state.boards || []).find(b => b && (b.id === boardId || b._id === boardId));
+    const targetId = boardId || (board ? (board.id || board._id) : null);
+    
+    if (!targetId && !board) return;
+
+    const usage = this.isBoardInActiveGame(targetId, board);
+
+    if (usage.inUse) {
+      const locationDetail = usage.dungeonName 
+        ? `dungeon "${usage.dungeonName}" (Level ${usage.levelId} ${usage.side.toUpperCase()})`
+        : `plane "${usage.planeName}"`;
+
+      const confirmDelete = window.confirm(
+        `⚠️ WARNING: This board is currently in use in active game instance ${locationDetail}.\n\nDeleting this board will remove it from the active dungeon map.\n\nAre you sure you want to delete this board?`
+      );
+
+      if (!confirmDelete) return;
+    } else {
+      const boardName = board ? (board.displayName || board.name) : 'this board';
+      const confirmDelete = window.confirm(`Are you sure you want to delete ${boardName}?`);
+      if (!confirmDelete) return;
+    }
+
+    if (board || boardId) {
+      let boardToDel = board || { id: boardId };
+      this.removeBoardFromPanel(boardToDel);
+      let planesToUpdate = this.planesContainingBoard(boardToDel);
+      await deleteBoardRequest(targetId);
       await this.clearLoadedBoard();
-      this.toast('Board Deleted')
+      this.toast('Board Deleted');
 
       if (planesToUpdate && planesToUpdate.length > 0) {
         for (let plane of planesToUpdate) {
@@ -5128,8 +5214,7 @@ class MapMakerPage extends React.Component {
           return;
         }
         this.setState({
-          dungeons,
-          loadingData: false
+          dungeons
         }, () => {
           const currentName = this.state.loadedDungeon?.name || 'Dungeon Selector';
           this.setLoadedDungeonDropdownValue(currentName);
@@ -5138,9 +5223,6 @@ class MapMakerPage extends React.Component {
       });
     } catch (e) {
       console.error('loadAllDungeons failed:', e);
-      if (this._isMounted !== false) {
-        this.setState({ loadingData: false });
-      }
       return true;
     }
   }
@@ -5209,8 +5291,66 @@ class MapMakerPage extends React.Component {
     return !!this.state.showUnstagedBoards;
   }
 
+  checkDungeonBackup = async (dungeon) => {
+    if (!dungeon || (!dungeon.id && !dungeon._id && !dungeon.name)) {
+      this.setState({ hasDungeonBackup: false, backupTimestamp: null });
+      return;
+    }
+    const identifier = dungeon.id || dungeon._id || dungeon.name;
+    try {
+      const res = await checkDungeonBackupRequest(identifier);
+      if (res && res.data && res.data.hasBackup) {
+        this.setState({
+          hasDungeonBackup: true,
+          backupTimestamp: res.data.timestamp
+        });
+      } else {
+        this.setState({
+          hasDungeonBackup: false,
+          backupTimestamp: null
+        });
+      }
+    } catch (e) {
+      this.setState({ hasDungeonBackup: false, backupTimestamp: null });
+    }
+  }
+
+  restoreDungeonFromBackup = async () => {
+    const dungeon = this.state.loadedDungeon;
+    if (!dungeon) return;
+    const identifier = dungeon.id || dungeon._id || dungeon.name;
+    const formattedDate = this.state.backupTimestamp
+      ? new Date(this.state.backupTimestamp).toLocaleString()
+      : 'the latest stored backup';
+
+    const confirmRestore = window.confirm(
+      `🔄 RESTORE FROM BACKUP:\n\nAre you sure you want to restore dungeon "${dungeon.name}" from the stored backup snapshot created on ${formattedDate}?\n\nAny unsaved changes will be overwritten.`
+    );
+
+    if (!confirmRestore) return;
+
+    try {
+      const res = await restoreDungeonBackupRequest(identifier);
+      if (res && res.data && res.data.success && res.data.restoredDungeon) {
+        const restored = this.props.mapMaker.formatDungeon(res.data.restoredDungeon);
+        this.setState({
+          loadedDungeon: restored,
+          dungeonHasUnsavedChanges: false
+        });
+        await this.addDungeonPlanesAndBoardsToState(restored);
+        this.toast(`Dungeon "${dungeon.name}" Restored from Backup!`);
+      } else {
+        alert('Failed to restore dungeon from backup.');
+      }
+    } catch (err) {
+      console.error('Failed to restore dungeon:', err);
+      alert('Error restoring dungeon from backup.');
+    }
+  }
+
   addDungeonPlanesAndBoardsToState = (dungeon) => {
     if (!dungeon || !Array.isArray(dungeon.levels)) return;
+    this.checkDungeonBackup(dungeon);
 
     let planes = [...this.state.planes];
     let boards = [...this.state.boards];
@@ -6229,11 +6369,12 @@ class MapMakerPage extends React.Component {
     const dungeon = clone(this.state.loadedDungeon);
     if (!dungeon || !Array.isArray(dungeon.levels) || !dungeon.levels[levelIndex]) return;
     
-    let plane = clone(this.state.draggedPlane);
-    dungeon.levels[levelIndex][frontOrBack] = plane;
-
+    if (!this.state.draggedPlane) return;
+    const sourcePlane = this.state.draggedPlane;
     const dungeonName = dungeon.name;
-    const normalizedLevel = String(dungeon.levels[levelIndex].id);
+    const levelId = dungeon.levels[levelIndex].id;
+    const normalizedLevel = String(levelId);
+    const orientCode = frontOrBack === 'back' ? 'B' : 'F';
     const suffix = frontOrBack === 'back' ? '_back' : '';
     const slotNames = [
       'top_left', 'top_mid', 'top_right',
@@ -6241,34 +6382,73 @@ class MapMakerPage extends React.Component {
       'bottom_left', 'bottom_mid', 'bottom_right'
     ];
 
-    if (plane.miniboards && Array.isArray(plane.miniboards)) {
-      await Promise.all(plane.miniboards.map(async (board, idx) => {
-        if (board && board.id) {
-          const slotName = slotNames[idx];
-          const newFolderPath = `${dungeonName}/${normalizedLevel}/${slotName}${suffix}`;
-          try {
-            let updatedBoard = {
-              name: board.name,
-              folderPath: newFolderPath,
-              tiles: clone(board.tiles),
-              config: clone(board.config || [[], [], [], []])
-            };
-            await updateBoardRequest(board.id, updatedBoard);
-          } catch (err) {
-            console.error('Failed to transfer board to new dungeon:', err);
-          }
-        }
-      }));
+    const newMiniboards = [];
+    const sourceMinis = Array.isArray(sourcePlane.miniboards) ? sourcePlane.miniboards : [];
+
+    for (let idx = 0; idx < 9; idx++) {
+      const slotName = slotNames[idx];
+      const folderPath = `${dungeonName}/${normalizedLevel}/${slotName}${suffix}`;
+      const boardName = `${dungeonName}_${normalizedLevel}_${orientCode}_${slotName}`;
+      const sourceBoard = sourceMinis[idx];
+
+      const newBoardPayload = {
+        name: boardName,
+        folderPath,
+        isEmptyBoard: sourceBoard ? (sourceBoard.isEmptyBoard || false) : true,
+        tiles: sourceBoard && Array.isArray(sourceBoard.tiles)
+          ? clone(sourceBoard.tiles)
+          : Array(15*15).fill(null).map((_, i) => ({ id: i, type: 'void', color: 'black', contains: 'empty', borders: [] })),
+        config: sourceBoard && sourceBoard.config ? clone(sourceBoard.config) : [[], [], [], []]
+      };
+
+      try {
+        const boardRes = await addBoardRequest(newBoardPayload);
+        const createdBoardId = boardRes?.data?._id || boardRes?.data?.id || boardRes?._id;
+        newMiniboards.push({
+          id: createdBoardId,
+          name: boardName,
+          isEmptyBoard: newBoardPayload.isEmptyBoard,
+          tiles: newBoardPayload.tiles,
+          config: newBoardPayload.config
+        });
+      } catch (err) {
+        console.error('Failed to create new board for dropped plane:', err);
+      }
     }
 
-    setTimeout(() => {
-      this.setState({
-        loadedDungeon: this.props.mapMaker.formatDungeon(dungeon),
-        draggedPlane: null,
-        hoveredDungeonSection: null,
-        dungeonHasUnsavedChanges: true,
-      })
-    })
+    const planeName = `${dungeonName}_${normalizedLevel}_${orientCode}`;
+    const newPlanePayload = {
+      name: planeName,
+      miniboards: newMiniboards,
+      spawnPoints: this.props.mapMaker.getSpawnPoints(newMiniboards),
+      valid: this.props.mapMaker.isValidPlane(newMiniboards)
+    };
+
+    let createdPlane = newPlanePayload;
+    try {
+      const planeRes = await addPlaneRequest(newPlanePayload);
+      const createdPlaneId = planeRes?.data?._id || planeRes?.data?.id || planeRes?._id;
+      if (createdPlaneId) {
+        createdPlane = { ...newPlanePayload, id: createdPlaneId, _id: createdPlaneId };
+      }
+    } catch (err) {
+      console.error('Failed to save new plane:', err);
+    }
+
+    dungeon.levels[levelIndex][frontOrBack] = createdPlane;
+
+    await Promise.all([this.loadAllBoards(), this.loadAllPlanes()]);
+
+    const formattedDungeon = this.props.mapMaker.formatDungeon(dungeon);
+
+    this.setState({
+      loadedDungeon: formattedDungeon,
+      draggedPlane: null,
+      hoveredDungeonSection: null,
+      dungeonHasUnsavedChanges: true,
+    }, () => {
+      this.addDungeonPlanesAndBoardsToState(formattedDungeon);
+    });
   }
 
   saveDungeonLevel = () => {
@@ -6283,38 +6463,39 @@ class MapMakerPage extends React.Component {
     this.writeDungeon()
   }
   clearDungeonLevel = (levelId) => {
-    let dungeon = this.state.loadedDungeon;
-    let level = dungeon.levels.find(l => l.id === levelId)
-    if (level.front === null && level.back === null) {
-      // clear upper level
-      if (levelId > 0) {
-        if (!!dungeon.levels.find(l => l.id === levelId + 1)) {
-          alert('CANT DELETE THIS LEVEL BECAUSE THERE IS ONE ABOVE IT')
-          return
-        } else {
-          dungeon.levels = dungeon.levels.filter(e => e.id !== levelId)
-        }
+    if (!this.state.loadedDungeon || !Array.isArray(this.state.loadedDungeon.levels)) return;
+    let dungeon = clone(this.state.loadedDungeon);
+    const numericLevelId = Number(levelId);
+    let level = dungeon.levels.find(l => String(l.id) === String(levelId));
 
-      }
-      //clear lower level
-      if (levelId < 0) {
-        if (!!dungeon.levels.find(l => l.id === levelId - 1)) {
-          alert('CANT DELETE THIS LEVEL BECAUSE THERE IS ONE BELOW IT')
-          return
-        } else {
-          dungeon.levels = dungeon.levels.filter(e => e.id !== levelId)
+    if (!level) return;
+
+    if (!level.front && !level.back) {
+      if (numericLevelId > 0) {
+        if (dungeon.levels.some(l => Number(l.id) > numericLevelId)) {
+          alert('CANT DELETE THIS LEVEL BECAUSE THERE IS ONE ABOVE IT');
+          return;
         }
+        dungeon.levels = dungeon.levels.filter(e => String(e.id) !== String(levelId));
+      } else if (numericLevelId < 0) {
+        if (dungeon.levels.some(l => Number(l.id) < numericLevelId)) {
+          alert('CANT DELETE THIS LEVEL BECAUSE THERE IS ONE BELOW IT');
+          return;
+        }
+        dungeon.levels = dungeon.levels.filter(e => String(e.id) !== String(levelId));
+      } else {
+        level.front = null;
+        level.back = null;
       }
-      this.setState({
-        loadedDungeon: this.props.mapMaker.formatDungeon(dungeon)
-      })
     } else {
       level.front = null;
       level.back = null;
-      this.setState({
-        loadedDungeon: this.props.mapMaker.formatDungeon(dungeon)
-      })
     }
+
+    this.setState({
+      loadedDungeon: this.props.mapMaker.formatDungeon(dungeon),
+      dungeonHasUnsavedChanges: true
+    });
   }
   addDungeonLevelUp = () => {
     if (!this.state.loadedDungeon) return;
@@ -8064,6 +8245,8 @@ class MapMakerPage extends React.Component {
               boardSize={this.state.boardSize}
               boardsFolders={this.state.boardsFolders}
               boardsFoldersExpanded={this.state.boardsFoldersExpanded}
+              loadedDungeon={this.state.loadedDungeon}
+              loadingData={this.state.loadingData}
               boards={this.state.boards}
               tiles={this.state.tiles}
               compatibilityMatrix={this.state.compatibilityMatrix}
@@ -8293,6 +8476,9 @@ class MapMakerPage extends React.Component {
                 boardsFoldersExpanded={this.state.boardsFoldersExpanded}
                 dungeonHasUnsavedChanges={this.state.dungeonHasUnsavedChanges}
                 isSavingDungeon={this.state.isSavingDungeon}
+                hasDungeonBackup={this.state.hasDungeonBackup}
+                backupTimestamp={this.state.backupTimestamp}
+                restoreDungeonFromBackup={this.restoreDungeonFromBackup}
                 boards={this.state.boards}
                 dungeons={this.state.dungeons}
                 tiles={this.state.tiles}

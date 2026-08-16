@@ -4071,6 +4071,10 @@ export function CombatManagerRedux() {
             if (key === 'monk_third_eye' && unit.thirdEyeActive) return;
             if (key === 'monk_astral_focus' && unit.astralBeingActive) return;
             if (key === 'regenerate' && (selfHpPct >= 0.50 || unit.regenerating)) return;
+            if (key === 'mimicry' && target) {
+                const isSummonedOrConstruct = !!(target.isMinion || target.isSummoned || target.isSummon || target.summonedBy || target.isFamiliar || target.isConstruct || target.isWall || target.type === 'engineer_wall' || target.type === 'turret' || target.type === 'walker');
+                if (isSummonedOrConstruct) return;
+            }
             const resolved = this.resolveSpecial(unit, key);
             if (!resolved || resolved.type === 'passive' || resolved.isPassive) return;
 
@@ -7352,6 +7356,21 @@ export function CombatManagerRedux() {
         let target = this.combatants[unit.targetId];
         if (!target) return;
 
+        // Eidolon Mimicry target filter: Eidolon cannot mimic summoned units or constructs
+        const isSummonedOrConstructTarget = (t) => !!(t && (t.isMinion || t.isSummoned || t.isSummon || t.summonedBy || t.isFamiliar || t.isConstruct || t.isWall || t.type === 'engineer_wall' || t.type === 'turret' || t.type === 'walker'));
+        if (unit.skills && unit.skills.includes('mimicry') && !unit.mimicryActive) {
+            if (target && isSummonedOrConstructTarget(target)) {
+                const validNonSummonTargets = Object.values(this.combatants).filter(c => {
+                    if (!c || c.dead || c.isVCT || (!!c.isMonster === !!unit.isMonster)) return false;
+                    return !isSummonedOrConstructTarget(c);
+                });
+                if (validNonSummonTargets.length > 0) {
+                    target = validNonSummonTargets[0];
+                    unit.targetId = target.id;
+                }
+            }
+        }
+
         // Intelligent Melee AI Immediate Retargeting
         if ((unit.isMonster || unit.isMinion) && intelTier === 'intelligent' && unit.movesTakenThisRound === 0) {
             const step = this.getPathfindNextStep(unit, target.coordinates.x, target.coordinates.y, target);
@@ -8860,6 +8879,11 @@ export function CombatManagerRedux() {
 
         if (abilityId === 'mimicry') {
             if (!target || target.id === unit.id) return;
+            const isSummonedOrConstruct = !!(target.isMinion || target.isSummoned || target.isSummon || target.summonedBy || target.isFamiliar || target.isConstruct || target.isWall || target.type === 'engineer_wall' || target.type === 'turret' || target.type === 'walker');
+            if (isSummonedOrConstruct) {
+                this.appendCombatLog(`${this.getCombatantLogName(unit)} cannot mimic ${this.getCombatantLogName(target)} (summoned units and constructs cannot be mimicked).`);
+                return;
+            }
 
             const targetName = target.name || target.type || 'Unit';
             const targetPortrait = target.portrait || target.image || (typeof target.getPortrait === 'function' ? target.getPortrait() : '');

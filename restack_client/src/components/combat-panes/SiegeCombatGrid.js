@@ -1971,7 +1971,7 @@ export default function SiegeCombatGrid(props) {
                             display: 'flex',
                             flexDirection: 'column-reverse',
                             pointerEvents: 'none',
-                            opacity: (hideBars || fighter.isConstruct || fighter.isWall || fighter.type === 'engineer_wall' || fighter.type === 'turret' || fighter.type === 'walker') ? 0 : 1,
+                            opacity: (hideBars || fighter.isWall || fighter.type === 'engineer_wall') ? 0 : 1,
                             transition: 'opacity 0.5s ease-in-out'
                         }}>
                             <div className="hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '1px' }}>
@@ -3005,7 +3005,7 @@ export default function SiegeCombatGrid(props) {
                         left: 0,
                         width: '100%',
                         pointerEvents: 'none',
-                        opacity: (hideBars || unit.isConstruct || unit.isWall || unit.type === 'engineer_wall' || unit.type === 'turret' || unit.type === 'walker') ? 0 : 1,
+                        opacity: (hideBars || unit.isWall || unit.type === 'engineer_wall') ? 0 : 1,
                         transition: 'opacity 0.5s ease-in-out'
                     }}>
                         <div className="monster-hp-bar hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '1px' }}>

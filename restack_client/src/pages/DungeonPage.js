@@ -3,6 +3,7 @@ import gifOne from '../assets/highres-gifs/gifOne.gif';
 import gifTwo from '../assets/highres-gifs/gifTwo.gif';
 import gifThree from '../assets/highres-gifs/gifThree.gif';
 
+import socketHandler from '../utils/socket-handler';
 import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../utils/shared-constants';
 import '../styles/dungeon-board.scss'
 import Tile from '../components/tile'
@@ -2469,6 +2470,7 @@ class DungeonPage extends React.Component {
             , mapBoardDetailBoardIndex: null
             // floating player animation state
             , playerFloatVisible: false
+            , peerPlayers: new Map()
             , playerFloatStyle: { left: 0, top: 0, transform: 'translate3d(0px, 0px, 0px)' }
             , mobileTouchTileId: null
             , showAvatarRadialMenu: false
@@ -3252,7 +3254,147 @@ class DungeonPage extends React.Component {
         }
     }
 
+    initDungeonSockets = () => {
+        try {
+            const meta = getMeta() || {};
+            const dungeonId = meta.dungeonId || this.props.boardManager?.dungeon?.id || 'carcosa';
+            const userId = getUserId() || 'guest';
+            const username = meta.username || 'Explorer';
+
+            const bm = this.props.boardManager;
+            const location = {
+                levelId: bm?.currentLevel?.id ?? 0,
+                orientation: bm?.currentOrientation === 'B' ? 'back' : 'front',
+                boardIndex: bm?.playerTile?.boardIndex ?? 0,
+                tileIndex: (bm && bm.playerTile && bm.playerTile.location) ? bm.getIndexFromCoordinates(bm.playerTile.location) : 0,
+                x: bm?.playerTile?.location ? bm.playerTile.location[1] : 0,
+                y: bm?.playerTile?.location ? bm.playerTile.location[0] : 0
+            };
+
+            const crewSummary = (this.props.crewManager?.crew || []).map(c => ({
+                name: c.name,
+                type: c.type || c.class,
+                level: c.level || 1,
+                portrait: c.portrait || c.type
+            }));
+
+            socketHandler.connect({ id: userId, username });
+
+            socketHandler.off('dungeon:presence_snapshot', this.handlePresenceSnapshot);
+            socketHandler.off('dungeon:player_joined', this.handlePeerPlayerJoined);
+            socketHandler.off('dungeon:player_left', this.handlePeerPlayerLeft);
+            socketHandler.off('dungeon:player_moved', this.handlePeerPlayerMoved);
+
+            socketHandler.on('dungeon:presence_snapshot', this.handlePresenceSnapshot);
+            socketHandler.on('dungeon:player_joined', this.handlePeerPlayerJoined);
+            socketHandler.on('dungeon:player_left', this.handlePeerPlayerLeft);
+            socketHandler.on('dungeon:player_moved', this.handlePeerPlayerMoved);
+
+            socketHandler.joinDungeon(dungeonId, userId, username, location, crewSummary);
+        } catch (e) {
+            console.warn('[DungeonSockets] initDungeonSockets failed', e);
+        }
+    }
+
+    cleanupDungeonSockets = () => {
+        try {
+            socketHandler.off('dungeon:presence_snapshot', this.handlePresenceSnapshot);
+            socketHandler.off('dungeon:player_joined', this.handlePeerPlayerJoined);
+            socketHandler.off('dungeon:player_left', this.handlePeerPlayerLeft);
+            socketHandler.off('dungeon:player_moved', this.handlePeerPlayerMoved);
+            socketHandler.leaveDungeon();
+        } catch (e) { }
+    }
+
+    handlePresenceSnapshot = (data = {}) => {
+        try {
+            const currentUserId = getUserId();
+            const rawPlayers = Array.isArray(data.players) ? data.players : [];
+            const peerPlayersMap = new Map();
+
+            rawPlayers.forEach(p => {
+                if (p && String(p.userId) !== String(currentUserId) && p.socketId !== socketHandler.socket?.id) {
+                    peerPlayersMap.set(p.socketId || p.userId, p);
+                }
+            });
+
+            this.setState({ peerPlayers: peerPlayersMap });
+        } catch (e) { }
+    }
+
+    handlePeerPlayerJoined = (playerState) => {
+        if (!playerState) return;
+        const currentUserId = getUserId();
+        if (String(playerState.userId) === String(currentUserId) || playerState.socketId === socketHandler.socket?.id) return;
+
+        this.setState(prevState => {
+            const nextMap = new Map(prevState.peerPlayers);
+            nextMap.set(playerState.socketId || playerState.userId, playerState);
+            return { peerPlayers: nextMap };
+        });
+
+        if (this.displayMessage) {
+            this.displayMessage(`🌐 ${playerState.username || 'An explorer'} entered the dungeon!`);
+        }
+    }
+
+    handlePeerPlayerLeft = (data = {}) => {
+        this.setState(prevState => {
+            const nextMap = new Map(prevState.peerPlayers);
+            const key = data.socketId || data.userId;
+            let departingPlayer = null;
+
+            if (nextMap.has(key)) {
+                departingPlayer = nextMap.get(key);
+                nextMap.delete(key);
+            } else {
+                for (const [sId, p] of nextMap.entries()) {
+                    if (p && String(p.userId) === String(data.userId)) {
+                        departingPlayer = p;
+                        nextMap.delete(sId);
+                        break;
+                    }
+                }
+            }
+
+            if (departingPlayer && this.displayMessage) {
+                this.displayMessage(`👋 ${departingPlayer.username || 'An explorer'} left the dungeon.`);
+            }
+
+            return { peerPlayers: nextMap };
+        });
+    }
+
+    handlePeerPlayerMoved = (data = {}) => {
+        if (!data || !data.socketId) return;
+        const currentUserId = getUserId();
+        if (String(data.userId) === String(currentUserId) || data.socketId === socketHandler.socket?.id) return;
+
+        this.setState(prevState => {
+            const nextMap = new Map(prevState.peerPlayers);
+            const existing = nextMap.get(data.socketId);
+            if (existing) {
+                nextMap.set(data.socketId, {
+                    ...existing,
+                    location: {
+                        ...existing.location,
+                        ...data.location
+                    }
+                });
+            } else {
+                nextMap.set(data.socketId, {
+                    userId: data.userId,
+                    socketId: data.socketId,
+                    username: data.username || 'Explorer',
+                    location: data.location
+                });
+            }
+            return { peerPlayers: nextMap };
+        });
+    }
+
     componentDidMount() {
+        this.initDungeonSockets();
         window.debugMode = this.state.debugMode;
         if (this.props.boardManager) {
             this.props.boardManager.debugMode = this.state.debugMode;
@@ -4108,6 +4250,18 @@ class DungeonPage extends React.Component {
                 playerFloatStyle: floatStyle
             }, () => {
                 this.checkMobileViewportCentering(coords);
+                try {
+                    const bm = this.props.boardManager;
+                    const loc = {
+                        levelId: bm?.currentLevel?.id ?? 0,
+                        orientation: bm?.currentOrientation === 'B' ? 'back' : 'front',
+                        boardIndex: bm?.playerTile?.boardIndex ?? 0,
+                        tileIndex: bm ? bm.getIndexFromCoordinates(coords) : 0,
+                        x: coords ? coords[1] : 0,
+                        y: coords ? coords[0] : 0
+                    };
+                    socketHandler.sendMove(loc);
+                } catch (err) { }
             });
         } catch (e) {
             console.warn('updateFloatingPlayerPosition failed', e);
@@ -5140,6 +5294,7 @@ class DungeonPage extends React.Component {
         }
     }
     componentWillUnmount() {
+        this.cleanupDungeonSockets();
         try { document.body.classList.remove('combat-active'); } catch (e) { }
         this._isMounted = false;
         if (typeof this.props.registerMessaging === 'function') {
