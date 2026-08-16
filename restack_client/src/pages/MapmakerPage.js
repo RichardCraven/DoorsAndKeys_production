@@ -495,6 +495,11 @@ class MapMakerPage extends React.Component {
     })
   }
   generateDungeon = () => {
+    const existingInstances = this.getUniqueDungeonInstances(this.state.dungeons);
+    if (existingInstances.length >= 10) {
+      alert('Maximum limit of 10 dungeon instances reached. Please delete an instance before generating a new one.');
+      return;
+    }
     // Reset the dropdown to default while generating
     this.setLoadedDungeonDropdownValue('Dungeon Selector');
     this.setState({

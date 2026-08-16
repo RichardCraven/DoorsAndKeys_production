@@ -1969,20 +1969,11 @@ class MonsterBattle extends React.Component {
 
 
             } else {
-                battleResult = 'loss'
-                summaryMessage = 'Death has come for you and yours.'
+                battleResult = 'loss';
+                summaryMessage = 'Death has come for you and yours.';
                 this._suppressPersistFinalHP = true;
-
-                // Show the summary panel (with portraits)
-                try { if (this._isMounted) this.setState({ showSummaryPanel: true, suppressSummaryPortraits: false }); } catch (e) { }
-
-                this._setTimeout(async () => {
-                    try { if (this._isMounted) this.setState({ showSummaryPanel: false, suppressSummaryPortraits: false }); } catch (e) { }
-
-                    this.props.battleOver('loss');
-
-                    this._suppressPersistFinalHP = false;
-                }, 3000);
+                this.props.battleOver('loss');
+                this._suppressPersistFinalHP = false;
             }
 
             // Persist final HP and dead state for crew once when combat ends

@@ -10,6 +10,7 @@ import FreeWillStatBar from './FreeWillStatBar';
 import { getRandomUserPerkOptions, getUserPerks } from '../utils/user-perks';
 import { getMeta, storeMeta, getUserId } from '../utils/session-handler';
 import { updateUserRequest } from '../utils/api-handler';
+import * as images from '../utils/images';
 import './UserLevelUpScreen.css';
 
 class UserLevelUpScreen extends Component {
@@ -56,10 +57,17 @@ class UserLevelUpScreen extends Component {
         } catch (e) {
             console.error('Failed to claim user perk:', e);
         }
-
         if (typeof this.props.onComplete === 'function') {
             this.props.onComplete(selectedPerkId);
         }
+
+        // Reroll options for the next level up, just in case the modal stays open
+        const newMeta = getMeta() || {};
+        this.setState({
+            selectedPerkId: null,
+            perkOptions: getRandomUserPerkOptions(newMeta, 4),
+            meta: newMeta
+        });
     };
 
     render() {
@@ -97,7 +105,11 @@ class UserLevelUpScreen extends Component {
                                 >
                                     <div className="user-perk-card-header">
                                         <div className="user-perk-icon-title">
-                                            <span className="user-perk-icon">{perk.icon}</span>
+                                            {perk.iconImage ? (
+                                                <span className="user-perk-icon image-icon" style={{ display: 'inline-block', width: '24px', height: '24px', backgroundImage: `url(${images[perk.iconImage]?.default || images[perk.iconImage]})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', filter: 'invert(1) drop-shadow(0 0 4px rgba(248, 113, 113, 0.8))' }} />
+                                            ) : (
+                                                <span className="user-perk-icon">{perk.icon}</span>
+                                            )}
                                             <span className="user-perk-name">{perk.name}</span>
                                         </div>
                                         <span className="user-perk-badge">{perk.badge}</span>

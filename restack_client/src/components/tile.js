@@ -543,7 +543,16 @@ function Tile(props) {
             }}
             onDragStart={(e) => e.preventDefault()}
             className={`tile ${props.className || ''} ${props.type || ''}`.trim()}
+            data-tile-id={props.index}
         >
+           {props.isMobileTouchHover && (
+               <div style={{
+                   position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                   border: '3px solid gold', zIndex: 100, pointerEvents: 'none',
+                   boxShadow: 'inset 0 0 10px rgba(255, 215, 0, 0.5)'
+               }} />
+           )}
+
            {edgeLines && (
                 <>
                     <div style={{position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: edgeLines.top, zIndex: 40, pointerEvents: 'none'}} />

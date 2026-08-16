@@ -58,6 +58,8 @@ import '../styles/codex.scss'
 import SkillTree from '../components/SkillTree';
 import CharacterProfileModal from '../components/CharacterProfileModal';
 import CodexModal from '../components/CodexModal';
+import TrophiesModal from '../components/TrophiesModal';
+import ReaperOfferModal from '../components/ReaperOfferModal';
 import AssemblyAnimation from '../components/assembly-animation';
 import '../styles/narrative-overlay.scss'
 import MapRedux from '../components/MapRedux';
@@ -2366,6 +2368,8 @@ class DungeonPage extends React.Component {
         }
 
         this.state = {
+            showReaperOfferModal: false,
+            showTrophiesModal: false,
             trapVisionEnabled: initialTrapVision,
             isLoadingDungeon: true,
             currentLoadingGif: (() => {
@@ -2466,6 +2470,7 @@ class DungeonPage extends React.Component {
             // floating player animation state
             , playerFloatVisible: false
             , playerFloatStyle: { left: 0, top: 0, transform: 'translate3d(0px, 0px, 0px)' }
+            , mobileTouchTileId: null
             , showAvatarRadialMenu: false
             , showPygmiesAttackPopup: false
             , isAvatarDamaged: false
@@ -6761,7 +6766,7 @@ class DungeonPage extends React.Component {
         const foodLimit = this.getFoodLimit();
         const isOverLimit = food > foodLimit;
         const resolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
-        const deaths = meta.deathTracker || 0;
+        const deaths = Math.max(1, meta.deathTracker || 0);
         const tooltip = 'Your crew has met death and been spared. If this happens thrice, your journey is over';
         const incomeRates = this.getResourceIncomeRates ? this.getResourceIncomeRates() : {};
 
@@ -6927,21 +6932,27 @@ class DungeonPage extends React.Component {
                 {!collapsed && (
                     <div className="section-content">
                         {deaths > 0 && (
-                            <div className="death-tracker" aria-label={tooltip}>
-                                {new Array(deaths).fill(0).map((_, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="death-skull-wrapper"
-                                        tabIndex={0}
-                                        title={tooltip}
-                                        aria-label={tooltip}
-                                        role="button"
-                                        onClick={() => this.openCardDuel(idx)}
-                                        style={{ cursor: 'pointer' }}
-                                    >
-                                        <div className="death-skull" style={{ backgroundImage: `url(${images['whiteskull']})` }}></div>
-                                    </div>
-                                ))}
+                            <div className="death-tracker" title={tooltip} aria-label={tooltip}>
+                                <div className="death-tracker-title">Death Tracker</div>
+                                <div className="death-skulls-list">
+                                    {new Array(deaths).fill(0).map((_, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="death-skull-wrapper"
+                                            tabIndex={0}
+                                            title={tooltip}
+                                            aria-label={tooltip}
+                                            role="button"
+                                            onClick={() => this.openCardDuel(idx)}
+                                            style={{ cursor: 'pointer' }}
+                                        >
+                                            <div
+                                                className="death-skull"
+                                                style={{ backgroundImage: `url("${images.whiteskull?.default || images.whiteskull || images['whiteskull']}")` }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                         {this.state.toastMessage && <div className="dungeon-toast" style={{ marginTop: 8, padding: 8, background: '#2b1b1b', color: '#f0d', borderRadius: 4 }}>{this.state.toastMessage}</div>}
@@ -7224,7 +7235,7 @@ class DungeonPage extends React.Component {
                                         title="Play a practice card duel (no penalty)"
                                     >
                                         <span><span role="img" aria-label="card">🃏</span> Card Scrimmage</span>
-                                        <span className="hotkey-indicator">S</span>
+                                        <span className="hotkey-indicator">1</span>
                                     </button>
                                     <button
                                         className="quick-action-btn"
@@ -10292,8 +10303,8 @@ class DungeonPage extends React.Component {
                     return;
                 }
             }
-            // 's' — Play a practice card duel
-            if ((maybeKey === 's' || maybeKey === 'S') && !this.state.inMonsterBattle && !event.metaKey && !event.ctrlKey) {
+            // '1' — Play a practice card duel
+            if ((maybeKey === '1') && !this.state.inMonsterBattle && !event.metaKey && !event.ctrlKey) {
                 const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
                 if (activeTag !== 'input' && activeTag !== 'textarea') {
                     event.preventDefault();
@@ -10607,6 +10618,46 @@ class DungeonPage extends React.Component {
             crewHoverMatrix: crew
         })
     }
+    handleBoardTouchStart = (e) => {
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el) {
+            const tileEl = el.closest('.tile');
+            if (tileEl) {
+                const tileId = parseInt(tileEl.dataset.tileId, 10);
+                if (!isNaN(tileId)) {
+                    this.setState({ mobileTouchTileId: tileId });
+                }
+            }
+        }
+    }
+
+    handleBoardTouchMove = (e) => {
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el) {
+            const tileEl = el.closest('.tile');
+            if (tileEl) {
+                const tileId = parseInt(tileEl.dataset.tileId, 10);
+                if (!isNaN(tileId) && this.state.mobileTouchTileId !== tileId) {
+                    this.setState({ mobileTouchTileId: tileId });
+                }
+            } else if (this.state.mobileTouchTileId !== null) {
+                this.setState({ mobileTouchTileId: null });
+            }
+        }
+    }
+
+    handleBoardTouchEnd = (e) => {
+        if (this.state.mobileTouchTileId !== null) {
+            const tile = this.state.tiles[this.state.mobileTouchTileId];
+            if (tile) {
+                this.handleClick(tile);
+            }
+            this.setState({ mobileTouchTileId: null });
+        }
+    }
+
     handleClick = (tile) => {
         if (!tile || !tile.coordinates) return;
         if (this.state.keysLocked || this.state.inMonsterBattle || this.state.playerAnimating || this.state.activeConstruction) return;
@@ -10745,8 +10796,7 @@ class DungeonPage extends React.Component {
                 const subtype = bm.getContainsSubtype(t.contains);
                 if (type === 'building' && subtype === 'earthen_fort') return true;
                 if (type === 'earthen_fort' || subtype === 'earthen_fort' || t.building === 'earthen_fort') return true;
-
-                if ((type === 'void' || type === 'inscription') && !bm.isConnectingPathTile(t)) return true;
+                if ((bm.isVoidTile(t) || type === 'void' || type === 'inscription') && !bm.isConnectingPathTile(t)) return true;
 
                 const gateType = bm.getGateTypeFromTile(t);
                 if (gateType && bm.isLockedGateTile(t)) {
@@ -12620,7 +12670,11 @@ class DungeonPage extends React.Component {
 
     // Delegates camping start to CampManager
     setUpCamp = async (maybeDuration) => {
-        return CampManager.setUpCamp(this, maybeDuration);
+        const res = await CampManager.setUpCamp(this, maybeDuration);
+        if (this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
+            this.updateFloatingPlayerPosition(this.props.boardManager.playerTile.location);
+        }
+        return res;
     }
 
     // Delegates camping end to CampManager
@@ -12629,6 +12683,9 @@ class DungeonPage extends React.Component {
         // After endCamp resolves, force another re-render so crew tiles pick up
         // the restored hp values from the new member objects in crewManager.crew.
         try { this.forceUpdate(); } catch (e) { }
+        if (this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
+            this.updateFloatingPlayerPosition(this.props.boardManager.playerTile.location);
+        }
         setTimeout(() => { try { this.forceUpdate(); } catch (e) { } }, 50);
     }
     uppercaseFirstLetter = (text) => {
@@ -12690,9 +12747,7 @@ class DungeonPage extends React.Component {
                 inMonsterBattle: false,
                 keysLocked: false
             }, () => {
-                this.setState({ isCardScrimmage: false, cardDuelTileId: 'combat_loss' }, () => {
-                    this.openCardDuel('combat_loss');
-                });
+                this.setState({ isCardScrimmage: false, cardDuelTileId: 'combat_loss', showReaperOfferModal: true });
             });
             return;
         } else if (result === 'respawn') {
@@ -12709,7 +12764,7 @@ class DungeonPage extends React.Component {
                     c.hp = 1;
                     c.dead = false;
                 });
-                const selectedDungeon = meta2.selectedDungeon || (this.props.boardManager && this.props.boardManager.dungeon);
+                const selectedDungeon = (this.props.boardManager && this.props.boardManager.dungeon) || meta2.selectedDungeon;
                 const resolvedRespawnPoints = this.getResolvedSpawnPoints(selectedDungeon);
                 const spawnPoint = resolvedRespawnPoints[0] || meta2.spawnPoint;
                 if (spawnPoint && selectedDungeon) {
@@ -16670,6 +16725,22 @@ class DungeonPage extends React.Component {
                     initialEntryId={this.state.codexEntry && this.state.codexEntry.entryId}
                 />
 
+                {/* Trophies Modal */}
+                <TrophiesModal
+                    visible={!!this.state.showTrophiesModal}
+                    onClose={() => this.setState({ showTrophiesModal: false })}
+                />
+
+                {/* Reaper's Offer Modal (Soul Wager Prompt on Combat Defeat) */}
+                <ReaperOfferModal
+                    visible={!!this.state.showReaperOfferModal}
+                    onAccept={() => {
+                        this.setState({ showReaperOfferModal: false }, () => {
+                            this.openCardDuel('combat_loss');
+                        });
+                    }}
+                />
+
                 {/* No Codex Entry popup */}
                 {this.state.noCodexEntry && (
                     <div
@@ -17369,19 +17440,11 @@ class DungeonPage extends React.Component {
                             </button>
                         </div>
 
-                        {/* BOTTOM: trophies / card deck / shards tiles */}
+                        {/* BOTTOM: trophies tile */}
                         <div className="camp-bottom-tiles">
-                            <div className="camp-bottom-tile">
+                            <div className="camp-bottom-tile" style={{ cursor: 'pointer' }} onClick={() => this.setState({ showTrophiesModal: true })}>
                                 <div className="camp-bottom-tile-icon"><span role="img" aria-label="trophy">🏆</span></div>
                                 <div className="camp-bottom-tile-label">Trophies</div>
-                            </div>
-                            <div className="camp-bottom-tile" style={{ cursor: 'pointer' }} onClick={() => this.setState({ showCardForge: true })}>
-                                <div className="camp-bottom-tile-icon" style={{ backgroundImage: `url(${images.the_duel_card || images.grimoire})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', width: 54, height: 54 }}></div>
-                                <div className="camp-bottom-tile-label">The Duel</div>
-                            </div>
-                            <div className="camp-bottom-tile" style={{ cursor: 'pointer' }} onClick={() => this.setState({ showSiegeArmy: true })}>
-                                <div className="camp-bottom-tile-icon" style={{ backgroundImage: `url(${images.eclipse})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', width: 54, height: 54 }}></div>
-                                <div className="camp-bottom-tile-label">Siege Army</div>
                             </div>
                         </div>
                     </CModalBody>
@@ -18954,10 +19017,15 @@ class DungeonPage extends React.Component {
                             })}
                         </div>
 
-                        <div className="board" style={{
-                            width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
-                            backgroundColor: 'white'
-                        }}>
+                        <div className="board" 
+                            onTouchStart={this.handleBoardTouchStart}
+                            onTouchMove={this.handleBoardTouchMove}
+                            onTouchEnd={this.handleBoardTouchEnd}
+                            style={{
+                                width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
+                                backgroundColor: 'white',
+                                touchAction: 'none'
+                            }}>
                             {this.state.tiles && this.state.tiles.map((tile, i) => {
                                 const isBeingBuilt = this.state.activeConstruction && this.state.activeConstruction.targetTileIdx === tile.id;
                                 let boardImage = isBeingBuilt ? 'building' : (tile.image ? tile.image : (tile.icon ? tile.icon : null));
@@ -19022,6 +19090,7 @@ class DungeonPage extends React.Component {
                                     handleHover={this.handleHover}
                                     type={tile.type}
                                     handleClick={this.handleClick}
+                                    isMobileTouchHover={this.state.mobileTouchTileId === tile.id}
                                     isFadingOut={!!tile.isFadingOut}
                                 >
                                 </Tile>
