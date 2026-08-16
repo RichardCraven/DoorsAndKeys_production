@@ -1,12 +1,19 @@
 import React from 'react'
 import '../styles/user-manager-page.scss'
-import {loadAllUsersRequest, deleteUserRequest, updateUserRequest} from '../utils/api-handler';
+import {loadAllUsersRequest, deleteUserRequest, updateUserRequest, generateBotRequest, getBotReplaysRequest, deleteAllBotReplaysRequest} from '../utils/api-handler';
 
 class UserManagerPage extends React.Component {
   constructor(props){
     super(props)
     this.state = {
       users: [],
+      isGeneratingBot: false,
+      alertMessage: null,
+      showLogsModal: false,
+      botReplays: [],
+      selectedReplay: null,
+      isLoadingLogs: false,
+      confirmDialog: null
     };
   }
 
@@ -15,24 +22,34 @@ class UserManagerPage extends React.Component {
     this.setState({ users: Array.isArray(response?.data) ? response.data : [] })
   }
 
-  deleteUser = async (user) => {
-    const c = window.confirm("Are you sure you want to delete this user?")
-    if(c){
-      await deleteUserRequest(user._id || user.id)
-      const final = await loadAllUsersRequest()
-      this.setState({ users: Array.isArray(final?.data) ? final.data : [] })
-    }
+  deleteUser = (user) => {
+    this.setState({
+      confirmDialog: {
+        message: "Are you sure you want to delete this user?",
+        onConfirm: async () => {
+          this.setState({ confirmDialog: null });
+          await deleteUserRequest(user._id || user.id);
+          const final = await loadAllUsersRequest();
+          this.setState({ users: Array.isArray(final?.data) ? final.data : [] });
+        }
+      }
+    });
   }
 
-  toggleAdmin = async (user) => {
+  toggleAdmin = (user) => {
     const nextStatus = !user.isAdmin;
     const actionText = nextStatus ? 'promote to Admin' : 'demote to Player';
-    const c = window.confirm(`Are you sure you want to ${actionText} user "${user.username}"?`);
-    if(c){
-      await updateUserRequest(user._id || user.id, undefined, undefined, nextStatus);
-      const final = await loadAllUsersRequest();
-      this.setState({ users: Array.isArray(final?.data) ? final.data : [] })
-    }
+    this.setState({
+      confirmDialog: {
+        message: `Are you sure you want to ${actionText} user "${user.username}"?`,
+        onConfirm: async () => {
+          this.setState({ confirmDialog: null });
+          await updateUserRequest(user._id || user.id, undefined, undefined, nextStatus);
+          const final = await loadAllUsersRequest();
+          this.setState({ users: Array.isArray(final?.data) ? final.data : [] });
+        }
+      }
+    });
   }
 
   handleBack = () => {
@@ -45,9 +62,447 @@ class UserManagerPage extends React.Component {
     }
   };
 
+  handleGenerateBot = async () => {
+    this.setState({ isGeneratingBot: true });
+    try {
+      const res = await generateBotRequest();
+      const botName = res && res.data && res.data.username ? res.data.username : 'A new bot';
+      this.setState({ alertMessage: `Bot generation started for ${botName}! The bot is now playing the game in the background for 3 minutes. Check the email on file for the results.` });
+      // Refresh user list
+      const final = await loadAllUsersRequest();
+      this.setState({ users: Array.isArray(final?.data) ? final.data : [] });
+    } catch (e) {
+      this.setState({ alertMessage: 'Failed to generate bot.' });
+    } finally {
+      this.setState({ isGeneratingBot: false });
+    }
+  };
+
+  closeAlert = () => {
+    this.setState({ alertMessage: null });
+  };
+
+  renderAlertModal = () => {
+    if (!this.state.alertMessage) return null;
+    return (
+      <div style={{
+          position: 'fixed',
+          top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backdropFilter: 'blur(3px)'
+      }}>
+        <div style={{
+              background: '#15101a',
+              border: '1px solid #e5b54f',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '420px',
+              maxWidth: '90%',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(229, 181, 79, 0.2)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', textTransform: 'uppercase', letterSpacing: '1px', color: '#e5b54f' }}>
+              System Alert
+            </h3>
+            <p style={{ fontSize: '14px', color: '#ddd', lineHeight: '1.5', marginBottom: '24px' }}>
+              {this.state.alertMessage}
+            </p>
+            <button 
+              onClick={this.closeAlert}
+              style={{
+                padding: '8px 24px',
+                background: 'rgba(229, 181, 79, 0.1)',
+                color: '#e5b54f',
+                border: '1px solid #e5b54f',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(229, 181, 79, 0.3)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(229, 181, 79, 0.1)'}
+            >
+              OK
+            </button>
+        </div>
+      </div>
+    );
+  };
+
+  renderConfirmModal = () => {
+    if (!this.state.confirmDialog) return null;
+    return (
+      <div style={{
+          position: 'fixed',
+          top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backdropFilter: 'blur(3px)'
+      }}>
+        <div style={{
+              background: '#15101a',
+              border: '1px solid #e5b54f',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '420px',
+              maxWidth: '90%',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(229, 181, 79, 0.2)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              textAlign: 'center'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', textTransform: 'uppercase', letterSpacing: '1px', color: '#e5b54f' }}>
+              Confirm Action
+            </h3>
+            <p style={{ fontSize: '14px', color: '#ddd', lineHeight: '1.5', marginBottom: '24px' }}>
+              {this.state.confirmDialog.message}
+            </p>
+            <div style={{ display: 'flex', gap: '16px' }}>
+              <button 
+                onClick={() => this.setState({ confirmDialog: null })}
+                style={{
+                  padding: '8px 24px',
+                  background: 'transparent',
+                  color: '#aaa',
+                  border: '1px solid #555',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = '#ccc'}
+                onMouseLeave={e => e.currentTarget.style.color = '#aaa'}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={this.state.confirmDialog.onConfirm}
+                style={{
+                  padding: '8px 24px',
+                  background: 'rgba(229, 181, 79, 0.1)',
+                  color: '#e5b54f',
+                  border: '1px solid #e5b54f',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(229, 181, 79, 0.3)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(229, 181, 79, 0.1)'}
+              >
+                Confirm
+              </button>
+            </div>
+        </div>
+      </div>
+    );
+  };
+
+  handleFetchLogs = async () => {
+    this.setState({ isLoadingLogs: true, showLogsModal: true, selectedReplay: null });
+    try {
+      const res = await getBotReplaysRequest();
+      if (res && res.data) {
+        this.setState({ botReplays: res.data });
+      }
+    } catch (e) {
+      console.error('Failed to fetch bot logs', e);
+    } finally {
+      this.setState({ isLoadingLogs: false });
+    }
+  };
+
+  handleDeleteAllLogs = async () => {
+    this.setState({
+      confirmDialog: {
+        message: "Are you sure you want to delete all bot logs?",
+        onConfirm: async () => {
+          this.setState({ confirmDialog: null, isLoadingLogs: true });
+          try {
+            await deleteAllBotReplaysRequest();
+            this.setState({ botReplays: [], selectedReplay: null });
+          } catch (e) {
+            console.error('Failed to delete bot logs', e);
+          } finally {
+            this.setState({ isLoadingLogs: false });
+          }
+        }
+      }
+    });
+  };
+
+  renderLogsModal = () => {
+    if (!this.state.showLogsModal) return null;
+    const { botReplays, selectedReplay, isLoadingLogs } = this.state;
+
+    return (
+      <div style={{
+          position: 'fixed',
+          top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backdropFilter: 'blur(3px)'
+      }}>
+        <div style={{
+              background: '#15101a',
+              border: '1px solid #e5b54f',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '600px',
+              maxWidth: '90%',
+              maxHeight: '80vh',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(229, 181, 79, 0.2)',
+              display: 'flex',
+              flexDirection: 'column'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', textTransform: 'uppercase', letterSpacing: '1px', color: '#e5b54f' }}>
+                Game Run Logs
+              </h3>
+              <div>
+                <button 
+                  onClick={this.handleDeleteAllLogs}
+                  style={{ background: 'transparent', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', padding: '4px 8px', marginRight: '10px' }}
+                >
+                  Delete All Logs
+                </button>
+                <button 
+                  onClick={() => this.setState({ showLogsModal: false })}
+                  style={{ background: 'transparent', color: '#e5b54f', border: 'none', cursor: 'pointer', fontSize: '18px' }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {isLoadingLogs ? (
+                <div style={{ color: '#aaa', textAlign: 'center', padding: '20px' }}>Loading...</div>
+              ) : selectedReplay ? (
+                <div>
+                  <button 
+                    onClick={() => this.setState({ selectedReplay: null })}
+                    style={{ background: 'transparent', color: '#e5b54f', border: 'none', cursor: 'pointer', padding: '0 0 10px 0', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}
+                  >
+                    ← Back to Runs
+                  </button>
+                  <h4 style={{ color: '#fff', margin: '0 0 10px 0', fontSize: '15px' }}>{selectedReplay.botUsername} - {new Date(selectedReplay.createdAt).toLocaleString()}</h4>
+                  <div style={{ background: 'rgba(0,0,0,0.4)', padding: '10px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    {selectedReplay.actions && selectedReplay.actions.map((act, i) => (
+                      <div key={i} style={{ color: '#ccc', fontSize: '12px', padding: '4px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                        <span style={{ color: '#888', marginRight: '8px' }}>[{new Date(act.timestamp).toLocaleTimeString()}]</span>
+                        {act.action}
+                      </div>
+                    ))}
+                    {(!selectedReplay.actions || selectedReplay.actions.length === 0) && (
+                      <div style={{ color: '#777', fontStyle: 'italic' }}>No actions recorded.</div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {botReplays.length === 0 ? (
+                    <div style={{ color: '#aaa', textAlign: 'center', padding: '20px' }}>No bot replays found.</div>
+                  ) : (
+                    botReplays.map((replay) => (
+                      <div 
+                        key={replay._id}
+                        onClick={() => this.setState({ selectedReplay: replay })}
+                        style={{
+                          padding: '12px',
+                          background: 'rgba(255,255,255,0.03)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                      >
+                        <span style={{ color: '#e5b54f', fontWeight: 'bold' }}>{replay.botUsername}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); this.startReplayPlayback(replay); }}
+                            style={{ 
+                              background: 'transparent', color: '#00ffff', border: 'none', 
+                              cursor: 'pointer', textShadow: '0 0 8px #00ffff', 
+                              textTransform: 'uppercase', letterSpacing: '1px', 
+                              fontWeight: 'bold', fontSize: '12px', padding: 0
+                            }}
+                          >
+                            Replay
+                          </button>
+                          <span style={{ color: '#888', fontSize: '12px' }}>{new Date(replay.createdAt).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </>
+              )}
+            </div>
+        </div>
+      </div>
+    );
+  };
+
+  startReplayPlayback = (replay) => {
+    if (!replay.actions || replay.actions.length === 0) {
+      this.setState({ alertMessage: "No actions to replay." });
+      return;
+    }
+    this.setState({ playingReplay: replay, replayActionIndex: 0, showLogsModal: false }, this.runReplayLoop);
+  };
+
+  runReplayLoop = () => {
+    if (!this.state.playingReplay) return;
+    const { actions } = this.state.playingReplay;
+    const currentIdx = this.state.replayActionIndex;
+
+    if (currentIdx >= actions.length - 1) {
+      this._replayTimeout = setTimeout(() => this.setState({ playingReplay: null }), 4000);
+      return;
+    }
+
+    const currentAction = actions[currentIdx];
+    const nextAction = actions[currentIdx + 1];
+    
+    let delay = nextAction.timestamp - currentAction.timestamp;
+    if (delay < 300) delay = 300; 
+    if (delay > 2000) delay = 2000; 
+
+    this._replayTimeout = setTimeout(() => {
+      if (!this.state.playingReplay) return;
+      this.setState({ replayActionIndex: this.state.replayActionIndex + 1 }, this.runReplayLoop);
+    }, delay);
+  };
+
+  stopReplayPlayback = () => {
+    if (this._replayTimeout) clearTimeout(this._replayTimeout);
+    this.setState({ playingReplay: null });
+  };
+
+  renderReplayPlayback = () => {
+    const { playingReplay, replayActionIndex } = this.state;
+    if (!playingReplay) return null;
+
+    const action = playingReplay.actions[replayActionIndex];
+    const recentActions = playingReplay.actions.slice(Math.max(0, replayActionIndex - 7), replayActionIndex + 1);
+
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+        backgroundColor: 'rgba(10, 8, 12, 0.95)', zIndex: 10000,
+        display: 'flex', flexDirection: 'column',
+        justifyContent: 'center', alignItems: 'center'
+      }}>
+        <div style={{
+          position: 'absolute', top: '24px', left: '24px',
+          color: '#00ffff', fontSize: '24px', fontWeight: 'bold', textTransform: 'uppercase',
+          letterSpacing: '4px', textShadow: '0 0 15px rgba(0,255,255,0.7)',
+          animation: 'pulseReplay 2s infinite'
+        }}>
+          ● REPLAY
+        </div>
+        
+        <button 
+          onClick={this.stopReplayPlayback}
+          style={{
+            position: 'absolute', top: '24px', right: '24px',
+            background: 'transparent', border: '1px solid #e5b54f', color: '#e5b54f',
+            padding: '8px 16px', borderRadius: '4px', cursor: 'pointer',
+            textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600'
+          }}
+        >
+          Exit Replay
+        </button>
+
+        <div style={{ width: '700px', maxWidth: '90%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <h2 style={{ color: '#e5b54f', textAlign: 'center', margin: '0 0 10px 0', fontSize: '24px', letterSpacing: '2px' }}>
+            {playingReplay.botUsername}
+          </h2>
+          
+          <div style={{
+            background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+            padding: '24px', height: '360px', overflow: 'hidden',
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+            boxShadow: 'inset 0 0 40px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.5)'
+          }}>
+            {recentActions.map((act, i) => {
+              const isLast = i === recentActions.length - 1;
+              return (
+                <div key={i} style={{
+                  padding: '10px 0',
+                  color: isLast ? '#fff' : 'rgba(255,255,255,0.3)',
+                  fontSize: isLast ? '22px' : '15px',
+                  borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.03)',
+                  transformOrigin: 'left',
+                  transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                  fontWeight: isLast ? '700' : '400',
+                  textShadow: isLast ? '0 0 10px rgba(255,255,255,0.2)' : 'none',
+                  display: 'flex', gap: '15px'
+                }}>
+                  <span style={{ color: isLast ? '#00ffff' : 'rgba(0,255,255,0.3)', whiteSpace: 'nowrap' }}>
+                    [{new Date(act.timestamp).toLocaleTimeString()}]
+                  </span>
+                  <span style={{ color: isLast ? '#fff' : 'inherit' }}>
+                    {act.action}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          
+          <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+             <div style={{ 
+               height: '100%', 
+               background: '#00ffff', 
+               width: `${(replayActionIndex / Math.max(1, playingReplay.actions.length - 1)) * 100}%`,
+               transition: 'width 0.3s linear',
+               boxShadow: '0 0 10px #00ffff'
+             }} />
+          </div>
+        </div>
+        <style>
+          {`
+            @keyframes pulseReplay {
+              0% { opacity: 1; }
+              50% { opacity: 0.3; }
+              100% { opacity: 1; }
+            }
+          `}
+        </style>
+      </div>
+    );
+  };
+
   render() {
     return (
       <div className="user-manager-page">
+        {this.renderAlertModal()}
+        {this.renderConfirmModal()}
+        {this.renderLogsModal()}
+        {this.renderReplayPlayback()}
         <div className="user-manager-card">
           <div className="user-manager-header">
             <h2>User Manager</h2>
@@ -56,6 +511,57 @@ class UserManagerPage extends React.Component {
             </button>
           </div>
           
+          <div className="bot-controls" style={{ padding: '10px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button 
+              className="generate-bot-btn" 
+              onClick={this.handleGenerateBot}
+              disabled={this.state.isGeneratingBot}
+              style={{
+                padding: '8px 16px',
+                background: this.state.isGeneratingBot ? 'rgba(255, 255, 255, 0.1)' : 'rgba(229, 181, 79, 0.1)',
+                color: this.state.isGeneratingBot ? '#888' : '#e5b54f',
+                border: `1px solid ${this.state.isGeneratingBot ? '#555' : '#e5b54f'}`,
+                borderRadius: '4px',
+                cursor: this.state.isGeneratingBot ? 'not-allowed' : 'pointer',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={e => {
+                if (!this.state.isGeneratingBot) e.currentTarget.style.background = 'rgba(229, 181, 79, 0.3)';
+              }}
+              onMouseLeave={e => {
+                if (!this.state.isGeneratingBot) e.currentTarget.style.background = 'rgba(229, 181, 79, 0.1)';
+              }}
+            >
+              {this.state.isGeneratingBot ? 'Generating...' : 'Generate Bot'}
+            </button>
+
+            <button 
+              className="fetch-logs-btn" 
+              onClick={this.handleFetchLogs}
+              style={{
+                padding: '8px 16px',
+                background: 'rgba(229, 181, 79, 0.1)',
+                color: '#e5b54f',
+                border: '1px solid #e5b54f',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '13px',
+                fontWeight: 'bold',
+                textTransform: 'uppercase',
+                letterSpacing: '1px',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(229, 181, 79, 0.3)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(229, 181, 79, 0.1)'}
+            >
+              Game Run Logs
+            </button>
+          </div>
+
           <div className="user-table-container">
             <table className="user-table">
               <thead>

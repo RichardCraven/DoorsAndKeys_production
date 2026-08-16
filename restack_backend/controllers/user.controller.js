@@ -11,8 +11,8 @@ exports.create = (req, res, next) => {
     } else {
       // Send notification email asynchronously
       sendNotificationEmail(
-        'New User Registration - Restack',
-        `A new user has registered on Restack!\n\nUsername: ${data.name || 'Unknown'}\nEmail: ${data.email || 'Unknown'}`
+        'New User Registration - DreamTower',
+        `A new user has registered on DreamTower!\n\nUsername: ${data.name || 'Unknown'}\nEmail: ${data.email || 'Unknown'}`
       );
       res.json(data)
     }

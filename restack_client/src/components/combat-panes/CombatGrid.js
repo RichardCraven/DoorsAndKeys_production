@@ -1981,7 +1981,7 @@ export default function CombatGrid(props) {
                             display: 'flex',
                             flexDirection: 'column-reverse',
                             pointerEvents: 'none',
-                            opacity: hideBars ? 0 : 1,
+                            opacity: (hideBars || fighter.isWall || fighter.type === 'engineer_wall') ? 0 : 1,
                             transition: 'opacity 0.5s ease-in-out'
                         }}>
                             <div className="hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
@@ -3015,7 +3015,7 @@ export default function CombatGrid(props) {
                         left: 0,
                         width: '100%',
                         pointerEvents: 'none',
-                        opacity: hideBars ? 0 : 1,
+                        opacity: (hideBars || unit.isWall || unit.type === 'engineer_wall') ? 0 : 1,
                         transition: 'opacity 0.5s ease-in-out'
                     }}>
                         <div className="monster-hp-bar hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
@@ -5734,6 +5734,35 @@ export default function CombatGrid(props) {
             );
         }
 
+
+        if (anim.type === 'turret_blade_spin' && anim.srcPx) {
+            const bladeImg = images.turret_blade || images.turret_blade_icon || '';
+            const durMs = anim.duration || 800;
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: '100px',
+                    height: '100px',
+                    pointerEvents: 'none',
+                    zIndex: 4800,
+                    transformOrigin: '50% 100%',
+                    transform: 'translate(-50%, -100%)',
+                    animation: `turretBladeSpin ${durMs}ms cubic-bezier(0.4, 0, 0.2, 1) forwards`
+                }}>
+                    <div style={{
+                        width: '100%',
+                        height: '100%',
+                        backgroundImage: bladeImg ? `url("${bladeImg}")` : 'none',
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center bottom',
+                        filter: 'drop-shadow(0 0 10px rgba(255, 183, 3, 0.7))'
+                    }} />
+                </div>
+            );
+        }
 
         // ── Beholder: Chainbolt beam ────────────────────────────────────────
         if (anim.type === 'chainbolt_beam' && anim.srcPx && anim.tgtPx) {

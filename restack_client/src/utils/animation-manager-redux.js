@@ -1531,6 +1531,15 @@ export class AnimationManagerRedux {
     });
   }
 
+  triggerTurretBladeSpin(coords, durationMs = 800) {
+    const srcPx = this._px(coords);
+    this._emit({
+      type: 'turret_blade_spin',
+      srcPx,
+      duration: durationMs
+    });
+  }
+
   triggerSummon(coords, summonType, transitionIcon) {
     this._summon(coords, summonType, transitionIcon);
   }
@@ -2041,11 +2050,34 @@ export class AnimationManagerRedux {
     });
   }
 
+  _adjustTargetForWall(src, tgt) {
+    if (!src || !tgt || !this.combatManager) return tgt;
+    const combatants = this.combatManager.combatants || {};
+    const dx = tgt.x - src.x;
+    const dy = tgt.y - src.y;
+    const steps = Math.max(Math.abs(dx), Math.abs(dy));
+    if (steps <= 0) return tgt;
+
+    for (let i = 1; i <= steps; i++) {
+        const cx = Math.round(src.x + (dx * i) / steps);
+        const cy = Math.round(src.y + (dy * i) / steps);
+        const wall = Object.values(combatants).find(c => 
+            c && !c.dead && (c.isWall || c.type === 'engineer_wall') &&
+            c.coordinates && c.coordinates.x === cx && c.coordinates.y === cy
+        );
+        if (wall) {
+            return { x: cx, y: cy };
+        }
+    }
+    return tgt;
+  }
+
   // ─── Beholder skill animations ───────────────────────────────────────────────
 
   _chainbolt(src, tgt, sourceUnitId, customDuration) {
+    const finalTgt = this._adjustTargetForWall(src, tgt);
     const srcPx = this._px(src);
-    const tgtPx = this._px(tgt);
+    const tgtPx = this._px(finalTgt);
     const dx = tgtPx.x - srcPx.x;
     const dy = tgtPx.y - srcPx.y;
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
@@ -2073,8 +2105,9 @@ export class AnimationManagerRedux {
   }
 
   _mindSwapBeam(src, tgt, variant = 'mind_swap', customDuration) {
+    const finalTgt = this._adjustTargetForWall(src, tgt);
     const srcPx = this._px(src);
-    const tgtPx = this._px(tgt);
+    const tgtPx = this._px(finalTgt);
     const dx = tgtPx.x - srcPx.x;
     const dy = tgtPx.y - srcPx.y;
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
@@ -2102,8 +2135,9 @@ export class AnimationManagerRedux {
   }
 
   _displacementRay(src, tgt, customDuration) {
+    const finalTgt = this._adjustTargetForWall(src, tgt);
     const srcPx = this._px(src);
-    const tgtPx = this._getImpactTargetPx(tgt);
+    const tgtPx = this._getImpactTargetPx(finalTgt);
     const dx = tgtPx.x - srcPx.x;
     const dy = tgtPx.y - srcPx.y;
     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
@@ -2195,7 +2229,6 @@ export class AnimationManagerRedux {
   }
 
   _paradoxEngineFail(src, tgt) {
-    const srcPx = this._px(src);
     const tgtPx = this._px(tgt);
     this._emit({
       type: 'paradox_fail_burst',

@@ -98,6 +98,16 @@ export function CrewManager() {
                 }
             }
 
+            // Engineer starts with construct skills & master_builder passive (migration-safe)
+            if ((member.type || member.image) === 'engineer') {
+                if (!Array.isArray(member.skills)) member.skills = [];
+                ['build_turret', 'build_walker', 'build_wall', 'engineer_repair', 'sword_swing'].forEach(s => {
+                    if (!member.skills.includes(s)) member.skills.push(s);
+                });
+                if (!Array.isArray(member.passives)) member.passives = [];
+                if (!member.passives.includes('master_builder')) member.passives.push('master_builder');
+            }
+
             member.specialActions.forEach(a => {
                 let end = new Date(a.endDate),
                     now = new Date();
@@ -855,8 +865,8 @@ export function CrewManager() {
             stats: { str: 5, int: 6, dex: 7, fort: 6, baseHp: 10, experience: 0 },
             portrait: images['engineer'],
             inventory: [],
-            skills: ['sword_swing', 'axe_throw', 'force_back'],
-            passives: ['inspiring_force'],
+            skills: ['build_turret', 'build_walker', 'build_wall', 'engineer_repair', 'sword_swing'],
+            passives: ['master_builder', 'inspiring_force'],
             weaknesses: ['curse', 'psionic'],
             description: 'A battlefield machinist who excels at spacing control and tactical pressure.',
             specialActions: [],

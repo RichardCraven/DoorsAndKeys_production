@@ -8,8 +8,8 @@ exports.enterDungeon = (req, res) => {
   }
 
   sendNotificationEmail(
-    'User Entered Dungeon - Restack',
-    `A user has just entered a dungeon!\n\nUser: ${username}\nDungeon: ${dungeonName}`
+    'User Entered Dungeon - DreamTower',
+    `User ${username} just entered the dungeon: ${dungeonName}`
   );
 
   res.status(200).json({ message: 'Notification sent successfully' });

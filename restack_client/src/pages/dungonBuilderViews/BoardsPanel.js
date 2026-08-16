@@ -29,6 +29,8 @@ class BoardsPanel extends React.Component {
             nextProps.boardSize !== this.props.boardSize ||
             nextProps.draggedBoard !== this.props.draggedBoard ||
             nextProps.showUnstagedBoards !== this.props.showUnstagedBoards ||
+            nextProps.loadedDungeon !== this.props.loadedDungeon ||
+            nextProps.loadingData !== this.props.loadingData ||
             nextState.hoveredSlot !== this.state.hoveredSlot
         );
     }
@@ -374,7 +376,14 @@ class BoardsPanel extends React.Component {
                             height: (this.props.boardSize - 43)+ 'px'
                           }}
                     >
-                        {this.props.boardsFolders.length > 0 && this.props.boardsFolders.map((folder, idx) => {
+                        {(() => {
+                            if (this.props.loadingData) return null;
+                            const activeDungeonName = this.props.loadedDungeon ? this.props.loadedDungeon.name : null;
+                            const visibleFolders = (this.props.boardsFolders || []).filter(f => {
+                                if (activeDungeonName) return f.title === activeDungeonName;
+                                return true;
+                            });
+                            return visibleFolders.map((folder, idx) => {
                         return  <div key={idx}>
                                     <div 
                                         className="boards-folder-headline draggable" 
@@ -537,7 +546,8 @@ class BoardsPanel extends React.Component {
                                         })}
                                     </CCollapse>
                                 </div>
-                        })}
+                        });
+                        })()}
                         {!!this.props.showUnstagedBoards && this.props.boards && this.props.compatibilityMatrix.show === false && this.props.boards.filter(board => {
                             const info = this.getBoardFolderInfo(board);
                             return !info.folderPath || info.folderPath.trim() === '';

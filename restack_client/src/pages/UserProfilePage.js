@@ -8,6 +8,7 @@ import {
 } from '../utils/api-handler';
 import FreeWillStatBar from '../components/FreeWillStatBar';
 import { USER_PERKS_POOL, getUserPerks } from '../utils/user-perks';
+import * as images from '../utils/images';
 
 class UserProfilePage extends React.Component{
   constructor(props){
@@ -252,7 +253,8 @@ class UserProfilePage extends React.Component{
         { navToLanding && <Redirect to="/landing" /> }
         
         <div className="profile-card">
-          <div className="profile-header">
+          <div className="profile-column">
+            <div className="profile-header">
             <div className="avatar-circle">
               {(isEditingName ? editedName : user?.name)?.charAt(0)?.toUpperCase() || '?'}
             </div>
@@ -317,7 +319,11 @@ class UserProfilePage extends React.Component{
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {unlockedPerks.map(p => (
                     <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 12px', background: 'rgba(255, 215, 0, 0.08)', border: '1px solid rgba(255, 215, 0, 0.25)', borderRadius: '8px' }}>
-                      <span style={{ fontSize: '20px' }}>{p.icon}</span>
+                      {p.iconImage ? (
+                        <div style={{ width: '24px', height: '24px', backgroundImage: `url(${images[p.iconImage]?.default || images[p.iconImage]})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', filter: 'invert(1) drop-shadow(0 0 4px rgba(248, 113, 113, 0.8))' }} />
+                      ) : (
+                        <span style={{ fontSize: '20px' }}>{p.icon}</span>
+                      )}
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontSize: '13px', fontWeight: 'bold', color: '#ffd700' }}>{p.name}</span>
                         <span style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.7)' }}>{p.shortDesc}</span>
@@ -328,9 +334,11 @@ class UserProfilePage extends React.Component{
               </div>
             );
           })()}
+          </div>
           
-          <div className="profile-section">
-            <div className="section-label">Current Dungeon</div>
+          <div className="profile-column" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div className="profile-section">
+              <div className="section-label">Current Dungeon</div>
             <div className="section-value">
               {dungeon?.name || <span className="no-dungeon">No active dungeon</span>}
             </div>
@@ -421,6 +429,7 @@ class UserProfilePage extends React.Component{
             >
               Back
             </button>
+          </div>
           </div>
         </div>
       </div>

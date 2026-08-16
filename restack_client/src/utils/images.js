@@ -618,7 +618,10 @@ import ranger from '../assets/portraits/crew/rogue/rogue_compressed.png'
 import sage from '../assets/portraits/crew/sage/sage_compressed.png'
 import sorceress from '../assets/icons/crew_icons/sorceress.png'
 import engineer from '../assets/portraits/crew/engineer/engineer_compressed.png'
+import turret_icon from '../assets/icons/combat-icons/specials/engineer/turret.png'
+import turret_blade_icon from '../assets/icons/combat-icons/specials/engineer/turret_blade.png'
 import summoner from '../assets/portraits/crew/summoner/summoner_compressed.png'
+import trophy_background from '../assets/high_res_images/trophy_background.png'
 
 import viking1 from '../assets/icons/crew_icons/viking1.png'
 import viking2 from '../assets/icons/crew_icons/viking2.png'
@@ -1239,6 +1242,8 @@ import woodland_warband from '../assets/portraits/pygmies/woodland warband.png';
 import woodland_group from '../assets/portraits/pygmies/woodland-group.png';
 import woodland_individual from '../assets/portraits/pygmies/woodland-individual.png';
 
+const walker_glowing_square = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIiB2aWV3Qm94PSIwIDAgMTIwIDEyMCI+PGRlZnM+PGZpbHRlciBpZD0iZ2xvdyIgeD0iLTMwJSIgeT0iLTMwJSIgd2lkdGg9IjE2MCUiIGhlaWdodD0iMTYwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iOCIgcmVzdWx0PSJibHVyIi8+PGZlQ29tcG9zaXRlIGluPSJTb3VyY2VHcmFwaGljIiBpbjI9ImJsdXIiIG9wZXJhdG9yPSJvdmVyIi8+PC9maWx0ZXI+PGxpbmVhckdyYWRpZW50IGlkPSJ5ZWxsb3dHcmFkIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZmZmNTY2Ii8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiNmZmQ3MDAiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNkNDliMDAiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiByeD0iMTQiIGZpbGw9InVybCgjeWVsbG93R3JhZCkiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBmaWx0ZXI9InVybCgjZ2xvdykiLz48cmVjdCB4PSIyMiIgeT0iMjIiIHdpZHRoPSI3NiIgaGVpZ2h0PSI3NiIgcng9IjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIzIiBvcGFjaXR5PSIwLjg1Ii8+PHJlY3QgeD0iMzYiIHk9IjM2IiB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHJ4PSI0IiBmaWxsPSIjZmZmZmZmIiBvcGFjaXR5PSIwLjk1Ii8+PC9zdmc+";
+
 const mud_pygmies = mud_group;
 const cave_pygmies = cave_squad;
 const save_pygmies = cave_squad;
@@ -1850,7 +1855,13 @@ export {
     barbarian_eyes_glow_red,
     sorceress,
     engineer,
+    turret_icon as turret,
+    turret_icon,
+    walker_glowing_square,
+    turret_blade_icon as turret_blade,
+    turret_blade_icon,
     summoner,
+    trophy_background,
     soldier,
     monk,
 

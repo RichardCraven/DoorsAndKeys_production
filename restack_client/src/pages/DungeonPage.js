@@ -3,12 +3,14 @@ import gifOne from '../assets/highres-gifs/gifOne.gif';
 import gifTwo from '../assets/highres-gifs/gifTwo.gif';
 import gifThree from '../assets/highres-gifs/gifThree.gif';
 
+import socketHandler from '../utils/socket-handler';
 import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../utils/shared-constants';
 import '../styles/dungeon-board.scss'
 import Tile from '../components/tile'
 import ProjectileCanvas from '../components/ProjectileCanvas'
 import MonsterBattle from './sub-views/MonsterBattle';
 import ShrineScreen from './sub-views/ShrineScreen';
+import PvPChallengeModal from '../components/PvPChallengeModal';
 
 import LevelUpScreen from '../components/LevelUpScreen';
 import UserLevelUpScreen from '../components/UserLevelUpScreen';
@@ -58,6 +60,8 @@ import '../styles/codex.scss'
 import SkillTree from '../components/SkillTree';
 import CharacterProfileModal from '../components/CharacterProfileModal';
 import CodexModal from '../components/CodexModal';
+import TrophiesModal from '../components/TrophiesModal';
+import ReaperOfferModal from '../components/ReaperOfferModal';
 import AssemblyAnimation from '../components/assembly-animation';
 import '../styles/narrative-overlay.scss'
 import MapRedux from '../components/MapRedux';
@@ -2366,6 +2370,8 @@ class DungeonPage extends React.Component {
         }
 
         this.state = {
+            showReaperOfferModal: false,
+            showTrophiesModal: false,
             trapVisionEnabled: initialTrapVision,
             isLoadingDungeon: true,
             currentLoadingGif: (() => {
@@ -2465,7 +2471,14 @@ class DungeonPage extends React.Component {
             , mapBoardDetailBoardIndex: null
             // floating player animation state
             , playerFloatVisible: false
+            , peerPlayers: new Map()
+            , selectedPeerPlayer: null
+            , incomingChallenge: null
+            , outgoingChallenge: null
+            , isPvPMode: false
+            , pvpMatchData: null
             , playerFloatStyle: { left: 0, top: 0, transform: 'translate3d(0px, 0px, 0px)' }
+            , mobileTouchTileId: null
             , showAvatarRadialMenu: false
             , showPygmiesAttackPopup: false
             , isAvatarDamaged: false
@@ -3247,7 +3260,237 @@ class DungeonPage extends React.Component {
         }
     }
 
+    initDungeonSockets = () => {
+        try {
+            const meta = getMeta() || {};
+            const dungeonId = meta.dungeonId || this.props.boardManager?.dungeon?.id || 'carcosa';
+            const userId = getUserId() || 'guest';
+            const username = meta.username || 'Explorer';
+
+            const bm = this.props.boardManager;
+            const location = {
+                levelId: bm?.currentLevel?.id ?? 0,
+                orientation: bm?.currentOrientation === 'B' ? 'back' : 'front',
+                boardIndex: bm?.playerTile?.boardIndex ?? 0,
+                tileIndex: (bm && bm.playerTile && bm.playerTile.location) ? bm.getIndexFromCoordinates(bm.playerTile.location) : 0,
+                x: bm?.playerTile?.location ? bm.playerTile.location[1] : 0,
+                y: bm?.playerTile?.location ? bm.playerTile.location[0] : 0
+            };
+
+            const crewSummary = (this.props.crewManager?.crew || []).map(c => ({
+                name: c.name,
+                type: c.type || c.class,
+                level: c.level || 1,
+                portrait: c.portrait || c.type
+            }));
+
+            socketHandler.connect({ id: userId, username });
+
+            socketHandler.off('dungeon:presence_snapshot', this.handlePresenceSnapshot);
+            socketHandler.off('dungeon:player_joined', this.handlePeerPlayerJoined);
+            socketHandler.off('dungeon:player_left', this.handlePeerPlayerLeft);
+            socketHandler.off('dungeon:player_moved', this.handlePeerPlayerMoved);
+            socketHandler.off('pvp:challenge_received', this.handlePvPChallengeReceived);
+            socketHandler.off('pvp:challenge_declined', this.handlePvPChallengeDeclined);
+            socketHandler.off('pvp:challenge_error', this.handlePvPChallengeError);
+            socketHandler.off('pvp:battle_start', this.handlePvPBattleStart);
+
+            socketHandler.on('dungeon:presence_snapshot', this.handlePresenceSnapshot);
+            socketHandler.on('dungeon:player_joined', this.handlePeerPlayerJoined);
+            socketHandler.on('dungeon:player_left', this.handlePeerPlayerLeft);
+            socketHandler.on('dungeon:player_moved', this.handlePeerPlayerMoved);
+            socketHandler.on('pvp:challenge_received', this.handlePvPChallengeReceived);
+            socketHandler.on('pvp:challenge_declined', this.handlePvPChallengeDeclined);
+            socketHandler.on('pvp:challenge_error', this.handlePvPChallengeError);
+            socketHandler.on('pvp:battle_start', this.handlePvPBattleStart);
+
+            socketHandler.joinDungeon(dungeonId, userId, username, location, crewSummary);
+        } catch (e) {
+            console.warn('[DungeonSockets] initDungeonSockets failed', e);
+        }
+    }
+
+    cleanupDungeonSockets = () => {
+        try {
+            socketHandler.off('dungeon:presence_snapshot', this.handlePresenceSnapshot);
+            socketHandler.off('dungeon:player_joined', this.handlePeerPlayerJoined);
+            socketHandler.off('dungeon:player_left', this.handlePeerPlayerLeft);
+            socketHandler.off('dungeon:player_moved', this.handlePeerPlayerMoved);
+            socketHandler.off('pvp:challenge_received', this.handlePvPChallengeReceived);
+            socketHandler.off('pvp:challenge_declined', this.handlePvPChallengeDeclined);
+            socketHandler.off('pvp:challenge_error', this.handlePvPChallengeError);
+            socketHandler.off('pvp:battle_start', this.handlePvPBattleStart);
+            socketHandler.leaveDungeon();
+        } catch (e) { }
+    }
+
+    handlePvPChallengeReceived = (data = {}) => {
+        this.setState({ incomingChallenge: data });
+    }
+
+    handlePvPChallengeDeclined = (data = {}) => {
+        this.setState({ outgoingChallenge: null });
+        if (this.displayMessage) {
+            this.displayMessage(`⚔️ ${data.targetUsername || 'Opponent'} declined the PvP challenge.`);
+        }
+    }
+
+    handlePvPChallengeError = (data = {}) => {
+        this.setState({ outgoingChallenge: null, incomingChallenge: null });
+        if (this.displayMessage) {
+            this.displayMessage(`⚠️ ${data.message || 'PvP challenge failed.'}`);
+        }
+    }
+
+    handlePvPBattleStart = (battleData = {}) => {
+        try {
+            this.setState({ incomingChallenge: null, outgoingChallenge: null });
+
+            const mySocketId = socketHandler.socket?.id;
+            const isPlayerA = battleData.playerA?.socketId === mySocketId;
+            const opponent = isPlayerA ? battleData.playerB : battleData.playerA;
+
+            const opponentCrew = (opponent && Array.isArray(opponent.crew) && opponent.crew.length > 0)
+                ? opponent.crew
+                : [{ id: 'pvp_opponent_1', name: opponent?.username || 'Opponent', hp: 100, maxHp: 100, portrait: 'cultist', type: 'cultist' }];
+
+            const monster = opponentCrew[0];
+            const minions = opponentCrew.slice(1);
+
+            this.setState({
+                isPvPMode: true,
+                pvpMatchData: battleData,
+                monster,
+                minions
+            }, () => {
+                this.triggerMonsterBattle(true, 'pvp_match');
+                if (this.displayMessage) {
+                    this.displayMessage(`⚔️ Real-time PvP Battle started against ${opponent?.username || 'Opponent'}!`);
+                }
+            });
+        } catch (err) {
+            console.warn('handlePvPBattleStart failed', err);
+        }
+    }
+
+    initiatePvPChallenge = (peer) => {
+        if (!peer || !peer.socketId) return;
+        const myCrew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : [];
+        socketHandler.sendPvPChallenge(peer.socketId, peer.userId, myCrew);
+        this.setState({
+            selectedPeerPlayer: null,
+            outgoingChallenge: {
+                targetUsername: peer.username || 'Peer Explorer',
+                targetSocketId: peer.socketId
+            }
+        });
+    }
+
+    handleAcceptPvPChallenge = () => {
+        const incoming = this.state.incomingChallenge;
+        if (!incoming) return;
+        const myCrew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : [];
+        socketHandler.respondPvPChallenge(incoming.challengerSocketId, true, myCrew);
+        this.setState({ incomingChallenge: null });
+    }
+
+    handleDeclinePvPChallenge = () => {
+        const incoming = this.state.incomingChallenge;
+        if (incoming) {
+            socketHandler.respondPvPChallenge(incoming.challengerSocketId, false);
+        }
+        this.setState({ incomingChallenge: null });
+    }
+
+    handlePresenceSnapshot = (data = {}) => {
+        try {
+            const currentUserId = getUserId();
+            const rawPlayers = Array.isArray(data.players) ? data.players : [];
+            const peerPlayersMap = new Map();
+
+            rawPlayers.forEach(p => {
+                if (p && String(p.userId) !== String(currentUserId) && p.socketId !== socketHandler.socket?.id) {
+                    peerPlayersMap.set(p.socketId || p.userId, p);
+                }
+            });
+
+            this.setState({ peerPlayers: peerPlayersMap });
+        } catch (e) { }
+    }
+
+    handlePeerPlayerJoined = (playerState) => {
+        if (!playerState) return;
+        const currentUserId = getUserId();
+        if (String(playerState.userId) === String(currentUserId) || playerState.socketId === socketHandler.socket?.id) return;
+
+        this.setState(prevState => {
+            const nextMap = new Map(prevState.peerPlayers);
+            nextMap.set(playerState.socketId || playerState.userId, playerState);
+            return { peerPlayers: nextMap };
+        });
+
+        if (this.displayMessage) {
+            this.displayMessage(`🌐 ${playerState.username || 'An explorer'} entered the dungeon!`);
+        }
+    }
+
+    handlePeerPlayerLeft = (data = {}) => {
+        this.setState(prevState => {
+            const nextMap = new Map(prevState.peerPlayers);
+            const key = data.socketId || data.userId;
+            let departingPlayer = null;
+
+            if (nextMap.has(key)) {
+                departingPlayer = nextMap.get(key);
+                nextMap.delete(key);
+            } else {
+                for (const [sId, p] of nextMap.entries()) {
+                    if (p && String(p.userId) === String(data.userId)) {
+                        departingPlayer = p;
+                        nextMap.delete(sId);
+                        break;
+                    }
+                }
+            }
+
+            if (departingPlayer && this.displayMessage) {
+                this.displayMessage(`👋 ${departingPlayer.username || 'An explorer'} left the dungeon.`);
+            }
+
+            return { peerPlayers: nextMap };
+        });
+    }
+
+    handlePeerPlayerMoved = (data = {}) => {
+        if (!data || !data.socketId) return;
+        const currentUserId = getUserId();
+        if (String(data.userId) === String(currentUserId) || data.socketId === socketHandler.socket?.id) return;
+
+        this.setState(prevState => {
+            const nextMap = new Map(prevState.peerPlayers);
+            const existing = nextMap.get(data.socketId);
+            if (existing) {
+                nextMap.set(data.socketId, {
+                    ...existing,
+                    location: {
+                        ...existing.location,
+                        ...data.location
+                    }
+                });
+            } else {
+                nextMap.set(data.socketId, {
+                    userId: data.userId,
+                    socketId: data.socketId,
+                    username: data.username || 'Explorer',
+                    location: data.location
+                });
+            }
+            return { peerPlayers: nextMap };
+        });
+    }
+
     componentDidMount() {
+        this.initDungeonSockets();
         window.debugMode = this.state.debugMode;
         if (this.props.boardManager) {
             this.props.boardManager.debugMode = this.state.debugMode;
@@ -4103,6 +4346,18 @@ class DungeonPage extends React.Component {
                 playerFloatStyle: floatStyle
             }, () => {
                 this.checkMobileViewportCentering(coords);
+                try {
+                    const bm = this.props.boardManager;
+                    const loc = {
+                        levelId: bm?.currentLevel?.id ?? 0,
+                        orientation: bm?.currentOrientation === 'B' ? 'back' : 'front',
+                        boardIndex: bm?.playerTile?.boardIndex ?? 0,
+                        tileIndex: bm ? bm.getIndexFromCoordinates(coords) : 0,
+                        x: coords ? coords[1] : 0,
+                        y: coords ? coords[0] : 0
+                    };
+                    socketHandler.sendMove(loc);
+                } catch (err) { }
             });
         } catch (e) {
             console.warn('updateFloatingPlayerPosition failed', e);
@@ -5135,6 +5390,7 @@ class DungeonPage extends React.Component {
         }
     }
     componentWillUnmount() {
+        this.cleanupDungeonSockets();
         try { document.body.classList.remove('combat-active'); } catch (e) { }
         this._isMounted = false;
         if (typeof this.props.registerMessaging === 'function') {
@@ -6761,7 +7017,7 @@ class DungeonPage extends React.Component {
         const foodLimit = this.getFoodLimit();
         const isOverLimit = food > foodLimit;
         const resolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
-        const deaths = meta.deathTracker || 0;
+        const deaths = Math.max(1, meta.deathTracker || 0);
         const tooltip = 'Your crew has met death and been spared. If this happens thrice, your journey is over';
         const incomeRates = this.getResourceIncomeRates ? this.getResourceIncomeRates() : {};
 
@@ -6927,21 +7183,27 @@ class DungeonPage extends React.Component {
                 {!collapsed && (
                     <div className="section-content">
                         {deaths > 0 && (
-                            <div className="death-tracker" aria-label={tooltip}>
-                                {new Array(deaths).fill(0).map((_, idx) => (
-                                    <div
-                                        key={idx}
-                                        className="death-skull-wrapper"
-                                        tabIndex={0}
-                                        title={tooltip}
-                                        aria-label={tooltip}
-                                        role="button"
-                                        onClick={() => this.openCardDuel(idx)}
-                                        style={{ cursor: 'pointer' }}
-                                    >
-                                        <div className="death-skull" style={{ backgroundImage: `url(${images['whiteskull']})` }}></div>
-                                    </div>
-                                ))}
+                            <div className="death-tracker" title={tooltip} aria-label={tooltip}>
+                                <div className="death-tracker-title">Death Tracker</div>
+                                <div className="death-skulls-list">
+                                    {new Array(deaths).fill(0).map((_, idx) => (
+                                        <div
+                                            key={idx}
+                                            className="death-skull-wrapper"
+                                            tabIndex={0}
+                                            title={tooltip}
+                                            aria-label={tooltip}
+                                            role="button"
+                                            onClick={() => this.openCardDuel(idx)}
+                                            style={{ cursor: 'pointer' }}
+                                        >
+                                            <div
+                                                className="death-skull"
+                                                style={{ backgroundImage: `url("${images.whiteskull?.default || images.whiteskull || images['whiteskull']}")` }}
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         )}
                         {this.state.toastMessage && <div className="dungeon-toast" style={{ marginTop: 8, padding: 8, background: '#2b1b1b', color: '#f0d', borderRadius: 4 }}>{this.state.toastMessage}</div>}
@@ -7224,7 +7486,7 @@ class DungeonPage extends React.Component {
                                         title="Play a practice card duel (no penalty)"
                                     >
                                         <span><span role="img" aria-label="card">🃏</span> Card Scrimmage</span>
-                                        <span className="hotkey-indicator">S</span>
+                                        <span className="hotkey-indicator">1</span>
                                     </button>
                                     <button
                                         className="quick-action-btn"
@@ -10292,8 +10554,8 @@ class DungeonPage extends React.Component {
                     return;
                 }
             }
-            // 's' — Play a practice card duel
-            if ((maybeKey === 's' || maybeKey === 'S') && !this.state.inMonsterBattle && !event.metaKey && !event.ctrlKey) {
+            // '1' — Play a practice card duel
+            if ((maybeKey === '1') && !this.state.inMonsterBattle && !event.metaKey && !event.ctrlKey) {
                 const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
                 if (activeTag !== 'input' && activeTag !== 'textarea') {
                     event.preventDefault();
@@ -10607,6 +10869,46 @@ class DungeonPage extends React.Component {
             crewHoverMatrix: crew
         })
     }
+    handleBoardTouchStart = (e) => {
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el) {
+            const tileEl = el.closest('.tile');
+            if (tileEl) {
+                const tileId = parseInt(tileEl.dataset.tileId, 10);
+                if (!isNaN(tileId)) {
+                    this.setState({ mobileTouchTileId: tileId });
+                }
+            }
+        }
+    }
+
+    handleBoardTouchMove = (e) => {
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el) {
+            const tileEl = el.closest('.tile');
+            if (tileEl) {
+                const tileId = parseInt(tileEl.dataset.tileId, 10);
+                if (!isNaN(tileId) && this.state.mobileTouchTileId !== tileId) {
+                    this.setState({ mobileTouchTileId: tileId });
+                }
+            } else if (this.state.mobileTouchTileId !== null) {
+                this.setState({ mobileTouchTileId: null });
+            }
+        }
+    }
+
+    handleBoardTouchEnd = (e) => {
+        if (this.state.mobileTouchTileId !== null) {
+            const tile = this.state.tiles[this.state.mobileTouchTileId];
+            if (tile) {
+                this.handleClick(tile);
+            }
+            this.setState({ mobileTouchTileId: null });
+        }
+    }
+
     handleClick = (tile) => {
         if (!tile || !tile.coordinates) return;
         if (this.state.keysLocked || this.state.inMonsterBattle || this.state.playerAnimating || this.state.activeConstruction) return;
@@ -10745,8 +11047,7 @@ class DungeonPage extends React.Component {
                 const subtype = bm.getContainsSubtype(t.contains);
                 if (type === 'building' && subtype === 'earthen_fort') return true;
                 if (type === 'earthen_fort' || subtype === 'earthen_fort' || t.building === 'earthen_fort') return true;
-
-                if ((type === 'void' || type === 'inscription') && !bm.isConnectingPathTile(t)) return true;
+                if ((bm.isVoidTile(t) || type === 'void' || type === 'inscription') && !bm.isConnectingPathTile(t)) return true;
 
                 const gateType = bm.getGateTypeFromTile(t);
                 if (gateType && bm.isLockedGateTile(t)) {
@@ -12620,7 +12921,11 @@ class DungeonPage extends React.Component {
 
     // Delegates camping start to CampManager
     setUpCamp = async (maybeDuration) => {
-        return CampManager.setUpCamp(this, maybeDuration);
+        const res = await CampManager.setUpCamp(this, maybeDuration);
+        if (this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
+            this.updateFloatingPlayerPosition(this.props.boardManager.playerTile.location);
+        }
+        return res;
     }
 
     // Delegates camping end to CampManager
@@ -12629,6 +12934,9 @@ class DungeonPage extends React.Component {
         // After endCamp resolves, force another re-render so crew tiles pick up
         // the restored hp values from the new member objects in crewManager.crew.
         try { this.forceUpdate(); } catch (e) { }
+        if (this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
+            this.updateFloatingPlayerPosition(this.props.boardManager.playerTile.location);
+        }
         setTimeout(() => { try { this.forceUpdate(); } catch (e) { } }, 50);
     }
     uppercaseFirstLetter = (text) => {
@@ -12690,9 +12998,7 @@ class DungeonPage extends React.Component {
                 inMonsterBattle: false,
                 keysLocked: false
             }, () => {
-                this.setState({ isCardScrimmage: false, cardDuelTileId: 'combat_loss' }, () => {
-                    this.openCardDuel('combat_loss');
-                });
+                this.setState({ isCardScrimmage: false, cardDuelTileId: 'combat_loss', showReaperOfferModal: true });
             });
             return;
         } else if (result === 'respawn') {
@@ -12709,7 +13015,7 @@ class DungeonPage extends React.Component {
                     c.hp = 1;
                     c.dead = false;
                 });
-                const selectedDungeon = meta2.selectedDungeon || (this.props.boardManager && this.props.boardManager.dungeon);
+                const selectedDungeon = (this.props.boardManager && this.props.boardManager.dungeon) || meta2.selectedDungeon;
                 const resolvedRespawnPoints = this.getResolvedSpawnPoints(selectedDungeon);
                 const spawnPoint = resolvedRespawnPoints[0] || meta2.spawnPoint;
                 if (spawnPoint && selectedDungeon) {
@@ -16670,6 +16976,22 @@ class DungeonPage extends React.Component {
                     initialEntryId={this.state.codexEntry && this.state.codexEntry.entryId}
                 />
 
+                {/* Trophies Modal */}
+                <TrophiesModal
+                    visible={!!this.state.showTrophiesModal}
+                    onClose={() => this.setState({ showTrophiesModal: false })}
+                />
+
+                {/* Reaper's Offer Modal (Soul Wager Prompt on Combat Defeat) */}
+                <ReaperOfferModal
+                    visible={!!this.state.showReaperOfferModal}
+                    onAccept={() => {
+                        this.setState({ showReaperOfferModal: false }, () => {
+                            this.openCardDuel('combat_loss');
+                        });
+                    }}
+                />
+
                 {/* No Codex Entry popup */}
                 {this.state.noCodexEntry && (
                     <div
@@ -17369,19 +17691,11 @@ class DungeonPage extends React.Component {
                             </button>
                         </div>
 
-                        {/* BOTTOM: trophies / card deck / shards tiles */}
+                        {/* BOTTOM: trophies tile */}
                         <div className="camp-bottom-tiles">
-                            <div className="camp-bottom-tile">
+                            <div className="camp-bottom-tile" style={{ cursor: 'pointer' }} onClick={() => this.setState({ showTrophiesModal: true })}>
                                 <div className="camp-bottom-tile-icon"><span role="img" aria-label="trophy">🏆</span></div>
                                 <div className="camp-bottom-tile-label">Trophies</div>
-                            </div>
-                            <div className="camp-bottom-tile" style={{ cursor: 'pointer' }} onClick={() => this.setState({ showCardForge: true })}>
-                                <div className="camp-bottom-tile-icon" style={{ backgroundImage: `url(${images.the_duel_card || images.grimoire})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', width: 54, height: 54 }}></div>
-                                <div className="camp-bottom-tile-label">The Duel</div>
-                            </div>
-                            <div className="camp-bottom-tile" style={{ cursor: 'pointer' }} onClick={() => this.setState({ showSiegeArmy: true })}>
-                                <div className="camp-bottom-tile-icon" style={{ backgroundImage: `url(${images.eclipse})`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center', width: 54, height: 54 }}></div>
-                                <div className="camp-bottom-tile-label">Siege Army</div>
                             </div>
                         </div>
                     </CModalBody>
@@ -18864,6 +19178,20 @@ class DungeonPage extends React.Component {
                 )}
                 {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
                     <div className={`right-side-panel ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`}>
+                        {this.props.boardManager && this.props.boardManager.dungeon && this.props.boardManager.dungeon.name && (
+                            <div style={{
+                                color: 'white',
+                                fontSize: '13px',
+                                fontWeight: '700',
+                                textAlign: 'center',
+                                padding: '12px 10px 4px 10px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '1px',
+                                textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                            }}>
+                                {this.props.boardManager.dungeon.name.replace(/_[0-9]{4}$/, '').replace(/_/g, ' ')}
+                            </div>
+                        )}
                         {this.renderPanelSections('right')}
                         <div className="expand-collapse-button icon-container" onClick={this.toggleRightSidePanel}>
                             <CIcon icon={cilCaretLeft} className={`expand-icon ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`} size="sm" />
@@ -18954,10 +19282,15 @@ class DungeonPage extends React.Component {
                             })}
                         </div>
 
-                        <div className="board" style={{
-                            width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
-                            backgroundColor: 'white'
-                        }}>
+                        <div className="board" 
+                            onTouchStart={this.handleBoardTouchStart}
+                            onTouchMove={this.handleBoardTouchMove}
+                            onTouchEnd={this.handleBoardTouchEnd}
+                            style={{
+                                width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
+                                backgroundColor: 'white',
+                                touchAction: 'none'
+                            }}>
                             {this.state.tiles && this.state.tiles.map((tile, i) => {
                                 const isBeingBuilt = this.state.activeConstruction && this.state.activeConstruction.targetTileIdx === tile.id;
                                 let boardImage = isBeingBuilt ? 'building' : (tile.image ? tile.image : (tile.icon ? tile.icon : null));
@@ -19022,11 +19355,94 @@ class DungeonPage extends React.Component {
                                     handleHover={this.handleHover}
                                     type={tile.type}
                                     handleClick={this.handleClick}
+                                    isMobileTouchHover={this.state.mobileTouchTileId === tile.id}
                                     isFadingOut={!!tile.isFadingOut}
                                 >
                                 </Tile>
                             })}
                         </div>
+                        {/* Peer Players Overlay Elements */}
+                        {Array.from(this.state.peerPlayers?.values() || []).map((peer) => {
+                            if (!peer || !peer.location) return null;
+                            const bm = this.props.boardManager;
+                            const currentLevelId = bm?.currentLevel?.id ?? 0;
+                            const currentOrientation = bm?.currentOrientation === 'B' ? 'back' : 'front';
+
+                            const peerLevel = peer.location.levelId ?? 0;
+                            const peerOrientation = peer.location.orientation || 'front';
+
+                            if (String(peerLevel) !== String(currentLevelId) || peerOrientation !== currentOrientation) {
+                                return null;
+                            }
+
+                            const x = peer.location.x ?? (peer.location.tileIndex % 15);
+                            const y = peer.location.y ?? Math.floor(peer.location.tileIndex / 15);
+                            const left = x * this.state.tileSize;
+                            const top = y * this.state.tileSize;
+
+                            return (
+                                <div
+                                    key={peer.socketId || peer.userId}
+                                    className="floating-peer-player"
+                                    title={`${peer.username || 'Peer Explorer'} (Click to interact)`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        this.setState({ selectedPeerPlayer: peer });
+                                    }}
+                                    style={{
+                                        position: 'absolute',
+                                        left: `${left}px`,
+                                        top: `${top}px`,
+                                        width: this.state.tileSize,
+                                        height: this.state.tileSize,
+                                        pointerEvents: 'auto',
+                                        cursor: 'pointer',
+                                        zIndex: 24,
+                                        transition: 'left 0.25s ease-out, top 0.25s ease-out',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            top: '-18px',
+                                            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                                            color: '#64ffda',
+                                            fontSize: '10px',
+                                            fontWeight: 'bold',
+                                            padding: '1px 6px',
+                                            borderRadius: '4px',
+                                            whiteSpace: 'nowrap',
+                                            border: '1px solid rgba(100, 255, 218, 0.5)',
+                                            pointerEvents: 'none',
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.7)'
+                                        }}
+                                    >
+                                        🌐 {peer.username || 'Explorer'}
+                                    </div>
+                                    <div
+                                        style={{
+                                            width: '80%',
+                                            height: '80%',
+                                            borderRadius: '50%',
+                                            border: '2px solid #64ffda',
+                                            backgroundColor: 'rgba(10, 25, 47, 0.9)',
+                                            boxShadow: '0 0 10px rgba(100, 255, 218, 0.6)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: `${Math.max(12, Math.floor(this.state.tileSize * 0.4))}px`
+                                        }}
+                                    >
+                                        🧙‍♂️
+                                    </div>
+                                </div>
+                            );
+                        })}
+
                         {/* Floating player overlay element - positioned absolutely within board wrapper */}
                         {this.state.playerFloatVisible && !this.state.activeConstruction && (
                             <div
@@ -21029,6 +21445,89 @@ class DungeonPage extends React.Component {
                         }}
                     />
                 )}
+                {/* Peer Action Menu Modal */}
+                {this.state.selectedPeerPlayer && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+                            backdropFilter: 'blur(4px)',
+                            zIndex: 99988,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onClick={() => this.setState({ selectedPeerPlayer: null })}
+                    >
+                        <div
+                            style={{
+                                width: '320px',
+                                backgroundColor: '#0a192f',
+                                border: '2px solid #64ffda',
+                                borderRadius: '14px',
+                                padding: '24px',
+                                color: '#fff',
+                                textAlign: 'center',
+                                boxShadow: '0 10px 30px rgba(100, 255, 218, 0.3)'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div style={{ fontSize: '36px', marginBottom: '8px' }}>🧙‍♂️</div>
+                            <h3 style={{ margin: '0 0 4px 0', color: '#64ffda', fontFamily: "'Cinzel', serif" }}>
+                                {this.state.selectedPeerPlayer.username || 'Peer Explorer'}
+                            </h3>
+                            <p style={{ fontSize: '13px', color: '#8892b0', marginBottom: '20px' }}>
+                                Peer Explorer in Dungeon
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <button
+                                    style={{
+                                        padding: '12px 18px',
+                                        borderRadius: '8px',
+                                        backgroundColor: '#64ffda',
+                                        color: '#0a192f',
+                                        fontWeight: 'bold',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: '15px',
+                                        boxShadow: '0 4px 14px rgba(100, 255, 218, 0.4)'
+                                    }}
+                                    onClick={() => this.initiatePvPChallenge(this.state.selectedPeerPlayer)}
+                                >
+                                    ⚔️ Challenge to PvP Battle
+                                </button>
+                                <button
+                                    style={{
+                                        padding: '10px 18px',
+                                        borderRadius: '8px',
+                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                        color: '#8892b0',
+                                        border: '1px solid rgba(255,255,255,0.2)',
+                                        cursor: 'pointer',
+                                        fontSize: '13px'
+                                    }}
+                                    onClick={() => this.setState({ selectedPeerPlayer: null })}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Real-time PvP Challenge Gateway Modal */}
+                <PvPChallengeModal
+                    incomingChallenge={this.state.incomingChallenge}
+                    outgoingChallenge={this.state.outgoingChallenge}
+                    onAccept={this.handleAcceptPvPChallenge}
+                    onDecline={this.handleDeclinePvPChallenge}
+                    onClose={() => this.setState({ outgoingChallenge: null })}
+                />
+
                 {/* Save Indicator */}
                 <style>{`
                 @keyframes save-spin {

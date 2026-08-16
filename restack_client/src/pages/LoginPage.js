@@ -118,13 +118,17 @@ export default function LoginPage(props) {
             try {
               const usersRes = await getAllUsersRequest();
               const allUsers = Array.isArray(usersRes?.data) ? usersRes.data : [];
+              if (allUsers.length >= 50) {
+                setInvalid('Maximum user limit reached (50 users). Registration is currently disabled.');
+                return;
+              }
               const userExists = allUsers.some(u => u.username?.toLowerCase() === registerName.toLowerCase());
               if (userExists) {
                 setInvalid('Username already exists.');
                 return;
               }
             } catch (err) {
-              console.error('Failed to verify username availability', err);
+              console.error('Failed to verify user limit & username availability', err);
             }
             const metadata = {
               dungeonId: null,

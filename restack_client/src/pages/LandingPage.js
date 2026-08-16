@@ -518,9 +518,12 @@ export default function LandingPage(props) {
     console.table(diagnostics);
     console.groupEnd();
 
+    const totalInstances = all.filter((d) => isInstanceDungeonName(d.name) || (d.name && d.name.includes('_'))).length;
+    const isUnderInstanceLimit = totalInstances < 10;
+
     const validOnly = all.filter((d) => {
       const spawnDiag = findSpawnPointDiagnostic(d);
-      return d.valid === true && spawnDiag.found;
+      return d.valid === true && spawnDiag.found && isUnderInstanceLimit;
     });
     const baseValidOnly = validOnly.filter((d) => !isInstanceDungeonName(d.name));
     setValidDungeons(baseValidOnly);

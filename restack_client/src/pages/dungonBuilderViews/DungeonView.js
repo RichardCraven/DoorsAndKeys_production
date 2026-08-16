@@ -6,7 +6,7 @@ import '../../styles/map-maker.scss'
 import Tile from '../../components/tile'
 import { CDropdown, CDropdownToggle, CDropdownMenu, CDropdownItem, CSpinner, CFormSelect} from '@coreui/react';
 import  CIcon  from '@coreui/icons-react'
-import { cilSave, cilQrCode, cilLevelDown, cilLevelUp, cilLibraryAdd, cilTrash, cilOptions, cilPlus } from '@coreui/icons';
+import { cilSave, cilQrCode, cilLevelDown, cilLevelUp, cilLibraryAdd, cilTrash, cilOptions, cilPlus, cilHistory } from '@coreui/icons';
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 import Canvas from '../../components/Canvas/canvas'
@@ -640,6 +640,16 @@ class DungeonView extends React.Component {
                                 <div className="icon-container" onClick={() => this.props.addNewDungeon()}>
                                     <CIcon icon={cilPlus} size="lg"/>
                                 </div>
+                                {this.props.hasDungeonBackup && (
+                                    <div 
+                                        className="icon-container" 
+                                        title={`Restore ${this.props.loadedDungeon ? this.props.loadedDungeon.name : 'Dungeon'} from Backup`}
+                                        onClick={() => this.props.restoreDungeonFromBackup && this.props.restoreDungeonFromBackup()}
+                                        style={{ color: '#4ade80', cursor: 'pointer' }}
+                                    >
+                                        <CIcon icon={cilHistory} size="lg"/>
+                                    </div>
+                                )}
                                 <div className="icon-container dungeon-options-container" >
                                     <CDropdown>
                                         <CDropdownToggle color="white">
@@ -648,6 +658,14 @@ class DungeonView extends React.Component {
                                         <CDropdownMenu>
                                             <CDropdownItem onClick={() => this.props.renameDungeon()}>Rename Dungeon</CDropdownItem>
                                             <CDropdownItem onClick={() => this.props.deleteDungeon()}>Delete Dungeon</CDropdownItem>
+                                            {this.props.hasDungeonBackup && (
+                                                <CDropdownItem 
+                                                    onClick={() => this.props.restoreDungeonFromBackup && this.props.restoreDungeonFromBackup()}
+                                                    style={{ color: '#4ade80', fontWeight: 'bold' }}
+                                                >
+                                                    🔄 Restore from Backup {this.props.backupTimestamp ? `(${new Date(this.props.backupTimestamp).toLocaleDateString()})` : ''}
+                                                </CDropdownItem>
+                                            )}
                                             <CDropdownItem onClick={() => this.props.downloadDungeon()}>⬇ Export as JSON</CDropdownItem>
                                             <CDropdownItem onClick={() => this.props.importDungeon()}>⬆ Import from JSON</CDropdownItem>
                                             <CDropdownItem onClick={(e) => {

@@ -699,13 +699,21 @@ export function BoardManager(){
             neighbors.forEach((nextIdx) => {
                 const existing = visited.get(nextIdx);
                 if (existing !== undefined && existing <= steps + 1) return;
-                if (this.isPassageWallBlockingBetween(idx, nextIdx, { ignoreBuilding: true })) return;
 
                 const tile = this.tiles[nextIdx] || (boardTiles && boardTiles[nextIdx]);
                 if (!tile) return;
 
                 const hasInscriptions = tile.inscriptions && Object.values(tile.inscriptions).some(v => !!v);
-                if (this.isVoidTile(tile) && !hasInscriptions) return;
+                const isTargetVoid = this.isVoidTile(tile);
+
+                if (this.isPassageWallBlockingBetween(idx, nextIdx, { ignoreBuilding: true })) {
+                    // If blocked by a void tile boundary, only allow through if we're revealing an inscribed void tile directly.
+                    if (!(isTargetVoid && hasInscriptions)) {
+                        return;
+                    }
+                }
+
+                if (isTargetVoid && !hasInscriptions) return;
 
                 visited.set(nextIdx, steps + 1);
 
@@ -2615,7 +2623,7 @@ export function BoardManager(){
     }
     
     this.handlePassingThroughWayUp = () => {
-        const incomingLevel = this.dungeon.levels.find(l => l.id === this.currentLevel.id+1)
+        const incomingLevel = this.dungeon.levels.find(l => Number(l.id) === Number(this.currentLevel.id) + 1)
         if(!incomingLevel){
             alert('trying to travel to a level that doesnt exist!')
             return
@@ -2626,7 +2634,7 @@ export function BoardManager(){
         this.broadcastLevelChange(this.currentLevel.id)
     }
     this.handlePassingThroughWayDown = () => {
-        const incomingLevel = this.dungeon.levels.find(l => l.id === this.currentLevel.id-1)
+        const incomingLevel = this.dungeon.levels.find(l => Number(l.id) === Number(this.currentLevel.id) - 1)
         if(!incomingLevel){
             alert('trying to travel to a level that doesnt exist!')
             return
@@ -3276,6 +3284,13 @@ export function BoardManager(){
                     e.image = null; // Hide monsters/items on the path under fog
                     e.borders = this.normalizeFogBorders(persistedBorders);
                     e.partialObscured = true;
+                } else if (!isRevealed && hasInscriptions && manhattan <= fogRadius) {
+                    // Special case: Tile is hidden behind a wall, but we inscribed the wall border!
+                    // Show it as a dark wall so the inscription is visible.
+                    e.color = '#0e0e0e';
+                    e.image = null;
+                    e.borders = null;
+                    e.partialObscured = false;
                 }
             } catch (err) {}
         });

@@ -2370,11 +2370,12 @@ const skillsMatrix = {
         id: 'build_turret',
         tier: 1,
         name: 'Build Turret',
-        desc: 'Creates a stationary mechanical turret that fires projectiles at enemies. Has an initial hp of 20, and a damage of 10 per projectile. It can fire 1 projectile per round and there is no range restriction.',
-        icon: images.terrain_1, // Placeholder
-        cooldown: 4,
+        desc: 'Creates a stationary mechanical turret that fires projectiles at enemies. Has an initial hp of 30, and a damage of 10 per projectile. It can fire 1 projectile per round and there is no range restriction.',
+        icon: images.turret || images.turret_icon,
+        cooldown: 8,
         type: 'summon_type',
-        treePath: 'engineer'
+        treePath: 'engineer',
+        knownByDefault: true
     },
     build_walker: {
         class: 'engineer',
@@ -2382,10 +2383,25 @@ const skillsMatrix = {
         tier: 1,
         name: 'Build Walker',
         desc: 'Creates a slow moving construct (with 30 hp) that moves one tile per round and swings a sword in a 360 degree arc around itself (10 damage). Moves in a straight line from left to right.',
-        icon: images.terrain_2, // Placeholder
-        cooldown: 4,
+        icon: images.walker_glowing_square || images.terrain_2,
+        cooldown: 6,
         type: 'summon_type',
-        treePath: 'engineer'
+        treePath: 'engineer',
+        knownByDefault: true
+    },
+    build_wall: {
+        class: 'engineer',
+        id: 'build_wall',
+        tier: 1,
+        name: 'Wall',
+        desc: 'Summons a two-tile vertical impassable stone wall. The wall blocks unit movement and stops all beam attacks (such as the Beholder beam). Disappears after 10 rounds.',
+        icon: images.terrain_1,
+        cooldown: 12,
+        initialCooldown: 4,
+        range: 'medium',
+        type: 'summon_type',
+        treePath: 'engineer',
+        knownByDefault: true
     },
     engineer_repair: {
         class: 'engineer',
@@ -2396,7 +2412,8 @@ const skillsMatrix = {
         icon: images.potion, // Placeholder
         cooldown: 4,
         type: 'repair_type',
-        treePath: 'engineer'
+        treePath: 'engineer',
+        knownByDefault: true
     },
     master_builder: {
         class: 'engineer',

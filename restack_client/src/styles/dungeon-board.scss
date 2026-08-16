@@ -299,6 +299,59 @@
             }
         }
     }
+
+    .death-tracker {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 6px 12px;
+        margin: 6px 0 10px 0;
+        background: rgba(35, 12, 12, 0.75);
+        border: 1px solid rgba(229, 62, 62, 0.45);
+        border-radius: 6px;
+        box-sizing: border-box;
+        animation: deathTrackerFade 320ms ease-out;
+
+        .death-tracker-title {
+            font-family: 'Cinzel', serif;
+            font-size: 11px;
+            font-weight: 700;
+            color: #f87171;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .death-skulls-list {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .death-skull-wrapper {
+            position: relative;
+            display: inline-flex;
+            outline: none;
+            cursor: pointer;
+            transform-origin: center center;
+            animation: deathSkullPop 360ms cubic-bezier(.2, .8, .2, 1);
+            transition: transform 0.2s ease;
+
+            &:hover {
+                transform: scale(1.2);
+            }
+        }
+
+        .death-skull {
+            width: 24px;
+            height: 24px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center center;
+            opacity: 1;
+            filter: invert(1) drop-shadow(0 0 4px rgba(248, 113, 113, 0.8));
+        }
+    }
     .right-side-panel{
         overflow-y: auto;
         overflow-x: hidden;

@@ -84,7 +84,8 @@ export const USER_PERKS_POOL = [
         name: 'Banishment Aura',
         shortDesc: '10% Reaper Auto-Win Chance',
         desc: 'Grants a 10% chance to automatically win and banish the Reaper instantly at the start of a Card Duel.',
-        icon: '💀',
+        icon: '',
+        iconImage: 'whiteskull',
         badge: 'Reaper'
     }
 ];
@@ -117,8 +118,8 @@ export function getRandomUserPerkOptions(customMeta = null, count = 4) {
     const claimed = getUserPerks(customMeta);
     let available = USER_PERKS_POOL.filter(p => !claimed.includes(p.id));
 
-    // If available is less than `count`, pull from full pool as fallback
-    if (available.length < count) {
+    // If no perks are available at all, fallback to full pool so something renders (though this state shouldn't occur normally if capped at 10)
+    if (available.length === 0) {
         available = [...USER_PERKS_POOL];
     }
 

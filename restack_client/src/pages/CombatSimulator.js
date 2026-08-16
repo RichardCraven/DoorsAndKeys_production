@@ -866,6 +866,7 @@ class CrewManagerPage extends React.Component {
 
         if (this.state.useReduxCombat) {
             this.reduxCombatManager = new CombatManagerRedux();
+            this.reduxCombatManager.isSimulator = true;
         } else {
             this.reduxCombatManager = null;
         }
@@ -1369,14 +1370,37 @@ class CrewManagerPage extends React.Component {
                                 </div>
                             </div>
 
-                            {/* ── Random encounter row ── */}
-                            <div style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'flex-end',
-                                gap: '10px',
-                                marginTop: '10px',
-                            }}>
+                            {/* Monster roster */}
+                            <div className="monster-roster-label">Monster Roster — click to select, click again to add to slot</div>
+                            <div className="monster-roster">
+                                {['goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'eidolon', 'djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
+                                    .map(k => this.props.monsterManager.getMonster(k))
+                                    .filter(Boolean)
+                                    .map((m, i) => (
+                                        <ProgressiveBgImage
+                                            key={m.key || i}
+                                            className="monster-roster-portrait"
+                                            src={m.portrait}
+                                            title={formatMonsterType(m.type)}
+                                            onClick={() => {
+                                                if (this.state.selectedEnemyForInfo && this.state.selectedEnemyForInfo.key === m.key) {
+                                                    this.addEnemyFromRoster(m.key);
+                                                } else {
+                                                    this.setState({ selectedEnemyForInfo: m });
+                                                }
+                                            }}
+                                        >
+                                            <div className="monster-roster-name">{formatMonsterType(m.type)}</div>
+                                        </ProgressiveBgImage>
+                                    ))}
+                            </div>
+                        </div>
+
+                        <div className="simulator-bottom-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div className="button-row-bottom-left">
+                                <button onClick={() => this.clear()}>Clear</button>
+                            </div>
+                            <div className="button-row" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                                 <button
                                     id="random-combat-btn"
                                     onClick={this.startRandomCombat}
@@ -1432,39 +1456,6 @@ class CrewManagerPage extends React.Component {
                                         <option key={n} value={n}>{n}</option>
                                     ))}
                                 </select>
-                            </div>
-
-                            {/* Monster roster */}
-                            <div className="monster-roster-label">Monster Roster — click to select, click again to add to slot</div>
-                            <div className="monster-roster">
-                                {['goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'eidolon', 'djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
-                                    .map(k => this.props.monsterManager.getMonster(k))
-                                    .filter(Boolean)
-                                    .map((m, i) => (
-                                        <ProgressiveBgImage
-                                            key={m.key || i}
-                                            className="monster-roster-portrait"
-                                            src={m.portrait}
-                                            title={formatMonsterType(m.type)}
-                                            onClick={() => {
-                                                if (this.state.selectedEnemyForInfo && this.state.selectedEnemyForInfo.key === m.key) {
-                                                    this.addEnemyFromRoster(m.key);
-                                                } else {
-                                                    this.setState({ selectedEnemyForInfo: m });
-                                                }
-                                            }}
-                                        >
-                                            <div className="monster-roster-name">{formatMonsterType(m.type)}</div>
-                                        </ProgressiveBgImage>
-                                    ))}
-                            </div>
-                        </div>
-
-                        <div className="simulator-bottom-actions">
-                            <div className="button-row-bottom-left">
-                                <button onClick={() => this.clear()}>Clear</button>
-                            </div>
-                            <div className="button-row">
                                 <button onClick={() => this.submit()}>Submit</button>
                             </div>
                         </div>

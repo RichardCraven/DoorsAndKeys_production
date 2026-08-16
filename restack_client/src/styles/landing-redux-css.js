@@ -302,6 +302,8 @@ export const LANDING_REDUX_CSS = `
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  padding-top: 10px;
+  padding-bottom: 10px;
 }
 
 @media (max-width: 900px) {
