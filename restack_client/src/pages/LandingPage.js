@@ -278,32 +278,32 @@ export default function LandingPage(props) {
 
     // TEMP SCRIPT: Grant 'breadcrumbs' to any Sage in the party
     try {
-        const meta = getMeta() || {};
-        let changed = false;
-        if (Array.isArray(meta.crew)) {
-            meta.crew.forEach(member => {
-                if (member && typeof member.class === 'string' && member.class.toLowerCase() === 'sage') {
-                    member.skills = member.skills || [];
-                    if (!member.skills.includes('breadcrumbs')) {
-                        member.skills.push('breadcrumbs');
-                        changed = true;
-                    }
-                }
-            });
-        }
-        if (changed) {
-            storeMeta(meta);
-            try {
-                if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
-                    updateUserRequest(getUserId(), meta).catch(() => {});
-                }
-            } catch(err) {}
-            if (props.crewManager) {
-                props.crewManager.crew = meta.crew;
+      const meta = getMeta() || {};
+      let changed = false;
+      if (Array.isArray(meta.crew)) {
+        meta.crew.forEach(member => {
+          if (member && typeof member.class === 'string' && member.class.toLowerCase() === 'sage') {
+            member.skills = member.skills || [];
+            if (!member.skills.includes('breadcrumbs')) {
+              member.skills.push('breadcrumbs');
+              changed = true;
             }
+          }
+        });
+      }
+      if (changed) {
+        storeMeta(meta);
+        try {
+          if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+            updateUserRequest(getUserId(), meta).catch(() => { });
+          }
+        } catch (err) { }
+        if (props.crewManager) {
+          props.crewManager.crew = meta.crew;
         }
+      }
     } catch (e) {
-        console.error('Failed to run temp script for breadcrumbs:', e);
+      console.error('Failed to run temp script for breadcrumbs:', e);
     }
 
     return () => {
@@ -668,7 +668,7 @@ export default function LandingPage(props) {
     meta.selectedDungeonTemplateName = dungeon.name;
     storeMeta(meta);
     if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
-        updateUserRequest(getUserId(), meta).catch(() => {});
+      updateUserRequest(getUserId(), meta).catch(() => { });
     }
     setPendingDungeonSelection(null);
     setShowDungeonPicker(false);
@@ -744,7 +744,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.4.1 BETA</span>
+          <span className="logo-subtitle">v 0.5.0 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
 
@@ -764,18 +764,18 @@ export default function LandingPage(props) {
             <div className="crew-showcase-modal" style={{ maxWidth: '400px', textAlign: 'center', padding: '30px', margin: 'auto', backgroundColor: '#1c1917', border: '1px solid rgba(229, 181, 79, 0.3)', borderRadius: '8px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }} onClick={(e) => e.stopPropagation()}>
               <h3 style={{ color: '#e5b54f', fontFamily: "'Outfit', sans-serif", marginBottom: '20px', fontSize: '1.5rem', marginTop: '0', textTransform: 'uppercase', letterSpacing: '1px' }}>Warning</h3>
               <p style={{ color: '#d6d3d1', marginBottom: '30px', lineHeight: '1.5', fontFamily: "'Inter', sans-serif", fontSize: '0.95rem' }}>
-                Choosing a new dungeon will clear all progress in the current dungeon, though the crew remains.<br/><br/>
+                Choosing a new dungeon will clear all progress in the current dungeon, though the crew remains.<br /><br />
                 Are you sure you want to change dungeons?
               </p>
               <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
-                <button 
+                <button
                   onClick={() => setPendingDungeonSelection(null)}
-                  style={{ 
-                    padding: '10px 20px', 
-                    background: 'rgba(255, 255, 255, 0.05)', 
-                    border: '1px solid #78716c', 
-                    color: '#a8a29e', 
-                    borderRadius: '4px', 
+                  style={{
+                    padding: '10px 20px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid #78716c',
+                    color: '#a8a29e',
+                    borderRadius: '4px',
                     cursor: 'pointer',
                     fontFamily: "'Inter', sans-serif",
                     fontSize: '1rem',
@@ -787,14 +787,14 @@ export default function LandingPage(props) {
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={confirmDungeonChange}
-                  style={{ 
-                    padding: '10px 20px', 
-                    background: '#e5b54f', 
-                    border: 'none', 
-                    color: '#0c0a09', 
-                    borderRadius: '4px', 
+                  style={{
+                    padding: '10px 20px',
+                    background: '#e5b54f',
+                    border: 'none',
+                    color: '#0c0a09',
+                    borderRadius: '4px',
                     cursor: 'pointer',
                     fontWeight: 'bold',
                     fontFamily: "'Inter', sans-serif",
