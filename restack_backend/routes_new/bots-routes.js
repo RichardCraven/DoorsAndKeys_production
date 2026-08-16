@@ -8,5 +8,8 @@ module.exports = app => {
     // Get all bot replays
     router.get("/replays", bots.getReplays);
 
+    // Delete all bot replays
+    router.delete("/replays", bots.deleteAllReplays);
+
     app.use('/api/bots', router);
 };

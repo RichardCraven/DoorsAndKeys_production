@@ -53,6 +53,19 @@ const getBotReplaysRequest = () => {
       })
 }
 
+const deleteAllBotReplaysRequest = () => {
+    return axios.delete(API_BASE + "/api/bots/replays")
+      .then(res=>{
+        if(res.status === 200){
+          return(res)
+        }
+      })
+      .catch(err=> {
+        console.log(err)
+        return(err)
+      })
+}
+
 const loginRequest = (loginObj) => {
     return axios.post(API_BASE + "/api/login", loginObj)
       .then(res=>{
@@ -406,6 +419,7 @@ export {
   sendDungeonEntryNotification,
   generateBotRequest,
   getBotReplaysRequest,
+  deleteAllBotReplaysRequest,
   checkDungeonBackupRequest,
   restoreDungeonBackupRequest
 };

@@ -1,6 +1,6 @@
 import React from 'react'
 import '../styles/user-manager-page.scss'
-import {loadAllUsersRequest, deleteUserRequest, updateUserRequest, generateBotRequest, getBotReplaysRequest} from '../utils/api-handler';
+import {loadAllUsersRequest, deleteUserRequest, updateUserRequest, generateBotRequest, getBotReplaysRequest, deleteAllBotReplaysRequest} from '../utils/api-handler';
 
 class UserManagerPage extends React.Component {
   constructor(props){
@@ -218,7 +218,7 @@ class UserManagerPage extends React.Component {
   handleFetchLogs = async () => {
     this.setState({ isLoadingLogs: true, showLogsModal: true, selectedReplay: null });
     try {
-      const res = await getBotReplaysRequest();
+      const res = await getBotReplaysRequest, deleteAllBotReplaysRequest();
       if (res && res.data) {
         this.setState({ botReplays: res.data });
       }
@@ -227,6 +227,25 @@ class UserManagerPage extends React.Component {
     } finally {
       this.setState({ isLoadingLogs: false });
     }
+  };
+
+  handleDeleteAllLogs = async () => {
+    this.setState({
+      confirmDialog: {
+        message: "Are you sure you want to delete all bot logs?",
+        onConfirm: async () => {
+          this.setState({ confirmDialog: null, isLoadingLogs: true });
+          try {
+            await deleteAllBotReplaysRequest();
+            this.setState({ botReplays: [], selectedReplay: null });
+          } catch (e) {
+            console.error('Failed to delete bot logs', e);
+          } finally {
+            this.setState({ isLoadingLogs: false });
+          }
+        }
+      }
+    });
   };
 
   renderLogsModal = () => {
@@ -260,12 +279,20 @@ class UserManagerPage extends React.Component {
               <h3 style={{ margin: 0, fontSize: '18px', textTransform: 'uppercase', letterSpacing: '1px', color: '#e5b54f' }}>
                 Game Run Logs
               </h3>
-              <button 
-                onClick={() => this.setState({ showLogsModal: false })}
-                style={{ background: 'transparent', color: '#e5b54f', border: 'none', cursor: 'pointer', fontSize: '18px' }}
-              >
-                ✕
-              </button>
+              <div>
+                <button 
+                  onClick={this.handleDeleteAllLogs}
+                  style={{ background: 'transparent', color: '#dc3545', border: '1px solid #dc3545', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', padding: '4px 8px', marginRight: '10px' }}
+                >
+                  Delete All Logs
+                </button>
+                <button 
+                  onClick={() => this.setState({ showLogsModal: false })}
+                  style={{ background: 'transparent', color: '#e5b54f', border: 'none', cursor: 'pointer', fontSize: '18px' }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>

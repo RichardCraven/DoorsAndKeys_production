@@ -107,6 +107,15 @@ exports.getReplays = async (req, res, next) => {
   }
 };
 
+exports.deleteAllReplays = async (req, res, next) => {
+  try {
+    await BotReplay.deleteMany({});
+    res.json({ message: "All bot replays deleted." });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const runBotSimulation = async (username, password) => {
   const actionLog = [];
   const replayEvents = []; // Structured JSON for Replay UI
@@ -213,7 +222,8 @@ const runBotSimulation = async (username, password) => {
             const buttons = Array.from(document.querySelectorAll('button'));
             const safeButtons = buttons.filter(b => {
                 const txt = b.textContent.toLowerCase();
-                if (txt.includes('logout') || txt.includes('delete') || txt.includes('generate bot') || txt.includes('user manager')) return false;
+                const title = (b.title || '').toLowerCase();
+                if (txt.includes('logout') || title.includes('logout') || txt.includes('🚪') || txt.includes('delete') || txt.includes('generate bot') || txt.includes('user manager')) return false;
                 if (b.offsetParent === null) return false; // not visible
                 if (b.disabled) return false; // Don't click disabled buttons
                 return true;
