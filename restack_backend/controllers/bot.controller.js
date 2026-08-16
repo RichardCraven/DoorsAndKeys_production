@@ -173,7 +173,7 @@ const runBotSimulation = async (username, password) => {
     // After login, we are at the landing page. We need to select a dungeon and click "Enter Dungeon".
     
     let runTime = 0;
-    const MAX_RUN_TIME = 60 * 1000; // 1 minute
+    const MAX_RUN_TIME = 180 * 1000; // 3 minutes
     
     logAction("Entering game loop...");
     while (runTime < MAX_RUN_TIME) {
@@ -250,7 +250,7 @@ const runBotSimulation = async (username, password) => {
         runTime += delay;
     }
 
-    logAction("1 minute simulation complete.");
+    logAction("3 minute simulation complete.");
   } catch (error) {
     logAction(`ERROR: ${error.message}`);
   } finally {

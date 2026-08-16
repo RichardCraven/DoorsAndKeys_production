@@ -10,6 +10,7 @@ import Tile from '../components/tile'
 import ProjectileCanvas from '../components/ProjectileCanvas'
 import MonsterBattle from './sub-views/MonsterBattle';
 import ShrineScreen from './sub-views/ShrineScreen';
+import PvPChallengeModal from '../components/PvPChallengeModal';
 
 import LevelUpScreen from '../components/LevelUpScreen';
 import UserLevelUpScreen from '../components/UserLevelUpScreen';
@@ -2471,6 +2472,11 @@ class DungeonPage extends React.Component {
             // floating player animation state
             , playerFloatVisible: false
             , peerPlayers: new Map()
+            , selectedPeerPlayer: null
+            , incomingChallenge: null
+            , outgoingChallenge: null
+            , isPvPMode: false
+            , pvpMatchData: null
             , playerFloatStyle: { left: 0, top: 0, transform: 'translate3d(0px, 0px, 0px)' }
             , mobileTouchTileId: null
             , showAvatarRadialMenu: false
@@ -3284,11 +3290,19 @@ class DungeonPage extends React.Component {
             socketHandler.off('dungeon:player_joined', this.handlePeerPlayerJoined);
             socketHandler.off('dungeon:player_left', this.handlePeerPlayerLeft);
             socketHandler.off('dungeon:player_moved', this.handlePeerPlayerMoved);
+            socketHandler.off('pvp:challenge_received', this.handlePvPChallengeReceived);
+            socketHandler.off('pvp:challenge_declined', this.handlePvPChallengeDeclined);
+            socketHandler.off('pvp:challenge_error', this.handlePvPChallengeError);
+            socketHandler.off('pvp:battle_start', this.handlePvPBattleStart);
 
             socketHandler.on('dungeon:presence_snapshot', this.handlePresenceSnapshot);
             socketHandler.on('dungeon:player_joined', this.handlePeerPlayerJoined);
             socketHandler.on('dungeon:player_left', this.handlePeerPlayerLeft);
             socketHandler.on('dungeon:player_moved', this.handlePeerPlayerMoved);
+            socketHandler.on('pvp:challenge_received', this.handlePvPChallengeReceived);
+            socketHandler.on('pvp:challenge_declined', this.handlePvPChallengeDeclined);
+            socketHandler.on('pvp:challenge_error', this.handlePvPChallengeError);
+            socketHandler.on('pvp:battle_start', this.handlePvPBattleStart);
 
             socketHandler.joinDungeon(dungeonId, userId, username, location, crewSummary);
         } catch (e) {
@@ -3302,8 +3316,90 @@ class DungeonPage extends React.Component {
             socketHandler.off('dungeon:player_joined', this.handlePeerPlayerJoined);
             socketHandler.off('dungeon:player_left', this.handlePeerPlayerLeft);
             socketHandler.off('dungeon:player_moved', this.handlePeerPlayerMoved);
+            socketHandler.off('pvp:challenge_received', this.handlePvPChallengeReceived);
+            socketHandler.off('pvp:challenge_declined', this.handlePvPChallengeDeclined);
+            socketHandler.off('pvp:challenge_error', this.handlePvPChallengeError);
+            socketHandler.off('pvp:battle_start', this.handlePvPBattleStart);
             socketHandler.leaveDungeon();
         } catch (e) { }
+    }
+
+    handlePvPChallengeReceived = (data = {}) => {
+        this.setState({ incomingChallenge: data });
+    }
+
+    handlePvPChallengeDeclined = (data = {}) => {
+        this.setState({ outgoingChallenge: null });
+        if (this.displayMessage) {
+            this.displayMessage(`⚔️ ${data.targetUsername || 'Opponent'} declined the PvP challenge.`);
+        }
+    }
+
+    handlePvPChallengeError = (data = {}) => {
+        this.setState({ outgoingChallenge: null, incomingChallenge: null });
+        if (this.displayMessage) {
+            this.displayMessage(`⚠️ ${data.message || 'PvP challenge failed.'}`);
+        }
+    }
+
+    handlePvPBattleStart = (battleData = {}) => {
+        try {
+            this.setState({ incomingChallenge: null, outgoingChallenge: null });
+
+            const mySocketId = socketHandler.socket?.id;
+            const isPlayerA = battleData.playerA?.socketId === mySocketId;
+            const opponent = isPlayerA ? battleData.playerB : battleData.playerA;
+
+            const opponentCrew = (opponent && Array.isArray(opponent.crew) && opponent.crew.length > 0)
+                ? opponent.crew
+                : [{ id: 'pvp_opponent_1', name: opponent?.username || 'Opponent', hp: 100, maxHp: 100, portrait: 'cultist', type: 'cultist' }];
+
+            const monster = opponentCrew[0];
+            const minions = opponentCrew.slice(1);
+
+            this.setState({
+                isPvPMode: true,
+                pvpMatchData: battleData,
+                monster,
+                minions
+            }, () => {
+                this.triggerMonsterBattle(true, 'pvp_match');
+                if (this.displayMessage) {
+                    this.displayMessage(`⚔️ Real-time PvP Battle started against ${opponent?.username || 'Opponent'}!`);
+                }
+            });
+        } catch (err) {
+            console.warn('handlePvPBattleStart failed', err);
+        }
+    }
+
+    initiatePvPChallenge = (peer) => {
+        if (!peer || !peer.socketId) return;
+        const myCrew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : [];
+        socketHandler.sendPvPChallenge(peer.socketId, peer.userId, myCrew);
+        this.setState({
+            selectedPeerPlayer: null,
+            outgoingChallenge: {
+                targetUsername: peer.username || 'Peer Explorer',
+                targetSocketId: peer.socketId
+            }
+        });
+    }
+
+    handleAcceptPvPChallenge = () => {
+        const incoming = this.state.incomingChallenge;
+        if (!incoming) return;
+        const myCrew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : [];
+        socketHandler.respondPvPChallenge(incoming.challengerSocketId, true, myCrew);
+        this.setState({ incomingChallenge: null });
+    }
+
+    handleDeclinePvPChallenge = () => {
+        const incoming = this.state.incomingChallenge;
+        if (incoming) {
+            socketHandler.respondPvPChallenge(incoming.challengerSocketId, false);
+        }
+        this.setState({ incomingChallenge: null });
     }
 
     handlePresenceSnapshot = (data = {}) => {
@@ -19251,6 +19347,88 @@ class DungeonPage extends React.Component {
                                 </Tile>
                             })}
                         </div>
+                        {/* Peer Players Overlay Elements */}
+                        {Array.from(this.state.peerPlayers?.values() || []).map((peer) => {
+                            if (!peer || !peer.location) return null;
+                            const bm = this.props.boardManager;
+                            const currentLevelId = bm?.currentLevel?.id ?? 0;
+                            const currentOrientation = bm?.currentOrientation === 'B' ? 'back' : 'front';
+
+                            const peerLevel = peer.location.levelId ?? 0;
+                            const peerOrientation = peer.location.orientation || 'front';
+
+                            if (String(peerLevel) !== String(currentLevelId) || peerOrientation !== currentOrientation) {
+                                return null;
+                            }
+
+                            const x = peer.location.x ?? (peer.location.tileIndex % 15);
+                            const y = peer.location.y ?? Math.floor(peer.location.tileIndex / 15);
+                            const left = x * this.state.tileSize;
+                            const top = y * this.state.tileSize;
+
+                            return (
+                                <div
+                                    key={peer.socketId || peer.userId}
+                                    className="floating-peer-player"
+                                    title={`${peer.username || 'Peer Explorer'} (Click to interact)`}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        this.setState({ selectedPeerPlayer: peer });
+                                    }}
+                                    style={{
+                                        position: 'absolute',
+                                        left: `${left}px`,
+                                        top: `${top}px`,
+                                        width: this.state.tileSize,
+                                        height: this.state.tileSize,
+                                        pointerEvents: 'auto',
+                                        cursor: 'pointer',
+                                        zIndex: 24,
+                                        transition: 'left 0.25s ease-out, top 0.25s ease-out',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        alignItems: 'center',
+                                        justifyContent: 'center'
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            position: 'absolute',
+                                            top: '-18px',
+                                            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+                                            color: '#64ffda',
+                                            fontSize: '10px',
+                                            fontWeight: 'bold',
+                                            padding: '1px 6px',
+                                            borderRadius: '4px',
+                                            whiteSpace: 'nowrap',
+                                            border: '1px solid rgba(100, 255, 218, 0.5)',
+                                            pointerEvents: 'none',
+                                            boxShadow: '0 2px 5px rgba(0,0,0,0.7)'
+                                        }}
+                                    >
+                                        🌐 {peer.username || 'Explorer'}
+                                    </div>
+                                    <div
+                                        style={{
+                                            width: '80%',
+                                            height: '80%',
+                                            borderRadius: '50%',
+                                            border: '2px solid #64ffda',
+                                            backgroundColor: 'rgba(10, 25, 47, 0.9)',
+                                            boxShadow: '0 0 10px rgba(100, 255, 218, 0.6)',
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            fontSize: `${Math.max(12, Math.floor(this.state.tileSize * 0.4))}px`
+                                        }}
+                                    >
+                                        🧙‍♂️
+                                    </div>
+                                </div>
+                            );
+                        })}
+
                         {/* Floating player overlay element - positioned absolutely within board wrapper */}
                         {this.state.playerFloatVisible && !this.state.activeConstruction && (
                             <div
@@ -21253,6 +21431,89 @@ class DungeonPage extends React.Component {
                         }}
                     />
                 )}
+                {/* Peer Action Menu Modal */}
+                {this.state.selectedPeerPlayer && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+                            backdropFilter: 'blur(4px)',
+                            zIndex: 99988,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                        }}
+                        onClick={() => this.setState({ selectedPeerPlayer: null })}
+                    >
+                        <div
+                            style={{
+                                width: '320px',
+                                backgroundColor: '#0a192f',
+                                border: '2px solid #64ffda',
+                                borderRadius: '14px',
+                                padding: '24px',
+                                color: '#fff',
+                                textAlign: 'center',
+                                boxShadow: '0 10px 30px rgba(100, 255, 218, 0.3)'
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <div style={{ fontSize: '36px', marginBottom: '8px' }}>🧙‍♂️</div>
+                            <h3 style={{ margin: '0 0 4px 0', color: '#64ffda', fontFamily: "'Cinzel', serif" }}>
+                                {this.state.selectedPeerPlayer.username || 'Peer Explorer'}
+                            </h3>
+                            <p style={{ fontSize: '13px', color: '#8892b0', marginBottom: '20px' }}>
+                                Peer Explorer in Dungeon
+                            </p>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                <button
+                                    style={{
+                                        padding: '12px 18px',
+                                        borderRadius: '8px',
+                                        backgroundColor: '#64ffda',
+                                        color: '#0a192f',
+                                        fontWeight: 'bold',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: '15px',
+                                        boxShadow: '0 4px 14px rgba(100, 255, 218, 0.4)'
+                                    }}
+                                    onClick={() => this.initiatePvPChallenge(this.state.selectedPeerPlayer)}
+                                >
+                                    ⚔️ Challenge to PvP Battle
+                                </button>
+                                <button
+                                    style={{
+                                        padding: '10px 18px',
+                                        borderRadius: '8px',
+                                        backgroundColor: 'rgba(255,255,255,0.08)',
+                                        color: '#8892b0',
+                                        border: '1px solid rgba(255,255,255,0.2)',
+                                        cursor: 'pointer',
+                                        fontSize: '13px'
+                                    }}
+                                    onClick={() => this.setState({ selectedPeerPlayer: null })}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Real-time PvP Challenge Gateway Modal */}
+                <PvPChallengeModal
+                    incomingChallenge={this.state.incomingChallenge}
+                    outgoingChallenge={this.state.outgoingChallenge}
+                    onAccept={this.handleAcceptPvPChallenge}
+                    onDecline={this.handleDeclinePvPChallenge}
+                    onClose={() => this.setState({ outgoingChallenge: null })}
+                />
+
                 {/* Save Indicator */}
                 <style>{`
                 @keyframes save-spin {

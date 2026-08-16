@@ -1,6 +1,7 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
 const registerDungeonPresence = require('./dungeonPresenceHandler');
+const registerPvPCombat = require('./pvpCombatHandler');
 
 function initSocketManager(httpServer) {
   const io = new Server(httpServer, {
@@ -54,6 +55,7 @@ function initSocketManager(httpServer) {
 
     // Register module handlers
     registerDungeonPresence(io, socket);
+    registerPvPCombat(io, socket);
 
     socket.on('disconnect', (reason) => {
       console.log(`[Sockets] Client disconnected: ${socket.id} (${reason})`);

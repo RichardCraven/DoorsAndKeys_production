@@ -67,7 +67,7 @@ class UserManagerPage extends React.Component {
     try {
       const res = await generateBotRequest();
       const botName = res && res.data && res.data.username ? res.data.username : 'A new bot';
-      this.setState({ alertMessage: `Bot generation started for ${botName}! The bot is now playing the game in the background for 1 minute. Check the email on file for the results.` });
+      this.setState({ alertMessage: `Bot generation started for ${botName}! The bot is now playing the game in the background for 3 minutes. Check the email on file for the results.` });
       // Refresh user list
       const final = await loadAllUsersRequest();
       this.setState({ users: Array.isArray(final?.data) ? final.data : [] });

@@ -508,7 +508,7 @@ function App(props) {
                       <span style={{ fontSize: '15px' }}>🚪</span>
                     </button>
 
-                    {location.pathname !== '/userProfilePage' && location.pathname !== '/combatSimulator' && !isCombatActive && (
+                    {location.pathname !== '/userProfilePage' && location.pathname !== '/mapmaker' && location.pathname !== '/combatSimulator' && !isCombatActive && (
                       <button
                         className="menu-buttons save-button"
                         onClick={() => { setMenuTrayExpanded(false); saveUserData(); }}

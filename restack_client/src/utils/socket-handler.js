@@ -79,6 +79,58 @@ class SocketHandler {
     }
   }
 
+  // PvP Combat Methods
+  sendPvPChallenge(targetSocketId, targetUserId, challengerCrew = []) {
+    if (this.socket) {
+      this.emit('pvp:challenge_send', {
+        targetSocketId,
+        targetUserId,
+        dungeonId: this.currentDungeonId,
+        challengerCrew
+      });
+    }
+  }
+
+  respondPvPChallenge(challengerSocketId, accepted, targetCrew = []) {
+    if (this.socket) {
+      this.emit('pvp:challenge_response', {
+        challengerSocketId,
+        accepted,
+        targetCrew,
+        dungeonId: this.currentDungeonId
+      });
+    }
+  }
+
+  sendPvPTurnAction(battleId, actionData = {}) {
+    if (this.socket && battleId) {
+      this.emit('pvp:turn_action', {
+        battleId,
+        ...actionData
+      });
+    }
+  }
+
+  sendPvPEndTurn(battleId, nextTurnSocketId) {
+    if (this.socket && battleId) {
+      this.emit('pvp:end_turn', {
+        battleId,
+        nextTurnSocketId
+      });
+    }
+  }
+
+  sendPvPBattleEnd(battleId, winnerSocketId, loserSocketId, rewards = {}) {
+    if (this.socket && battleId) {
+      this.emit('pvp:battle_end', {
+        battleId,
+        winnerSocketId,
+        loserSocketId,
+        rewards
+      });
+    }
+  }
+
   emit(event, payload) {
     if (this.socket) {
       this.socket.emit(event, payload);
