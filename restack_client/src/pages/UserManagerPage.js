@@ -218,7 +218,7 @@ class UserManagerPage extends React.Component {
   handleFetchLogs = async () => {
     this.setState({ isLoadingLogs: true, showLogsModal: true, selectedReplay: null });
     try {
-      const res = await getBotReplaysRequest, deleteAllBotReplaysRequest();
+      const res = await getBotReplaysRequest();
       if (res && res.data) {
         this.setState({ botReplays: res.data });
       }
@@ -341,7 +341,20 @@ class UserManagerPage extends React.Component {
                         onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
                       >
                         <span style={{ color: '#e5b54f', fontWeight: 'bold' }}>{replay.botUsername}</span>
-                        <span style={{ color: '#888', fontSize: '12px' }}>{new Date(replay.createdAt).toLocaleString()}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); this.startReplayPlayback(replay); }}
+                            style={{ 
+                              background: 'transparent', color: '#00ffff', border: 'none', 
+                              cursor: 'pointer', textShadow: '0 0 8px #00ffff', 
+                              textTransform: 'uppercase', letterSpacing: '1px', 
+                              fontWeight: 'bold', fontSize: '12px', padding: 0
+                            }}
+                          >
+                            Replay
+                          </button>
+                          <span style={{ color: '#888', fontSize: '12px' }}>{new Date(replay.createdAt).toLocaleString()}</span>
+                        </div>
                       </div>
                     ))
                   )}
@@ -353,12 +366,143 @@ class UserManagerPage extends React.Component {
     );
   };
 
+  startReplayPlayback = (replay) => {
+    if (!replay.actions || replay.actions.length === 0) {
+      this.setState({ alertMessage: "No actions to replay." });
+      return;
+    }
+    this.setState({ playingReplay: replay, replayActionIndex: 0, showLogsModal: false }, this.runReplayLoop);
+  };
+
+  runReplayLoop = () => {
+    if (!this.state.playingReplay) return;
+    const { actions } = this.state.playingReplay;
+    const currentIdx = this.state.replayActionIndex;
+
+    if (currentIdx >= actions.length - 1) {
+      this._replayTimeout = setTimeout(() => this.setState({ playingReplay: null }), 4000);
+      return;
+    }
+
+    const currentAction = actions[currentIdx];
+    const nextAction = actions[currentIdx + 1];
+    
+    let delay = nextAction.timestamp - currentAction.timestamp;
+    if (delay < 300) delay = 300; 
+    if (delay > 2000) delay = 2000; 
+
+    this._replayTimeout = setTimeout(() => {
+      if (!this.state.playingReplay) return;
+      this.setState({ replayActionIndex: this.state.replayActionIndex + 1 }, this.runReplayLoop);
+    }, delay);
+  };
+
+  stopReplayPlayback = () => {
+    if (this._replayTimeout) clearTimeout(this._replayTimeout);
+    this.setState({ playingReplay: null });
+  };
+
+  renderReplayPlayback = () => {
+    const { playingReplay, replayActionIndex } = this.state;
+    if (!playingReplay) return null;
+
+    const action = playingReplay.actions[replayActionIndex];
+    const recentActions = playingReplay.actions.slice(Math.max(0, replayActionIndex - 7), replayActionIndex + 1);
+
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+        backgroundColor: 'rgba(10, 8, 12, 0.95)', zIndex: 10000,
+        display: 'flex', flexDirection: 'column',
+        justifyContent: 'center', alignItems: 'center'
+      }}>
+        <div style={{
+          position: 'absolute', top: '24px', left: '24px',
+          color: '#00ffff', fontSize: '24px', fontWeight: 'bold', textTransform: 'uppercase',
+          letterSpacing: '4px', textShadow: '0 0 15px rgba(0,255,255,0.7)',
+          animation: 'pulseReplay 2s infinite'
+        }}>
+          ● REPLAY
+        </div>
+        
+        <button 
+          onClick={this.stopReplayPlayback}
+          style={{
+            position: 'absolute', top: '24px', right: '24px',
+            background: 'transparent', border: '1px solid #e5b54f', color: '#e5b54f',
+            padding: '8px 16px', borderRadius: '4px', cursor: 'pointer',
+            textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600'
+          }}
+        >
+          Exit Replay
+        </button>
+
+        <div style={{ width: '700px', maxWidth: '90%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <h2 style={{ color: '#e5b54f', textAlign: 'center', margin: '0 0 10px 0', fontSize: '24px', letterSpacing: '2px' }}>
+            {playingReplay.botUsername}
+          </h2>
+          
+          <div style={{
+            background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+            padding: '24px', height: '360px', overflow: 'hidden',
+            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+            boxShadow: 'inset 0 0 40px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.5)'
+          }}>
+            {recentActions.map((act, i) => {
+              const isLast = i === recentActions.length - 1;
+              return (
+                <div key={i} style={{
+                  padding: '10px 0',
+                  color: isLast ? '#fff' : 'rgba(255,255,255,0.3)',
+                  fontSize: isLast ? '22px' : '15px',
+                  borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.03)',
+                  transformOrigin: 'left',
+                  transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                  fontWeight: isLast ? '700' : '400',
+                  textShadow: isLast ? '0 0 10px rgba(255,255,255,0.2)' : 'none',
+                  display: 'flex', gap: '15px'
+                }}>
+                  <span style={{ color: isLast ? '#00ffff' : 'rgba(0,255,255,0.3)', whiteSpace: 'nowrap' }}>
+                    [{new Date(act.timestamp).toLocaleTimeString()}]
+                  </span>
+                  <span style={{ color: isLast ? '#fff' : 'inherit' }}>
+                    {act.action}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          
+          <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+             <div style={{ 
+               height: '100%', 
+               background: '#00ffff', 
+               width: `${(replayActionIndex / Math.max(1, playingReplay.actions.length - 1)) * 100}%`,
+               transition: 'width 0.3s linear',
+               boxShadow: '0 0 10px #00ffff'
+             }} />
+          </div>
+        </div>
+        <style>
+          {`
+            @keyframes pulseReplay {
+              0% { opacity: 1; }
+              50% { opacity: 0.3; }
+              100% { opacity: 1; }
+            }
+          `}
+        </style>
+      </div>
+    );
+  };
+
   render() {
     return (
       <div className="user-manager-page">
         {this.renderAlertModal()}
         {this.renderConfirmModal()}
         {this.renderLogsModal()}
+        {this.renderReplayPlayback()}
         <div className="user-manager-card">
           <div className="user-manager-header">
             <h2>User Manager</h2>

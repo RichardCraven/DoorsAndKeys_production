@@ -19178,6 +19178,20 @@ class DungeonPage extends React.Component {
                 )}
                 {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
                     <div className={`right-side-panel ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`}>
+                        {this.props.boardManager && this.props.boardManager.dungeon && this.props.boardManager.dungeon.name && (
+                            <div style={{
+                                color: 'white',
+                                fontSize: '13px',
+                                fontWeight: '700',
+                                textAlign: 'center',
+                                padding: '12px 10px 4px 10px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '1px',
+                                textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                            }}>
+                                {this.props.boardManager.dungeon.name.replace(/_[0-9]{4}$/, '').replace(/_/g, ' ')}
+                            </div>
+                        )}
                         {this.renderPanelSections('right')}
                         <div className="expand-collapse-button icon-container" onClick={this.toggleRightSidePanel}>
                             <CIcon icon={cilCaretLeft} className={`expand-icon ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`} size="sm" />
