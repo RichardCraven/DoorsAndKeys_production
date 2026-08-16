@@ -27,6 +27,7 @@ import { INTERVALS, INTERVAL_DISPLAY_NAMES } from '../../utils/shared-constants'
 import REAGENTS, { REAGENT_KEYS } from '../../utils/reagents';
 import BREW_INGREDIENTS, { BREW_INGREDIENT_KEYS } from '../../utils/brew-ingredients';
 import { BATTLE_TACTICS } from '../../utils/spells-table';
+import socketHandler from '../../utils/socket-handler';
 
 // const MAX_DEPTH = 7;
 const NUM_COLUMNS = 8;
@@ -374,10 +375,43 @@ class MonsterBattle extends React.Component {
         }
     }
 
+    handlePvPActionBroadcast = (actionData = {}) => {
+        try {
+            if (!this.props.combatManager) return;
+            const { type, actorId, targetId, destination, skillKey } = actionData;
+            if (type === 'move' && actorId && destination) {
+                if (typeof this.props.combatManager.moveFighterToDestination === 'function') {
+                    this.props.combatManager.moveFighterToDestination(actorId, destination);
+                }
+            } else if (type === 'attack' && actorId && targetId) {
+                const actor = this.props.combatManager.getCombatant(actorId);
+                if (actor) {
+                    actor.targetId = targetId;
+                    if (typeof this.props.combatManager.performFighterAttack === 'function') {
+                        this.props.combatManager.performFighterAttack(actor);
+                    }
+                }
+            } else if (type === 'skill' && actorId && skillKey) {
+                const actor = this.props.combatManager.getCombatant(actorId);
+                if (actor) {
+                    if (targetId) actor.targetId = targetId;
+                    if (typeof this.props.combatManager.useFighterSkill === 'function') {
+                        this.props.combatManager.useFighterSkill(actor, skillKey);
+                    }
+                }
+            }
+        } catch (err) {
+            console.warn('[PvP] handlePvPActionBroadcast error:', err);
+        }
+    }
+
     componentDidMount() {
         // mark mounted so async callbacks can safely call setState
         this._isMounted = true;
         window.addEventListener('resize', this._handleResize);
+        try {
+            socketHandler.on('pvp:action_broadcast', this.handlePvPActionBroadcast);
+        } catch (e) { }
         const meta = getMeta();
         const savedLogFilter = meta?.logFilterSelectedFighter ?? false;
         // Reset UI state that persists across remounts (shield walls, fear, etc.)
@@ -714,6 +748,7 @@ class MonsterBattle extends React.Component {
     componentWillUnmount() {
         // mark unmounted to prevent async callbacks attempting setState
         try { this._isMounted = false; } catch (e) { }
+        try { socketHandler.off('pvp:action_broadcast', this.handlePvPActionBroadcast); } catch (e) { }
         window.removeEventListener('resize', this._handleResize);
         if (this._rafId) {
             cancelAnimationFrame(this._rafId);

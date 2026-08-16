@@ -111,7 +111,25 @@ const runBotSimulation = async (username, password) => {
   const actionLog = [];
   const replayEvents = []; // Structured JSON for Replay UI
 
+  let consecutiveMovements = 0;
+  let firstMovementTime = null;
+
   const logAction = (msg) => {
+    if (msg.startsWith('Pressed movement key:')) {
+      consecutiveMovements++;
+      if (!firstMovementTime) firstMovementTime = Date.now();
+      return;
+    }
+
+    if (consecutiveMovements > 0) {
+      const moveMsg = `Movement (${consecutiveMovements})`;
+      console.log(`[Bot ${username}] ${moveMsg}`);
+      actionLog.push(`[${new Date(firstMovementTime).toLocaleTimeString()}] ${moveMsg}`);
+      replayEvents.push({ timestamp: firstMovementTime, action: moveMsg });
+      consecutiveMovements = 0;
+      firstMovementTime = null;
+    }
+
     console.log(`[Bot ${username}] ${msg}`);
     actionLog.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
     replayEvents.push({ timestamp: Date.now(), action: msg });

@@ -2623,17 +2623,9 @@ export function BoardManager(){
     }
     
     this.handlePassingThroughWayUp = () => {
-        const incomingLevel = this.dungeon.levels.find(l => l.id === this.currentLevel.id+1)
+        const incomingLevel = this.dungeon.levels.find(l => Number(l.id) === Number(this.currentLevel.id) + 1)
         if(!incomingLevel){
-            // Exiting the dungeon
-            try {
-                const meta = getMeta() || {};
-                delete meta.dungeonId;
-                delete meta.boardIndex;
-                delete meta.tileIndex;
-                storeMeta(meta);
-            } catch (e) {}
-            window.location.href = '/';
+            alert('trying to travel to a level that doesnt exist!')
             return
         }
         this.currentLevel = incomingLevel;
@@ -2642,17 +2634,9 @@ export function BoardManager(){
         this.broadcastLevelChange(this.currentLevel.id)
     }
     this.handlePassingThroughWayDown = () => {
-        const incomingLevel = this.dungeon.levels.find(l => l.id === this.currentLevel.id-1)
+        const incomingLevel = this.dungeon.levels.find(l => Number(l.id) === Number(this.currentLevel.id) - 1)
         if(!incomingLevel){
-            // Exiting the dungeon (or reached bottom)
-            try {
-                const meta = getMeta() || {};
-                delete meta.dungeonId;
-                delete meta.boardIndex;
-                delete meta.tileIndex;
-                storeMeta(meta);
-            } catch (e) {}
-            window.location.href = '/';
+            alert('trying to travel to a level that doesnt exist!')
             return
         }
         this.currentLevel = incomingLevel;
