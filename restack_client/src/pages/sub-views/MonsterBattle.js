@@ -254,7 +254,7 @@ class MonsterBattle extends React.Component {
             hoveredGlyphTile: null,
             showCrosshair: false,
             portraitHoveredId: null,
-            greetingInProcess: true,
+            greetingInProcess: !(props.isPvP || props.isPvPMode),
             combatTiles: [],
             draggedOverCombatTileId: null,
             draggingFighter: null,
@@ -645,8 +645,10 @@ class MonsterBattle extends React.Component {
             crew: this.props.crew,
             leader: this.getCrewLeader(),
             monster: this.props.monster,
-            minions: this.props.minions
-
+            minions: this.props.minions,
+            isPvP: !!(this.props.isPvP || this.props.isPvPMode),
+            isPvPMode: !!(this.props.isPvP || this.props.isPvPMode),
+            opponentCrew: this.props.opponentCrew
         })
 
         if (this.props.combatManager && typeof this.props.combatManager.pauseCombat === 'function') {

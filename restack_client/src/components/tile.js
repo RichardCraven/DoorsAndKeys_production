@@ -768,7 +768,7 @@ function Tile(props) {
                          }
                          return (
                              <div 
-                                 className="territory-bg" 
+                                 className={`territory-bg ${props.newlyClaimed ? 'newly-claimed' : ''}`} 
                                  style={{
                                      position: 'absolute', 
                                      top: 0, left: 0, right: 0, bottom: 0, 
@@ -778,7 +778,8 @@ function Tile(props) {
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
                                      opacity: (clan === 'player' || clan === 'crew') ? 1 : ((isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') ? 0 : 1), 
-                                     transition: 'opacity 0.35s ease-in-out'
+                                     transition: 'opacity 0.35s ease-in-out',
+                                     animation: props.newlyClaimed ? 'territoryFadeIn 1.5s ease-in-out forwards' : 'none'
                                  }} 
                              />
                          );
@@ -1172,7 +1173,10 @@ function Tile(props) {
                        alignItems: 'center',
                        justifyContent: 'center',
                        opacity: color === 'black' ? 0 : 1,
-                       transition: 'opacity 0.35s ease-in-out'
+                       transition: 'all 0.25s ease-in-out',
+                       transform: isOccupied ? 'scale(1.15)' : 'scale(1)',
+                       filter: isOccupied ? 'brightness(1.3)' : 'none',
+                       transformOrigin: 'center center'
                    };
                    if (edge === 'top') {
                        overlayStyle.borderTop = 'none';
@@ -1228,6 +1232,22 @@ function Tile(props) {
                           {/* Gleaming/shimmering overlay animation if connected */}
                           {isConnected && (
                               <div className={`connecting-path-shimmer ${isHorizontal ? 'horizontal' : 'vertical'}`} />
+                          )}
+
+                          {/* Red Map Edge Boundary Indicator when player is on the tile */}
+                          {props.isPlayerOnTile && (edge === 'top' || edge === 'bottom' || edge === 'left' || edge === 'right') && (
+                              <div style={{
+                                  position: 'absolute',
+                                  top: edge === 'top' ? 0 : 'auto',
+                                  bottom: edge === 'bottom' ? 0 : 'auto',
+                                  left: edge === 'left' ? 0 : 'auto',
+                                  right: edge === 'right' ? 0 : 'auto',
+                                  width: (edge === 'left' || edge === 'right') ? '6px' : '100%',
+                                  height: (edge === 'top' || edge === 'bottom') ? '6px' : '100%',
+                                  backgroundColor: 'rgba(255, 0, 0, 0.8)',
+                                  boxShadow: '0 0 12px red',
+                                  zIndex: 40
+                              }} />
                           )}
                       </div>
                  );

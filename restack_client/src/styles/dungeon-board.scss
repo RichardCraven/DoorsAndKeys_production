@@ -933,6 +933,14 @@
                     width: 2px;
                     border-radius: 2px;
                     position: absolute;
+                    &.generator{
+                        background-color: #2ecc71;
+                        height: 3px;
+                        width: 3px;
+                        margin-left: -0.5px;
+                        margin-top: -0.5px;
+                        box-shadow: 0 0 3px #2ecc71;
+                    }
                     &.enemy{
                         background-color: red;
                     }
@@ -4649,4 +4657,14 @@
 
 .door-transition-in {
     animation: doorShrinkIn 0.4s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+}
+@keyframes territoryFadeIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
 }

@@ -600,10 +600,10 @@ export function CombatManagerRedux() {
 
     this.beginGreeting = () => {
         const monster = this.data?.monster;
-        if (!monster) {
+        if (this.data?.isPvP || this.data?.isPvPMode || !monster) {
             this.showBars = true;
             if (typeof this.greetingComplete === 'function') this.greetingComplete();
-            this.appendCombatLog('Combat started. Round 1 begins.');
+            this.appendCombatLog('⚔️ Real-time PvP Duel started! Round 1 begins.');
             this.startRoundTimer();
             this.processRoundTurns();
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
@@ -971,6 +971,54 @@ export function CombatManagerRedux() {
                 this.appendCombatLog(`⚔️ ${leaderData.name || 'The Leader'} inspires the party — Leadership Aura grants +2 DEF to all allies!`);
             }
         } catch (e) { console.warn('[Combat] Leadership Aura buff application failed', e); }
+
+        const isPvP = !!(this.data.isPvP || this.data.isPvPMode);
+        if (isPvP || !this.data.monster) {
+            const rawOpponentCrew = (Array.isArray(this.data.opponentCrew) && this.data.opponentCrew.length > 0)
+                ? this.data.opponentCrew
+                : (this.data.monster ? [this.data.monster, ...(this.data.minions || [])] : []);
+
+            rawOpponentCrew.forEach((e, idx) => {
+                if (!e || e.dead) return;
+                const opponentUnit = {
+                    ...e,
+                    isMonster: false,
+                    isMinion: false,
+                    isMainMonster: false,
+                    isLarge: false,
+                    isHuge: false,
+                    isOpponent: true,
+                    facing: e.facing || 'left',
+                    coordinates: { x: MAX_DEPTH, y: Math.min(idx, 4) }
+                };
+
+                const fighter = createFighter(opponentUnit, callbacks, this.FIGHT_INTERVAL);
+                fighter.isMonster = false;
+                fighter.isMinion = false;
+                fighter.isMainMonster = false;
+                fighter.isLarge = false;
+                fighter.isHuge = false;
+                fighter.isOpponent = true;
+                fighter.maxEndurance = e.stats?.vitality || 30;
+                fighter.endurance = fighter.maxEndurance;
+                fighter.enduranceFrozenRounds = 0;
+                fighter.cooldowns = {};
+                fighter.movesTakenThisRound = 0;
+                fighter.actionsTakenThisRound = 0;
+
+                this.combatants[fighter.id] = fighter;
+                this._initializeInitialCooldowns(fighter);
+                this._setCombatantOccupiedCoords(fighter, this.combatants);
+                this._makeHpEffectsAware(fighter);
+            });
+
+            this.beginGreeting();
+
+            if (typeof this.updateData === 'function') {
+                this.updateData(clone(this.combatants));
+            }
+            return;
+        }
 
         const m = { ...this.data.monster };
         m.isMonster = true; // Mark as monster early so isLarge/isHuge sizing evaluates correctly for VCT occupied lanes

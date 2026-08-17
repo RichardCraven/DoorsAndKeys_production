@@ -2387,6 +2387,10 @@ export function BoardManager(){
     };
 
     this.removeDefeatedMonsterTile = (tileId, onComplete) => {
+        if (typeof tileId === 'string') {
+            if (typeof onComplete === 'function') onComplete();
+            return;
+        }
         const tile = typeof tileId === 'number' ? this.tiles[tileId] : tileId;
         if (!tile) {
             if (typeof onComplete === 'function') onComplete();
@@ -2398,7 +2402,7 @@ export function BoardManager(){
     };
 
     this.removeTileFromBoard = (tile) => {
-        if (!tile) return;
+        if (!tile || typeof tile === 'string') return;
         // Clear runtime monster/image and restore floor appearance.
         tile.isFadingOut = false;
         tile.image = null;

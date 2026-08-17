@@ -3383,9 +3383,34 @@ class DungeonPage extends React.Component {
             const isPlayerA = battleData.playerA?.socketId === mySocketId;
             const opponent = isPlayerA ? battleData.playerB : battleData.playerA;
 
-            const opponentCrew = (opponent && Array.isArray(opponent.crew) && opponent.crew.length > 0)
+            const rawCrew = (opponent && Array.isArray(opponent.crew) && opponent.crew.length > 0)
                 ? opponent.crew
                 : [{ id: 'pvp_opponent_1', name: opponent?.username || 'Opponent', hp: 100, maxHp: 100, portrait: 'cultist', type: 'cultist' }];
+
+            const opponentCrew = rawCrew.map((member, idx) => {
+                const hpVal = typeof member.hp === 'number' ? member.hp : (member.stats?.hp || 100);
+                return {
+                    ...member,
+                    id: member.id || `pvp_opponent_${idx + 1}`,
+                    name: member.name || opponent?.username || 'Opponent',
+                    hp: hpVal,
+                    starting_hp: typeof member.starting_hp === 'number' ? member.starting_hp : hpVal,
+                    portrait: member.portrait || member.type || 'cultist',
+                    type: member.type || member.portrait || 'cultist',
+                    stats: {
+                        hp: hpVal,
+                        atk: typeof member.stats?.atk === 'number' ? member.stats.atk : (typeof member.atk === 'number' ? member.atk : 15),
+                        def: typeof member.stats?.def === 'number' ? member.stats.def : (typeof member.def === 'number' ? member.def : 8),
+                        str: typeof member.stats?.str === 'number' ? member.stats.str : 10,
+                        dex: typeof member.stats?.dex === 'number' ? member.stats.dex : 10,
+                        fort: typeof member.stats?.fort === 'number' ? member.stats.fort : 10,
+                        int: typeof member.stats?.int === 'number' ? member.stats.int : 10,
+                        speed: typeof member.stats?.speed === 'number' ? member.stats.speed : 10,
+                        vitality: typeof member.stats?.vitality === 'number' ? member.stats.vitality : 30,
+                        ...(member.stats || {})
+                    }
+                };
+            });
 
             const monster = opponentCrew[0];
             const minions = opponentCrew.slice(1);
@@ -3393,6 +3418,7 @@ class DungeonPage extends React.Component {
             this.setState({
                 isPvPMode: true,
                 pvpMatchData: battleData,
+                opponentCrew,
                 monster,
                 minions
             }, () => {
@@ -3529,15 +3555,13 @@ class DungeonPage extends React.Component {
         let isOwnedByMe = false;
         let updatedGenData = generatorData;
         if (generatorData) {
-            if (generatorData.ownerSocketId && mySocketId) {
-            isOwnedByMe = generatorData.ownerSocketId === mySocketId;
-        } else if (generatorData.ownerId && generatorData.ownerId !== 'guest') {
-            isOwnedByMe = generatorData.ownerId === currentUserId;
-        } else if (generatorData.ownedByPlayer !== undefined) {
-            isOwnedByMe = !!generatorData.ownedByPlayer;
-            } else {
-                isOwnedByMe = generatorData.owned !== false;
-            }
+            isOwnedByMe = (() => {
+                if (generatorData.ownerId && generatorData.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest' && generatorData.ownerId === currentUserId) return true;
+                if (generatorData.ownerSocketId && mySocketId && generatorData.ownerSocketId === mySocketId) return true;
+                if (generatorData.ownedByPlayer !== undefined) return !!generatorData.ownedByPlayer;
+                if (generatorData.ownerId || generatorData.ownerSocketId) return false;
+                return generatorData.owned !== false;
+            })();
 
             updatedGenData = {
                 ...generatorData,
@@ -3887,11 +3911,9 @@ class DungeonPage extends React.Component {
                     showModal: true,
                     selectedCrewMember,
                     numeralUpdate: (this.state.numeralUpdate || false) ? false : true // toggle dummy state
-                }, () => {
-                    this.forceUpdate();
                 });
             } else if (modified || numeralUpdate) {
-                // If no popup, still force update for numeral/count UI
+                // If no popup, update selectedCrewMember and toggle numeralUpdate
                 this.setState(prevState => {
                     let selectedCrewMember = prevState.selectedCrewMember;
                     if (selectedCrewMember && selectedCrewMember.id) {
@@ -3899,8 +3921,6 @@ class DungeonPage extends React.Component {
                         if (updated) selectedCrewMember = { ...updated };
                     }
                     return { selectedCrewMember, numeralUpdate: (prevState.numeralUpdate || false) ? false : true };
-                }, () => {
-                    this.forceUpdate();
                 });
             } else {
                 // No updates/modified flags — but the cooldown visuals rely on frequent re-renders
@@ -4265,13 +4285,15 @@ class DungeonPage extends React.Component {
             });
 
             // Debug mode toggle commands
-            window.toggleDebug = () => { this.handleToggleDebugMode(); return `Debug Mode toggled: ${window.debugMode ? 'ON' : 'OFF'}`; };
+            window.toggleDebug = () => { this.handleToggleDebugMode(); return `Debug Mode toggled: ${this.state.debugMode ? 'ON' : 'OFF'}`; };
             Object.defineProperty(window, 'd', {
-                get: () => { this.handleToggleDebugMode(); return `Debug Mode toggled: ${window.debugMode ? 'ON' : 'OFF'}`; },
+                get: () => this.state.debugMode,
+                set: (val) => { if (Boolean(val) !== this.state.debugMode) this.handleToggleDebugMode(); },
                 configurable: true
             });
             Object.defineProperty(window, 'debug', {
-                get: () => { this.handleToggleDebugMode(); return `Debug Mode toggled: ${window.debugMode ? 'ON' : 'OFF'}`; },
+                get: () => this.state.debugMode,
+                set: (val) => { if (Boolean(val) !== this.state.debugMode) this.handleToggleDebugMode(); },
                 configurable: true
             });
 
@@ -7229,26 +7251,80 @@ class DungeonPage extends React.Component {
                                                 const levelObj = dungeon && dungeon.levels && dungeon.levels.find(l => Number(l.id) === Number(currentLevelId));
                                                 const plane = levelObj ? (currentOrientation === 'B' ? levelObj.back : levelObj.front) : null;
                                                 const boardObj = plane && plane.miniboards && plane.miniboards[i];
-                                                const boardTiles = boardObj && Array.isArray(boardObj.tiles) ? boardObj.tiles : [];
+                                                let boardTiles = boardObj && Array.isArray(boardObj.tiles) ? boardObj.tiles : [];
+                                                if (bm && bm.currentBoard && bm.playerTile && bm.playerTile.boardIndex === i && Array.isArray(bm.tiles) && bm.tiles.length > 0) {
+                                                    boardTiles = bm.tiles;
+                                                }
+
+                                                // Inject persistent generators from meta, but respect orientation
+                                                try {
+                                                    const meta = typeof getMeta === 'function' ? getMeta() : {};
+                                                    if (meta && meta.activatedGenerators) {
+                                                        Object.keys(meta.activatedGenerators).forEach(key => {
+                                                            const parts = key.split('_');
+                                                            if (parts.length >= 3 && Number(parts[0]) === Number(currentLevelId) && Number(parts[1]) === i) {
+                                                                const tId = Number(parts[2]);
+                                                                const genData = meta.activatedGenerators[key];
+                                                                let isOnCurrentPlane = true;
+                                                                
+                                                                // If the generator saved its orientation, respect it strictly
+                                                                if (genData && genData.orientation) {
+                                                                    isOnCurrentPlane = genData.orientation === currentOrientation;
+                                                                } else {
+                                                                    // Legacy: Check if the actual tile on this plane looks like a generator
+                                                                    const t = boardTiles.find(bt => Number(bt.id) === tId);
+                                                                    if (t && t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'generator' || t.contains.type === 'building')) {
+                                                                        isOnCurrentPlane = true;
+                                                                    } else {
+                                                                        // Check opposite plane to see if it definitively belongs there
+                                                                        const oppositePlane = currentOrientation === 'B' ? levelObj.front : levelObj.back;
+                                                                        const oppBoard = oppositePlane && oppositePlane.miniboards && oppositePlane.miniboards[i];
+                                                                        const oppTile = oppBoard && oppBoard.tiles && oppBoard.tiles.find(bt => Number(bt.id) === tId);
+                                                                        if (oppTile && oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'generator' || oppTile.contains.type === 'building')) {
+                                                                            isOnCurrentPlane = false; // It definitively belongs to the other plane
+                                                                        }
+                                                                    }
+                                                                }
+
+                                                                // Only draw owned generators
+                                                                let isOwned = false;
+                                                                const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+                                                                const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
+                                                                if (genData.ownerId && genData.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest' && genData.ownerId === currentUserId) isOwned = true;
+                                                                else if (genData.ownerSocketId && mySocketId && genData.ownerSocketId === mySocketId) isOwned = true;
+                                                                else if (genData.ownedByPlayer !== undefined) isOwned = !!genData.ownedByPlayer;
+                                                                else if (!genData.ownerId && !genData.ownerSocketId) isOwned = genData.owned !== false;
+
+                                                                if (isOnCurrentPlane && isOwned && !isNaN(tId) && !mergedByTile.has(`generator_${tId}`)) {
+                                                                    mergedByTile.set(`generator_${tId}`, { tileId: tId, indicatorType: 'generator' });
+                                                                }
+                                                            }
+                                                        });
+                                                    }
+                                                } catch (e) {}
 
                                                 boardTiles.forEach((tile) => {
-                                                    if (!tile || typeof tile.id !== 'number') return;
-                                                    const contains = tile.contains;
-                                                    const containsType = contains?.type || tile.containsType;
-                                                    const containsSubtype = contains?.subtype || tile.containsSubtype;
+                                                    try {
+                                                        if (!tile || tile.id == null) return;
+                                                        const contains = tile.contains;
+                                                        const containsType = contains?.type || tile.containsType || (bm && bm.getContainsType ? bm.getContainsType(contains) : null);
+                                                        const containsSubtype = contains?.subtype || tile.containsSubtype || (bm && bm.getContainsSubtype ? bm.getContainsSubtype(contains) : null);
 
-                                                    const isVendor = containsType === 'vendor' || containsType === 'shop' || ['merchant', 'alchemist', 'vendor'].includes(containsSubtype);
-                                                    if (isVendor) {
-                                                        if (!mergedByTile.has(`merchant_${tile.id}`)) {
-                                                            mergedByTile.set(`merchant_${tile.id}`, { tileId: tile.id, indicatorType: 'merchant' });
+                                                        const isVendor = containsType === 'vendor' || containsType === 'shop' || ['merchant', 'alchemist', 'vendor'].includes(containsSubtype);
+                                                        if (isVendor) {
+                                                            if (!mergedByTile.has(`merchant_${tile.id}`)) {
+                                                                mergedByTile.set(`merchant_${tile.id}`, { tileId: tile.id, indicatorType: 'merchant' });
+                                                            }
                                                         }
-                                                    }
 
-                                                    const isGen = this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData;
-                                                    if (isGen && !isVendor) {
-                                                        if (!mergedByTile.has(`generator_${tile.id}`)) {
-                                                            mergedByTile.set(`generator_${tile.id}`, { tileId: tile.id, indicatorType: 'generator' });
+                                                        const isGen = this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData;
+                                                        if (isGen && !isVendor) {
+                                                            if (!mergedByTile.has(`generator_${tile.id}`)) {
+                                                                mergedByTile.set(`generator_${tile.id}`, { tileId: tile.id, indicatorType: 'generator' });
+                                                            }
                                                         }
+                                                    } catch (err) {
+                                                        console.error("Error processing minimap indicator for tile", tile.id, err);
                                                     }
                                                 });
                                             } catch (err) { }
@@ -7324,6 +7400,29 @@ class DungeonPage extends React.Component {
 
         return (
             <div className="popped-out-resources-topbar">
+                <div className="topbar-resource-item" title="Resolve" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="res-icon resolve-icon" style={{
+                        display: 'inline-block',
+                        backgroundImage: `url(${images.resolve_icon})`,
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center',
+                        width: '13px',
+                        height: '13px',
+                        verticalAlign: 'middle'
+                    }} />
+                    <div style={{ display: 'flex', flexDirection: 'column', width: '40px', justifyContent: 'center' }}>
+                        <span className="res-val" style={{ color: resolve < 25 ? '#e74c3c' : (resolve < 50 ? '#e67e22' : '#f1c40f'), fontSize: '10px', lineHeight: '10px', textAlign: 'center', marginBottom: '2px' }}>{resolve}</span>
+                        <div style={{ width: '100%', height: '4px', backgroundColor: '#2a1a1a', borderRadius: '2px', overflow: 'hidden' }}>
+                            <div style={{
+                                height: '100%',
+                                width: `${Math.max(0, Math.min(100, resolve))}%`,
+                                backgroundColor: resolve < 25 ? '#e74c3c' : (resolve < 50 ? '#e67e22' : '#f1c40f'),
+                                transition: 'width 0.3s ease-in-out, background-color 0.3s'
+                            }} />
+                        </div>
+                    </div>
+                </div>
                 <div className="topbar-resource-item" title="Attack">
                     <span className="res-icon">⚔</span>
                     <span className="res-val">{totalAtk}</span>
@@ -7338,19 +7437,6 @@ class DungeonPage extends React.Component {
                         {incomeRates.food > 0 && <span className="res-income">+{incomeRates.food}</span>}
                         {food}/{foodLimit}
                     </span>
-                </div>
-                <div className="topbar-resource-item" title="Resolve">
-                    <span className="res-icon resolve-icon" style={{
-                        display: 'inline-block',
-                        backgroundImage: `url(${images.resolve_icon})`,
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center',
-                        width: '13px',
-                        height: '13px',
-                        verticalAlign: 'middle'
-                    }} />
-                    <span className="res-val">{resolve}</span>
                 </div>
                 <div className="topbar-resource-item" title="Gold">
                     <span className="res-icon">🪙</span>
@@ -7507,6 +7593,32 @@ class DungeonPage extends React.Component {
                             </div>
                         ) : (
                             <div className="quicklook-panel">
+                                <div className="ql-row" style={{ flexDirection: 'column', alignItems: 'stretch', paddingBottom: '12px' }}>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                        <span className="ql-label">
+                                            <span style={{
+                                                display: 'inline-block',
+                                                backgroundImage: `url(${images.resolve_icon})`,
+                                                backgroundSize: 'contain',
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'center',
+                                                width: '16px',
+                                                height: '16px',
+                                                verticalAlign: 'middle',
+                                                marginRight: '4px'
+                                            }} /> Resolve
+                                        </span>
+                                        <span className="ql-value" style={{ color: resolve < 25 ? '#e74c3c' : (resolve < 50 ? '#e67e22' : '#f1c40f') }}>{resolve}</span>
+                                    </div>
+                                    <div style={{ height: '6px', backgroundColor: '#2a1a1a', borderRadius: '3px', overflow: 'hidden' }}>
+                                        <div style={{
+                                            height: '100%',
+                                            width: `${Math.max(0, Math.min(100, resolve))}%`,
+                                            backgroundColor: resolve < 25 ? '#e74c3c' : (resolve < 50 ? '#e67e22' : '#f1c40f'),
+                                            transition: 'width 0.3s ease-in-out, background-color 0.3s'
+                                        }} />
+                                    </div>
+                                </div>
                                 <div className="ql-row"><span className="ql-label"><span role="img" aria-label="crossed swords">⚔</span> Attack</span><span className="ql-value">{totalAtk}</span></div>
                                 <div className="ql-row"><span className="ql-label"><span role="img" aria-label="shield">🛡</span> Defense</span><span className="ql-value">{totalDef}</span></div>
                                 <div className="ql-row">
@@ -7516,17 +7628,6 @@ class DungeonPage extends React.Component {
                                         {food} / {foodLimit}
                                     </span>
                                 </div>
-                                <div className="ql-row"><span className="ql-label"><span style={{
-                                    display: 'inline-block',
-                                    backgroundImage: `url(${images.resolve_icon})`,
-                                    backgroundSize: 'contain',
-                                    backgroundRepeat: 'no-repeat',
-                                    backgroundPosition: 'center',
-                                    width: '16px',
-                                    height: '16px',
-                                    verticalAlign: 'middle',
-                                    marginRight: '4px'
-                                }} /> Resolve</span><span className="ql-value">{resolve}</span></div>
                                 <div className="ql-row">
                                     <span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span>
                                     <span className="ql-value" style={{ color: '#ffd700' }}>
@@ -8411,6 +8512,22 @@ class DungeonPage extends React.Component {
                 return;
             }
 
+            if (cmd === 'activate' || cmd === 'monolithactivate' || cmd === 'monolith-activate' || cmd === 'autoactivate') {
+                const meta = getMeta() || {};
+                const nextState = !meta.activateNextMonolith;
+                meta.activateNextMonolith = nextState;
+                storeMeta(meta);
+                try { updateUserRequest(getUserId(), meta).catch(() => { }); } catch (e) { }
+                this.setState(prev => ({
+                    activateNextMonolith: nextState,
+                    devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Activate monolith flag: ${nextState ? 'ENABLED (Next domain monolith activation or overtaking success check will automatically succeed)' : 'DISABLED'}`],
+                    devConsoleInput: ''
+                }));
+                try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
+                e.preventDefault();
+                return;
+            }
+
             if (cmd === 'time') {
                 try {
                     const pstNow = getPstDate();
@@ -8691,6 +8808,7 @@ class DungeonPage extends React.Component {
                 // list available commands
                 if (cmd === 'list' || cmd === 'help') {
                     const commands = [
+                        'activate / monolithactivate — toggle auto-success for next domain monolith activation or overtake',
                         'instakill / instantkill / ik — toggle instakill mode (next encountered monster is slain instantly)',
                         'monster-spawn / monsterspawn / mspawn',
                         'd / debug / debugmode — toggle debug mode on or off',
@@ -12138,16 +12256,14 @@ class DungeonPage extends React.Component {
                 const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
                 const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
                 
-                let isOwnedByMe = false;
-                if (tile.generatorData.ownerSocketId && mySocketId) {
-                    isOwnedByMe = tile.generatorData.ownerSocketId === mySocketId;
-                } else if (tile.generatorData.ownerId && tile.generatorData.ownerId !== 'guest') {
-                    isOwnedByMe = tile.generatorData.ownerId === currentUserId;
-                } else if (tile.generatorData.ownedByPlayer !== undefined) {
-                    isOwnedByMe = !!tile.generatorData.ownedByPlayer;
-                } else {
-                    isOwnedByMe = tile.generatorData.owned !== false;
-                }
+                let isOwnedByMe = (() => {
+                    const gd = tile.generatorData;
+                    if (gd.ownerId && gd.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest' && gd.ownerId === currentUserId) return true;
+                    if (gd.ownerSocketId && mySocketId && gd.ownerSocketId === mySocketId) return true;
+                    if (gd.ownedByPlayer !== undefined) return !!gd.ownedByPlayer;
+                    if (gd.ownerId || gd.ownerSocketId) return false;
+                    return gd.owned !== false;
+                })();
 
                 if (isOwnedByMe) {
                     tile.ownedByPlayer = true;
@@ -15134,8 +15250,8 @@ class DungeonPage extends React.Component {
         const generatorKeys = ['larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith'];
         const buildingKeys = ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'];
 
-        const hasGenerator = generatorKeys.includes(containsSubtype) || generatorKeys.includes(bldg) || generatorKeys.includes(img) || generatorKeys.some(k => img === 'buildable_' + k);
-        const hasBuilding = buildingKeys.includes(containsSubtype) || buildingKeys.includes(bldg) || buildingKeys.includes(img) || buildingKeys.some(k => img === 'buildable_' + k);
+        const hasGenerator = generatorKeys.includes(containsType) || generatorKeys.includes(containsSubtype) || generatorKeys.includes(bldg) || generatorKeys.includes(img) || generatorKeys.some(k => img === 'buildable_' + k);
+        const hasBuilding = buildingKeys.includes(containsType) || buildingKeys.includes(containsSubtype) || buildingKeys.includes(bldg) || buildingKeys.includes(img) || buildingKeys.some(k => img === 'buildable_' + k);
 
         return (
             containsType === 'building' ||
@@ -15739,8 +15855,18 @@ class DungeonPage extends React.Component {
                 }
             } catch (e) { }
 
-            const successChance = Math.pow(0.5, count + 1);
-            const success = Math.random() < successChance;
+            const meta = getMeta() || {};
+            let success = false;
+            if (meta.activateNextMonolith || this.state.activateNextMonolith) {
+                success = true;
+                meta.activateNextMonolith = false;
+                try { storeMeta(meta); } catch (e) { }
+                try { updateUserRequest(getUserId(), meta).catch(() => { }); } catch (e) { }
+                this.setState({ activateNextMonolith: false });
+            } else {
+                const successChance = Math.pow(0.5, count + 1);
+                success = Math.random() < successChance;
+            }
 
             if (success) {
                 try {
@@ -15751,16 +15877,22 @@ class DungeonPage extends React.Component {
                     }
                 } catch (e) { }
 
-                // Mock activeGeneratorTile for handleActivateGenerator
+                // Set animation state and wait before showing the modal
                 this.setState({
                     monolithActivationState: null,
-                    monolithActivationResultModal: {
-                        success: true,
-                        message: 'Attunement Successful! The Domain Monolith is now generating territory for you.'
-                    },
+                    domainExpansionAnimation: { tileId: targetTile.id },
                     activeGeneratorTile: targetTile
                 }, () => {
                     this.handleActivateGenerator();
+                    setTimeout(() => {
+                        this.setState({
+                            domainExpansionAnimation: null,
+                            monolithActivationResultModal: {
+                                success: true,
+                                message: 'Attunement Successful! The Domain Monolith is now generating territory for you.'
+                            }
+                        });
+                    }, 1500); // 1.5s delay to let tiles fade in
                 });
             } else {
                 const nextCount = count + 1;
@@ -15919,12 +16051,21 @@ class DungeonPage extends React.Component {
             }
         }
 
-        let successChance = 0.35; // base 35%
-        if (failCount === 1) successChance = 0.175;
-        else if (failCount === 2) successChance = 0.05;
-        else if (failCount >= 3) successChance = 0.01;
+        let success = false;
+        if (meta.activateNextMonolith || this.state.activateNextMonolith) {
+            success = true;
+            meta.activateNextMonolith = false;
+            try { storeMeta(meta); } catch (e) { }
+            try { updateUserRequest(getUserId(), meta).catch(() => { }); } catch (e) { }
+            this.setState({ activateNextMonolith: false });
+        } else {
+            let successChance = 0.35; // base 35%
+            if (failCount === 1) successChance = 0.175;
+            else if (failCount === 2) successChance = 0.05;
+            else if (failCount >= 3) successChance = 0.01;
 
-        const success = Math.random() < successChance;
+            success = Math.random() < successChance;
+        }
         const genName = generatorName || 'Domain Monolith';
 
         if (success) {
@@ -16016,13 +16157,19 @@ class DungeonPage extends React.Component {
             // Re-activate as player owned
             this.setState({
                 domainOvertakeState: null,
-                monolithActivationResultModal: {
-                    success: true,
-                    message: `Overtake Successful! The ${targetLevel > 1 ? `Level ${targetLevel} ` : ''}${genName} is now yours.`
-                },
+                domainExpansionAnimation: { tileId: tile.id },
                 activeGeneratorTile: tile
             }, () => {
                 this.handleActivateGenerator();
+                setTimeout(() => {
+                    this.setState({
+                        domainExpansionAnimation: null,
+                        monolithActivationResultModal: {
+                            success: true,
+                            message: `Overtake Successful! The ${targetLevel > 1 ? `Level ${targetLevel} ` : ''}${genName} is now yours.`
+                        }
+                    });
+                }, 1500);
             });
 
         } else {
@@ -16367,6 +16514,21 @@ class DungeonPage extends React.Component {
                 bm.currentBoard.tiles[targetTileIdx].contains = buildingObj;
                 bm.currentBoard.tiles[targetTileIdx].building = buildingDef.key;
             }
+            if (bm.dungeon && bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
+                try {
+                    const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
+                    if (levelEntry) {
+                        const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
+                        if (targetPlane && targetPlane.miniboards) {
+                            const b = targetPlane.miniboards[bm.currentBoard.id];
+                            if (b && b.tiles && b.tiles[targetTileIdx]) {
+                                b.tiles[targetTileIdx].contains = buildingObj;
+                                b.tiles[targetTileIdx].building = buildingDef.key;
+                            }
+                        }
+                    }
+                } catch (e) { }
+            }
             if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
             
             if (typeof socketHandler !== 'undefined' && socketHandler.sendTileUpdate) {
@@ -16548,6 +16710,21 @@ class DungeonPage extends React.Component {
             if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[playerIdx]) {
                 bm.currentBoard.tiles[playerIdx].contains = buildingObj;
                 bm.currentBoard.tiles[playerIdx].building = expectedBuildingKey;
+            }
+            if (bm.dungeon && bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
+                try {
+                    const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
+                    if (levelEntry) {
+                        const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
+                        if (targetPlane && targetPlane.miniboards) {
+                            const b = targetPlane.miniboards[bm.currentBoard.id];
+                            if (b && b.tiles && b.tiles[playerIdx]) {
+                                b.tiles[playerIdx].contains = buildingObj;
+                                b.tiles[playerIdx].building = expectedBuildingKey;
+                            }
+                        }
+                    }
+                } catch (e) { }
             }
             if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
             
@@ -20733,16 +20910,13 @@ class DungeonPage extends React.Component {
                     const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
                     const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
 
-                    let isOwner = false;
-                    if (gData.ownerSocketId && mySocketId) {
-                        isOwner = gData.ownerSocketId === mySocketId;
-                    } else if (gData.ownerId && gData.ownerId !== 'guest') {
-                        isOwner = gData.ownerId === currentUserId;
-                    } else if (gData.ownedByPlayer !== undefined) {
-                        isOwner = !!gData.ownedByPlayer;
-                    } else {
-                        isOwner = gData.owned !== false;
-                    }
+                    let isOwner = (() => {
+                        if (gData.ownerId && gData.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest' && gData.ownerId === currentUserId) return true;
+                        if (gData.ownerSocketId && mySocketId && gData.ownerSocketId === mySocketId) return true;
+                        if (gData.ownedByPlayer !== undefined) return !!gData.ownedByPlayer;
+                        if (gData.ownerId || gData.ownerSocketId) return false;
+                        return gData.owned !== false;
+                    })();
                     const inPlayerTerritory = tile.territory === 'player';
                     const stats = this.getEffectiveGeneratorStats(gData, def);
                     const accumulated = this.getAccumulatedGeneratorAmount(gData, stats.cap, stats.rate, inPlayerTerritory && isOwner);
@@ -21246,6 +21420,9 @@ class DungeonPage extends React.Component {
                         crew={this.props.crewManager.crew}
                         monster={this.state.monster}
                         minions={this.state.minions}
+                        isPvP={this.state.isPvPMode}
+                        isPvPMode={this.state.isPvPMode}
+                        opponentCrew={this.state.opponentCrew}
                         battleOver={this.battleOver}
                         paused={this.state.paused}
                         setNarrativeSequence={this.props.setNarrativeSequence}
