@@ -275,6 +275,17 @@ export const getActiveEffects = (combatant, combatManager) => {
             totalDurationMs: liveUnit.frozenTotalDurationMs
         });
     }
+    if (liveUnit.petrified) {
+        list.push({
+            key: 'petrified',
+            icon: images.stone_rune || images.earthen_rune || images.archaic_rune,
+            border: '#9e9e9e',
+            roundsLeft: liveUnit.petrified_eras || liveUnit.petrifiedRounds || 0,
+            totalDuration: liveUnit.petrifiedTotalRounds || liveUnit.petrified_eras || 2,
+            endTimeMs: liveUnit.petrifiedEndTimeMs,
+            totalDurationMs: liveUnit.petrifiedTotalDurationMs
+        });
+    }
     if (liveUnit.stunned && !liveUnit.asleep && !liveUnit.feared) {
         list.push({
             key: 'stunned',
@@ -2450,7 +2461,7 @@ export default function SiegeCombatGrid(props) {
                             backgroundImage: unit.portrait ? `url("${getCombatantPortrait(unit, greetingInProcess, activeAnimations)}")` : 'none',
                             backgroundSize: undefined,
                             backgroundPosition: undefined,
-                            filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),
+                            filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${unit.petrified || liveMonster.petrified ? 'grayscale(1) contrast(1.4) brightness(0.75)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),
                             zIndex: isMinion ? 2 : 1,
                             position: 'relative',
                             width: '100%',
@@ -2560,6 +2571,38 @@ export default function SiegeCombatGrid(props) {
                             }
                             return null;
                         })()}
+                        {/* Petrified Overlay (Stone Slab Encasement) */}
+                        {(unit.petrified || liveMonster?.petrified) && !isDead && (
+                            <div style={{
+                                boxSizing: 'border-box',
+                                position: 'absolute',
+                                top: 0, left: 0, width: '100%', height: '100%',
+                                borderRadius: '6px',
+                                pointerEvents: 'none',
+                                zIndex: 16,
+                                background: 'rgba(80, 80, 80, 0.55)',
+                                border: '3px solid #888888',
+                                boxShadow: 'inset 0 0 15px rgba(0,0,0,0.8), 0 0 10px rgba(136,136,136,0.6)',
+                                backdropFilter: 'grayscale(1) contrast(1.5)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center'
+                            }}>
+                                <div style={{
+                                    fontSize: '11px',
+                                    fontWeight: 'bold',
+                                    color: '#e0e0e0',
+                                    letterSpacing: '1px',
+                                    textShadow: '0 0 4px #000, 1px 1px 2px #000',
+                                    background: 'rgba(0,0,0,0.7)',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #777'
+                                }}>
+                                    STONE SLAB
+                                </div>
+                            </div>
+                        )}
                         {/* Poison Overlay (pulsing green glow) */}
                         {liveMonster?.poison && !isDead && (
                             <div style={{
@@ -4238,6 +4281,101 @@ export default function SiegeCombatGrid(props) {
                         }} />
                     </div>
                 </div>
+            );
+        }
+
+        if (anim.type === 'petrify_gaze_beam' && anim.srcPx && anim.tgtPx) {
+            const duration = anim.duration || 1100;
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: `${anim.length}px`,
+                    height: '40px',
+                    transformOrigin: '0 50%',
+                    transform: `translateY(-50%) rotate(${anim.angle}deg)`,
+                    pointerEvents: 'none',
+                    zIndex: 4900,
+                }}>
+                    <div style={{
+                        width: '100%',
+                        height: '100%',
+                        background: 'linear-gradient(to right, rgba(16, 185, 129, 0.9), rgba(120, 120, 120, 0.95), rgba(200, 200, 200, 1))',
+                        boxShadow: '0 0 15px #10b981, 0 0 30px #787878',
+                        borderRadius: '20px',
+                        animation: `dragonBreathFlame ${duration}ms cubic-bezier(0.1, 0.8, 0.3, 1) forwards`,
+                    }} />
+                </div>
+            );
+        }
+
+        if (anim.type === 'petrify_stone_burst' && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.tgtPx.x}px`,
+                    top: `${anim.tgtPx.y}px`,
+                    width: '110px',
+                    height: '110px',
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                    zIndex: 5100,
+                    borderRadius: '8px',
+                    background: 'radial-gradient(circle, rgba(160, 160, 160, 0.95) 0%, rgba(80, 80, 80, 0.8) 60%, transparent 100%)',
+                    border: '3px solid #aaaaaa',
+                    boxShadow: '0 0 25px rgba(120, 120, 120, 0.9), inset 0 0 15px #ffffff',
+                    animation: 'vampBiteBackgroundFade 1.2s ease-in-out forwards',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    fontWeight: 'bold',
+                    fontSize: '13px',
+                    letterSpacing: '2px',
+                    textShadow: '0 0 8px #000000'
+                }}>
+                    PETRIFIED!
+                </div>
+            );
+        }
+
+        if (anim.type === 'snake_strike_swipe' && anim.srcPx && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    width: '70px',
+                    height: '70px',
+                    transform: `translate(-50%, -50%) rotate(${anim.angle}deg)`,
+                    pointerEvents: 'none',
+                    zIndex: 5000,
+                    backgroundImage: `url(${images.bite || images.claws})`,
+                    backgroundSize: 'contain',
+                    backgroundRepeat: 'no-repeat',
+                    filter: 'drop-shadow(0 0 12px #22c55e) hue-rotate(90deg) saturate(2)',
+                    animation: 'vampBiteBackgroundFade 0.65s ease-out forwards',
+                }} />
+            );
+        }
+
+        if (anim.type === 'snake_strike_hit' && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.tgtPx.x}px`,
+                    top: `${anim.tgtPx.y}px`,
+                    width: '90px',
+                    height: '90px',
+                    transform: 'translate(-50%, -50%)',
+                    pointerEvents: 'none',
+                    zIndex: 5100,
+                    borderRadius: '50%',
+                    background: 'radial-gradient(circle, rgba(34, 197, 94, 0.8) 0%, rgba(20, 83, 45, 0.4) 60%, transparent 100%)',
+                    boxShadow: '0 0 20px #22c55e',
+                    animation: 'stompShockwave 0.5s ease-out forwards',
+                }} />
             );
         }
 

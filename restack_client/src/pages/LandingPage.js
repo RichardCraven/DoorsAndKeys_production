@@ -480,13 +480,18 @@ export default function LandingPage(props) {
 
   const refreshValidDungeons = async () => {
     const res = await loadAllDungeonsRequest();
+    let presenceMap = {};
     try {
       const presenceRes = await getActivePresenceRequest();
       if (presenceRes && presenceRes.data) {
+        presenceMap = presenceRes.data;
         setActivePresenceMap(presenceRes.data);
+        console.log('[PresenceDiagnostic] Active presence map fetched:', presenceRes.data);
+      } else {
+        console.warn('[PresenceDiagnostic] Active presence response returned empty/null:', presenceRes);
       }
     } catch (err) {
-      console.warn('Failed to fetch active presence', err);
+      console.warn('[PresenceDiagnostic] Failed to fetch active presence:', err);
     }
     const all = (res?.data || []).map((row) => {
       if (!row || !row.content) return null;
@@ -538,6 +543,14 @@ export default function LandingPage(props) {
     const baseValidOnly = validOnly.filter((d) => !isInstanceDungeonName(d.name));
     setValidDungeons(baseValidOnly);
 
+    if (Object.keys(presenceMap).length > 0) {
+      console.log('[PresenceDiagnostic] Evaluated Dungeon Presence Counts:', baseValidOnly.map((d) => ({
+        name: d.name,
+        id: d.id,
+        onlineCount: getDungeonOnlineCount(d, presenceMap, all)
+      })));
+    }
+
     const meta = getMeta() || {};
     const selectedId = meta.selectedDungeonTemplateId || null;
     const selected = selectedId ? baseValidOnly.find((d) => d.id === selectedId) : null;
@@ -570,8 +583,51 @@ export default function LandingPage(props) {
     }
   }, [history])
 
+  const getDungeonOnlineCount = (d, presenceMap, allDungeons = []) => {
+    if (!d || !presenceMap) return 0;
+    const baseName = (d.name || '').toLowerCase().trim();
+    const normBase = baseName.replace(/[^a-z0-9]/g, '');
+    const dungeonIdStr = String(d.id || d._id || '').toLowerCase();
+
+    let totalOnline = 0;
+    const countedKeys = new Set();
+
+    Object.keys(presenceMap).forEach((key) => {
+      const count = presenceMap[key] || 0;
+      if (!count || countedKeys.has(key)) return;
+
+      const keyStr = String(key).toLowerCase();
+      const normKey = keyStr.replace(/[^a-z0-9]/g, '');
+
+      const matchesId = dungeonIdStr && (keyStr === dungeonIdStr);
+      const matchesBaseName = keyStr === baseName || keyStr.startsWith(baseName + '_') || baseName.startsWith(keyStr + '_');
+      const matchesNorm = normBase && (normKey === normBase || normKey.startsWith(normBase) || normBase.startsWith(normKey));
+
+      let matchesInstanceLookup = false;
+      if (Array.isArray(allDungeons) && allDungeons.length > 0) {
+        const instMatch = allDungeons.find(x => String(x.id || x._id || '').toLowerCase() === keyStr);
+        if (instMatch && instMatch.name) {
+          const instName = String(instMatch.name).toLowerCase();
+          if (instName === baseName || instName.startsWith(baseName + '_')) {
+            matchesInstanceLookup = true;
+          }
+        }
+      }
+
+      if (matchesId || matchesBaseName || matchesNorm || matchesInstanceLookup) {
+        totalOnline += count;
+        countedKeys.add(key);
+      }
+    });
+    return totalOnline;
+  };
+
   useEffect(() => {
     refreshValidDungeons();
+    const interval = setInterval(() => {
+      refreshValidDungeons();
+    }, 10000);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -754,7 +810,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.5.1 BETA</span>
+          <span className="logo-subtitle">v 0.5.2 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
 
@@ -828,32 +884,58 @@ export default function LandingPage(props) {
               {/* Select Dungeon Dropdown */}
               <div className="dungeon-selector-group" ref={dungeonPickerRef}>
                 <span className="selector-label">Target Dungeon</span>
-                <div
-                  className={`custom-select-trigger ${selectedDungeonTemplateId ? 'selected' : ''}`}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!showDungeonPicker) {
-                      refreshValidDungeons();
-                    }
-                    setShowDungeonPicker((s) => !s);
-                  }}
-                >
-                  <span>{getMeta()?.selectedDungeonTemplateName || 'Select a Dungeon...'}</span>
-                  <span>▼</span>
-                </div>
+                {(() => {
+                  const selectedDungeonObj = validDungeons.find((d) => d.id === selectedDungeonTemplateId);
+                  const selectedOnlineCount = selectedDungeonObj ? getDungeonOnlineCount(selectedDungeonObj, activePresenceMap, validDungeons) : 0;
+                  const selectedDungeonName = getMeta()?.selectedDungeonTemplateName || selectedDungeonObj?.name || 'Select a Dungeon...';
+
+                  return (
+                    <div
+                      className={`custom-select-trigger ${selectedDungeonTemplateId ? 'selected' : ''}`}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!showDungeonPicker) {
+                          refreshValidDungeons();
+                        }
+                        setShowDungeonPicker((s) => !s);
+                      }}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span>{selectedDungeonName}</span>
+                        {selectedOnlineCount > 0 && (
+                          <span
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              fontSize: '11px',
+                              color: '#10b981',
+                              fontWeight: 'bold'
+                            }}
+                            title={`${selectedOnlineCount} player(s) active in live instance`}
+                          >
+                            <span style={{
+                              width: '8px',
+                              height: '8px',
+                              borderRadius: '50%',
+                              backgroundColor: '#10b981',
+                              boxShadow: '0 0 8px #10b981'
+                            }} />
+                            {selectedOnlineCount} online
+                          </span>
+                        )}
+                      </div>
+                      <span>▼</span>
+                    </div>
+                  );
+                })()}
 
                 {showDungeonPicker && (
                   <div className="custom-select-menu">
                     {validDungeons.map((d) => {
-                      const baseName = (d.name || '').toLowerCase();
-                      let totalOnline = 0;
-                      Object.keys(activePresenceMap || {}).forEach((key) => {
-                        const keyLower = key.toLowerCase();
-                        if (keyLower === baseName || keyLower.startsWith(baseName + '_')) {
-                          totalOnline += (activePresenceMap[key] || 0);
-                        }
-                      });
+                      const totalOnline = getDungeonOnlineCount(d, activePresenceMap, validDungeons);
                       const isActive = totalOnline > 0;
 
                       return (

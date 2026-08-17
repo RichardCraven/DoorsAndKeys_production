@@ -383,6 +383,11 @@ function Tile(props) {
                 if (images[key]) return images[key];
                 if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
+                if (key.endsWith('_under_construction')) {
+                    const baseKey = key.replace('_under_construction', '');
+                    if (images[baseKey]) return images[baseKey];
+                    if (images[`buildable_${baseKey}`]) return images[`buildable_${baseKey}`];
+                }
             } else if (typeof props.image === 'object') {
                 return props.image.default || props.image;
             }
@@ -393,6 +398,11 @@ function Tile(props) {
                 if (images[key]) return images[key];
                 if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
+                if (key.endsWith('_under_construction')) {
+                    const baseKey = key.replace('_under_construction', '');
+                    if (images[baseKey]) return images[baseKey];
+                    if (images[`buildable_${baseKey}`]) return images[`buildable_${baseKey}`];
+                }
             } else if (typeof props.contains === 'object') {
                 const sub = props.contains.subtype || props.contains.building || props.contains.type || props.contains.name;
                 if (sub && typeof sub === 'string') {
@@ -400,6 +410,11 @@ function Tile(props) {
                     if (images[key]) return images[key];
                     if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                     if (images[`${key}_portrait`]) return images[`${key}_portrait`];
+                    if (key.endsWith('_under_construction')) {
+                        const baseKey = key.replace('_under_construction', '');
+                        if (images[baseKey]) return images[baseKey];
+                        if (images[`buildable_${baseKey}`]) return images[`buildable_${baseKey}`];
+                    }
                 }
             }
         }
@@ -420,6 +435,9 @@ function Tile(props) {
     const isHut = props.building === 'hut' || 
                   (containsObj && (containsObj.subtype === 'hut' || containsObj.building === 'hut' || containsObj.type === 'hut')) ||
                   (currentContains && (currentContains.subtype === 'hut' || currentContains.building === 'hut' || currentContains.type === 'hut'));
+    const isUnderConstruction = (props.contains && typeof props.contains.subtype === 'string' && props.contains.subtype.includes('_under_construction')) ||
+                                (currentContains && typeof currentContains.subtype === 'string' && currentContains.subtype.includes('_under_construction'));
+    const isOccupied = props.isPlayerOnTile || props.isPeerOnTile;
 
     const isNearbyMonster = (() => {
         if (!isMonsterOrPygmyTile) return false;
@@ -525,7 +543,7 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: (isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || (props.isPlayerOnTile && isHut) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
+            overflow: (isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isHut && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
             zIndex: isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : undefined),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
@@ -824,11 +842,12 @@ function Tile(props) {
                                backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'),
                                backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
                                backgroundRepeat: 'no-repeat',
-                               zIndex: isVendorCell ? 40 : (isHut && props.isPlayerOnTile ? 4 : portraitZIndex),
+                               zIndex: isVendorCell ? 40 : ((isHut && isOccupied) || isUnderConstruction ? 4 : portraitZIndex),
                                opacity: (color === 'black' || props.isFadingOut) ? 0 : 1,
-                               transform: isHut && props.isPlayerOnTile ? 'scale(2.0)' : 'none',
-                               transformOrigin: isHut && props.isPlayerOnTile ? 'bottom center' : 'center center',
+                               transform: isUnderConstruction ? 'scale(1.5)' : (isHut && isOccupied ? 'scale(2.0)' : 'none'),
+                               transformOrigin: (isHut && isOccupied) || isUnderConstruction ? 'bottom center' : 'center center',
                                transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
+                               animation: isUnderConstruction ? 'buildingPulse 1.5s infinite ease-in-out' : 'none',
                                pointerEvents: 'none'
                            }} />
                       )}
@@ -1372,6 +1391,49 @@ function Tile(props) {
                 }} title="Unlock spell active" />
             )}
 
+            {/* Generator Ownership Indicators */}
+            {(props.ownedByPlayer || props.boardTiles?.[props.index]?.ownedByPlayer || props.boardTiles?.[props.id]?.ownedByPlayer) && (
+                <div style={{
+                    position: 'absolute',
+                    top: '2px',
+                    left: '2px',
+                    width: '18px',
+                    height: '18px',
+                    background: 'radial-gradient(circle, rgba(59, 130, 246, 0.9) 0%, rgba(29, 78, 216, 0.9) 100%)',
+                    border: '1px solid #60a5fa',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 0 8px rgba(59, 130, 246, 0.8)',
+                    zIndex: 40,
+                    pointerEvents: 'none'
+                }}>
+                    <span style={{ fontSize: '12px' }}>👑</span>
+                </div>
+            )}
+            
+            {(props.ownedByEnemy || props.boardTiles?.[props.index]?.ownedByEnemy || props.boardTiles?.[props.id]?.ownedByEnemy) && (
+                <div style={{
+                    position: 'absolute',
+                    top: '2px',
+                    left: '2px',
+                    width: '18px',
+                    height: '18px',
+                    background: 'radial-gradient(circle, rgba(220, 38, 38, 0.9) 0%, rgba(153, 27, 27, 0.9) 100%)',
+                    border: '1px solid #f87171',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 0 8px rgba(220, 38, 38, 0.8)',
+                    zIndex: 40,
+                    pointerEvents: 'none'
+                }}>
+                    <span style={{ fontSize: '12px' }}>⚔️</span>
+                </div>
+            )}
+
             {/* Earthen Fort level badge (levels > 1 show a number in the top right of the icon) */}
             {(() => {
                 const bSubtype = containsSubtype || (containsObj && containsObj.subtype);
@@ -1420,7 +1482,8 @@ export function propsAreEqual(prevProps, nextProps) {
         'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
         'isPlayerOnTile', 'className', 'illuminated', 'sabotageProgress', 'monolithActivationProgress',
         'isDisabledOutpost', 'disabledUntil', 'inscriptions', 'debugMode',
-        'isPlayerTile', 'hasLivingSummoner', 'playerImgKey', 'cursor', 'isFadingOut'
+        'isPlayerTile', 'hasLivingSummoner', 'playerImgKey', 'cursor', 'isFadingOut',
+        'ownedByPlayer', 'ownedByEnemy'
     ];
 
     for (let key of keysToCompare) {

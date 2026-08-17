@@ -1,6 +1,6 @@
 import React from 'react'
 import '../styles/user-manager-page.scss'
-import {loadAllUsersRequest, deleteUserRequest, updateUserRequest, generateBotRequest, getBotReplaysRequest, deleteAllBotReplaysRequest} from '../utils/api-handler';
+import {loadAllUsersRequest, deleteUserRequest, updateUserRequest, generateBotRequest, getBotReplaysRequest, deleteAllBotReplaysRequest, loadAllDungeonsRequest} from '../utils/api-handler';
 
 class UserManagerPage extends React.Component {
   constructor(props){
@@ -13,7 +13,12 @@ class UserManagerPage extends React.Component {
       botReplays: [],
       selectedReplay: null,
       isLoadingLogs: false,
-      confirmDialog: null
+      confirmDialog: null,
+      showBotConfigModal: false,
+      preferredDungeon: 'random',
+      botPlaystyle: 'default',
+      availableDungeons: [],
+      isLoadingDungeons: false
     };
   }
 
@@ -62,10 +67,43 @@ class UserManagerPage extends React.Component {
     }
   };
 
-  handleGenerateBot = async () => {
-    this.setState({ isGeneratingBot: true });
+  openBotConfigModal = async () => {
+    this.setState({
+      showBotConfigModal: true,
+      isLoadingDungeons: true,
+      preferredDungeon: 'random',
+      botPlaystyle: 'default'
+    });
     try {
-      const res = await generateBotRequest();
+      const res = await loadAllDungeonsRequest();
+      const all = (res?.data || []).map((row) => {
+        if (!row || !row.content) return null;
+        try {
+          const dungeon = JSON.parse(row.content);
+          dungeon.id = row._id;
+          return dungeon;
+        } catch (e) {
+          return null;
+        }
+      }).filter(Boolean);
+
+      const validDungeons = all.filter(d => d.valid === true && !(/_\d+$/i.test(d.name || '') || /_[^_]+_[a-z0-9]{4}$/i.test(d.name || '')));
+      this.setState({ availableDungeons: validDungeons });
+    } catch (e) {
+      console.error('Failed to load dungeons for bot config:', e);
+    } finally {
+      this.setState({ isLoadingDungeons: false });
+    }
+  };
+
+  handleConfirmGenerateBot = async () => {
+    const { preferredDungeon, botPlaystyle } = this.state;
+    this.setState({ showBotConfigModal: false, isGeneratingBot: true });
+    try {
+      const res = await generateBotRequest({
+        preferredDungeon,
+        playstyle: botPlaystyle
+      });
       const botName = res && res.data && res.data.username ? res.data.username : 'A new bot';
       this.setState({ alertMessage: `Bot generation started for ${botName}! The bot is now playing the game in the background for 3 minutes. Check the email on file for the results.` });
       // Refresh user list
@@ -76,6 +114,138 @@ class UserManagerPage extends React.Component {
     } finally {
       this.setState({ isGeneratingBot: false });
     }
+  };
+
+  renderBotConfigModal = () => {
+    if (!this.state.showBotConfigModal) return null;
+    const { preferredDungeon, botPlaystyle, availableDungeons, isLoadingDungeons } = this.state;
+
+    return (
+      <div style={{
+          position: 'fixed',
+          top: 0, left: 0, width: '100vw', height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backdropFilter: 'blur(3px)'
+      }}>
+        <div style={{
+              background: '#15101a',
+              border: '1px solid #e5b54f',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '420px',
+              maxWidth: '90%',
+              boxShadow: '0 10px 40px rgba(0, 0, 0, 0.8), 0 0 20px rgba(229, 181, 79, 0.2)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', textTransform: 'uppercase', letterSpacing: '1px', color: '#e5b54f' }}>
+                Generate Bot Options
+              </h3>
+              <button 
+                onClick={() => this.setState({ showBotConfigModal: false })}
+                style={{ background: 'transparent', color: '#e5b54f', border: 'none', cursor: 'pointer', fontSize: '18px' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#ccc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Preferred Dungeon
+              </label>
+              <select 
+                value={preferredDungeon}
+                onChange={e => this.setState({ preferredDungeon: e.target.value })}
+                disabled={isLoadingDungeons}
+                style={{
+                  padding: '8px 12px',
+                  background: '#0a080d',
+                  color: '#fff',
+                  border: '1px solid #555',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  outline: 'none'
+                }}
+              >
+                <option value="random">random</option>
+                {availableDungeons.map(d => (
+                  <option key={d.id} value={d.name || d.id}>
+                    {d.name || d.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '13px', fontWeight: 'bold', color: '#ccc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Bot Playstyle
+              </label>
+              <select 
+                value={botPlaystyle}
+                onChange={e => this.setState({ botPlaystyle: e.target.value })}
+                style={{
+                  padding: '8px 12px',
+                  background: '#0a080d',
+                  color: '#fff',
+                  border: '1px solid #555',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  outline: 'none'
+                }}
+              >
+                <option value="default">default</option>
+                <option value="aggressive PVP">aggressive PVP</option>
+                <option value="territorial">territorial</option>
+                <option value="explorer">explorer</option>
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '8px' }}>
+              <button 
+                onClick={() => this.setState({ showBotConfigModal: false })}
+                style={{
+                  padding: '8px 16px',
+                  background: 'transparent',
+                  color: '#aaa',
+                  border: '1px solid #555',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase'
+                }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={this.handleConfirmGenerateBot}
+                style={{
+                  padding: '8px 20px',
+                  background: 'rgba(229, 181, 79, 0.15)',
+                  color: '#e5b54f',
+                  border: '1px solid #e5b54f',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 'bold',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(229, 181, 79, 0.35)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(229, 181, 79, 0.15)'}
+              >
+                Confirm
+              </button>
+            </div>
+        </div>
+      </div>
+    );
   };
 
   closeAlert = () => {
@@ -521,6 +691,7 @@ class UserManagerPage extends React.Component {
         {this.renderConfirmModal()}
         {this.renderLogsModal()}
         {this.renderReplayPlayback()}
+        {this.renderBotConfigModal()}
         <div className="user-manager-card">
           <div className="user-manager-header">
             <h2>User Manager</h2>
@@ -532,7 +703,7 @@ class UserManagerPage extends React.Component {
           <div className="bot-controls" style={{ padding: '10px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', gap: '12px', justifyContent: 'center' }}>
             <button 
               className="generate-bot-btn" 
-              onClick={this.handleGenerateBot}
+              onClick={this.openBotConfigModal}
               disabled={this.state.isGeneratingBot}
               style={{
                 padding: '8px 16px',
