@@ -422,6 +422,23 @@ class MonsterBattle extends React.Component {
             logFilterSelectedFighter: savedLogFilter
         });
 
+        // Preload staged portraits to prevent image loading flashes when monster is wounded
+        const preloadStagedPortraits = (unit) => {
+            if (unit && unit.stagedPortraits) {
+                Object.values(unit.stagedPortraits).forEach(url => {
+                    if (url) {
+                        const img = new Image();
+                        img.src = url;
+                    }
+                });
+            }
+        };
+
+        if (this.props.monster) preloadStagedPortraits(this.props.monster);
+        if (this.props.minions && Array.isArray(this.props.minions)) {
+            this.props.minions.forEach(minion => preloadStagedPortraits(minion));
+        }
+
         // --- FIX: Ensure combatManager resets combatants and removes all active enemies ---
         if (this.props.combatManager && typeof this.props.combatManager.reset === 'function') {
             this.props.combatManager.reset();

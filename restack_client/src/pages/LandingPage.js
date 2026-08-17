@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
 import { getMeta, storeMeta, getUserId } from '../utils/session-handler';
-import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest } from '../utils/api-handler';
+import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest, getActivePresenceRequest } from '../utils/api-handler';
 
 
 import skillsMatrix from '../utils/skills-matrix';
+import { getCrewPortraitBackground } from '../utils/images';
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 
 const DEFAULT_CLASS_LORE = {
@@ -409,6 +410,7 @@ export default function LandingPage(props) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
   const [validDungeons, setValidDungeons] = useState([])
+  const [activePresenceMap, setActivePresenceMap] = useState({})
   const [showDungeonPicker, setShowDungeonPicker] = useState(false)
   const [selectedDungeonTemplateId, setSelectedDungeonTemplateId] = useState(null)
   const [pendingDungeonSelection, setPendingDungeonSelection] = useState(null)
@@ -478,6 +480,14 @@ export default function LandingPage(props) {
 
   const refreshValidDungeons = async () => {
     const res = await loadAllDungeonsRequest();
+    try {
+      const presenceRes = await getActivePresenceRequest();
+      if (presenceRes && presenceRes.data) {
+        setActivePresenceMap(presenceRes.data);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch active presence', err);
+    }
     const all = (res?.data || []).map((row) => {
       if (!row || !row.content) return null;
       try {
@@ -744,7 +754,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.5.0 BETA</span>
+          <span className="logo-subtitle">v 0.5.1 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
 
@@ -835,15 +845,50 @@ export default function LandingPage(props) {
 
                 {showDungeonPicker && (
                   <div className="custom-select-menu">
-                    {validDungeons.map((d) => (
-                      <div
-                        key={d.id}
-                        className={`menu-item ${selectedDungeonTemplateId === d.id ? 'active' : ''}`}
-                        onClick={() => selectDungeonTemplate(d)}
-                      >
-                        {d.name}
-                      </div>
-                    ))}
+                    {validDungeons.map((d) => {
+                      const baseName = (d.name || '').toLowerCase();
+                      let totalOnline = 0;
+                      Object.keys(activePresenceMap || {}).forEach((key) => {
+                        const keyLower = key.toLowerCase();
+                        if (keyLower === baseName || keyLower.startsWith(baseName + '_')) {
+                          totalOnline += (activePresenceMap[key] || 0);
+                        }
+                      });
+                      const isActive = totalOnline > 0;
+
+                      return (
+                        <div
+                          key={d.id}
+                          className={`menu-item ${selectedDungeonTemplateId === d.id ? 'active' : ''}`}
+                          onClick={() => selectDungeonTemplate(d)}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '12px' }}
+                        >
+                          <span>{d.name}</span>
+                          {isActive && (
+                            <span
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                fontSize: '11px',
+                                color: '#10b981',
+                                fontWeight: 'bold'
+                              }}
+                              title={`${totalOnline} player(s) active in live instance`}
+                            >
+                              <span style={{
+                                width: '9px',
+                                height: '9px',
+                                borderRadius: '50%',
+                                backgroundColor: '#10b981',
+                                boxShadow: '0 0 10px #10b981'
+                              }} />
+                              {totalOnline} online
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -896,8 +941,15 @@ export default function LandingPage(props) {
                             style={{ cursor: 'pointer' }}
                             title={`Click to view profile & stats for ${member.name}`}
                           >
-                            <div className={`selected-crew-avatar-wrapper type-${String(member.type || member.image || '').toLowerCase()}${member.isLeader ? ' is-leader' : ''}`}>
-                              <img src={member.portrait || member.image} alt={member.name} className="crew-avatar-img" />
+                            <div
+                              className={`selected-crew-avatar-wrapper type-${String(member.type || member.image || '').toLowerCase()}${member.isLeader ? ' is-leader' : ''}`}
+                              style={{
+                                backgroundImage: getCrewPortraitBackground(member.portrait, member.type || member.image),
+                                backgroundSize: 'cover',
+                                backgroundPosition: 'center'
+                              }}
+                            >
+                              <img src={member.portrait || member.image} alt={member.name} className="crew-avatar-img" onError={(e) => { e.target.style.display = 'none'; }} />
                             </div>
                             <span className="selected-crew-name" title={member.name}>
                               {member.name}

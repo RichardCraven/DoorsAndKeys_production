@@ -162,11 +162,11 @@ const runBotSimulation = async (username, password) => {
     
     const page = await browser.newPage();
     
-    // Optimize memory by blocking images, CSS, and fonts
+    // Optimize memory by blocking media (audio/video) but keep visuals for replays
     await page.setRequestInterception(true);
     page.on('request', (req) => {
       const type = req.resourceType();
-      if (type === 'image' || type === 'stylesheet' || type === 'font' || type === 'media') {
+      if (type === 'media') {
         req.abort();
       } else {
         req.continue();
