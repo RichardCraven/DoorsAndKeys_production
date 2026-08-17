@@ -320,6 +320,19 @@ const loadAllDungeonsRequest = (id) => {
       return { status: 500, data: [], error: err };
     })
 }
+const getActivePresenceRequest = () => {
+  return axios.get(API_BASE + "/api/dungeons/active-presence", { timeout: 10000 })
+    .then(res => {
+      if (res.status === 200) {
+        return res;
+      }
+      return { status: res.status, data: {} };
+    })
+    .catch(err => {
+      console.log(err);
+      return { status: 500, data: {}, error: err };
+    });
+}
 const loadDungeonRequest = (id) => {
   return axios.get(API_BASE + "/api/dungeons/"+id, { timeout: 15000 })
     .then(res=>{
@@ -421,5 +434,6 @@ export {
   getBotReplaysRequest,
   deleteAllBotReplaysRequest,
   checkDungeonBackupRequest,
-  restoreDungeonBackupRequest
+  restoreDungeonBackupRequest,
+  getActivePresenceRequest
 };

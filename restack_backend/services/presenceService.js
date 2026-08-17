@@ -85,10 +85,19 @@ const getPlayerBySocketId = (socketId) => {
   return dungeonRoom ? dungeonRoom.get(socketId) : null;
 };
 
+const getAllPresenceSummary = () => {
+  const summary = {};
+  for (const [dungeonId, room] of dungeonPresenceMap.entries()) {
+    summary[dungeonId] = room.size;
+  }
+  return summary;
+};
+
 module.exports = {
   addPlayer,
   updatePlayerLocation,
   removePlayer,
   getPlayersInDungeon,
-  getPlayerBySocketId
+  getPlayerBySocketId,
+  getAllPresenceSummary
 };

@@ -2482,3 +2482,25 @@ export {
     eidolon_death7,
 };
 
+const portraitMap = {
+    barbarian: barbarian_portrait || barbarian,
+    soldier: soldier_portrait || soldier,
+    monk: monk_portrait || monk,
+    wizard: wizard_portrait || wizard,
+    ranger: ranger_portrait || ranger,
+    rogue: ranger_portrait || ranger,
+    sage: sage_portrait || sage,
+    engineer: engineer,
+    summoner: summoner
+};
+
+export const getCrewPortraitBackground = (portraitUrl, classType) => {
+    const key = (classType || '').toLowerCase().replace('-', '_');
+    const fallback = portraitMap[key] || soldier_portrait || soldier || '';
+    if (portraitUrl && fallback && portraitUrl !== fallback) {
+        return `url("${portraitUrl}"), url("${fallback}")`;
+    }
+    return `url("${portraitUrl || fallback}")`;
+};
+
+

@@ -11927,11 +11927,12 @@ class DungeonPage extends React.Component {
         }
 
         // Try to match active shared instances of this template (formatted like `${selectedDungeon.name}_[0-9]{4}`)
-        // or the legacy user-specific format (`${selectedDungeon.name}_[^_]+_[a-fA-F0-9]{4}`)
-        const sharedRegex = new RegExp(`^${selectedDungeon.name}_\\d{4}$`, 'i');
-        const legacyRegex = new RegExp(`^${selectedDungeon.name}_[^_]+_[a-zA-Z0-9]{4}$`, 'i');
+        const baseTemplateName = (selectedDungeon.name || '').split('_')[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const sharedRegex = new RegExp(`^${baseTemplateName}_\\d{4}$`, 'i');
+        const legacyRegex = new RegExp(`^${baseTemplateName}_[^_]+_[a-zA-Z0-9]{4}$`, 'i');
 
-        let matchedDungeon = dungeons.find(d => sharedRegex.test(d.name) || legacyRegex.test(d.name));
+        let matchedInstances = dungeons.filter(d => sharedRegex.test(d.name) || legacyRegex.test(d.name));
+        let matchedDungeon = matchedInstances.length > 0 ? matchedInstances[matchedInstances.length - 1] : null;
 
         if (matchedDungeon) {
             console.log(`Found active shared dungeon instance: ${matchedDungeon.name} (${matchedDungeon.id})`);
@@ -19189,7 +19190,7 @@ class DungeonPage extends React.Component {
                                 letterSpacing: '1px',
                                 textShadow: '0 2px 4px rgba(0,0,0,0.8)'
                             }}>
-                                {this.props.boardManager.dungeon.name.replace(/_[0-9]{4}$/, '').replace(/_/g, ' ')}
+                                {this.props.boardManager.dungeon.name.replace(/_/g, ' ')}
                             </div>
                         )}
                         {this.renderPanelSections('right')}
@@ -19365,11 +19366,16 @@ class DungeonPage extends React.Component {
                         {Array.from(this.state.peerPlayers?.values() || []).map((peer) => {
                             if (!peer || !peer.location) return null;
                             const bm = this.props.boardManager;
+                            const normOrient = (o) => {
+                                if (!o) return 'front';
+                                const s = String(o).toLowerCase();
+                                return (s === 'f' || s === 'front') ? 'front' : ((s === 'b' || s === 'back') ? 'back' : s);
+                            };
                             const currentLevelId = bm?.currentLevel?.id ?? 0;
-                            const currentOrientation = bm?.currentOrientation === 'B' ? 'back' : 'front';
+                            const currentOrientation = normOrient(bm?.currentOrientation);
 
                             const peerLevel = peer.location.levelId ?? 0;
-                            const peerOrientation = peer.location.orientation || 'front';
+                            const peerOrientation = normOrient(peer.location.orientation);
 
                             if (String(peerLevel) !== String(currentLevelId) || peerOrientation !== currentOrientation) {
                                 return null;

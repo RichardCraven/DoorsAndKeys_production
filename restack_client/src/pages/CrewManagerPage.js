@@ -9,6 +9,7 @@ import {
     //   addDungeonRequest
 } from '../utils/api-handler';
 import { InventoryManager } from '../utils/inventory-manager';
+import { getCrewPortraitBackground } from '../utils/images';
 import '../styles/codex.scss';
 
 const renderPowerRatingsPanel = (crewMember) => {
@@ -602,7 +603,7 @@ class CrewManagerPage extends React.Component {
                                     <div
                                         className={`portrait${isSelected ? ' selected' : ''}`}
                                         key={i}
-                                        style={{ backgroundImage: "url(" + e.portrait + ")", position: 'relative' }}
+                                        style={{ backgroundImage: getCrewPortraitBackground(e.portrait, e.type || e.image), position: 'relative' }}
                                         onClick={(event) => this.selectCrewMember(event, e)}
                                     >
                                         <span style={{
@@ -630,7 +631,7 @@ class CrewManagerPage extends React.Component {
                                     <div
                                         className="giant-portrait"
                                         style={{
-                                            backgroundImage: "url(" + this.state.selectedCrewMember.portrait + ")",
+                                            backgroundImage: getCrewPortraitBackground(this.state.selectedCrewMember.portrait, this.state.selectedCrewMember.type || this.state.selectedCrewMember.image),
                                             ...(this.state.selectedCrewMember.name === 'Sardonis' ? {
                                                 backgroundSize: '90% 90%',
                                                 backgroundPosition: 'center'
@@ -770,7 +771,7 @@ class CrewManagerPage extends React.Component {
                                             </div>
                                         )}
                                         {member && (
-                                            <div className="portrait" style={{ backgroundImage: "url(" + member.portrait + ")", position: 'relative', width: '100%', height: '100%' }}>
+                                            <div className="portrait" style={{ backgroundImage: getCrewPortraitBackground(member.portrait, member.type || member.image), position: 'relative', width: '100%', height: '100%' }}>
                                                 <span style={{
                                                     position: 'absolute',
                                                     bottom: '2px',

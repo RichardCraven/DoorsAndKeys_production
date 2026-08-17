@@ -1,5 +1,11 @@
 
 const dungeonSchema = require('../models/dungeon.model')
+const presenceService = require('../services/presenceService')
+
+exports.getActivePresence = (req, res) => {
+  const activeCounts = presenceService.getAllPresenceSummary ? presenceService.getAllPresenceSummary() : {};
+  res.json(activeCounts);
+};
 
 exports.create = (req, res, next) => {
   req.body.content = req.body.dungeon
