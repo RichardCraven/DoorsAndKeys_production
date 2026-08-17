@@ -1,3 +1,10 @@
+// Polyfill legacy SlowBuffer for Node.js 20+ / 22+ / 26+ compatibility on Render
+const { Buffer } = require('buffer');
+if (typeof global.SlowBuffer === 'undefined') {
+  global.SlowBuffer = class SlowBuffer extends Buffer {};
+  if (!global.SlowBuffer.prototype) global.SlowBuffer.prototype = Buffer.prototype;
+}
+
 require('dotenv').config({ path: __dirname + '/.env' }); 
 const express = require("express");
 const http = require("http");

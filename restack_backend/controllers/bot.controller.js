@@ -272,11 +272,11 @@ const runBotSimulation = async (username, password) => {
             const dirs = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
             const dir = dirs[Math.floor(Math.random() * dirs.length)];
             await page.keyboard.press(dir);
-            logAction(`Pressed movement key: ${dir.replace('Arrow', '')}`);
+            logAction(`Pressed movement key: ${dir.replace('Arrow', '')}`, screenshotBase64);
         } else if (action) {
-            logAction(`Clicked: ${action}`);
+            logAction(`Clicked: ${action}`, screenshotBase64);
         } else {
-            logAction("No actions available.");
+            logAction("No actions available.", screenshotBase64);
         }
 
         // Sleep to simulate human delay, reduced by 50%
