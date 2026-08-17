@@ -123,7 +123,7 @@ const runBotSimulation = async (username, password) => {
   let consecutiveMovements = 0;
   let firstMovementTime = null;
 
-  const logAction = (msg) => {
+  const logAction = (msg, screenshotBase64 = null) => {
     if (msg.startsWith('Pressed movement key:')) {
       consecutiveMovements++;
       if (!firstMovementTime) firstMovementTime = Date.now();
@@ -134,14 +134,14 @@ const runBotSimulation = async (username, password) => {
       const moveMsg = `Movement (${consecutiveMovements})`;
       console.log(`[Bot ${username}] ${moveMsg}`);
       actionLog.push(`[${new Date(firstMovementTime).toLocaleTimeString()}] ${moveMsg}`);
-      replayEvents.push({ timestamp: firstMovementTime, action: moveMsg });
+      replayEvents.push({ timestamp: firstMovementTime, action: moveMsg, screenshot: screenshotBase64 });
       consecutiveMovements = 0;
       firstMovementTime = null;
     }
 
     console.log(`[Bot ${username}] ${msg}`);
     actionLog.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
-    replayEvents.push({ timestamp: Date.now(), action: msg });
+    replayEvents.push({ timestamp: Date.now(), action: msg, screenshot: screenshotBase64 });
   };
 
   logAction("Starting simulation...");
@@ -204,6 +204,13 @@ const runBotSimulation = async (username, password) => {
     
     logAction("Entering game loop...");
     while (runTime < MAX_RUN_TIME) {
+        let screenshotBase64 = null;
+        try {
+            screenshotBase64 = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 30 });
+        } catch (e) {
+            console.error(`[Bot ${username}] Failed to take screenshot`, e.message);
+        }
+
         const action = await page.evaluate(() => {
             // First check if we need to select a dungeon
             const trigger = document.querySelector('.custom-select-trigger');
@@ -265,11 +272,11 @@ const runBotSimulation = async (username, password) => {
             const dirs = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
             const dir = dirs[Math.floor(Math.random() * dirs.length)];
             await page.keyboard.press(dir);
-            logAction(`Pressed movement key: ${dir.replace('Arrow', '')}`);
+            logAction(`Pressed movement key: ${dir.replace('Arrow', '')}`, screenshotBase64);
         } else if (action) {
-            logAction(`Clicked: ${action}`);
+            logAction(`Clicked: ${action}`, screenshotBase64);
         } else {
-            logAction("No actions available.");
+            logAction("No actions available.", screenshotBase64);
         }
 
         // Sleep to simulate human delay, reduced by 50%

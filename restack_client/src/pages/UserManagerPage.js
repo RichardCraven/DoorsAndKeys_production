@@ -437,40 +437,58 @@ class UserManagerPage extends React.Component {
           Exit Replay
         </button>
 
-        <div style={{ width: '700px', maxWidth: '90%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ width: '1000px', maxWidth: '95%', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <h2 style={{ color: '#e5b54f', textAlign: 'center', margin: '0 0 10px 0', fontSize: '24px', letterSpacing: '2px' }}>
             {playingReplay.botUsername}
           </h2>
           
           <div style={{
-            background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
-            padding: '24px', height: '360px', overflow: 'hidden',
-            display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-            boxShadow: 'inset 0 0 40px rgba(0,0,0,0.8), 0 10px 30px rgba(0,0,0,0.5)'
+            position: 'relative',
+            background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px',
+            overflow: 'hidden', width: '100%', aspectRatio: '16/9',
+            boxShadow: '0 10px 50px rgba(0,0,0,0.8), inset 0 0 100px rgba(0,255,255,0.03)'
           }}>
-            {recentActions.map((act, i) => {
-              const isLast = i === recentActions.length - 1;
-              return (
-                <div key={i} style={{
-                  padding: '10px 0',
-                  color: isLast ? '#fff' : 'rgba(255,255,255,0.3)',
-                  fontSize: isLast ? '22px' : '15px',
-                  borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.03)',
-                  transformOrigin: 'left',
-                  transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
-                  fontWeight: isLast ? '700' : '400',
-                  textShadow: isLast ? '0 0 10px rgba(255,255,255,0.2)' : 'none',
-                  display: 'flex', gap: '15px'
-                }}>
-                  <span style={{ color: isLast ? '#00ffff' : 'rgba(0,255,255,0.3)', whiteSpace: 'nowrap' }}>
-                    [{new Date(act.timestamp).toLocaleTimeString()}]
-                  </span>
-                  <span style={{ color: isLast ? '#fff' : 'inherit' }}>
-                    {act.action}
-                  </span>
-                </div>
-              );
-            })}
+            {action && action.screenshot ? (
+              <img 
+                src={`data:image/jpeg;base64,${action.screenshot}`} 
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                alt="Replay Frame"
+              />
+            ) : (
+              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontStyle: 'italic', fontSize: '18px' }}>
+                [ No Visual Data Available ]
+              </div>
+            )}
+            
+            <div style={{
+              position: 'absolute', bottom: 0, left: 0, width: '100%',
+              background: 'linear-gradient(transparent, rgba(0,0,0,0.95) 70%, #000 100%)',
+              padding: '60px 24px 24px 24px',
+              display: 'flex', flexDirection: 'column', gap: '6px'
+            }}>
+              {recentActions.slice(-3).map((act, i, arr) => {
+                const isLast = i === arr.length - 1;
+                return (
+                  <div key={i} style={{
+                    color: isLast ? '#fff' : 'rgba(255,255,255,0.4)',
+                    fontSize: isLast ? '22px' : '15px',
+                    fontWeight: isLast ? '700' : '400',
+                    textShadow: '0 2px 8px #000',
+                    display: 'flex', gap: '15px',
+                    transform: isLast ? 'scale(1)' : 'scale(0.98)',
+                    transformOrigin: 'left',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <span style={{ color: isLast ? '#00ffff' : 'rgba(0,255,255,0.4)', whiteSpace: 'nowrap' }}>
+                      [{new Date(act.timestamp).toLocaleTimeString()}]
+                    </span>
+                    <span style={{ color: isLast ? '#fff' : 'inherit' }}>
+                      {act.action}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
           
           <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
