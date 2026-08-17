@@ -3,7 +3,7 @@ const presenceService = require('../services/presenceService');
 module.exports = function registerDungeonPresence(io, socket) {
   // Client joins a dungeon instance
   socket.on('dungeon:join', (payload = {}) => {
-    const { dungeonId, userId, username, location, crewSummary } = payload;
+    const { dungeonId, dungeonName, userId, username, location, crewSummary } = payload;
     if (!dungeonId) return;
 
     const roomName = `dungeon:${dungeonId}`;
@@ -29,14 +29,17 @@ module.exports = function registerDungeonPresence(io, socket) {
       userId || socket.userId,
       username || socket.username,
       location,
-      crewSummary
+      crewSummary,
+      dungeonName
     );
 
-    // 1. Send snapshot of all current players in this dungeon to the joining player
+    // 1. Send snapshot of all current players and generator tile states in this dungeon to joining player
     const allPlayersInDungeon = presenceService.getPlayersInDungeon(dungeonId);
+    const allTileStates = presenceService.getTileStatesInDungeon(dungeonId);
     socket.emit('dungeon:presence_snapshot', {
       dungeonId,
-      players: allPlayersInDungeon
+      players: allPlayersInDungeon,
+      tileStates: allTileStates
     });
 
     // 2. Broadcast to all other players in room that a new player joined
@@ -70,6 +73,57 @@ module.exports = function registerDungeonPresence(io, socket) {
         userId: updateInfo.playerState.userId,
         socketId: socket.id,
         location: updateInfo.playerState.location
+      });
+    }
+  });
+
+  socket.on('dungeon:tile_updated', (payload = {}) => {
+    const { dungeonId, tileId, generatorData } = payload;
+    if (!dungeonId || tileId === undefined || tileId === null) return;
+
+    presenceService.updateTileState(dungeonId, tileId, generatorData);
+
+    const roomName = `dungeon:${dungeonId}`;
+    socket.to(roomName).emit('dungeon:tile_updated', payload);
+  });
+
+  // Chat socket handlers
+  socket.on('chat:invite_send', (payload = {}) => {
+    const { targetSocketId, targetUserId, senderName } = payload;
+    if (targetSocketId) {
+      io.to(targetSocketId).emit('chat:invite_received', {
+        senderSocketId: socket.id,
+        senderUserId: socket.userId,
+        senderName: senderName || socket.username || 'Peer Explorer'
+      });
+    }
+  });
+
+  socket.on('chat:invite_response', (payload = {}) => {
+    const { senderSocketId, accepted } = payload;
+    if (senderSocketId) {
+      if (accepted) {
+        io.to(senderSocketId).emit('chat:invite_accepted', {
+          targetSocketId: socket.id,
+          targetUserId: socket.userId,
+          targetUsername: socket.username || 'Peer Explorer'
+        });
+      } else {
+        io.to(senderSocketId).emit('chat:invite_declined', {
+          targetSocketId: socket.id
+        });
+      }
+    }
+  });
+
+  socket.on('chat:message_send', (payload = {}) => {
+    const { targetSocketId, text, senderName } = payload;
+    if (targetSocketId && text) {
+      io.to(targetSocketId).emit('chat:message_received', {
+        senderSocketId: socket.id,
+        senderName: senderName || socket.username || 'Peer Explorer',
+        text,
+        timestamp: new Date().toISOString()
       });
     }
   });

@@ -27,8 +27,8 @@ const registerRequest = (regObj) => {
         return(err)
       })
 }
-const generateBotRequest = () => {
-    return axios.post(API_BASE + "/api/bots/generate")
+const generateBotRequest = (options) => {
+    return axios.post(API_BASE + "/api/bots/generate", options)
       .then(res=>{
         if(res.status === 200){
             return(res)

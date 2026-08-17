@@ -1729,6 +1729,33 @@ const skillsMatrix = {
         atkPercentage: 100,
         type: 'damage'
     },
+    // Gorgon
+    snake_strike: {
+        id: 'snake_strike',
+        tier: 1,
+        name: 'Snake Strike',
+        desc: 'Serpentine strikes that bite swift and deep, dealing physical damage with a chance to inflict poison.',
+        icon: images['bite'] || images['claws'],
+        cooldown: 3,
+        duration: 'instant',
+        range: 'close',
+        atkPercentage: 125,
+        type: 'damage',
+        effect: { type: 'poison', chance: 75, duration: 'medium' }
+    },
+    petrify: {
+        id: 'petrify',
+        tier: 2,
+        name: 'Petrify',
+        desc: 'Lock eyes with the Gorgon, turning the target into solid stone. The petrified unit cannot act, move, or take damage for 2 rounds.',
+        icon: images['stone_rune'] || images['earthen_rune'] || images['archaic_rune'],
+        cooldown: 10,
+        initialCooldown: 2,
+        duration: 'short',
+        range: 'medium',
+        type: 'debuff',
+        effect: { type: 'petrify', chance: 100, duration: 8 }
+    },
     // Vampire
     vampiric_bite: {
         id: 'vampiric_bite',

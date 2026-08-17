@@ -4,6 +4,7 @@ class SocketHandler {
   constructor() {
     this.socket = null;
     this.currentDungeonId = null;
+    this.lastJoinArgs = null;
   }
 
   connect(userObj = {}) {
@@ -28,6 +29,10 @@ class SocketHandler {
 
     this.socket.on('connect', () => {
       console.log('[SocketHandler] Connected with ID:', this.socket.id);
+      if (this.currentDungeonId && this.lastJoinArgs) {
+        console.log('[SocketHandler] Re-joining dungeon on socket connect/reconnect...');
+        this.emit('dungeon:join', this.lastJoinArgs);
+      }
     });
 
     this.socket.on('connect_error', (err) => {
@@ -46,27 +51,33 @@ class SocketHandler {
       this.socket.disconnect();
       this.socket = null;
       this.currentDungeonId = null;
+      this.lastJoinArgs = null;
     }
   }
 
-  joinDungeon(dungeonId, userId, username, location, crewSummary = []) {
-    if (!this.socket) {
-      this.connect({ id: userId, username });
-    }
+  joinDungeon(dungeonId, userId, username, location, crewSummary = [], dungeonName = null) {
     this.currentDungeonId = dungeonId;
-    this.emit('dungeon:join', {
+    this.lastJoinArgs = {
       dungeonId,
+      dungeonName,
       userId,
       username,
       location,
       crewSummary
-    });
+    };
+    if (!this.socket) {
+      this.connect({ id: userId, username });
+    } else if (this.socket.connected) {
+      console.log(`[PresenceDiagnostic] Emitting dungeon:join event: dungeonId="${dungeonId}", dungeonName="${dungeonName}", userId="${userId}", username="${username}" (socketId: ${this.socket?.id})`);
+      this.emit('dungeon:join', this.lastJoinArgs);
+    }
   }
 
   leaveDungeon() {
     if (this.socket && this.currentDungeonId) {
       this.emit('dungeon:leave', { dungeonId: this.currentDungeonId });
       this.currentDungeonId = null;
+      this.lastJoinArgs = null;
     }
   }
 
@@ -79,7 +90,52 @@ class SocketHandler {
     }
   }
 
+  sendTileUpdate(tileId, generatorData, location = null, contains = null, building = null) {
+    if (this.socket && this.currentDungeonId) {
+      this.emit('dungeon:tile_updated', {
+        dungeonId: this.currentDungeonId,
+        tileId,
+        generatorData,
+        location,
+        contains,
+        building
+      });
+    }
+  }
+
   // PvP Combat Methods
+  sendChatInvite(targetSocketId, targetUserId, senderName) {
+    if (this.socket) {
+      this.emit('chat:invite_send', {
+        targetSocketId,
+        targetUserId,
+        senderName,
+        dungeonId: this.currentDungeonId
+      });
+    }
+  }
+
+  respondChatInvite(senderSocketId, accepted) {
+    if (this.socket) {
+      this.emit('chat:invite_response', {
+        senderSocketId,
+        accepted,
+        dungeonId: this.currentDungeonId
+      });
+    }
+  }
+
+  sendChatMessage(targetSocketId, text, senderName) {
+    if (this.socket) {
+      this.emit('chat:message_send', {
+        targetSocketId,
+        text,
+        senderName,
+        dungeonId: this.currentDungeonId
+      });
+    }
+  }
+
   sendPvPChallenge(targetSocketId, targetUserId, challengerCrew = []) {
     if (this.socket) {
       this.emit('pvp:challenge_send', {

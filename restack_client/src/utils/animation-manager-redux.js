@@ -485,11 +485,78 @@ export class AnimationManagerRedux {
       case 'mimicry':
         this._mimicryDazzle(sourceCoords, targetCoords);
         break;
+      case 'snake_strike':
+        this._snakeStrike(sourceCoords, targetCoords, sourceUnitId);
+        break;
+      case 'petrify':
+      case 'petrifying_gaze':
+        this._petrifyGaze(sourceCoords, targetCoords, sourceUnitId);
+        break;
       default:
         // Generic melee hit for unknown abilities
         this._genericHit(sourceCoords, targetCoords);
         break;
     }
+  }
+
+  _snakeStrike(src, tgt, sourceUnitId = null) {
+    const srcPx = this._px(src);
+    const tgtPx = this._px(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const midPx = { x: srcPx.x + dx * 0.6, y: srcPx.y + dy * 0.6 };
+    const angle = (Math.atan2(dy, dx) * (180 / Math.PI)) + 180;
+
+    // Phase 1: Rapid serpentine viper strike arc towards target
+    this._emit({
+      type: 'snake_strike_swipe',
+      srcPx,
+      tgtPx,
+      midPx,
+      angle,
+      duration: 650,
+      sourceUnitId,
+    });
+
+    // Phase 2: Venomous bite/strike hit burst overlay on target
+    this._delay(() => {
+      this._emit({
+        type: 'snake_strike_hit',
+        tgtPx,
+        duration: 500,
+        sourceUnitId,
+      });
+    }, 450);
+  }
+
+  _petrifyGaze(src, tgt, sourceUnitId = null) {
+    const srcPx = this._px(src);
+    const tgtPx = this._getImpactTargetPx(tgt);
+    const dx = tgtPx.x - srcPx.x;
+    const dy = tgtPx.y - srcPx.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+
+    // Phase 1: Petrifying emerald gaze beam from Gorgon to target
+    this._emit({
+      type: 'petrify_gaze_beam',
+      srcPx,
+      tgtPx,
+      length,
+      angle,
+      duration: 1100,
+      sourceUnitId,
+    });
+
+    // Phase 2: Stone encasement / slab burst on target
+    this._delay(() => {
+      this._emit({
+        type: 'petrify_stone_burst',
+        tgtPx,
+        duration: 1200,
+        sourceUnitId,
+      });
+    }, 450);
   }
 
   _mimicryDazzle(src, tgt) {

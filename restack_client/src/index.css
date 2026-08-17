@@ -122,3 +122,15 @@ img[src*="burst_shot"], [style*="burst_shot"] {
   border-color: rgba(255, 255, 255, 0.3);
   color: #fff;
 }
+
+@keyframes constructPulse {
+    0% { transform: scale(0.9); opacity: 0.8; }
+    50% { transform: scale(1.1); opacity: 1; box-shadow: 0 0 10px #e5b54f; }
+    100% { transform: scale(0.9); opacity: 0.8; }
+}
+
+@keyframes buildingPulse {
+    0% { transform: scale(1.0); filter: drop-shadow(0 0 2px rgba(229, 181, 79, 0.4)); }
+    50% { transform: scale(2.0); filter: drop-shadow(0 0 12px rgba(229, 181, 79, 0.9)); }
+    100% { transform: scale(1.0); filter: drop-shadow(0 0 2px rgba(229, 181, 79, 0.4)); }
+}

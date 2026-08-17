@@ -375,7 +375,7 @@ export function BoardManager(){
         const img = tile.image || tile.contains?.image;
 
         // 'hut' and 'buildable_hut' are EXPLICITLY passable
-        if (containsSubtype === 'hut' || containsSubtype === 'buildable_hut' || bldg === 'hut' || img === 'hut' || img === 'buildable_hut') {
+        if (containsSubtype === 'hut' || containsSubtype === 'hut_under_construction' || containsSubtype === 'buildable_hut' || bldg === 'hut' || bldg === 'hut_under_construction' || img === 'hut' || img === 'buildable_hut') {
             return false;
         }
 
@@ -1384,18 +1384,20 @@ export function BoardManager(){
     }
     // Respawn items based on a template (separate flow from monsters)
     this.respawnItems = (template) => {
-        if(!template || !template.levels) return
-        let currentOrientation = this.currentOrientation
-        let currentLevel = currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back
-        let foundTemplatePlane;
-        template.levels.forEach((templateLevel, templateIndex)=>{
-            let front = templateLevel.front
-            let back = templateLevel.back
-            let relevantPlane = currentOrientation === 'F' ? front : back
-            if(relevantPlane.name === currentLevel.name){
-                foundTemplatePlane = relevantPlane
+        if (!template || !template.levels || !this.currentLevel) return;
+        let currentOrientation = this.currentOrientation;
+        let currentLevel = currentOrientation === 'F' ? (this.currentLevel.front || this.currentLevel) : (this.currentLevel.back || this.currentLevel);
+        if (!currentLevel) return;
+        let foundTemplatePlane = null;
+        template.levels.forEach((templateLevel) => {
+            if (!templateLevel) return;
+            let front = templateLevel.front;
+            let back = templateLevel.back;
+            let relevantPlane = currentOrientation === 'F' ? front : back;
+            if (relevantPlane && currentLevel && relevantPlane.name === currentLevel.name) {
+                foundTemplatePlane = relevantPlane;
             }
-        })
+        });
         let templateBoard = foundTemplatePlane && foundTemplatePlane.miniboards && foundTemplatePlane.miniboards[this.playerTile.boardIndex]
         // Normalize the templateBoard for legacy shapes
         try { this.normalizeBoardTiles(templateBoard); } catch (e) {}
@@ -1603,19 +1605,35 @@ export function BoardManager(){
             return item;
         }
         let spawnCoords = (spawnTileIndex !== null && spawnTileIndex !== undefined) ? this.getCoordinatesFromIndex(spawnTileIndex) : null;
-        if (boardIndex !== null && boardIndex !== undefined) {
-            if (!this.playerTile) this.playerTile = {};
-            this.playerTile.boardIndex = boardIndex;
-        }
-        if (spawnCoords) {
-            if (!this.playerTile) this.playerTile = {};
-            this.playerTile.location = spawnCoords;
-        }
         let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
         if (!plane) {
             plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
         }
-        let board = plane && plane.miniboards ? plane.miniboards[boardIndex] : null;
+        let board = null;
+        let resolvedBoardIndex = boardIndex;
+        if (plane && Array.isArray(plane.miniboards)) {
+            if (typeof boardIndex === 'number' || (typeof boardIndex === 'string' && !isNaN(boardIndex) && String(Number(boardIndex)) === String(boardIndex))) {
+                resolvedBoardIndex = Number(boardIndex);
+                board = plane.miniboards[resolvedBoardIndex] || null;
+            } else if (typeof boardIndex === 'string') {
+                const foundIdx = plane.miniboards.findIndex(b => b && (b.id === boardIndex || b._id === boardIndex));
+                if (foundIdx !== -1) {
+                    resolvedBoardIndex = foundIdx;
+                    board = plane.miniboards[foundIdx];
+                } else {
+                    board = plane.miniboards[boardIndex] || plane.miniboards[0] || null;
+                    if (board) resolvedBoardIndex = plane.miniboards.indexOf(board);
+                }
+            }
+        } else if (plane && plane.miniboards) {
+            board = plane.miniboards[boardIndex] || null;
+        }
+
+        if (boardIndex !== null && boardIndex !== undefined) {
+            if (!this.playerTile) this.playerTile = {};
+            this.playerTile.boardIndex = (resolvedBoardIndex !== undefined && resolvedBoardIndex !== null) ? resolvedBoardIndex : boardIndex;
+        }
+
         if (!board) {
             console.error("initializeTilesFromMap: No board found at index", boardIndex, "on level/plane", this.currentLevel, this.currentOrientation);
             return;
@@ -2765,6 +2783,40 @@ export function BoardManager(){
 
 
     }
+    this.isPeerTileOccupied = (coords) => {
+        try {
+            if (!coords || typeof this.getPeerPlayers !== 'function') return false;
+            const peersMap = this.getPeerPlayers();
+            if (!peersMap || peersMap.size === 0) return false;
+
+            const currentBoardIndex = this.playerTile?.boardIndex ?? 0;
+            const currentOrientation = this.currentOrientation === 'B' ? 'back' : 'front';
+            const currentLevelId = this.currentLevel?.id ?? 0;
+            const targetTileIndex = this.getIndexFromCoordinates(coords);
+
+            for (const [key, peer] of peersMap.entries()) {
+                if (!peer || !peer.location) continue;
+                const loc = peer.location;
+
+                if (loc.levelId !== undefined && String(loc.levelId) !== String(currentLevelId)) continue;
+                if (loc.orientation && loc.orientation !== currentOrientation) continue;
+                if (loc.boardIndex !== undefined && Number(loc.boardIndex) !== Number(currentBoardIndex)) continue;
+
+                let pTileIdx = Number(loc.tileIndex);
+                if (isNaN(pTileIdx)) {
+                    pTileIdx = (Number(loc.y) * 15) + Number(loc.x);
+                }
+
+                if (pTileIdx === targetTileIndex) {
+                    return peer;
+                }
+            }
+            return false;
+        } catch (e) {
+            return false;
+        }
+    };
+
     // Check if movement to destination coordinates would be blocked
     // Returns true if blocked, false if movement is allowed
     this.isMovementBlocked = (destinationCoords) => {
@@ -2783,6 +2835,8 @@ export function BoardManager(){
             
             const type = this.getContainsType(destTile.contains);
             const gateType = this.getGateTypeFromTile(destTile);
+
+            if (this.isPeerTileOccupied(destinationCoords)) return true;
             
             // Check for void wall
             if (type === 'void') return true;
@@ -2804,6 +2858,16 @@ export function BoardManager(){
         }
     }
     this.move = (destinationCoords, direction) => {
+        const occupiedPeer = this.isPeerTileOccupied(destinationCoords);
+        if (occupiedPeer) {
+            try {
+                if (typeof this.handlePeerTileInteraction === 'function') {
+                    this.handlePeerTileInteraction(occupiedPeer, destinationCoords);
+                }
+            } catch (e) {}
+            return;
+        }
+
         const tile = this.tiles[this.getIndexFromCoordinates(this.playerTile.location)];
         const destinationIndex = this.getIndexFromCoordinates(destinationCoords);
         const destinationTile = this.tiles[destinationIndex];

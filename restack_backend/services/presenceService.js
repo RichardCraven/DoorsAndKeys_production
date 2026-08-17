@@ -7,8 +7,10 @@
 const dungeonPresenceMap = new Map();
 // socketToDungeonMap: socketId -> { dungeonId, userId }
 const socketToDungeonMap = new Map();
+// dungeonTileStatesMap: dungeonId -> Map(tileId -> generatorData)
+const dungeonTileStatesMap = new Map();
 
-const addPlayer = (dungeonId, socketId, userId, username, location, crewSummary = []) => {
+const addPlayer = (dungeonId, socketId, userId, username, location, crewSummary = [], dungeonName = null) => {
   if (!dungeonId || !socketId) return null;
 
   const dKey = String(dungeonId);
@@ -21,15 +23,16 @@ const addPlayer = (dungeonId, socketId, userId, username, location, crewSummary 
     socketId,
     userId: userId || socketId,
     username: username || 'Explorer',
+    dungeonName: dungeonName || (location && location.dungeonName) || null,
     location: location || { levelId: 0, orientation: 'front', tileIndex: 0, x: 0, y: 0 },
     crewSummary: Array.isArray(crewSummary) ? crewSummary : [],
     lastUpdated: Date.now()
   };
 
   dungeonRoom.set(socketId, playerState);
-  socketToDungeonMap.set(socketId, { dungeonId: dKey, userId: playerState.userId });
+  socketToDungeonMap.set(socketId, { dungeonId: dKey, userId: playerState.userId, dungeonName: playerState.dungeonName });
 
-  console.log(`[PresenceService] User '${playerState.username}' (${socketId}) joined dungeon '${dKey}'`);
+  console.log(`[PresenceService] User '${playerState.username}' (${socketId}) joined dungeon '${dKey}' (dungeonName: '${playerState.dungeonName}')`);
   return playerState;
 };
 
@@ -88,9 +91,43 @@ const getPlayerBySocketId = (socketId) => {
 const getAllPresenceSummary = () => {
   const summary = {};
   for (const [dungeonId, room] of dungeonPresenceMap.entries()) {
-    summary[dungeonId] = room.size;
+    const size = room.size;
+    if (!size) continue;
+
+    summary[dungeonId] = size;
+
+    for (const playerState of room.values()) {
+      if (playerState.dungeonName) {
+        const dName = String(playerState.dungeonName).trim();
+        summary[dName] = (summary[dName] || 0) + size;
+
+        if (dName.includes('_')) {
+          const baseName = dName.split('_')[0];
+          if (baseName && baseName !== dName) {
+            summary[baseName] = (summary[baseName] || 0) + size;
+          }
+        }
+      }
+    }
   }
   return summary;
+};
+
+const updateTileState = (dungeonId, tileId, generatorData) => {
+  if (!dungeonId || tileId === undefined || tileId === null) return;
+  const dKey = String(dungeonId);
+  if (!dungeonTileStatesMap.has(dKey)) {
+    dungeonTileStatesMap.set(dKey, new Map());
+  }
+  const tileMap = dungeonTileStatesMap.get(dKey);
+  tileMap.set(Number(tileId), { ...generatorData, tileId: Number(tileId) });
+};
+
+const getTileStatesInDungeon = (dungeonId) => {
+  const dKey = String(dungeonId);
+  const tileMap = dungeonTileStatesMap.get(dKey);
+  if (!tileMap) return [];
+  return Array.from(tileMap.values());
 };
 
 module.exports = {
@@ -99,5 +136,7 @@ module.exports = {
   removePlayer,
   getPlayersInDungeon,
   getPlayerBySocketId,
-  getAllPresenceSummary
+  getAllPresenceSummary,
+  updateTileState,
+  getTileStatesInDungeon
 };
