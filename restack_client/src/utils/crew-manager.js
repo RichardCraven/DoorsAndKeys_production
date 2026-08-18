@@ -101,9 +101,10 @@ export function CrewManager() {
             // Engineer starts with construct skills & master_builder passive (migration-safe)
             if ((member.type || member.image) === 'engineer') {
                 if (!Array.isArray(member.skills)) member.skills = [];
-                ['build_turret', 'build_walker', 'build_wall', 'engineer_repair', 'sword_swing'].forEach(s => {
+                ['build_turret', 'build_walker', 'build_wall', 'engineer_repair', 'wrench_strike'].forEach(s => {
                     if (!member.skills.includes(s)) member.skills.push(s);
                 });
+                member.skills = member.skills.filter(s => s !== 'sword_swing');
                 if (!Array.isArray(member.passives)) member.passives = [];
                 if (!member.passives.includes('master_builder')) member.passives.push('master_builder');
             }

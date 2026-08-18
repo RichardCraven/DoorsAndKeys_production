@@ -657,12 +657,19 @@ const formatDamageValue = (value) => {
 const DEBUG_FORCE_BIG_BULGE = true;
 const MINION_DEBUG_FACTOR = 0.3;
 
+const isPCUnitType = (key) => {
+    if (!key || typeof key !== 'string') return false;
+    const k = key.toLowerCase();
+    return ['soldier', 'ranger', 'wizard', 'monk', 'barbarian', 'sage', 'engineer', 'summoner', 'avatar', 'cultist', 'basilisk_cultist', 'crew'].some(t => k.includes(t));
+};
+
 const computeHitVars = (combatant, getHitAnimation, isMobileLandscape) => {
     // CombatGrid portraits fill their container via width:100%/height:100%,
     // so --portrait-base-scale should always be 1 (container is already 200px for large monsters).
     const baseScale = '1';
     const isFighter = combatant && !combatant.isMonster && !combatant.isMinion;
-    const flip = isFighter
+    const isPCUnit = isFighter || combatant?.isOpponent || (combatant && isPCUnitType(combatant.type || combatant.portrait || combatant.image));
+    const flip = isPCUnit
         ? (combatant.facing === 'left' ? '-1' : '1')
         : (combatant.facing === 'right' ? '-1' : '1');
 
@@ -717,7 +724,7 @@ const computeHitVars = (combatant, getHitAnimation, isMobileLandscape) => {
         '--portrait-bulge-y': bulgeY,
         '--portrait-transform-origin': transformOrigin,
         '--portrait-base-scale': scaleVal,
-        '--portrait-flip': combatant.facing === 'right' ? '-1' : '1',
+        '--portrait-flip': flip,
         '--portrait-animation-duration': (combatant.isMinion && combatant.tier !== 3 && combatant.tier !== 4) ? '520ms' : '420ms',
         '--portrait-animation-timing': (combatant.isMinion && combatant.tier !== 3 && combatant.tier !== 4) ? 'cubic-bezier(.18,.9,.22,1)' : 'cubic-bezier(.2,.8,.2,1)'
     };
@@ -725,23 +732,37 @@ const computeHitVars = (combatant, getHitAnimation, isMobileLandscape) => {
 
 // Resolve portrait/icon to a string URL
 const resolvePortrait = (portraitVal) => {
-    if (!portraitVal) return '';
+    if (!portraitVal) {
+        const fb = images.soldier || images.cultist || images.basilisk_cultist || images.avatar || '';
+        return (typeof fb === 'object' && fb) ? (fb.default || fb.src || fb) : fb;
+    }
     let res = '';
     if (typeof portraitVal === 'string') {
         const mapped = images[portraitVal];
         if (mapped) {
-            res = mapped.default || mapped;
-        } else {
+            res = (typeof mapped === 'object' && mapped) ? (mapped.default || mapped.src || mapped) : mapped;
+        } else if (portraitVal.startsWith('http://') || portraitVal.startsWith('https://') || portraitVal.startsWith('/') || portraitVal.startsWith('data:')) {
             res = portraitVal;
+        } else {
+            // Unmapped string key -> fallback to default soldier/cultist/avatar asset
+            const fb = images.soldier || images.cultist || images.basilisk_cultist || images.avatar || '';
+            res = (typeof fb === 'object' && fb) ? (fb.default || fb.src || fb) : fb;
+            console.warn(`[PvP Diagnostic] Unmapped portrait key "${portraitVal}" — resolved fallback:`, res);
         }
-    } else if (typeof portraitVal === 'object') {
-        res = portraitVal.default || '';
+    } else if (typeof portraitVal === 'object' && portraitVal !== null) {
+        res = portraitVal.default || portraitVal.src || (typeof portraitVal.toString === 'function' && portraitVal.toString() !== '[object Object]' ? portraitVal.toString() : '');
+        if (!res) {
+            const fb = images.soldier || images.cultist || images.basilisk_cultist || images.avatar || '';
+            res = (typeof fb === 'object' && fb) ? (fb.default || fb.src || fb) : fb;
+            console.warn(`[PvP Diagnostic] Empty portrait object resolved to fallback:`, res);
+        }
     }
     return res;
 };
 
 const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
-    if (unit && unit.stagedPortraits) {
+    if (!unit) return '';
+    if (unit.stagedPortraits) {
         const sp = unit.stagedPortraits;
         if (greetingInProcess && unit.isMainMonster && sp.greeting) {
             return resolvePortrait(sp.greeting);
@@ -769,11 +790,50 @@ const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
             }
         }
     }
-    return resolvePortrait(
-        (unit.type === 'archaic_familiar' && activeAnimations && activeAnimations.some(a => a.sourceUnitId === unit.id))
-        ? 'stone_familiar_glowing'
-        : (unit.portrait || unit.type || unit.subtype)
-    );
+
+    if (unit.type === 'archaic_familiar' && activeAnimations && activeAnimations.some(a => a.sourceUnitId === unit.id)) {
+        return resolvePortrait('stone_familiar_glowing');
+    }
+
+    const validProp = (val) => {
+        if (!val) return null;
+        if (typeof val === 'string' && val.trim() !== '' && val !== '[object Object]') {
+            const lower = val.trim().toLowerCase();
+            if (lower === 'warrior' || lower === 'spellcaster') return null;
+            return val.trim();
+        }
+        if (typeof val === 'object' && (val.default || val.src)) return val;
+        return null;
+    };
+
+    let targetKey = validProp(unit.portrait) || validProp(unit.type) || validProp(unit.image) || validProp(unit.class) || validProp(unit.subtype) || validProp(unit.key);
+    if (!targetKey && unit.name && typeof unit.name === 'string') {
+        const n = unit.name.toLowerCase();
+        if (n.includes('yu') || n.includes('monk')) targetKey = 'monk';
+        else if (n.includes('dormund') || n.includes('ranger')) targetKey = 'ranger';
+        else if (n.includes('sardonis') || n.includes('soldier')) targetKey = 'soldier';
+        else if (n.includes('ulaf') || n.includes('barbarian')) targetKey = 'barbarian';
+        else if (n.includes('loryastes') || n.includes('sage')) targetKey = 'sage';
+        else if (n.includes('zildjikan') || n.includes('wizard')) targetKey = 'wizard';
+        else if (n.includes('icaron') || n.includes('engineer')) targetKey = 'engineer';
+        else if (n.includes('vaelis') || n.includes('summoner')) targetKey = 'summoner';
+    }
+    if (!targetKey) targetKey = 'soldier';
+
+    const finalUrl = resolvePortrait(targetKey);
+    const isOpponentUnit = (unit) => {
+        if (!unit) return false;
+        if (unit.isOpponent === true) return true;
+        if (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.includes('pvp_'))) return true;
+        return false;
+    };
+    if (isOpponentUnit(unit) || unit.isOpponent) {
+        console.log(`[PvP Diagnostic] getCombatantPortrait for opponent [${unit.id}]: name="${unit.name}", targetKey="${targetKey}", resolvedUrl="${finalUrl}"`);
+    }
+    if (!finalUrl && process.env.NODE_ENV !== 'production') {
+        console.warn(`[PvP Diagnostic] Unit "${unit.name || unit.id}" has no valid portrait URL (targetKey="${targetKey}")`, unit);
+    }
+    return finalUrl;
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -817,8 +877,15 @@ export default function CombatGrid(props) {
     const crewIds = new Set(crew.map(f => f.id));
     const hideBars = props.showBars === false || greetingInProcess;
 
+    const isOpponentUnit = (unit) => {
+        if (!unit) return false;
+        if (unit.isOpponent === true) return true;
+        if (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.includes('pvp_'))) return true;
+        return false;
+    };
+
     const checkHuge = (unit) => {
-        if (!unit || unit.isShrineGuardian) return false;
+        if (!unit || unit.isShrineGuardian || isOpponentUnit(unit)) return false;
         const hugeByTemplate = (
             (typeof unit.huge === 'boolean' && unit.huge === true) ||
             (unit.type === 'dragon') ||
@@ -832,7 +899,7 @@ export default function CombatGrid(props) {
     };
 
     const checkLarge = (unit) => {
-        if (!unit || unit.isShrineGuardian) return false;
+        if (!unit || unit.isShrineGuardian || isOpponentUnit(unit)) return false;
         if (checkHuge(unit)) return false;
         const largeByTemplate = (
             (typeof unit.large === 'boolean' && unit.large === true) ||
@@ -1562,7 +1629,7 @@ export default function CombatGrid(props) {
                             backgroundImage: `url("${resolvePortrait(
                                 (fighter.type === 'archaic_familiar' && activeAnimations.some(a => a.sourceUnitId === fighter.id))
                                 ? 'stone_familiar_glowing'
-                                : fighter.portrait
+                                : (fighter.portrait || fighter.type || fighter.class || 'soldier')
                             )}")`,
                             opacity: getLiveCombatant(fighter.id)?.astralBeingActive ? 0.55 : 1,
                             filter: [
@@ -2295,11 +2362,10 @@ export default function CombatGrid(props) {
             ? -TILE_SIZE * 2 - (SHOW_TILE_BORDERS ? 4 : 0) 
             : (isLarge ? -TILE_SIZE - (SHOW_TILE_BORDERS ? 2 : 0) : 0);
 
-        const isMainMonster = unit.isMainMonster || (isMonster && !isMinion);
+        const isMainMonster = !isOpponentUnit(unit) && (unit.isMainMonster || (isMonster && !isMinion));
         const showEnlarged = greetingInProcess && isMainMonster && !props.isMobileLandscape && !isDead;
         const numCols = props.numColumns || combatManager?.numColumns || 8;
         const boardWidth = numCols * TILE_SIZE + (SHOW_TILE_BORDERS ? numCols * 2 : 0);
-        const centeredLeft = (boardWidth - width) / 2;
 
         const leftPos = showEnlarged ? (boardWidth - width) : (xPos + hOffset);
         const topPos = yPos + vOffset;
@@ -2344,6 +2410,12 @@ export default function CombatGrid(props) {
         }
         const isSpawningMinion = isMinion && !isDead && !isFamiliar && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
 
+        const isPCUnit = unit.isOpponent || (!unit.isMonster && !unit.isMinion) || isPCUnitType(unit.type || unit.portrait || unit.image);
+        const currentFacing = unit.facing || (isOpponentUnit(unit) || (unit.coordinates && unit.coordinates.x >= 4) ? 'left' : (isPCUnit ? 'right' : 'left'));
+        const needFlip = isPCUnit
+            ? (currentFacing === 'left')
+            : (currentFacing === 'right');
+
         // All state classes go on unit-tile — not on any full-width wrapper
         const unitTileClasses = [
             'unit-tile',
@@ -2353,7 +2425,7 @@ export default function CombatGrid(props) {
             unit.wounded ? 'hit' : '',
             unit.wounded ? hitAnim : '',
             unit.wounded ? 'hit-flash' : '',
-            unit.facing === 'right' ? 'reversed' : '',
+            needFlip ? 'reversed' : '',
             (unit.stunned && !isAsleepMonster) ? 'stunned' : '',
             isDisintegrating ? 'disintegrate-shaking' : '',
             activeReturnTrialAnim ? 'respawn-fade-in' : '',
@@ -2369,9 +2441,9 @@ export default function CombatGrid(props) {
             unit.bifurcating ? 'bifurcatingAnimation' : (isDead ? (unit.type === 'mummy' || unit.key === 'mummy' || isLarge || isHuge ? 'dead mummyDeadAnimation' : 'dead monsterDeadAnimation') : ''),
             unit.isBifurcateSmall ? 'bifurcate-copy' : '',
             unit.isBifurcateCopy ? 'bifurcate-copy-spawning' : '',
-            unit.missed ? (unit.facing === 'right' ? 'missed-reversed' : 'missed') : '',
+            unit.missed ? (needFlip ? 'missed-reversed' : 'missed') : '',
             selectedMonster?.id === unit.id ? 'selected' : '',
-            unit.facing === 'right' ? 'reversed' : '',
+            needFlip ? 'reversed' : '',
             unit.facing === 'up' ? 'facing-up' : '',
             unit.facing === 'down' ? 'facing-down' : '',
             liveMonster.chargingUpActive ? 'charging-up' : '',
@@ -2471,7 +2543,14 @@ export default function CombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: unit.portrait ? `url("${getCombatantPortrait(unit, greetingInProcess, activeAnimations)}")` : 'none',
+                            backgroundImage: (() => {
+                                const url = getCombatantPortrait(unit, greetingInProcess, activeAnimations);
+                                if (!url) {
+                                    console.warn(`[PvP Diagnostic] renderMonsterUnit: unit id="${unit.id}" name="${unit.name}" has empty portrait URL`, unit);
+                                    return 'none';
+                                }
+                                return `url("${url}")`;
+                            })(),
                             backgroundSize: undefined,
                             backgroundPosition: undefined,
                             filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${unit.petrified || liveMonster.petrified ? 'grayscale(1) contrast(1.4) brightness(0.75)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),
@@ -2480,12 +2559,12 @@ export default function CombatGrid(props) {
                             width: '100%',
                             height: '100%',
                             transform: showEnlarged
-                                ? `scale(1.5) perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px)`
+                                ? `scale(1.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)`
                                 : ((isLarge || isHuge)
-                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px) ${(greetingInProcess && !props.isMobileLandscape && !isDead) ? 'scale(1.2)' : ''}`.trim() || 'none'
+                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px) ${(greetingInProcess && !props.isMobileLandscape && !isDead) ? 'scale(1.2)' : ''}`.trim() || 'none'
                                     : (unit.isUpsideDown 
                                         ? 'rotate(180deg)' 
-                                        : (unit.type === 'spider_minion' ? `scale(0.5) perspective(400px) rotateY(${unit.facing === 'right' ? 15 : -15}deg) translateX(${unit.facing === 'right' ? 3 : -3}px)` : undefined))),
+                                        : (unit.type === 'spider_minion' ? `scale(0.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)` : undefined))),
                             transformOrigin: showEnlarged ? 'right center' : 'bottom',
                             boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                             borderRadius: '0',
@@ -7417,7 +7496,7 @@ export default function CombatGrid(props) {
     };
 
     // ── Monster units — exclude VCT and trials_icon (rendered separately) ─────
-    const monsterUnits = Object.values(battleData).filter(u => u && (u.isMonster || u.isMinion) && !crewIds.has(u.id) && !u.isVCT && !u.isTrialIcon);
+    const monsterUnits = Object.values(battleData).filter(u => u && (u.isMonster || u.isMinion || u.isOpponent) && !crewIds.has(u.id) && !u.isVCT && !u.isTrialIcon);
 
     const getUnitCenterPx = (unitId) => {
         // Find in crew

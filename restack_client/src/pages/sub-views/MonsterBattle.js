@@ -254,7 +254,7 @@ class MonsterBattle extends React.Component {
             hoveredGlyphTile: null,
             showCrosshair: false,
             portraitHoveredId: null,
-            greetingInProcess: true,
+            greetingInProcess: !(props.isPvP || props.isPvPMode),
             combatTiles: [],
             draggedOverCombatTileId: null,
             draggingFighter: null,
@@ -645,8 +645,10 @@ class MonsterBattle extends React.Component {
             crew: this.props.crew,
             leader: this.getCrewLeader(),
             monster: this.props.monster,
-            minions: this.props.minions
-
+            minions: this.props.minions,
+            isPvP: !!(this.props.isPvP || this.props.isPvPMode),
+            isPvPMode: !!(this.props.isPvP || this.props.isPvPMode),
+            opponentCrew: this.props.opponentCrew
         })
 
         if (this.props.combatManager && typeof this.props.combatManager.pauseCombat === 'function') {
@@ -2799,6 +2801,8 @@ class MonsterBattle extends React.Component {
         if (!fighter || !fighter.coordinates) return;
         const details = this.state.battleData[fighter.id];
         if (!details || details.dead) return;
+        const fighterSleepDebuff = Array.isArray(details.activeDebuffs) && details.activeDebuffs.some(d => d && d.name && ["sleep", "sleep_spell"].includes(d.name.toLowerCase()) && (d.roundsLeft || 0) > 0);
+        if (!!details.asleep || (details.sleepRounds || 0) > 0 || fighterSleepDebuff) return;
         // Store whether combat was already paused so we can restore it on mouseup
         const wasPaused = !!(this.props.combatManager?.combatPaused || this.props.paused);
         if (this.props.combatManager && typeof this.props.combatManager.pauseCombat === 'function') {
@@ -2825,7 +2829,9 @@ class MonsterBattle extends React.Component {
         if (!fighter || !fighter.coordinates) return;
         this._isTouchDragging = true;
         const details = this.state.battleData[fighter.id];
-        if (!details || details.dead) return;
+        if (!details || details.dead) return; 
+        const fighterSleepDebuff = Array.isArray(details.activeDebuffs) && details.activeDebuffs.some(d => d && d.name && ["sleep", "sleep_spell"].includes(d.name.toLowerCase()) && (d.roundsLeft || 0) > 0);
+        if (!!details.asleep || (details.sleepRounds || 0) > 0 || fighterSleepDebuff) return;
 
         const now = Date.now();
         const lastTap = this._lastFighterTapTime?.[fighter.id] || 0;
@@ -3056,6 +3062,8 @@ class MonsterBattle extends React.Component {
         group.forEach((fighterId, idx) => {
             const fighter = this.state.battleData[fighterId];
             if (!fighter || fighter.dead) return;
+            const fighterSleepDebuff = Array.isArray(fighter.activeDebuffs) && fighter.activeDebuffs.some(d => d && d.name && ["sleep", "sleep_spell"].includes(d.name.toLowerCase()) && (d.roundsLeft || 0) > 0);
+            if (!!fighter.asleep || (fighter.sleepRounds || 0) > 0 || fighterSleepDebuff) return;
 
             if (isEnemy) {
                 // Group attack: each member targets the same enemy
@@ -3198,6 +3206,9 @@ class MonsterBattle extends React.Component {
     // ── Context Menu Handlers ─────────────────────────────────────────────────
     onFighterRightClick = (fighterId, x, y) => {
         const fighter = this.state.battleData[fighterId];
+        if (!fighter || fighter.dead) return;
+            const fighterSleepDebuff = Array.isArray(fighter.activeDebuffs) && fighter.activeDebuffs.some(d => d && d.name && ["sleep", "sleep_spell"].includes(d.name.toLowerCase()) && (d.roundsLeft || 0) > 0);
+        if (!!fighter.asleep || (fighter.sleepRounds || 0) > 0 || fighterSleepDebuff) return;
         const isRanger = fighter && (fighter.type === 'ranger' || fighter.image === 'ranger');
         this.setState({
             unitContextMenu: { fighterId, x, y },
@@ -3470,6 +3481,24 @@ class MonsterBattle extends React.Component {
             // Ultimate shimmer: skill has an `ultimate` field AND the fighter's ultimate is ready
             const isUltimateSkill = fighterUltimateActive && !!(spec.ultimate);
 
+            let lacksConstructMats = false;
+            let constructCost = 2;
+            if (normalizedKey === 'build_turret' || normalizedKey === 'build_walker') {
+                if (cm && liveFighterRef && !liveFighterRef.isMonster && !cm.isSimulator) {
+                    if (cm.hasPassive && cm.getSkillLevel) {
+                        if (cm.hasPassive(liveFighterRef, 'master_builder')) {
+                            if (cm.getSkillLevel(liveFighterRef, 'master_builder') >= 2) constructCost = 1;
+                        }
+                    }
+                    const inventory = typeof cm.getCurrentInventory === 'function' ? cm.getCurrentInventory() : [];
+                    let woodItems = inventory.filter(inv => inv && (inv._im_key === 'wood' || inv.id === 'wood' || inv.name === 'Wood'));
+                    let stoneItems = inventory.filter(inv => inv && (inv._im_key === 'stone' || inv.id === 'stone' || inv.name === 'Stone'));
+                    if (woodItems.length < constructCost || stoneItems.length < constructCost) {
+                        lacksConstructMats = true;
+                    }
+                }
+            }
+
             return (
                 <div
                     key={`reg-${i}`}
@@ -3485,19 +3514,20 @@ class MonsterBattle extends React.Component {
                     </div>
                     <div className="interaction-tile-wrapper" style={{ position: 'relative' }}>
                         <div
-                            className={`interaction-tile special${isReady ? ' available' : ''}${isQueued ? ' queued' : ''}${isUltimateSkill ? ' ultimate-shimmer' : ''}`}
+                            className={`interaction-tile special${isReady && !lacksConstructMats ? ' available' : ''}${isQueued ? ' queued' : ''}${isUltimateSkill ? ' ultimate-shimmer' : ''}`}
                             style={{
                                 backgroundImage: iconUrl ? `url("${encodeURI(String(iconUrl).replace(/^['"]/g, '').replace(/['"]/g, ''))}")` : 'none',
                                 // Grab cursor on ultimate-ready skills to hint drag-to-target
-                                cursor: isUltimateSkill ? 'grab' : 'pointer',
+                                cursor: isUltimateSkill && !lacksConstructMats ? 'grab' : (lacksConstructMats ? 'not-allowed' : 'pointer'),
                                 opacity: isReady ? 1 : 0.7,
+                                filter: lacksConstructMats ? 'grayscale(100%)' : 'none'
                             }}
-                            onClick={() => this.handleQueueSkill(fighterId, normalizedKey)}
-                            onMouseDown={!this.state.isMobileLandscape
+                            onClick={() => lacksConstructMats ? this.props.combatManager?.messaging?.('Not enough Wood and Stone!') : this.handleQueueSkill(fighterId, normalizedKey)}
+                            onMouseDown={!this.state.isMobileLandscape && !lacksConstructMats
                                 ? (e) => this._handleSkillMouseDragStart(e, fighterId, normalizedKey, spec.name || sourceKey, iconUrl, isUltimateSkill)
                                 : undefined
                             }
-                            onTouchStart={this.state.isMobileLandscape
+                            onTouchStart={this.state.isMobileLandscape && !lacksConstructMats
                                 ? (e) => this._handleSkillDragStart(e, fighterId, normalizedKey, spec.name || sourceKey, iconUrl, isUltimateSkill)
                                 : undefined
                             }
@@ -3514,6 +3544,11 @@ class MonsterBattle extends React.Component {
                         {/* Ultimate shimmer overlay — sits on top of the icon, pointer-events:none */}
                         {isUltimateSkill && (
                             <div className="ultimate-skill-shimmer" aria-hidden="true" />
+                        )}
+                        {lacksConstructMats && (
+                            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ff4d4d', fontSize: '24px', pointerEvents: 'none', borderRadius: '4px', zIndex: 5, textShadow: '0 0 5px black' }}>
+                                ❌
+                            </div>
                         )}
                         <CooldownSvg pct={cooldownPct} />
                         {!isReady && (

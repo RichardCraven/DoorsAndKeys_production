@@ -212,12 +212,26 @@ const runBotSimulation = async (username, password) => {
         }
 
         const action = await page.evaluate(() => {
+            const isElementVisible = (el) => {
+                if (!el || el.offsetParent === null) return false;
+                const style = window.getComputedStyle(el);
+                if (style.visibility === 'hidden' || style.opacity === '0') return false;
+                const rect = el.getBoundingClientRect();
+                if (rect.width === 0 || rect.height === 0) return false;
+                const cx = rect.left + rect.width / 2;
+                const cy = rect.top + rect.height / 2;
+                if (cx < 0 || cy < 0 || cx > window.innerWidth || cy > window.innerHeight) return false;
+                const topEl = document.elementFromPoint(cx, cy);
+                if (!topEl) return false;
+                return el.contains(topEl) || topEl.contains(el);
+            };
+
             // First check if we need to select a dungeon
             const trigger = document.querySelector('.custom-select-trigger');
-            if (trigger && !trigger.classList.contains('selected')) {
+            if (trigger && !trigger.classList.contains('selected') && isElementVisible(trigger)) {
                 // If menu is open, click first item
                 const menuItem = document.querySelector('.menu-item');
-                if (menuItem && menuItem.offsetParent !== null) {
+                if (menuItem && isElementVisible(menuItem)) {
                     menuItem.click();
                     return "Selected a Dungeon";
                 } else {
@@ -226,42 +240,50 @@ const runBotSimulation = async (username, password) => {
                 }
             }
 
-            const buttons = Array.from(document.querySelectorAll('button'));
-            const safeButtons = buttons.filter(b => {
-                const txt = b.textContent.toLowerCase();
+            // Find all interactable buttons & card duel elements
+            const candidates = Array.from(document.querySelectorAll('button, .pe-fanned-card--playable'));
+            const safeButtons = candidates.filter(b => {
+                const txt = (b.textContent || '').toLowerCase();
                 const title = (b.title || '').toLowerCase();
                 if (txt.includes('logout') || title.includes('logout') || txt.includes('🚪') || txt.includes('delete') || txt.includes('generate bot') || txt.includes('user manager')) return false;
-                if (b.offsetParent === null) return false; // not visible
-                if (b.disabled) return false; // Don't click disabled buttons
+                if (b.disabled) return false;
+                if (!isElementVisible(b)) return false;
                 return true;
             });
             
             if (safeButtons.length > 0) {
                 // Priority 1: Navigation & Progression
-                const enterBtn = safeButtons.find(b => b.textContent.trim() === 'Enter Dungeon');
+                const enterBtn = safeButtons.find(b => b.textContent && b.textContent.trim() === 'Enter Dungeon');
                 if (enterBtn) { enterBtn.click(); return 'Enter Dungeon'; }
 
-                const skipBtn = safeButtons.find(b => b.textContent.trim().toLowerCase().includes('skip'));
+                const skipBtn = safeButtons.find(b => b.textContent && b.textContent.trim().toLowerCase().includes('skip'));
                 if (skipBtn) { skipBtn.click(); return skipBtn.textContent.trim(); }
 
-                // Priority 2: High priority game actions (Combat, Loot, Confirmations)
+                // Priority 2: High priority game & Card Duel actions
                 const actionBtn = safeButtons.find(b => {
-                    const txt = b.textContent.toLowerCase();
-                    return txt === 'ok' || txt.includes('continue') || txt.includes('attack') || txt.includes('loot') || txt.includes('leave') || txt.includes('close');
+                    const txt = (b.textContent || '').toLowerCase();
+                    return txt === 'ok' || txt.includes('continue') || txt.includes('attack') || txt.includes('loot') || txt.includes('leave') || txt.includes('close') || txt.includes('end turn') || txt.includes('exit scrimmage') || txt.includes('forfeit') || txt.includes('claim victory');
                 });
                 
                 if (actionBtn) {
                     actionBtn.click();
-                    return actionBtn.textContent.trim() || 'Action Button';
+                    return (actionBtn.textContent || '').trim() || 'Action Button';
                 }
 
-                // If no high priority buttons, 50/50 chance to MOVE or click random button
+                // Priority 3: Playable Cards in Card Duel
+                const cardBtn = safeButtons.find(b => b.classList && b.classList.contains('pe-fanned-card--playable'));
+                if (cardBtn) {
+                    cardBtn.click();
+                    return 'Played Card';
+                }
+
+                // If no high priority buttons, 50/50 chance to MOVE or click random visible button
                 if (Math.random() > 0.5) {
                     return 'MOVE';
                 }
 
                 const randomBtn = safeButtons[Math.floor(Math.random() * safeButtons.length)];
-                const btnName = randomBtn.textContent || randomBtn.className || 'Unknown Button';
+                const btnName = (randomBtn.textContent || randomBtn.className || 'Unknown Button').trim();
                 randomBtn.click();
                 return btnName;
             }

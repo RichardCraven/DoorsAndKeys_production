@@ -1942,6 +1942,11 @@ class MapMakerPage extends React.Component {
   _toggleMobilePalette = () => {
     this.setState(prev => ({ mobilePaletteOpen: !prev.mobilePaletteOpen }));
   }
+  handleDoubleClick = (tile) => {
+    if (tile && tile.inscriptions && Object.keys(tile.inscriptions).length > 0) {
+      this.showInscriptionWallPicker(tile.id !== undefined ? tile.id : tile.index);
+    }
+  }
 
   handleClick = (tile) => {
     if (tile.type === 'palette-tile') {
@@ -3017,8 +3022,13 @@ class MapMakerPage extends React.Component {
   parseBoardPlacement = (board) => {
     if (!board) return { dungeon: '', level: '', slot: '', orientation: 'front' };
 
-    let folderPath = board.folderPath || '';
+    let folderPath = board.folderPath !== undefined && board.folderPath !== null ? String(board.folderPath) : null;
     let name = board.name || '';
+
+    // If folderPath is explicitly set to empty string, this board is unassigned
+    if (folderPath === '') {
+      return { dungeon: '', level: '', slot: '', orientation: 'front' };
+    }
 
     if (folderPath) {
       const parts = folderPath.split('/');
@@ -3224,9 +3234,10 @@ class MapMakerPage extends React.Component {
     };
 
     // Second, run the placement parsing logic to sync any boards that match the parser layout naming convention
-    // but only overwrite slots if they are empty/unassigned.
+    // but only overwrite slots if they are empty/unassigned and the board has an explicit folderPath assigned.
     boards.forEach((board) => {
       if (!board) return;
+      if (!board.folderPath || typeof board.folderPath !== 'string' || !board.folderPath.trim()) return;
       const placement = this.parseBoardPlacement(board);
       if (!placement.dungeon || !placement.level) return;
       if (placement.dungeon.toLowerCase() !== syncedDungeon.name.toLowerCase()) return;
@@ -5193,6 +5204,9 @@ class MapMakerPage extends React.Component {
       let dungeons = [];
       const dataList = (val && Array.isArray(val.data)) ? val.data : [];
       dataList.forEach((e) => {
+        if (!e || !e.content) return;
+        const isInstance = /_.+_[^_]{4}$/i.test(`${e.name || ""}`) || /_\d+$/i.test(`${e.name || JSON.parse(e.content).name || ""}`);
+        if (isInstance) return;
         if (!e || !e.content) return;
         try {
           let dungeon = JSON.parse(e.content);
@@ -8273,6 +8287,7 @@ class MapMakerPage extends React.Component {
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
               handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
               handleHover={this.handleHover}
               setPaletteHover={this.setPaletteHover}
               loadBoard={this.loadBoard}
@@ -8341,6 +8356,7 @@ class MapMakerPage extends React.Component {
                     collapseFilterHeader={this.collapseFilterHeader}
                     setHover={this.setHover}
                     handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
                     handleHover={this.handleHover}
                     setPaletteHover={this.setPaletteHover}
                     loadBoard={this.loadBoard}
@@ -8396,6 +8412,7 @@ class MapMakerPage extends React.Component {
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
               handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
               handleHover={this.handleHover}
               setPaletteHover={this.setPaletteHover}
               loadBoard={this.loadBoard}
@@ -8459,6 +8476,7 @@ class MapMakerPage extends React.Component {
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
               handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
               handleHover={this.handleHover}
               setPaletteHover={this.setPaletteHover}
               loadBoard={this.loadBoard}
@@ -8525,6 +8543,7 @@ class MapMakerPage extends React.Component {
                 collapseFilterHeader={this.collapseFilterHeader}
                 setHover={this.setHover}
                 handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
                 handleHover={this.handleHover}
                 setPaletteHover={this.setPaletteHover}
                 loadBoard={this.loadBoard}
@@ -8622,6 +8641,7 @@ class MapMakerPage extends React.Component {
                 collapseFilterHeader={this.collapseFilterHeader}
                 setHover={this.setHover}
                 handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
                 handleHover={this.handleHover}
                 setPaletteHover={this.setPaletteHover}
                 loadBoard={this.loadBoard}

@@ -147,12 +147,13 @@ class SocketHandler {
     }
   }
 
-  respondPvPChallenge(challengerSocketId, accepted, targetCrew = []) {
+  respondPvPChallenge(challengerSocketId, accepted, targetCrew = [], challengerCrew = []) {
     if (this.socket) {
       this.emit('pvp:challenge_response', {
         challengerSocketId,
         accepted,
         targetCrew,
+        challengerCrew,
         dungeonId: this.currentDungeonId
       });
     }

@@ -259,7 +259,11 @@ function App(props) {
       items: props.inventoryManager.inventory,
       gold: props.inventoryManager.gold,
       shimmering_dust: props.inventoryManager.shimmering_dust,
-      totems: props.inventoryManager.totems
+      totems: props.inventoryManager.totems,
+      wood: props.inventoryManager.wood,
+      stone: props.inventoryManager.stone,
+      slate: props.inventoryManager.slate,
+      mushrooms: props.inventoryManager.mushrooms
     }
     if (props.crewManager.crew.length === 0) {
       // Crew is empty — this is expected after a final death wipe. Skip saving.

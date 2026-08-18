@@ -933,6 +933,14 @@
                     width: 2px;
                     border-radius: 2px;
                     position: absolute;
+                    &.generator{
+                        background-color: #2ecc71;
+                        height: 3px;
+                        width: 3px;
+                        margin-left: -0.5px;
+                        margin-top: -0.5px;
+                        box-shadow: 0 0 3px #2ecc71;
+                    }
                     &.enemy{
                         background-color: red;
                     }
@@ -2739,6 +2747,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+    overflow-y: auto;
     animation: smoothOverlayFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
     will-change: opacity;
     backface-visibility: hidden;
@@ -2749,16 +2760,19 @@
     background: linear-gradient(135deg, #120e0e 0%, #1c0909 100%);
     border: 2px solid #ff3b30;
     box-shadow: 0 0 30px rgba(255, 59, 48, 0.35), inset 0 0 15px rgba(255, 59, 48, 0.15);
-    padding: 35px;
+    padding: 30px 24px;
     color: white;
     text-align: center;
     border-radius: 16px;
     width: 380px;
-    max-width: 90%;
+    max-width: 94%;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    margin: auto;
     animation: smoothCardScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
     will-change: transform, opacity;
     position: relative;
-    overflow: hidden;
     backface-visibility: hidden;
     transform: translate3d(0, 0, 0);
     -webkit-font-smoothing: antialiased;
@@ -2771,6 +2785,44 @@
         right: 0;
         height: 4px;
         background: linear-gradient(90deg, #ff3b30, #ff9500, #ff3b30);
+    }
+}
+
+@media (max-height: 650px), (max-width: 500px) {
+    .ambush-popup-card {
+        padding: 16px 14px;
+        max-width: 96%;
+    }
+    .ambush-title {
+        font-size: 1.4rem !important;
+        margin-top: 0 !important;
+        margin-bottom: 2px !important;
+    }
+    .ambush-subtitle {
+        font-size: 0.88rem !important;
+        margin-bottom: 10px !important;
+    }
+    .ambush-portrait-frame {
+        width: 85px !important;
+        height: 85px !important;
+        margin-bottom: 12px !important;
+        padding: 4px !important;
+    }
+    .ambush-stats-grid {
+        padding: 8px 10px !important;
+        margin-bottom: 12px !important;
+        gap: 4px !important;
+    }
+    .ambush-stat-item {
+        font-size: 0.8rem !important;
+    }
+    .ambush-fight-btn {
+        padding: 8px 24px !important;
+        font-size: 1rem !important;
+    }
+    .ambush-shortcut-hint {
+        margin-top: 6px !important;
+        font-size: 0.7rem !important;
     }
 }
 
@@ -2957,6 +3009,30 @@
     }
 }
 
+@keyframes pygmyBumpHit {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1);
+    }
+    35% {
+        transform: translate3d(var(--bump-x, 0%), var(--bump-y, -85%), 0) scale(1.22);
+        filter: brightness(1.5) drop-shadow(0 0 20px rgba(255, 35, 35, 0.95));
+    }
+    65% {
+        transform: translate3d(calc(var(--bump-x, 0%) * -0.22), calc(var(--bump-y, -85%) * -0.22), 0) scale(0.92);
+        filter: brightness(1.1) drop-shadow(0 0 10px rgba(255, 0, 0, 0.5));
+    }
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1);
+    }
+}
+
+.pygmy-bump-hit {
+    animation: pygmyBumpHit 0.65s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
+    z-index: 100 !important;
+}
+
 @keyframes pulseGlow {
     from {
         text-shadow: 0 0 10px rgba(255, 59, 48, 0.5), 0 0 2px rgba(255, 59, 48, 0.3);
@@ -2998,6 +3074,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+    overflow-y: auto;
     animation: smoothOverlayFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
     will-change: opacity;
     backface-visibility: hidden;
@@ -3008,16 +3087,19 @@
     background: linear-gradient(135deg, #18120c 0%, #120d07 100%);
     border: 1.5px solid rgba(230, 126, 34, 0.6);
     box-shadow: 0 0 25px rgba(230, 126, 34, 0.25), inset 0 0 15px rgba(0, 0, 0, 0.5);
-    padding: 28px 32px;
+    padding: 24px 28px;
     color: white;
     text-align: center;
     border-radius: 16px;
     width: 420px;
-    max-width: 90%;
+    max-width: 94%;
+    max-height: calc(100vh - 24px);
+    overflow-y: auto;
+    box-sizing: border-box;
+    margin: auto;
     animation: smoothCardScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
     will-change: transform, opacity;
     position: relative;
-    overflow: hidden;
     backface-visibility: hidden;
     transform: translate3d(0, 0, 0);
     -webkit-font-smoothing: antialiased;
@@ -4649,4 +4731,14 @@
 
 .door-transition-in {
     animation: doorShrinkIn 0.4s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+}
+@keyframes territoryFadeIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
 }

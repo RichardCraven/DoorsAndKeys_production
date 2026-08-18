@@ -1,4 +1,4 @@
-import { getMeta, storeMeta } from './session-handler';
+import { getMeta, storeMeta, getUserId } from './session-handler';
 import { MonsterManager } from './monster-manager';
 import { REAGENT_KEYS } from './reagents';
 import { BREW_INGREDIENT_KEYS } from './brew-ingredients';
@@ -379,6 +379,15 @@ export function BoardManager(){
             return false;
         }
 
+        // 'wall' is passable ONLY for its owner
+        if (containsSubtype === 'wall' || containsSubtype === 'wall_under_construction' || bldg === 'wall' || bldg === 'wall_under_construction' || img === 'wall' || (tile.contains && (tile.contains.subtype === 'wall' || tile.contains.subtype === 'wall_under_construction'))) {
+            const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+            if (tile.contains && tile.contains.ownerId && currentUserId && tile.contains.ownerId === currentUserId) {
+                return false;
+            }
+            return true;
+        }
+
         const buildingSubtypes = [
             'outpost', 'buildable_outpost',
             'observer_platform', 'buildable_observer_platform',
@@ -500,13 +509,18 @@ export function BoardManager(){
         }
 
         const hasKey = inventory.some(e =>
-            e.name === config.keyName ||
-            e.subtype === config.requires ||
-            e.name === config.requires ||
-            (e.name && e.name.replace(/_/g, ' ') === config.keyName) ||
-            e.name === 'master key' ||
-            e.subtype === 'master_key' ||
-            e._im_key === 'master_key'
+            !e ? false : (
+                e.name === config.keyName ||
+                e.subtype === config.requires ||
+                e.name === config.requires ||
+                e._im_key === config.requires ||
+                e.icon === config.requires ||
+                (e.name && e.name.replace(/_/g, ' ') === config.keyName) ||
+                (e.name && e.name.replace(/_/g, '_') === config.requires) ||
+                e.name === 'master key' ||
+                e.subtype === 'master_key' ||
+                e._im_key === 'master_key'
+            )
         );
 
         if (hasKey) return false;
@@ -769,9 +783,24 @@ export function BoardManager(){
                 t.color = '#6b6057';
             }
 
-            // if already object format, ensure minimal shape
+            // if already object format, ensure minimal shape and normalize item categories
             if (typeof t.contains === 'object' && t.contains !== null && t.contains.type) {
-                // nothing to do
+                const cType = String(t.contains.type).toLowerCase();
+                const cSubtype = t.contains.subtype ? String(t.contains.subtype) : '';
+                const isItemType = ['key', 'rune', 'jewel', 'shard', 'consumable', 'weapon', 'armor', 'magical', 'potion'].includes(cType) ||
+                    cType.includes('key') || cType.includes('shard') || cType.includes('rune') ||
+                    cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune');
+
+                if (isItemType) {
+                    let actualSubtype = cSubtype;
+                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(actualSubtype)) {
+                        actualSubtype = cType;
+                    }
+                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(actualSubtype)) {
+                        actualSubtype = 'minor_key';
+                    }
+                    t.contains = { type: 'item', subtype: actualSubtype };
+                }
                 continue;
             }
             const legacy = t.contains;
@@ -787,8 +816,8 @@ export function BoardManager(){
                     t.contains = { type: 'gate', subtype: 'minor' };
                 } else if (normalizedLegacy === 'lantern') {
                     t.contains = { type: 'item', subtype: (this.pickRandom(this.availableItems) || null) };
-                } else if (normalizedLegacy.indexOf('key') !== -1) {
-                    // any key-like legacy string (e.g. 'minor_key' or 'minor key') -> item with subtype
+                } else if (normalizedLegacy.indexOf('key') !== -1 || normalizedLegacy.indexOf('shard') !== -1 || normalizedLegacy.indexOf('rune') !== -1 || normalizedLegacy.indexOf('potion') !== -1 || normalizedLegacy.indexOf('jewel') !== -1) {
+                    // any key/shard/item legacy string -> item with subtype
                     t.contains = { type: 'item', subtype: normalizedLegacy };
                 } else {
                     // generic mapping: keep type as legacy and no subtype
@@ -2086,30 +2115,40 @@ export function BoardManager(){
             const raw = destinationTile && destinationTile.contains;
             if (raw && typeof raw === 'string') {
                 // legacy string form: either a monster key, a key/item, or a type name
-                if (this.monstersArr.includes(raw)) {
+                if (this.monstersArr.includes(raw) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(raw))) {
                     destinationTile.contains = { type: 'monster', subtype: raw };
                 } else if (raw === 'monster') {
                     destinationTile.contains = { type: 'monster', subtype: this.getRandomMonster() };
-                } else if (typeof raw === 'string' && raw.indexOf('key') !== -1) {
-                    // treat any '*_key' or key-like string as an item (so it can be picked up)
+                } else if (raw.includes('key') || raw.includes('shard') || raw.includes('rune') || raw.includes('potion') || raw.includes('jewel')) {
+                    // treat any key/shard/rune string as an item (so it can be picked up)
                     destinationTile.contains = { type: 'item', subtype: raw };
                 } else {
                     destinationTile.contains = { type: raw, subtype: null };
                 }
             } else if (raw && typeof raw === 'object') {
-                // If an object with only a subtype was provided (e.g. { subtype: 'gorgon' })
-                // assume it's a monster when the subtype matches known monster keys.
+                const cType = raw.type ? String(raw.type).toLowerCase() : '';
+                const cSubtype = raw.subtype ? String(raw.subtype) : '';
+                const isItemKind = ['item', 'key', 'rune', 'jewel', 'shard', 'consumable', 'weapon', 'armor', 'magical', 'potion'].includes(cType) ||
+                    cType.includes('key') || cType.includes('shard') || cType.includes('rune') ||
+                    cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune');
+
                 if ((!raw.type || raw.type === null) && raw.subtype) {
                     if (this.monstersArr.includes(raw.subtype)) {
                         destinationTile.contains = { type: 'monster', subtype: raw.subtype };
+                    } else if (isItemKind) {
+                        destinationTile.contains = { type: 'item', subtype: raw.subtype };
                     } else {
                         destinationTile.contains = { type: raw.type || null, subtype: raw.subtype || null };
                     }
-                } else if (raw.type && typeof raw.type === 'string' && raw.type.indexOf('key') !== -1) {
-                    // objects that specify a key-like type (e.g. { type: 'minor_key' })
-                    // should be treated as items so pickup logic runs. Preserve the
-                    // specific key string in subtype so callers can distinguish variants.
-                    destinationTile.contains = { type: 'item', subtype: raw.type };
+                } else if (isItemKind) {
+                    let actualSubtype = cSubtype;
+                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(actualSubtype)) {
+                        actualSubtype = cType;
+                    }
+                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(actualSubtype)) {
+                        actualSubtype = 'minor_key';
+                    }
+                    destinationTile.contains = { type: 'item', subtype: actualSubtype };
                 }
             }
         } catch (e) {
@@ -2119,16 +2158,9 @@ export function BoardManager(){
         const type = this.getContainsType(destinationTile.contains);
         const subtype = this.getContainsSubtype(destinationTile.contains);
         
-        if (type === 'building' && subtype !== 'hut') {
+        if (this.isImpassableBuildingTile(destinationTile)) {
             const rawBldg = subtype || destinationTile.building || 'building';
-            const bldgName = rawBldg.replace(/_/g, ' ');
-            const article = ['a', 'e', 'i', 'o', 'u'].includes(bldgName.charAt(0).toLowerCase()) ? 'An' : 'A';
-            if (this.messaging) this.messaging(`${article} ${bldgName} obstructs your movement.`);
-            return 'impassable';
-        }
-        if (type !== 'hut' && subtype !== 'hut' && destinationTile.building && destinationTile.building !== 'hut') {
-            const rawBldg = subtype || destinationTile.building || 'building';
-            const bldgName = rawBldg.replace(/_/g, ' ');
+            const bldgName = rawBldg.replace(/_/g, ' ').replace(' under construction', '');
             const article = ['a', 'e', 'i', 'o', 'u'].includes(bldgName.charAt(0).toLowerCase()) ? 'An' : 'A';
             if (this.messaging) this.messaging(`${article} ${bldgName} obstructs your movement.`);
             return 'impassable';
@@ -2192,17 +2224,26 @@ export function BoardManager(){
             case 'pygmies':
                 return 'pygmies';
             case 'item':
+            case 'key':
+            case 'rune':
+            case 'jewel':
+            case 'shard':
+            case 'consumable':
                 if (this.isChest(subtype)) {
                     const keyDetails = this.getRequiredKeyForChest(subtype);
                     if (keyDetails) {
                         const inventory = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || [];
                         const keyItem = inventory.find(e =>
-                            e.subtype === keyDetails.requiredKeySubtype ||
-                            e.name === keyDetails.keyName ||
-                            (e.name && e.name.replace(/_/g, ' ') === keyDetails.keyName) ||
-                            e.name === 'master key' ||
-                            e.subtype === 'master_key' ||
-                            e._im_key === 'master_key'
+                            !e ? false : (
+                                e.subtype === keyDetails.requiredKeySubtype ||
+                                e.name === keyDetails.keyName ||
+                                (e.name && e.name.replace(/_/g, ' ') === keyDetails.keyName) ||
+                                e._im_key === keyDetails.requiredKeySubtype ||
+                                e.icon === keyDetails.requiredKeySubtype ||
+                                e.name === 'master key' ||
+                                e.subtype === 'master_key' ||
+                                e._im_key === 'master_key'
+                            )
                         );
                         if (keyItem) {
                             this.messaging(`You unlock the chest using your ${keyItem.name.replace(/_/g, ' ')}!`);
@@ -2232,12 +2273,15 @@ export function BoardManager(){
                 } else {
                     // destinationTile.contains may be object; callers expect string contains
                     try {
-                        const tileForCallback = Object.assign({}, destinationTile, { contains: subtype });
-                        this.addItemToInventory(tileForCallback)
+                        const itemKey = (subtype && !['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(subtype))
+                            ? subtype
+                            : (destinationTile.contains && typeof destinationTile.contains === 'object' ? (destinationTile.contains.subtype || destinationTile.contains.type) : destinationTile.contains);
+                        const tileForCallback = Object.assign({}, destinationTile, { contains: itemKey });
+                        this.addItemToInventory(tileForCallback);
                     } catch (e) {
-                        this.addItemToInventory(destinationTile)
+                        this.addItemToInventory(destinationTile);
                     }
-                    this.removeTileFromBoard(destinationTile)
+                    this.removeTileFromBoard(destinationTile);
                     return 'item';
                 }
                 break;
@@ -2387,8 +2431,12 @@ export function BoardManager(){
     };
 
     this.removeDefeatedMonsterTile = (tileId, onComplete) => {
-        const tile = typeof tileId === 'number' ? this.tiles[tileId] : tileId;
-        if (!tile) {
+        if (!tileId || typeof tileId === 'string') {
+            if (typeof onComplete === 'function') onComplete();
+            return;
+        }
+        const tile = typeof tileId === 'number' ? (this.tiles ? this.tiles[tileId] : null) : (typeof tileId === 'object' ? tileId : null);
+        if (!tile || typeof tile !== 'object') {
             if (typeof onComplete === 'function') onComplete();
             return;
         }
@@ -2398,7 +2446,7 @@ export function BoardManager(){
     };
 
     this.removeTileFromBoard = (tile) => {
-        if (!tile) return;
+        if (!tile || typeof tile !== 'object') return;
         // Clear runtime monster/image and restore floor appearance.
         tile.isFadingOut = false;
         tile.image = null;

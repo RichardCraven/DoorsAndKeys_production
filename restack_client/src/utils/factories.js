@@ -55,11 +55,15 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         const vctId = `${combatant.id}_VCT`;
         return allCombatants[vctId] || combatant;
     };
-    // Determine initial facing: right for fighters, left for monsters/minions
-    let initialFacing = 'right';
-    if (fighter.isMonster || fighter.isMinion) {
-        // console.log('*****fighter: ', fighter);
-        initialFacing = 'left';
+    // Determine initial facing: right for fighters on left side, left for monsters/minions/right-side units
+    let initialFacing = fighter.facing;
+    if (!initialFacing) {
+        const isRightSide = (fighter.coordinates && fighter.coordinates.x >= 4) || fighter.isOpponent;
+        if (fighter.isMonster || fighter.isMinion || isRightSide) {
+            initialFacing = 'left';
+        } else {
+            initialFacing = 'right';
+        }
     }
 
     let rawAttacks = [];
@@ -112,31 +116,33 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         huge: fighter.huge,
         key: fighter.key || fighter.type,
         FIGHT_INTERVAL: FIGHT_INTERVAL,
-    // Use incoming current hp if provided (persisted from DungeonPage), otherwise default to stats.hp
-    hp: (typeof fighter.hp === 'number') ? fighter.hp : fighter.stats.hp,
-    // starting_hp represents the max HP for the fighter (may be provided or fall back to stats.hp)
-    starting_hp: (typeof fighter.starting_hp === 'number') ? fighter.starting_hp : fighter.stats.hp,
-        // All units start at 0 energy.
-        energy: 0,
-        tempo: 1,
-        turnCycleCount: 0,
-        turnCycleStarted: false,
-        atk: fighter.stats.atk,
-        stats: {
-            str: fighter.stats.str,
-            fort: fighter.stats.fort,
-            dex: fighter.stats.dex,
-            int: fighter.stats.int,
-            def: fighter.stats.def,
-            hp: fighter.stats.hp,
-            atk: fighter.stats.atk,
-            // Include derived substats if present (speed/willpower). If not
-            // provided, they'll be computed below via fallbacks where needed.
-            // Ensure a numeric speed exists for tempo math: prefer explicit speed,
-            // fall back to dex if available, otherwise default to 1.
-            speed: (typeof fighter.stats.speed === 'number') ? fighter.stats.speed : ((typeof fighter.stats.dex === 'number') ? fighter.stats.dex : 1),
-            willpower: (typeof fighter.stats.willpower === 'number') ? fighter.stats.willpower : undefined
-        },
+        // Safe fallbacks if fighter.stats is missing or incomplete
+        ...(() => {
+            const fStats = fighter.stats || {};
+            const fHp = (typeof fighter.hp === 'number') ? fighter.hp : ((typeof fStats.hp === 'number') ? fStats.hp : (typeof fighter.maxHp === 'number' ? fighter.maxHp : 100));
+            const fStartingHp = (typeof fighter.starting_hp === 'number') ? fighter.starting_hp : ((typeof fStats.hp === 'number') ? fStats.hp : (typeof fighter.maxHp === 'number' ? fighter.maxHp : fHp));
+            const fAtk = (typeof fighter.atk === 'number') ? fighter.atk : ((typeof fStats.atk === 'number') ? fStats.atk : 10);
+            return {
+                hp: fHp,
+                starting_hp: fStartingHp,
+                energy: 0,
+                tempo: 1,
+                turnCycleCount: 0,
+                turnCycleStarted: false,
+                atk: fAtk,
+                stats: {
+                    str: (typeof fStats.str === 'number') ? fStats.str : (typeof fighter.str === 'number' ? fighter.str : 10),
+                    fort: (typeof fStats.fort === 'number') ? fStats.fort : (typeof fighter.fort === 'number' ? fighter.fort : 10),
+                    dex: (typeof fStats.dex === 'number') ? fStats.dex : (typeof fighter.dex === 'number' ? fighter.dex : 10),
+                    int: (typeof fStats.int === 'number') ? fStats.int : (typeof fighter.int === 'number' ? fighter.int : 10),
+                    def: (typeof fStats.def === 'number') ? fStats.def : (typeof fighter.def === 'number' ? fighter.def : 5),
+                    hp: fHp,
+                    atk: fAtk,
+                    speed: (typeof fStats.speed === 'number') ? fStats.speed : ((typeof fStats.dex === 'number') ? fStats.dex : ((typeof fighter.speed === 'number') ? fighter.speed : 1)),
+                    willpower: (typeof fStats.willpower === 'number') ? fStats.willpower : fighter.willpower
+                }
+            };
+        })(),
     inventory: fighter.inventory,
     dead: !!fighter.dead,
         weaknesses: fighter.weaknesses,

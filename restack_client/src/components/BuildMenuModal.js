@@ -5,7 +5,7 @@
 
 import React, { Component } from 'react';
 import * as images from '../utils/images';
-import { getAdjustedBuildTime, hasArcaneUnit } from '../utils/building-utils';
+import { getAdjustedBuildTime, hasArcaneUnit, hasEngineerUnit } from '../utils/building-utils';
 import { getMeta } from '../utils/session-handler';
 
 export const BUILDINGS = [
@@ -135,6 +135,18 @@ export const BUILDINGS = [
         tag: 'OBSCURE',
         description: 'Lorem ipsum dolor sit amet. A fiery chasm offering access to Nether forces.',
     },
+    // --- ADVANCED BUILDINGS ---
+    {
+        key: 'wall',
+        name: 'Wall',
+        category: 'advanced',
+        imageKey: 'wall',
+        fallbackImageKey: 'wall',
+        costs: { wood: 25, stone: 20, slate: 0 },
+        buildTime: 60,
+        tag: 'STRUCTURE',
+        description: 'A sturdy wall that blocks movement for non-owners. Cannot be inscribed by other players.',
+    },
 ];
 
 // hasArcaneUnit imported from building-utils.js
@@ -145,6 +157,12 @@ const TABS = [
         label: 'Earthly',
         icon: '🌿',
         isDisabled: () => false,
+    },
+    {
+        id: 'advanced',
+        label: 'Advanced',
+        icon: '⚙️',
+        isDisabled: (crew) => !hasEngineerUnit(crew),
     },
     {
         id: 'arcane',
@@ -171,9 +189,14 @@ class BuildMenuModal extends Component {
 
     getResourceCounts = () => {
         const { inventoryManager } = this.props;
-        const inv = (inventoryManager && inventoryManager.inventory) || [];
-        const counts = { wood: 0, stone: 0, slate: 0, dust: 0 };
+        const counts = { 
+            wood: inventoryManager?.wood || 0, 
+            stone: inventoryManager?.stone || 0, 
+            slate: inventoryManager?.slate || 0, 
+            dust: inventoryManager?.shimmering_dust || 0 
+        };
 
+        const inv = (inventoryManager && inventoryManager.inventory) || [];
         if (Array.isArray(inv)) {
             inv.forEach(item => {
                 if (!item) return;

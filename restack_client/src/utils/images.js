@@ -620,6 +620,7 @@ import sorceress from '../assets/icons/crew_icons/sorceress.png'
 import engineer from '../assets/portraits/crew/engineer/engineer_compressed.png'
 import turret_icon from '../assets/icons/combat-icons/specials/engineer/turret.png'
 import turret_blade_icon from '../assets/icons/combat-icons/specials/engineer/turret_blade.png'
+import wall_icon from '../assets/icons/combat-icons/specials/engineer/wall.png'
 import summoner from '../assets/portraits/crew/summoner/summoner_compressed.png'
 import trophy_background from '../assets/high_res_images/trophy_background.png'
 
@@ -1255,6 +1256,8 @@ const woodland_pygmy_group = woodland_group;
 const mud_pygmy_group = mud_group;
 
 
+const cultist = basilisk_cultists;
+const cultist_portrait = basilisk_cultists_portrait;
 const basilisk_cultist = basilisk_cultists;
 const basilisk_cultist_portrait = basilisk_cultists_portrait;
 const high_priest_of_basilisk = high_priest_of_the_basilisk;
@@ -1394,6 +1397,8 @@ export {
     basilisk_priest_portrait,
     basilisk,
     basilisk_portrait,
+    cultist,
+    cultist_portrait,
     basilisk_cultists,
     basilisk_cultists_portrait,
     basilisk_cultist,
@@ -1858,6 +1863,7 @@ export {
     turret_icon as turret,
     turret_icon,
     walker_glowing_square,
+    wall_icon as wall,
     turret_blade_icon as turret_blade,
     turret_blade_icon,
     summoner,

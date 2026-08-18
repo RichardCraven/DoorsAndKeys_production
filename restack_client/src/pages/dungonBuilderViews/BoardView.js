@@ -405,6 +405,7 @@ class BoardView extends React.Component {
                                 handleHover={this.props.handleHover}
                                 handleClick={this.props.handleClick}
                                 handleContextMenu={this.props.handleContextMenu}
+                                handleDoubleClick={this.props.handleDoubleClick}
                                 delayedHoverLabel={this.getTileHoverLabel(tile)}
                                 type={tile.type}
                                 hovered={isHovered && !tileMatchesPreview}

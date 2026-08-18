@@ -1576,6 +1576,20 @@ const skillsMatrix = {
         atkPercentage: 100,
         type: 'damage'
     },
+    wrench_strike: {
+        class: 'engineer',
+        id: 'wrench_strike',
+        tier: 1,
+        knownByDefault: true,
+        name: 'Wrench Strike',
+        desc: 'Execute a heavy wrench strike.',
+        icon: images['shortsword'],
+        cooldown: 1,
+        duration: 'instant',
+        range: 'close',
+        atkPercentage: 100,
+        type: 'damage'
+    },
     bite: {
         id: 'bite',
         tier: 1,
