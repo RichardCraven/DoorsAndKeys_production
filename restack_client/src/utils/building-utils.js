@@ -134,3 +134,27 @@ export function hasArcaneUnit(crew = []) {
     });
 }
 
+export function hasEngineerUnit(crew = []) {
+    if (!Array.isArray(crew)) return false;
+    return crew.some(member => {
+        if (!member) return false;
+        const isDead = member.dead === true || member.isDead === true || (typeof member.hp === 'number' && member.hp <= 0);
+        if (isDead) return false;
+
+        const stringValues = [];
+        for (const [key, value] of Object.entries(member)) {
+            if (typeof value === 'string') {
+                stringValues.push(value.toLowerCase());
+            } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+                for (const subVal of Object.values(value)) {
+                    if (typeof subVal === 'string') {
+                        stringValues.push(subVal.toLowerCase());
+                    }
+                }
+            }
+        }
+        const searchStr = stringValues.join(' ');
+
+        return searchStr.includes('engineer') || searchStr.includes('machinist');
+    });
+}

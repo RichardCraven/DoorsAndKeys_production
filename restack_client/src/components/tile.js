@@ -127,8 +127,10 @@ function Tile(props) {
 
         let anchorId = null;
 
-        if (props.hoveredTileFootprint && props.hoveredTileFootprint.length === 4 && props.id !== null && props.id !== undefined) {
-            if (props.hoveredTileFootprint.includes(props.id)) {
+        const currentId = props.id !== undefined && props.id !== null ? props.id : props.index;
+
+        if (props.hoveredTileFootprint && props.hoveredTileFootprint.length === 4 && currentId !== null && currentId !== undefined) {
+            if (props.hoveredTileFootprint.includes(currentId)) {
                 anchorId = props.hoveredTileFootprint[0];
             }
         }
@@ -141,11 +143,11 @@ function Tile(props) {
             return containsObj.vendorCell;
         }
 
-        if (anchorId !== null && props.id !== null && props.id !== undefined) {
+        if (anchorId !== null && currentId !== null && currentId !== undefined) {
             const anchorRow = Math.floor(anchorId / 15);
             const anchorCol = anchorId % 15;
-            const tileRow = Math.floor(props.id / 15);
-            const tileCol = props.id % 15;
+            const tileRow = Math.floor(currentId / 15);
+            const tileCol = currentId % 15;
 
             const dRow = tileRow - anchorRow;
             const dCol = tileCol - anchorCol;
@@ -185,6 +187,10 @@ function Tile(props) {
             unwrapped = unwrapped.default || '';
         }
         let normalizedUrl = String(unwrapped).trim().replace(/^['"]|['"]$/g, '');
+
+        if (normalizedUrl.startsWith('/') || normalizedUrl.includes('/static/media/') || normalizedUrl.startsWith('http') || normalizedUrl.startsWith('data:')) {
+            return `url("${encodeURI(normalizedUrl)}")`;
+        }
 
         let keyStr = normalizedUrl;
         if (normalizedUrl.includes('/') || normalizedUrl.includes('.')) {
@@ -432,8 +438,7 @@ function Tile(props) {
     const targetTileId = props.index !== undefined ? props.index : props.id;
     const mainTile = props.boardTiles?.[targetTileId];
     const isMainTileBlack = mainTile ? isBlackRenderedTile(mainTile.contains, mainTile.color) : isBlackTile;
-    const isHut = props.building === 'hut' || 
-                  (containsObj && (containsObj.subtype === 'hut' || containsObj.building === 'hut' || containsObj.type === 'hut')) ||
+    const isHut = (containsObj && (containsObj.subtype === 'hut' || containsObj.building === 'hut' || containsObj.type === 'hut')) ||
                   (currentContains && (currentContains.subtype === 'hut' || currentContains.building === 'hut' || currentContains.type === 'hut'));
     const isUnderConstruction = (props.contains && typeof props.contains.subtype === 'string' && props.contains.subtype.includes('_under_construction')) ||
                                 (currentContains && typeof currentContains.subtype === 'string' && currentContains.subtype.includes('_under_construction'));
@@ -451,6 +456,10 @@ function Tile(props) {
     })();
 
     const isChargingAmbush = !!(currentTile && currentTile.isChargingAmbush) || !!props.isChargingAmbush;
+    const isBumpingAttack = !!(currentTile && currentTile.isBumpingAttack) || !!props.isBumpingAttack || !!(currentContains && currentContains.isBumpingAttack);
+    const bumpVector = (currentTile && currentTile.bumpVector) || props.bumpVector || (currentContains && currentContains.bumpVector) || { dRow: -1, dCol: 0 };
+    const bumpX = `${(bumpVector?.dCol ?? 0) * 85}%`;
+    const bumpY = `${(bumpVector?.dRow ?? -1) * 85}%`;
 
 
     const imageString = String(props.imageOverride || props.image || '').toLowerCase();
@@ -527,6 +536,8 @@ function Tile(props) {
         <div 
             data-portal-id={props['data-portal-id']}
             style={{
+            '--bump-x': bumpX,
+            '--bump-y': bumpY,
             opacity: props.isPreview ? 0.6 : 1,
             pointerEvents: props.passThrough ? 'none' : 'inherit',
             boxSizing: 'border-box',
@@ -543,8 +554,8 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: (isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isHut && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
-            zIndex: isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : undefined),
+            overflow: (isBumpingAttack || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isHut && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
+            zIndex: isBumpingAttack ? 100 : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (((isHut && isOccupied) || isUnderConstruction) ? 5 : undefined))),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
@@ -580,6 +591,11 @@ function Tile(props) {
                     return null
                 }
             }}
+            onDoubleClick={(e) => {
+                if (props.handleDoubleClick) {
+                    return props.handleDoubleClick(props);
+                }
+            }}
             onContextMenu={(e) => {
                 if (props.handleContextMenu) {
                     e.preventDefault();
@@ -587,7 +603,7 @@ function Tile(props) {
                 }
             }}
             onDragStart={(e) => e.preventDefault()}
-            className={`tile ${props.className || ''} ${props.type || ''}`.trim()}
+            className={`tile ${props.className || ''} ${props.type || ''} ${isBumpingAttack ? 'pygmy-bump-hit' : ''}`.trim()}
             data-tile-id={props.index}
         >
            {props.isMobileTouchHover && (
@@ -848,7 +864,6 @@ function Tile(props) {
                                transform: isUnderConstruction ? 'scale(1.5)' : (isHut && isOccupied ? 'scale(2.0)' : 'none'),
                                transformOrigin: (isHut && isOccupied) || isUnderConstruction ? 'bottom center' : 'center center',
                                transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
-                               animation: isUnderConstruction ? 'buildingPulse 1.5s infinite ease-in-out' : 'none',
                                pointerEvents: 'none'
                            }} />
                       )}
@@ -858,12 +873,26 @@ function Tile(props) {
                 const monsterType = props.data.monsterType || '';
                 const mTypeLower = monsterType.toLowerCase();
                 const portraitUrl = images[monsterType] || images[mTypeLower] || images[`${mTypeLower}_portrait`] || images[`${mTypeLower}_portrait2`] || null;
+                const isComplete = props.data.count >= 3;
                 return (
                     <div style={{
                         position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                         opacity: color === 'black' ? 0 : 1,
                         transition: 'opacity 0.35s ease-in-out'
                     }}>
+                        {/* Complete 3/3 Golden / Emerald Pulsing Glow Frame */}
+                        {isComplete && (
+                            <div style={{
+                                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                boxShadow: 'inset 0 0 12px rgba(52, 211, 153, 0.85), 0 0 10px rgba(255, 215, 0, 0.9)',
+                                border: '2px solid #ffd700',
+                                borderRadius: '3px',
+                                zIndex: 3,
+                                pointerEvents: 'none',
+                                animation: 'soulShardCompleteGlow 1.6s ease-in-out infinite alternate'
+                            }} />
+                        )}
+
                         {/* 50% opacity monster portrait underlay */}
                         {portraitUrl && (
                             <div style={{
@@ -872,10 +901,22 @@ function Tile(props) {
                                 backgroundImage: toCssUrl(portraitUrl),
                                 backgroundSize: 'cover',
                                 backgroundPosition: 'center',
-                                opacity: 0.5,
+                                opacity: isComplete ? 0.65 : 0.5,
                                 zIndex: 1
                             }} />
                         )}
+
+                        {/* Center gold radiance glow when stack complete */}
+                        {isComplete && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '10%', left: '10%', right: '10%', bottom: '10%',
+                                background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.6) 0%, rgba(52, 211, 153, 0.3) 50%, transparent 80%)',
+                                zIndex: 1,
+                                pointerEvents: 'none'
+                            }} />
+                        )}
+
                         {/* 100% opacity soul shards icon on top */}
                         <div style={{
                             position: 'absolute',
@@ -884,22 +925,50 @@ function Tile(props) {
                             backgroundSize: '80% 80%',
                             backgroundPosition: 'center',
                             backgroundRepeat: 'no-repeat',
+                            filter: isComplete ? 'drop-shadow(0 0 6px rgba(255, 215, 0, 0.95))' : 'none',
                             zIndex: 2
                         }} />
-                        {/* Top-left fraction label (e.g. 2/3) */}
+
+                        {/* Top-left fraction label (e.g. 3/3) */}
                         <div style={{
                             position: 'absolute',
                             top: '2px',
                             left: '3px',
                             fontSize: '9px',
                             fontWeight: 'bold',
-                            color: '#ffd700',
-                            textShadow: '0px 1px 3px rgba(0,0,0,0.9), 0px 1px 1px black',
+                            color: isComplete ? '#34d399' : '#ffd700',
+                            textShadow: isComplete ? '0px 0px 5px rgba(52, 211, 153, 0.9), 0px 1px 2px black' : '0px 1px 3px rgba(0,0,0,0.9), 0px 1px 1px black',
                             zIndex: 4,
                             pointerEvents: 'none'
                         }}>
                             {props.data.count}/3
                         </div>
+
+                        {/* Top-right Checkmark Badge when 3/3 complete */}
+                        {isComplete && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '2px',
+                                right: '3px',
+                                width: '13px',
+                                height: '13px',
+                                borderRadius: '50%',
+                                backgroundColor: '#10b981',
+                                backgroundImage: 'linear-gradient(135deg, #34d399, #059669)',
+                                color: '#ffffff',
+                                fontSize: '9px',
+                                fontWeight: 'bold',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 0 6px rgba(16, 185, 129, 0.9)',
+                                border: '1px solid #ffffff',
+                                zIndex: 5,
+                                pointerEvents: 'none'
+                            }}>
+                                ✓
+                            </div>
+                        )}
                     </div>
                 );
             })()}
@@ -1503,7 +1572,7 @@ export function propsAreEqual(prevProps, nextProps) {
         'isPlayerOnTile', 'className', 'illuminated', 'sabotageProgress', 'monolithActivationProgress',
         'isDisabledOutpost', 'disabledUntil', 'inscriptions', 'debugMode',
         'isPlayerTile', 'hasLivingSummoner', 'playerImgKey', 'cursor', 'isFadingOut',
-        'ownedByPlayer', 'ownedByEnemy'
+        'ownedByPlayer', 'ownedByEnemy', 'isBumpingAttack', 'bumpVector'
     ];
 
     for (let key of keysToCompare) {

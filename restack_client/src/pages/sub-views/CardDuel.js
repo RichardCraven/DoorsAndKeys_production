@@ -2,6 +2,8 @@ import React from 'react';
 import * as images from '../../utils/images';
 import '../../styles/CardDuel.css';
 import { hasUserPerk } from '../../utils/user-perks';
+import { getMeta } from '../../utils/session-handler';
+import cardManager from '../../utils/card-manager';
 
 // ─── Tactical Card Duel Component (Threshold & Territory Overhaul) ───────────
 
@@ -466,6 +468,34 @@ export default class CardDuel extends React.Component {
             height: 1,
             art: resolveImage(images.shadow_rune) || resolveImage(images.earthen_rune),
             desc: 'Draw 3 cards from your deck.'
+        });
+
+        // Add forged Echo Cards (1/1 unit cards identical to pygmies except for portrait and name)
+        const meta = getMeta() || {};
+        const forgedEchoIds = (meta.echoCards && Array.isArray(meta.echoCards)) ? meta.echoCards : [];
+
+        forgedEchoIds.forEach((echoId) => {
+            const cardObj = cardManager.getCard(echoId);
+            const mType = cardObj?.monsterType || echoId.replace('echo_', '');
+            const cardName = cardObj?.name ? `${cardObj.name}` : `${mType.charAt(0).toUpperCase() + mType.slice(1)} Echo`;
+            const artKey = cardObj?.art || `${mType}_portrait` || mType;
+            const resolvedArt = resolveImage(images[artKey]) || resolveImage(images[`${mType}_portrait`]) || resolveImage(images[mType]) || resolveImage(images.cave_individual);
+
+            playerDeck.push({
+                id: `player_echo_${echoId}_${Math.random().toString(36).substring(2, 7)}`,
+                name: cardName,
+                type: 'pygmy', // 1/1 unit identical to Pygmy
+                owner: 'player',
+                cost: 1,
+                atk: 1,
+                hp: 1,
+                maxHp: 1,
+                width: 1,
+                height: 1,
+                art: resolvedArt,
+                isEcho: true,
+                monsterType: mType
+            });
         });
 
         // Fill remaining up to 12 with Cave Pygmies
@@ -1119,6 +1149,59 @@ export default class CardDuel extends React.Component {
         return true;
     }
 
+    canUnitMoveTo = (unit, newAnchorRow, newAnchorCol, currentGrid) => {
+        if (!unit) return false;
+        const w = unit.width || 1;
+        const h = unit.height || 1;
+
+        if (newAnchorRow < 0 || newAnchorRow + h > 5 || newAnchorCol < 0 || newAnchorCol + w > 5) {
+            return false;
+        }
+
+        const currentKeys = new Set(unit.occupiedKeys || []);
+        for (let dr = 0; dr < h; dr++) {
+            for (let dc = 0; dc < w; dc++) {
+                const checkKey = `${newAnchorRow + dr}_${newAnchorCol + dc}`;
+                if (!currentKeys.has(checkKey) && currentGrid[checkKey] && currentGrid[checkKey].id !== unit.id) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    applyUnitMove = (unit, newAnchorRow, newAnchorCol, grid, territory = null, ownerTerritory = null) => {
+        if (!unit) return [];
+        const w = unit.width || 1;
+        const h = unit.height || 1;
+
+        if (Array.isArray(unit.occupiedKeys)) {
+            unit.occupiedKeys.forEach(k => {
+                if (grid[k] && grid[k].id === unit.id) {
+                    delete grid[k];
+                }
+            });
+        }
+
+        const newKeys = [];
+        for (let dr = 0; dr < h; dr++) {
+            for (let dc = 0; dc < w; dc++) {
+                const key = `${newAnchorRow + dr}_${newAnchorCol + dc}`;
+                newKeys.push(key);
+                grid[key] = unit;
+                if (territory && ownerTerritory) {
+                    territory[key] = ownerTerritory;
+                }
+            }
+        }
+
+        unit.anchorRow = newAnchorRow;
+        unit.anchorCol = newAnchorCol;
+        unit.occupiedKeys = newKeys;
+
+        return newKeys;
+    }
+
     handleDragOverNode = (e, r, c) => {
         const { selectedCard } = this.state;
         if (selectedCard) {
@@ -1451,51 +1534,20 @@ export default class CardDuel extends React.Component {
                 // Player Monk attacks Reaper
                 if (pIsMonk && originalPDmg > 0 && rUnit.hp > originalPDmg) {
                     const targetRow = rUnit.anchorRow - 1;
-                    if (targetRow >= 0) {
-                        let canPush = true;
-                        for (let c = colIndex; c < colIndex + (rUnit.width || 1); c++) {
-                            if (updatedGrid[`${targetRow}_${c}`]) canPush = false;
-                        }
-                        if (canPush) {
-                            rStunned = true;
-                            rUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                            rUnit.anchorRow = targetRow;
-                            rUnit.occupiedKeys = [];
-                            for (let r = 0; r < (rUnit.height || 1); r++) {
-                                for (let c = 0; c < (rUnit.width || 1); c++) {
-                                    const key = `${targetRow + r}_${colIndex + c}`;
-                                    rUnit.occupiedKeys.push(key);
-                                    updatedGrid[key] = rUnit;
-                                }
-                            }
-                            this.addLog(`🥋 [Col ${colIndex + 1}] Your Monk's strike pushes ${rUnit.name} back and stuns them!`);
-                        }
+                    if (this.canUnitMoveTo(rUnit, targetRow, rUnit.anchorCol, updatedGrid)) {
+                        rStunned = true;
+                        this.applyUnitMove(rUnit, targetRow, rUnit.anchorCol, updatedGrid);
+                        this.addLog(`🥋 [Col ${colIndex + 1}] Your Monk's strike pushes ${rUnit.name} back and stuns them!`);
                     }
                 }
 
                 // Reaper Monk attacks Player
                 if (rIsMonk && originalRDmg > 0 && pUnit.hp > originalRDmg) {
-                    const targetRow = pUnit.anchorRow + (pUnit.height || 1);
-                    if (targetRow <= 4) {
-                        let canPush = true;
-                        for (let c = colIndex; c < colIndex + (pUnit.width || 1); c++) {
-                            if (updatedGrid[`${targetRow}_${c}`]) canPush = false;
-                        }
-                        if (canPush) {
-                            pStunned = true;
-                            const newAnchorRow = pUnit.anchorRow + 1;
-                            pUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                            pUnit.anchorRow = newAnchorRow;
-                            pUnit.occupiedKeys = [];
-                            for (let r = 0; r < (pUnit.height || 1); r++) {
-                                for (let c = 0; c < (pUnit.width || 1); c++) {
-                                    const key = `${newAnchorRow + r}_${colIndex + c}`;
-                                    pUnit.occupiedKeys.push(key);
-                                    updatedGrid[key] = pUnit;
-                                }
-                            }
-                            this.addLog(`💀🥋 [Col ${colIndex + 1}] Reaper Monk's strike pushes ${pUnit.name} back and stuns them!`);
-                        }
+                    const targetRow = pUnit.anchorRow + 1;
+                    if (this.canUnitMoveTo(pUnit, targetRow, pUnit.anchorCol, updatedGrid)) {
+                        pStunned = true;
+                        this.applyUnitMove(pUnit, targetRow, pUnit.anchorCol, updatedGrid);
+                        this.addLog(`💀🥋 [Col ${colIndex + 1}] Reaper Monk's strike pushes ${pUnit.name} back and stuns them!`);
                     }
                 }
 
@@ -1567,24 +1619,15 @@ export default class CardDuel extends React.Component {
                             // Advance pUnit & Sage 1 tile UP if slot in front is claimable
                             if (pUnit.anchorRow > 0) {
                                 const targetRow = pUnit.anchorRow - 1;
-                                const targetKey = `${targetRow}_${colIndex}`;
-
-                                if (!updatedGrid[targetKey] || updatedGrid[targetKey].id === pUnit.id) {
-                                    updatedTerritory[targetKey] = 'player';
-                                    
-                                    // Move pUnit UP
-                                    pUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                                    pUnit.anchorRow = targetRow;
-                                    pUnit.occupiedKeys = [`${targetRow}_${colIndex}`];
-                                    updatedGrid[`${targetRow}_${colIndex}`] = pUnit;
+                                if (this.canUnitMoveTo(pUnit, targetRow, pUnit.anchorCol, updatedGrid)) {
+                                    this.applyUnitMove(pUnit, targetRow, pUnit.anchorCol, updatedGrid, updatedTerritory, 'player');
 
                                     // Move pSageBehind UP
-                                    if (pSageBehind.anchorRow > targetRow + 1) {
+                                    if (pSageBehind.anchorRow > targetRow + (pUnit.height || 1)) {
                                         const sageTargetRow = pSageBehind.anchorRow - 1;
-                                        pSageBehind.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                                        pSageBehind.anchorRow = sageTargetRow;
-                                        pSageBehind.occupiedKeys = [`${sageTargetRow}_${colIndex}`];
-                                        updatedGrid[`${sageTargetRow}_${colIndex}`] = pSageBehind;
+                                        if (this.canUnitMoveTo(pSageBehind, sageTargetRow, pSageBehind.anchorCol, updatedGrid)) {
+                                            this.applyUnitMove(pSageBehind, sageTargetRow, pSageBehind.anchorCol, updatedGrid, updatedTerritory, 'player');
+                                        }
                                     }
                                     moveAnims[pUnit.occupiedKeys[0]] = 'up';
                                     if (pSageBehind.occupiedKeys[0]) moveAnims[pSageBehind.occupiedKeys[0]] = 'up';
@@ -1603,26 +1646,17 @@ export default class CardDuel extends React.Component {
                             this.addLog(`✨ [Sage] Reaper's Sage ${rSageBehind.name} healed ${rUnit.name} (+1 HP -> ${rUnit.hp}/${maxH})!`);
 
                             // Advance rUnit & Sage 1 tile DOWN if slot in front is claimable
-                            if (rUnit.anchorRow < 4) {
+                            if (rUnit.anchorRow + (rUnit.height || 1) <= 4) {
                                 const targetRow = rUnit.anchorRow + 1;
-                                const targetKey = `${targetRow}_${colIndex}`;
-
-                                if (!updatedGrid[targetKey] || updatedGrid[targetKey].id === rUnit.id) {
-                                    updatedTerritory[targetKey] = 'reaper';
-
-                                    // Move rUnit DOWN
-                                    rUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                                    rUnit.anchorRow = targetRow;
-                                    rUnit.occupiedKeys = [`${targetRow}_${colIndex}`];
-                                    updatedGrid[`${targetRow}_${colIndex}`] = rUnit;
+                                if (this.canUnitMoveTo(rUnit, targetRow, rUnit.anchorCol, updatedGrid)) {
+                                    this.applyUnitMove(rUnit, targetRow, rUnit.anchorCol, updatedGrid, updatedTerritory, 'reaper');
 
                                     // Move rSageBehind DOWN
                                     if (rSageBehind.anchorRow < targetRow - 1) {
                                         const sageTargetRow = rSageBehind.anchorRow + 1;
-                                        rSageBehind.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                                        rSageBehind.anchorRow = sageTargetRow;
-                                        rSageBehind.occupiedKeys = [`${sageTargetRow}_${colIndex}`];
-                                        updatedGrid[`${sageTargetRow}_${colIndex}`] = rSageBehind;
+                                        if (this.canUnitMoveTo(rSageBehind, sageTargetRow, rSageBehind.anchorCol, updatedGrid)) {
+                                            this.applyUnitMove(rSageBehind, sageTargetRow, rSageBehind.anchorCol, updatedGrid, updatedTerritory, 'reaper');
+                                        }
                                     }
                                     moveAnims[rUnit.occupiedKeys[0]] = 'down';
                                     if (rSageBehind.occupiedKeys[0]) moveAnims[rSageBehind.occupiedKeys[0]] = 'down';
@@ -1634,38 +1668,24 @@ export default class CardDuel extends React.Component {
                     // Barbarian Advance Logic
                     if (rDead && !pDead && reaperUnits.length === 0) {
                         const isBarbarian = pUnit.isBarbarian || (pUnit.memberType && pUnit.memberType.toLowerCase().includes('barbarian'));
-                        if (isBarbarian) {
-                            if (pUnit.anchorRow > 0) {
-                                const targetRow = pUnit.anchorRow - 1;
-                                const targetKey = `${targetRow}_${colIndex}`;
-                                if (!updatedGrid[targetKey] || updatedGrid[targetKey].id === pUnit.id) {
-                                    this.addLog(`🪓 [Barbarian] ${pUnit.name} goes into a frenzy and advances an extra tile!`);
-                                    updatedTerritory[targetKey] = 'player';
-                                    pUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                                    pUnit.anchorRow = targetRow;
-                                    pUnit.occupiedKeys = [`${targetRow}_${colIndex}`];
-                                    updatedGrid[`${targetRow}_${colIndex}`] = pUnit;
-                                    moveAnims[pUnit.occupiedKeys[0]] = 'up';
-                                }
+                        if (isBarbarian && pUnit.anchorRow > 0) {
+                            const targetRow = pUnit.anchorRow - 1;
+                            if (this.canUnitMoveTo(pUnit, targetRow, pUnit.anchorCol, updatedGrid)) {
+                                this.addLog(`🪓 [Barbarian] ${pUnit.name} goes into a frenzy and advances an extra tile!`);
+                                this.applyUnitMove(pUnit, targetRow, pUnit.anchorCol, updatedGrid, updatedTerritory, 'player');
+                                moveAnims[pUnit.occupiedKeys[0]] = 'up';
                             }
                         }
                     }
 
                     if (pDead && !rDead && playerUnits.length === 0) {
                         const isBarbarian = rUnit.isBarbarian || (rUnit.memberType && rUnit.memberType.toLowerCase().includes('barbarian'));
-                        if (isBarbarian) {
-                            if (rUnit.anchorRow < 4) {
-                                const targetRow = rUnit.anchorRow + 1;
-                                const targetKey = `${targetRow}_${colIndex}`;
-                                if (!updatedGrid[targetKey] || updatedGrid[targetKey].id === rUnit.id) {
-                                    this.addLog(`🪓 [Barbarian] Reaper's ${rUnit.name} goes into a frenzy and advances an extra tile!`);
-                                    updatedTerritory[targetKey] = 'reaper';
-                                    rUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                                    rUnit.anchorRow = targetRow;
-                                    rUnit.occupiedKeys = [`${targetRow}_${colIndex}`];
-                                    updatedGrid[`${targetRow}_${colIndex}`] = rUnit;
-                                    moveAnims[rUnit.occupiedKeys[0]] = 'down';
-                                }
+                        if (isBarbarian && rUnit.anchorRow + (rUnit.height || 1) <= 4) {
+                            const targetRow = rUnit.anchorRow + 1;
+                            if (this.canUnitMoveTo(rUnit, targetRow, rUnit.anchorCol, updatedGrid)) {
+                                this.addLog(`🪓 [Barbarian] Reaper's ${rUnit.name} goes into a frenzy and advances an extra tile!`);
+                                this.applyUnitMove(rUnit, targetRow, rUnit.anchorCol, updatedGrid, updatedTerritory, 'reaper');
+                                moveAnims[rUnit.occupiedKeys[0]] = 'down';
                             }
                         }
                     }
@@ -1712,30 +1732,17 @@ export default class CardDuel extends React.Component {
             const moveAnims = { ...this.state.moveAnims };
 
             if (playerFrontier > 0) {
-                const targetRow = playerFrontier - 1;
-                updatedTerritory[`${targetRow}_${colIndex}`] = 'player';
-
-                // Move unit 1 tile UP into targetRow
-                const newAnchorRow = Math.max(0, pUnit.anchorRow - 1);
-                const newAnchorCol = pUnit.anchorCol;
-                const newOccupiedKeys = [];
-                for (let dr = 0; dr < (pUnit.height || 1); dr++) {
-                    for (let dc = 0; dc < (pUnit.width || 1); dc++) {
-                        newOccupiedKeys.push(`${newAnchorRow + dr}_${newAnchorCol + dc}`);
-                    }
+                const targetRow = pUnit.anchorRow - 1;
+                if (targetRow >= 0 && this.canUnitMoveTo(pUnit, targetRow, pUnit.anchorCol, updatedGrid)) {
+                    this.applyUnitMove(pUnit, targetRow, pUnit.anchorCol, updatedGrid, updatedTerritory, 'player');
+                    pUnit.occupiedKeys.forEach(k => { moveAnims[k] = 'up'; });
+                    this.addLog(`🚩 [Col ${colIndex + 1}] Your ${pUnit.name} advanced 1 tile into R${targetRow + 1}:L${colIndex + 1}! Territory claimed.`);
+                } else {
+                    // Blocked or at top edge -> deal direct damage
+                    reaperHP = Math.max(0, reaperHP - pUnit.atk);
+                    pUnit.occupiedKeys.forEach(k => { moveAnims[k] = 'up'; });
+                    this.addLog(`💥 [Col ${colIndex + 1}] Your ${pUnit.name} poured into enemy ranks dealing ${pUnit.atk} direct damage to the Reaper!`);
                 }
-
-                pUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                const movedUnit = {
-                    ...pUnit,
-                    anchorRow: newAnchorRow,
-                    anchorCol: newAnchorCol,
-                    occupiedKeys: newOccupiedKeys
-                };
-                newOccupiedKeys.forEach(k => { updatedGrid[k] = movedUnit; });
-                newOccupiedKeys.forEach(k => { moveAnims[k] = 'up'; });
-
-                this.addLog(`🚩 [Col ${colIndex + 1}] Your ${pUnit.name} advanced 1 tile into R${targetRow + 1}:L${colIndex + 1}! Territory claimed.`);
             } else {
                 // Already controls all 5 rows in this column -> direct damage
                 reaperHP = Math.max(0, reaperHP - pUnit.atk);
@@ -1777,30 +1784,17 @@ export default class CardDuel extends React.Component {
             const moveAnims = { ...this.state.moveAnims };
 
             if (reaperFrontier < 4) {
-                const targetRow = reaperFrontier + 1;
-                updatedTerritory[`${targetRow}_${colIndex}`] = 'reaper';
-
-                // Move unit 1 tile DOWN into targetRow
-                const newAnchorRow = Math.min(5 - (rUnit.height || 1), rUnit.anchorRow + 1);
-                const newAnchorCol = rUnit.anchorCol;
-                const newOccupiedKeys = [];
-                for (let dr = 0; dr < (rUnit.height || 1); dr++) {
-                    for (let dc = 0; dc < (rUnit.width || 1); dc++) {
-                        newOccupiedKeys.push(`${newAnchorRow + dr}_${newAnchorCol + dc}`);
-                    }
+                const targetRow = rUnit.anchorRow + 1;
+                if (targetRow + (rUnit.height || 1) <= 5 && this.canUnitMoveTo(rUnit, targetRow, rUnit.anchorCol, updatedGrid)) {
+                    this.applyUnitMove(rUnit, targetRow, rUnit.anchorCol, updatedGrid, updatedTerritory, 'reaper');
+                    rUnit.occupiedKeys.forEach(k => { moveAnims[k] = 'down'; });
+                    this.addLog(`🚩 [Col ${colIndex + 1}] Reaper's ${rUnit.name} advanced 1 tile into R${targetRow + 1}:L${colIndex + 1}! Territory claimed.`);
+                } else {
+                    // Blocked or at bottom edge -> deal direct damage
+                    playerHP = Math.max(0, playerHP - rUnit.atk);
+                    rUnit.occupiedKeys.forEach(k => { moveAnims[k] = 'down'; });
+                    this.addLog(`💀 [Col ${colIndex + 1}] Reaper's ${rUnit.name} poured into your ranks dealing ${rUnit.atk} direct damage to YOU!`);
                 }
-
-                rUnit.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                const movedUnit = {
-                    ...rUnit,
-                    anchorRow: newAnchorRow,
-                    anchorCol: newAnchorCol,
-                    occupiedKeys: newOccupiedKeys
-                };
-                newOccupiedKeys.forEach(k => { updatedGrid[k] = movedUnit; });
-                newOccupiedKeys.forEach(k => { moveAnims[k] = 'down'; });
-
-                this.addLog(`🚩 [Col ${colIndex + 1}] Reaper's ${rUnit.name} advanced 1 tile into R${targetRow + 1}:L${colIndex + 1}! Territory claimed.`);
             } else {
                 // Already controls all 5 rows in this column -> direct damage
                 playerHP = Math.max(0, playerHP - rUnit.atk);
@@ -2279,6 +2273,35 @@ export default class CardDuel extends React.Component {
         return (
             <div className="pe-root" style={bgImg ? { backgroundImage: bgImg } : {}}>
                 <div className="pe-overlay" />
+                {(this.props.scrimmage || this.props.onClose) && (
+                    <button
+                        className="pe-btn pe-btn--exit-scrimmage"
+                        onClick={() => {
+                            if (this.props.onClose) this.props.onClose();
+                            else if (this.props.onFinish) this.props.onFinish({ winner: 'reaper', forfeited: true });
+                        }}
+                        style={{
+                            position: 'absolute',
+                            top: '15px',
+                            right: '20px',
+                            zIndex: 1000,
+                            padding: '8px 16px',
+                            backgroundColor: 'rgba(231, 76, 60, 0.25)',
+                            border: '1px solid #e74c3c',
+                            color: '#ff7675',
+                            borderRadius: '6px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            fontWeight: 'bold',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5)'
+                        }}
+                    >
+                        ✕ Exit Scrimmage
+                    </button>
+                )}
                 <div className="pe-layout pe-layout--tactical">
 
                     {/* ── MAIN ARENA FLEX CONTAINER (Left Log | Center Arena | Right Runes) ── */}

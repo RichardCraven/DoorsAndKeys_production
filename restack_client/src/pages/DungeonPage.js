@@ -304,6 +304,7 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
             const stock = [];
             stock.push({ ...inventoryManager.allItems['minor_health_potion'], price: 20 });
             stock.push({ ...inventoryManager.allItems['major_health_potion'], price: 50 });
+            stock.push({ ...inventoryManager.allItems["minor_key"], price: 100 });
 
             const weaponKeys = Object.keys(inventoryManager.weapons || {});
             for (let i = 0; i < 2; i++) {
@@ -3002,6 +3003,10 @@ class DungeonPage extends React.Component {
             this.props.inventoryManager.gold = 0;
             this.props.inventoryManager.shimmering_dust = 0;
             this.props.inventoryManager.totems = 0;
+            this.props.inventoryManager.wood = 0;
+            this.props.inventoryManager.stone = 0;
+            this.props.inventoryManager.slate = 0;
+            this.props.inventoryManager.mushrooms = 0;
         }
 
         meta.dungeonId = null;
@@ -3017,7 +3022,11 @@ class DungeonPage extends React.Component {
                 }),
             gold: 0,
             shimmering_dust: 0,
-            totems: 0
+            totems: 0,
+            wood: 0,
+            stone: 0,
+            slate: 0,
+            mushrooms: 0
         };
         delete meta.activatedGenerators;
         delete meta.disabledOutposts;
@@ -3389,14 +3398,42 @@ class DungeonPage extends React.Component {
 
             const opponentCrew = rawCrew.map((member, idx) => {
                 const hpVal = typeof member.hp === 'number' ? member.hp : (member.stats?.hp || 100);
-                return {
+                const validStr = (val) => {
+                    if (typeof val !== 'string' || !val.trim() || val === '[object Object]') return null;
+                    const lower = val.trim().toLowerCase();
+                    if (lower === 'warrior' || lower === 'spellcaster') return null;
+                    return lower;
+                };
+
+                let resolvedKey = validStr(member.type) || validStr(member.image) || validStr(member.key);
+                if (!resolvedKey && typeof member.portrait === 'string') resolvedKey = validStr(member.portrait);
+                if (!resolvedKey && member.name) {
+                    const n = member.name.toLowerCase();
+                    if (n.includes('yu') || n.includes('monk')) resolvedKey = 'monk';
+                    else if (n.includes('dormund') || n.includes('ranger')) resolvedKey = 'ranger';
+                    else if (n.includes('sardonis') || n.includes('soldier')) resolvedKey = 'soldier';
+                    else if (n.includes('ulaf') || n.includes('barbarian')) resolvedKey = 'barbarian';
+                    else if (n.includes('loryastes') || n.includes('sage')) resolvedKey = 'sage';
+                    else if (n.includes('zildjikan') || n.includes('wizard')) resolvedKey = 'wizard';
+                    else if (n.includes('icaron') || n.includes('engineer')) resolvedKey = 'engineer';
+                    else if (n.includes('vaelis') || n.includes('summoner')) resolvedKey = 'summoner';
+                }
+                if (!resolvedKey) resolvedKey = 'soldier';
+
+                const unitObj = {
                     ...member,
-                    id: member.id || `pvp_opponent_${idx + 1}`,
+                    id: (member.id && String(member.id).startsWith('pvp_opponent_')) ? member.id : `pvp_opponent_${member.id || idx + 1}`,
                     name: member.name || opponent?.username || 'Opponent',
                     hp: hpVal,
                     starting_hp: typeof member.starting_hp === 'number' ? member.starting_hp : hpVal,
-                    portrait: member.portrait || member.type || 'cultist',
-                    type: member.type || member.portrait || 'cultist',
+                    portrait: resolvedKey,
+                    type: resolvedKey,
+                    image: resolvedKey,
+                    class: resolvedKey,
+                    isOpponent: true,
+                    isMainMonster: false,
+                    isLarge: false,
+                    isHuge: false,
                     stats: {
                         hp: hpVal,
                         atk: typeof member.stats?.atk === 'number' ? member.stats.atk : (typeof member.atk === 'number' ? member.atk : 15),
@@ -3410,7 +3447,11 @@ class DungeonPage extends React.Component {
                         ...(member.stats || {})
                     }
                 };
+                console.log(`[PvP Diagnostic] mapped opponent member [${idx}]: name="${unitObj.name}", id="${unitObj.id}", resolvedKey="${resolvedKey}", rawPortrait=`, member.portrait);
+                return unitObj;
             });
+
+            console.log('[PvP Diagnostic] handlePvPBattleStart: final opponentCrew count:', opponentCrew.length, opponentCrew);
 
             const monster = opponentCrew[0];
             const minions = opponentCrew.slice(1);
@@ -3432,9 +3473,53 @@ class DungeonPage extends React.Component {
         }
     }
 
+    _sanitizeCrewForSocket = (crewArr) => {
+        const validStr = (val) => {
+            if (typeof val !== 'string' || !val.trim() || val === '[object Object]') return null;
+            const lower = val.trim().toLowerCase();
+            if (lower === 'warrior' || lower === 'spellcaster') return null;
+            return lower;
+        };
+
+        return (crewArr || []).map(member => {
+            if (!member) return null;
+            let typeKey = validStr(member.type) || validStr(member.image) || validStr(member.key);
+            if (!typeKey && typeof member.portrait === 'string') typeKey = validStr(member.portrait);
+            if (!typeKey && member.name) {
+                const n = member.name.toLowerCase();
+                if (n.includes('yu') || n.includes('monk')) typeKey = 'monk';
+                else if (n.includes('dormund') || n.includes('ranger')) typeKey = 'ranger';
+                else if (n.includes('sardonis') || n.includes('soldier')) typeKey = 'soldier';
+                else if (n.includes('ulaf') || n.includes('barbarian')) typeKey = 'barbarian';
+                else if (n.includes('loryastes') || n.includes('sage')) typeKey = 'sage';
+                else if (n.includes('zildjikan') || n.includes('wizard')) typeKey = 'wizard';
+                else if (n.includes('icaron') || n.includes('engineer')) typeKey = 'engineer';
+                else if (n.includes('vaelis') || n.includes('summoner')) typeKey = 'summoner';
+            }
+            if (!typeKey) typeKey = 'soldier';
+
+            return {
+                id: member.id || `crew_${Math.random().toString(36).substr(2, 9)}`,
+                name: member.name || typeKey,
+                type: typeKey,
+                image: typeKey,
+                class: typeKey,
+                portrait: typeKey,
+                hp: member.hp || member.stats?.hp || 100,
+                starting_hp: member.starting_hp || member.stats?.hp || 100,
+                stats: member.stats || {},
+                inventory: member.inventory || [],
+                skills: member.skills || [],
+                attacks: member.attacks || [],
+                specials: member.specials || []
+            };
+        }).filter(Boolean);
+    }
+
     initiatePvPChallenge = (peer) => {
         if (!peer || !peer.socketId) return;
-        const myCrew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : [];
+        const rawCrew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : [];
+        const myCrew = this._sanitizeCrewForSocket(rawCrew);
         socketHandler.sendPvPChallenge(peer.socketId, peer.userId, myCrew);
         this.setState({
             selectedPeerPlayer: null,
@@ -3448,8 +3533,9 @@ class DungeonPage extends React.Component {
     handleAcceptPvPChallenge = () => {
         const incoming = this.state.incomingChallenge;
         if (!incoming) return;
-        const myCrew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : [];
-        socketHandler.respondPvPChallenge(incoming.challengerSocketId, true, myCrew);
+        const rawCrew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : [];
+        const myCrew = this._sanitizeCrewForSocket(rawCrew);
+        socketHandler.respondPvPChallenge(incoming.challengerSocketId, true, myCrew, incoming.challengerCrew);
         this.setState({ incomingChallenge: null });
     }
 
@@ -3460,6 +3546,71 @@ class DungeonPage extends React.Component {
         }
         this.setState({ incomingChallenge: null });
     }
+
+
+    handleChatInviteReceived = (payload) => {
+        if (!payload) return;
+        this.setState({ incomingChatInvite: payload });
+    };
+
+    handleChatInviteAccepted = (payload) => {
+        if (!payload) return;
+        const peer = (this.state.peerPlayers && this.state.peerPlayers.get(payload.targetSocketId)) || {
+            socketId: payload.targetSocketId,
+            userId: payload.targetUserId,
+            username: payload.targetUsername || 'A player'
+        };
+        this.setState({ activeChatPeer: peer });
+        this.displayMessage(`💬 ${peer.username} accepted your chat invitation!`);
+    };
+
+    handleChatInviteDeclined = (payload) => {
+        if (!payload) return;
+        const peer = this.state.peerPlayers && this.state.peerPlayers.get(payload.targetSocketId);
+        const name = peer ? peer.username : 'A player';
+        this.displayMessage(`💬 ${name} declined your chat invitation.`);
+    };
+
+    handleChatMessageReceived = (payload) => {
+        if (!payload) return;
+        this.setState(prevState => {
+            const map = { ...(prevState.chatMessagesMap || {}) };
+            const arr = map[payload.senderSocketId] || [];
+            map[payload.senderSocketId] = [...arr, {
+                senderName: payload.senderName,
+                text: payload.text,
+                timestamp: payload.timestamp,
+                isSelf: false
+            }];
+            return { chatMessagesMap: map };
+        }, () => {
+            // Also flash notification
+            if (!this.state.activeChatPeer || this.state.activeChatPeer.socketId !== payload.senderSocketId) {
+                this.displayMessage(`💬 New message from ${payload.senderName}: ${payload.text}`);
+            }
+        });
+    };
+
+    handleSendChatMessage = (text) => {
+        const target = this.state.activeChatPeer;
+        if (!target) return;
+        if (typeof socketHandler !== 'undefined' && socketHandler.sendChatMessage) {
+            socketHandler.sendChatMessage(target.socketId, text, typeof getUserName === 'function' ? getUserName() : 'Explorer');
+            
+            // Optimistically add to our own log
+            this.setState(prevState => {
+                const map = { ...(prevState.chatMessagesMap || {}) };
+                const arr = map[target.socketId] || [];
+                map[target.socketId] = [...arr, {
+                    senderName: 'You',
+                    text,
+                    timestamp: new Date().toISOString(),
+                    isSelf: true
+                }];
+                return { chatMessagesMap: map };
+            });
+        }
+    };
 
     handlePresenceSnapshot = (data = {}) => {
         try {
@@ -4076,6 +4227,21 @@ class DungeonPage extends React.Component {
                     }, 1000); // Give boardManager a moment to initialize
                 } else {
                     // Resume construction
+                    if (this.props.boardManager && this.props.boardManager.tiles && this.props.boardManager.tiles[ac.targetTileIdx]) {
+                        const expectedBuildingKey = `${ac.buildingDef.key}_under_construction`;
+                        const buildingObj = {
+                            type: 'building',
+                            subtype: expectedBuildingKey,
+                            name: `${ac.buildingDef.name} (Constructing)`,
+                            placedBy: 'player',
+                            ownerId: typeof getUserId === 'function' ? getUserId() : null,
+                            constructionStartTime: ac.startTime,
+                            constructionDurationMs: ac.durationMs
+                        };
+                        this.props.boardManager.tiles[ac.targetTileIdx].contains = buildingObj;
+                        this.props.boardManager.tiles[ac.targetTileIdx].building = expectedBuildingKey;
+                    }
+
                     this.setState({ activeConstruction: ac }, () => {
                         this._constructionTicker = setInterval(() => {
                             if (!this.state.activeConstruction) {
@@ -4093,20 +4259,20 @@ class DungeonPage extends React.Component {
                                 this._constructionTicker = null;
                                 this.finishConstruction(ac);
                             } else {
-                                // Verify the tile hasn't been sabotaged
+                                // Ensure the tile still shows as under construction (recover from rapid refresh desync)
                                 if (this.props.boardManager && this.props.boardManager.tiles) {
                                     const t = this.props.boardManager.tiles[ac.targetTileIdx];
                                     const expectedBuilding = `${ac.buildingDef.key}_under_construction`;
                                     if (t && t.building !== expectedBuilding && (!t.contains || t.contains.subtype !== expectedBuilding)) {
-                                        // Tile was sabotaged!
-                                        clearInterval(this._constructionTicker);
-                                        this._constructionTicker = null;
-                                        this.setState({ activeConstruction: null });
-                                        const meta = getMeta() || {};
-                                        delete meta.activeConstruction;
-                                        storeMeta(meta);
-                                        this.displayMessage('Your construction project was sabotaged and destroyed!');
-                                        return;
+                                        t.building = expectedBuilding;
+                                        t.contains = {
+                                            type: 'building',
+                                            subtype: expectedBuilding,
+                                            name: `${ac.buildingDef.name} (Constructing)`,
+                                            placedBy: 'player',
+                                            constructionStartTime: ac.startTime,
+                                            constructionDurationMs: ac.durationMs
+                                        };
                                     }
                                 }
                                 this.setState(prev => ({
@@ -4868,7 +5034,7 @@ class DungeonPage extends React.Component {
 
                 const selfInscription = sides?.self && playerTileObj?.inscriptions?.[sides.self];
                 const oppInscription = sides?.opp && destTileObj?.inscriptions?.[sides.opp];
-                const anyInscription = oppInscription || selfInscription || (destTileObj?.inscriptions && Object.values(destTileObj.inscriptions).find(v => !!v));
+                const anyInscription = oppInscription || selfInscription;
 
                 if (this.isBuildingOrGeneratorTile(destTileObj) || this.isBuildingOrGeneratorTile(playerTileObj)) {
                     const targetBuilding = this.isBuildingOrGeneratorTile(destTileObj) ? destTileObj : playerTileObj;
@@ -4931,9 +5097,10 @@ class DungeonPage extends React.Component {
             if (playerMoved) {
                 this.clearIlluminatedTile();
                 let destTileObj = bm.tiles[destIndex];
+                const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
                 const isHutProtected = destTileObj && (
-                    destTileObj.building === 'hut' ||
-                    (destTileObj.contains && (destTileObj.contains.subtype === 'hut' || destTileObj.contains.building === 'hut'))
+                    (destTileObj.building === 'hut' && (!destTileObj.contains || !destTileObj.contains.ownerId || destTileObj.contains.ownerId === currentUserId)) ||
+                    (destTileObj.contains && (destTileObj.contains.subtype === 'hut' || destTileObj.contains.building === 'hut') && (!destTileObj.contains.ownerId || destTileObj.contains.ownerId === currentUserId))
                 );
                 if (destTileObj && destTileObj.contains && destTileObj.contains.type === 'obscured_space' && !isHutProtected) {
                     // Check if an ambush was triggered within the last 2 minutes (120,000 ms)
@@ -6122,12 +6289,13 @@ class DungeonPage extends React.Component {
 
                     const checkLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                     if (checkLivePlayerIdx !== null && isAdjacent(currentIdx, checkLivePlayerIdx)) {
-                        pTile.contains = null;
-                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                        await this.playPygmyBumpAnimation(currentIdx, checkLivePlayerIdx, pygmyData);
                         this.setState({
                             showPygmiesAttackPopup: true,
                             attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland',
-                            attackingPygmyIsGroup: isGroupUnit
+                            attackingPygmyIsGroup: isGroupUnit,
+                            attackingPygmyTileIdx: currentIdx,
+                            keysLocked: true
                         });
                         break;
                     } else {
@@ -6195,9 +6363,10 @@ class DungeonPage extends React.Component {
                         const checkLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                         if (checkLivePlayerIdx !== null && isAdjacent(currentIdx, checkLivePlayerIdx)) {
                             const playerTileObj = bm.tiles[checkLivePlayerIdx] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[checkLivePlayerIdx]);
+                            const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
                             const isHutProtected = playerTileObj && (
-                                playerTileObj.building === 'hut' ||
-                                (playerTileObj.contains && (playerTileObj.contains.subtype === 'hut' || playerTileObj.contains.building === 'hut'))
+                                (playerTileObj.building === 'hut' && (!playerTileObj.contains || !playerTileObj.contains.ownerId || playerTileObj.contains.ownerId === currentUserId)) ||
+                                (playerTileObj.contains && (playerTileObj.contains.subtype === 'hut' || playerTileObj.contains.building === 'hut') && (!playerTileObj.contains.ownerId || playerTileObj.contains.ownerId === currentUserId))
                             );
 
                             if (isHutProtected) {
@@ -6212,11 +6381,14 @@ class DungeonPage extends React.Component {
                                 break;
                             }
 
+                            await this.playPygmyBumpAnimation(currentIdx, checkLivePlayerIdx, pygmyData);
+
                             this.setState({
                                 showPygmiesAttackPopup: true,
                                 attackingPygmySubtype: bm.getContainsSubtype(pygmyData) || 'woodland',
                                 attackingPygmyIsGroup: isGroupUnit,
-                                attackingPygmyTileIdx: currentIdx
+                                attackingPygmyTileIdx: currentIdx,
+                                keysLocked: true
                             });
                             ambushed = true;
                             break;
@@ -6249,7 +6421,49 @@ class DungeonPage extends React.Component {
         }
     };
 
-    triggerPygmyAmbush = (tileIdx) => {
+    playPygmyBumpAnimation = async (pygmyTileIdx, playerTileIdx, pygmyData) => {
+        const bm = this.props.boardManager;
+        if (!bm || !bm.tiles) return;
+        const pTile = bm.tiles[pygmyTileIdx] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[pygmyTileIdx]);
+        if (!pTile) return;
+
+        const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+        // Lock directional keys while animating
+        this.setState({ keysLocked: true });
+
+        const pRow = Math.floor(pygmyTileIdx / 15), pCol = pygmyTileIdx % 15;
+        const uRow = (typeof playerTileIdx === 'number' && playerTileIdx >= 0) ? Math.floor(playerTileIdx / 15) : pRow;
+        const uCol = (typeof playerTileIdx === 'number' && playerTileIdx >= 0) ? playerTileIdx % 15 : pCol;
+
+        let dRow = uRow - pRow;
+        let dCol = uCol - pCol;
+
+        if (dRow === 0 && dCol === 0) {
+            dRow = -1;
+            dCol = 0;
+        }
+
+        dRow = Math.sign(dRow);
+        dCol = Math.sign(dCol);
+
+        pTile.isBumpingAttack = true;
+        pTile.bumpVector = { dRow, dCol };
+
+        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+        this.forceUpdate();
+
+        // 650ms bump animation
+        await sleep(650);
+
+        pTile.isBumpingAttack = false;
+        pTile.bumpVector = null;
+
+        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+        this.forceUpdate();
+    };
+
+    triggerPygmyAmbush = async (tileIdx) => {
         const bm = this.props.boardManager;
         if (!bm || !bm.tiles) return;
         const tile = bm.tiles[tileIdx];
@@ -6258,9 +6472,10 @@ class DungeonPage extends React.Component {
         // Check if player is protected by a Hut on their current tile before ambush triggers
         const playerTileIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
         const playerTileObj = bm.tiles[playerTileIdx];
+        const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
         const isHutProtected = playerTileObj && (
-            playerTileObj.building === 'hut' ||
-            (playerTileObj.contains && (playerTileObj.contains.subtype === 'hut' || playerTileObj.contains.building === 'hut'))
+            (playerTileObj.building === 'hut' && (!playerTileObj.contains || !playerTileObj.contains.ownerId || playerTileObj.contains.ownerId === currentUserId)) ||
+            (playerTileObj.contains && (playerTileObj.contains.subtype === 'hut' || playerTileObj.contains.building === 'hut') && (!playerTileObj.contains.ownerId || playerTileObj.contains.ownerId === currentUserId))
         );
 
         if (isHutProtected) {
@@ -6276,11 +6491,15 @@ class DungeonPage extends React.Component {
         }
 
         const isGroupUnit = !!(tile.contains && (tile.contains.isGroup || tile.contains.subtype?.includes('group') || tile.contains.subtype?.includes('party') || tile.contains.group));
+
+        await this.playPygmyBumpAnimation(tileIdx, playerTileIdx, tile.contains);
+
         this.setState({
             showPygmiesAttackPopup: true,
             attackingPygmySubtype: bm.getContainsSubtype(tile.contains) || 'woodland',
             attackingPygmyIsGroup: isGroupUnit,
-            attackingPygmyTileIdx: tileIdx
+            attackingPygmyTileIdx: tileIdx,
+            keysLocked: true
         });
     };
 
@@ -6326,7 +6545,8 @@ class DungeonPage extends React.Component {
             showPygmiesAttackPopup: false,
             attackingPygmySubtype: null,
             attackingPygmyIsGroup: false,
-            attackingPygmyTileIdx: null
+            attackingPygmyTileIdx: null,
+            keysLocked: false
         });
 
         if (attackTileIdx !== null && attackTileIdx !== undefined && this.props.boardManager) {
@@ -6434,9 +6654,10 @@ class DungeonPage extends React.Component {
             if (bm && bm.playerTile && bm.playerTile.location && bm.tiles) {
                 const playerTileIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                 const playerTileObj = bm.tiles[playerTileIdx];
+                const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
                 const isHutProtected = playerTileObj && (
-                    playerTileObj.building === 'hut' ||
-                    (playerTileObj.contains && (playerTileObj.contains.subtype === 'hut' || playerTileObj.contains.building === 'hut'))
+                    (playerTileObj.building === 'hut' && (!playerTileObj.contains || !playerTileObj.contains.ownerId || playerTileObj.contains.ownerId === currentUserId)) ||
+                    (playerTileObj.contains && (playerTileObj.contains.subtype === 'hut' || playerTileObj.contains.building === 'hut') && (!playerTileObj.contains.ownerId || playerTileObj.contains.ownerId === currentUserId))
                 );
                 if (isHutProtected) {
                     this.displayMessage('⛺ A projectile hit your Hut, but your crew was shielded!');
@@ -8859,6 +9080,10 @@ class DungeonPage extends React.Component {
                                     gold: im.gold,
                                     shimmering_dust: im.shimmering_dust,
                                     totems: im.totems,
+                                    wood: im.wood,
+                                    stone: im.stone,
+                                    slate: im.slate,
+                                    mushrooms: im.mushrooms,
                                 };
                                 storeMeta(meta);
                                 if (typeof this.props.saveUserData === 'function') this.props.saveUserData();
@@ -8902,6 +9127,10 @@ class DungeonPage extends React.Component {
                                 gold: this.props.inventoryManager.gold,
                                 shimmering_dust: this.props.inventoryManager.shimmering_dust,
                                 totems: this.props.inventoryManager.totems,
+                                wood: this.props.inventoryManager.wood,
+                                stone: this.props.inventoryManager.stone,
+                                slate: this.props.inventoryManager.slate,
+                                mushrooms: this.props.inventoryManager.mushrooms,
                             };
                             storeMeta(meta);
                             if (typeof this.props.saveUserData === 'function') this.props.saveUserData();
@@ -8931,6 +9160,10 @@ class DungeonPage extends React.Component {
                                 gold: this.props.inventoryManager.gold,
                                 shimmering_dust: this.props.inventoryManager.shimmering_dust,
                                 totems: this.props.inventoryManager.totems,
+                                wood: this.props.inventoryManager.wood,
+                                stone: this.props.inventoryManager.stone,
+                                slate: this.props.inventoryManager.slate,
+                                mushrooms: this.props.inventoryManager.mushrooms,
                             };
                             storeMeta(meta);
                             if (typeof this.props.saveUserData === 'function') this.props.saveUserData();
@@ -9766,24 +9999,39 @@ class DungeonPage extends React.Component {
         const itemDefinition = this.props.inventoryManager.allItems[tileContains];
         const itemDisplayName = itemDefinition?.name || (typeof tileContains === 'string' ? tileContains.replaceAll('_', ' ') : tileContains);
         if (itemDefinition) {
-            this.props.inventoryManager.addItem(itemDefinition)
+            this.props.inventoryManager.addItem({ ...itemDefinition });
+        } else if (tileContains && tileContains !== 'void' && tileContains !== 'empty_space') {
+            const fallbackItem = {
+                _im_key: tileContains,
+                icon: tileContains,
+                type: tileContains.includes('key') ? 'key' : (tileContains.includes('shard') ? 'rune' : 'misc'),
+                name: typeof tileContains === 'string' ? tileContains.replaceAll('_', ' ') : tileContains,
+                equippedBy: null
+            };
+            this.props.inventoryManager.addItem(fallbackItem);
         }
 
         // Progress item retrieval quests
         this.checkItemRetrievalQuests(itemDisplayName);
 
-        const matrix = this.state.inventoryHoverMatrix;
+        const matrix = Array.isArray(this.state.inventoryHoverMatrix) ? [...this.state.inventoryHoverMatrix] : [];
         this.getCombinedInventory().forEach((e, i) => {
             matrix[i] = '';
-        })
+        });
 
         const isPlural = itemDisplayName.toLowerCase().includes('shards') || itemDisplayName.toLowerCase().includes('gold') || itemDisplayName.toLowerCase().includes('dust');
         const article = isPlural ? 'some' : 'a';
-        this.displayMessage(`You found ${article} ${itemDisplayName}!`)
+        this.displayMessage(`You found ${article} ${itemDisplayName}!`);
+
+        if (typeof this.props.saveUserData === 'function') {
+            try { this.props.saveUserData(); } catch (e) { }
+        }
 
         this.setState({
             inventoryHoverMatrix: matrix
-        })
+        });
+
+        this.forceUpdate();
 
         const iconKey = itemDefinition?.icon || tileContains;
         const resolvedIcon = (typeof iconKey === 'string' && images[iconKey]) || (typeof tileContains === 'string' && images[tileContains]) || images['treasure'] || null;
@@ -11204,21 +11452,28 @@ class DungeonPage extends React.Component {
     findItemTemplate = (item) => {
         if (!item || !this.props.inventoryManager) return null;
         const invMgr = this.props.inventoryManager;
+        
+        // Use allItems dictionary first using item's internal key or name
+        const key = item._im_key || (item.name ? item.name.replace(/ /g, '_') : null) || item.icon;
+        if (key && invMgr.allItems && invMgr.allItems[key]) {
+            return invMgr.allItems[key];
+        }
+
         const icon = item.icon;
         // Search through all item categories for a matching template
         if (icon) {
             // Check weapons
-            if (invMgr.weapons && invMgr.weapons[icon]) {
-                return invMgr.weapons[icon];
-            }
+            if (invMgr.weapons && invMgr.weapons[icon]) return invMgr.weapons[icon];
             // Check armor
-            if (invMgr.armor && invMgr.armor[icon]) {
-                return invMgr.armor[icon];
-            }
+            if (invMgr.armor && invMgr.armor[icon]) return invMgr.armor[icon];
             // Check magical items
-            if (invMgr.magical && invMgr.magical[icon]) {
-                return invMgr.magical[icon];
-            }
+            if (invMgr.magical && invMgr.magical[icon]) return invMgr.magical[icon];
+            // Check consumables
+            if (invMgr.consumables && invMgr.consumables[icon]) return invMgr.consumables[icon];
+            // Check jewels
+            if (invMgr.jewels && invMgr.jewels[icon]) return invMgr.jewels[icon];
+            // Check runes
+            if (invMgr.runes && invMgr.runes[icon]) return invMgr.runes[icon];
         }
         return null;
     }
@@ -11380,7 +11635,7 @@ class DungeonPage extends React.Component {
             if (isVoid || isWallBlocked) {
                 const selfInscription = sides?.self && playerTileObj?.inscriptions?.[sides.self];
                 const oppInscription = sides?.opp && actualTile?.inscriptions?.[sides.opp];
-                const anyInscription = oppInscription || selfInscription || (actualTile?.inscriptions && Object.values(actualTile.inscriptions).find(v => !!v));
+                const anyInscription = oppInscription || selfInscription;
 
                 const lastWallClick = this._lastWallClickInfo || { tileIdx: null, ts: 0 };
                 const isDoubleTap = (lastWallClick.tileIdx === tileIndex && (now - lastWallClick.ts) < 500);
@@ -12754,9 +13009,43 @@ class DungeonPage extends React.Component {
             await moveStep('right', 200); // (13, 8)
             await moveStep('right', 200); // (14, 8)
             await moveStep('up', 200);    // (14, 7) - Connecting path tile
-            await moveStep('right', 200); // Step right across board edge to transition
+            await moveStep('right', 200); // Step right across board edge to transition to next board
 
-            await pauseStep('🎯 Loaded Next Board — Tutorial Complete!', 1200);
+            if (this.props.boardManager) {
+                try {
+                    this.props.boardManager.refreshTiles();
+                    this.setState({ tiles: this.props.boardManager.tiles });
+                } catch (e) { }
+            }
+
+            await pauseStep('🗺️ Board Transition! Entering Middle Board...', 400);
+            await playTutorialNarrativeStep('Moving through connecting paths transitions your crew to adjacent boards.');
+
+            // 7. Move from (0,7) to Wall Inscription at (3,8)
+            await pauseStep('Tutorial: Moving to Wall Inscription at (3,8)...', 200);
+            await moveStep('right', 200); // (1, 7)
+            await moveStep('right', 200); // (2, 7)
+            await moveStep('right', 200); // (3, 7)
+            await moveStep('down', 200);  // (3, 8) - Wall Inscription
+
+            // Inspect Wall Inscription at (3,8)
+            await pauseStep('📜 Inspecting Wall Inscription at (3,8)...', 400);
+            await playTutorialNarrativeStep('Interact with wall inscriptions by double-moving into them, or clicking/tapping on them. Some inscriptions will depict game world lore, while others will pose riddles that can be answered for rewards.');
+
+            // 8. Move from (3,8) to (7,6) and try gate at (7,7)
+            await pauseStep('Tutorial: Moving to Gate at (7,7)...', 200);
+            await moveStep('up', 200);    // (3, 7)
+            await moveStep('up', 200);    // (3, 6)
+            await moveStep('right', 200); // (4, 6)
+            await moveStep('right', 200); // (5, 6)
+            await moveStep('right', 200); // (6, 6)
+            await moveStep('right', 200); // (7, 6)
+            await moveStep('down', 200);  // Bumps into locked Gate at (7, 7)!
+
+            await pauseStep('🔒 Gate at (7,7) is LOCKED!', 400);
+            await playTutorialNarrativeStep('This gate is locked! Explore surrounding corridors for keys to open passage.');
+
+            await pauseStep('🎯 Tutorial Complete!', 1200);
 
             if (this.props.history) {
                 this.props.history.push('/tutorials');
@@ -12934,9 +13223,23 @@ class DungeonPage extends React.Component {
             if (contains) {
                 const cType = typeof contains === 'string' ? contains : contains.type;
                 if (cType === 'void' || cType === 'empty' || cType === 'voidfill') return true;
+                
+                const cSubtype = contains.subtype;
+                if (cSubtype === 'wall' || contains.building === 'wall') {
+                    const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+                    if (contains.ownerId && currentUserId && contains.ownerId === currentUserId) {
+                        return true;
+                    }
+                }
             }
 
             if (tile.image === 'void_fill' || tile.image === 'void' || (tile.image && tile.image.includes('void'))) return true;
+            if (tile.building === 'wall') {
+                const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+                if (contains && contains.ownerId && currentUserId && contains.ownerId === currentUserId) {
+                    return true;
+                }
+            }
 
             return false;
         };
@@ -13433,7 +13736,9 @@ class DungeonPage extends React.Component {
                 this.props.questManager.updateProgressByType('bounty', 1);
             }
 
-            this.props.boardManager.removeDefeatedMonsterTile(this.state.monsterBattleTileId)
+            if (this.props.boardManager && this.state.monsterBattleTileId && typeof this.state.monsterBattleTileId !== 'string') {
+                this.props.boardManager.removeDefeatedMonsterTile(this.state.monsterBattleTileId);
+            }
             this.props.crewManager.checkForLevelUp(this.props.crewManager.crew)
             let meta = getMeta()
 
@@ -14671,11 +14976,15 @@ class DungeonPage extends React.Component {
             const meta = getMeta();
             meta.crew = this.props.crewManager.crew;
             meta.inventory = {
-                items: this.props.inventoryManager.inventory,
-                gold: this.props.inventoryManager.gold,
-                shimmering_dust: this.props.inventoryManager.shimmering_dust,
-                totems: this.props.inventoryManager.totems,
-            };
+                                items: this.props.inventoryManager.inventory,
+                                gold: this.props.inventoryManager.gold,
+                                shimmering_dust: this.props.inventoryManager.shimmering_dust,
+                                totems: this.props.inventoryManager.totems,
+                                wood: this.props.inventoryManager.wood,
+                                stone: this.props.inventoryManager.stone,
+                                slate: this.props.inventoryManager.slate,
+                                mushrooms: this.props.inventoryManager.mushrooms,
+                            };
             storeMeta(meta);
             this.props.saveUserData();
         } catch (e) { console.warn('handleCompoundBrew: persist failed', e); }
@@ -14707,11 +15016,15 @@ class DungeonPage extends React.Component {
         try {
             const meta = getMeta();
             meta.inventory = {
-                items: this.props.inventoryManager.inventory,
-                gold: this.props.inventoryManager.gold,
-                shimmering_dust: this.props.inventoryManager.shimmering_dust,
-                totems: this.props.inventoryManager.totems,
-            };
+                                items: this.props.inventoryManager.inventory,
+                                gold: this.props.inventoryManager.gold,
+                                shimmering_dust: this.props.inventoryManager.shimmering_dust,
+                                totems: this.props.inventoryManager.totems,
+                                wood: this.props.inventoryManager.wood,
+                                stone: this.props.inventoryManager.stone,
+                                slate: this.props.inventoryManager.slate,
+                                mushrooms: this.props.inventoryManager.mushrooms,
+                            };
             storeMeta(meta);
             this.props.saveUserData();
         } catch (e) {
@@ -14771,11 +15084,15 @@ class DungeonPage extends React.Component {
             const meta = getMeta();
             meta.crew = this.props.crewManager.crew;
             meta.inventory = {
-                items: this.props.inventoryManager.inventory,
-                gold: this.props.inventoryManager.gold,
-                shimmering_dust: this.props.inventoryManager.shimmering_dust,
-                totems: this.props.inventoryManager.totems,
-            };
+                                items: this.props.inventoryManager.inventory,
+                                gold: this.props.inventoryManager.gold,
+                                shimmering_dust: this.props.inventoryManager.shimmering_dust,
+                                totems: this.props.inventoryManager.totems,
+                                wood: this.props.inventoryManager.wood,
+                                stone: this.props.inventoryManager.stone,
+                                slate: this.props.inventoryManager.slate,
+                                mushrooms: this.props.inventoryManager.mushrooms,
+                            };
             storeMeta(meta);
             this.props.saveUserData();
         } catch (e) { console.warn('handleBrewStart: persist failed', e); }
@@ -15242,8 +15559,17 @@ class DungeonPage extends React.Component {
         const bldg = tile.building || tile.contains?.building;
         const img = tile.image;
 
-        // 'hut' and 'hut_under_construction' are explicitly NOT interactable via modal, they are just walkable tiles.
-        if (containsSubtype === 'hut' || containsSubtype === 'hut_under_construction' || containsSubtype === 'buildable_hut' || bldg === 'hut' || bldg === 'hut_under_construction' || img === 'hut' || img === 'buildable_hut') {
+        const ownerId = tile.contains?.ownerId || tile.generatorData?.ownerId;
+        const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+        const isOwner = ownerId === currentUserId;
+
+        const hutKeys = ['hut', 'hut_under_construction', 'buildable_hut'];
+        if (hutKeys.includes(containsSubtype) || hutKeys.includes(bldg) || hutKeys.includes(img)) {
+            return false;
+        }
+
+        const wallKeys = ['wall', 'wall_under_construction', 'buildable_wall'];
+        if (isOwner && (wallKeys.includes(containsSubtype) || wallKeys.includes(bldg) || wallKeys.includes(img))) {
             return false;
         }
 
@@ -15458,6 +15784,17 @@ class DungeonPage extends React.Component {
                 imageKey: 'buildable_war_fort',
                 iconEmoji: '🏛️',
                 description: 'An impenetrable stone-and-slate stronghold capable of enduring sieges.'
+            },
+            wall: {
+                key: 'wall',
+                name: 'Wall',
+                resource: 'Defense',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                imageKey: 'wall',
+                iconEmoji: '🧱',
+                description: 'A sturdy wall that blocks movement for non-owners.'
             }
         };
 
@@ -15465,7 +15802,17 @@ class DungeonPage extends React.Component {
             if (key.includes(defKey)) return def;
         }
 
-        return GENERATOR_DEFS.larder;
+        return {
+            key: 'unknown_building',
+            name: 'Unknown Building',
+            resource: 'Unknown',
+            currencyType: null,
+            rate: 0,
+            cap: 0,
+            imageKey: 'building',
+            iconEmoji: '🏗️',
+            description: 'This interactable building needs interaction logic.'
+        };
     };
     getEffectiveGeneratorStats = (generatorData, baseDef) => {
         let level = generatorData?.level || 1;
@@ -15632,7 +15979,7 @@ class DungeonPage extends React.Component {
         });
     };
 
-    confirmOutpostSabotage = (tile) => {
+    startSabotage = (tile, type, durationMs, msg) => {
         if (!tile) return;
         this.closeGeneratorModal();
 
@@ -15641,17 +15988,26 @@ class DungeonPage extends React.Component {
 
         this.setState({
             sabotageState: {
+                type,
                 tileId: tile.id,
                 startPlayerLocation: playerLoc ? [...playerLoc] : [0, 0],
                 startTime: Date.now(),
-                duration: 10000,
+                duration: durationMs,
                 progress: 0
             }
         }, () => {
             if (this._sabotageTimer) clearInterval(this._sabotageTimer);
             this._sabotageTimer = setInterval(() => this.tickSabotageProgress(), 100);
-            this.displayMessage('⏳ Sabotaging enemy outpost... Stay on your tile for 10 seconds!');
+            this.displayMessage(msg);
         });
+    };
+
+    confirmOutpostSabotage = (tile) => {
+        this.startSabotage(tile, 'outpost', 10000, '⏳ Sabotaging enemy outpost... Stay on your tile for 10 seconds!');
+    };
+
+    confirmWallSabotage = (tile) => {
+        this.startSabotage(tile, 'wall', 60000, '⏳ Sabotaging enemy wall... Stay on your tile for 1 minute!');
     };
 
     tickSabotageProgress = () => {
@@ -15685,6 +16041,55 @@ class DungeonPage extends React.Component {
             const success = Math.random() < 0.5;
 
             if (success) {
+                if (sabotageState.type === 'wall') {
+                    // Destroy the wall entirely
+                    if (targetTile) {
+                        targetTile.building = null;
+                        targetTile.contains = null;
+                    }
+                    if (bm.tiles && bm.tiles[tileId]) {
+                        bm.tiles[tileId].building = null;
+                        bm.tiles[tileId].contains = null;
+                    }
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) {
+                        bm.currentBoard.tiles[tileId].building = null;
+                        bm.currentBoard.tiles[tileId].contains = null;
+                    }
+
+                    const meta = getMeta() || {};
+                    if (this.props.user && meta.dungeonId && typeof updateDungeonRequest === 'function') {
+                        setTimeout(async () => {
+                            try {
+                                const res = await loadDungeonRequest(meta.dungeonId);
+                                if (res && res.data && res.data.length > 0) {
+                                    let dData = JSON.parse(res.data[0].content);
+                                    const lvl = dData.levels.find(l => Number(l.id) === Number(meta.location.levelId));
+                                    if (lvl) {
+                                        const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
+                                        const mb = plane.miniboards[meta.location.boardIndex];
+                                        if (mb && mb.tiles && mb.tiles[tileId]) {
+                                            mb.tiles[tileId].building = null;
+                                            mb.tiles[tileId].contains = null;
+                                            await updateDungeonRequest(res.data[0]._id, dData);
+                                        }
+                                    }
+                                }
+                            } catch(e) { console.warn('Failed to sync destroyed wall', e); }
+                        }, 500);
+                    }
+
+                    this.setState({
+                        sabotageState: null,
+                        sabotageResultModal: {
+                            success: true,
+                            message: 'Sabotage Successful! The enemy wall was destroyed.'
+                        },
+                        tiles: bm.tiles ? [...bm.tiles] : this.state.tiles
+                    });
+                    this.displayMessage('Sabotage Successful! Enemy wall destroyed.');
+                    return;
+                }
+
                 const isUnderConstruction = targetTile && (targetTile.building === 'outpost_under_construction' || (targetTile.contains && targetTile.contains.subtype === 'outpost_under_construction'));
                 
                 if (isUnderConstruction) {
@@ -15706,12 +16111,12 @@ class DungeonPage extends React.Component {
                     // and their local activeConstruction check will fail or they will realize it's gone.
                     // To be safe, we also force a dungeon update immediately so other players see it removed.
                     const meta = getMeta() || {};
-                    if (this.props.user && meta.dungeonId && typeof window.updateDungeonRequest === 'function') {
+                    if (this.props.user && meta.dungeonId && typeof updateDungeonRequest === 'function') {
                         setTimeout(async () => {
                             try {
-                                const res = await window.getDungeonRequest(meta.dungeonId);
-                                if (res && res.data) {
-                                    let dData = JSON.parse(res.data.content);
+                                const res = await loadDungeonRequest(meta.dungeonId);
+                                if (res && res.data && res.data.length > 0) {
+                                    let dData = JSON.parse(res.data[0].content);
                                     const lvl = dData.levels.find(l => Number(l.id) === Number(meta.location.levelId));
                                     if (lvl) {
                                         const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
@@ -15719,7 +16124,7 @@ class DungeonPage extends React.Component {
                                         if (mb && mb.tiles && mb.tiles[tileId]) {
                                             mb.tiles[tileId].building = null;
                                             mb.tiles[tileId].contains = null;
-                                            await window.updateDungeonRequest(res.data._id, dData);
+                                            await updateDungeonRequest(res.data[0]._id, dData);
                                         }
                                     }
                                 }
@@ -15764,14 +16169,15 @@ class DungeonPage extends React.Component {
                     this.displayMessage('Sabotage Successful! Outpost disabled for 30 minutes.');
                 }
             } else {
+                const msg = sabotageState.type === 'wall' ? 'Sabotage Failed! The wall proved too sturdy.' : 'Sabotage Failed! The enemy sentries repelled your attempt.';
                 this.setState({
                     sabotageState: null,
                     sabotageResultModal: {
                         success: false,
-                        message: 'Sabotage Failed! The enemy sentries repelled your attempt.'
+                        message: msg
                     }
                 });
-                this.displayMessage('Sabotage Failed! The enemy guards repelled your attempt.');
+                this.displayMessage(msg);
             }
         }
     };
@@ -16115,7 +16521,7 @@ class DungeonPage extends React.Component {
                                         const stats = this.getEffectiveGeneratorStats(tile.generatorData, def); const amount = this.getAccumulatedGeneratorAmount(tile.generatorData, stats.cap, stats.rate, true);
                                         if (amount > 0) {
                                             window.getAllUsersRequest().then(res => {
-                                                if (res && res.data) {
+                                                if (res && res.data && res.data.length > 0) {
                                                     const enemyUser = res.data.find(u => u._id === enemyOwnerId);
                                                     if (enemyUser) {
                                                         const enemyMeta = JSON.parse(enemyUser.metadata || '{}');
@@ -16275,19 +16681,19 @@ class DungeonPage extends React.Component {
 
         // Also force dungeon state update immediately to save ownership persistently
         const safeMeta = getMeta() || {};
-        if (this.props.user && safeMeta.dungeonId && typeof window.updateDungeonRequest === 'function') {
+        if (this.props.user && safeMeta.dungeonId && typeof updateDungeonRequest === 'function') {
             setTimeout(async () => {
                 try {
-                    const res = await window.getDungeonRequest(safeMeta.dungeonId);
-                    if (res && res.data) {
-                        let dData = JSON.parse(res.data.content);
+                    const res = await loadDungeonRequest(safeMeta.dungeonId);
+                    if (res && res.data && res.data.length > 0) {
+                        let dData = JSON.parse(res.data[0].content);
                         const lvl = dData.levels.find(l => Number(l.id) === Number(bm?.currentLevel?.id ?? 0));
                         if (lvl) {
                             const plane = bm?.currentOrientation === 'B' ? lvl.back : lvl.front;
                             const mb = plane.miniboards[bm.playerTile?.boardIndex ?? 0];
                             if (mb && mb.tiles && mb.tiles[tileId]) {
                                 mb.tiles[tileId].generatorData = genData;
-                                await window.updateDungeonRequest(res.data._id, dData);
+                                await updateDungeonRequest(res.data[0]._id, dData);
                             }
                         }
                     }
@@ -16314,18 +16720,29 @@ class DungeonPage extends React.Component {
         if (!tile || !tile.generatorData) return;
         const meta = getMeta() || {};
         
-        const costGold = 100;
-        const costResolve = 50;
-        const currentGold = meta.gold || 0;
+        const def = this.getGeneratorDef(tile);
+        if (!def || !def.currencyType) return; // Cannot upgrade if it doesn't have a currency type
+        
+        const currentLevel = tile.generatorData.level || 1;
+        const costResource = 20 * currentLevel;
+        const costResolve = 10;
+        
+        const isFood = def.currencyType === 'food';
+        const invKey = def.currencyType === 'dust' ? 'shimmering_dust' : def.currencyType;
+        const currentResource = isFood ? (typeof meta.food === 'number' ? meta.food : 0) : (this.props.inventoryManager ? (this.props.inventoryManager[invKey] || 0) : 0);
         const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
         
-        if (currentGold < costGold || currentResolve < costResolve) {
-            this.displayMessage(`❌ Insufficient resources! Need ${costGold} Gold and ${costResolve} Resolve to upgrade.`);
+        if (currentResource < costResource || currentResolve < costResolve) {
+            this.displayMessage(`❌ Insufficient resources! Need ${costResource} ${def.resource} and ${costResolve} Resolve to upgrade.`);
             return;
         }
 
         // Deduct costs
-        meta.gold = currentGold - costGold;
+        if (isFood) {
+            meta.food = currentResource - costResource;
+        } else if (this.props.inventoryManager) {
+            this.props.inventoryManager[invKey] = currentResource - costResource;
+        }
         meta.resolve = currentResolve - costResolve;
         
         // Update generator state
@@ -16362,19 +16779,19 @@ class DungeonPage extends React.Component {
 
         // Also force dungeon state update immediately to save ownership persistently
         const safeMeta = getMeta() || {};
-        if (this.props.user && safeMeta.dungeonId && typeof window.updateDungeonRequest === 'function') {
+        if (this.props.user && safeMeta.dungeonId && typeof updateDungeonRequest === 'function') {
             setTimeout(async () => {
                 try {
-                    const res = await window.getDungeonRequest(safeMeta.dungeonId);
-                    if (res && res.data) {
-                        let dData = JSON.parse(res.data.content);
+                    const res = await loadDungeonRequest(safeMeta.dungeonId);
+                    if (res && res.data && res.data.length > 0) {
+                        let dData = JSON.parse(res.data[0].content);
                         const lvl = dData.levels.find(l => Number(l.id) === Number(bm?.currentLevel?.id ?? 0));
                         if (lvl) {
                             const plane = bm?.currentOrientation === 'B' ? lvl.back : lvl.front;
                             const mb = plane.miniboards[bm.playerTile?.boardIndex ?? 0];
                             if (mb && mb.tiles && mb.tiles[tile.id]) {
                                 mb.tiles[tile.id].generatorData = tile.generatorData;
-                                await window.updateDungeonRequest(res.data._id, dData);
+                                await updateDungeonRequest(res.data[0]._id, dData);
                             }
                         }
                     }
@@ -16502,7 +16919,8 @@ class DungeonPage extends React.Component {
             type: 'building',
             subtype: buildingDef.key,
             name: buildingDef.name,
-            placedBy: 'player'
+            placedBy: 'player',
+            ownerId: typeof getUserId === 'function' ? getUserId() : null
         };
 
         if (bm) {
@@ -16565,12 +16983,12 @@ class DungeonPage extends React.Component {
         }
         
         // Also force dungeon state update immediately for the new building
-        if (this.props.user && meta.dungeonId && typeof window.updateDungeonRequest === 'function') {
+        if (this.props.user && meta.dungeonId && typeof updateDungeonRequest === 'function') {
             setTimeout(async () => {
                 try {
-                    const res = await window.getDungeonRequest(meta.dungeonId);
-                    if (res && res.data) {
-                        let dData = JSON.parse(res.data.content);
+                    const res = await loadDungeonRequest(meta.dungeonId);
+                    if (res && res.data && res.data.length > 0) {
+                        let dData = JSON.parse(res.data[0].content);
                         const lvl = dData.levels.find(l => Number(l.id) === Number(meta.location.levelId));
                         if (lvl) {
                             const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
@@ -16578,7 +16996,7 @@ class DungeonPage extends React.Component {
                             if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
                                 mb.tiles[targetTileIdx].contains = buildingObj;
                                 mb.tiles[targetTileIdx].building = buildingDef.key;
-                                await window.updateDungeonRequest(res.data._id, dData);
+                                await updateDungeonRequest(res.data[0]._id, dData);
                             }
                         }
                     }
@@ -16641,10 +17059,24 @@ class DungeonPage extends React.Component {
         const inv = (invManager && invManager.inventory) || [];
 
         const costs = buildingDef.costs || { wood: 0, stone: 0, slate: 0 };
-        const toRemove = { wood: costs.wood || 0, stone: costs.stone || 0, slate: costs.slate || 0 };
+        const toRemove = { wood: costs.wood || 0, stone: costs.stone || 0, slate: costs.slate || 0, dust: costs.dust || 0 };
 
         for (const resKey of Object.keys(toRemove)) {
             let needed = toRemove[resKey];
+            if (needed <= 0) continue;
+
+            const counterKey = resKey === 'dust' ? 'shimmering_dust' : resKey;
+            if (invManager && typeof invManager[counterKey] === 'number') {
+                const availableCounter = invManager[counterKey];
+                if (availableCounter >= needed) {
+                    invManager[counterKey] -= needed;
+                    needed = 0;
+                } else {
+                    invManager[counterKey] = 0;
+                    needed -= availableCounter;
+                }
+            }
+
             while (needed > 0) {
                 const idx = inv.findIndex(item => {
                     if (!item) return false;
@@ -16700,6 +17132,7 @@ class DungeonPage extends React.Component {
                 subtype: expectedBuildingKey,
                 name: `${buildingDef.name} (Constructing)`,
                 placedBy: 'player',
+                ownerId: typeof getUserId === 'function' ? getUserId() : null,
                 constructionStartTime: Date.now(),
                 constructionDurationMs: durationMs
             };
@@ -16734,13 +17167,13 @@ class DungeonPage extends React.Component {
             }
 
             // Update Dungeon on backend immediately
-            if (this.props.user && meta.dungeonId && typeof window.updateDungeonRequest === 'function') {
+            if (this.props.user && meta.dungeonId && typeof updateDungeonRequest === 'function') {
                 // Quick debounce/async sync
                 setTimeout(async () => {
                     try {
-                        const res = await window.getDungeonRequest(meta.dungeonId);
-                        if (res && res.data) {
-                            let dData = JSON.parse(res.data.content);
+                        const res = await loadDungeonRequest(meta.dungeonId);
+                        if (res && res.data && res.data.length > 0) {
+                            let dData = JSON.parse(res.data[0].content);
                             const lvl = dData.levels.find(l => Number(l.id) === Number(meta.location.levelId));
                             if (lvl) {
                                 const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
@@ -16748,7 +17181,7 @@ class DungeonPage extends React.Component {
                                 if (mb && mb.tiles && mb.tiles[playerIdx]) {
                                     mb.tiles[playerIdx].contains = buildingObj;
                                     mb.tiles[playerIdx].building = expectedBuildingKey;
-                                    await window.updateDungeonRequest(res.data._id, dData);
+                                    await updateDungeonRequest(res.data[0]._id, dData);
                                 }
                             }
                         }
@@ -16777,20 +17210,21 @@ class DungeonPage extends React.Component {
                 this._constructionTicker = null;
                 this.finishConstruction(constructionState);
             } else {
-                // Verify the tile hasn't been sabotaged
+                // Ensure the tile still shows as under construction (recover from rapid refresh desync)
                 if (this.props.boardManager && this.props.boardManager.tiles) {
                     const t = this.props.boardManager.tiles[constructionState.targetTileIdx];
                     const expectedBuilding = `${constructionState.buildingDef.key}_under_construction`;
                     if (t && t.building !== expectedBuilding && (!t.contains || t.contains.subtype !== expectedBuilding)) {
-                        // Tile was sabotaged!
-                        clearInterval(this._constructionTicker);
-                        this._constructionTicker = null;
-                        this.setState({ activeConstruction: null });
-                        const meta = getMeta() || {};
-                        delete meta.activeConstruction;
-                        storeMeta(meta);
-                        this.displayMessage('Your construction project was sabotaged and destroyed!');
-                        return;
+                        t.building = expectedBuilding;
+                        t.contains = {
+                            type: 'building',
+                            subtype: expectedBuilding,
+                            name: `${constructionState.buildingDef.name} (Constructing)`,
+                            placedBy: 'player',
+                            ownerId: typeof getUserId === 'function' ? getUserId() : null,
+                            constructionStartTime: constructionState.startTime,
+                            constructionDurationMs: constructionState.durationMs
+                        };
                     }
                 }
                 this.setState(prev => ({
@@ -17348,9 +17782,10 @@ class DungeonPage extends React.Component {
         if (bm && bm.playerTile && bm.playerTile.location && bm.tiles) {
             const pIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
             const pTile = bm.tiles[pIdx];
-            isPlayerInHut = !!(pTile && (
-                pTile.building === 'hut' ||
-                (pTile.contains && (pTile.contains.subtype === 'hut' || pTile.contains.building === 'hut'))
+            const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+            isPlayerInHut = !!(pTile && pTile.contains && (
+                (pTile.contains.subtype === 'hut' || pTile.contains.building === 'hut' || pTile.contains.type === 'hut') && 
+                (!pTile.contains.ownerId || pTile.contains.ownerId === currentUserId)
             ));
         }
 
@@ -20203,6 +20638,8 @@ class DungeonPage extends React.Component {
                                     playerImgKey={playerImgKey}
                                     cursor={this.state.minimapPlaceMapMarkerStarted ? 'crosshair' : 'default'}
                                     tileSize={this.state.tileSize}
+                                    isBumpingAttack={tile.isBumpingAttack}
+                                    bumpVector={tile.bumpVector}
                                     image={boardImage}
                                     imageOverride={isBeingBuilt ? 'building' : (boardImage && boardImage.includes ? (boardImage.includes('/') ? boardImage : null) : null)}
                                     contains={tile.contains}
@@ -20397,6 +20834,45 @@ class DungeonPage extends React.Component {
                                     }}
                                     className="avatar-image-inner"
                                 />
+                                {(() => {
+                                    const meta = getMeta() || {};
+                                    if (meta.camping && meta.campingStart && meta.campingEnd) {
+                                        return (
+                                            <div style={{
+                                                position: 'absolute',
+                                                bottom: '-12px',
+                                                left: '1px',
+                                                right: '1px',
+                                                height: '7px',
+                                                backgroundColor: 'rgba(0, 0, 0, 0.9)',
+                                                border: '1px solid #f59e0b',
+                                                borderRadius: '3px',
+                                                padding: '1px',
+                                                zIndex: 60,
+                                                pointerEvents: 'none',
+                                                boxShadow: '0 2px 6px rgba(0,0,0,0.9)'
+                                            }}>
+                                                <div
+                                                    id="avatar-camp-progress"
+                                                    ref={el => this.placeholderRef(el, 'avatar-camp-progress', meta.campingStart, meta.campingEnd)}
+                                                    className="progress-overlay camp-anim"
+                                                    style={{
+                                                        width: '0%',
+                                                        height: '100%',
+                                                        backgroundColor: '#f59e0b',
+                                                        backgroundImage: 'linear-gradient(90deg, #d97706, #fbbf24)',
+                                                        borderRadius: '2px',
+                                                        animationName: 'campProgress',
+                                                        animationTimingFunction: 'linear',
+                                                        animationFillMode: 'forwards',
+                                                        boxShadow: '0 0 6px rgba(245, 158, 11, 0.8)'
+                                                    }}
+                                                />
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
                                 {isPlayerInHut && (
                                     <div className="avatar-shield-overlay" style={{ pointerEvents: 'none' }} />
                                 )}
@@ -21031,18 +21507,47 @@ class DungeonPage extends React.Component {
                                 {(() => {
                                     const meta = getMeta() || {};
                                     const isEnemyOutpost = (def.key === 'outpost' || def.key === 'outpost_under_construction') && !isOwner;
-                                    const isEnemyGenerator = def.key !== 'outpost' && def.key !== 'outpost_under_construction' && !isOwner && isActivated;
+                                    const isEnemyWall = (def.key === 'wall' || def.key === 'wall_under_construction') && !isOwner;
+                                    const isEnemyGenerator = def.key !== 'outpost' && def.key !== 'outpost_under_construction' && def.key !== 'wall' && def.key !== 'wall_under_construction' && !isOwner && isActivated;
                                     const isDisabled = tile.disabledUntil && Date.now() < tile.disabledUntil;
 
-                                    if (isOwner && stats.level < 2) {
-                                        const costGold = 100;
-                                        const costResolve = 50;
-                                        const currentGold = meta.gold || 0;
+                                    if (isEnemyWall) {
+                                        return (
+                                            <button
+                                                onClick={() => this.confirmWallSabotage(tile)}
+                                                style={{
+                                                    width: '100%',
+                                                    boxSizing: 'border-box',
+                                                    padding: '12px 24px',
+                                                    borderRadius: '12px',
+                                                    border: '1px solid #f59e0b',
+                                                    background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.6) 0%, rgba(245, 158, 11, 0.85) 100%)',
+                                                    color: '#ffffff',
+                                                    fontFamily: "'Cinzel', serif",
+                                                    fontSize: '15px',
+                                                    fontWeight: '700',
+                                                    letterSpacing: '1px',
+                                                    cursor: 'pointer',
+                                                    boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)',
+                                                    transition: 'all 0.2s ease'
+                                                }}
+                                            >
+                                                SABOTAGE WALL (1 Minute)
+                                            </button>
+                                        );
+                                    }
+
+                                    if (isOwner && stats.level < 2 && def.currencyType) {
+                                        const costResource = 20 * stats.level;
+                                        const costResolve = 10;
+                                        const isFood = def.currencyType === 'food';
+                                        const invKey = def.currencyType === 'dust' ? 'shimmering_dust' : def.currencyType;
+                                        const currentResource = isFood ? (typeof meta.food === 'number' ? meta.food : 0) : (this.props.inventoryManager ? (this.props.inventoryManager[invKey] || 0) : 0);
                                         const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
-                                        const canAfford = currentGold >= costGold && currentResolve >= costResolve;
+                                        const canAfford = currentResource >= costResource && currentResolve >= costResolve;
                                         
                                         const isUpgrading = !!gData.isUpgrading;
-                                        let btnText = `UPGRADE GENERATOR (${costGold} Gold, ${costResolve} Resolve)`;
+                                        let btnText = `UPGRADE GENERATOR (${costResource} ${def.resource}, ${costResolve} Resolve)`;
                                         let btnDisabled = !canAfford || isUpgrading;
                                         
                                         if (isUpgrading) {
@@ -21791,7 +22296,7 @@ class DungeonPage extends React.Component {
                                                         )
                                                     })()}
                                                 </div>
-                                                <div className="stats-display" style={{ width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '8px', boxSizing: 'border-box', marginTop: '-38px', opacity: isSelected ? 1 : 0.5 }}>
+                                                <div className="stats-display" style={{ width: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', padding: '8px', boxSizing: 'border-box', marginTop: '-38px', opacity: isSelected ? 1 : 0.5, userSelect: 'none' }}>
                                                     {[
                                                         'attack',
                                                         'defense',
@@ -22333,7 +22838,10 @@ class DungeonPage extends React.Component {
                     }}>
                         <CardDuel
                             onFinish={this.handleCardDuelFinish}
-                            onClose={() => this.setState({ showCardDuelModal: false })}
+                            onClose={() => {
+                                this.setState({ isCardScrimmage: false });
+                                this.closeCardDuel();
+                            }}
                             saveUserData={this.props.saveUserData}
                             inventoryManager={this.props.inventoryManager}
                             scrimmage={!!this.state.isCardScrimmage}
@@ -22562,7 +23070,7 @@ class DungeonPage extends React.Component {
                 {this.state.activeChatPeer && (
                     <DirectChatModal
                         peerPlayer={this.state.activeChatPeer}
-                        messages={this.state.chatMessagesMap[this.state.activeChatPeer.socketId] || []}
+                        messages={(this.state.chatMessagesMap || {})[this.state.activeChatPeer.socketId] || []}
                         onSendMessage={this.handleSendChatMessage}
                         onClose={() => this.setState({ activeChatPeer: null })}
                     />

@@ -55,11 +55,15 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         const vctId = `${combatant.id}_VCT`;
         return allCombatants[vctId] || combatant;
     };
-    // Determine initial facing: right for fighters, left for monsters/minions
-    let initialFacing = 'right';
-    if (fighter.isMonster || fighter.isMinion) {
-        // console.log('*****fighter: ', fighter);
-        initialFacing = 'left';
+    // Determine initial facing: right for fighters on left side, left for monsters/minions/right-side units
+    let initialFacing = fighter.facing;
+    if (!initialFacing) {
+        const isRightSide = (fighter.coordinates && fighter.coordinates.x >= 4) || fighter.isOpponent;
+        if (fighter.isMonster || fighter.isMinion || isRightSide) {
+            initialFacing = 'left';
+        } else {
+            initialFacing = 'right';
+        }
     }
 
     let rawAttacks = [];

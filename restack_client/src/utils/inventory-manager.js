@@ -2820,6 +2820,10 @@ export function InventoryManager() {
             this.gold = 0;
             this.shimmering_dust = 0;
             this.totems = 0;
+            this.wood = 0;
+            this.stone = 0;
+            this.slate = 0;
+            this.mushrooms = 0;
         } else {
             this.inventory = itemsArray.map(e => {
                 if (!e) return null;
@@ -2842,6 +2846,10 @@ export function InventoryManager() {
             this.gold = (data && typeof data.gold === 'number') ? data.gold : 0;
             this.shimmering_dust = (data && typeof data.shimmering_dust === 'number') ? data.shimmering_dust : 0;
             this.totems = (data && typeof data.totems === 'number') ? data.totems : 0;
+            this.wood = (data && typeof data.wood === 'number') ? data.wood : 0;
+            this.stone = (data && typeof data.stone === 'number') ? data.stone : 0;
+            this.slate = (data && typeof data.slate === 'number') ? data.slate : 0;
+            this.mushrooms = (data && typeof data.mushrooms === 'number') ? data.mushrooms : 0;
         }
     }
     // Re-hydrate every weapon in an inventory array from the current allItems

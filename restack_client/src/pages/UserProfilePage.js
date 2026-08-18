@@ -121,6 +121,10 @@ class UserProfilePage extends React.Component{
       this.props.inventoryManager.gold = 0;
       this.props.inventoryManager.shimmering_dust = 0;
       this.props.inventoryManager.totems = 0;
+      this.props.inventoryManager.wood = 0;
+      this.props.inventoryManager.stone = 0;
+      this.props.inventoryManager.slate = 0;
+      this.props.inventoryManager.mushrooms = 0;
     }
 
     meta.food = 0;
@@ -134,7 +138,11 @@ class UserProfilePage extends React.Component{
           }),
       gold: 0,
       shimmering_dust: 0,
-      totems: 0
+      totems: 0,
+      wood: 0,
+      stone: 0,
+      slate: 0,
+      mushrooms: 0
     };
 
     delete meta.activatedGenerators;
@@ -155,13 +163,13 @@ class UserProfilePage extends React.Component{
       this.props.boardManager.dungeon.id = null;
     }
 
-    meta.dungeonId = null;
-    meta.location = null;
+    delete meta.dungeonId;
+    delete meta.location;
 
     this.resetResourcesAndKeepItems(meta);
 
     // Revive and keep crew intact with all their equipped items & stats
-    if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
+    if (this.props.crewManager && Array.isArray(this.props.crewManager.crew) && this.props.crewManager.crew.length > 0) {
       this.props.crewManager.crew.forEach(c => {
         if (c) {
           c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
@@ -170,6 +178,14 @@ class UserProfilePage extends React.Component{
       });
       meta.crew = this.props.crewManager.crew;
       try { this.props.crewManager.initializeCrew(meta.crew); } catch (e) {}
+    } else if (Array.isArray(meta.crew) && meta.crew.length > 0) {
+      // Fallback: revive from meta if crewManager is somehow empty
+      meta.crew.forEach(c => {
+        if (c) {
+          c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
+          c.dead = false;
+        }
+      });
     }
 
     await updateUserRequest(getUserId(), meta);
@@ -195,13 +211,13 @@ class UserProfilePage extends React.Component{
       this.props.boardManager.dungeon.id = null;
     }
 
-    meta.dungeonId = null;
-    meta.location = null;
+    delete meta.dungeonId;
+    delete meta.location;
 
     this.resetResourcesAndKeepItems(meta);
 
     // Revive and keep crew intact with all their equipped items & stats
-    if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
+    if (this.props.crewManager && Array.isArray(this.props.crewManager.crew) && this.props.crewManager.crew.length > 0) {
       this.props.crewManager.crew.forEach(c => {
         if (c) {
           c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
@@ -210,6 +226,14 @@ class UserProfilePage extends React.Component{
       });
       meta.crew = this.props.crewManager.crew;
       try { this.props.crewManager.initializeCrew(meta.crew); } catch (e) {}
+    } else if (Array.isArray(meta.crew) && meta.crew.length > 0) {
+      // Fallback: revive from meta if crewManager is somehow empty
+      meta.crew.forEach(c => {
+        if (c) {
+          c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
+          c.dead = false;
+        }
+      });
     }
 
     await updateUserRequest(getUserId(), meta);

@@ -265,34 +265,34 @@
 /* Upper-Left Corner Reaper Orb */
 .pe-corner-health-orb--top-left {
   position: absolute;
-  left: -88px;
-  top: -12px;
+  left: -115px;
+  top: -16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   z-index: 50;
 }
 
 /* Lower-Right Corner Crew Orb */
 .pe-corner-health-orb--bottom-right {
   position: absolute;
-  right: -88px;
-  bottom: -12px;
+  right: -115px;
+  bottom: -16px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   z-index: 50;
 }
 
 .pe-orb-header-label {
   font-family: 'Cinzel', serif;
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 11.5px;
+  font-weight: 800;
   color: var(--pe-gold);
-  letter-spacing: 0.08em;
-  text-shadow: 0 1px 4px #000;
+  letter-spacing: 0.1em;
+  text-shadow: 0 1px 4px #000, 0 0 8px rgba(201, 168, 76, 0.4);
 }
 
 .pe-spirit-subbadge {
@@ -500,11 +500,11 @@
 
 .pe-liquid-orb-vessel {
   position: relative;
-  width: 60px;
-  height: 60px;
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
   overflow: hidden;
-  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 4px 22px rgba(0, 0, 0, 0.95);
 }
 
 .pe-liquid-orb-bg {
@@ -559,17 +559,17 @@
 
 .pe-liquid-orb-label {
   font-family: 'Cinzel', serif;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 800;
   color: var(--pe-gold);
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 8px rgba(201, 168, 76, 0.3);
-  letter-spacing: 0.05em;
-  margin-top: 1px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 10px rgba(201, 168, 76, 0.5);
+  letter-spacing: 0.06em;
+  margin-top: 3px;
 }
 
 .pe-liquid-orb--reaper .pe-liquid-orb-label {
   color: #ff6666;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 8px rgba(255, 68, 68, 0.4);
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9), 0 0 10px rgba(255, 68, 68, 0.6);
 }
 
 /* ── CENTER TACTICAL ARENA ────────────────────────────────────── */

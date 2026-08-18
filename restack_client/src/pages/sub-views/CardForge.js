@@ -44,14 +44,17 @@ export default function CardForge({ crew, meta, onClose, onSave, highlightMonste
         }
         const newShards = { ...shardsState, [entry.monsterType]: (shardsState[entry.monsterType] || 0) - 3 };
         const newForged = [...forgedState, entry.card.id];
+        const newActive = activeEchos.includes(entry.card.id) ? activeEchos : [...activeEchos, entry.card.id];
         setShardsState(newShards);
         setForgedState(newForged);
-        showToast(`${entry.card.name} forged!`);
+        setActiveEchos(newActive);
+        showToast(`${entry.card.name} forged & added to deck!`);
 
         // Persist immediately
         if (meta) {
             meta.soulShards = newShards;
             meta.echoCards  = newForged;
+            meta.activeEchoCards = newActive;
             if (onSave) onSave(meta);
         }
     };
@@ -113,8 +116,7 @@ export default function CardForge({ crew, meta, onClose, onSave, highlightMonste
                 {tab === 'forge' && (
                     <div className="pf-forge-body">
                         <div className="pf-section-label">
-                            Collect 3 Soul Shards of a monster type to forge its Echo Card.
-                            Echo Cards unleash powerful one-time effects in the card duel.
+                            Collect 3 Soul Shards of a monster type to forge its Echo Card. Echo Cards are playable cards in the Duel.
                         </div>
 
                         <div className="pf-forge-grid">
@@ -325,8 +327,11 @@ const FORGE_CSS = `
 .pf-forge-card--done  { border-color: rgba(90,176,112,0.4); opacity: 0.75; }
 
 .pf-forge-portrait {
-  width: 100%; height: 80px;
-  background: rgba(30,20,50,0.6) center/cover no-repeat;
+  width: 100%; height: 110px;
+  background-color: rgba(14, 10, 24, 0.9);
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
   position: relative; display: flex; align-items: center; justify-content: center;
 }
 .pf-forge-glyph { font-size: 28px; color: rgba(155,100,201,0.4); }
@@ -375,7 +380,11 @@ const FORGE_CSS = `
   border-radius: 8px; overflow: hidden; width: 90px; text-align: center;
 }
 .pf-champ-portrait {
-  width: 100%; height: 60px; background: rgba(40,30,10,0.6) center/cover no-repeat;
+  width: 100%; height: 75px;
+  background-color: rgba(20, 14, 10, 0.9);
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
   display: flex; align-items: center; justify-content: center;
 }
 .pf-champ-emoji { font-size: 26px; }
@@ -391,7 +400,11 @@ const FORGE_CSS = `
 .pf-echo-sel-card:hover { border-color: rgba(155,100,201,0.5); transform: translateY(-2px); }
 .pf-echo-sel-card--active { border-color: #c9a84c; box-shadow: 0 0 10px rgba(201,168,76,0.2); }
 .pf-echo-sel-portrait {
-  width: 100%; height: 60px; background: rgba(30,15,50,0.6) center/cover no-repeat;
+  width: 100%; height: 75px;
+  background-color: rgba(14, 10, 24, 0.9);
+  background-position: center;
+  background-size: contain;
+  background-repeat: no-repeat;
   position: relative; display: flex; align-items: center; justify-content: center;
 }
 .pf-echo-sel-glyph { font-size: 22px; color: rgba(155,100,201,0.4); }

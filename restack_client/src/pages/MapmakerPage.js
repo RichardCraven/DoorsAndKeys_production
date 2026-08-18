@@ -1942,6 +1942,11 @@ class MapMakerPage extends React.Component {
   _toggleMobilePalette = () => {
     this.setState(prev => ({ mobilePaletteOpen: !prev.mobilePaletteOpen }));
   }
+  handleDoubleClick = (tile) => {
+    if (tile && tile.inscriptions && Object.keys(tile.inscriptions).length > 0) {
+      this.showInscriptionWallPicker(tile.id !== undefined ? tile.id : tile.index);
+    }
+  }
 
   handleClick = (tile) => {
     if (tile.type === 'palette-tile') {
@@ -5200,6 +5205,9 @@ class MapMakerPage extends React.Component {
       const dataList = (val && Array.isArray(val.data)) ? val.data : [];
       dataList.forEach((e) => {
         if (!e || !e.content) return;
+        const isInstance = /_.+_[^_]{4}$/i.test(`${e.name || ""}`) || /_\d+$/i.test(`${e.name || JSON.parse(e.content).name || ""}`);
+        if (isInstance) return;
+        if (!e || !e.content) return;
         try {
           let dungeon = JSON.parse(e.content);
           dungeon.id = e._id;
@@ -8279,6 +8287,7 @@ class MapMakerPage extends React.Component {
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
               handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
               handleHover={this.handleHover}
               setPaletteHover={this.setPaletteHover}
               loadBoard={this.loadBoard}
@@ -8347,6 +8356,7 @@ class MapMakerPage extends React.Component {
                     collapseFilterHeader={this.collapseFilterHeader}
                     setHover={this.setHover}
                     handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
                     handleHover={this.handleHover}
                     setPaletteHover={this.setPaletteHover}
                     loadBoard={this.loadBoard}
@@ -8402,6 +8412,7 @@ class MapMakerPage extends React.Component {
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
               handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
               handleHover={this.handleHover}
               setPaletteHover={this.setPaletteHover}
               loadBoard={this.loadBoard}
@@ -8465,6 +8476,7 @@ class MapMakerPage extends React.Component {
               collapseFilterHeader={this.collapseFilterHeader}
               setHover={this.setHover}
               handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
               handleHover={this.handleHover}
               setPaletteHover={this.setPaletteHover}
               loadBoard={this.loadBoard}
@@ -8531,6 +8543,7 @@ class MapMakerPage extends React.Component {
                 collapseFilterHeader={this.collapseFilterHeader}
                 setHover={this.setHover}
                 handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
                 handleHover={this.handleHover}
                 setPaletteHover={this.setPaletteHover}
                 loadBoard={this.loadBoard}
@@ -8628,6 +8641,7 @@ class MapMakerPage extends React.Component {
                 collapseFilterHeader={this.collapseFilterHeader}
                 setHover={this.setHover}
                 handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
                 handleHover={this.handleHover}
                 setPaletteHover={this.setPaletteHover}
                 loadBoard={this.loadBoard}

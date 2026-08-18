@@ -254,6 +254,24 @@ class DungeonView extends React.Component {
         }
         return containsType || containsSubtype || imageType || null;
     }
+    safeDrawImage = (ctx, img, x, y, width, height) => {
+        if (!ctx || !img) return;
+        const isValid = (
+            img instanceof HTMLImageElement ||
+            img instanceof HTMLCanvasElement ||
+            (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) ||
+            (typeof window !== 'undefined' && window.CSSImageValue && img instanceof window.CSSImageValue) ||
+            (typeof window !== 'undefined' && window.OffscreenCanvas && img instanceof window.OffscreenCanvas)
+        );
+        if (isValid && img.complete !== false && (img.naturalWidth !== 0 || img.width !== 0)) {
+            try {
+                ctx.drawImage(img, x, y, width, height);
+            } catch (e) {
+                // Ignore transient drawImage failures during image loading
+            }
+        }
+    }
+
     // drawPlane: single-canvas replacement for the 9 per-board canvases.
     // Draws all passage overlays for an entire plane (front or back) in one RAF loop.
     drawPlane = (ctx, frameCount, data) => {
@@ -301,27 +319,27 @@ class DungeonView extends React.Component {
                 const dx = originX + unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
                 const dy = originY + unit * pCoords[1];
                 const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
-                ctx.drawImage(this.props.imagesMatrix['doorImg'], dx, dy, size, size);
+                this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix['doorImg'] : null, dx, dy, size, size);
 
             } else if (pType === 'way_up') {
                 const dx = originX + unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
                 const dy = originY + unit * pCoords[1];
                 const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
                 const imageKey = isConnected ? 'arrowUpImg' : 'arrowUpImgInvalid';
-                ctx.drawImage(this.props.imagesMatrix[imageKey], dx, dy, size, size);
+                this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix[imageKey] : null, dx, dy, size, size);
 
             } else if (pType === 'way_down') {
                 const dx = originX + unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
                 const dy = originY + unit * pCoords[1];
                 const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
                 const imageKey = isConnected ? 'arrowDownImg' : 'arrowDownImgInvalid';
-                ctx.drawImage(this.props.imagesMatrix[imageKey], dx, dy, size, size);
+                this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix[imageKey] : null, dx, dy, size, size);
 
             } else if (pType === 'spawn_point') {
                 const dx = originX + unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
                 const dy = originY + unit * pCoords[1];
                 const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
-                ctx.drawImage(this.props.imagesMatrix['spawnPointImg'], dx, dy, size, size);
+                this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix['spawnPointImg'] : null, dx, dy, size, size);
 
             } else {
                 // Generic pulsing dot (door unconnected, or unknown type)
@@ -483,25 +501,25 @@ class DungeonView extends React.Component {
                         let y = unit*pCoords[1]
                         let size = 20 + Math.sin(frameCount * 0.04)**2 * 5
                         let imageKey = 'doorImg'
-                        ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
+                        this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix[imageKey] : null, x, y, size, size);
                     } else if(pType === 'way_up'){
                         let x = unit*pCoords[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
                         let y = unit*pCoords[1]
                         let imageKey = isConnected ? 'arrowUpImg' : 'arrowUpImgInvalid'
                         let size = 20 + Math.sin(frameCount * 0.04)**2 * 5;
-                        ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
+                        this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix[imageKey] : null, x, y, size, size);
                     } else if(pType === 'way_down'){
                         let x = unit*pCoords[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
                         let y = unit*pCoords[1]
                         let size = 20 + Math.sin(frameCount * 0.04)**2 * 5
                         let imageKey = isConnected ? 'arrowDownImg' : 'arrowDownImgInvalid'
-                        ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
+                        this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix[imageKey] : null, x, y, size, size);
                     } else if(pType === 'spawn_point'){
                         let x = unit*pCoords[0] - 0.5*unit - (Math.sin(frameCount * 0.04)**2 * 2)
                         let y = unit*pCoords[1]
                         let size = 20 + Math.sin(frameCount * 0.04)**2 * 5
                         const imageKey = 'spawnPointImg';
-                        ctx.drawImage(this.props.imagesMatrix[imageKey], x, y, size, size);
+                        this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix[imageKey] : null, x, y, size, size);
                     } else {
                         ctx.beginPath()
                         let minVal = 3.5;

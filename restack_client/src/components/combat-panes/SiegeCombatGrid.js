@@ -1371,7 +1371,7 @@ export default function SiegeCombatGrid(props) {
             details?.wounded ? 'hit' : '',
             details?.wounded ? (getHitAnimation ? getHitAnimation(details) : '') : '',
             details?.wounded ? 'hit-flash' : '',
-            (liveFighter?.facing || details?.facing) === 'right' ? 'reversed' : '',
+            facingClass,
             (details?.stunned && !isAsleepFighter) ? 'stunned' : '',
             isDisintegrating ? 'disintegrate-shaking' : '',
             activeReturnTrialAnim ? 'respawn-fade-in' : '',

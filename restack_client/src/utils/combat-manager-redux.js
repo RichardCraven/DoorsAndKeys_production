@@ -847,7 +847,8 @@ export function CombatManagerRedux() {
                 if (!e.specials.includes('build_wall')) e.specials.push('build_wall');
                 if (!e.specials.includes('engineer_repair')) e.specials.push('engineer_repair');
                 e.attacks = e.attacks || [];
-                if (!e.attacks.includes('sword_swing')) e.attacks.push('sword_swing');
+                e.attacks = e.attacks.filter(a => a !== 'sword_swing');
+                if (!e.attacks.includes('wrench_strike')) e.attacks.push('wrench_strike');
             } else if (e.type === 'sage') {
                 e.attacks = e.attacks || [];
                 if (!e.attacks.includes('heal')) e.attacks.push('heal');
@@ -980,25 +981,55 @@ export function CombatManagerRedux() {
 
             rawOpponentCrew.forEach((e, idx) => {
                 if (!e || e.dead) return;
+                const validStr = (val) => {
+                    if (typeof val !== 'string' || !val.trim() || val === '[object Object]') return null;
+                    const lower = val.trim().toLowerCase();
+                    if (lower === 'warrior' || lower === 'spellcaster') return null;
+                    return lower;
+                };
+
+                let resolvedKey = validStr(e.type) || validStr(e.image) || validStr(e.key);
+                if (!resolvedKey && typeof e.portrait === 'string') resolvedKey = validStr(e.portrait);
+                if (!resolvedKey && e.name) {
+                    const n = e.name.toLowerCase();
+                    if (n.includes('yu') || n.includes('monk')) resolvedKey = 'monk';
+                    else if (n.includes('dormund') || n.includes('ranger')) resolvedKey = 'ranger';
+                    else if (n.includes('sardonis') || n.includes('soldier')) resolvedKey = 'soldier';
+                    else if (n.includes('ulaf') || n.includes('barbarian')) resolvedKey = 'barbarian';
+                    else if (n.includes('loryastes') || n.includes('sage')) resolvedKey = 'sage';
+                    else if (n.includes('zildjikan') || n.includes('wizard')) resolvedKey = 'wizard';
+                    else if (n.includes('icaron') || n.includes('engineer')) resolvedKey = 'engineer';
+                    else if (n.includes('vaelis') || n.includes('summoner')) resolvedKey = 'summoner';
+                }
+                if (!resolvedKey) resolvedKey = 'soldier';
+
+                const portraitName = resolvedKey;
+                const typeName = resolvedKey;
                 const opponentUnit = {
                     ...e,
-                    isMonster: false,
+                    isMonster: true,
                     isMinion: false,
                     isMainMonster: false,
                     isLarge: false,
                     isHuge: false,
                     isOpponent: true,
+                    portrait: portraitName,
+                    type: typeName,
+                    image: typeName,
+                    class: typeName,
                     facing: e.facing || 'left',
-                    coordinates: { x: MAX_DEPTH, y: Math.min(idx, 4) }
+                    coordinates: { x: MAX_DEPTH, y: Math.min(idx, 5) }
                 };
 
                 const fighter = createFighter(opponentUnit, callbacks, this.FIGHT_INTERVAL);
-                fighter.isMonster = false;
+                fighter.isMonster = true;
                 fighter.isMinion = false;
                 fighter.isMainMonster = false;
                 fighter.isLarge = false;
                 fighter.isHuge = false;
                 fighter.isOpponent = true;
+                fighter.portrait = portraitName;
+                fighter.type = typeName;
                 fighter.maxEndurance = e.stats?.vitality || 30;
                 fighter.endurance = fighter.maxEndurance;
                 fighter.enduranceFrozenRounds = 0;
@@ -1010,6 +1041,7 @@ export function CombatManagerRedux() {
                 this._initializeInitialCooldowns(fighter);
                 this._setCombatantOccupiedCoords(fighter, this.combatants);
                 this._makeHpEffectsAware(fighter);
+                console.log(`[PvP Diagnostic] combat-manager-redux initialized opponent fighter [${fighter.id}]: name="${fighter.name}", type="${fighter.type}", portrait="${fighter.portrait}", isOpponent=${fighter.isOpponent}, isMainMonster=${fighter.isMainMonster}, coords=`, fighter.coordinates);
             });
 
             this.beginGreeting();
@@ -1328,6 +1360,10 @@ export function CombatManagerRedux() {
         if (!combatant) return;
         combatant.occupiedCoords = [];
         if (combatant.coordinates) combatant.occupiedCoords.push({ x: combatant.coordinates.x, y: combatant.coordinates.y });
+
+        if (combatant.isOpponent) {
+            return;
+        }
 
         const isHuge = !combatant.isShrineGuardian && (
             (typeof combatant.huge === 'boolean' && combatant.huge === true)
@@ -5673,24 +5709,18 @@ export function CombatManagerRedux() {
         if (!unit || !unit.coordinates) return true;
         const isMonster = !!unit.isMonster;
         const currentX = unit.coordinates.x;
+        const currentY = unit.coordinates.y;
         const centerX = Math.floor(MAX_DEPTH / 2);
+        const centerY = Math.floor((MAX_LANES - 1) / 2);
 
-        // Reached central zone (e.g. x >= centerX - 1 for crew, x <= centerX + 1 for monster)
-        const reachedCenter = isMonster ? (currentX <= centerX + 1) : (currentX >= centerX - 1);
-        if (reachedCenter) return true;
+        // Reached central zone (X within 1 of centerX and Y within 1 of centerY)
+        const reachedCenterX = isMonster ? (currentX <= centerX + 1) : (currentX >= centerX - 1);
+        const reachedCenterY = Math.abs(currentY - centerY) <= 1;
+        if (reachedCenterX && reachedCenterY) return true;
 
-        // Check if path forward is completely blocked
-        const forwardDX = isMonster ? -1 : 1;
-        const nextX = currentX + forwardDX;
-        if (nextX < 0 || nextX > MAX_DEPTH) return true;
-
-        const nextTileBlocked = this.isTileOccupied(nextX, unit.coordinates.y);
-        if (nextTileBlocked) {
-            const step = this.getPathfindNextStep(unit, isMonster ? 0 : MAX_DEPTH, unit.coordinates.y);
-            if (!step || (isMonster ? step.x >= currentX : step.x <= currentX)) {
-                return true; // Blocked from advancing further
-            }
-        }
+        // Check if path to center is completely blocked
+        const step = this.getPathfindNextStep(unit, centerX, centerY);
+        if (!step) return true; // Blocked from advancing further
 
         return false;
     };
@@ -5704,10 +5734,10 @@ export function CombatManagerRedux() {
         const walkerReady = this._abilityReady(unit, 'build_walker') && this._canEngineerBuild(unit);
         const turretReady = this._abilityReady(unit, 'build_turret') && this._canEngineerBuild(unit);
 
-        // ── Phase 1: Try to plant turret as close to center of board first ──
+        // ── Phase 1: Try to plant turret as close to center of board (X and Y) first ──
         if (!myTurret && turretReady) {
             let targetX = Math.floor(MAX_DEPTH / 2);
-            let targetY = unit.coordinates.y;
+            let targetY = Math.floor((MAX_LANES - 1) / 2);
 
             if (canMove && (unit.coordinates.x !== targetX || unit.coordinates.y !== targetY)) {
                 const moved = this.getPathfindNextStep(unit, targetX, targetY);
@@ -5831,19 +5861,7 @@ export function CombatManagerRedux() {
     };
 
     this._canEngineerBuild = (unit) => {
-        if (unit.isMonster || this.isSimulator) return true; // Enemy engineers & simulator don't need inventory
-        const inventory = (typeof this.getCurrentInventory === 'function') ? this.getCurrentInventory() : [];
-        if (!inventory || inventory.length === 0) return true; // Fallback if inventory is not populated
-        const woodCount = inventory.filter(i => i && (i._im_key === 'wood' || i.id === 'wood' || i.name === 'Wood')).length;
-        const stoneCount = inventory.filter(i => i && (i._im_key === 'stone' || i.id === 'stone' || i.name === 'Stone')).length;
-        
-        let cost = 2;
-        if (this.hasPassive(unit, 'master_builder')) {
-            const lvl = this.getSkillLevel(unit, 'master_builder');
-            if (lvl >= 2) cost = 1;
-        }
-        
-        return woodCount >= cost && stoneCount >= cost;
+        return true; // Constructs in combat are governed by skill cooldowns
     };
 
     this._executeEngineerSummon = (unit, ability, abilityKey) => {
@@ -5859,15 +5877,12 @@ export function CombatManagerRedux() {
                 let woodItems = inventory.filter(i => i && (i._im_key === 'wood' || i.id === 'wood' || i.name === 'Wood'));
                 let stoneItems = inventory.filter(i => i && (i._im_key === 'stone' || i.id === 'stone' || i.name === 'Stone'));
                 
-                if (woodItems.length < cost || stoneItems.length < cost) {
-                    this.appendCombatLog(`${this.getCombatantLogName(unit)} lacks materials to build.`);
-                    return;
-                }
-
-                for (let i = 0; i < cost; i++) {
-                    if (typeof this.useConsumable === 'function') {
-                        this.useConsumable(woodItems[i]);
-                        this.useConsumable(stoneItems[i]);
+                if (woodItems.length >= cost && stoneItems.length >= cost) {
+                    for (let i = 0; i < cost; i++) {
+                        if (typeof this.useConsumable === 'function') {
+                            this.useConsumable(woodItems[i]);
+                            this.useConsumable(stoneItems[i]);
+                        }
                     }
                 }
             }
@@ -12340,7 +12355,7 @@ export function CombatManagerRedux() {
         }
         const baseAttack = (Array.isArray(unit.attacks) && unit.attacks.length > 0)
             ? unit.attacks[0]
-            : (unit.type === 'monk' ? 'monk_punch' : (unit.type === 'wizard' ? 'magic_missile' : 'slash'));
+            : (unit.type === 'monk' ? 'monk_punch' : (unit.type === 'wizard' ? 'magic_missile' : (unit.type === 'engineer' ? 'wrench_strike' : 'slash')));
         if (!baseAttack) return;
 
         const attackKey = typeof baseAttack === 'string' ? baseAttack : (baseAttack ? baseAttack.id : null);
