@@ -5,7 +5,7 @@ import '../../styles/map-maker.scss'
 import Tile from '../../components/tile'
 import { CDropdown, CDropdownToggle, CDropdownMenu, CDropdownItem, CCollapse} from '@coreui/react';
 import  CIcon  from '@coreui/icons-react'
-import { cilCaretRight } from '@coreui/icons';
+import { cilCaretRight, cilTrash } from '@coreui/icons';
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 
@@ -514,7 +514,23 @@ class PlanesPanel extends React.Component {
                                                 <div className="icon-container">
                                                     <CIcon icon={cilCaretRight} className={`expand-icon ${this.isFolderExpanded(subfolderKey) ? 'expanded' : ''}`} size="sm"/>
                                                 </div>
-                                                <div className="subfolder-headline-text">Level {subfolder.title}</div>
+                                                <div style={{display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center'}}>
+                                                    <div className="subfolder-headline-text">Level {subfolder.title}</div>
+                                                    {!this.props.isMobile && subfolder.title !== '0' && (
+                                                        <div 
+                                                            className="icon-container trash-icon-hover" 
+                                                            style={{ padding: '0 10px', color: '#ff4d4f' }}
+                                                            onClick={(e) => { 
+                                                                e.stopPropagation(); 
+                                                                if (typeof this.props.deleteDungeonLevel === 'function') {
+                                                                    this.props.deleteDungeonLevel(subfolder.title);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <CIcon icon={cilTrash} size="sm"/>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                             <CCollapse visible={this.isFolderExpanded(subfolderKey)}>
                                                 {this.renderLevelPlanes(subfolder, folder.title)}

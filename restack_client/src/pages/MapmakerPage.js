@@ -841,12 +841,12 @@ class MapMakerPage extends React.Component {
   getVendorGroupTileIds = (tiles, tileId) => {
     const tile = tiles?.[tileId];
     const contains = tile?.contains;
-    if (!contains || contains.type !== 'vendor') return [];
+    if (!contains || !contains.vendorGroupId) return [];
 
     if (contains.vendorGroupId) {
       const groupTileIds = [];
       tiles.forEach((entry, idx) => {
-        if (entry?.contains?.type === 'vendor' && entry.contains.vendorGroupId === contains.vendorGroupId) {
+        if (entry?.contains?.vendorGroupId === contains.vendorGroupId) {
           groupTileIds.push(idx);
         }
       });
@@ -861,7 +861,7 @@ class MapMakerPage extends React.Component {
 
   deleteTileWithVendorSupport = (tiles, tileId) => {
     const tile = tiles?.[tileId];
-    if (tile?.contains?.type !== 'vendor') {
+    if (!tile?.contains?.vendorGroupId) {
       tiles[tileId] = this.getDeleteResultForTile(tile);
       return tiles;
     }
@@ -874,7 +874,7 @@ class MapMakerPage extends React.Component {
   }
 
   isParentPaletteOption = (optionType) => {
-    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors'].includes(optionType);
+    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'generators', 'dungeon litter'].includes(optionType);
   }
 
   getVendorFootprintTileIds = (anchorTileId) => {
@@ -899,14 +899,14 @@ class MapMakerPage extends React.Component {
       const tile = tiles[tileId];
       if (!tile) return false;
       const type = this.getContainsType(tile.contains);
-      return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage' || type === 'vendor';
+      return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage' || type === 'vendor' || type === 'building';
     });
   }
 
-  placeVendorFootprint = (tiles, anchorTileId, vendorKey) => {
+  placeVendorFootprint = (tiles, anchorTileId, vendorKey, baseType = 'vendor') => {
     const footprint = this.getVendorFootprintTileIds(anchorTileId);
     if (!footprint) return tiles;
-    const vendorGroupId = `vendor_${vendorKey}_${anchorTileId}`;
+    const vendorGroupId = `${baseType}_${vendorKey}_${anchorTileId}`;
     const vendorCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
 
     // Copy the original borders for all 4 tiles in the footprint to preserve the outer boundaries
@@ -938,7 +938,7 @@ class MapMakerPage extends React.Component {
       }
 
       tiles[tileId].contains = {
-        type: 'vendor',
+        type: baseType,
         subtype: vendorKey,
         vendorGroupId,
         vendorAnchorId: anchorTileId,
@@ -949,15 +949,6 @@ class MapMakerPage extends React.Component {
       tiles[tileId].borders = newBorders;
     });
     return tiles;
-  }
-
-  getDefaultPassageBorders = (tile) => {
-    return tile?.borders ? { ...tile.borders } : {
-      top: '2px solid black',
-      bottom: '2px solid black',
-      left: '2px solid black',
-      right: '2px solid black'
-    };
   }
 
   breakPassageWall = (tiles, fromTileId, toTileId) => {
@@ -1000,7 +991,7 @@ class MapMakerPage extends React.Component {
         nextTiles[fromTileId] = {
           ...sourceTile,
           borders: {
-            ...this.getDefaultPassageBorders(sourceTile),
+            ...(sourceTile.borders || {}),
             [fromSide]: '2px solid transparent'
           }
         };
@@ -1015,7 +1006,7 @@ class MapMakerPage extends React.Component {
         nextTiles[toTileId] = {
           ...targetTile,
           borders: {
-            ...this.getDefaultPassageBorders(targetTile),
+            ...(targetTile.borders || {}),
             [toSide]: '2px solid transparent'
           }
         };
@@ -1060,7 +1051,7 @@ class MapMakerPage extends React.Component {
       vendorOption = this.props.mapMaker.vendorOptions[pinnedOption.id];
     }
 
-    let shrineOption = null, territoryOption = null, buildingOption = null, generatorOption = null;
+    let shrineOption = null, territoryOption = null, buildingOption = null, generatorOption = null, dungeonLitterOption = null;
     if (pinnedOption.type === 'shrine-tile') {
       shrineOption = this.props.mapMaker.shrineOptions[pinnedOption.id];
     }
@@ -1073,8 +1064,11 @@ class MapMakerPage extends React.Component {
     if (pinnedOption.type === 'generator-tile') {
       generatorOption = this.props.mapMaker.generatorOptions[pinnedOption.id];
     }
+    if (pinnedOption.type === 'dungeon-litter-tile') {
+      dungeonLitterOption = this.props.mapMaker.dungeonLitterOptions[pinnedOption.id];
+    }
 
-    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || generatorOption;
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || generatorOption || dungeonLitterOption;
     if (!isSpecialOption && !pinned) return null;
 
     let arr = this.state.tiles.map(t => ({ ...t }));
@@ -1128,22 +1122,35 @@ class MapMakerPage extends React.Component {
       }
       arr[tileId].territory = territoryOption.clan;
     } else if (buildingOption) {
-      const currentTile = arr[tileId];
-      const currentContains = currentTile?.contains;
-      let fortLevel = 1;
-      if (buildingOption.key === 'earthen_fort') {
-        const isExistingFort = currentContains && currentContains.type === 'building' && currentContains.subtype === 'earthen_fort';
-        if (isExistingFort) {
-          const existingLvl = typeof currentContains.level === 'number' ? currentContains.level : 1;
-          fortLevel = Math.min(3, existingLvl + 1);
+      if (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort') {
+        if (!this.canPlaceVendorFootprint(arr, tileId)) {
+          this.toast(`${buildingOption.name} requires a 2x2 empty space.`);
+          return null;
         }
+        arr = this.placeVendorFootprint(arr, tileId, buildingOption.key, 'building');
+      } else {
+        const currentTile = arr[tileId];
+        const currentContains = currentTile?.contains;
+        let fortLevel = 1;
+        if (buildingOption.key === 'earthen_fort') {
+          const isExistingFort = currentContains && currentContains.type === 'building' && currentContains.subtype === 'earthen_fort';
+          if (isExistingFort) {
+            const existingLvl = typeof currentContains.level === 'number' ? currentContains.level : 1;
+            fortLevel = Math.min(3, existingLvl + 1);
+          }
+        }
+        arr[tileId].contains = { type: 'building', subtype: buildingOption.key, level: fortLevel };
+        arr[tileId].image = images[buildingOption.image] || buildingOption.image;
+        arr[tileId].color = null;
       }
-      arr[tileId].contains = { type: 'building', subtype: buildingOption.key, level: fortLevel };
-      arr[tileId].image = images[buildingOption.image] || buildingOption.image;
-      arr[tileId].color = null;
     } else if (generatorOption) {
       arr[tileId].contains = { type: 'building', subtype: generatorOption.key };
       arr[tileId].image = images[generatorOption.image] || generatorOption.image;
+      arr[tileId].color = null;
+    } else if (dungeonLitterOption) {
+      const existingRot = (arr[tileId] && arr[tileId].contains && (arr[tileId].contains.type === 'dungeon_litter' || arr[tileId].contains.type === 'dungeon litter') && (arr[tileId].contains.subtype === dungeonLitterOption.key || arr[tileId].contains === dungeonLitterOption.key) && typeof arr[tileId].contains.rotation === 'number') ? arr[tileId].contains.rotation : 0;
+      arr[tileId].contains = { type: 'dungeon_litter', subtype: dungeonLitterOption.key, rotation: existingRot };
+      arr[tileId].image = images[dungeonLitterOption.image] || dungeonLitterOption.image;
       arr[tileId].color = null;
     } else if (pinned.optionType === 'passage') {
       let prevTileIdx = this.state.hoveredTileIdx;
@@ -1228,7 +1235,7 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'generator-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'generator-tile', 'dungeon-litter-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
@@ -1943,8 +1950,79 @@ class MapMakerPage extends React.Component {
     this.setState(prev => ({ mobilePaletteOpen: !prev.mobilePaletteOpen }));
   }
   handleDoubleClick = (tile) => {
+    const tileId = tile ? (tile.id !== undefined ? tile.id : tile.index) : null;
+    if (tileId === undefined || tileId === null) return;
+
+    const currentTile = this.state.tiles && this.state.tiles[tileId];
+    if (currentTile) {
+      const contains = currentTile.contains;
+      const containsType = this.getContainsType(contains);
+      const containsSubtype = typeof contains === 'object' ? (contains.subtype || contains.key) : (typeof contains === 'string' ? contains : null);
+
+      const isLitter = containsType === 'dungeon_litter' ||
+                       containsType === 'dungeon litter' ||
+                       (typeof containsSubtype === 'string' && (containsSubtype.startsWith('litter_') || containsSubtype.includes('litter')));
+
+      if (isLitter) {
+        const currentRotation = typeof contains === 'object' && typeof contains.rotation === 'number' ? contains.rotation : 0;
+        const nextRotation = (currentRotation + 90) % 360;
+
+        const newContains = typeof contains === 'object' ? {
+          ...contains,
+          rotation: nextRotation
+        } : {
+          type: 'dungeon_litter',
+          subtype: contains,
+          rotation: nextRotation
+        };
+
+        const nextTiles = this.state.tiles.map((t, idx) => {
+          if (idx === tileId) {
+            return {
+              ...t,
+              contains: newContains
+            };
+          }
+          return t;
+        });
+
+        const updatedLoadedBoard = this.state.loadedBoard ? {
+          ...this.state.loadedBoard,
+          tiles: nextTiles
+        } : null;
+
+        let dungeon = this.state.loadedDungeon ? clone(this.state.loadedDungeon) : null;
+        if (dungeon && Array.isArray(dungeon.levels)) {
+          dungeon.levels.forEach(level => {
+            ['front', 'back'].forEach(orientation => {
+              const plane = level[orientation];
+              if (plane && Array.isArray(plane.miniboards)) {
+                plane.miniboards.forEach(mb => {
+                  if (mb && (mb.id === this.state.loadedBoard?.id || mb.name === this.state.loadedBoard?.name)) {
+                    if (mb.tiles && mb.tiles[tileId]) {
+                      mb.tiles[tileId].contains = newContains;
+                    }
+                  }
+                });
+              }
+            });
+          });
+        }
+
+        this.setState({
+          tiles: nextTiles,
+          loadedBoard: updatedLoadedBoard,
+          loadedDungeon: dungeon || this.state.loadedDungeon,
+          dungeonHasUnsavedChanges: true,
+          boardHasUnsavedChanges: true
+        });
+        this.flashLeftReadout(`Rotated tile (${nextRotation}°)`);
+        return;
+      }
+    }
+
     if (tile && tile.inscriptions && Object.keys(tile.inscriptions).length > 0) {
-      this.showInscriptionWallPicker(tile.id !== undefined ? tile.id : tile.index);
+      this.showInscriptionWallPicker(tileId);
     }
   }
 
@@ -1986,7 +2064,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'generator-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile') {
       this.setState({
         pinnedOption: tile
       })
@@ -6476,6 +6554,126 @@ class MapMakerPage extends React.Component {
     }
     this.writeDungeon()
   }
+  deleteDungeonLevel = (levelId) => {
+    this.setState({
+      showModal: true,
+      modalType: 'delete dungeon level',
+      levelToDelete: levelId
+    });
+  }
+
+  executeDeleteDungeonLevel = async () => {
+    const levelId = this.state.levelToDelete;
+    this.setState({ showModal: false, levelToDelete: null });
+
+    if (!this.state.loadedDungeon) return;
+    
+    let dungeon = JSON.parse(JSON.stringify(this.state.loadedDungeon));
+    const numericLevelId = Number(levelId);
+    let level = Array.isArray(dungeon.levels) ? dungeon.levels.find(l => String(l.id) === String(levelId)) : null;
+
+    if (level) {
+      if (numericLevelId > 0) {
+        if (dungeon.levels.some(l => Number(l.id) > numericLevelId)) {
+          this.flashLeftReadout('Cannot delete this level because there is one above it', true);
+          return;
+        }
+      } else if (numericLevelId < 0) {
+        if (dungeon.levels.some(l => Number(l.id) < numericLevelId)) {
+          this.flashLeftReadout('Cannot delete this level because there is one below it', true);
+          return;
+        }
+      }
+    }
+
+    // Extract plane and board IDs to delete from the level structure (if it exists)
+    let planeIdsToDelete = new Set();
+    let boardIdsToDelete = new Set();
+    
+    const checkPlane = (plane) => {
+      if (!plane) return;
+      if (plane.id) planeIdsToDelete.add(plane.id);
+      if (plane._id) planeIdsToDelete.add(plane._id);
+      if (Array.isArray(plane.miniboards)) {
+        plane.miniboards.forEach(mb => {
+          if (!mb || Object.keys(mb).length === 0 || Array.isArray(mb)) return;
+          if (mb.id) boardIdsToDelete.add(mb.id);
+          if (mb._id) boardIdsToDelete.add(mb._id);
+        });
+      }
+    };
+
+    if (level) {
+      checkPlane(level.front);
+      checkPlane(level.back);
+    }
+
+    // Also extract orphaned planes that match the dungeon and level naming convention
+    // e.g. "carcosa_-1_front"
+    const dungeonName = dungeon.name;
+    const prefix1 = `${dungeonName}_${levelId}_`;
+    const prefix2 = `${dungeonName}_Level ${levelId}_`;
+
+    if (Array.isArray(this.state.planes)) {
+      this.state.planes.forEach(plane => {
+        if (plane && plane.name && (plane.name.startsWith(prefix1) || plane.name.startsWith(prefix2))) {
+          checkPlane(plane);
+        }
+      });
+    }
+    
+    // Also extract orphaned boards that match the folderPath convention
+    // e.g. "carcosa/-1" or "carcosa/Level -1"
+    if (Array.isArray(this.state.boards)) {
+      this.state.boards.forEach(board => {
+        if (board && board.folderPath) {
+          const pathLower = board.folderPath.toLowerCase();
+          if (pathLower.startsWith(`${dungeonName}/${levelId}`.toLowerCase()) || 
+              pathLower.startsWith(`${dungeonName}/Level ${levelId}`.toLowerCase()) ||
+              pathLower === `${dungeonName}/${levelId}`.toLowerCase()) {
+            if (board.id) boardIdsToDelete.add(board.id);
+            if (board._id) boardIdsToDelete.add(board._id);
+          }
+        }
+      });
+    }
+
+    // Process dungeon level removal
+    if (level) {
+      if (numericLevelId > 0 || numericLevelId < 0) {
+        dungeon.levels = dungeon.levels.filter(e => String(e.id) !== String(levelId));
+      } else {
+        this.flashLeftReadout('Level 0 cannot be deleted, but its contents will be cleared.');
+        level.front = null;
+        level.back = null;
+      }
+    }
+
+    this.setState({
+      loadedDungeon: this.props.mapMaker.formatDungeon(dungeon),
+      dungeonHasUnsavedChanges: !!level, // only mark as unsaved if we actually modified the dungeon state
+      loadingData: true
+    });
+
+    try {
+      // Delete boards
+      for (let bid of boardIdsToDelete) {
+        await deleteBoardRequest(bid).catch(e => console.log('Error deleting board', e));
+      }
+      // Delete planes
+      for (let pid of planeIdsToDelete) {
+        await deletePlaneRequest(pid).catch(e => console.log('Error deleting plane', e));
+      }
+
+      await this.loadAllBoards();
+      await this.loadAllPlanes();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      this.setState({ loadingData: false });
+    }
+  }
+
   clearDungeonLevel = (levelId) => {
     if (!this.state.loadedDungeon || !Array.isArray(this.state.loadedDungeon.levels)) return;
     let dungeon = clone(this.state.loadedDungeon);
@@ -7694,6 +7892,7 @@ class MapMakerPage extends React.Component {
             {this.state.modalType === 'name board' && <CModalTitle>Name this board</CModalTitle>}
             {this.state.modalType === 'rename board' && <CModalTitle>Rename this board</CModalTitle>}
             {this.state.modalType === 'create sync planes' && <CModalTitle>Establish planes for Level {this.state.syncModalLevelName}</CModalTitle>}
+                        {this.state.modalType === 'delete dungeon level' && <CModalTitle>Delete Level</CModalTitle>}
           </CModalHeader>
           <CModalBody>
              {(this.state.modalType === 'name dungeon' || this.state.modalType === 'rename dungeon') && <input ref={this.state.dungeonNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedDungeon?.name || ''} placeholder={this.state.loadedDungeon?.name || ''} />}
@@ -7759,6 +7958,13 @@ class MapMakerPage extends React.Component {
                     />
                   </div>
                 </div>
+              </div>
+            )}
+            {this.state.modalType === 'delete dungeon level' && (
+              <div style={{ padding: '20px', color: '#fff', fontSize: '16px', textAlign: 'center' }}>
+                Are you sure you want to delete Level {this.state.levelToDelete} and all of its contents?
+                <br /><br />
+                <span style={{ color: '#ff4d4f', fontSize: '14px', fontWeight: 'bold' }}>This action will permanently delete the level and all associated planes and boards.</span>
               </div>
             )}
             {(this.state.modalType === 'name board' || this.state.modalType === 'rename board') && (() => {
@@ -8004,12 +8210,21 @@ class MapMakerPage extends React.Component {
             })()}
           </CModalBody>
           <CModalFooter>
-            <CButton color="secondary" onClick={() => this.closeModal()}>
-              Close
-            </CButton>
-            <CButton color="primary" onClick={() => this.modalSaveChanges()}>
-              {this.state.modalType === 'create sync planes' ? 'Create & Sync' : 'Save changes'}
-            </CButton>
+            {this.state.modalType === 'delete dungeon level' ? (
+              <React.Fragment>
+                <CButton color="secondary" onClick={() => this.setState({ showModal: false, levelToDelete: null })}>Cancel</CButton>
+                <CButton color="danger" onClick={this.executeDeleteDungeonLevel}>Delete Level</CButton>
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                <CButton color="secondary" onClick={() => this.closeModal()}>
+                  Close
+                </CButton>
+                <CButton color="primary" onClick={() => this.modalSaveChanges()}>
+                  {this.state.modalType === 'create sync planes' ? 'Create & Sync' : 'Save changes'}
+                </CButton>
+              </React.Fragment>
+            )}
           </CModalFooter>
         </CModal>
         <CModal
@@ -8583,6 +8798,7 @@ class MapMakerPage extends React.Component {
                 zoomIntoBoard={this.zoomIntoBoard}
                 handlePlaneBoardContextMenu={this.handlePlaneBoardContextMenu}
                 showTeleporterInterface={this.state.showTeleporterInterface}
+                deleteDungeonLevel={this.deleteDungeonLevel}
                 toggleTeleporterInterface={this.toggleTeleporterInterface}
               ></DungeonView>}
 
@@ -8656,6 +8872,8 @@ class MapMakerPage extends React.Component {
                 expandCollapsePlaneFolders={this.expandCollapsePlaneFolders}
                 collapseAllPlaneFolders={this.collapseAllPlaneFolders}
                 showTeleporterInterface={this.state.showTeleporterInterface}
+                deleteDungeonLevel={this.deleteDungeonLevel}
+                isMobile={this.state.isMobile}
               ></PlanesPanel>}
 
           </div>

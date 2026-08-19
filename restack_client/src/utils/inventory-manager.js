@@ -2653,6 +2653,20 @@ export function InventoryManager() {
             name: 'lantern',
             equippedBy: null,
         },
+        chemical_lantern: {
+            icon: 'chemical_lantern',
+            type: 'lantern',
+            name: 'chemical lantern',
+            equippedBy: null,
+            description: 'Consumes chemicals (unstable or stable) at a rate of 1 per 3 minutes of active game time. When active, extends vision radius by 1 extra tile through the fog of war.'
+        },
+        territorial_lantern: {
+            icon: 'territorial_lantern',
+            type: 'lantern',
+            name: 'territorial lantern',
+            equippedBy: null,
+            description: 'Always active. When stepping onto a tile of claimed territory, immediately reveals all contiguous tiles in that territory.'
+        },
         curse_doll: {
             icon: 'curse_doll',
             type: 'special',
@@ -2824,6 +2838,8 @@ export function InventoryManager() {
             this.stone = 0;
             this.slate = 0;
             this.mushrooms = 0;
+            this.unstable_chemicals = 0;
+            this.stable_chemicals = 0;
         } else {
             this.inventory = itemsArray.map(e => {
                 if (!e) return null;
@@ -2850,8 +2866,22 @@ export function InventoryManager() {
             this.stone = (data && typeof data.stone === 'number') ? data.stone : 0;
             this.slate = (data && typeof data.slate === 'number') ? data.slate : 0;
             this.mushrooms = (data && typeof data.mushrooms === 'number') ? data.mushrooms : 0;
+            this.unstable_chemicals = (data && typeof data.unstable_chemicals === 'number') ? data.unstable_chemicals : 0;
+            this.stable_chemicals = (data && typeof data.stable_chemicals === 'number') ? data.stable_chemicals : 0;
         }
+        this.ensureLanterns();
     }
+    this.ensureLanterns = () => {
+        if (!Array.isArray(this.inventory)) this.inventory = [];
+        const hasChem = this.inventory.some(item => item && (item.name === 'chemical lantern' || item._im_key === 'chemical_lantern'));
+        if (!hasChem && this.allItems['chemical_lantern']) {
+            this.addItem(copy(this.allItems['chemical_lantern']));
+        }
+        const hasTerr = this.inventory.some(item => item && (item.name === 'territorial lantern' || item._im_key === 'territorial_lantern'));
+        if (!hasTerr && this.allItems['territorial_lantern']) {
+            this.addItem(copy(this.allItems['territorial_lantern']));
+        }
+    };
     // Re-hydrate every weapon in an inventory array from the current allItems
     // definitions so that changes to damage/stats in this file are always the
     // source of truth for combat.  Non-weapon items and unknown weapons are
@@ -2948,10 +2978,35 @@ export function InventoryManager() {
                     }
                 }
                 break;
+            case 'unstable_chemicals':
+            case 'unstable chemicals':
+                this.unstable_chemicals = (this.unstable_chemicals || 0) + amt;
+                break;
+            case 'stable_chemicals':
+            case 'stable chemicals':
+                this.stable_chemicals = (this.stable_chemicals || 0) + amt;
+                break;
+            case 'chemicals':
+                this.unstable_chemicals = (this.unstable_chemicals || 0) + amt;
+                break;
             default:
                 break;
         }
     }
+    this.consumeChemicals = (amt = 1) => {
+        let remaining = amt;
+        if (this.unstable_chemicals > 0) {
+            const taken = Math.min(this.unstable_chemicals, remaining);
+            this.unstable_chemicals -= taken;
+            remaining -= taken;
+        }
+        if (remaining > 0 && this.stable_chemicals > 0) {
+            const taken = Math.min(this.stable_chemicals, remaining);
+            this.stable_chemicals -= taken;
+            remaining -= taken;
+        }
+        return amt - remaining;
+    };
     this.getStarterPack = () => {
         return [
             {

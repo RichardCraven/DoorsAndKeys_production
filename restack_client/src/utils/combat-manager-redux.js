@@ -2416,7 +2416,7 @@ export function CombatManagerRedux() {
                 const hasSoulTap = (
                     (summoner.globalSkills && summoner.globalSkills.some(s => (typeof s === 'string' ? s : s.key) === 'soul_tap')) ||
                     (summoner.skills && summoner.skills.some(s => (typeof s === 'string' ? s : s.key) === 'soul_tap')) ||
-                    (typeof this.getSkillLevel === 'function' && this.getSkillLevel(summoner, 'soul_tap') > 0)
+                    (typeof this.hasPassive === 'function' && this.hasPassive(summoner, 'soul_tap'))
                 );
                 if (hasSoulTap && accumulatedPower > 0) {
                     const oldPower = summoner.power || 0;
@@ -10699,11 +10699,12 @@ export function CombatManagerRedux() {
                 if (!c || c.dead || c.isVCT) return;
                 const isEnemy = (!!unit.isMonster !== !!c.isMonster);
                 if (isEnemy && !this.isFamiliarUnit(c)) {
-                    c.endurance = Math.max(0, (c.endurance || 0) - 30);
+                    const drainAmt = Math.max(1, Math.round((c.maxEndurance || 30) * 0.3));
+                    c.endurance = Math.max(0, (c.endurance || 0) - drainAmt);
                     c.damageIndicators = c.damageIndicators || [];
                     c.damageIndicators.push({
                         id: Date.now() + Math.random(),
-                        value: '-30 Stamina',
+                        value: `-${drainAmt} Stamina`,
                         source: 'Despair',
                         type: 'debuff'
                     });

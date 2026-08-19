@@ -424,7 +424,9 @@ export function BoardManager(){
     this.getImageForContains = (contains, tile = null) => {
         const type = this.getContainsType(contains);
         const subtype = this.getContainsSubtype(contains);
-        if (!type) return null;
+        if (type === 'dungeon_portal' || type === 'dungeon portal' || type === 'portal' || type === 'teleporter' || subtype === 'dungeon_portal' || subtype === 'dungeon portal' || subtype === 'portal' || subtype === 'teleporter') {
+            return 'dungeon_portal';
+        }
         if (type === 'vendor') {
             return this.getImage(subtype);
         }
@@ -787,9 +789,10 @@ export function BoardManager(){
             if (typeof t.contains === 'object' && t.contains !== null && t.contains.type) {
                 const cType = String(t.contains.type).toLowerCase();
                 const cSubtype = t.contains.subtype ? String(t.contains.subtype) : '';
-                const isItemType = ['key', 'rune', 'jewel', 'shard', 'consumable', 'weapon', 'armor', 'magical', 'potion'].includes(cType) ||
+                const isPortalType = ['dungeon_portal', 'dungeon portal', 'portal', 'teleporter'].includes(cType) || ['dungeon_portal', 'dungeon portal', 'portal', 'teleporter'].includes(cSubtype);
+                const isItemType = !isPortalType && (['key', 'rune', 'jewel', 'shard', 'consumable', 'weapon', 'armor', 'magical', 'potion'].includes(cType) ||
                     cType.includes('key') || cType.includes('shard') || cType.includes('rune') ||
-                    cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune');
+                    cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune'));
 
                 if (isItemType) {
                     let actualSubtype = cSubtype;
@@ -1879,6 +1882,8 @@ export function BoardManager(){
                     tile.contains = { type: 'void', subtype: null };
                 } else if (normalized === 'monster') {
                     tile.contains = { type: 'monster', subtype: this.getRandomMonster() };
+                } else if (normalized === 'portal' || normalized === 'teleporter' || normalized === 'dungeon_portal') {
+                    tile.contains = { type: 'dungeon_portal', subtype: null };
                 } else if (normalized.indexOf('key') !== -1) {
                     tile.contains = { type: 'item', subtype: normalized };
                 } else {
@@ -3209,6 +3214,11 @@ export function BoardManager(){
                 return 'ornate_key'  
             case 'spawn':
                 return 'spawn_point'    
+            case 'portal':
+            case 'dungeon portal':
+            case 'dungeon_portal':
+            case 'teleporter':
+                return 'dungeon_portal'
             default:
                 return key
         }
@@ -3346,7 +3356,6 @@ export function BoardManager(){
                 const isVoid = this.isVoidTile(e);
                 const hasInscriptions = e.inscriptions && Object.values(e.inscriptions).some(v => !!v);
                 const isRevealed = revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
-                const isPath = this.getContainsType(e.contains) === 'path' || e.type === 'path';
 
                 if (isRevealed && (!isVoid || hasInscriptions)) {
 
@@ -3372,33 +3381,16 @@ export function BoardManager(){
                         }
                     }
 
-                    e.color = (!isVoid ? '#6b6057' : (boardColor || '#0e0e0e'));
+                    e.color = (!isVoid ? (boardColor || '#6b6057') : (boardColor || '#0e0e0e'));
                     e.image = this.getImageForContains(e.contains, e);
                     e.borders = this.normalizeFogBorders(persistedBorders);
 
                     if (inBreadcrumbPassiveReveal && !(revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id)))) {
                         e.partialObscured = true;
                     }
-                } else if (isPath) {
-                    const persistedColor = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].color);
-                    const persistedBorders = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].borders);
-                    const runtimeColor = (e.color && e.color !== 'black' && e.color !== 'white' && e.color !== 'null') ? e.color : null;
-                    let boardColor = (persistedColor && persistedColor !== 'black' && persistedColor !== 'white' && persistedColor !== 'null') ? persistedColor : (runtimeColor || null);
-                    
-                    if (boardColor && String(boardColor).includes('ff0000') && !isDebugMode) {
-                        boardColor = null;
-                        if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id]) {
-                            this.currentBoard.tiles[e.id].color = '#6b6057';
-                        }
-                    }
-
-                    e.color = boardColor || '#6b6057';
-                    e.image = null; // Hide monsters/items on the path under fog
-                    e.borders = this.normalizeFogBorders(persistedBorders);
-                    e.partialObscured = true;
-                } else if (!isRevealed && hasInscriptions && manhattan <= fogRadius) {
-                    // Special case: Tile is hidden behind a wall, but we inscribed the wall border!
-                    // Show it as a dark wall so the inscription is visible.
+                } else if (!isRevealed && hasInscriptions && manhattan === 1) {
+                    // Special case: Tile is a wall directly adjacent to the player, and we inscribed the wall border!
+                    // Show it as a dark wall so the inscription is visible on the adjacent wall.
                     e.color = '#0e0e0e';
                     e.image = null;
                     e.borders = null;
@@ -3421,7 +3413,7 @@ export function BoardManager(){
                     }
                 }
             });
-            if (keenEyeLvl >= 2 && keMetadata.trapVisionEnabled !== false && this.trapTileIds && this.trapTileIds.size > 0) {
+            if (keenEyeLvl >= 1 && keMetadata.trapVisionEnabled !== false && this.trapTileIds && this.trapTileIds.size > 0) {
                 this.tiles.forEach((tile) => {
                     if (!tile || tile.color === 'black') return; // not visible
                     if (tile.hasTrap) {
@@ -3442,7 +3434,6 @@ export function BoardManager(){
 
             this.tiles.forEach((tile) => {
                 if (!tile || !tile.contains || typeof tile.contains !== 'object') return;
-                if (tile.contains.type !== 'vendor') return;
                 const groupId = tile.contains.vendorGroupId;
                 if (!groupId) return;
                 if (!vendorGroups.has(groupId)) vendorGroups.set(groupId, []);
