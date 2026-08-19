@@ -1013,6 +1013,16 @@ import camp from '../assets/icons/misc/camp/camp.png'
 import camping from '../assets/gemini_images/camping.png';
 import merchant_bg from '../assets/gemini_images/merchant.png';
 import alchemist_bg from '../assets/gemini_images/alchemist.png';
+import litter_scattered_rocks from '../assets/gemini_images/litter_scattered_rocks.png';
+import litter_broken_wood from '../assets/gemini_images/litter_broken_wood.png';
+import litter_old_barrels from '../assets/gemini_images/litter_old_barrels.png';
+import litter_rubble_bones from '../assets/gemini_images/litter_rubble_bones.png';
+import litter_edge_rocks from '../assets/gemini_images/litter_edge_rocks.png';
+import litter_edge_wood from '../assets/gemini_images/litter_edge_wood.png';
+import litter_small_barrel from '../assets/gemini_images/litter_small_barrel.png';
+import litter_edge_bones from '../assets/gemini_images/litter_edge_bones.png';
+import chemical_lantern from '../assets/gemini_images/chemical_lantern.png';
+import territorial_lantern from '../assets/gemini_images/territorial_lantern.png';
 import codex from '../assets/icons/codex.png';
 
 // global skills
@@ -2486,6 +2496,18 @@ export {
     eidolon_death5,
     eidolon_death6,
     eidolon_death7,
+
+    // Dungeon Litter
+    litter_scattered_rocks,
+    litter_broken_wood,
+    litter_old_barrels,
+    litter_rubble_bones,
+    litter_edge_rocks,
+    litter_edge_wood,
+    litter_small_barrel,
+    litter_edge_bones,
+    chemical_lantern,
+    territorial_lantern,
 };
 
 const portraitMap = {

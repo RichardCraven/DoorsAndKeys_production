@@ -21,7 +21,7 @@ import { useEffect } from 'react';
 import { updateUserRequest } from '../src/utils/api-handler'
 
 import { getAllUsersRequest } from './utils/api-handler';
-import { storeSessionData, getUserId, getMeta } from './utils/session-handler';
+import { storeSessionData, getUserId, getUserName, getMeta } from './utils/session-handler';
 import { useHistory } from "react-router";
 import gifOne from './assets/highres-gifs/gifOne.gif';
 import gifTwo from './assets/highres-gifs/gifTwo.gif';
@@ -369,7 +369,7 @@ function App(props) {
           }}>
             {isMobileWidth ? (
               // Mobile View: Single toggle button with dropdown
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
                   onClick={() => setMobileMenuExpanded(!mobileMenuExpanded)}
                   style={{
@@ -390,6 +390,17 @@ function App(props) {
                 >
                   {mobileMenuExpanded ? '✕' : '☰'}
                 </button>
+                <span style={{
+                  color: '#e5b54f',
+                  fontFamily: "'Cinzel', 'Outfit', sans-serif",
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  letterSpacing: '0.5px',
+                  userSelect: 'none',
+                  textShadow: '0 1px 3px rgba(0,0,0,0.8)'
+                }}>
+                  {getUserName() || ''}
+                </span>
                 {mobileMenuExpanded && (
                   <div style={{
                     position: 'absolute',
@@ -471,7 +482,7 @@ function App(props) {
                 WebkitBackdropFilter: menuTrayExpanded ? 'blur(10px)' : 'none',
                 padding: menuTrayExpanded ? (isMapmaker ? '8px 4px' : '4px 8px') : '0',
                 borderRadius: menuTrayExpanded ? '18px' : '0',
-                width: menuTrayExpanded ? 'auto' : '32px',
+                width: menuTrayExpanded ? 'auto' : 'auto',
                 height: menuTrayExpanded ? 'auto' : '32px',
                 border: menuTrayExpanded ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
                 boxShadow: menuTrayExpanded ? '0 4px 16px rgba(0, 0, 0, 0.6)' : 'none',
@@ -498,6 +509,20 @@ function App(props) {
                 >
                   {menuTrayExpanded ? '✕' : '☰'}
                 </button>
+
+                <span style={{
+                  color: '#e5b54f',
+                  fontFamily: "'Cinzel', 'Outfit', sans-serif",
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  letterSpacing: '0.5px',
+                  paddingLeft: '4px',
+                  paddingRight: '6px',
+                  userSelect: 'none',
+                  textShadow: '0 1px 3px rgba(0,0,0,0.8)'
+                }}>
+                  {getUserName() || ''}
+                </span>
 
                 {menuTrayExpanded && (
                   <>

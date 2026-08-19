@@ -12,6 +12,7 @@ export function MapMaker(props){
         'territory',
         'buildings',
         'generators',
+        'dungeon litter',
         'delete',
         'door',
         'way up',
@@ -155,6 +156,17 @@ export function MapMaker(props){
         { key: 'ore_mine', name: 'Ore Mine', image: 'ore_mine' },
         { key: 'slate_mine', name: 'Slate Mine', image: 'slate_mine' },
         { key: 'fungal_nursery', name: 'Fungal Nursery', image: 'fungal_nursery' },
+    ];
+
+    this.dungeonLitterOptions = [
+        { key: 'litter_scattered_rocks', name: 'Scattered Rocks', image: 'litter_scattered_rocks' },
+        { key: 'litter_broken_wood', name: 'Broken Wood', image: 'litter_broken_wood' },
+        { key: 'litter_old_barrels', name: 'Old Barrels', image: 'litter_old_barrels' },
+        { key: 'litter_rubble_bones', name: 'Rubble & Bones', image: 'litter_rubble_bones' },
+        { key: 'litter_edge_rocks', name: 'Edge Rocks', image: 'litter_edge_rocks' },
+        { key: 'litter_edge_wood', name: 'Edge Wood', image: 'litter_edge_wood' },
+        { key: 'litter_small_barrel', name: 'Small Barrel', image: 'litter_small_barrel' },
+        { key: 'litter_edge_bones', name: 'Edge Bones & Rubble', image: 'litter_edge_bones' },
     ];
 
     this.paletteTiles = [];
@@ -457,6 +469,15 @@ export function MapMaker(props){
                     image: 'buildable_outpost',
                     color: null,
                     isBuilding: true,
+                    id: i
+                })
+            } else if(key === 'dungeon litter'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'dungeon litter',
+                    image: 'litter_scattered_rocks',
+                    color: null,
+                    isDungeonLitter: true,
                     id: i
                 })
             } else {
@@ -804,6 +825,8 @@ export function MapMaker(props){
                 return 'buildable_outpost'
             case 'generators':
                 return 'dust_collector'
+            case 'dungeon litter':
+                return 'litter_scattered_rocks'
             default:
                 return false
         }

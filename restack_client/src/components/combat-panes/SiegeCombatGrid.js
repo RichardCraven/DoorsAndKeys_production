@@ -2334,6 +2334,11 @@ export default function SiegeCombatGrid(props) {
         }
         const isSpawningMinion = isMinion && !isDead && !isFamiliar && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
 
+        const isArchaicFamiliar = unit.type === 'archaic_familiar' || unit.key === 'archaic_familiar' || (unit.name && String(unit.name).toLowerCase().includes('archaic familiar'));
+        const effectiveFacing = isArchaicFamiliar
+            ? ((!unit.isMonster && unit.isMinion) ? 'left' : 'right')
+            : (liveMonster.facing || unit.facing);
+
         // All state classes go on unit-tile — not on any full-width wrapper
         const unitTileClasses = [
             'unit-tile',
@@ -2343,7 +2348,7 @@ export default function SiegeCombatGrid(props) {
             unit.wounded ? 'hit' : '',
             unit.wounded ? hitAnim : '',
             unit.wounded ? 'hit-flash' : '',
-            (liveMonster.facing || unit.facing) === 'right' ? 'reversed' : '',
+            effectiveFacing === 'right' ? 'reversed' : '',
             (unit.stunned && !isAsleepMonster) ? 'stunned' : '',
             isDisintegrating ? 'disintegrate-shaking' : '',
             activeReturnTrialAnim ? 'respawn-fade-in' : '',
@@ -4578,6 +4583,45 @@ export default function SiegeCombatGrid(props) {
                     filter: 'blur(1.5px)',
                     animation: 'pinkBeamPulse 1.5s ease-out forwards',
                 }} />
+            );
+        }
+
+        if (anim.type === 'soul_tap_beam' && anim.srcPx && anim.tgtPx) {
+            return (
+                <div key={key} style={{
+                    position: 'absolute',
+                    left: `${anim.srcPx.x}px`,
+                    top: `${anim.srcPx.y}px`,
+                    height: '10px',
+                    '--beam-length': `${anim.length}px`,
+                    background: 'linear-gradient(to right, rgba(46, 204, 113, 0.2), #2ecc71, #abebc6, #2ecc71, rgba(46, 204, 113, 0.2))',
+                    boxShadow: '0 0 14px #2ecc71, 0 0 26px #27ae60',
+                    transformOrigin: '0 50%',
+                    transform: `rotate(${anim.angle}deg) translateY(-50%)`,
+                    zIndex: 4500,
+                    pointerEvents: 'none',
+                    filter: 'blur(1.2px)',
+                    animation: 'soulTapBeamStretch 1.5s ease-in-out forwards',
+                }}>
+                    {anim.icon && (
+                        <img
+                            src={anim.icon}
+                            alt="Soul Tap"
+                            style={{
+                                position: 'absolute',
+                                left: '0%',
+                                top: '50%',
+                                width: '32px',
+                                height: '32px',
+                                transform: 'translate(-50%, -50%)',
+                                boxShadow: '0 0 12px #2ecc71',
+                                borderRadius: '50%',
+                                border: '1px solid #abebc6',
+                                animation: 'soulTapOrbTravel 1.5s ease-in-out forwards'
+                            }}
+                        />
+                    )}
+                </div>
             );
         }
 

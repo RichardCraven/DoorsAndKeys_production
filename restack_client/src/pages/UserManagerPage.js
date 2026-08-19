@@ -105,7 +105,7 @@ class UserManagerPage extends React.Component {
         playstyle: botPlaystyle
       });
       const botName = res && res.data && res.data.username ? res.data.username : 'A new bot';
-      this.setState({ alertMessage: `Bot generation started for ${botName}! The bot is now playing the game in the background for 3 minutes. Check the email on file for the results.` });
+      this.setState({ alertMessage: `Bot generation started for ${botName}!\nBehavior: ${botPlaystyle}\nDungeon: ${preferredDungeon}\n\nThe bot is now playing the game in the background for 3 minutes. Check the email on file for the results.` });
       // Refresh user list
       const final = await loadAllUsersRequest();
       this.setState({ users: Array.isArray(final?.data) ? final.data : [] });
@@ -281,7 +281,7 @@ class UserManagerPage extends React.Component {
             <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', textTransform: 'uppercase', letterSpacing: '1px', color: '#e5b54f' }}>
               System Alert
             </h3>
-            <p style={{ fontSize: '14px', color: '#ddd', lineHeight: '1.5', marginBottom: '24px' }}>
+            <p style={{ fontSize: '14px', color: '#ddd', lineHeight: '1.5', marginBottom: '24px', whiteSpace: 'pre-wrap' }}>
               {this.state.alertMessage}
             </p>
             <button 

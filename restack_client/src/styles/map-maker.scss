@@ -1586,11 +1586,117 @@ ul.dropdown-menu.show{
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   MOBILE LAYOUT  (≤ 1024 px)
-   All rules below are gated to narrow viewports so the desktop experience
-   is completely unaffected.
+   TABLET LAYOUT  (768px – 1200px)
+   Show both left and right side panels alongside a slightly reduced center 
+   viewport so all three panels fit comfortably on tablet screens.
    ═══════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 1024px) {
+@media (min-width: 768px) and (max-width: 1200px) {
+  .mapmaker-container {
+    overflow: hidden !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+  }
+
+  .column-wrapper {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    overflow: hidden !important;
+  }
+
+  .row-wrapper {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: stretch !important;
+    justify-content: space-between !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Force side panels to 180px fixed width and override inline tileSize*4.5 styles */
+  .left-palette.boards-palette,
+  .right-palette {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 180px !important;
+    min-width: 180px !important;
+    max-width: 180px !important;
+    flex-shrink: 0 !important;
+    z-index: 20;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+
+    * {
+      max-width: 100% !important;
+      box-sizing: border-box !important;
+    }
+
+    .board-options-buttons-container,
+    .left-text-readout,
+    .previews-container {
+      width: 100% !important;
+    }
+
+    .side-by-side-planes-wrapper {
+      flex-direction: column !important;
+      align-items: center !important;
+    }
+  }
+
+  /* Compact the level info column on the left of each level row */
+  .level-wrapper .level-info {
+    min-width: 36px !important;
+    width: 36px !important;
+    padding: 2px !important;
+    font-size: 10px !important;
+    gap: 2px !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+
+    .level-readout {
+      font-size: 10px !important;
+      white-space: nowrap !important;
+    }
+  }
+
+  .board-view-container,
+  .plane-view-container,
+  .dungeon-view-container {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    max-width: calc(100vw - 360px) !important;
+    overflow: auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: flex-start !important;
+  }
+
+  /* Scale center canvas/board elements down so they fit cleanly without overflowing side panels */
+  .center-board-container,
+  .loaded-dungeon-wrapper,
+  .dungeon-levels-container {
+    zoom: 0.72;
+    -moz-transform: scale(0.72);
+    -moz-transform-origin: top center;
+    margin: 0 auto !important;
+  }
+
+  .mobile-palette-drawer,
+  .mobile-action-strip {
+    display: none !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE PHONE LAYOUT  (≤ 767 px)
+   All rules below are gated to phone viewports so tablet and desktop
+   experiences are completely unaffected.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 767px) {
 
   .mapmaker-container {
     /* Prevent any page-level horizontal scroll and pin to top */
@@ -1958,5 +2064,12 @@ ul.dropdown-menu.show{
 @media (max-width: 1366px) {
   .right-palette:not(.palette-drawer-content .right-palette) {
     padding-top: 30px !important;
+  }
+}
+.trash-icon-hover {
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+  &:hover {
+    opacity: 1;
   }
 }

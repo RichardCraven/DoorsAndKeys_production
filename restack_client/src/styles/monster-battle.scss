@@ -6907,6 +6907,21 @@
     animation: mindSwapTravel var(--mind-swap-duration, 350ms) linear forwards, beamFlicker 0.1s infinite alternate;
 }
 
+@keyframes soulTapBeamStretch {
+    0% { width: 0; opacity: 0; }
+    15% { width: var(--beam-length); opacity: 1; }
+    50% { width: var(--beam-length); opacity: 1; }
+    85% { width: 0; opacity: 1; }
+    100% { width: 0; opacity: 0; }
+}
+
+@keyframes soulTapOrbTravel {
+    0% { left: 0%; }
+    15% { left: 100%; }
+    50% { left: 100%; }
+    85% { left: 0%; }
+    100% { left: 0%; }
+}
 @keyframes pinkBeamPulse {
     0% {
         height: 0px;

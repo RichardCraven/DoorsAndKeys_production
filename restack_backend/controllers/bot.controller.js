@@ -14,7 +14,9 @@ exports.generateBot = async (req, res, next) => {
     "Carlos", "Chen", "Sofia", "Tariq", "Elena"
   ];
   const randomName = botNames[Math.floor(Math.random() * botNames.length)];
-  const botName = `Bot_${randomName}_${Math.floor(Math.random() * 1000)}`;
+  const preferredDungeon = req.body.preferredDungeon;
+  const dungeonStr = preferredDungeon && preferredDungeon !== 'random' ? `_${preferredDungeon}` : '';
+  const botName = `Bot_${randomName}${dungeonStr}_${Math.floor(Math.random() * 1000)}`;
   const botPassword = 'botpassword123';
   
   const botMetadata = {
@@ -93,7 +95,7 @@ exports.generateBot = async (req, res, next) => {
       res.json(data);
       
       // Run bot simulation in background
-      runBotSimulation(botData.username, botData.password);
+      runBotSimulation(botData.username, botData.password, req.body.preferredDungeon, req.body.playstyle);
     }
   });
 };
@@ -116,7 +118,7 @@ exports.deleteAllReplays = async (req, res, next) => {
   }
 };
 
-const runBotSimulation = async (username, password) => {
+const runBotSimulation = async (username, password, preferredDungeon, playstyle) => {
   const actionLog = [];
   const replayEvents = []; // Structured JSON for Replay UI
 
@@ -200,7 +202,7 @@ const runBotSimulation = async (username, password) => {
     // After login, we are at the landing page. We need to select a dungeon and click "Enter Dungeon".
     
     let runTime = 0;
-    const MAX_RUN_TIME = 180 * 1000; // 3 minutes
+    const MAX_RUN_TIME = 300 * 1000; // 5 minutes
     
     logAction("Entering game loop...");
     while (runTime < MAX_RUN_TIME) {
@@ -211,7 +213,9 @@ const runBotSimulation = async (username, password) => {
             console.error(`[Bot ${username}] Failed to take screenshot`, e.message);
         }
 
-        const action = await page.evaluate(() => {
+        let action = "No action";
+        try {
+            action = await page.evaluate((preferredDungeon) => {
             const isElementVisible = (el) => {
                 if (!el || el.offsetParent === null) return false;
                 const style = window.getComputedStyle(el);
@@ -226,71 +230,133 @@ const runBotSimulation = async (username, password) => {
                 return el.contains(topEl) || topEl.contains(el);
             };
 
-            // First check if we need to select a dungeon
+            const getText = (el) => ((el && el.textContent) || '').trim().toLowerCase();
+
+            // 1. First check if we need to select a dungeon
             const trigger = document.querySelector('.custom-select-trigger');
             if (trigger && !trigger.classList.contains('selected') && isElementVisible(trigger)) {
-                // If menu is open, click first item
-                const menuItem = document.querySelector('.menu-item');
-                if (menuItem && isElementVisible(menuItem)) {
+                let menuItem = null;
+                if (preferredDungeon && preferredDungeon !== 'random') {
+                    const items = Array.from(document.querySelectorAll('.menu-item'));
+                    menuItem = items.find(item => {
+                        const span = item.querySelector('span');
+                        return span && span.textContent.trim() === preferredDungeon;
+                    });
+                }
+                if (!menuItem) {
+                    menuItem = document.querySelector('.menu-item');
+                }
+                
+                const isMenuOpen = menuItem && menuItem.offsetParent !== null;
+
+                if (isMenuOpen) {
+                    menuItem.scrollIntoView({ block: "center", behavior: "instant" });
                     menuItem.click();
-                    return "Selected a Dungeon";
+                    const span = menuItem.querySelector('span');
+                    const selectedName = span ? span.textContent.trim() : 'random';
+                    return `Selected Dungeon: ${selectedName}`;
                 } else {
                     trigger.click();
                     return "Opened Dungeon Select Menu";
                 }
             }
 
-            // Find all interactable buttons & card duel elements
-            const candidates = Array.from(document.querySelectorAll('button, .pe-fanned-card--playable'));
+            // Find interactable buttons, playable cards, & quick actions
+            const candidates = Array.from(document.querySelectorAll('button, .pe-fanned-card--playable, .quick-action-btn'));
             const safeButtons = candidates.filter(b => {
-                const txt = (b.textContent || '').toLowerCase();
+                const txt = getText(b);
                 const title = (b.title || '').toLowerCase();
-                if (txt.includes('logout') || title.includes('logout') || txt.includes('🚪') || txt.includes('delete') || txt.includes('generate bot') || txt.includes('user manager')) return false;
+                // Exclude administrative / non-gameplay buttons to prevent random UI clicks
+                if (txt.includes('logout') || title.includes('logout') || txt.includes('🚪') ||
+                    txt.includes('delete') || txt.includes('generate bot') || txt.includes('user manager') ||
+                    txt.includes('codex') || txt.includes('skill tree')) return false;
                 if (b.disabled) return false;
                 if (!isElementVisible(b)) return false;
                 return true;
             });
             
-            if (safeButtons.length > 0) {
-                // Priority 1: Navigation & Progression
-                const enterBtn = safeButtons.find(b => b.textContent && b.textContent.trim() === 'Enter Dungeon');
-                if (enterBtn) { enterBtn.click(); return 'Enter Dungeon'; }
+            // Priority 1: Dungeon Entry & Intro Skipping
+            const enterBtn = safeButtons.find(b => getText(b) === 'enter dungeon');
+            if (enterBtn) { enterBtn.click(); return 'Entered Dungeon'; }
 
-                const skipBtn = safeButtons.find(b => b.textContent && b.textContent.trim().toLowerCase().includes('skip'));
-                if (skipBtn) { skipBtn.click(); return skipBtn.textContent.trim(); }
+            const skipBtn = safeButtons.find(b => getText(b).includes('skip'));
+            if (skipBtn) { skipBtn.click(); return 'Skipped Intro/Dialog'; }
 
-                // Priority 2: High priority game & Card Duel actions
-                const actionBtn = safeButtons.find(b => {
-                    const txt = (b.textContent || '').toLowerCase();
-                    return txt === 'ok' || txt.includes('continue') || txt.includes('attack') || txt.includes('loot') || txt.includes('leave') || txt.includes('close') || txt.includes('end turn') || txt.includes('exit scrimmage') || txt.includes('forfeit') || txt.includes('claim victory');
+            // Priority 2: Health Check (< 50%) -> Attempt to Recuperate
+            let currentHp = 0, maxHp = 0;
+            try {
+                const metaStr = localStorage.getItem('restack_meta') || localStorage.getItem('meta');
+                if (metaStr) {
+                    const meta = JSON.parse(metaStr);
+                    if (Array.isArray(meta.crew) && meta.crew.length > 0) {
+                        meta.crew.forEach(m => {
+                            if (m) {
+                                currentHp += (typeof m.hp === 'number' ? m.hp : 0);
+                                const mMax = m.maxHp || (m.stats && m.stats.baseHp) || 10;
+                                maxHp += mMax;
+                            }
+                        });
+                    }
+                }
+            } catch (e) {}
+
+            const healthRatio = maxHp > 0 ? (currentHp / maxHp) : 1;
+            if (healthRatio < 0.50) {
+                const recuperateBtn = safeButtons.find(b => {
+                    const txt = getText(b);
+                    return txt.includes('recuperate') || txt.includes('camp') || txt.includes('rest');
                 });
-                
-                if (actionBtn) {
-                    actionBtn.click();
-                    return (actionBtn.textContent || '').trim() || 'Action Button';
+                if (recuperateBtn) {
+                    recuperateBtn.click();
+                    return `Crew Health at ${Math.round(healthRatio * 100)}% - Recuperating`;
                 }
-
-                // Priority 3: Playable Cards in Card Duel
-                const cardBtn = safeButtons.find(b => b.classList && b.classList.contains('pe-fanned-card--playable'));
-                if (cardBtn) {
-                    cardBtn.click();
-                    return 'Played Card';
-                }
-
-                // If no high priority buttons, 50/50 chance to MOVE or click random visible button
-                if (Math.random() > 0.5) {
-                    return 'MOVE';
-                }
-
-                const randomBtn = safeButtons[Math.floor(Math.random() * safeButtons.length)];
-                const btnName = (randomBtn.textContent || randomBtn.className || 'Unknown Button').trim();
-                randomBtn.click();
-                return btnName;
+                return `RECUPERATE_KEY:${Math.round(healthRatio * 100)}`;
             }
-            return 'MOVE';
-        });
 
-        if (action === 'MOVE') {
+            // Priority 3: Picking up Items / Looting
+            const lootBtn = safeButtons.find(b => {
+                const txt = getText(b);
+                return txt.includes('take all') || txt.includes('loot') || txt.includes('pick up') || txt.includes('claim');
+            });
+            if (lootBtn) {
+                lootBtn.click();
+                return `Looted Item: ${getText(lootBtn)}`;
+            }
+
+            // Priority 4: Fighting Enemies & Combat Actions
+            const combatBtn = safeButtons.find(b => {
+                const txt = getText(b);
+                return txt === 'ok' || txt.includes('continue') || txt.includes('attack') || txt.includes('strike') ||
+                       txt.includes('end turn') || txt.includes('exit scrimmage') || txt.includes('claim victory');
+            });
+            if (combatBtn) {
+                combatBtn.click();
+                return `Combat Action: ${getText(combatBtn)}`;
+            }
+
+            const cardBtn = safeButtons.find(b => b.classList && b.classList.contains('pe-fanned-card--playable'));
+            if (cardBtn) {
+                cardBtn.click();
+                return 'Played Combat Card';
+            }
+
+            // Default Behavior: Pathfind & Explore around the map (no random button clicking)
+            return 'MOVE';
+        }, preferredDungeon);
+        } catch (evalErr) {
+            if (evalErr.message.includes('detached Frame') || evalErr.message.includes('Execution context was destroyed')) {
+                await sleep(500);
+                continue;
+            } else {
+                throw evalErr;
+            }
+        }
+
+        if (typeof action === 'string' && action.startsWith('RECUPERATE_KEY')) {
+            const hpPct = action.split(':')[1] || 'below 50';
+            await page.keyboard.press('r');
+            logAction(`Crew Health at ${hpPct}% - Pressed 'r' to Recuperate`, screenshotBase64);
+        } else if (action === 'MOVE') {
             const dirs = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
             const dir = dirs[Math.floor(Math.random() * dirs.length)];
             await page.keyboard.press(dir);
@@ -301,13 +367,13 @@ const runBotSimulation = async (username, password) => {
             logAction("No actions available.", screenshotBase64);
         }
 
-        // Sleep to simulate human delay, reduced by 50%
-        const delay = 750 + Math.random() * 1000; 
+        // Sleep to simulate human delay
+        const delay = 300 + Math.random() * 500; 
         await sleep(delay);
         runTime += delay;
     }
 
-    logAction("3 minute simulation complete.");
+    logAction("5 minute simulation complete.");
   } catch (error) {
     logAction(`ERROR: ${error.message}`);
   } finally {

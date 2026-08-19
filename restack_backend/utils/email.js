@@ -11,6 +11,9 @@ const sendNotificationEmail = async (subject, text) => {
       return;
     }
 
+    const uniqueId = Math.floor(100 + Math.random() * 900);
+    const uniqueSubject = `${subject} [${uniqueId}]`;
+
     let transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -22,7 +25,7 @@ const sendNotificationEmail = async (subject, text) => {
     const mailOptions = {
       from: `"DreamTower Notifications" <${emailUser}>`,
       to: adminEmail,
-      subject: subject,
+      subject: uniqueSubject,
       text: text,
     };
 

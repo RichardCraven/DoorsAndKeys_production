@@ -92,6 +92,8 @@ export default class CardDuel extends React.Component {
 
             // UI Confirm Modals & Event Log
             showForfeitModal: false,
+            showDeckModal: false,
+            fullPlayerDeck: [],
             log: []
         };
 
@@ -578,6 +580,7 @@ export default class CardDuel extends React.Component {
             isCombatPhase: false,
             activeCombatColumn: null,
             gameOver: null,
+            fullPlayerDeck: [...playerDeck],
             playerDeck: shuffledPlayerDeck,
             playerHand,
             playerDiscard: [],
@@ -2549,10 +2552,106 @@ export default class CardDuel extends React.Component {
                                     );
                                 })}
                             </div>
+
+                            <button
+                                className="pe-view-deck-btn"
+                                onClick={() => this.setState({ showDeckModal: true })}
+                                style={{
+                                    marginTop: 'auto',
+                                    width: '100%',
+                                    boxSizing: 'border-box',
+                                    padding: '10px 8px',
+                                    background: 'linear-gradient(135deg, rgba(201, 168, 76, 0.25) 0%, rgba(120, 80, 200, 0.3) 100%)',
+                                    border: '1.5px solid rgba(201, 168, 76, 0.6)',
+                                    borderRadius: '8px',
+                                    color: '#fdf6e2',
+                                    fontFamily: "'Cinzel', sans-serif",
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                    letterSpacing: '1px',
+                                    textTransform: 'uppercase',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '6px',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                <span>🎴</span> VIEW DECK
+                            </button>
                         </div>
 
                     </div>
                 </div>
+
+                {/* View Deck Modal Overlay */}
+                {this.state.showDeckModal && (
+                    <div className="pe-deck-modal-overlay" onClick={() => this.setState({ showDeckModal: false })}>
+                        <div className="pe-deck-modal-container" onClick={(e) => e.stopPropagation()}>
+                            <div className="pe-deck-modal-header">
+                                <div className="pe-deck-modal-title">
+                                    <span>🎴</span> YOUR DECK ({this.state.fullPlayerDeck ? this.state.fullPlayerDeck.length : 0} CARDS)
+                                </div>
+                                <button className="pe-deck-modal-close-btn" onClick={() => this.setState({ showDeckModal: false })}>
+                                    ✕
+                                </button>
+                            </div>
+                            <div className="pe-deck-modal-body">
+                                <div className="pe-deck-grid">
+                                    {(this.state.fullPlayerDeck || []).map((card, idx) => {
+                                        let statusKey = 'in_deck';
+                                        let statusLabel = 'IN DECK';
+
+                                        const isInHand = (this.state.playerHand || []).some(c => c.id === card.id);
+                                        const isInDeck = (this.state.playerDeck || []).some(c => c.id === card.id);
+                                        const isOnField = Object.values(this.state.grid || {}).some(u => u && u.id === card.id && u.owner === 'player');
+                                        const isDiscarded = (this.state.playerDiscard || []).some(c => c.id === card.id);
+
+                                        if (isInHand) {
+                                            statusKey = 'in_hand';
+                                            statusLabel = 'IN HAND';
+                                        } else if (isOnField) {
+                                            statusKey = 'on_field';
+                                            statusLabel = 'ON FIELD';
+                                        } else if (isDiscarded) {
+                                            statusKey = 'discarded';
+                                            statusLabel = 'DISCARDED';
+                                        } else if (isInDeck) {
+                                            statusKey = 'in_deck';
+                                            statusLabel = 'IN DECK';
+                                        }
+
+                                        return (
+                                            <div key={card.id || idx} className="pe-deck-card-tile">
+                                                <div className={`pe-deck-status-badge pe-deck-status--${statusKey}`}>
+                                                    {statusLabel}
+                                                </div>
+                                                <div
+                                                    className="pe-deck-card-art"
+                                                    style={card.art ? { backgroundImage: `url(${card.art})` } : {}}
+                                                />
+                                                <div className="pe-deck-card-name">{card.name}</div>
+                                                <div className="pe-deck-card-meta">
+                                                    {card.type === 'action' ? (
+                                                        <span>Cost: {card.cost} ⚡</span>
+                                                    ) : (
+                                                        <span>Cost: {card.cost} ⚡ · ATK {card.atk} · HP {card.hp}</span>
+                                                    )}
+                                                </div>
+                                                {card.desc && <div className="pe-deck-card-desc">{card.desc}</div>}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Action Card Visual Animation Overlay */}
                 {this.state.actionCardAnim && (

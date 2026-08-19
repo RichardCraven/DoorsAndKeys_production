@@ -2302,3 +2302,195 @@
   animation: pe-btn-pulse 1.2s ease-in-out infinite alternate;
 }
 
+/* ── VIEW DECK MODAL STYLES ──────────────────────────────────── */
+.pe-deck-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 3, 10, 0.85);
+  backdrop-filter: blur(8px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: pe-fade-in 0.25s ease-out;
+}
+
+@keyframes pe-fade-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.pe-deck-modal-container {
+  width: 100%;
+  max-width: 860px;
+  max-height: 85vh;
+  background: linear-gradient(160deg, rgba(20, 16, 32, 0.96) 0%, rgba(12, 10, 20, 0.98) 100%);
+  border: 1.5px solid rgba(201, 168, 76, 0.5);
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.85), 0 0 24px rgba(201, 168, 76, 0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.pe-deck-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 22px;
+  background: rgba(10, 8, 16, 0.8);
+  border-bottom: 1px solid rgba(201, 168, 76, 0.3);
+}
+
+.pe-deck-modal-title {
+  font-family: 'Cinzel', serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--pe-gold);
+  letter-spacing: 0.08em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pe-deck-modal-close-btn {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  color: var(--pe-gold);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.pe-deck-modal-close-btn:hover {
+  background: rgba(201, 168, 76, 0.25);
+  transform: scale(1.08);
+}
+
+.pe-deck-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.pe-deck-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.pe-deck-card-tile {
+  background: linear-gradient(145deg, rgba(26, 22, 42, 0.9), rgba(16, 14, 28, 0.95));
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.pe-deck-card-tile:hover {
+  transform: translateY(-3px);
+  border-color: rgba(201, 168, 76, 0.7);
+}
+
+.pe-deck-status-badge {
+  font-family: 'Cinzel', serif;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.pe-deck-status--in_hand {
+  background: rgba(56, 189, 248, 0.25);
+  border: 1px solid #38bdf8;
+  color: #70e1ff;
+}
+
+.pe-deck-status--in_deck {
+  background: rgba(201, 168, 76, 0.25);
+  border: 1px solid var(--pe-gold);
+  color: var(--pe-gold-light);
+}
+
+.pe-deck-status--on_field {
+  background: rgba(46, 204, 113, 0.25);
+  border: 1px solid #2ecc71;
+  color: #66ff99;
+}
+
+.pe-deck-status--discarded {
+  background: rgba(148, 163, 184, 0.25);
+  border: 1px solid #94a3b8;
+  color: #cbd5e1;
+}
+
+.pe-deck-card-art {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  border: 1.5px solid rgba(201, 168, 76, 0.4);
+  margin-top: 8px;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+}
+
+.pe-deck-card-name {
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pe-text);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  margin-bottom: 4px;
+}
+
+.pe-deck-card-meta {
+  font-size: 11px;
+  color: var(--pe-gold-light);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.pe-deck-card-desc {
+  font-size: 9.5px;
+  color: #b0a8c0;
+  text-align: center;
+  margin-top: 6px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+

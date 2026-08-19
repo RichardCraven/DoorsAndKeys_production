@@ -854,3 +854,7 @@
         }
     }
 }
+
+@keyframes chemicalLanternGlow { 0% { box-shadow: 0 0 5px #00ffcc, inset 0 0 5px #00ffcc; border-color: #00ffcc; } 50% { box-shadow: 0 0 15px #00ffcc, inset 0 0 10px #00ffcc; border-color: #33ffdd; } 100% { box-shadow: 0 0 5px #00ffcc, inset 0 0 5px #00ffcc; border-color: #00ffcc; } }
+
+.tile.inventory-tile.chemical-lantern-active { animation: chemicalLanternGlow 2s infinite alternate; border: 1px solid #00ffcc !important; z-index: 2; }

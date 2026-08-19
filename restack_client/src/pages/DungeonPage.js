@@ -2369,7 +2369,7 @@ class DungeonPage extends React.Component {
                     }
                 }
             });
-            initialTrapVision = keenEyeLvl >= 2;
+            initialTrapVision = keenEyeLvl >= 1;
         }
 
         this.state = {
@@ -2672,7 +2672,7 @@ class DungeonPage extends React.Component {
                     if (spawnPoint && selectedDungeon) {
                         const levelId = spawnPoint.level;
                         const level = Array.isArray(selectedDungeon.levels)
-                            ? selectedDungeon.levels.find(e => Number(e.id) === Number(levelId))
+                            ? selectedDungeon.levels.find(e => String(e.id) === String(levelId))
                             : null;
                         const miniboardIndex = spawnPoint.miniboardIndex != null ? spawnPoint.miniboardIndex : 0;
                         const orientation = this.getSpawnOrientationCode(spawnPoint);
@@ -3726,7 +3726,7 @@ class DungeonPage extends React.Component {
         const locOri = location ? location.orientation : undefined;
 
         const isCurrentBoard = (!location) || (
-            (Number(locLevelId) === Number(bm.currentLevel?.id) || locLevelId === undefined) &&
+            (String(locLevelId) === String(bm.currentLevel?.id) || locLevelId === undefined) &&
             (Number(locBoardIdx) === Number(bm.playerTile?.boardIndex) || locBoardIdx === undefined) &&
             (locOri === bm.currentOrientation || locOri === undefined)
         );
@@ -3761,7 +3761,7 @@ class DungeonPage extends React.Component {
                 const targetOrientation = locOri || bm.currentOrientation;
                 const targetBoardIdx = locBoardIdx !== undefined ? locBoardIdx : (bm.currentBoard ? bm.currentBoard.id : null);
                 
-                const levelEntry = bm.dungeon.levels.find(e => Number(e.id) === Number(targetLevelId));
+                const levelEntry = bm.dungeon.levels.find(e => String(e.id) === String(targetLevelId));
                 if (levelEntry) {
                     const targetPlane = targetOrientation === 'B' ? levelEntry.back : levelEntry.front;
                     if (targetPlane && targetPlane.miniboards && targetBoardIdx !== null) {
@@ -4261,19 +4261,32 @@ class DungeonPage extends React.Component {
                             } else {
                                 // Ensure the tile still shows as under construction (recover from rapid refresh desync)
                                 if (this.props.boardManager && this.props.boardManager.tiles) {
-                                    const t = this.props.boardManager.tiles[ac.targetTileIdx];
                                     const expectedBuilding = `${ac.buildingDef.key}_under_construction`;
-                                    if (t && t.building !== expectedBuilding && (!t.contains || t.contains.subtype !== expectedBuilding)) {
-                                        t.building = expectedBuilding;
-                                        t.contains = {
-                                            type: 'building',
-                                            subtype: expectedBuilding,
-                                            name: `${ac.buildingDef.name} (Constructing)`,
-                                            placedBy: 'player',
-                                            constructionStartTime: ac.startTime,
-                                            constructionDurationMs: ac.durationMs
-                                        };
-                                    }
+                                    const footprint = ac.footprint || [ac.targetTileIdx];
+                                    const isLarge = ac.isLargeBuilding;
+                                    const vendorGroupId = isLarge ? `building_${expectedBuilding}_${ac.targetTileIdx}` : null;
+                                    const vendorCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
+
+                                    footprint.forEach((tId, idx) => {
+                                        const t = this.props.boardManager.tiles[tId];
+                                        if (t && t.building !== expectedBuilding && (!t.contains || t.contains.subtype !== expectedBuilding)) {
+                                            t.building = expectedBuilding;
+                                            const tileObj = {
+                                                type: 'building',
+                                                subtype: expectedBuilding,
+                                                name: `${ac.buildingDef.name} (Constructing)`,
+                                                placedBy: 'player',
+                                                constructionStartTime: ac.startTime,
+                                                constructionDurationMs: ac.durationMs
+                                            };
+                                            if (isLarge) {
+                                                tileObj.vendorGroupId = vendorGroupId;
+                                                tileObj.vendorAnchorId = ac.targetTileIdx;
+                                                tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                            }
+                                            t.contains = tileObj;
+                                        }
+                                    });
                                 }
                                 this.setState(prev => ({
                                     activeConstruction: prev.activeConstruction ? {
@@ -5151,9 +5164,27 @@ class DungeonPage extends React.Component {
             if (playerMoved && !ambushTriggered) {
                 let destTileObj = bm.tiles[destIndex];
                 if (destTileObj && destTileObj.hasTrap) {
-                    trapTriggered = true;
-                    bm.disarmTrap(destTileObj.id);
-                    trapResults = this.calculateTrapDamage();
+                    let trapperNegated = false;
+                    try {
+                        const meta = getMeta() || {};
+                        const crew = meta.crew || [];
+                        const hasTrapper = crew.some(m => m && !m.dead && ((m.type || '').toLowerCase() === 'ranger' || (m.image || '').toLowerCase() === 'ranger') && m.globalSkills && m.globalSkills.some(s => {
+                            const k = typeof s === 'string' ? s : s.key;
+                            return k === 'trapper' || k === 'read_the_land';
+                        }));
+                        if (hasTrapper && Math.random() < 0.25) {
+                            trapperNegated = true;
+                        }
+                    } catch (e) {}
+
+                    if (trapperNegated) {
+                        bm.disarmTrap(destTileObj.id);
+                        this.setState({ toastMessage: '🛡️ Trapper! Ranger negated the trap completely.' });
+                    } else {
+                        trapTriggered = true;
+                        bm.disarmTrap(destTileObj.id);
+                        trapResults = this.calculateTrapDamage();
+                    }
                 }
             }
 
@@ -5396,7 +5427,7 @@ class DungeonPage extends React.Component {
         const targetCoordinates = [coords.x, coords.y];
 
         if (bm.dungeon && Array.isArray(bm.dungeon.levels)) {
-            const incomingLevel = bm.dungeon.levels.find(l => Number(l.id) === targetLevelId);
+            const incomingLevel = bm.dungeon.levels.find(l => String(l.id) === String(targetLevelId));
             if (incomingLevel) {
                 bm.currentLevel = incomingLevel;
             }
@@ -5414,7 +5445,7 @@ class DungeonPage extends React.Component {
 
         const levelTracker = [...this.state.levelTracker];
         levelTracker.forEach(e => { if (e) e.active = false; });
-        const lvl = levelTracker.find(e => e && Number(e.id) === targetLevelId);
+        const lvl = levelTracker.find(e => e && String(e.id) === String(targetLevelId));
         if (lvl) lvl.active = true;
 
         const meta = getMeta() || {};
@@ -5432,7 +5463,7 @@ class DungeonPage extends React.Component {
             minimap[targetMiniboardIndex].active = true;
         }
 
-        let indicatorsGroup = meta.minimapIndicators.find(e => Number(e.level) === targetLevelId && e.orientation === mappedOrientation);
+        let indicatorsGroup = meta.minimapIndicators.find(e => String(e.level) === String(targetLevelId) && e.orientation === mappedOrientation);
         if (!indicatorsGroup) {
             let newIndicators = [];
             for (let i = 0; i < 9; i++) {
@@ -5523,7 +5554,7 @@ class DungeonPage extends React.Component {
             if (canTransition) {
                 const targetLevelId = Number(targetLevelIdVal);
                 if (targetLevelId !== Number(bm.currentLevel?.id)) {
-                    const incomingLevel = bm.dungeon.levels.find(l => Number(l.id) === targetLevelId);
+                    const incomingLevel = bm.dungeon.levels.find(l => String(l.id) === String(targetLevelId));
                     if (incomingLevel) {
                         bm.currentLevel = incomingLevel;
                     }
@@ -5547,11 +5578,11 @@ class DungeonPage extends React.Component {
 
                 const levelTracker = this.state.levelTracker;
                 levelTracker.forEach(e => e.active = false);
-                const lvl = levelTracker.find(e => Number(e.id) === targetLevelId);
+                const lvl = levelTracker.find(e => String(e.id) === String(targetLevelId));
                 if (lvl) lvl.active = true;
 
                 const meta = getMeta() || {};
-                let indicatorsGroup = meta.minimapIndicators.find(e => Number(e.level) === targetLevelId && e.orientation === mappedOrientation);
+                let indicatorsGroup = meta.minimapIndicators.find(e => String(e.level) === String(targetLevelId) && e.orientation === mappedOrientation);
                 if (!indicatorsGroup) {
                     let newIndicators = [];
                     for (let i = 0; i < 9; i++) {
@@ -6900,7 +6931,7 @@ class DungeonPage extends React.Component {
                                 if (portraitUrl && typeof portraitUrl === 'object') {
                                     portraitUrl = portraitUrl.default || '';
                                 }
-                                return <div className="portrait" style={{ backgroundImage: `url(${portraitUrl})` }}></div>;
+                                return <div className="portrait" style={{ backgroundImage: `url(${portraitUrl})`, cursor: 'pointer' }} onClick={() => this.handleOpenSkillTree(this.state.selectedCrewMember, 'character')}></div>;
                             })()}
                             <div className="cooldowns-container">
                                 {(() => {
@@ -6982,11 +7013,12 @@ class DungeonPage extends React.Component {
                             if (globalSkills.length === 0) return null;
 
                             const skillDetails = {
-                                keen_eye: { name: 'Keen Eye', desc: 'L1: Reveals +2 fog tiles. L2: Reveals nearby traps. L3: +3 DEX to trap saves.' },
+                                keen_eye: { name: 'Keen Eye', desc: 'L1: Reveals nearby traps. L2: +3 DEX to trap saves.' },
                                 scrounging_rat: { name: 'Scrounging Rat', desc: 'Allows scrounging for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' },
                                 fastidious_crow: { name: 'Fastidious Crow', desc: 'Scouts a random board (10x10 fog reveal) for 24 hours. Process takes 20m. Cooldown and gold/gem reward based on level.' },
                                 hunters_quarry: { name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' },
-                                read_the_land: { name: 'Read the Land', desc: 'Adjacent tile types hinted on entry' },
+                                trapper: { name: 'Trapper', desc: '25% chance to negate any trap entirely.' },
+                                read_the_land: { name: 'Trapper', desc: '25% chance to negate any trap entirely.' },
                                 trailblaze: { name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' },
                                 herbalism: { name: 'Herbalism', desc: 'Camp costs 1 less food per member' },
                                 mend: { name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' },
@@ -7469,10 +7501,11 @@ class DungeonPage extends React.Component {
 
                                             try {
                                                 const dungeon = this.state.dungeon;
-                                                const levelObj = dungeon && dungeon.levels && dungeon.levels.find(l => Number(l.id) === Number(currentLevelId));
+                                                const levelObj = dungeon && dungeon.levels && dungeon.levels.find(l => String(l.id) === String(currentLevelId));
                                                 const plane = levelObj ? (currentOrientation === 'B' ? levelObj.back : levelObj.front) : null;
                                                 const boardObj = plane && plane.miniboards && plane.miniboards[i];
                                                 let boardTiles = boardObj && Array.isArray(boardObj.tiles) ? boardObj.tiles : [];
+                                                console.log("MINIMAP BOARD DEBUG", { currentLevelId, i, hasLevelObj: !!levelObj, hasPlane: !!plane, boardTilesLength: boardTiles.length });
                                                 if (bm && bm.currentBoard && bm.playerTile && bm.playerTile.boardIndex === i && Array.isArray(bm.tiles) && bm.tiles.length > 0) {
                                                     boardTiles = bm.tiles;
                                                 }
@@ -7483,7 +7516,7 @@ class DungeonPage extends React.Component {
                                                     if (meta && meta.activatedGenerators) {
                                                         Object.keys(meta.activatedGenerators).forEach(key => {
                                                             const parts = key.split('_');
-                                                            if (parts.length >= 3 && Number(parts[0]) === Number(currentLevelId) && Number(parts[1]) === i) {
+                                                            if (parts.length >= 3 && String(parts[0]) === String(currentLevelId) && Number(parts[1]) === i) {
                                                                 const tId = Number(parts[2]);
                                                                 const genData = meta.activatedGenerators[key];
                                                                 let isOnCurrentPlane = true;
@@ -7494,20 +7527,19 @@ class DungeonPage extends React.Component {
                                                                 } else {
                                                                     // Legacy: Check if the actual tile on this plane looks like a generator
                                                                     const t = boardTiles.find(bt => Number(bt.id) === tId);
-                                                                    if (t && t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'generator' || t.contains.type === 'building')) {
+                                                                    if (t && (t.generatorData || t.building || (t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'generator' || t.contains.type === 'building')))) {
                                                                         isOnCurrentPlane = true;
                                                                     } else {
                                                                         // Check opposite plane to see if it definitively belongs there
                                                                         const oppositePlane = currentOrientation === 'B' ? levelObj.front : levelObj.back;
                                                                         const oppBoard = oppositePlane && oppositePlane.miniboards && oppositePlane.miniboards[i];
                                                                         const oppTile = oppBoard && oppBoard.tiles && oppBoard.tiles.find(bt => Number(bt.id) === tId);
-                                                                        if (oppTile && oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'generator' || oppTile.contains.type === 'building')) {
+                                                                        if (oppTile && (oppTile.generatorData || oppTile.building || (oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'generator' || oppTile.contains.type === 'building')))) {
                                                                             isOnCurrentPlane = false; // It definitively belongs to the other plane
                                                                         }
                                                                     }
                                                                 }
 
-                                                                // Only draw owned generators
                                                                 let isOwned = false;
                                                                 const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
                                                                 const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
@@ -7518,6 +7550,22 @@ class DungeonPage extends React.Component {
 
                                                                 if (isOnCurrentPlane && isOwned && !isNaN(tId) && !mergedByTile.has(`generator_${tId}`)) {
                                                                     mergedByTile.set(`generator_${tId}`, { tileId: tId, indicatorType: 'generator' });
+                                                                }
+                                                            }
+                                                        });
+                                                    }
+
+                                                    // Inject ANY generator we've physically discovered
+                                                    if (meta && meta.discoveredGenerators) {
+                                                        Object.keys(meta.discoveredGenerators).forEach(key => {
+                                                            const parts = key.split('_');
+                                                            if (parts.length >= 3 && String(parts[0]) === String(currentLevelId) && Number(parts[1]) === i) {
+                                                                const tId = Number(parts[2]);
+                                                                const genData = meta.discoveredGenerators[key];
+                                                                if (genData && genData.orientation === currentOrientation) {
+                                                                    if (!isNaN(tId) && !mergedByTile.has(`generator_${tId}`)) {
+                                                                        mergedByTile.set(`generator_${tId}`, { tileId: tId, indicatorType: 'generator' });
+                                                                    }
                                                                 }
                                                             }
                                                         });
@@ -7543,6 +7591,17 @@ class DungeonPage extends React.Component {
                                                             if (!mergedByTile.has(`generator_${tile.id}`)) {
                                                                 mergedByTile.set(`generator_${tile.id}`, { tileId: tile.id, indicatorType: 'generator' });
                                                             }
+                                                            try {
+                                                                const meta = typeof getMeta === 'function' ? getMeta() : null;
+                                                                if (meta) {
+                                                                    meta.discoveredGenerators = meta.discoveredGenerators || {};
+                                                                    const key = `${currentLevelId}_${i}_${tile.id}`;
+                                                                    if (!meta.discoveredGenerators[key] || meta.discoveredGenerators[key].orientation !== currentOrientation) {
+                                                                        meta.discoveredGenerators[key] = { orientation: currentOrientation };
+                                                                        if (typeof storeMeta === 'function') storeMeta(meta);
+                                                                    }
+                                                                }
+                                                            } catch (e) {}
                                                         }
                                                     } catch (err) {
                                                         console.error("Error processing minimap indicator for tile", tile.id, err);
@@ -7610,14 +7669,17 @@ class DungeonPage extends React.Component {
         const mushrooms = (this.props.inventoryManager?.mushrooms || 0) + inv.filter(item => item && (item._im_key === 'mushrooms' || item.id === 'mushrooms' || item.name === 'Mushrooms')).length;
         const stone = (this.props.inventoryManager?.stone || 0) + inv.filter(item => item && (item._im_key === 'stone' || item.id === 'stone' || item.name === 'Stone')).length;
         const slate = (this.props.inventoryManager?.slate || 0) + inv.filter(item => item && (item._im_key === 'slate' || item.id === 'slate' || item.name === 'Slate')).length;
+        const unstableChem = (this.props.inventoryManager?.unstable_chemicals || 0);
+        const stableChem = (this.props.inventoryManager?.stable_chemicals || 0);
+        const chemicals = unstableChem + stableChem + inv.filter(item => item && (item._im_key === 'chemicals' || item.id === 'chemicals' || item.name === 'Chemicals')).length;
 
         return {
-            totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate
+            totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem
         };
     };
 
     renderPoppedOutResourcesTopBar = () => {
-        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, incomeRates, gold, dust, wood, mushrooms, stone, slate } = this.getResourcesData();
+        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem } = this.getResourcesData();
 
         return (
             <div className="popped-out-resources-topbar">
@@ -7737,6 +7799,22 @@ class DungeonPage extends React.Component {
                         {slate}
                     </span>
                 </div>
+                <div className="topbar-resource-item" title={`Chemicals: ${chemicals} (${unstableChem} unstable, ${stableChem} stable)`}>
+                    <span className="res-icon chemical-icon" style={{
+                        display: 'inline-block',
+                        backgroundImage: `url(${images.chemical_lantern})`,
+                        backgroundSize: 'contain',
+                        backgroundRepeat: 'no-repeat',
+                        backgroundPosition: 'center',
+                        width: '13px',
+                        height: '13px',
+                        verticalAlign: 'middle'
+                    }} />
+                    <span className="res-val" style={{ color: '#2ecc71' }}>
+                        {incomeRates.chemicals > 0 && <span className="res-income">+{incomeRates.chemicals}</span>}
+                        {chemicals}
+                    </span>
+                </div>
                 <button
                     className="resources-popin-btn"
                     onClick={this.togglePopoutResources}
@@ -7751,7 +7829,7 @@ class DungeonPage extends React.Component {
     renderStatusSummarySection = () => {
         const collapsed = this.isSectionCollapsed('status_summary');
         const poppedOut = !!this.state.popoutResources;
-        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate } = this.getResourcesData();
+        const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem } = this.getResourcesData();
 
         return (
             <div className="dungeon-panel-section section-status_summary">
@@ -7929,6 +8007,23 @@ class DungeonPage extends React.Component {
                                     <span className="ql-value" style={{ color: '#7f8c8d' }}>
                                         {incomeRates.slate > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.slate}</span>}
                                         {slate}
+                                    </span>
+                                </div>
+                                <div className="ql-row" title={`Chemicals: ${chemicals} (${unstableChem} unstable, ${stableChem} stable)`}>
+                                    <span className="ql-label"><span style={{
+                                        display: 'inline-block',
+                                        backgroundImage: `url(${images.chemical_lantern})`,
+                                        backgroundSize: 'contain',
+                                        backgroundRepeat: 'no-repeat',
+                                        backgroundPosition: 'center',
+                                        width: '16px',
+                                        height: '16px',
+                                        verticalAlign: 'middle',
+                                        marginRight: '4px'
+                                    }} /> Chemicals</span>
+                                    <span className="ql-value" style={{ color: '#2ecc71' }}>
+                                        {incomeRates.chemicals > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.chemicals}</span>}
+                                        {chemicals}
                                     </span>
                                 </div>
                             </div>
@@ -9002,8 +9097,23 @@ class DungeonPage extends React.Component {
                         this.addCurrencyToInventory({ type: 'mushrooms', amount: 50 }, null, true);
                         this.addCurrencyToInventory({ type: 'stone', amount: 50 }, null, true);
                         this.addCurrencyToInventory({ type: 'slate', amount: 50 }, null, true);
-                        this.displayMessage('Added 50 of each resource (Food, Gold, Dust, Wood, Mushrooms, Stone, Slate)!');
-                        this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Added 50 of each resource (Food, Gold, Dust, Wood, Mushrooms, Stone, Slate)'], devConsoleInput: '' }));
+                        this.addCurrencyToInventory({ type: 'unstable_chemicals', amount: 50 }, null, true);
+                        this.addCurrencyToInventory({ type: 'stable_chemicals', amount: 50 }, null, true);
+                        this.displayMessage('Added 50 of each resource (Food, Gold, Dust, Wood, Mushrooms, Stone, Slate, Chemicals)!');
+                        this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Added 50 of each resource (Food, Gold, Dust, Wood, Mushrooms, Stone, Slate, Chemicals)'], devConsoleInput: '' }));
+                    } catch (err) {
+                        this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error: ${err && err.message ? err.message : err}`], devConsoleInput: '' }));
+                    }
+                    try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
+                    e.preventDefault();
+                    return;
+                }
+                if (cmd === 'chemicals' || cmd === 'chem' || cmd === 'chems') {
+                    try {
+                        this.addCurrencyToInventory({ type: 'unstable_chemicals', amount: 50 }, null, true);
+                        this.addCurrencyToInventory({ type: 'stable_chemicals', amount: 50 }, null, true);
+                        this.displayMessage('Added 50 Unstable & 50 Stable Chemicals!');
+                        this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Added 50 Unstable & 50 Stable Chemicals'], devConsoleInput: '' }));
                     } catch (err) {
                         this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error: ${err && err.message ? err.message : err}`], devConsoleInput: '' }));
                     }
@@ -9037,7 +9147,8 @@ class DungeonPage extends React.Component {
                         'shrine respawn / shrinerespawn',
                         'shrine reset / reset shrines — reset all used shrines so they can be accessed again',
                         'resolve — set the crew\'s resolve to 100',
-                        'resources / rs — add 50 of each resource (Food, Gold, Dust, Wood, Mushrooms, Stone, Slate)',
+                        'resources / rs — add 50 of each resource (Food, Gold, Dust, Wood, Mushrooms, Stone, Slate, Chemicals)',
+                        'chemicals / chem / chems — add 50 unstable & 50 stable chemicals',
                         'fullhealth / full-health / revive',
                         'food — fill food count to 55',
                         'key — add 1 master key to inventory',
@@ -10462,7 +10573,7 @@ class DungeonPage extends React.Component {
 
         // Get Keen Eye level for DEX save bonus
         const keenEyeLevel = this.getKeenEyeLevel();
-        const keenEyeDexBonus = keenEyeLevel >= 3 ? 3 : 0;
+        const keenEyeDexBonus = keenEyeLevel >= 2 ? 3 : 0;
 
         const DC = 12; // Difficulty class for DEX save
         const crewResults = [];
@@ -11490,6 +11601,23 @@ class DungeonPage extends React.Component {
         if (type === 'jewel' || type === 'rune') return 'Materials & Jewels';
         return 'Keys & Misc';
     }
+    handleInventoryItemDoubleClick = (item) => {
+        if (item && item.name === 'chemical lantern') {
+            item.active = !item.active;
+            try {
+                const meta = getMeta();
+                if (meta) {
+                    const im = this.props.inventoryManager;
+                    if (im && Array.isArray(im.inventory)) {
+                        meta.inventory = JSON.parse(JSON.stringify(im.inventory));
+                        storeMeta(meta);
+                    }
+                }
+            } catch (e) {}
+            this.forceUpdate();
+        }
+    }
+
     handleInventoryTileHover = (tileProps) => {
         // Check if the hovered item has actually changed to prevent flickering from repeated hover events
         const newHoveredItem = tileProps ? (tileProps.data || null) : null;
@@ -12404,7 +12532,7 @@ class DungeonPage extends React.Component {
         const boardIndex = location.boardIndex != null ? Number(location.boardIndex) : 0;
         const orientation = location.orientation === 'B' ? 'B' : 'F';
         const level = Array.isArray(dungeon.levels)
-            ? dungeon.levels.find((entry) => Number(entry?.id) === levelId)
+            ? dungeon.levels.find((entry) => String(entry?.id) === String(levelId))
             : null;
         if (!level) return null;
         const plane = orientation === 'F' ? level.front : level.back;
@@ -13487,7 +13615,7 @@ class DungeonPage extends React.Component {
                 // outward from center (112) so the player doesn't land in a void.
                 try {
                     const coerceId = meta.location.levelId != null ? Number(meta.location.levelId) : null;
-                    const lvl = dungeon.levels.find(l => Number(l.id) === coerceId) || dungeon.levels[0];
+                    const lvl = dungeon.levels.find(l => String(l.id) === String(coerceId)) || dungeon.levels[0];
                     const boardIdx = meta.location.boardIndex || 0;
                     const orientation = meta.location.orientation || 'F';
                     const plane = orientation === 'F' ? lvl.front : lvl.back;
@@ -13522,7 +13650,7 @@ class DungeonPage extends React.Component {
         }
         // Coerce levelId to a number for comparison — it may have been serialised as a string
         const targetLevelId = meta.location.levelId != null ? Number(meta.location.levelId) : null;
-        const dungeonLevel = dungeon.levels.find(l => Number(l.id) === targetLevelId) || dungeon.levels[0];
+        const dungeonLevel = dungeon.levels.find(l => String(l.id) === String(targetLevelId)) || dungeon.levels[0];
         if (!dungeonLevel) {
             console.error('DungeonPage.loadExistingDungeon: dungeon has no levels, cannot initialize board');
             this.setState({ isLoadingDungeon: false });
@@ -13571,7 +13699,7 @@ class DungeonPage extends React.Component {
 
         const minimap = this.state.minimap,
             levels = this.state.levelTracker;
-        let level = levels.find(e => Number(e.id) === Number(meta.location.levelId));
+        let level = levels.find(e => String(e.id) === String(meta.location.levelId));
         if (!level) {
             console.warn('DungeonPage.loadExistingDungeon: levelId not found in levelTracker, falling back to first entry', meta.location.levelId, levels);
             level = levels[0];
@@ -13806,7 +13934,7 @@ class DungeonPage extends React.Component {
                 if (spawnPoint && selectedDungeon) {
                     const levelId = spawnPoint.level;
                     const level = Array.isArray(selectedDungeon.levels)
-                        ? selectedDungeon.levels.find(e => Number(e.id) === Number(levelId))
+                        ? selectedDungeon.levels.find(e => String(e.id) === String(levelId))
                         : null;
                     const miniboardIndex = spawnPoint.miniboardIndex != null ? spawnPoint.miniboardIndex : 0;
                     const orientation = this.getSpawnOrientationCode(spawnPoint);
@@ -13907,7 +14035,7 @@ class DungeonPage extends React.Component {
                         // Update levelTracker active state
                         const levelTracker = [...this.state.levelTracker];
                         levelTracker.forEach(e => { if (e) e.active = false; });
-                        const lvl = levelTracker.find(e => e && Number(e.id) === targetLevelId);
+                        const lvl = levelTracker.find(e => e && String(e.id) === String(targetLevelId));
                         if (lvl) lvl.active = true;
 
                         // Update minimap active state
@@ -13918,7 +14046,7 @@ class DungeonPage extends React.Component {
                         }
 
                         // Sync minimap indicators
-                        let indicatorsGroup = meta2.minimapIndicators.find(e => Number(e.level) === targetLevelId && e.orientation === meta2.location.orientation);
+                        let indicatorsGroup = meta2.minimapIndicators.find(e => String(e.level) === String(targetLevelId) && e.orientation === meta2.location.orientation);
                         if (!indicatorsGroup) {
                             let newIndicators = [];
                             for (let i = 0; i < 9; i++) {
@@ -13932,7 +14060,7 @@ class DungeonPage extends React.Component {
                         // Rebuild board context from respawn location so tile index is applied
                         // on the correct level/orientation/miniboard.
                         const respawnLevel = bm.dungeon && Array.isArray(bm.dungeon.levels)
-                            ? bm.dungeon.levels.find(l => Number(l.id) === Number(meta2.location.levelId))
+                            ? bm.dungeon.levels.find(l => String(l.id) === String(meta2.location.levelId))
                             : null;
                         if (respawnLevel && typeof bm.setCurrentLevel === 'function') {
                             bm.setCurrentLevel(respawnLevel);
@@ -15131,7 +15259,31 @@ class DungeonPage extends React.Component {
             // If this fighter is currently selected, update selectedCrewMember state so UI updates immediately.
             // Either way, forceUpdate so the crew tile list re-renders with the new member object reference.
             if (this.state.selectedCrewMember && this.state.selectedCrewMember.id === fighter.id) {
-                this.setState({ selectedCrewMember: { ...this.state.selectedCrewMember, specialActions: JSON.parse(JSON.stringify(fighter.specialActions || [])), ...(!this._suppressFighterDeadHpUpdates && { hp: (typeof fighter.hp !== 'undefined' ? fighter.hp : this.state.selectedCrewMember.hp), dead: (typeof fighter.dead !== 'undefined' ? !!fighter.dead : this.state.selectedCrewMember.dead) }) } });
+                const nextDead = (typeof fighter.dead !== 'undefined' ? !!fighter.dead : this.state.selectedCrewMember.dead);
+                const nextHp = (typeof fighter.hp !== 'undefined' ? fighter.hp : this.state.selectedCrewMember.hp);
+                const isNowDead = !this._suppressFighterDeadHpUpdates && (nextDead || nextHp <= 0);
+
+                if (isNowDead) {
+                    const livingCrew = (this.props.crewManager.crew || []).filter(c => c && !c.dead && c.hp > 0 && c.id !== fighter.id);
+                    if (livingCrew.length > 0) {
+                        const nextSelected = livingCrew[0];
+                        this.props.crewManager.crew.forEach(c => { if (c) c.selected = (c.id === nextSelected.id); });
+                        this.setState({ selectedCrewMember: { ...nextSelected } }, () => {
+                            try { this.sendLocationSocketUpdate(); } catch(e){}
+                        });
+                        try {
+                            const meta = getMeta();
+                            if (meta && Array.isArray(meta.crew)) {
+                                meta.crew.forEach(c => { if (c) c.selected = (c.id === nextSelected.id); });
+                                storeMeta(meta);
+                            }
+                        } catch (e) {}
+                    } else {
+                        this.setState({ selectedCrewMember: { ...this.state.selectedCrewMember, specialActions: JSON.parse(JSON.stringify(fighter.specialActions || [])), hp: nextHp, dead: nextDead } });
+                    }
+                } else {
+                    this.setState({ selectedCrewMember: { ...this.state.selectedCrewMember, specialActions: JSON.parse(JSON.stringify(fighter.specialActions || [])), ...(!this._suppressFighterDeadHpUpdates && { hp: nextHp, dead: nextDead }) } });
+                }
             } else {
                 try { this.forceUpdate(); } catch (e) { }
             }
@@ -15678,13 +15830,13 @@ class DungeonPage extends React.Component {
             cultivation_vat: {
                 key: 'cultivation_vat',
                 name: 'Cultivation Vat',
-                resource: 'Food',
-                currencyType: 'food',
+                resource: 'Unstable Chemicals',
+                currencyType: 'unstable_chemicals',
                 rate: 5,
                 cap: 300,
                 imageKey: 'cultivation_vat',
                 iconEmoji: '🧪',
-                description: 'A glowing bio-vat synthesizing organic nutrients. Generates 5 food per hour (capped at 300).'
+                description: 'A glowing bio-vat synthesizing chemical compounds. Generates 5 unstable chemicals per hour (capped at 300). Upgrades to produce stable chemicals at Level 3.'
             },
             domain_monolith: {
                 key: 'domain_monolith',
@@ -15817,12 +15969,17 @@ class DungeonPage extends React.Component {
     getEffectiveGeneratorStats = (generatorData, baseDef) => {
         let level = generatorData?.level || 1;
         if (generatorData?.isUpgrading && Date.now() >= generatorData.upgradeEndTime) {
-            level = 2;
+            level = generatorData.targetLevel || 2;
+        }
+        let currencyType = baseDef?.currencyType || 'gold';
+        if (baseDef?.key === 'cultivation_vat') {
+            currencyType = level >= 3 ? 'stable_chemicals' : 'unstable_chemicals';
         }
         return {
             level,
-            rate: level === 2 ? baseDef.rate * 2 : baseDef.rate,
-            cap: level === 2 ? Math.floor(baseDef.cap * 1.5) : baseDef.cap
+            currencyType,
+            rate: level >= 2 ? baseDef.rate * Math.pow(2, level - 1) : baseDef.rate,
+            cap: level >= 2 ? Math.floor(baseDef.cap * (1 + (level - 1) * 0.5)) : baseDef.cap
         };
     };
 
@@ -16063,7 +16220,7 @@ class DungeonPage extends React.Component {
                                 const res = await loadDungeonRequest(meta.dungeonId);
                                 if (res && res.data && res.data.length > 0) {
                                     let dData = JSON.parse(res.data[0].content);
-                                    const lvl = dData.levels.find(l => Number(l.id) === Number(meta.location.levelId));
+                                    const lvl = dData.levels.find(l => String(l.id) === String(meta.location.levelId));
                                     if (lvl) {
                                         const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
                                         const mb = plane.miniboards[meta.location.boardIndex];
@@ -16117,7 +16274,7 @@ class DungeonPage extends React.Component {
                                 const res = await loadDungeonRequest(meta.dungeonId);
                                 if (res && res.data && res.data.length > 0) {
                                     let dData = JSON.parse(res.data[0].content);
-                                    const lvl = dData.levels.find(l => Number(l.id) === Number(meta.location.levelId));
+                                    const lvl = dData.levels.find(l => String(l.id) === String(meta.location.levelId));
                                     if (lvl) {
                                         const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
                                         const mb = plane.miniboards[meta.location.boardIndex];
@@ -16484,7 +16641,7 @@ class DungeonPage extends React.Component {
                     if (levelEntry) {
                         const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
                         if (targetPlane && targetPlane.miniboards) {
-                            const b = targetPlane.miniboards[bm.currentBoard.id];
+                            const b = targetPlane.miniboards[bm.playerTile.boardIndex];
                             if (b && b.tiles) {
                                 const activeMonoliths = [];
                                 b.tiles.forEach(t => {
@@ -16627,7 +16784,7 @@ class DungeonPage extends React.Component {
             key: def.key,
             resource: def.resource,
             currencyType: def.currencyType,
-            rate: def.rate
+            rate: def.rate, orientation: bm ? bm.currentOrientation : 'F'
         };
 
         tile.generatorData = genData;
@@ -16645,7 +16802,7 @@ class DungeonPage extends React.Component {
                     if (levelEntry) {
                         const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
                         if (targetPlane && targetPlane.miniboards) {
-                            const b = targetPlane.miniboards[bm.currentBoard.id];
+                            const b = targetPlane.miniboards[bm.playerTile.boardIndex];
                             if (b && b.tiles && b.tiles[tileId]) {
                                 b.tiles[tileId].generatorData = genData;
                             }
@@ -16687,7 +16844,7 @@ class DungeonPage extends React.Component {
                     const res = await loadDungeonRequest(safeMeta.dungeonId);
                     if (res && res.data && res.data.length > 0) {
                         let dData = JSON.parse(res.data[0].content);
-                        const lvl = dData.levels.find(l => Number(l.id) === Number(bm?.currentLevel?.id ?? 0));
+                        const lvl = dData.levels.find(l => String(l.id) === String(bm?.currentLevel?.id ?? 0));
                         if (lvl) {
                             const plane = bm?.currentOrientation === 'B' ? lvl.back : lvl.front;
                             const mb = plane.miniboards[bm.playerTile?.boardIndex ?? 0];
@@ -16785,7 +16942,7 @@ class DungeonPage extends React.Component {
                     const res = await loadDungeonRequest(safeMeta.dungeonId);
                     if (res && res.data && res.data.length > 0) {
                         let dData = JSON.parse(res.data[0].content);
-                        const lvl = dData.levels.find(l => Number(l.id) === Number(bm?.currentLevel?.id ?? 0));
+                        const lvl = dData.levels.find(l => String(l.id) === String(bm?.currentLevel?.id ?? 0));
                         if (lvl) {
                             const plane = bm?.currentOrientation === 'B' ? lvl.back : lvl.front;
                             const mb = plane.miniboards[bm.playerTile?.boardIndex ?? 0];
@@ -16817,10 +16974,12 @@ class DungeonPage extends React.Component {
             return;
         }
 
-        if (def.currencyType) {
-            this.addCurrencyToInventory({ type: def.currencyType, amount }, tile, true);
+        const currencyType = stats.currencyType || def.currencyType;
+        const resourceName = currencyType === 'stable_chemicals' ? 'Stable Chemicals' : (currencyType === 'unstable_chemicals' ? 'Unstable Chemicals' : def.resource);
+        if (currencyType) {
+            this.addCurrencyToInventory({ type: currencyType, amount }, tile, true);
         }
-        this.displayMessage(`The crew gained ${amount} ${def.resource}!`);
+        this.displayMessage(`The crew gained ${amount} ${resourceName}!`);
 
         this.closeGeneratorModal();
 
@@ -16938,7 +17097,7 @@ class DungeonPage extends React.Component {
                     if (levelEntry) {
                         const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
                         if (targetPlane && targetPlane.miniboards) {
-                            const b = targetPlane.miniboards[bm.currentBoard.id];
+                            const b = targetPlane.miniboards[bm.playerTile.boardIndex];
                             if (b && b.tiles && b.tiles[targetTileIdx]) {
                                 b.tiles[targetTileIdx].contains = buildingObj;
                                 b.tiles[targetTileIdx].building = buildingDef.key;
@@ -16989,7 +17148,7 @@ class DungeonPage extends React.Component {
                     const res = await loadDungeonRequest(meta.dungeonId);
                     if (res && res.data && res.data.length > 0) {
                         let dData = JSON.parse(res.data[0].content);
-                        const lvl = dData.levels.find(l => Number(l.id) === Number(meta.location.levelId));
+                        const lvl = dData.levels.find(l => String(l.id) === String(meta.location.levelId));
                         if (lvl) {
                             const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
                             const mb = plane.miniboards[meta.location.boardIndex];
@@ -17025,6 +17184,31 @@ class DungeonPage extends React.Component {
 
         const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
         if (playerIdx === null || playerIdx === undefined) return;
+
+        let footprint = [playerIdx];
+        const isLarge = buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort';
+        if (isLarge) {
+            const loc = bm.playerTile.location;
+            const idx1 = bm.getIndexFromCoordinates([loc[0], loc[1]]);
+            const idx2 = bm.getIndexFromCoordinates([loc[0] + 1, loc[1]]);
+            const idx3 = bm.getIndexFromCoordinates([loc[0], loc[1] + 1]);
+            const idx4 = bm.getIndexFromCoordinates([loc[0] + 1, loc[1] + 1]);
+            footprint = [idx1, idx2, idx3, idx4];
+            
+            const canBuild = footprint.every(id => {
+                if (id === null || id === undefined) return false;
+                const tile = bm.tiles[id] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[id]);
+                if (!tile) return false;
+                if (id === playerIdx) return true; // Player is standing here
+                const type = bm.getContainsType(tile.contains);
+                return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage';
+            });
+            
+            if (!canBuild) {
+                if (typeof bm.messaging === 'function') bm.messaging(`❌ Cannot build ${buildingDef.name} here: Requires a 2x2 empty space! (Make sure the tiles to your right and bottom are clear)`);
+                return;
+            }
+        }
 
         if (buildingDef.key === 'hut') {
             // Replaces any hut the crew has placed previously immediately
@@ -17103,6 +17287,8 @@ class DungeonPage extends React.Component {
         const constructionState = {
             buildingDef,
             targetTileIdx: playerIdx,
+            footprint: footprint,
+            isLargeBuilding: isLarge,
             startTime: Date.now(),
             durationMs,
             progressPct: 0,
@@ -17136,24 +17322,46 @@ class DungeonPage extends React.Component {
                 constructionStartTime: Date.now(),
                 constructionDurationMs: durationMs
             };
-            if (bm.tiles && bm.tiles[playerIdx]) {
-                bm.tiles[playerIdx].contains = buildingObj;
-                bm.tiles[playerIdx].building = expectedBuildingKey;
-            }
-            if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[playerIdx]) {
-                bm.currentBoard.tiles[playerIdx].contains = buildingObj;
-                bm.currentBoard.tiles[playerIdx].building = expectedBuildingKey;
-            }
+            const vendorGroupId = isLarge ? `building_${expectedBuildingKey}_${playerIdx}` : null;
+            const vendorCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
+
+            footprint.forEach((tId, idx) => {
+                const tileObj = { ...buildingObj };
+                if (isLarge) {
+                    tileObj.vendorGroupId = vendorGroupId;
+                    tileObj.vendorAnchorId = playerIdx;
+                    tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                }
+                
+                if (bm.tiles && bm.tiles[tId]) {
+                    bm.tiles[tId].contains = tileObj;
+                    bm.tiles[tId].building = expectedBuildingKey;
+                }
+                if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
+                    bm.currentBoard.tiles[tId].contains = tileObj;
+                    bm.currentBoard.tiles[tId].building = expectedBuildingKey;
+                }
+            });
             if (bm.dungeon && bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
                 try {
                     const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
                     if (levelEntry) {
                         const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
                         if (targetPlane && targetPlane.miniboards) {
-                            const b = targetPlane.miniboards[bm.currentBoard.id];
-                            if (b && b.tiles && b.tiles[playerIdx]) {
-                                b.tiles[playerIdx].contains = buildingObj;
-                                b.tiles[playerIdx].building = expectedBuildingKey;
+                            const b = targetPlane.miniboards[bm.playerTile.boardIndex];
+                            if (b && b.tiles) {
+                                footprint.forEach((tId, idx) => {
+                                    if (b.tiles[tId]) {
+                                        const tileObj = { ...buildingObj };
+                                        if (isLarge) {
+                                            tileObj.vendorGroupId = vendorGroupId;
+                                            tileObj.vendorAnchorId = playerIdx;
+                                            tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                        }
+                                        b.tiles[tId].contains = tileObj;
+                                        b.tiles[tId].building = expectedBuildingKey;
+                                    }
+                                });
                             }
                         }
                     }
@@ -17174,13 +17382,27 @@ class DungeonPage extends React.Component {
                         const res = await loadDungeonRequest(meta.dungeonId);
                         if (res && res.data && res.data.length > 0) {
                             let dData = JSON.parse(res.data[0].content);
-                            const lvl = dData.levels.find(l => Number(l.id) === Number(meta.location.levelId));
+                            const lvl = dData.levels.find(l => String(l.id) === String(meta.location.levelId));
                             if (lvl) {
                                 const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
                                 const mb = plane.miniboards[meta.location.boardIndex];
-                                if (mb && mb.tiles && mb.tiles[playerIdx]) {
-                                    mb.tiles[playerIdx].contains = buildingObj;
-                                    mb.tiles[playerIdx].building = expectedBuildingKey;
+                                if (mb && mb.tiles) {
+                                    const expectedBuildingKey = `${buildingDef.key}_under_construction`;
+                                    const vendorGroupId = isLarge ? `building_${expectedBuildingKey}_${playerIdx}` : null;
+                                    const vendorCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
+
+                                    footprint.forEach((tId, idx) => {
+                                        if (mb.tiles[tId]) {
+                                            const tileObj = { ...buildingObj };
+                                            if (isLarge) {
+                                                tileObj.vendorGroupId = vendorGroupId;
+                                                tileObj.vendorAnchorId = playerIdx;
+                                                tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                            }
+                                            mb.tiles[tId].contains = tileObj;
+                                            mb.tiles[tId].building = expectedBuildingKey;
+                                        }
+                                    });
                                     await updateDungeonRequest(res.data[0]._id, dData);
                                 }
                             }
@@ -17212,20 +17434,33 @@ class DungeonPage extends React.Component {
             } else {
                 // Ensure the tile still shows as under construction (recover from rapid refresh desync)
                 if (this.props.boardManager && this.props.boardManager.tiles) {
-                    const t = this.props.boardManager.tiles[constructionState.targetTileIdx];
                     const expectedBuilding = `${constructionState.buildingDef.key}_under_construction`;
-                    if (t && t.building !== expectedBuilding && (!t.contains || t.contains.subtype !== expectedBuilding)) {
-                        t.building = expectedBuilding;
-                        t.contains = {
-                            type: 'building',
-                            subtype: expectedBuilding,
-                            name: `${constructionState.buildingDef.name} (Constructing)`,
-                            placedBy: 'player',
-                            ownerId: typeof getUserId === 'function' ? getUserId() : null,
-                            constructionStartTime: constructionState.startTime,
-                            constructionDurationMs: constructionState.durationMs
-                        };
-                    }
+                    const footprint = constructionState.footprint || [constructionState.targetTileIdx];
+                    const isLarge = constructionState.isLargeBuilding;
+                    const vendorGroupId = isLarge ? `building_${expectedBuilding}_${constructionState.targetTileIdx}` : null;
+                    const vendorCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
+
+                    footprint.forEach((tId, idx) => {
+                        const t = this.props.boardManager.tiles[tId];
+                        if (t && t.building !== expectedBuilding && (!t.contains || t.contains.subtype !== expectedBuilding)) {
+                            t.building = expectedBuilding;
+                            const tileObj = {
+                                type: 'building',
+                                subtype: expectedBuilding,
+                                name: `${constructionState.buildingDef.name} (Constructing)`,
+                                placedBy: 'player',
+                                ownerId: typeof getUserId === 'function' ? getUserId() : null,
+                                constructionStartTime: constructionState.startTime,
+                                constructionDurationMs: constructionState.durationMs
+                            };
+                            if (isLarge) {
+                                tileObj.vendorGroupId = vendorGroupId;
+                                tileObj.vendorAnchorId = constructionState.targetTileIdx;
+                                tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                            }
+                            t.contains = tileObj;
+                        }
+                    });
                 }
                 this.setState(prev => ({
                     activeConstruction: prev.activeConstruction ? {
@@ -18026,9 +18261,9 @@ class DungeonPage extends React.Component {
                                         </div>
                                     ))}
                                 </div>
-                                {results.keenEyeLevel >= 3 && (
+                                {results.keenEyeLevel >= 2 && (
                                     <div style={{ fontSize: '0.8rem', color: '#e67e22', marginBottom: '12px' }}>
-                                        ⦿ Keen Eye (L3): +3 DEX save bonus applied
+                                        ⦿ Keen Eye (L2): +3 DEX save bonus applied
                                     </div>
                                 )}
                                 <button className="trap-dismiss-btn" onClick={() => this.dismissTrapPopup()}>
@@ -18326,7 +18561,7 @@ class DungeonPage extends React.Component {
 
                     // Global skills for this class (from proposed_new_features spec)
                     const globalSkillsByClass = {
-                        ranger: [{ key: 'keen_eye', name: 'Keen Eye', desc: 'L1: Reveals +2 fog tiles. L2: Reveals nearby traps. L3: +3 DEX to trap saves.' }, { key: 'hunters_quarry', name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' }, { key: 'read_the_land', name: 'Read the Land', desc: 'Adjacent tile types hinted on entry' }, { key: 'trailblaze', name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' }, { key: 'scrounging_rat', name: 'Scrounging Rat', desc: 'Forage for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' }, { key: 'fastidious_crow', name: 'Fastidious Crow', desc: 'Scout a 10x10 board area for 24h. Process: 20m. Cooldown: 6h / 3h. Reward: 5-20g / 25-80g + 30% shard chance.' }],
+                        ranger: [{ key: 'keen_eye', name: 'Keen Eye', desc: 'L1: Reveals nearby traps. L2: +3 DEX to trap saves.' }, { key: 'hunters_quarry', name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' }, { key: 'trapper', name: 'Trapper', desc: '25% chance to negate any trap entirely.' }, { key: 'trailblaze', name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' }, { key: 'scrounging_rat', name: 'Scrounging Rat', desc: 'Forage for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' }, { key: 'fastidious_crow', name: 'Fastidious Crow', desc: 'Scout a 10x10 board area for 24h. Process: 20m. Cooldown: 6h / 3h. Reward: 5-20g / 25-80g + 30% shard chance.' }],
                         sage: [{ key: 'herbalism', name: 'Herbalism', desc: 'Camp costs 1 less food per member' }, { key: 'mend', name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' }, { key: 'ritual_efficiency', name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' }, { key: 'revive', name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }],
                         soldier: [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open a Minor Key gate once per level' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
                         wizard: [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
@@ -19386,7 +19621,7 @@ class DungeonPage extends React.Component {
                                 if (isPlayerOnCurrentMapOrientation && targetLevelId === currentLevelId && Array.isArray(this.state.minimapIndicators)) {
                                     return this.state.minimapIndicators;
                                 }
-                                const group = (meta.minimapIndicators || []).find(e => Number(e.level) === targetLevelId && e.orientation === currentMapOrientation);
+                                const group = (meta.minimapIndicators || []).find(e => String(e.level) === String(targetLevelId) && e.orientation === currentMapOrientation);
                                 return group ? (group.indicators || []) : [];
                             })();
 
@@ -22513,8 +22748,9 @@ class DungeonPage extends React.Component {
                                                                 editMode={false}
                                                                 type={'inventory-tile'}
                                                                 handleClick={() => this.handleItemClick(item, firstIndex)}
+                                                                handleDoubleClick={() => this.handleInventoryItemDoubleClick(item)}
                                                                 handleHover={this.handleInventoryTileHover}
-                                                                className={`inventory-tile ${this.state.activeInventoryItem?.id === firstIndex ? 'active' : ''}`}
+                                                                className={`inventory-tile ${this.state.activeInventoryItem?.id === firstIndex ? 'active' : ''} ${item.active && item.name === 'chemical lantern' ? 'chemical-lantern-active' : ''}`}
                                                                 isActiveInventory={this.state.activeInventoryItem?.id === firstIndex}
                                                             />
                                                             {(count > 1 || isShardStack) && item.type !== 'soul_shard' && (
@@ -22618,8 +22854,9 @@ class DungeonPage extends React.Component {
                                                                             editMode={false}
                                                                             type={'inventory-tile'}
                                                                             handleClick={() => this.handleItemClick(item, firstIndex)}
+                                                                            handleDoubleClick={() => this.handleInventoryItemDoubleClick(item)}
                                                                             handleHover={this.handleInventoryTileHover}
-                                                                            className={`inventory-tile ${this.state.activeInventoryItem?.id === firstIndex ? 'active' : ''}`}
+                                                                            className={`inventory-tile ${this.state.activeInventoryItem?.id === firstIndex ? 'active' : ''} ${item.active && item.name === 'chemical lantern' ? 'chemical-lantern-active' : ''}`}
                                                                             isActiveInventory={this.state.activeInventoryItem?.id === firstIndex}
                                                                         />
                                                                         {(count > 1 || isShardStack) && item.type !== 'soul_shard' && (

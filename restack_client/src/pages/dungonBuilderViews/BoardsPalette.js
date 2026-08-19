@@ -26,6 +26,7 @@ class BoardsPalette extends React.Component {
         if (optionType === 'territory') return 'Territory';
         if (optionType === 'buildings') return 'Buildings';
         if (optionType === 'generators') return 'Generators';
+        if (optionType === 'dungeon litter') return 'Dungeon Litter';
         return optionType;
     }
 
@@ -94,7 +95,7 @@ class BoardsPalette extends React.Component {
                                 }}
                                 >{this.getOptionLabel(tile.optionType)}</span>
                             </div>
-                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'territory', 'buildings', 'generators'].includes(tile.optionType) && (() => {
+                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'territory', 'buildings', 'generators', 'dungeon litter'].includes(tile.optionType) && (() => {
                                 const isExpanded = this.props.optionClickedIdx === i;
                                 return (
                                     <div style={{ marginRight: '15px', display: 'flex', alignItems: 'center', userSelect: 'none' }}>
@@ -589,6 +590,36 @@ class BoardsPalette extends React.Component {
                                     index={gi}
                                     image={images[gItem.image]}
                                     imageOverride={images[gItem.image]}
+                                    handleHover={null}
+                                    handleClick={null}
+                                    type={'item'}>
+                                    </Tile>
+                                </div>
+                            })}
+                        </div>}
+                        {tile.optionType === 'dungeon litter' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
+                            {(this.props.mapMaker.dungeonLitterOptions || []).map((lItem, li) => {
+                                const isHovered = this.state.hoveredSubItem?.type === 'dungeon-litter' && this.state.hoveredSubItem?.id === li;
+                                const isSelected = this.props.pinnedOption?.type === 'dungeon-litter-tile' && this.props.pinnedOption?.id === li;
+                                return <div
+                                key={`dungeon-litter-${li}`}
+                                className={`palette-option-subcontainer${isHovered ? ' sub-hovered' : ''}${isSelected ? ' sub-selected' : ''}`}
+                                onMouseEnter={() => this.setState({ hoveredSubItem: { type: 'dungeon-litter', id: li } })}
+                                onMouseLeave={() => this.setState({ hoveredSubItem: null })}
+                                onClick={() => {
+                                    this.props.handleClick({
+                                        type: 'dungeon-litter-tile',
+                                        id: li
+                                    })
+                                }}
+                                >
+                                    <div className="text-container">{lItem.name}</div>
+                                    <Tile
+                                    id={li}
+                                    tileSize={this.props.tileSize}
+                                    index={li}
+                                    image={images[lItem.image]}
+                                    imageOverride={images[lItem.image]}
                                     handleHover={null}
                                     handleClick={null}
                                     type={'item'}>

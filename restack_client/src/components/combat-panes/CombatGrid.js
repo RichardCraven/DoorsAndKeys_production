@@ -2412,9 +2412,10 @@ export default function CombatGrid(props) {
 
         const isPCUnit = unit.isOpponent || (!unit.isMonster && !unit.isMinion) || isPCUnitType(unit.type || unit.portrait || unit.image);
         const currentFacing = unit.facing || (isOpponentUnit(unit) || (unit.coordinates && unit.coordinates.x >= 4) ? 'left' : (isPCUnit ? 'right' : 'left'));
-        const needFlip = isPCUnit
-            ? (currentFacing === 'left')
-            : (currentFacing === 'right');
+        const isArchaicFamiliar = unit.type === 'archaic_familiar' || unit.key === 'archaic_familiar' || (unit.name && String(unit.name).toLowerCase().includes('archaic familiar'));
+        const needFlip = isArchaicFamiliar
+            ? (!isPCUnit && !unit.isMinion)
+            : (isPCUnit ? (currentFacing === 'left') : (currentFacing === 'right'));
 
         // All state classes go on unit-tile — not on any full-width wrapper
         const unitTileClasses = [
@@ -4733,8 +4734,8 @@ export default function CombatGrid(props) {
                     position: 'absolute',
                     left: `${anim.srcPx.x}px`,
                     top: `${anim.srcPx.y}px`,
-                    width: `${anim.length}px`,
                     height: '10px',
+                    '--beam-length': `${anim.length}px`,
                     background: 'linear-gradient(to right, rgba(46, 204, 113, 0.2), #2ecc71, #abebc6, #2ecc71, rgba(46, 204, 113, 0.2))',
                     boxShadow: '0 0 14px #2ecc71, 0 0 26px #27ae60',
                     transformOrigin: '0 50%',
@@ -4742,7 +4743,7 @@ export default function CombatGrid(props) {
                     zIndex: 4500,
                     pointerEvents: 'none',
                     filter: 'blur(1.2px)',
-                    animation: 'pinkBeamPulse 1.5s ease-out forwards',
+                    animation: 'soulTapBeamStretch 1.5s ease-in-out forwards',
                 }}>
                     {anim.icon && (
                         <img
@@ -4750,14 +4751,15 @@ export default function CombatGrid(props) {
                             alt="Soul Tap"
                             style={{
                                 position: 'absolute',
-                                left: '50%',
+                                left: '0%',
                                 top: '50%',
                                 width: '32px',
                                 height: '32px',
                                 transform: 'translate(-50%, -50%)',
                                 boxShadow: '0 0 12px #2ecc71',
                                 borderRadius: '50%',
-                                border: '1px solid #abebc6'
+                                border: '1px solid #abebc6',
+                                animation: 'soulTapOrbTravel 1.5s ease-in-out forwards'
                             }}
                         />
                     )}

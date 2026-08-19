@@ -110,8 +110,11 @@ function Tile(props) {
     const isPaletteTile = props.type === 'palette-tile';
     const isVendorType = (val) => {
         if (!val) return false;
+        if (typeof val === 'object') {
+            return isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.key) || isVendorType(val.name);
+        }
         const s = String(val).toLowerCase();
-        return s === 'vendor' || s === 'alchemist' || s === 'merchant' || s.includes('vendor') || s.includes('alchemist') || s.includes('merchant');
+        return s === 'vendor' || s === 'alchemist' || s === 'merchant' || s === 'war_camp' || s === 'war_fort' || s.includes('vendor') || s.includes('alchemist') || s.includes('merchant');
     };
     const isVendorCell = !isPaletteTile && (
         isVendorType(props.contains) ||
@@ -125,8 +128,11 @@ function Tile(props) {
     const getVendorCellRole = () => {
         if (!isVendorCell) return null;
 
-        let anchorId = null;
+        if (containsObj && containsObj.vendorCell && containsObj.vendorCell !== 'footprint') {
+            return containsObj.vendorCell;
+        }
 
+        let anchorId = null;
         const currentId = props.id !== undefined && props.id !== null ? props.id : props.index;
 
         if (props.hoveredTileFootprint && props.hoveredTileFootprint.length === 4 && currentId !== null && currentId !== undefined) {
@@ -137,10 +143,6 @@ function Tile(props) {
 
         if (anchorId === null && containsObj && containsObj.vendorAnchorId !== null && containsObj.vendorAnchorId !== undefined) {
             anchorId = containsObj.vendorAnchorId;
-        }
-
-        if (anchorId === null && containsObj && containsObj.vendorCell && containsObj.vendorCell !== 'footprint') {
-            return containsObj.vendorCell;
         }
 
         if (anchorId !== null && currentId !== null && currentId !== undefined) {
@@ -220,6 +222,8 @@ function Tile(props) {
                 normalizedUrl = images['tier_2_armor'];
             } else if (cleanKey === 'tier_3' && images['tier_3_armor']) {
                 normalizedUrl = images['tier_3_armor'];
+            } else if (['portal', 'teleporter', 'dungeon_portal'].includes(cleanKey)) {
+                normalizedUrl = images['dungeon_portal'];
             } else if (images[cleanKey + '_portrait']) {
                 normalizedUrl = images[cleanKey + '_portrait'];
             } else if (images[cleanKey + '_gate']) {
@@ -259,6 +263,13 @@ function Tile(props) {
     const currentTile = (tileIndex !== null && boardTiles && boardTiles[tileIndex]) ? boardTiles[tileIndex] : null;
     const currentContains = currentTile ? currentTile.contains : props.contains;
     const currentTileColor = (currentTile && typeof currentTile.color !== 'undefined' && currentTile.color !== 'null') ? currentTile.color : color;
+    const rotationDeg = (typeof props.rotation === 'number')
+        ? props.rotation
+        : (containsObj && typeof containsObj.rotation === 'number'
+            ? containsObj.rotation
+            : (currentContains && typeof currentContains.rotation === 'number'
+                ? currentContains.rotation
+                : 0));
     const getNeighborTile = (delta) => {
         if (tileIndex === null || !boardTiles) return null;
         if (tileRow === null || tileCol === null) return null;
@@ -273,8 +284,11 @@ function Tile(props) {
         return neighbor || null;
     };
     const getBorderColorIntent = (borderValue) => {
-        if (!borderValue) return 'white';
-        return String(borderValue).includes('transparent') ? 'white' : 'black';
+        if (!borderValue) return 'none';
+        const str = String(borderValue).toLowerCase();
+        if (str.includes('transparent') || str === 'none') return 'transparent';
+        if (str.includes('black') || str.includes('#000') || str.includes('2px solid') || str.includes('1px solid')) return 'black';
+        return 'none';
     };
     const isBlackRenderedTile = (contains, color) => {
         if (isVoidContains(contains)) return true;
@@ -291,9 +305,9 @@ function Tile(props) {
             compact === '#000000ff';
     };
     const edgeColorForBoundary = (currentBorderValue, neighborBorderValue, neighborContains, neighborColor) => {
-        if (isBlackRenderedTile(currentContains, currentTileColor) || isBlackRenderedTile(neighborContains, neighborColor)) return '#000000';
         const currentIntent = getBorderColorIntent(currentBorderValue);
         const neighborIntent = getBorderColorIntent(neighborBorderValue);
+        if (currentIntent === 'transparent' || neighborIntent === 'transparent') return 'transparent';
         if (currentIntent === 'black' || neighborIntent === 'black') return '#000000';
         return 'transparent';
     };
@@ -379,6 +393,8 @@ function Tile(props) {
                 return props.imageOverride;
             }
             if (images[props.imageOverride]) return images[props.imageOverride];
+            const cleanKey = String(props.imageOverride).trim().toLowerCase().replace(/[\s-]+/g, '_');
+            if (['portal', 'teleporter', 'dungeon_portal'].includes(cleanKey)) return images.dungeon_portal;
         }
         if (props.image) {
             if (typeof props.image === 'string') {
@@ -386,6 +402,7 @@ function Tile(props) {
                     return props.image;
                 }
                 const key = props.image.trim().toLowerCase().replace(/[\s-]+/g, '_');
+                if (['portal', 'teleporter', 'dungeon_portal'].includes(key)) return images.dungeon_portal;
                 if (images[key]) return images[key];
                 if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
@@ -401,6 +418,7 @@ function Tile(props) {
         if (props.contains) {
             if (typeof props.contains === 'string') {
                 const key = props.contains.trim().toLowerCase().replace(/[\s-]+/g, '_');
+                if (['portal', 'teleporter', 'dungeon_portal'].includes(key)) return images.dungeon_portal;
                 if (images[key]) return images[key];
                 if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                 if (images[`${key}_portrait`]) return images[`${key}_portrait`];
@@ -410,9 +428,15 @@ function Tile(props) {
                     if (images[`buildable_${baseKey}`]) return images[`buildable_${baseKey}`];
                 }
             } else if (typeof props.contains === 'object') {
+                const cType = String(props.contains.type || '').trim().toLowerCase();
+                const cSubtype = String(props.contains.subtype || '').trim().toLowerCase();
+                if (['dungeon_portal', 'dungeon portal', 'portal', 'teleporter'].includes(cType) || ['dungeon_portal', 'dungeon portal', 'portal', 'teleporter'].includes(cSubtype)) {
+                    return images.dungeon_portal;
+                }
                 const sub = props.contains.subtype || props.contains.building || props.contains.type || props.contains.name;
                 if (sub && typeof sub === 'string') {
                     const key = sub.trim().toLowerCase().replace(/[\s-]+/g, '_');
+                    if (['portal', 'teleporter', 'dungeon_portal'].includes(key)) return images.dungeon_portal;
                     if (images[key]) return images[key];
                     if (images[`buildable_${key}`]) return images[`buildable_${key}`];
                     if (images[`${key}_portrait`]) return images[`${key}_portrait`];
@@ -484,10 +508,14 @@ function Tile(props) {
                         imageString.includes('rune') ||
                         imageString.includes('shard');
 
-    const isItemCell = props.type === 'item' || 
+    const isLitterCell = imageString.includes('litter') ||
+                         (containsObj && containsObj.type === 'dungeon_litter') ||
+                         props.optionType === 'dungeon litter';
+
+    const isItemCell = !isLitterCell && (props.type === 'item' || 
                        (containsObj && (containsObj.type === 'item' || containsObj.type === 'key')) ||
                        ['key', 'items', 'jewels', 'runes', 'treasure'].includes(props.optionType) ||
-                       isItemImage;
+                       isItemImage);
 
     const isKeyTile = (() => {
         const strImage = imageString;
@@ -559,10 +587,10 @@ function Tile(props) {
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
-                (props.type === 'palette-tile' && props.hovered ? '2px solid red' : '1px solid transparent')))))),
-            borderRight: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.right) ? props.borders.right : '1px solid transparent')))),
-            borderTop: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.top) ? props.borders.top : '1px solid transparent')))),
-            borderBottom: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.bottom) ? props.borders.bottom : '1px solid transparent'))))
+                (props.type === 'palette-tile' && props.hovered ? '2px solid red' : 'none')))))),
+            borderRight: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.right) ? props.borders.right : 'none')))),
+            borderTop: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.top) ? props.borders.top : 'none')))),
+            borderBottom: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || ((props.borders && props.borders.bottom) ? props.borders.bottom : 'none'))))
             }}
             onMouseEnter={() => {
                 beginDelayedHoverLabel();
@@ -616,10 +644,10 @@ function Tile(props) {
 
            {edgeLines && (
                 <>
-                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: edgeLines.top, zIndex: 40, pointerEvents: 'none'}} />
-                    <div style={{position: 'absolute', top: 0, bottom: 0, left: 0, width: 1, backgroundColor: edgeLines.left, zIndex: 40, pointerEvents: 'none'}} />
-                    {edgeLines.right && <div style={{position: 'absolute', top: 0, bottom: 0, right: 0, width: 1, backgroundColor: edgeLines.right, zIndex: 40, pointerEvents: 'none'}} />}
-                    {edgeLines.bottom && <div style={{position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: edgeLines.bottom, zIndex: 40, pointerEvents: 'none'}} />}
+                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: edgeLines.top, zIndex: 40, pointerEvents: 'none'}} />
+                    <div style={{position: 'absolute', top: 0, bottom: 0, left: 0, width: 2, backgroundColor: edgeLines.left, zIndex: 40, pointerEvents: 'none'}} />
+                    {edgeLines.right && <div style={{position: 'absolute', top: 0, bottom: 0, right: 0, width: 2, backgroundColor: edgeLines.right, zIndex: 40, pointerEvents: 'none'}} />}
+                    {edgeLines.bottom && <div style={{position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, backgroundColor: edgeLines.bottom, zIndex: 40, pointerEvents: 'none'}} />}
                 </>
            )}
 
@@ -761,26 +789,26 @@ function Tile(props) {
                          const rawClan = props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory;
                          const clan = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : String(rawClan);
                          if (color === 'black' && clan !== 'player' && clan !== 'crew') return null;
-                         let territoryBg = 'rgba(139, 90, 43, 0.45)';
-                         let borderColor = 'rgba(179, 120, 73, 0.65)';
+                         let territoryBg = 'rgba(90, 60, 30, 0.22)';
+                         let borderColor = 'rgba(125, 85, 45, 0.35)';
                          if (clan === 'cave' || clan === 'cave_clan') {
-                             territoryBg = 'rgba(100, 110, 140, 0.45)';
-                             borderColor = 'rgba(130, 140, 170, 0.65)';
+                             territoryBg = 'rgba(60, 70, 90, 0.20)';
+                             borderColor = 'rgba(85, 95, 120, 0.35)';
                          } else if (clan === 'woodland' || clan === 'woodland_clan') {
-                             territoryBg = 'rgba(34, 139, 34, 0.45)';
-                             borderColor = 'rgba(54, 179, 54, 0.65)';
+                             territoryBg = 'rgba(25, 75, 30, 0.22)';
+                             borderColor = 'rgba(40, 110, 50, 0.35)';
                          } else if (clan === 'shadow' || clan === 'shadow_clan') {
-                             territoryBg = 'rgba(80, 0, 120, 0.45)';
-                             borderColor = 'rgba(110, 20, 160, 0.65)';
+                             territoryBg = 'rgba(50, 10, 75, 0.22)';
+                             borderColor = 'rgba(75, 20, 110, 0.35)';
                          } else if (clan === 'paradox' || clan === 'paradox_clan') {
-                             territoryBg = 'rgba(180, 0, 180, 0.45)';
-                             borderColor = 'rgba(220, 40, 220, 0.65)';
+                             territoryBg = 'rgba(95, 20, 95, 0.20)';
+                             borderColor = 'rgba(130, 35, 130, 0.35)';
                          } else if (clan === 'mud' || clan === 'mud_clan') {
-                             territoryBg = 'rgba(139, 90, 43, 0.45)';
-                             borderColor = 'rgba(179, 120, 73, 0.65)';
+                             territoryBg = 'rgba(90, 60, 30, 0.22)';
+                             borderColor = 'rgba(125, 85, 45, 0.35)';
                          } else if (clan === 'player' || clan === 'crew') {
-                             territoryBg = 'rgba(50, 150, 255, 0.35)';
-                             borderColor = 'rgba(100, 200, 255, 0.65)';
+                             territoryBg = 'rgba(30, 90, 160, 0.20)';
+                             borderColor = 'rgba(60, 135, 210, 0.35)';
                          }
                          return (
                              <div 
@@ -789,7 +817,7 @@ function Tile(props) {
                                      position: 'absolute', 
                                      top: 0, left: 0, right: 0, bottom: 0, 
                                      backgroundColor: territoryBg, 
-                                     boxShadow: `inset 0 0 10px ${borderColor}`, 
+                                     boxShadow: `inset 0 0 5px ${borderColor}`, 
                                      border: `1px dashed ${borderColor}`,
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
@@ -861,7 +889,7 @@ function Tile(props) {
                                backgroundRepeat: 'no-repeat',
                                zIndex: isVendorCell ? 40 : ((isHut && isOccupied) || isUnderConstruction ? 4 : portraitZIndex),
                                opacity: (color === 'black' || props.isFadingOut) ? 0 : 1,
-                               transform: isUnderConstruction ? 'scale(1.5)' : (isHut && isOccupied ? 'scale(2.0)' : 'none'),
+                               transform: isUnderConstruction ? `scale(1.5) rotate(${rotationDeg}deg)` : (isHut && isOccupied ? `scale(2.0) rotate(${rotationDeg}deg)` : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')),
                                transformOrigin: (isHut && isOccupied) || isUnderConstruction ? 'bottom center' : 'center center',
                                transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
                                pointerEvents: 'none'
@@ -1243,7 +1271,7 @@ function Tile(props) {
                        justifyContent: 'center',
                        opacity: color === 'black' ? 0 : 1,
                        transition: 'all 0.25s ease-in-out',
-                       transform: isOccupied ? 'scale(1.15)' : 'scale(1)',
+                       transform: isOccupied ? 'scale(1.35)' : 'scale(1)',
                        filter: isOccupied ? 'brightness(1.3)' : 'none',
                        transformOrigin: 'center center'
                    };
@@ -1298,8 +1326,8 @@ function Tile(props) {
                               </svg>
                           )}
 
-                          {/* Gleaming/shimmering overlay animation if connected */}
-                          {isConnected && (
+                          {/* Gleaming/shimmering overlay animation if connected or occupied */}
+                          {(isConnected || isOccupied) && (
                               <div className={`connecting-path-shimmer ${isHorizontal ? 'horizontal' : 'vertical'}`} />
                           )}
 
@@ -1325,7 +1353,7 @@ function Tile(props) {
            {/* Inscription edge markers — golden bars on inscribed walls */}
            { props.inscriptions && (
                 <div style={{
-                    opacity: color === 'black' ? 0 : 1,
+                    opacity: (color === 'black' || color === '#000000' || color === '#000' || isBlackTile) ? 0 : 1,
                     transition: 'opacity 0.35s ease-in-out'
                 }}>
                     { props.inscriptions.top && (

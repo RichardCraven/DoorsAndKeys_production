@@ -140,9 +140,7 @@ export default function CardForge({ crew, meta, onClose, onSave, highlightMonste
                                             {alreadyForged && <div className="pf-forge-checkmark">✓</div>}
                                         </div>
                                         <div className="pf-forge-info">
-                                            <div className="pf-forge-name">{entry.card.name}</div>
-                                            <div className="pf-forge-monster">{entry.monsterType.replace(/_/g, ' ')}</div>
-                                            <div className="pf-forge-effect">{entry.card.text}</div>
+                                            <div className="pf-forge-name">{entry.card.name || entry.monsterType.replace(/_/g, ' ')}</div>
                                             {/* Shard progress bar */}
                                             <div className="pf-shard-row">
                                                 <div className="pf-shard-bar-bg">
@@ -233,7 +231,6 @@ export default function CardForge({ crew, meta, onClose, onSave, highlightMonste
                                                 {isActive && <div className="pf-echo-active-mark">✓</div>}
                                             </div>
                                             <div className="pf-echo-sel-name">{card.name}</div>
-                                            <div className="pf-echo-sel-text">{card.text}</div>
                                         </div>
                                     );
                                 })}

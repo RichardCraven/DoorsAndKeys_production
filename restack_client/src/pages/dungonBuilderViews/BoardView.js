@@ -103,6 +103,9 @@ class BoardView extends React.Component {
             const generatorMatch = (this.props.mapMaker?.generatorOptions || []).find((entry) => entry.key === subtype);
             if (generatorMatch?.name) return generatorMatch.name;
 
+            const litterMatch = (this.props.mapMaker?.dungeonLitterOptions || []).find((entry) => entry.key === subtype);
+            if (litterMatch?.name) return litterMatch.name;
+
             return this.formatHoverLabel(subtype);
         }
 
@@ -171,7 +174,7 @@ class BoardView extends React.Component {
                 vendorOption = this.props.mapMaker?.vendorOptions?.[pinnedOption.id];
             }
 
-            let shrineOption = null, territoryOption = null, buildingOption = null, generatorOption = null;
+            let shrineOption = null, territoryOption = null, buildingOption = null, generatorOption = null, dungeonLitterOption = null;
             if (pinnedOption.type === 'shrine-tile') {
                 shrineOption = this.props.mapMaker?.shrineOptions?.[pinnedOption.id];
             }
@@ -183,6 +186,9 @@ class BoardView extends React.Component {
             }
             if (pinnedOption.type === 'generator-tile') {
                 generatorOption = this.props.mapMaker?.generatorOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'dungeon-litter-tile') {
+                dungeonLitterOption = this.props.mapMaker?.dungeonLitterOptions?.[pinnedOption.id];
             }
 
             if (monster) {
@@ -207,7 +213,7 @@ class BoardView extends React.Component {
                 previewContains = { type: 'item', subtype: treasureOption.key };
                 previewImage = treasureOption.image;
             } else if (vendorOption) {
-                previewContains = { type: 'vendor', subtype: vendorOption.vendorKey, key: vendorOption.key };
+                previewContains = { type: 'vendor', subtype: vendorOption.key || vendorOption.vendorKey, key: vendorOption.key };
                 previewImage = vendorOption.image;
             } else if (shrineOption) {
                 previewContains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
@@ -223,6 +229,9 @@ class BoardView extends React.Component {
             } else if (generatorOption) {
                 previewContains = { type: 'building', subtype: generatorOption.key };
                 previewImage = images[generatorOption.image] || generatorOption.image;
+            } else if (dungeonLitterOption) {
+                previewContains = { type: 'dungeon_litter', subtype: dungeonLitterOption.key };
+                previewImage = images[dungeonLitterOption.image] || dungeonLitterOption.image;
             } else if (pinned.optionType === 'passage') {
                 previewContains = { type: 'passage', subtype: null };
             } else if (pinned.optionType === 'empty space') {
