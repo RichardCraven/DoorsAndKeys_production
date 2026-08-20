@@ -58,6 +58,22 @@ export function keyCleanup(dungeon) {
         });
     });
 
+    if (dungeon.superboards) {
+        Object.values(dungeon.superboards).forEach(sb => {
+            if (!sb || !Array.isArray(sb.miniboards)) return;
+            sb.miniboards.forEach(miniboard => {
+                if (!miniboard || !Array.isArray(miniboard.tiles)) return;
+                miniboard.tiles.forEach(tile => {
+                    if (isMasterKey(tile.contains)) {
+                        tile.contains = { type: 'item', subtype: 'treasury_key' };
+                        tile.image = null;
+                        replacedCount++;
+                    }
+                });
+            });
+        });
+    }
+
     if (replacedCount > 0) {
         console.log(`cache-cleanup.keyCleanup: replaced ${replacedCount} master key tile(s) with treasury key`);
     }
@@ -134,6 +150,29 @@ export function itemCleanup(dungeon, crew) {
                 });
             });
         });
+
+        if (dungeon.superboards) {
+            Object.values(dungeon.superboards).forEach(sb => {
+                if (!sb || !Array.isArray(sb.miniboards)) return;
+                sb.miniboards.forEach(miniboard => {
+                    if (!miniboard || !Array.isArray(miniboard.tiles)) return;
+                    miniboard.tiles.forEach(tile => {
+                        if (!tile.contains) return;
+                        const sub = typeof tile.contains === 'string'
+                            ? tile.contains
+                            : tile.contains.subtype;
+                        const replacement = DEPRECATED_SHIELDS[sub];
+                        if (replacement) {
+                            tile.contains = typeof tile.contains === 'string'
+                                ? replacement
+                                : { ...tile.contains, subtype: replacement };
+                            tile.image = null;
+                            replacedCount++;
+                        }
+                    });
+                });
+            });
+        }
     }
 
     // ── Scan crew inventories ───────────────────────────────────────────────
@@ -228,6 +267,28 @@ export function resolveItemPools(dungeon, allItems) {
         });
     });
 
+    if (dungeon.superboards) {
+        Object.values(dungeon.superboards).forEach(sb => {
+            if (!sb || !Array.isArray(sb.miniboards)) return;
+            sb.miniboards.forEach(miniboard => {
+                if (!miniboard || !Array.isArray(miniboard.tiles)) return;
+                miniboard.tiles.forEach(tile => {
+                    if (!tile.contains) return;
+                    const containsType = typeof tile.contains === 'string'
+                        ? tile.contains
+                        : tile.contains.type;
+                    const pool = pools[containsType];
+                    if (!pool || pool.length === 0) return;
+
+                    const chosen = pool[Math.floor(Math.random() * pool.length)];
+                    tile.contains = { type: 'item', subtype: chosen };
+                    tile.image = allItems[chosen]?.icon || null;
+                    resolvedCount++;
+                });
+            });
+        });
+    }
+
     if (resolvedCount > 0) {
         console.log(`cache-cleanup.resolveItemPools: resolved ${resolvedCount} tier pool tile(s) to specific items`);
     }
@@ -287,6 +348,28 @@ export function resolveMonsterPools(dungeon, monsters) {
             });
         });
     });
+
+    if (dungeon.superboards) {
+        Object.values(dungeon.superboards).forEach(sb => {
+            if (!sb || !Array.isArray(sb.miniboards)) return;
+            sb.miniboards.forEach(miniboard => {
+                if (!miniboard || !Array.isArray(miniboard.tiles)) return;
+                miniboard.tiles.forEach(tile => {
+                    if (!tile.contains) return;
+                    const containsType = typeof tile.contains === 'string'
+                        ? tile.contains
+                        : tile.contains.type;
+                    const pool = pools[containsType];
+                    if (!pool || pool.length === 0) return;
+
+                    const chosen = pool[Math.floor(Math.random() * pool.length)];
+                    tile.contains = { type: 'monster', subtype: chosen };
+                    tile.image = null;
+                    resolvedCount++;
+                });
+            });
+        });
+    }
 
     if (resolvedCount > 0) {
         console.log(`cache-cleanup.resolveMonsterPools: resolved ${resolvedCount} monster tier tile(s) to specific monsters`);

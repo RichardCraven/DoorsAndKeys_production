@@ -376,10 +376,16 @@ export default function LandingPage(props) {
     fetchInstances();
   };
 
-  const handleDeleteInstance = async (id, name) => {
-    if (!window.confirm(`Are you sure you want to delete dungeon instance "${name}"?`)) {
-      return;
-    }
+  const [pendingDeleteInstance, setPendingDeleteInstance] = useState(null);
+
+  const handleDeleteInstance = (id, name) => {
+    setPendingDeleteInstance({ id, name });
+  };
+
+  const confirmDeleteInstance = async () => {
+    if (!pendingDeleteInstance) return;
+    const { id, name } = pendingDeleteInstance;
+    setPendingDeleteInstance(null);
     setDeletingInstanceId(id);
     try {
       await deleteDungeonRequest(id);
@@ -490,12 +496,8 @@ export default function LandingPage(props) {
       if (presenceRes && presenceRes.data) {
         presenceMap = presenceRes.data;
         setActivePresenceMap(presenceRes.data);
-        console.log('[PresenceDiagnostic] Active presence map fetched:', presenceRes.data);
-      } else {
-        console.warn('[PresenceDiagnostic] Active presence response returned empty/null:', presenceRes);
       }
     } catch (err) {
-      console.warn('[PresenceDiagnostic] Failed to fetch active presence:', err);
     }
     const all = (res?.data || []).map((row) => {
       if (!row || !row.content) return null;
@@ -507,35 +509,6 @@ export default function LandingPage(props) {
         return null;
       }
     }).filter(Boolean);
-
-    console.groupCollapsed("[LandingPage] Dungeon Dropdown Diagnostics");
-    console.log(`Loaded ${all.length} total dungeons from API.`);
-
-    const diagnostics = all.map((d) => {
-      const spawnDiag = findSpawnPointDiagnostic(d);
-      const isValidProp = d.valid === true;
-      const hasSpawn = spawnDiag.found;
-      const isInstance = isInstanceDungeonName(d.name);
-      const passesAll = isValidProp && hasSpawn && !isInstance;
-
-      let reason = "PASSED";
-      if (!isValidProp) reason = "valid property is not true";
-      else if (!hasSpawn) reason = "no spawn point found";
-      else if (isInstance) reason = "is an instance dungeon (filtered out of templates)";
-
-      return {
-        name: d.name,
-        id: d.id,
-        validProp: d.valid,
-        spawnPointFound: hasSpawn,
-        spawnPointDetails: spawnDiag,
-        isInstanceDungeon: isInstance,
-        verdict: reason
-      };
-    });
-
-    console.table(diagnostics);
-    console.groupEnd();
 
     const totalInstances = all.filter((d) => isInstanceDungeonName(d.name) || (d.name && d.name.includes('_'))).length;
     const isUnderInstanceLimit = totalInstances < 10;
@@ -814,7 +787,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.5.7 BETA</span>
+          <span className="logo-subtitle">v 0.5.8 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
 
@@ -879,6 +852,131 @@ export default function LandingPage(props) {
                   onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(229, 181, 79, 0.3)'; }}
                 >
                   Confirm
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Instance Confirmation Modal */}
+        {pendingDeleteInstance && (
+          <div
+            className="crew-showcase-overlay"
+            style={{
+              position: 'fixed',
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.85)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+              zIndex: 100000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px'
+            }}
+            onClick={() => setPendingDeleteInstance(null)}
+          >
+            <div
+              className="crew-showcase-modal"
+              style={{
+                maxWidth: '440px',
+                width: '100%',
+                textAlign: 'center',
+                padding: '28px 24px',
+                backgroundColor: '#1c1917',
+                border: '1.5px solid rgba(239, 68, 68, 0.4)',
+                borderRadius: '12px',
+                boxShadow: '0 20px 50px rgba(0,0,0,0.9), 0 0 25px rgba(239, 68, 68, 0.2)'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🗑️</div>
+              <h3
+                style={{
+                  color: '#ef4444',
+                  fontFamily: "'Cinzel', 'Cinzel Decorative', serif",
+                  marginBottom: '14px',
+                  fontSize: '1.35rem',
+                  marginTop: '0',
+                  textTransform: 'uppercase',
+                  letterSpacing: '1px'
+                }}
+              >
+                Delete Instance
+              </h3>
+              <p
+                style={{
+                  color: '#d6d3d1',
+                  marginBottom: '28px',
+                  lineHeight: '1.5',
+                  fontFamily: "'Inter', 'Outfit', sans-serif",
+                  fontSize: '0.95rem'
+                }}
+              >
+                Are you sure you want to delete dungeon instance{' '}
+                <strong style={{ color: '#e5b54f', fontFamily: "'Outfit', sans-serif" }}>
+                  "{pendingDeleteInstance.name}"
+                </strong>
+                ?<br />
+                <span style={{ fontSize: '0.82rem', color: '#a8a29e', marginTop: '6px', display: 'inline-block' }}>
+                  This action cannot be undone.
+                </span>
+              </p>
+              <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
+                <button
+                  onClick={() => setPendingDeleteInstance(null)}
+                  style={{
+                    padding: '10px 20px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid #78716c',
+                    color: '#a8a29e',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '0.95rem',
+                    fontWeight: '600',
+                    minWidth: '110px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                    e.currentTarget.style.color = '#fff';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                    e.currentTarget.style.color = '#a8a29e';
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmDeleteInstance}
+                  style={{
+                    padding: '10px 20px',
+                    background: '#dc2626',
+                    border: 'none',
+                    color: '#ffffff',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontWeight: 'bold',
+                    fontFamily: "'Inter', sans-serif",
+                    fontSize: '0.95rem',
+                    minWidth: '130px',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.4)'
+                  }}
+                  onMouseOver={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                    e.currentTarget.style.boxShadow = '0 0 18px rgba(220, 38, 38, 0.7)';
+                    e.currentTarget.style.background = '#ef4444';
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = '0 0 12px rgba(220, 38, 38, 0.4)';
+                    e.currentTarget.style.background = '#dc2626';
+                  }}
+                >
+                  Delete Instance
                 </button>
               </div>
             </div>
@@ -1045,7 +1143,7 @@ export default function LandingPage(props) {
                                 const isMissingHp = hp < maxHp;
                                 const hpPct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
                                 const isDead = member.dead || hp <= 0;
-                                
+
                                 return (
                                   <>
                                     {(isMissingHp || isDead) && (

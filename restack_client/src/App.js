@@ -263,7 +263,9 @@ function App(props) {
       wood: props.inventoryManager.wood,
       stone: props.inventoryManager.stone,
       slate: props.inventoryManager.slate,
-      mushrooms: props.inventoryManager.mushrooms
+      mushrooms: props.inventoryManager.mushrooms,
+      unstable_chemicals: props.inventoryManager.unstable_chemicals,
+      stable_chemicals: props.inventoryManager.stable_chemicals
     }
     if (props.crewManager.crew.length === 0) {
       // Crew is empty — this is expected after a final death wipe. Skip saving.

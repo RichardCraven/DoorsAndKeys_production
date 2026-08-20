@@ -141,3 +141,17 @@ export function getPendingUserPerkLevels(customMeta = null) {
         return 0;
     }
 }
+
+/**
+ * Calculates domain expansion interval in milliseconds.
+ * Base duration is 12 hours (43,200,000 ms).
+ * If user has 'domain_growth_reduction' perk, duration is reduced by 10% (38,880,000 ms = 10.8 hours).
+ */
+export function getDomainExpansionIntervalMs(customMeta = null) {
+    const baseMs = 12 * 60 * 60 * 1000;
+    if (hasUserPerk('domain_growth_reduction', customMeta)) {
+        return Math.round(baseMs * 0.9);
+    }
+    return baseMs;
+}
+

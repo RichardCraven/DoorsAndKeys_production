@@ -209,22 +209,14 @@ const SkillTree = ({ crewMember, onClose }) => {
                                 return (
                                     <div key={`${pathName}-tier-${tier}`} className="skill-tier-row">
                                         {skillsInTier.map(skill => {
-                                            if (skill.id === 'breadcrumbs') {
-                                                console.log("=== BREADCRUMBS CHECK ===");
-                                                console.log("crewMember:", crewMember);
-                                                console.log("class:", crewMember ? crewMember.class : 'undefined');
-                                                console.log("type:", crewMember ? crewMember.type : 'undefined');
-                                            }
                                             // TEMP SCRIPT INJECTION: Automatically grant breadcrumbs to Sage for testing
                                             if (skill.id === 'breadcrumbs' && crewMember && (
                                                 (typeof crewMember.class === 'string' && crewMember.class.toLowerCase() === 'sage') || 
                                                 (typeof crewMember.type === 'string' && crewMember.type.toLowerCase() === 'sage') ||
                                                 (typeof crewMember.characterClass === 'string' && crewMember.characterClass.toLowerCase() === 'sage')
                                             )) {
-                                                console.log("Successfully identified Sage! Injecting breadcrumbs...");
                                                 if (!Array.isArray(crewMember.skills)) crewMember.skills = [];
                                                 if (!crewMember.skills.includes('breadcrumbs')) crewMember.skills.push('breadcrumbs');
-                                                console.log("Updated skills array:", crewMember.skills);
                                             }
 
                                             const gsRecord = crewMember.globalSkills && crewMember.globalSkills.find(gs => {

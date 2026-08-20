@@ -1014,7 +1014,6 @@ import camp from '../assets/icons/misc/camp/camp.png'
 import camping from '../assets/gemini_images/camping.png';
 import merchant_bg from '../assets/gemini_images/merchant.png';
 import alchemist_bg from '../assets/gemini_images/alchemist.png';
-import dream_den from '../assets/gemini_images/dream_den.png';
 import dream_den_bg from '../assets/gemini_images/dream_den.png';
 import litter_scattered_rocks from '../assets/gemini_images/litter_scattered_rocks.png';
 import litter_broken_wood from '../assets/gemini_images/litter_broken_wood.png';
@@ -1297,6 +1296,7 @@ const observer_platform = buildable_observer_platform;
 const outpost = buildable_outpost;
 const war_camp = buildable_war_camp;
 const war_fort = buildable_war_fort;
+const dream_den = moon_castle;
 
 const tattoo_placeholder = tattoo_ink; // placeholder until real tattoo art is added
 const _terrainBase = [terrain_1, terrain_2, terrain_3, terrain_4, terrain_5, terrain_6, terrain_7, terrain_8, terrain_9, terrain_10, terrain_11, terrain_12, terrain_13, terrain_14, terrain_15, terrain_16];

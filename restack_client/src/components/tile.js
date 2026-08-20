@@ -462,8 +462,8 @@ function Tile(props) {
     const targetTileId = props.index !== undefined ? props.index : props.id;
     const mainTile = props.boardTiles?.[targetTileId];
     const isMainTileBlack = mainTile ? isBlackRenderedTile(mainTile.contains, mainTile.color) : isBlackTile;
-    const isHut = (containsObj && (containsObj.subtype === 'hut' || containsObj.building === 'hut' || containsObj.type === 'hut')) ||
-                  (currentContains && (currentContains.subtype === 'hut' || currentContains.building === 'hut' || currentContains.type === 'hut'));
+    const isEnlargeableStructure = (containsObj && (['hut', 'archway'].includes(containsObj.subtype) || ['hut', 'archway'].includes(containsObj.building) || ['hut', 'archway'].includes(containsObj.type))) ||
+                                   (currentContains && (['hut', 'archway'].includes(currentContains.subtype) || ['hut', 'archway'].includes(currentContains.building) || ['hut', 'archway'].includes(currentContains.type)));
     const isUnderConstruction = (props.contains && typeof props.contains.subtype === 'string' && props.contains.subtype.includes('_under_construction')) ||
                                 (currentContains && typeof currentContains.subtype === 'string' && currentContains.subtype.includes('_under_construction'));
     const isOccupied = props.isPlayerOnTile || props.isPeerOnTile;
@@ -565,6 +565,13 @@ function Tile(props) {
         return false;
     })();
 
+    const isAutomatedTile = !!(
+        props.isAutomated ||
+        (props.generatorData && props.generatorData.automated) ||
+        (props.contains && typeof props.contains === 'object' && props.contains.generatorData && props.contains.generatorData.automated) ||
+        (props.data && props.data.generatorData && props.data.generatorData.automated)
+    );
+
     return (
         <div 
             data-portal-id={props['data-portal-id']}
@@ -578,8 +585,8 @@ function Tile(props) {
             boxSizing: 'border-box',
             transition: 'background-color 0.35s, border-color 0.35s',
             cursor: props.cursor ? props.cursor : 'pointer',
-            height: props.tileSize+'px',
-            width: props.tileSize+'px',
+            height: typeof props.tileSize === 'string' ? props.tileSize : (props.tileSize ? props.tileSize + 'px' : '100%'),
+            width: typeof props.tileSize === 'string' ? props.tileSize : (props.tileSize ? props.tileSize + 'px' : '100%'),
             backgroundColor: 
                 props.backgroundColor ? props.backgroundColor :
                 (props.hovered && props.type === 'board-tile') ? 
@@ -589,8 +596,8 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: (isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isHut && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
-            zIndex: isBumpingAttack ? 100 : (isGliding ? 90 : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (((isHut && isOccupied) || isUnderConstruction) ? 5 : undefined)))),
+            overflow: (isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
+            zIndex: isBumpingAttack ? 100 : (isGliding ? 90 : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (((isEnlargeableStructure && isOccupied) || isUnderConstruction) ? 5 : undefined)))),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
@@ -643,7 +650,9 @@ function Tile(props) {
         >
            {props.isMobileTouchHover && (
                <div style={{
-                   position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                   position: 'absolute', top: 0, left: 0,
+                   right: (isVendorCell && getVendorCellRole() === 'anchor') ? '-100%' : 0,
+                   bottom: (isVendorCell && getVendorCellRole() === 'anchor') ? '-100%' : 0,
                    border: '3px solid gold', zIndex: 100, pointerEvents: 'none',
                    boxShadow: 'inset 0 0 10px rgba(255, 215, 0, 0.5)'
                }} />
@@ -729,6 +738,43 @@ function Tile(props) {
                }}>
                    <span style={{ fontSize: '18px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.9))' }}>💥</span>
                    <span style={{ fontSize: '8px', color: '#fca5a5', fontWeight: 'bold', fontFamily: "'Inter', sans-serif", letterSpacing: '0.5px' }}>DISABLED</span>
+               </div>
+           )}
+
+           {/* Automated Generator Badge Overlay */}
+           { color !== 'black' && isAutomatedTile && (
+               <div
+                   className="automated-tile-badge"
+                   title="Automated Structure (Auto-collects / Auto-operates)"
+                   style={{
+                       position: 'absolute',
+                       top: '2px',
+                       right: '2px',
+                       background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.95) 0%, rgba(14, 165, 233, 0.95) 100%)',
+                       border: '1px solid #67e8f9',
+                       borderRadius: '4px',
+                       padding: '1px 3px',
+                       display: 'flex',
+                       alignItems: 'center',
+                       gap: '2px',
+                       boxShadow: '0 2px 6px rgba(0, 0, 0, 0.8), 0 0 8px rgba(6, 182, 212, 0.6)',
+                       zIndex: 35,
+                       pointerEvents: 'none'
+                   }}
+               >
+                   <span style={{ fontSize: '8px', lineHeight: 1 }}>🤖</span>
+                   <span style={{
+                       fontSize: '6.5px',
+                       fontWeight: '800',
+                       fontFamily: "'Cinzel', 'Inter', sans-serif",
+                       color: '#ffffff',
+                       letterSpacing: '0.5px',
+                       textTransform: 'uppercase',
+                       lineHeight: 1,
+                       textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)'
+                   }}>
+                       AUTO
+                   </span>
                </div>
            )}
 
@@ -894,10 +940,10 @@ function Tile(props) {
                                backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'),
                                backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
                                backgroundRepeat: 'no-repeat',
-                               zIndex: isVendorCell ? 40 : ((isHut && isOccupied) || isUnderConstruction ? 4 : portraitZIndex),
+                               zIndex: isVendorCell ? 40 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex),
                                opacity: (color === 'black' || props.isFadingOut) ? 0 : 1,
-                               transform: isUnderConstruction ? `scale(1.5) rotate(${rotationDeg}deg)` : (isHut && isOccupied ? `scale(2.0) rotate(${rotationDeg}deg)` : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')),
-                               transformOrigin: (isHut && isOccupied) || isUnderConstruction ? 'bottom center' : 'center center',
+                               transform: isUnderConstruction ? `scale(1.5) rotate(${rotationDeg}deg)` : (isEnlargeableStructure && isOccupied ? `scale(2.0) rotate(${rotationDeg}deg)` : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')),
+                               transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction ? 'bottom center' : 'center center',
                                transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
                                pointerEvents: 'none'
                            }} />
@@ -1040,7 +1086,9 @@ function Tile(props) {
            {/* Interactive Building Illumination Glow Overlay */}
            { (props.illuminated || props.isIlluminated || (props.contains && props.contains.illuminated) || (props.data && props.data.illuminated)) && (
                 <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    position: 'absolute', top: 0, left: 0, 
+                    right: (isVendorCell && getVendorCellRole() === 'anchor') ? '-100%' : 0,
+                    bottom: (isVendorCell && getVendorCellRole() === 'anchor') ? '-100%' : 0,
                     boxShadow: 'inset 0 0 16px rgba(255, 215, 0, 0.95), 0 0 12px rgba(255, 215, 0, 0.9)',
                     border: '2px solid #ffd700',
                     borderRadius: '2px',

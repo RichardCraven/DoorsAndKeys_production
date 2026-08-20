@@ -2292,10 +2292,17 @@ export function BoardManager(){
                 }
                 break;
             case 'spell':
+                this.removeTileFromBoard(destinationTile);
+                this.triggerRitualEncounter();
+            break;
             case 'dream den':
             case 'dream_den':
-                this.removeTileFromBoard(destinationTile)
-                this.triggerRitualEncounter();
+                try {
+                    if (this.triggerVendorEncounter) {
+                        this.triggerVendorEncounter('dream_den');
+                    }
+                } catch (e) {}
+                return 'vendor';
             break;
             case 'narrative':
                 return 'narrative';
@@ -3250,6 +3257,15 @@ export function BoardManager(){
             }
         } catch (e) {}
 
+        // Chemical Lantern: extends vision radius by 1 extra tile through the fog of war when active
+        try {
+            const inv = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || (getMeta()?.inventory) || [];
+            const activeChem = inv.find(item => item && (item.name === 'chemical lantern' || item._im_key === 'chemical_lantern') && item.active);
+            if (activeChem) {
+                fogRadius += 1;
+            }
+        } catch (e) {}
+
         const visibleTileIds = this.getReachableTilesWithinSteps(destinationTile.id, fogRadius);
 
         // Helper: strip legacy player-position markers that should never render on the board
@@ -3476,7 +3492,7 @@ export function BoardManager(){
 
                 const isVoid = this.isVoidTile(e);
                 const hasInscriptions = e.inscriptions && Object.values(e.inscriptions).some(v => !!v);
-                const isRevealed = inLanternTerritory || isObserverPlatformActive || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
+                const isRevealed = inLanternTerritory || isObserverPlatformActive || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
 
                 if (isRevealed && (!isVoid || hasInscriptions)) {
 
@@ -3506,7 +3522,7 @@ export function BoardManager(){
                     e.image = this.getImageForContains(e.contains, e);
                     e.borders = this.normalizeFogBorders(persistedBorders);
 
-                    if (inBreadcrumbPassiveReveal && !(revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id)))) {
+                    if (inBreadcrumbPassiveReveal && !(revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)))) {
                         e.partialObscured = true;
                     }
                 } else if (!isRevealed && hasInscriptions && manhattan === 1) {
@@ -3668,6 +3684,61 @@ export function BoardManager(){
                     } else {
                         tile.partialObscured = false;
                     }
+                    return;
+                }
+
+                // Straight 3-step tiles (N, S, E, W by 3)
+                if (manhattan === 3 && (dr === 0 || dc === 0)) {
+                    const stepR = dr === 0 ? 0 : (dr > 0 ? 1 : -1);
+                    const stepC = dc === 0 ? 0 : (dc > 0 ? 1 : -1);
+                    const mid1 = getTileAtCoords(playerRow + stepR, playerCol + stepC);
+                    const mid2 = getTileAtCoords(playerRow + stepR * 2, playerCol + stepC * 2);
+                    if (isVoidOrBlackOrBlocked(destinationTile, mid1) ||
+                        isVoidOrBlackOrBlocked(mid1, mid2) ||
+                        (mid2 && this.isPassageWallBlockingBetween(mid2.id, tile.id, { ignoreBuilding: true }))) {
+                        tile.partialObscured = true;
+                    } else {
+                        tile.partialObscured = false;
+                    }
+                    return;
+                }
+
+                // Combination 3-step tiles (manhattan === 3)
+                if (manhattan === 3) {
+                    const stepR = dr === 0 ? 0 : (dr > 0 ? 1 : -1);
+                    const stepC = dc === 0 ? 0 : (dc > 0 ? 1 : -1);
+                    const nR = getTileAtCoords(playerRow + stepR, playerCol);
+                    const nC = getTileAtCoords(playerRow, playerCol + stepC);
+                    const rBlocked = isVoidOrBlackOrBlocked(destinationTile, nR);
+                    const cBlocked = isVoidOrBlackOrBlocked(destinationTile, nC);
+                    if (rBlocked && cBlocked) {
+                        tile.partialObscured = true;
+                    } else {
+                        tile.partialObscured = false;
+                    }
+                    return;
+                }
+
+                // Straight 4-step tiles (manhattan === 4)
+                if (manhattan === 4 && (dr === 0 || dc === 0)) {
+                    const stepR = dr === 0 ? 0 : (dr > 0 ? 1 : -1);
+                    const stepC = dc === 0 ? 0 : (dc > 0 ? 1 : -1);
+                    const mid1 = getTileAtCoords(playerRow + stepR, playerCol + stepC);
+                    const mid2 = getTileAtCoords(playerRow + stepR * 2, playerCol + stepC * 2);
+                    const mid3 = getTileAtCoords(playerRow + stepR * 3, playerCol + stepC * 3);
+                    if (isVoidOrBlackOrBlocked(destinationTile, mid1) ||
+                        isVoidOrBlackOrBlocked(mid1, mid2) ||
+                        isVoidOrBlackOrBlocked(mid2, mid3) ||
+                        (mid3 && this.isPassageWallBlockingBetween(mid3.id, tile.id, { ignoreBuilding: true }))) {
+                        tile.partialObscured = true;
+                    } else {
+                        tile.partialObscured = false;
+                    }
+                    return;
+                }
+
+                if (manhattan <= fogRadius) {
+                    tile.partialObscured = false;
                     return;
                 }
 

@@ -618,17 +618,37 @@ class UserManagerPage extends React.Component {
             overflow: 'hidden', width: '100%', aspectRatio: '16/9',
             boxShadow: '0 10px 50px rgba(0,0,0,0.8), inset 0 0 100px rgba(0,255,255,0.03)'
           }}>
-            {action && action.screenshot ? (
-              <img 
-                src={`data:image/jpeg;base64,${action.screenshot}`} 
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                alt="Replay Frame"
-              />
-            ) : (
-              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontStyle: 'italic', fontSize: '18px' }}>
-                [ No Visual Data Available ]
-              </div>
-            )}
+            {(() => {
+              let frameScreenshot = action?.screenshot;
+              if (!frameScreenshot && playingReplay?.actions) {
+                for (let k = replayActionIndex - 1; k >= 0; k--) {
+                  if (playingReplay.actions[k]?.screenshot) {
+                    frameScreenshot = playingReplay.actions[k].screenshot;
+                    break;
+                  }
+                }
+                if (!frameScreenshot) {
+                  for (let k = replayActionIndex + 1; k < playingReplay.actions.length; k++) {
+                    if (playingReplay.actions[k]?.screenshot) {
+                      frameScreenshot = playingReplay.actions[k].screenshot;
+                      break;
+                    }
+                  }
+                }
+              }
+
+              return frameScreenshot ? (
+                <img 
+                  src={`data:image/jpeg;base64,${frameScreenshot}`} 
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  alt="Replay Frame"
+                />
+              ) : (
+                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555', fontStyle: 'italic', fontSize: '18px' }}>
+                  [ No Visual Data Available ]
+                </div>
+              );
+            })()}
             
             <div style={{
               position: 'absolute', bottom: 0, left: 0, width: '100%',

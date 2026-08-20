@@ -1558,7 +1558,7 @@
 
 // ── Merchant & Alchemist Modals ──────────────────────────────────────────
 
-.merchant-modal, .alchemist-modal, .prep-complete-modal, .ritual-complete-modal, .ritual-encounter-modal, .food-complete-modal, .sharpen-blades-details-modal {
+.merchant-modal, .alchemist-modal, .dream-den-modal, .prep-complete-modal, .ritual-complete-modal, .ritual-encounter-modal, .food-complete-modal, .sharpen-blades-details-modal {
   z-index: 3000 !important;
 
   .modal-dialog {
@@ -1594,7 +1594,7 @@
   }
 }
 
-.merchant-modal, .alchemist-modal, .ritual-encounter-modal {
+.merchant-modal, .alchemist-modal, .dream-den-modal, .ritual-encounter-modal {
   .modal-content {
     min-height: 580px;
   }
@@ -1606,7 +1606,7 @@
   }
 }
 
-.merchant-modal {
+.merchant-modal, .dream-den-modal {
   .modal-dialog {
     max-width: 920px;
   }
