@@ -1151,7 +1151,7 @@ export function MonsterManager() {
         hashmallim: {
             type: 'hashmallim',
             tier: 4,
-            subtype: 'eldritch',
+            subtype: 'greater entity',
             key: 'hashmallim',
             image_names: ['hashmallim'],
             monster_names: [],
@@ -1172,6 +1172,33 @@ export function MonsterManager() {
             deathCries: ['Impossible...'],
             skills: ['gore', 'rake', 'dominate', 'madness', 'overload', 'meteors', 'entropic_kindred'],
             weaknesses: ['holy', 'fire'],
+            drops: []
+        },
+        the_principalities: {
+            type: 'the_principalities',
+            tier: 4,
+            subtype: 'lesser entity',
+            key: 'the_principalities',
+            image_names: ['the_principalities_portrait'],
+            monster_names: ['The Principalities'],
+            lordName: 'The Ethereal Triumvirate',
+            stats: {
+                hp: 250,
+                atk: 12,
+                def: 10,
+                speed: 10,
+                willpower: 12,
+                str: 6,
+                int: 10,
+                dex: 8,
+                fort: 8
+            },
+            level: 15,
+            portrait: images['the_principalities_portrait'],
+            greetings: ['We are the three in one...', 'Your path meets the threshold...'],
+            deathCries: ['The queue advances...'],
+            skills: ['undead_grasp', 'invoke_darkness', 'sphere_of_darkness'],
+            weaknesses: ['holy'],
             drops: []
         }
     };

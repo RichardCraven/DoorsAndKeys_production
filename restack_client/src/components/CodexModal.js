@@ -286,7 +286,9 @@ export const MONSTER_LORE = {
     beholder_minion: { lore: 'A creature existing only to serve the great eye.', tactics: 'Focus them down before they can bifurcate into a double.' },
     ghoul: { lore: 'A ravenous undead predator. Tears flesh and can paralyze with its bite.', tactics: 'Poison and acid are effective. Paralysis breaks your action economy — purge fast.' },
     hagigah: { lore: 'The demonlord overseer of the outer reaches. Drawn to the tower by insatiable hunger.' },
-    hashmallim: { lore: "The tower's old custodian, torn in two by infinite contradictions." },
+    hashmallim: { lore: "A greater entity, the tower's old custodian, torn in two by infinite contradictions." },
+    the_principalities: { lore: 'A lesser entity formed of three ethereal individuals bound in silent accord. The first entity encountered in the queue of death.', tactics: 'Defeat them in a death card duel to gain an immediate crew level and unlock the next death entity.' },
+    eshu: { lore: 'A lesser entity of trickery and cosmic crossroads. The second entity in the queue of death.', tactics: 'Be vigilant against deceptive hand maneuvers in the card duel.' },
 };
 
 // ── Classes info ─────────────────────────────────────────────────────────────

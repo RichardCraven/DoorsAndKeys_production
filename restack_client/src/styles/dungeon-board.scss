@@ -3033,6 +3033,33 @@
     z-index: 100 !important;
 }
 
+@keyframes pygmyGlide {
+    0% {
+        transform: translate3d(var(--glide-x, 0%), var(--glide-y, 0%), 0);
+    }
+    100% {
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+.tile.pygmy-glide .portrait,
+.tile.pygmy-glide .monster-portrait-glow {
+    animation: pygmyGlide 0.35s ease-out forwards !important;
+}
+
+.tile.pygmy-glide {
+    z-index: 90 !important;
+}
+
+@keyframes playerGlide {
+    0% { transform: translate3d(var(--glide-x, 0px), var(--glide-y, 0px), 0); }
+    100% { transform: translate3d(0, 0, 0); }
+}
+
+.player-glide {
+    animation: playerGlide 0.15s linear forwards !important;
+}
+
 @keyframes pulseGlow {
     from {
         text-shadow: 0 0 10px rgba(255, 59, 48, 0.5), 0 0 2px rgba(255, 59, 48, 0.3);

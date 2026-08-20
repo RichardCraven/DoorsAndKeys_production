@@ -140,10 +140,10 @@ export function MapMaker(props){
     this.buildingOptions = [
         { key: 'hut', name: 'Hut', image: 'buildable_hut' },
         { key: 'outpost', name: 'Outpost', image: 'buildable_outpost' },
-        { key: 'observer_platform', name: 'Observer Platform', image: 'buildable_observer_platform' },
+        { key: 'observer_platform', name: 'Observation Platform', image: 'buildable_observer_platform' },
         { key: 'earthen_fort', name: 'Earthen Fort', image: 'buildable_earthen_fort' },
-        { key: 'war_camp', name: 'War Camp', image: 'buildable_war_camp' },
-        { key: 'war_fort', name: 'War Fort', image: 'buildable_war_fort' },
+        { key: 'war_camp', name: 'War Camp', image: 'buildable_war_camp', isMultiTile: true },
+        { key: 'war_fort', name: 'War Fort', image: 'buildable_war_fort', isMultiTile: true },
     ];
 
     this.generatorOptions = [

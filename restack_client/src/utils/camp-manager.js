@@ -385,24 +385,48 @@ export async function endCamp(component) {
                 const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
                 const currentLevel = bm.currentLevel;
                 const currentBoard = bm.currentBoard;
+                
+                const canPlaceCampfire = (tile) => {
+                    if (!tile) return false;
+                    if (tile.building || tile.generatorData) return false;
+                    if (tile.type === 'building' || tile.subtype === 'outpost') return false;
+                    if (tile.contains) {
+                        const t = typeof tile.contains === 'object' ? tile.contains.type : tile.contains;
+                        const st = typeof tile.contains === 'object' ? tile.contains.subtype : null;
+                        if (t === 'building' || t === 'generator' || t === 'domain_monolith') return false;
+                        if (st === 'outpost' || st === 'hut' || st === 'tent' || st === 'earthen_fort') return false;
+                        if (['door', 'gate', 'stairs', 'way_up', 'way_down', 'portal', 'chest', 'event', 'npc', 'vendor', 'shop', 'shrine', 'altar'].includes(t)) return false;
+                    }
+                    return true;
+                };
+
                 if (currentLevel && currentBoard && playerIdx !== null && activeDungeon) {
                     const levelEntry = activeDungeon.levels?.find(e => e.id === currentLevel.id);
                     if (levelEntry) {
                         const orientation = bm.currentOrientation || 'F';
                         const miniboards = orientation === 'F' ? levelEntry.front?.miniboards : levelEntry.back?.miniboards;
                         const b = miniboards?.find(bi => bi.id === currentBoard.id);
-                        if (b && b.tiles && b.tiles[playerIdx]) {
-                            b.tiles[playerIdx].contains = { type: 'structure', subtype: 'dead_campfire' };
-                            b.tiles[playerIdx].image = 'dead_campfire';
+                        
+                        const bmTile = bm.tiles && bm.tiles[playerIdx];
+                        const boardTile = b && b.tiles && b.tiles[playerIdx];
+                        
+                        const bmSafe = bmTile ? canPlaceCampfire(bmTile) : true;
+                        const boardSafe = boardTile ? canPlaceCampfire(boardTile) : true;
+                        
+                        if (bmSafe && boardSafe && (bmTile || boardTile)) {
+                            if (boardTile) {
+                                boardTile.contains = { type: 'structure', subtype: 'dead_campfire' };
+                                boardTile.image = 'dead_campfire';
+                            }
+                            if (bmTile) {
+                                bmTile.contains = { type: 'structure', subtype: 'dead_campfire' };
+                                bmTile.image = 'dead_campfire';
+                                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                            }
+                            if (activeDungeon.id) {
+                                updateDungeonRequest(activeDungeon.id, activeDungeon).catch(err => console.error('Error saving dead campfire structure:', err));
+                            }
                         }
-                    }
-                    if (bm.tiles && bm.tiles[playerIdx]) {
-                        bm.tiles[playerIdx].contains = { type: 'structure', subtype: 'dead_campfire' };
-                        bm.tiles[playerIdx].image = 'dead_campfire';
-                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
-                    }
-                    if (activeDungeon.id) {
-                        updateDungeonRequest(activeDungeon.id, activeDungeon).catch(err => console.error('Error saving dead campfire structure:', err));
                     }
                 }
             }

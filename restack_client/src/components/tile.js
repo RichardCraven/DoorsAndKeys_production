@@ -111,10 +111,10 @@ function Tile(props) {
     const isVendorType = (val) => {
         if (!val) return false;
         if (typeof val === 'object') {
-            return isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.key) || isVendorType(val.name);
+            return !!val.isMultiTile || isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.key) || isVendorType(val.name);
         }
         const s = String(val).toLowerCase();
-        return s === 'vendor' || s === 'alchemist' || s === 'merchant' || s === 'war_camp' || s === 'war_fort' || s.includes('vendor') || s.includes('alchemist') || s.includes('merchant');
+        return s === 'vendor' || s === 'alchemist' || s === 'merchant' || s === 'war_camp' || s === 'war_fort' || s === 'dream_den' || s === 'dream den' || s.includes('vendor') || s.includes('alchemist') || s.includes('merchant') || s.includes('dream_den') || s.includes('dream den');
     };
     const isVendorCell = !isPaletteTile && (
         isVendorType(props.contains) ||
@@ -485,6 +485,11 @@ function Tile(props) {
     const bumpX = `${(bumpVector?.dCol ?? 0) * 85}%`;
     const bumpY = `${(bumpVector?.dRow ?? -1) * 85}%`;
 
+    const isGliding = !!(currentTile && currentTile.isGliding) || !!props.isGliding || !!(currentContains && currentContains.isGliding);
+    const glideVector = (currentTile && currentTile.glideVector) || props.glideVector || (currentContains && currentContains.glideVector) || { dRow: 0, dCol: 0 };
+    const glideX = `${(glideVector?.dCol ?? 0) * 100}%`;
+    const glideY = `${(glideVector?.dRow ?? 0) * 100}%`;
+
 
     const imageString = String(props.imageOverride || props.image || '').toLowerCase();
     const isItemImage = imageString.includes('key') ||
@@ -566,6 +571,8 @@ function Tile(props) {
             style={{
             '--bump-x': bumpX,
             '--bump-y': bumpY,
+            '--glide-x': glideX,
+            '--glide-y': glideY,
             opacity: props.isPreview ? 0.6 : 1,
             pointerEvents: props.passThrough ? 'none' : 'inherit',
             boxSizing: 'border-box',
@@ -582,8 +589,8 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: (isBumpingAttack || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isHut && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
-            zIndex: isBumpingAttack ? 100 : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (((isHut && isOccupied) || isUnderConstruction) ? 5 : undefined))),
+            overflow: (isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isHut && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
+            zIndex: isBumpingAttack ? 100 : (isGliding ? 90 : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (((isHut && isOccupied) || isUnderConstruction) ? 5 : undefined)))),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
@@ -631,7 +638,7 @@ function Tile(props) {
                 }
             }}
             onDragStart={(e) => e.preventDefault()}
-            className={`tile ${props.className || ''} ${props.type || ''} ${isBumpingAttack ? 'pygmy-bump-hit' : ''}`.trim()}
+            className={`tile ${props.className || ''} ${props.type || ''} ${isBumpingAttack ? 'pygmy-bump-hit' : (isGliding ? 'pygmy-glide' : '')}`.trim()}
             data-tile-id={props.index}
         >
            {props.isMobileTouchHover && (
@@ -788,7 +795,7 @@ function Tile(props) {
                      { (props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory) && (() => {
                          const rawClan = props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory;
                          const clan = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : String(rawClan);
-                         if (color === 'black' && clan !== 'player' && clan !== 'crew') return null;
+                         if (color === 'black') return null;
                          let territoryBg = 'rgba(90, 60, 30, 0.22)';
                          let borderColor = 'rgba(125, 85, 45, 0.35)';
                          if (clan === 'cave' || clan === 'cave_clan') {
@@ -821,7 +828,7 @@ function Tile(props) {
                                      border: `1px dashed ${borderColor}`,
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
-                                     opacity: (clan === 'player' || clan === 'crew') ? 1 : ((isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') ? 0 : 1), 
+                                     opacity: (isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') ? 0 : 1, 
                                      transition: 'opacity 0.35s ease-in-out',
                                      animation: props.newlyClaimed ? 'territoryFadeIn 1.5s ease-in-out forwards' : 'none'
                                  }} 
@@ -1551,12 +1558,34 @@ function Tile(props) {
                 </div>
             )}
 
-            {/* Earthen Fort level badge (levels > 1 show a number in the top right of the icon) */}
+            {/* Automaton Badge Overlay */}
+            {(props.isAutomated || props.contains?.automated || props.contains?.generatorData?.automated || props.data?.automated || props.data?.generatorData?.automated) && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: '2px',
+                    right: '2px',
+                    width: '18px',
+                    height: '18px',
+                    background: 'radial-gradient(circle, rgba(6, 182, 212, 0.9) 0%, rgba(14, 116, 144, 0.9) 100%)',
+                    border: '1px solid #67e8f9',
+                    borderRadius: '50%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: '0 0 8px rgba(6, 182, 212, 0.8)',
+                    zIndex: 40,
+                    pointerEvents: 'none'
+                }} title="Automated Generator">
+                    <span style={{ fontSize: '11px' }}>🤖</span>
+                </div>
+            )}
+
+            {/* Earthen Fort level badge (levels >= 1 show a number in the top right of the icon) */}
             {(() => {
                 const bSubtype = containsSubtype || (containsObj && containsObj.subtype);
                 const isFort = bSubtype === 'earthen_fort' || props.building === 'earthen_fort' || props.image === 'earthen_fort' || props.image === 'buildable_earthen_fort';
-                const lvl = (containsObj && containsObj.level) || (props.contains && props.contains.level) || (currentContains && currentContains.level) || props.level;
-                if (isFort && typeof lvl === 'number' && lvl > 1) {
+                const lvl = (containsObj && containsObj.level) || (props.contains && props.contains.level) || (currentContains && currentContains.level) || props.level || 1;
+                if (isFort && typeof lvl === 'number' && lvl >= 1) {
                     return (
                         <div style={{
                             position: 'absolute',
@@ -1600,7 +1629,7 @@ export function propsAreEqual(prevProps, nextProps) {
         'isPlayerOnTile', 'className', 'illuminated', 'sabotageProgress', 'monolithActivationProgress',
         'isDisabledOutpost', 'disabledUntil', 'inscriptions', 'debugMode',
         'isPlayerTile', 'hasLivingSummoner', 'playerImgKey', 'cursor', 'isFadingOut',
-        'ownedByPlayer', 'ownedByEnemy', 'isBumpingAttack', 'bumpVector'
+        'ownedByPlayer', 'ownedByEnemy', 'isBumpingAttack', 'bumpVector', 'isGliding', 'glideVector', 'hoveredTileFootprint', 'isAutomated'
     ];
 
     for (let key of keysToCompare) {

@@ -34,6 +34,93 @@ export function QuestManager() {
             .replace('{domain}', ctx.domain ?? 'ancient lore')
             .replace('{class}', ctx.class ?? 'warrior');
 
+    // ── Extract actual monsters & items present on dungeon tiles ───────────
+    this._extractDungeonEntities = (dungeon, monsterManager, inventoryManager) => {
+        const monstersMap = new Map();
+        const itemsMap = new Map();
+        let hasChests = false;
+
+        if (dungeon && Array.isArray(dungeon.levels)) {
+            const allMonstersDef = monsterManager?.monsters || {};
+            const allItemsDef = inventoryManager?.allItems || {};
+
+            dungeon.levels.forEach(level => {
+                ['front', 'back'].forEach(side => {
+                    const sideData = level && level[side];
+                    if (!sideData || !Array.isArray(sideData.miniboards)) return;
+
+                    sideData.miniboards.forEach(board => {
+                        if (!board || !Array.isArray(board.tiles)) return;
+
+                        board.tiles.forEach(tile => {
+                            if (!tile || !tile.contains) return;
+
+                            const contains = tile.contains;
+                            let rawType = null;
+                            let rawSubtype = null;
+
+                            if (typeof contains === 'string') {
+                                rawType = contains;
+                                rawSubtype = contains;
+                            } else if (typeof contains === 'object') {
+                                rawType = contains.type;
+                                rawSubtype = contains.subtype || contains.key;
+                            }
+
+                            // --- Monster extraction ---
+                            let mKey = null;
+                            if (rawType === 'monster' || rawType === 'boss') {
+                                mKey = rawSubtype;
+                            } else if (rawType === 'pygmies') {
+                                mKey = rawSubtype || 'pygmy';
+                            } else if (allMonstersDef[rawType]) {
+                                mKey = rawType;
+                            } else if (rawSubtype && allMonstersDef[rawSubtype]) {
+                                mKey = rawSubtype;
+                            }
+
+                            if (mKey && mKey !== 'monster') {
+                                const def = allMonstersDef[mKey] || allMonstersDef[mKey.toLowerCase()];
+                                const name = def?.name || mKey.replace(/_/g, ' ');
+                                const existing = monstersMap.get(mKey) || { key: mKey, name, count: 0 };
+                                existing.count += 1;
+                                monstersMap.set(mKey, existing);
+                            }
+
+                            // --- Item extraction ---
+                            let iKey = null;
+                            if (rawType === 'item') {
+                                iKey = rawSubtype;
+                            } else if (allItemsDef[rawType]) {
+                                iKey = rawType;
+                            } else if (rawSubtype && allItemsDef[rawSubtype]) {
+                                iKey = rawSubtype;
+                            }
+
+                            if (iKey && iKey !== 'item' && iKey !== 'void' && iKey !== 'empty_space') {
+                                const def = allItemsDef[iKey] || allItemsDef[iKey.toLowerCase()];
+                                const name = def?.name || iKey.replace(/_/g, ' ');
+                                const existing = itemsMap.get(iKey) || { key: iKey, name, count: 0 };
+                                existing.count += 1;
+                                itemsMap.set(iKey, existing);
+                            }
+
+                            if (rawType === 'chest' || (typeof rawType === 'string' && rawType.includes('chest'))) {
+                                hasChests = true;
+                            }
+                        });
+                    });
+                });
+            });
+        }
+
+        return {
+            monsters: Array.from(monstersMap.values()),
+            items: Array.from(itemsMap.values()),
+            hasChests
+        };
+    };
+
     // ── The Quest Pool ─────────────────────────────────────────────────────
     // Each entry is a template that generateQuestSet fills in with context.
 
@@ -196,10 +283,116 @@ export function QuestManager() {
         };
     };
 
+    // ── Helper to place a single item onto an empty non-void tile in the dungeon ──
+    this._placeItemInDungeon = (dungeon, itemKey, inventoryManager) => {
+        if (!dungeon || !Array.isArray(dungeon.levels) || !itemKey) return false;
+
+        const candidateTiles = [];
+        const fallbackTiles = [];
+
+        dungeon.levels.forEach(level => {
+            ['front', 'back'].forEach(side => {
+                const sideData = level && level[side];
+                if (!sideData || !Array.isArray(sideData.miniboards)) return;
+
+                sideData.miniboards.forEach(board => {
+                    if (!board || !Array.isArray(board.tiles)) return;
+
+                    board.tiles.forEach(tile => {
+                        if (!tile) return;
+
+                        const isVoid = tile.terrain === 'void' || tile.contains === 'void';
+                        if (isVoid) return;
+
+                        const rawType = typeof tile.contains === 'string' ? tile.contains : tile.contains?.type;
+                        const isEssential = ['gate', 'door', 'portal', 'stair', 'shrine', 'dungeon_portal'].includes(rawType);
+                        if (isEssential) return;
+
+                        if (!tile.contains || tile.contains === 'empty_space') {
+                            candidateTiles.push({ board, tile });
+                        } else {
+                            fallbackTiles.push({ board, tile });
+                        }
+                    });
+                });
+            });
+        });
+
+        const pool = candidateTiles.length > 0 ? candidateTiles : fallbackTiles;
+        if (pool.length === 0) return false;
+
+        const chosen = pool[Math.floor(Math.random() * pool.length)];
+        const itemDef = inventoryManager?.allItems?.[itemKey];
+        chosen.tile.contains = { type: 'item', subtype: itemKey };
+        if (itemDef?.icon) {
+            chosen.tile.image = itemDef.icon;
+        }
+        return true;
+    };
+
+    // ── Helper to place monsters onto empty non-void tiles in the dungeon ──
+    this._placeMonstersInDungeon = (dungeon, monsterKey, count, monsterManager) => {
+        if (!dungeon || !Array.isArray(dungeon.levels) || !monsterKey || count <= 0) return 0;
+
+        const candidateTiles = [];
+        const fallbackTiles = [];
+
+        dungeon.levels.forEach(level => {
+            ['front', 'back'].forEach(side => {
+                const sideData = level && level[side];
+                if (!sideData || !Array.isArray(sideData.miniboards)) return;
+
+                sideData.miniboards.forEach(board => {
+                    if (!board || !Array.isArray(board.tiles)) return;
+
+                    board.tiles.forEach(tile => {
+                        if (!tile) return;
+
+                        const isVoid = tile.terrain === 'void' || tile.contains === 'void';
+                        if (isVoid) return;
+
+                        const rawType = typeof tile.contains === 'string' ? tile.contains : tile.contains?.type;
+                        const isEssential = ['gate', 'door', 'portal', 'stair', 'shrine', 'dungeon_portal'].includes(rawType);
+                        if (isEssential) return;
+
+                        if (!tile.contains || tile.contains === 'empty_space') {
+                            candidateTiles.push({ board, tile });
+                        } else {
+                            fallbackTiles.push({ board, tile });
+                        }
+                    });
+                });
+            });
+        });
+
+        let placed = 0;
+        const monsterDef = monsterManager?.monsters?.[monsterKey];
+
+        for (let i = 0; i < count; i++) {
+            const pool = candidateTiles.length > 0 ? candidateTiles : fallbackTiles;
+            if (pool.length === 0) break;
+
+            const randomIndex = Math.floor(Math.random() * pool.length);
+            const chosen = pool.splice(randomIndex, 1)[0];
+
+            chosen.tile.contains = { type: 'monster', subtype: monsterKey };
+            if (monsterDef?.icon) {
+                chosen.tile.image = monsterDef.icon;
+            }
+            chosen.tile.color = '#ff000078';
+            placed++;
+        }
+
+        return placed;
+    };
+
     /**
      * Generates 3 quests from the full pool for a new dungeon run.
      * Always includes one travel + one bounty, then one drawn from the
      * exploration types (lore/communion/inscription/item_retrieval).
+     *
+     * Ensures target monsters and items for quests are guaranteed to exist
+     * somewhere in the active dungeon.
      */
     this.generateQuestSet = (dungeon, monsterManager, inventoryManager, crewManager) => {
         this.activeQuests = [];
@@ -219,6 +412,9 @@ export function QuestManager() {
             ? deepestLevel
             : Math.max(1, Math.min(deepestLevelNum, Math.floor(crewPower * 1.5)));
 
+        // Extract monsters and items that actually exist in the dungeon
+        let { monsters: dungeonMonsters, items: dungeonItems, hasChests } = this._extractDungeonEntities(dungeon, monsterManager, inventoryManager);
+
         // ── Travel quest ──────────────────────────────────────────────────
         const travelTemplates = this._POOL.filter(p => p.type === 'travel');
         const travelTmpl = travelTemplates[Math.floor(Math.random() * travelTemplates.length)];
@@ -226,17 +422,43 @@ export function QuestManager() {
         if (travel) this.activeQuests.push(travel);
 
         // ── Bounty quest ──────────────────────────────────────────────────
-        const monsterKeys = monsterManager ? Object.keys(monsterManager.monsters || {}) : [];
-        const monsterName = monsterKeys.length
-            ? monsterKeys[Math.floor(Math.random() * monsterKeys.length)].replace(/_/g, ' ')
-            : 'enemies';
+        let monsterName = 'enemies';
+        let monsterKey = null;
+        let maxAvailableCount = 0;
+
+        if (dungeonMonsters.length > 0) {
+            const chosen = dungeonMonsters[Math.floor(Math.random() * dungeonMonsters.length)];
+            monsterName = chosen.name;
+            monsterKey = chosen.key;
+            maxAvailableCount = chosen.count;
+        } else if (monsterManager && monsterManager.monsters) {
+            const allKeys = Object.keys(monsterManager.monsters);
+            if (allKeys.length) {
+                monsterKey = allKeys[Math.floor(Math.random() * allKeys.length)];
+                monsterName = monsterManager.monsters[monsterKey]?.name || monsterKey.replace(/_/g, ' ');
+            }
+        }
         
-        // Scale bounty count dynamically
-        const bountyCount = Math.max(2, Math.min(15, Math.round(3 * crewPower)));
+        // Scale bounty count dynamically based on crew power
+        let bountyCount = Math.max(2, Math.min(15, Math.round(3 * crewPower)));
+        if (maxAvailableCount > 0) {
+            bountyCount = Math.max(1, Math.min(bountyCount, maxAvailableCount));
+        } else if (monsterKey && dungeon) {
+            // If 0 instances exist on tiles, spawn the required count into the dungeon
+            const placed = this._placeMonstersInDungeon(dungeon, monsterKey, bountyCount, monsterManager);
+            if (placed > 0) {
+                maxAvailableCount = placed;
+            }
+        }
 
         const bountyTemplates = this._POOL.filter(p => p.type === 'bounty');
         const bountyTmpl = bountyTemplates[Math.floor(Math.random() * bountyTemplates.length)];
-        const bounty = this._makeFromTemplate(bountyTmpl, { count: bountyCount, monster: monsterName, level: targetLevel });
+        const bounty = this._makeFromTemplate(bountyTmpl, {
+            count: bountyCount,
+            monster: monsterName,
+            monsterKey,
+            level: targetLevel
+        });
         if (bounty) this.activeQuests.push(bounty);
 
         // ── Exploration quest (lore / communion / inscription / retrieval) ─
@@ -253,9 +475,34 @@ export function QuestManager() {
             ? crewClasses[Math.floor(Math.random() * crewClasses.length)]
             : CLASS_TYPES[Math.floor(Math.random() * CLASS_TYPES.length)];
 
-        const itemKeys = inventoryManager ? Object.keys(inventoryManager.allItems || {}) : [];
-        const randomItemKey = itemKeys.length ? itemKeys[Math.floor(Math.random() * itemKeys.length)] : null;
-        const itemName = (randomItemKey && inventoryManager.allItems[randomItemKey]?.name) || 'lost relic';
+        // Select an item actually present on a tile in the dungeon
+        let chosenItemKey = null;
+        let itemName = 'lost relic';
+
+        if (exploTmpl.type === 'item_retrieval') {
+            if (dungeonItems.length > 0) {
+                const chosenItem = dungeonItems[Math.floor(Math.random() * dungeonItems.length)];
+                chosenItemKey = chosenItem.key;
+                itemName = chosenItem.name;
+            } else if (inventoryManager && inventoryManager.allItems) {
+                const allItemKeys = Object.keys(inventoryManager.allItems);
+                if (allItemKeys.length) {
+                    chosenItemKey = allItemKeys[Math.floor(Math.random() * allItemKeys.length)];
+                    itemName = inventoryManager.allItems[chosenItemKey]?.name || chosenItemKey.replace(/_/g, ' ');
+                }
+            } else {
+                chosenItemKey = 'woodcutters_axe';
+                itemName = "Woodcutter's Axe";
+            }
+
+            // Guarantee that the required item for item retrieval is actually placed in the dungeon
+            if (chosenItemKey && dungeon) {
+                const itemAlreadyInDungeon = dungeonItems.some(i => i.key === chosenItemKey);
+                if (!itemAlreadyInDungeon) {
+                    this._placeItemInDungeon(dungeon, chosenItemKey, inventoryManager);
+                }
+            }
+        }
 
         // Scale exploration target count dynamically
         let exploCount = exploTmpl.progressTarget;
@@ -272,6 +519,7 @@ export function QuestManager() {
             domain: LORE_DOMAINS[Math.floor(Math.random() * LORE_DOMAINS.length)],
             class: chosenClass,
             item: itemName,
+            itemKey: chosenItemKey,
             count: exploCount,
         };
         const explo = this._makeFromTemplate(exploTmpl, exploCtx);
@@ -322,6 +570,35 @@ export function QuestManager() {
             if (q.type === type && !q.completed) {
                 q.progress = Math.min(q.progress + amount, q.progressTarget);
                 if (q.progress >= q.progressTarget) this.completeQuest(q.id);
+            }
+        });
+    };
+
+    /**
+     * Updates progress on bounty quests specifically when a monster is defeated.
+     * Matches generic 'enemies' or specific monster name/key.
+     */
+    this.updateProgressForMonsterDefeat = (monsterObj) => {
+        if (!monsterObj) return;
+        const monsterName = (monsterObj.name || monsterObj.type || monsterObj.key || '').toLowerCase().replace(/_/g, ' ');
+        const monsterKey = (monsterObj.key || monsterObj.type || '').toLowerCase();
+        const monsterSubtype = (monsterObj.subtype || '').toLowerCase();
+
+        this.activeQuests.forEach(q => {
+            if (q.type === 'bounty' && !q.completed) {
+                const targetMonster = (q.context?.monster || '').toLowerCase();
+                const targetKey = (q.context?.monsterKey || '').toLowerCase();
+
+                const isMatch = !targetMonster ||
+                    targetMonster === 'enemies' ||
+                    (targetKey && monsterKey && (targetKey === monsterKey || monsterKey.includes(targetKey) || targetKey === monsterSubtype)) ||
+                    (targetKey && monsterSubtype && (targetKey === monsterSubtype || monsterSubtype.includes(targetKey))) ||
+                    (targetMonster && monsterName && (monsterName.includes(targetMonster) || targetMonster.includes(monsterName)));
+
+                if (isMatch) {
+                    q.progress = Math.min(q.progress + 1, q.progressTarget);
+                    if (q.progress >= q.progressTarget) this.completeQuest(q.id);
+                }
             }
         });
     };
