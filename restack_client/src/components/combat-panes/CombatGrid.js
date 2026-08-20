@@ -11,6 +11,7 @@ import React from 'react';
 import * as images from '../../utils/images';
 import Overlay from '../Overlay';
 import { runesData } from '../../utils/rune-data';
+import WalkerAnimatedUnit from '../WalkerAnimatedUnit';
 
 
 const TILE_SIZE = 100;
@@ -1626,7 +1627,7 @@ export default function CombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: `url("${resolvePortrait(
+                            backgroundImage: (fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') ? 'none' : `url("${resolvePortrait(
                                 (fighter.type === 'archaic_familiar' && activeAnimations.some(a => a.sourceUnitId === fighter.id))
                                 ? 'stone_familiar_glowing'
                                 : (fighter.portrait || fighter.type || fighter.class || 'soldier')
@@ -1655,7 +1656,6 @@ export default function CombatGrid(props) {
                                             ? 'BulgePortrait var(--portrait-animation-duration, 420ms) var(--portrait-animation-timing, cubic-bezier(.2,.8,.2,1)) forwards'
                                             : undefined))),
                         }}
-
                         onClick={(e) => {
                             // Shift+click is handled by onMouseDown; block normal selection when shift is held
                             if (e.shiftKey) return;
@@ -1698,6 +1698,9 @@ export default function CombatGrid(props) {
                             }
                         }}
                     >
+                        {(fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') && (
+                            <WalkerAnimatedUnit isMoving={true} />
+                        )}
                         {fighter.type === 'wizard' && (
                             <div
                                 className="wizard-eyes-glow-overlay"
@@ -2541,66 +2544,70 @@ export default function CombatGrid(props) {
                         transition: typeof unit.opacityTransition === 'string' ? unit.opacityTransition : 'opacity 0.25s ease-in-out'
                     }}
                 >
-                    <div
-                        className={portraitClasses}
-                        style={{
-                            backgroundImage: (() => {
-                                const url = getCombatantPortrait(unit, greetingInProcess, activeAnimations);
-                                if (!url) {
-                                    console.warn(`[PvP Diagnostic] renderMonsterUnit: unit id="${unit.id}" name="${unit.name}" has empty portrait URL`, unit);
-                                    return 'none';
-                                }
-                                return `url("${url}")`;
-                            })(),
-                            backgroundSize: undefined,
-                            backgroundPosition: undefined,
-                            filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${unit.petrified || liveMonster.petrified ? 'grayscale(1) contrast(1.4) brightness(0.75)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),
-                            zIndex: isMinion ? 2 : 1,
-                            position: 'relative',
-                            width: '100%',
-                            height: '100%',
-                            transform: showEnlarged
-                                ? `scale(1.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)`
-                                : ((isLarge || isHuge)
-                                    ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px) ${(greetingInProcess && !props.isMobileLandscape && !isDead) ? 'scale(1.2)' : ''}`.trim() || 'none'
-                                    : (unit.isUpsideDown 
-                                        ? 'rotate(180deg)' 
-                                        : (unit.type === 'spider_minion' ? `scale(0.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)` : undefined))),
-                            transformOrigin: showEnlarged ? 'right center' : 'bottom',
-                            boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
-                            borderRadius: '0',
-                            transition: 'filter 0.25s ease-in-out, transform 0.5s ease-in-out, transform-origin 0.5s ease-in-out',
-                            maskImage: unit.type === 'darkness_sphere' ? 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 72%)' : undefined,
-                            WebkitMaskImage: unit.type === 'darkness_sphere' ? 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 72%)' : undefined,
-                            animation: unit.isSinisterReflection
-                                ? 'sinisterPulse 1.5s ease-in-out infinite alternate'
-                                : (unit.type === 'darkness_sphere'
-                                    ? 'sphereOfDarknessFadeIn 1.5s cubic-bezier(0.19, 1, 0.22, 1) forwards'
-                                    : ((unit.stunned && !isAsleepMonster && !isDead)
-                                        ? 'stunWobble 0.6s ease-in-out infinite'
-                                        : ((unit.wounded && !isDead)
-                                            ? 'BulgePortrait var(--portrait-animation-duration, 420ms) var(--portrait-animation-timing, cubic-bezier(.2,.8,.2,1)) forwards'
-                                            : undefined)))
-                        }}
-                        onAnimationEnd={e => {
-                            if (isDead && e.animationName && e.animationName.includes('meltDownDeath') && showDeathAnimation[unit.id]) {
-                                setFullyDead(prev => ({ ...prev, [unit.id]: true }));
-                                setShowDeathAnimation(prev => ({ ...prev, [unit.id]: false }));
-                            }
-                            if (e.animationName && e.animationName.includes('bifurcateShrink')) {
-                                setFullyDead(prev => ({ ...prev, [unit.id]: true }));
-                            }
-                        }}
-                    >
-                        {unit.isLord && unit.lordBadge && (
-                            <div 
-                                className="lord-badge"
+                    {(() => {
+                        const isWalkerUnit = unit.type === 'walker' || unit.key === 'walker' || (unit.name && String(unit.name).toLowerCase().includes('walker'));
+                        return (
+                            <div
+                                className={portraitClasses}
                                 style={{
-                                    backgroundImage: `url("${resolvePortrait(`${unit.lordBadge}_badge`)}")`
+                                    backgroundImage: isWalkerUnit ? 'none' : (() => {
+                                        const url = getCombatantPortrait(unit, greetingInProcess, activeAnimations);
+                                        if (!url) {
+                                            console.warn(`[PvP Diagnostic] renderMonsterUnit: unit id="${unit.id}" name="${unit.name}" has empty portrait URL`, unit);
+                                            return 'none';
+                                        }
+                                        return `url("${url}")`;
+                                    })(),
+                                    backgroundSize: undefined,
+                                    backgroundPosition: undefined,
+                                    filter: `${unit.portraitFilter || ''} sepia(${portraitHoveredId === unit.id ? '2' : '0'}) ${liveMonster.frozen ? 'hue-rotate(165deg) saturate(1.35) brightness(1.08) contrast(1.05)' : ''} ${unit.petrified || liveMonster.petrified ? 'grayscale(1) contrast(1.4) brightness(0.75)' : ''} ${meltScales[unit.id] !== undefined ? `url(#melt-effect-${unit.id})` : ''} ${hashmallimFilter}`.trim(),
+                                    zIndex: isMinion ? 2 : 1,
+                                    position: 'relative',
+                                    width: '100%',
+                                    height: '100%',
+                                    transform: showEnlarged
+                                        ? `scale(1.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)`
+                                        : ((isLarge || isHuge)
+                                            ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px) ${(greetingInProcess && !props.isMobileLandscape && !isDead) ? 'scale(1.2)' : ''}`.trim() || 'none'
+                                            : (unit.isUpsideDown 
+                                                ? 'rotate(180deg)' 
+                                                : (unit.type === 'spider_minion' ? `scale(0.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)` : undefined))),
+                                    transformOrigin: showEnlarged ? 'right center' : 'bottom',
+                                    boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
+                                    borderRadius: '0',
+                                    transition: 'filter 0.25s ease-in-out, transform 0.5s ease-in-out, transform-origin 0.5s ease-in-out',
+                                    maskImage: unit.type === 'darkness_sphere' ? 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 72%)' : undefined,
+                                    WebkitMaskImage: unit.type === 'darkness_sphere' ? 'radial-gradient(circle, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 72%)' : undefined,
+                                    animation: unit.isSinisterReflection
+                                        ? 'sinisterPulse 1.5s ease-in-out infinite alternate'
+                                        : (unit.type === 'darkness_sphere'
+                                            ? 'sphereOfDarknessFadeIn 1.5s cubic-bezier(0.19, 1, 0.22, 1) forwards'
+                                            : ((unit.stunned && !isAsleepMonster && !isDead)
+                                                ? 'stunWobble 0.6s ease-in-out infinite'
+                                                : ((unit.wounded && !isDead)
+                                                    ? 'BulgePortrait var(--portrait-animation-duration, 420ms) var(--portrait-animation-timing, cubic-bezier(.2,.8,.2,1)) forwards'
+                                                    : undefined)))
                                 }}
-                            />
-                        )}
-                        {SHOW_MONSTER_IDS ? unit.id : null}
+                                onAnimationEnd={e => {
+                                    if (isDead && e.animationName && e.animationName.includes('meltDownDeath') && showDeathAnimation[unit.id]) {
+                                        setFullyDead(prev => ({ ...prev, [unit.id]: true }));
+                                        setShowDeathAnimation(prev => ({ ...prev, [unit.id]: false }));
+                                    }
+                                    if (e.animationName && e.animationName.includes('bifurcateShrink')) {
+                                        setFullyDead(prev => ({ ...prev, [unit.id]: true }));
+                                    }
+                                }}
+                            >
+                                {isWalkerUnit && <WalkerAnimatedUnit isMoving={true} />}
+                                {unit.isLord && unit.lordBadge && (
+                                    <div 
+                                        className="lord-badge"
+                                        style={{
+                                            backgroundImage: `url("${resolvePortrait(`${unit.lordBadge}_badge`)}")`
+                                        }}
+                                    />
+                                )}
+                                {SHOW_MONSTER_IDS ? unit.id : null}
                         {unit.mimicTargetPortrait && (
                             <div
                                 className="mimicry-overlay-portrait"
@@ -2823,6 +2830,8 @@ export default function CombatGrid(props) {
                             </>
                         )}
                     </div>
+                    )
+                    })()}
                     {liveMonster?.marked && !isDead && (
                         <div style={{
                             position: 'absolute',

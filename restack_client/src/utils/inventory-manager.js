@@ -485,6 +485,14 @@ export function InventoryManager() {
             name: 'master key',
             description: 'Master keys can open almost any mundane lock'
         },
+        automaton: {
+            effect: 'automaton',
+            type: 'item',
+            icon: 'automaton',
+            name: 'automaton',
+            price: 1,
+            description: 'A mechanical construct capable of automating structures.'
+        },
     }
     this.weapons = {
         /* named axes mapped to numbered axe icons */

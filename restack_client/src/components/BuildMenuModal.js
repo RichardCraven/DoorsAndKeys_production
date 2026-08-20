@@ -22,6 +22,17 @@ export const BUILDINGS = [
         description: 'Safe haven for the crew. Prevents Pygmy ambushes on this tile. Replaces any previously placed Hut.',
     },
     {
+        key: 'dream_den',
+        name: 'Dream Den',
+        category: 'earthly',
+        imageKey: 'dream_den',
+        fallbackImageKey: 'dream_den',
+        costs: { wood: 5, stone: 5, slate: 0 },
+        buildTime: 30,
+        tag: 'FUNCTIONAL',
+        description: 'Rest area for resting unit energy. 2x2 structure.',
+    },
+    {
         key: 'outpost',
         name: 'Outpost',
         category: 'earthly',
@@ -34,7 +45,7 @@ export const BUILDINGS = [
     },
     {
         key: 'observer_platform',
-        name: 'Observer Platform',
+        name: 'Observation Platform',
         category: 'earthly',
         imageKey: 'buildable_observer_platform',
         fallbackImageKey: 'observer_platform',

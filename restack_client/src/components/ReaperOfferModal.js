@@ -1,10 +1,18 @@
 import React from 'react';
 import * as images from '../utils/images';
+import { getCurrentDeathEnemy } from '../utils/death-enemies';
 
 export default function ReaperOfferModal({ visible, onAccept }) {
     if (!visible) return null;
 
-    const reaperImg = images.reaper_death_stare?.default || images.reaper_death_stare || images.reaper_soul_harvest?.default || images.reaper_soul_harvest || '';
+    const deathEnemy = getCurrentDeathEnemy();
+    let portraitImg = deathEnemy.portrait;
+    if (typeof portraitImg === 'object' && portraitImg !== null) {
+        portraitImg = portraitImg.default || portraitImg;
+    }
+    if (!portraitImg) {
+        portraitImg = images.the_principalities_portrait?.default || images.the_principalities_portrait || images.reaper_death_stare?.default || images.reaper_death_stare || '';
+    }
 
     return (
         <div
@@ -48,12 +56,12 @@ export default function ReaperOfferModal({ visible, onAccept }) {
                     animation: 'reaperModalFadeIn 0.35s ease-out'
                 }}
             >
-                {/* Reaper Portrait Artwork */}
+                {/* Death Entity Portrait Artwork */}
                 <div
                     style={{
                         position: 'relative',
-                        width: 'clamp(65px, 12vh, 100px)',
-                        height: 'clamp(65px, 12vh, 100px)',
+                        width: 'clamp(75px, 14vh, 120px)',
+                        height: 'clamp(75px, 14vh, 120px)',
                         borderRadius: '50%',
                         border: '2px solid #a855f7',
                         boxShadow: '0 0 25px rgba(168, 85, 247, 0.65), inset 0 0 15px rgba(0,0,0,0.8)',
@@ -63,14 +71,14 @@ export default function ReaperOfferModal({ visible, onAccept }) {
                         flexShrink: 0
                     }}
                 >
-                    {reaperImg ? (
+                    {portraitImg ? (
                         <img
-                            src={reaperImg}
-                            alt="The Reaper"
+                            src={portraitImg}
+                            alt={deathEnemy.name}
                             style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                         />
                     ) : (
-                        <span style={{ fontSize: '40px', lineHeight: '100px' }} role="img" aria-label="reaper skull">💀</span>
+                        <span style={{ fontSize: '40px', lineHeight: '100px' }} role="img" aria-label="skull">💀</span>
                     )}
                 </div>
 
@@ -87,7 +95,7 @@ export default function ReaperOfferModal({ visible, onAccept }) {
                         flexShrink: 0
                     }}
                 >
-                    ⚔ COMBAT DEFEAT ⚔
+                    ⚔ COMBAT DEFEAT — {deathEnemy.classification || 'LESSER ENTITY'} ⚔
                 </div>
 
                 {/* Main Header Title */}
@@ -104,7 +112,7 @@ export default function ReaperOfferModal({ visible, onAccept }) {
                         flexShrink: 0
                     }}
                 >
-                    The Reaper Claims Your Souls
+                    {deathEnemy.name} Claims Your Souls
                 </h2>
 
                 {/* Narrative Lore Text */}
@@ -123,10 +131,10 @@ export default function ReaperOfferModal({ visible, onAccept }) {
                     }}
                 >
                     <p style={{ margin: '0 0 10px 0' }}>
-                        Your crew has fallen in combat. As the mist settles, the Grim Reaper steps forth from the dark void, scythe resting against cold iron.
+                        {deathEnemy.loreText}
                     </p>
                     <p style={{ margin: 0, fontStyle: 'italic', color: '#f3e8ff' }}>
-                        &ldquo;Your mortals&apos; journey ends here... unless you dare wager your collective souls in a game of cards. Defeat me, and your crew shall draw breath once more.&rdquo;
+                        {deathEnemy.quote}
                     </p>
                 </div>
 
@@ -164,7 +172,7 @@ export default function ReaperOfferModal({ visible, onAccept }) {
                         e.currentTarget.style.transform = 'scale(0.98)';
                     }}
                 >
-                    ⚔ Wager Your Souls 🃏
+                    ⚔ Wager Your Souls Against {deathEnemy.name} 🃏
                 </button>
             </div>
         </div>

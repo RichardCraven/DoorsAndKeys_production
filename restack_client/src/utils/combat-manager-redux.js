@@ -5448,24 +5448,44 @@ export function CombatManagerRedux() {
                     });
                 });
                 
-                let score = minEnemyDist * 20; // Heavy weight on keeping distance
+                // Favor staying away from the fight, but cap the distance multiplier 
+                // so he doesn't just camp in a corner uselessly.
+                let score = 0;
+                if (minEnemyDist > 4) {
+                    score = (4 * 20) + ((minEnemyDist - 4) * 2); 
+                } else {
+                    score = minEnemyDist * 20;
+                }
                 
                 // Backline and corner bonuses
                 if (x === backlineX) {
                     score += 15;
                     if (y === 0 || y === MAX_LANES - 1) {
-                        score += 25; // Extra bonus for corner safe spots
+                        score += 15; // Modest bonus for corner safe spots (reduced to prevent over-camping)
                     }
                 }
                 
                 // Behind allies bonus (especially beefy ones)
                 allies.forEach(a => {
                     const allyTiles = (Array.isArray(a.occupiedCoords) && a.occupiedCoords.length > 0) ? a.occupiedCoords : [a.coordinates];
+                    
+                    // Bonus for staying behind allies
                     const isAllyInFront = allyTiles.some(tile => tile && (!unit.isMonster ? tile.x >= x : tile.x <= x));
                     if (isAllyInFront) {
                         const beefiness = a.hp || 10;
                         const sameLane = allyTiles.some(tile => tile && tile.y === y);
                         score += sameLane ? (beefiness * 0.4) : (beefiness * 0.15);
+                    }
+
+                    // Dynamically move closer to heal/support injured summons
+                    if (a.isMinion) {
+                        const d = Math.abs(x - a.coordinates.x) + Math.abs(y - a.coordinates.y);
+                        const isInjured = a.hp < (a.starting_hp || a.stats?.hp || 10);
+                        if (isInjured && d <= 2) {
+                            score += 35; // Move closer in so he can heal his summons
+                        } else if (d <= 4) {
+                            score += 15; // Stay within range for duplicates/support
+                        }
                     }
                 });
                 

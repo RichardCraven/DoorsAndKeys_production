@@ -158,6 +158,7 @@ class MapMakerPage extends React.Component {
       optionClickedIdx: null,
       pinnedOption: null,
       mouseDown: false,
+      lastWallBreakerTileId: null,
       // Inscription placement state
       inscriptionDragStartId: null,
       showInscriptionModal: false,
@@ -885,6 +886,18 @@ class MapMakerPage extends React.Component {
     return [anchorTileId, anchorTileId + 1, anchorTileId + 15, anchorTileId + 16];
   }
 
+  is2x2FootprintPinnedOption = (pinnedOption) => {
+    if (!pinnedOption) return false;
+    if (pinnedOption.type === 'vendor-tile') return true;
+    if (pinnedOption.type === 'building-tile') {
+      const buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
+      if (buildingOption && (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort' || buildingOption.isMultiTile)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   getContainsType = (contains) => {
     if (!contains) return null;
     if (typeof contains === 'object') return contains.type || null;
@@ -957,19 +970,24 @@ class MapMakerPage extends React.Component {
     }
 
     const delta = toTileId - fromTileId;
+    const fromRow = Math.floor(fromTileId / 15);
+    const toRow = Math.floor(toTileId / 15);
+    const fromCol = fromTileId % 15;
+    const toCol = toTileId % 15;
+
     let fromSide = null;
     let toSide = null;
 
-    if (delta === 1) {
+    if (delta === 1 && fromRow === toRow) {
       fromSide = 'right';
       toSide = 'left';
-    } else if (delta === -1) {
+    } else if (delta === -1 && fromRow === toRow) {
       fromSide = 'left';
       toSide = 'right';
-    } else if (delta === 15) {
+    } else if (delta === 15 && fromCol === toCol) {
       fromSide = 'bottom';
       toSide = 'top';
-    } else if (delta === -15) {
+    } else if (delta === -15 && fromCol === toCol) {
       fromSide = 'top';
       toSide = 'bottom';
     } else {
@@ -1242,7 +1260,10 @@ class MapMakerPage extends React.Component {
       let tile = this.state.tiles[id];
       let pinned = pinnedPaletteTile;
       if (pinnedPassageTool?.key === 'wall_breaker') {
-        const arr = this.breakPassageWall([...this.state.tiles], this.state.hoveredTileIdx, tile.id);
+        const fromId = (this.state.lastWallBreakerTileId !== null && this.state.lastWallBreakerTileId !== undefined)
+          ? this.state.lastWallBreakerTileId
+          : this.state.hoveredTileIdx;
+        const arr = this.breakPassageWall([...this.state.tiles], fromId, tile.id);
         const updatedLoadedBoard = this.state.loadedBoard ? {
           ...this.state.loadedBoard,
           tiles: arr
@@ -1250,7 +1271,10 @@ class MapMakerPage extends React.Component {
         this.setState({
           tiles: arr,
           loadedBoard: updatedLoadedBoard,
-          hoveredTileIdx: tile.id
+          hoveredTileIdx: tile.id,
+          lastWallBreakerTileId: tile.id,
+          dungeonHasUnsavedChanges: true,
+          boardHasUnsavedChanges: true
         });
         return;
       }
@@ -1281,12 +1305,12 @@ class MapMakerPage extends React.Component {
           hoveredTileFootprint: null
         })
       } else {
-        const pinnedIsVendor = this.state.pinnedOption && this.state.pinnedOption.type === 'vendor-tile';
-        const vendorFootprint = pinnedIsVendor ? this.getVendorFootprintTileIds(id) : null;
+        const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
+        const multiTileFootprint = isMultiTile ? this.getVendorFootprintTileIds(id) : null;
         this.setState({
           previousHoveredTileIdx: this.state.hoveredTileIdx !== id ? this.state.hoveredTileIdx : this.state.previousHoveredTileIdx,
           hoveredTileIdx: id,
-          hoveredTileFootprint: vendorFootprint
+          hoveredTileFootprint: multiTileFootprint
         })
       }
     }
@@ -1297,7 +1321,7 @@ class MapMakerPage extends React.Component {
   }
   mouseUpHandler = (e) => {
     const prevMouseDown = this.state.mouseDown;
-    this.setState({ mouseDown: false });
+    this.setState({ mouseDown: false, lastWallBreakerTileId: null });
 
     // If inscription tool is pinned and we just released, check if we can place one
     const pinnedOption = this.state.pinnedOption;
@@ -2132,8 +2156,9 @@ class MapMakerPage extends React.Component {
         : null;
 
       if (pinnedPassageTool?.key === 'wall_breaker') {
-        if (this.state.previousHoveredTileIdx !== null && this.state.previousHoveredTileIdx !== undefined) {
-          const arr = this.breakPassageWall([...this.state.tiles], this.state.previousHoveredTileIdx, tile.id);
+        const fromId = this.state.lastWallBreakerTileId;
+        if (fromId !== null && fromId !== undefined && fromId !== tile.id) {
+          const arr = this.breakPassageWall([...this.state.tiles], fromId, tile.id);
           const updatedLoadedBoard = this.state.loadedBoard ? {
             ...this.state.loadedBoard,
             tiles: arr
@@ -2142,8 +2167,14 @@ class MapMakerPage extends React.Component {
             tiles: arr,
             loadedBoard: updatedLoadedBoard,
             hoveredTileIdx: tile.id,
+            lastWallBreakerTileId: tile.id,
             dungeonHasUnsavedChanges: true,
             boardHasUnsavedChanges: true
+          });
+        } else {
+          this.setState({
+            hoveredTileIdx: tile.id,
+            lastWallBreakerTileId: tile.id
           });
         }
         return;
@@ -2208,11 +2239,11 @@ class MapMakerPage extends React.Component {
     }
   }
   setHover = (id) => {
-    const pinnedIsVendor = this.state.pinnedOption && this.state.pinnedOption.type === 'vendor-tile';
-    const vendorFootprint = (id !== null && id !== undefined && pinnedIsVendor) ? this.getVendorFootprintTileIds(id) : null;
+    const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
+    const multiTileFootprint = (id !== null && id !== undefined && isMultiTile) ? this.getVendorFootprintTileIds(id) : null;
     this.setState({
       hoveredTileIdx: id,
-      hoveredTileFootprint: vendorFootprint
+      hoveredTileFootprint: multiTileFootprint
     })
   }
   setPaletteHover = (id) => {
@@ -5407,19 +5438,20 @@ class MapMakerPage extends React.Component {
     }
   }
 
-  restoreDungeonFromBackup = async () => {
+  restoreDungeonFromBackup = () => {
+    const dungeon = this.state.loadedDungeon;
+    if (!dungeon) return;
+    this.setState({
+      showModal: true,
+      modalType: 'confirm restore dungeon'
+    });
+  }
+
+  executeRestoreDungeonFromBackup = async () => {
+    this.closeModal();
     const dungeon = this.state.loadedDungeon;
     if (!dungeon) return;
     const identifier = dungeon.id || dungeon._id || dungeon.name;
-    const formattedDate = this.state.backupTimestamp
-      ? new Date(this.state.backupTimestamp).toLocaleString()
-      : 'the latest stored backup';
-
-    const confirmRestore = window.confirm(
-      `🔄 RESTORE FROM BACKUP:\n\nAre you sure you want to restore dungeon "${dungeon.name}" from the stored backup snapshot created on ${formattedDate}?\n\nAny unsaved changes will be overwritten.`
-    );
-
-    if (!confirmRestore) return;
 
     try {
       const res = await restoreDungeonBackupRequest(identifier);
@@ -5432,11 +5464,11 @@ class MapMakerPage extends React.Component {
         await this.addDungeonPlanesAndBoardsToState(restored);
         this.toast(`Dungeon "${dungeon.name}" Restored from Backup!`);
       } else {
-        alert('Failed to restore dungeon from backup.');
+        this.toast('Failed to restore dungeon from backup.', true);
       }
     } catch (err) {
       console.error('Failed to restore dungeon:', err);
-      alert('Error restoring dungeon from backup.');
+      this.toast('Error restoring dungeon from backup.', true);
     }
   }
 
@@ -7893,6 +7925,7 @@ class MapMakerPage extends React.Component {
             {this.state.modalType === 'rename board' && <CModalTitle>Rename this board</CModalTitle>}
             {this.state.modalType === 'create sync planes' && <CModalTitle>Establish planes for Level {this.state.syncModalLevelName}</CModalTitle>}
                         {this.state.modalType === 'delete dungeon level' && <CModalTitle>Delete Level</CModalTitle>}
+            {this.state.modalType === 'confirm restore dungeon' && <CModalTitle>Restore From Backup</CModalTitle>}
           </CModalHeader>
           <CModalBody>
              {(this.state.modalType === 'name dungeon' || this.state.modalType === 'rename dungeon') && <input ref={this.state.dungeonNameInput} className="dungeonname-input" type="text" defaultValue={this.state.loadedDungeon?.name || ''} placeholder={this.state.loadedDungeon?.name || ''} />}
@@ -7967,6 +8000,19 @@ class MapMakerPage extends React.Component {
                 <span style={{ color: '#ff4d4f', fontSize: '14px', fontWeight: 'bold' }}>This action will permanently delete the level and all associated planes and boards.</span>
               </div>
             )}
+            {this.state.modalType === 'confirm restore dungeon' && (() => {
+              const dungeonName = this.state.loadedDungeon?.name;
+              const formattedDate = this.state.backupTimestamp
+                ? new Date(this.state.backupTimestamp).toLocaleString()
+                : 'the latest stored backup';
+              return (
+                <div style={{ padding: '20px', color: '#fff', fontSize: '16px', textAlign: 'center' }}>
+                  Are you sure you want to restore dungeon "{dungeonName}" from the stored backup snapshot created on {formattedDate}?
+                  <br /><br />
+                  <span style={{ color: '#ff4d4f', fontSize: '14px', fontWeight: 'bold' }}>Any unsaved changes will be overwritten.</span>
+                </div>
+              );
+            })()}
             {(this.state.modalType === 'name board' || this.state.modalType === 'rename board') && (() => {
               const info = this.getBoardFolderInfo(this.state.loadedBoard);
               return (
@@ -8214,6 +8260,11 @@ class MapMakerPage extends React.Component {
               <React.Fragment>
                 <CButton color="secondary" onClick={() => this.setState({ showModal: false, levelToDelete: null })}>Cancel</CButton>
                 <CButton color="danger" onClick={this.executeDeleteDungeonLevel}>Delete Level</CButton>
+              </React.Fragment>
+            ) : this.state.modalType === 'confirm restore dungeon' ? (
+              <React.Fragment>
+                <CButton color="secondary" onClick={() => this.closeModal()}>Cancel</CButton>
+                <CButton color="primary" onClick={this.executeRestoreDungeonFromBackup}>Restore from Backup</CButton>
               </React.Fragment>
             ) : (
               <React.Fragment>

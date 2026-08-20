@@ -134,3 +134,57 @@ img[src*="burst_shot"], [style*="burst_shot"] {
     50% { transform: scale(2.0); filter: drop-shadow(0 0 12px rgba(229, 181, 79, 0.9)); }
     100% { transform: scale(1.0); filter: drop-shadow(0 0 2px rgba(229, 181, 79, 0.4)); }
 }
+
+/* Walker Leg Swivel & Mechanical Movement Animations */
+.walker-animated-container.is-walking .leg-fl {
+  animation: walkerLegSwivelFL 0.5s ease-in-out infinite alternate;
+}
+.walker-animated-container.is-walking .leg-fr {
+  animation: walkerLegSwivelFR 0.5s ease-in-out infinite alternate;
+}
+.walker-animated-container.is-walking .leg-ml {
+  animation: walkerLegSwivelML 0.5s ease-in-out infinite alternate;
+}
+.walker-animated-container.is-walking .leg-mr {
+  animation: walkerLegSwivelMR 0.5s ease-in-out infinite alternate;
+}
+.walker-animated-container.is-walking .leg-bl {
+  animation: walkerLegSwivelBL 0.5s ease-in-out infinite alternate;
+}
+.walker-animated-container.is-walking .leg-br {
+  animation: walkerLegSwivelBR 0.5s ease-in-out infinite alternate;
+}
+.walker-animated-container.is-walking .walker-chassis {
+  animation: walkerBodyBounce 0.5s ease-in-out infinite alternate;
+}
+
+@keyframes walkerLegSwivelFL {
+  0% { transform: rotate(-12deg); }
+  100% { transform: rotate(14deg); }
+}
+@keyframes walkerLegSwivelFR {
+  0% { transform: rotate(14deg); }
+  100% { transform: rotate(-12deg); }
+}
+@keyframes walkerLegSwivelML {
+  0% { transform: rotate(10deg); }
+  100% { transform: rotate(-10deg); }
+}
+@keyframes walkerLegSwivelMR {
+  0% { transform: rotate(-10deg); }
+  100% { transform: rotate(10deg); }
+}
+@keyframes walkerLegSwivelBL {
+  0% { transform: rotate(-8deg); }
+  100% { transform: rotate(10deg); }
+}
+@keyframes walkerLegSwivelBR {
+  0% { transform: rotate(10deg); }
+  100% { transform: rotate(-8deg); }
+}
+@keyframes walkerBodyBounce {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-2px); }
+  100% { transform: translateY(0px); }
+}
+

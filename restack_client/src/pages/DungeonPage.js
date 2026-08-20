@@ -64,12 +64,71 @@ import CharacterProfileModal from '../components/CharacterProfileModal';
 import CodexModal from '../components/CodexModal';
 import TrophiesModal from '../components/TrophiesModal';
 import ReaperOfferModal from '../components/ReaperOfferModal';
+import { getCurrentDeathEnemy, advanceDeathEnemyIndex } from '../utils/death-enemies';
 import AssemblyAnimation from '../components/assembly-animation';
 import '../styles/narrative-overlay.scss'
 import MapRedux from '../components/MapRedux';
 import '../styles/map-redux.scss';
 import { FLAGS } from '../flags';
 import { getAdjustedBuildTime, applyBuildingStaminaPenalty } from '../utils/building-utils';
+
+const MonolithCountdownTimer = ({ activatedAt }) => {
+    const [timeLeft, setTimeLeft] = React.useState('12:00:00');
+    const [currentRadius, setCurrentRadius] = React.useState(1);
+
+    React.useEffect(() => {
+        const update = () => {
+            const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+            const now = Date.now();
+            const start = (typeof activatedAt === 'number' && activatedAt > 0) ? activatedAt : now;
+            const elapsed = Math.max(0, now - start);
+            const msUntilNext = TWELVE_HOURS_MS - (elapsed % TWELVE_HOURS_MS);
+
+            const hours = Math.floor(msUntilNext / (1000 * 60 * 60));
+            const mins = Math.floor((msUntilNext % (1000 * 60 * 60)) / (1000 * 60));
+            const secs = Math.floor((msUntilNext % (1000 * 60)) / 1000);
+
+            const formatted = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            const radius = Math.min(16, 1 + Math.floor(elapsed / TWELVE_HOURS_MS));
+
+            setTimeLeft(formatted);
+            setCurrentRadius(radius);
+        };
+
+        update();
+        const interval = setInterval(update, 1000);
+        return () => clearInterval(interval);
+    }, [activatedAt]);
+
+    return (
+        <div style={{
+            marginTop: '16px',
+            padding: '14px 20px',
+            background: 'linear-gradient(135deg, rgba(20, 15, 10, 0.9) 0%, rgba(10, 8, 6, 0.95) 100%)',
+            border: '1px solid rgba(229, 181, 79, 0.4)',
+            borderRadius: '12px',
+            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6), inset 0 0 15px rgba(229, 181, 79, 0.1)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '6px'
+        }}>
+            <div style={{ fontSize: '11px', color: 'rgba(240, 237, 229, 0.7)', textTransform: 'uppercase', letterSpacing: '1.5px', fontFamily: "'Cinzel', serif" }}>
+                NEXT DOMAIN EXPANSION ({currentRadius}-TILE RADIUS ACTIVE)
+            </div>
+            <div style={{
+                fontSize: '24px',
+                fontWeight: '800',
+                fontFamily: "'Cinzel', 'Courier New', monospace",
+                color: '#f9b115',
+                letterSpacing: '3px',
+                textShadow: '0 0 12px rgba(249, 177, 21, 0.6)'
+            }}>
+                {timeLeft}
+            </div>
+        </div>
+    );
+};
 
 const getPstDate = () => {
     const formatter = new Intl.DateTimeFormat('en-US', {
@@ -305,6 +364,11 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
             stock.push({ ...inventoryManager.allItems['minor_health_potion'], price: 20 });
             stock.push({ ...inventoryManager.allItems['major_health_potion'], price: 50 });
             stock.push({ ...inventoryManager.allItems["minor_key"], price: 100 });
+            if (inventoryManager.allItems['automaton']) {
+                stock.push({ ...inventoryManager.allItems['automaton'], _im_key: 'automaton', price: 1 });
+            } else {
+                stock.push({ name: 'automaton', icon: 'automaton', type: 'item', _im_key: 'automaton', price: 1, description: 'A mechanical construct capable of automating structures.' });
+            }
 
             const weaponKeys = Object.keys(inventoryManager.weapons || {});
             for (let i = 0; i < 2; i++) {
@@ -822,21 +886,39 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                             <h3 className="panel-title">Your Unequipped Items</h3>
                             <div className="item-list scroll-container">
                                 {(() => {
-                                    const sellableItems = (inventoryManager?.inventory || []).filter(item => item && item.equippedBy == null);
+                                    const sellableItems = (inventoryManager?.inventory || []).map((item, idx) => ({ item, originalIndex: idx })).filter(obj => obj.item && obj.item.equippedBy == null);
                                     if (sellableItems.length === 0) {
                                         return <div className="empty-message">No sellable items in inventory.</div>;
                                     }
-                                    return sellableItems.map((item, idx) => {
-                                        const originalIndex = inventoryManager.inventory.indexOf(item);
+                                    
+                                    const groupedItems = [];
+                                    const groupMap = {};
+                                    sellableItems.forEach(obj => {
+                                        const key = `${obj.item.name}_${obj.item.description || obj.item.type}`;
+                                        if (!groupMap[key]) {
+                                            groupMap[key] = {
+                                                item: obj.item,
+                                                indices: [obj.originalIndex],
+                                                count: 1
+                                            };
+                                            groupedItems.push(groupMap[key]);
+                                        } else {
+                                            groupMap[key].indices.push(obj.originalIndex);
+                                            groupMap[key].count++;
+                                        }
+                                    });
+
+                                    return groupedItems.map((group, idx) => {
+                                        const { item, indices, count } = group;
                                         const sellPrice = getItemSellPrice(item);
                                         return (
                                             <div key={idx} className="item-card">
                                                 {renderItemIcon(item.icon)}
                                                 <div className="item-details">
-                                                    <div className="item-name">{item.name}</div>
+                                                    <div className="item-name">{item.name}{count > 1 ? ` (x${count})` : ''}</div>
                                                     <div className="item-description">{item.description || item.type}</div>
                                                 </div>
-                                                <button className="sell-btn" onClick={() => handleSellItem(item, originalIndex)}>
+                                                <button className="sell-btn" onClick={() => handleSellItem(item, indices[0])}>
                                                     <span>Sell</span>
                                                     <span className="price-tag"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> {sellPrice}</span>
                                                 </button>
@@ -5000,6 +5082,14 @@ class DungeonPage extends React.Component {
 
             const originPixel = this.getPixelForIndex(originIndex);
             const destPixel = this.getPixelForIndex(destIndex);
+            
+            let playerGlideVector = null;
+            if (originPixel && destPixel) {
+                playerGlideVector = {
+                    x: originPixel.left - destPixel.left,
+                    y: originPixel.top - destPixel.top
+                };
+            }
 
             // Choose image for floating player (camp or avatar)
             try { getMeta(); } catch (e) { /* ignore */ }
@@ -5045,12 +5135,22 @@ class DungeonPage extends React.Component {
                 };
                 const sides = sideMap[direction];
 
+                const isWallBlocked = (destIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, destIndex, { ignoreBuilding: true })) ||
+                    (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
+                    (sides?.opp && bm.hasSolidBorder(destTileObj, sides.opp));
+
                 const selfInscription = sides?.self && playerTileObj?.inscriptions?.[sides.self];
                 const oppInscription = sides?.opp && destTileObj?.inscriptions?.[sides.opp];
                 const anyInscription = oppInscription || selfInscription;
 
-                if (this.isBuildingOrGeneratorTile(destTileObj) || this.isBuildingOrGeneratorTile(playerTileObj)) {
-                    const targetBuilding = this.isBuildingOrGeneratorTile(destTileObj) ? destTileObj : playerTileObj;
+                let targetBuilding = null;
+                if (!isWallBlocked && this.isBuildingOrGeneratorTile(destTileObj)) {
+                    targetBuilding = destTileObj;
+                } else if (this.isBuildingOrGeneratorTile(playerTileObj)) {
+                    targetBuilding = playerTileObj;
+                }
+
+                if (targetBuilding) {
                     const isAlreadyIlluminated = (this.state.illuminatedTileId === targetBuilding.id || targetBuilding.illuminated);
 
                     this._isMoving = false;
@@ -5216,6 +5316,8 @@ class DungeonPage extends React.Component {
                     overlayTiles: bm.overlayTiles,
                     playerFloatVisible: true,
                     playerFloatStyle: floatStyle || this.state.playerFloatStyle,
+                    isPlayerGliding: !!playerGlideVector,
+                    playerGlideVector: playerGlideVector,
                     playerAnimating: false,
                     animOriginIndex: null,
                     animDestIndex: null,
@@ -5236,6 +5338,13 @@ class DungeonPage extends React.Component {
                     this.checkMobileViewportCentering(bm.playerTile.location);
                     this.sendLocationSocketUpdate(bm.playerTile.location);
                     this.recordBreadcrumb();
+
+                    if (this.playerGlideTimeout) clearTimeout(this.playerGlideTimeout);
+                    this.playerGlideTimeout = setTimeout(() => {
+                        if (this._isMounted && this.state.isPlayerGliding) {
+                            this.setState({ isPlayerGliding: false, playerGlideVector: null });
+                        }
+                    }, 150);
 
                     if (ambushTriggered) {
                         this.ambushTimeout = setTimeout(() => {
@@ -5994,10 +6103,10 @@ class DungeonPage extends React.Component {
                 if (!raw) {
                     const row = Math.floor(tId / 15), col = tId % 15;
                     const neighbors = [];
-                    if (row > 0) neighbors.push((row - 1) * 15 + col);
-                    if (row < 14) neighbors.push((row + 1) * 15 + col);
-                    if (col > 0) neighbors.push(row * 15 + (col - 1));
-                    if (col < 14) neighbors.push(row * 15 + (col + 1));
+                    if (row > 0 && !bm.isPassageWallBlockingBetween(tId, (row - 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row - 1) * 15 + col);
+                    if (row < 14 && !bm.isPassageWallBlockingBetween(tId, (row + 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row + 1) * 15 + col);
+                    if (col > 0 && !bm.isPassageWallBlockingBetween(tId, row * 15 + (col - 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col - 1));
+                    if (col < 14 && !bm.isPassageWallBlockingBetween(tId, row * 15 + (col + 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col + 1));
                     for (const nId of neighbors) {
                         const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
                         if (nTile) {
@@ -6032,10 +6141,10 @@ class DungeonPage extends React.Component {
                     const row = Math.floor(curr / 15);
                     const col = curr % 15;
                     const neighbors = [];
-                    if (row > 0) neighbors.push((row - 1) * 15 + col);
-                    if (row < 14) neighbors.push((row + 1) * 15 + col);
-                    if (col > 0) neighbors.push(row * 15 + (col - 1));
-                    if (col < 14) neighbors.push(row * 15 + (col + 1));
+                    if (row > 0 && !bm.isPassageWallBlockingBetween(curr, (row - 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row - 1) * 15 + col);
+                    if (row < 14 && !bm.isPassageWallBlockingBetween(curr, (row + 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row + 1) * 15 + col);
+                    if (col > 0 && !bm.isPassageWallBlockingBetween(curr, row * 15 + (col - 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col - 1));
+                    if (col < 14 && !bm.isPassageWallBlockingBetween(curr, row * 15 + (col + 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col + 1));
 
                     for (const n of neighbors) {
                         if (!visited.has(n) && getTileClan(n) === targetClan) {
@@ -6234,6 +6343,18 @@ class DungeonPage extends React.Component {
                                     }
                                     if (nextStep !== fortIdx) {
                                         bm.tiles[nextStep].contains = pygmyData;
+                                        const dRow = Math.floor(pygmyTile.id / 15) - Math.floor(nextStep / 15);
+                                        const dCol = (pygmyTile.id % 15) - (nextStep % 15);
+                                        bm.tiles[nextStep].isGliding = true;
+                                        bm.tiles[nextStep].glideVector = { dRow, dCol };
+                                        setTimeout(() => {
+                                            if (bm.tiles[nextStep]) {
+                                                bm.tiles[nextStep].isGliding = false;
+                                                bm.tiles[nextStep].glideVector = null;
+                                                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                                                if (this && this._isMounted && typeof this.forceUpdate === 'function') this.forceUpdate();
+                                            }
+                                        }, 400);
                                     }
                                 }
                             }
@@ -6376,6 +6497,19 @@ class DungeonPage extends React.Component {
                         bm.currentBoard.tiles[fromTile.id].color = '#6b6057';
                     }
                     toTile.contains = pygmyData;
+                    
+                    const dRow = Math.floor(fromTile.id / 15) - Math.floor(toTile.id / 15);
+                    const dCol = (fromTile.id % 15) - (toTile.id % 15);
+                    toTile.isGliding = true;
+                    toTile.glideVector = { dRow, dCol };
+                    
+                    setTimeout(() => {
+                        toTile.isGliding = false;
+                        toTile.glideVector = null;
+                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                        if (this && this._isMounted && typeof this.forceUpdate === 'function') this.forceUpdate();
+                    }, 400);
+                    
                     currentIdx = nextStepIdx;
 
                     const currentLivePlayerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
@@ -6535,10 +6669,20 @@ class DungeonPage extends React.Component {
     };
 
     handleClosePygmiesAttackPopup = () => {
+        const attackTileIdx = this.state.attackingPygmyTileIdx;
+        const bm = this.props.boardManager;
+        let homeFortTileId = null;
+        if (attackTileIdx !== null && attackTileIdx !== undefined && bm && bm.tiles && bm.tiles[attackTileIdx]) {
+            const pygmyData = bm.tiles[attackTileIdx].contains;
+            if (pygmyData && pygmyData.homeFortTileId !== undefined) {
+                homeFortTileId = pygmyData.homeFortTileId;
+            }
+        }
+
+        let totalDamageDealt = 0;
         try {
             let meta = getMeta() || {};
             const crew = (this.props.crewManager && this.props.crewManager.crew) || meta.crew || [];
-            let totalDamageDealt = 0;
 
             const isGroup = !!this.state.attackingPygmyIsGroup;
             const multiplier = isGroup ? 3 : 1;
@@ -6570,7 +6714,48 @@ class DungeonPage extends React.Component {
             console.error('Error handling Pygmies Attack popup close:', e);
         }
 
-        const attackTileIdx = this.state.attackingPygmyTileIdx;
+        if (totalDamageDealt > 0 && homeFortTileId !== null && bm && bm.tiles && bm.tiles[homeFortTileId]) {
+            const fortTile = bm.tiles[homeFortTileId];
+            if (fortTile && fortTile.contains && (fortTile.contains.subtype === 'earthen_fort' || fortTile.building === 'earthen_fort')) {
+                let currentLevel = fortTile.contains.level || 1;
+                fortTile.contains.ticks = (fortTile.contains.ticks || 0) + 1;
+                if (fortTile.contains.ticks >= 10) {
+                    fortTile.contains.ticks = 0;
+                    fortTile.contains.level = currentLevel + 1;
+                    this.displayMessage(`🔺 An Earthen Fort leveled up to Level ${fortTile.contains.level}!`);
+                }
+                
+                if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[homeFortTileId]) {
+                    bm.currentBoard.tiles[homeFortTileId].contains = { ...fortTile.contains };
+                }
+                
+                // Persist to dungeon
+                const safeMeta = getMeta() || {};
+                if (this.props.user && safeMeta.dungeonId && typeof updateDungeonRequest === 'function') {
+                    setTimeout(async () => {
+                        try {
+                            const res = await loadDungeonRequest(safeMeta.dungeonId);
+                            if (res && res.data && res.data.length > 0) {
+                                let dData = JSON.parse(res.data[0].content);
+                                const lvl = dData.levels.find(l => String(l.id) === String(bm?.currentLevel?.id ?? 0));
+                                if (lvl) {
+                                    const plane = bm?.currentOrientation === 'B' ? lvl.back : lvl.front;
+                                    const mb = plane.miniboards[bm.playerTile?.boardIndex ?? 0];
+                                    if (mb && mb.tiles && mb.tiles[homeFortTileId]) {
+                                        if (!mb.tiles[homeFortTileId].contains) mb.tiles[homeFortTileId].contains = {};
+                                        mb.tiles[homeFortTileId].contains.ticks = fortTile.contains.ticks;
+                                        mb.tiles[homeFortTileId].contains.level = fortTile.contains.level;
+                                        await updateDungeonRequest(res.data[0]._id, dData);
+                                    }
+                                }
+                            }
+                        } catch(e) { console.warn('Failed to sync fort level up', e); }
+                    }, 500);
+                }
+            }
+        }
+
+        // attackTileIdx already declared above
 
         this.setState({
             showPygmiesAttackPopup: false,
@@ -6629,10 +6814,10 @@ class DungeonPage extends React.Component {
                 if (!rawClan) {
                     const rowO = Math.floor(outpost.id / 15), colO = outpost.id % 15;
                     const neighbors = [];
-                    if (rowO > 0) neighbors.push((rowO - 1) * 15 + colO);
-                    if (rowO < 14) neighbors.push((rowO + 1) * 15 + colO);
-                    if (colO > 0) neighbors.push(rowO * 15 + (colO - 1));
-                    if (colO < 14) neighbors.push(rowO * 15 + (colO + 1));
+                    if (rowO > 0 && !bm.isPassageWallBlockingBetween(outpost.id, (rowO - 1) * 15 + colO, { ignoreBuilding: true })) neighbors.push((rowO - 1) * 15 + colO);
+                    if (rowO < 14 && !bm.isPassageWallBlockingBetween(outpost.id, (rowO + 1) * 15 + colO, { ignoreBuilding: true })) neighbors.push((rowO + 1) * 15 + colO);
+                    if (colO > 0 && !bm.isPassageWallBlockingBetween(outpost.id, rowO * 15 + (colO - 1), { ignoreBuilding: true })) neighbors.push(rowO * 15 + (colO - 1));
+                    if (colO < 14 && !bm.isPassageWallBlockingBetween(outpost.id, rowO * 15 + (colO + 1), { ignoreBuilding: true })) neighbors.push(rowO * 15 + (colO + 1));
                     for (const nId of neighbors) {
                         const nTile = bm.tiles[nId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[nId]);
                         if (nTile) {
@@ -10083,7 +10268,7 @@ class DungeonPage extends React.Component {
     establishAnimationCallback = () => {
         this.props.animationManager.establishAnimationCallback(this.renderAnimation)
     }
-    checkItemRetrievalQuests = (itemDisplayName) => {
+    checkItemRetrievalQuests = (itemDisplayName, itemKey) => {
         if (this.props.questManager) {
             // Collector's run progress
             this.props.questManager.updateProgressByType('item_retrieval', 1);
@@ -10092,8 +10277,18 @@ class DungeonPage extends React.Component {
             const activeQuests = this.props.questManager.getActiveQuests() || [];
             const retrievalQuests = activeQuests.filter(q => q.key === 'recover_the_artifact');
             retrievalQuests.forEach(q => {
-                if (q.context && q.context.item && itemDisplayName && itemDisplayName.toLowerCase().includes(q.context.item.toLowerCase())) {
-                    this.props.questManager.updateProgress(q.id, 1);
+                if (q.context) {
+                    const targetItem = (q.context.item || '').toLowerCase();
+                    const targetKey = (q.context.itemKey || '').toLowerCase();
+                    const curName = (itemDisplayName || '').toLowerCase();
+                    const curKey = (itemKey || '').toLowerCase();
+
+                    const isMatch = (targetKey && curKey && (targetKey === curKey || curKey.includes(targetKey))) ||
+                        (targetItem && curName && (curName.includes(targetItem) || targetItem.includes(curName)));
+
+                    if (isMatch) {
+                        this.props.questManager.updateProgress(q.id, 1);
+                    }
                 }
             });
         }
@@ -10123,7 +10318,7 @@ class DungeonPage extends React.Component {
         }
 
         // Progress item retrieval quests
-        this.checkItemRetrievalQuests(itemDisplayName);
+        this.checkItemRetrievalQuests(itemDisplayName, tileContains);
 
         const matrix = Array.isArray(this.state.inventoryHoverMatrix) ? [...this.state.inventoryHoverMatrix] : [];
         this.getCombinedInventory().forEach((e, i) => {
@@ -10168,7 +10363,7 @@ class DungeonPage extends React.Component {
         const itemIconName = itemDefinition?.icon || treasure.item;
 
         // Progress item retrieval quests
-        this.checkItemRetrievalQuests(itemDisplayName);
+        this.checkItemRetrievalQuests(itemDisplayName, treasure.item);
 
         let currencyType = treasure.currency.type;
         let currencyIconKey = 'gold';
@@ -10886,6 +11081,26 @@ class DungeonPage extends React.Component {
         }
     }
     boardTransition = (direction) => {
+        const bm = this.props.boardManager;
+        if (bm && bm.tiles) {
+            try {
+                const meta = getMeta() || {};
+                bm.tiles.forEach(tile => {
+                    if (!tile) return;
+                    const gData = tile.generatorData || (tile.contains && tile.contains.generatorData);
+                    const ct = typeof tile.contains === 'string' ? tile.contains : (tile.contains && tile.contains.type);
+                    const key = (gData && gData.key) || tile.key || tile.type || ct;
+                    if ((key === 'observer_platform' || key === 'observation_platform') && gData && gData.activated && !gData.automated) {
+                        gData.activated = false;
+                        const tileKey = `${bm.currentLevel?.id ?? 0}_${bm.playerTile?.boardIndex ?? 0}_${tile.id}`;
+                        if (meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
+                            delete meta.activatedGenerators[tileKey];
+                        }
+                    }
+                });
+                storeMeta(meta);
+            } catch (e) {}
+        }
         const minimap = this.state.minimap;
         const currentIndex = minimap.findIndex(e => e.active === true);
         let newIndex;
@@ -11730,20 +11945,6 @@ class DungeonPage extends React.Component {
         const now = Date.now();
         this._lastTileClickInfo = { tileIdx: tileIndex, ts: now };
 
-        const targetBuilding = (this.isBuildingOrGeneratorTile(actualTile) ? actualTile : (tileIndex !== null && this.isBuildingOrGeneratorTile(bm.tiles[tileIndex]) ? bm.tiles[tileIndex] : null));
-        if (targetBuilding) {
-            const isAlreadyIlluminated = (this.state.illuminatedTileId === targetBuilding.id || targetBuilding.illuminated);
-            if (isAlreadyIlluminated) {
-                this.clearIlluminatedTile();
-                this.openGeneratorModal(targetBuilding);
-            } else {
-                this.illuminateBuildingTile(targetBuilding);
-            }
-            return;
-        } else {
-            this.clearIlluminatedTile();
-        }
-
         if (manhattanDist === 1) {
             const playerIdx = bm.getIndexFromCoordinates(startCoords);
             const playerTileObj = bm.tiles[playerIdx];
@@ -11756,7 +11957,7 @@ class DungeonPage extends React.Component {
             };
             const sides = sideMap[`${dx},${dy}`];
 
-            const isWallBlocked = (tileIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, tileIndex)) ||
+            const isWallBlocked = (tileIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, tileIndex, { ignoreBuilding: true })) ||
                 (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
                 (sides?.opp && bm.hasSolidBorder(actualTile, sides.opp));
 
@@ -11770,10 +11971,6 @@ class DungeonPage extends React.Component {
                 this._lastWallClickInfo = { tileIdx: tileIndex, ts: now };
 
                 if (isDoubleTap) {
-                    if (this.isBuildingOrGeneratorTile(actualTile)) {
-                        this.openGeneratorModal(actualTile);
-                        return;
-                    }
                     if (this.isGateOrDoorTile(actualTile, tileIndex)) {
                         return;
                     }
@@ -11807,6 +12004,25 @@ class DungeonPage extends React.Component {
                 }
                 return;
             }
+        }
+
+        const targetBuilding = (this.isBuildingOrGeneratorTile(actualTile) ? actualTile : (tileIndex !== null && this.isBuildingOrGeneratorTile(bm.tiles[tileIndex]) ? bm.tiles[tileIndex] : null));
+        if (targetBuilding) {
+            if (manhattanDist === 1) {
+                const isAlreadyIlluminated = (this.state.illuminatedTileId === targetBuilding.id || targetBuilding.illuminated);
+                if (isAlreadyIlluminated) {
+                    this.clearIlluminatedTile();
+                    this.openGeneratorModal(targetBuilding);
+                } else {
+                    this.illuminateBuildingTile(targetBuilding);
+                }
+            } else {
+                this.displayMessage('You cannot interact with buildings unless you are adjacent and there is no wall between you.');
+                this.clearIlluminatedTile();
+            }
+            return;
+        } else {
+            this.clearIlluminatedTile();
         }
 
         // If clicked on the tile the player is already on, toggle avatar radial menu
@@ -13862,6 +14078,9 @@ class DungeonPage extends React.Component {
             // Progress bounty quests
             if (this.props.questManager) {
                 this.props.questManager.updateProgressByType('bounty', 1);
+                if (typeof this.props.questManager.updateProgressForMonsterDefeat === 'function') {
+                    this.props.questManager.updateProgressForMonsterDefeat(this.state.monster);
+                }
             }
 
             if (this.props.boardManager && this.state.monsterBattleTileId && typeof this.state.monsterBattleTileId !== 'string') {
@@ -15556,7 +15775,18 @@ class DungeonPage extends React.Component {
         } else {
             // Failure — shrine not marked used (they can try again later if resolve allows)
             try { if (this.props.boardManager.messaging) this.props.boardManager.messaging('🏛 The communion was broken — the shrine\'s power awaits another attempt.'); } catch (e) { }
-            this.setState({ keysLocked: false, inShrineScreen: false, shrineData: null });
+            
+            let allDead = false;
+            try {
+                const crew = this.props.crewManager?.crew || (getMeta()?.crew || []);
+                allDead = crew.length > 0 && crew.every(c => c && (c.dead || c.hp <= 0));
+            } catch (e) { }
+
+            this.setState({ keysLocked: false, inShrineScreen: false, shrineData: null }, () => {
+                if (allDead) {
+                    this.setState({ isCardScrimmage: false, cardDuelTileId: 'combat_loss', showReaperOfferModal: true, keysLocked: true });
+                }
+            });
         }
     }
 
@@ -15726,7 +15956,7 @@ class DungeonPage extends React.Component {
         }
 
         const generatorKeys = ['larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith'];
-        const buildingKeys = ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'];
+        const buildingKeys = ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction', 'dream_den', 'dream_den_under_construction'];
 
         const hasGenerator = generatorKeys.includes(containsType) || generatorKeys.includes(containsSubtype) || generatorKeys.includes(bldg) || generatorKeys.includes(img) || generatorKeys.some(k => img === 'buildable_' + k);
         const hasBuilding = buildingKeys.includes(containsType) || buildingKeys.includes(containsSubtype) || buildingKeys.includes(bldg) || buildingKeys.includes(img) || buildingKeys.some(k => img === 'buildable_' + k);
@@ -15895,7 +16125,7 @@ class DungeonPage extends React.Component {
             },
             observer_platform: {
                 key: 'observer_platform',
-                name: 'Observer Platform',
+                name: 'Observation Platform',
                 resource: 'Vantage Point',
                 currencyType: null,
                 rate: 0,
@@ -16758,6 +16988,144 @@ class DungeonPage extends React.Component {
         }
     };
 
+    hasAutomatonInInventory = () => {
+        const im = this.props.inventoryManager;
+        if (!im || !Array.isArray(im.inventory)) return false;
+        return im.inventory.some(item => item && (
+            item._im_key === 'automaton' ||
+            item.id === 'automaton' ||
+            (item.name || '').toLowerCase() === 'automaton'
+        ));
+    };
+
+    consumeAutomatonFromInventory = () => {
+        const im = this.props.inventoryManager;
+        if (!im) return false;
+        if (typeof im.removeItemByKey === 'function') {
+            im.removeItemByKey('automaton');
+            im.removeItemByKey('Automaton');
+        } else if (Array.isArray(im.inventory)) {
+            const idx = im.inventory.findIndex(item => item && (
+                item._im_key === 'automaton' ||
+                item.id === 'automaton' ||
+                (item.name || '').toLowerCase() === 'automaton'
+            ));
+            if (idx !== -1) im.inventory.splice(idx, 1);
+        }
+        return true;
+    };
+
+    handleDeployAutomaton = (targetTile) => {
+        const tile = targetTile || this.state.activeGeneratorTile;
+        if (!tile) return;
+        const def = this.getGeneratorDef(tile);
+        if (!def) return;
+
+        if (!this.hasAutomatonInInventory()) {
+            this.displayMessage('❌ You do not have an Automaton in your inventory!');
+            return;
+        }
+
+        this.consumeAutomatonFromInventory();
+
+        const bm = this.props.boardManager;
+        const tileId = tile.id;
+        const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+        const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
+
+        const existingGData = tile.generatorData || (tile.contains && tile.contains.generatorData) || {};
+        const genData = {
+            ...existingGData,
+            activated: true,
+            automated: true,
+            level: existingGData.level || 1,
+            owned: true,
+            ownerId: existingGData.ownerId || currentUserId,
+            ownerSocketId: existingGData.ownerSocketId || mySocketId,
+            ownerName: existingGData.ownerName || (typeof getUserName === 'function' ? getUserName() : 'Explorer'),
+            activatedAt: existingGData.activatedAt || Date.now(),
+            lastCollectedAt: existingGData.lastCollectedAt || Date.now(),
+            accumulated: existingGData.accumulated || 0,
+            key: def.key,
+            resource: def.resource,
+            currencyType: def.currencyType,
+            rate: def.rate,
+            orientation: bm ? bm.currentOrientation : 'F'
+        };
+
+        tile.generatorData = genData;
+
+        if (bm) {
+            if (bm.tiles && bm.tiles[tileId]) {
+                bm.tiles[tileId].generatorData = genData;
+            }
+            if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) {
+                bm.currentBoard.tiles[tileId].generatorData = genData;
+            }
+            if (bm.dungeon && bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
+                try {
+                    const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
+                    if (levelEntry) {
+                        const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
+                        if (targetPlane && targetPlane.miniboards) {
+                            const b = targetPlane.miniboards[bm.playerTile.boardIndex];
+                            if (b && b.tiles && b.tiles[tileId]) {
+                                b.tiles[tileId].generatorData = genData;
+                            }
+                        }
+                    }
+                } catch (e) { }
+            }
+        }
+
+        try {
+            const meta = getMeta() || {};
+            meta.activatedGenerators = meta.activatedGenerators || {};
+            const key = `${bm?.currentLevel?.id ?? 0}_${bm?.playerTile?.boardIndex ?? 0}_${tileId}`;
+            meta.activatedGenerators[key] = genData;
+
+            if (this.props.inventoryManager) {
+                meta.inventory = {
+                    items: this.props.inventoryManager.inventory,
+                    gold: this.props.inventoryManager.gold,
+                    shimmering_dust: this.props.inventoryManager.shimmering_dust,
+                    totems: this.props.inventoryManager.totems,
+                    wood: this.props.inventoryManager.wood,
+                    stone: this.props.inventoryManager.stone,
+                    slate: this.props.inventoryManager.slate,
+                    mushrooms: this.props.inventoryManager.mushrooms,
+                    unstable_chemicals: this.props.inventoryManager.unstable_chemicals,
+                    stable_chemicals: this.props.inventoryManager.stable_chemicals,
+                    crystal: this.props.inventoryManager.crystal
+                };
+            }
+            storeMeta(meta);
+        } catch (e) { }
+
+        if ((def.key === 'observer_platform' || def.key === 'observation_platform') && bm && typeof bm.handleFogOfWar === 'function' && bm.playerTile && bm.playerTile.location) {
+            const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+            if (bm.tiles && bm.tiles[playerIdx]) {
+                bm.handleFogOfWar(bm.tiles[playerIdx]);
+                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+            }
+        }
+
+        this.displayMessage(`🤖 Automaton deployed to ${def.name}!`);
+
+        if (typeof this.props.saveUserData === 'function') {
+            this.props.saveUserData();
+        }
+
+        if (typeof socketHandler !== 'undefined' && socketHandler.sendTileUpdate) {
+            const loc = { levelId: bm?.currentLevel?.id ?? 0, boardIndex: bm?.playerTile?.boardIndex ?? 0, orientation: bm?.currentOrientation || 'F' };
+            socketHandler.sendTileUpdate(tileId, genData, loc);
+        }
+
+        this.setState({
+            activeGeneratorTile: { ...tile }
+        });
+    };
+
     handleActivateGenerator = () => {
         const tile = this.state.activeGeneratorTile;
         if (!tile) return;
@@ -16819,6 +17187,15 @@ class DungeonPage extends React.Component {
             meta.activatedGenerators[key] = genData;
             storeMeta(meta);
         } catch (e) { }
+
+        // If it's an observer platform, recalculate fog of war immediately to reveal the map
+        if (def.key === 'observer_platform' && bm && typeof bm.handleFogOfWar === 'function' && bm.playerTile && bm.playerTile.location) {
+            const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+            if (bm.tiles[playerIdx]) {
+                bm.handleFogOfWar(bm.tiles[playerIdx]);
+                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+            }
+        }
 
         let msg = `Activated ${def.name}!`;
         if (def.rate > 0) {
@@ -19749,7 +20126,7 @@ class DungeonPage extends React.Component {
                                         const key = `${markerType}_${marker.tileId}`;
                                         if (seenKeys.has(key)) return;
                                         seenKeys.add(key);
-                                        const iconKey = markerType === 'shrine' ? 'shrine' : null;
+                                        const iconKey = images[markerType] ? markerType : (markerType === 'shrine' ? 'shrine' : null);
                                         markers.push({
                                             key,
                                             left: `${toBoardDetailPercent(coords[1]).toFixed(2)}%`,
@@ -19765,6 +20142,23 @@ class DungeonPage extends React.Component {
                                         (Array.isArray(group.stairs) ? group.stairs : []).forEach(m => pushMarker(m, 'stairs'));
                                         (Array.isArray(group.gates) ? group.gates : []).forEach(m => pushMarker(m, 'gate'));
                                         (Array.isArray(group.misc) ? group.misc : []).forEach(m => pushMarker(m, 'location'));
+                                    }
+
+                                    const meta = getMeta() || {};
+                                    if (meta && meta.activatedGenerators) {
+                                        Object.keys(meta.activatedGenerators).forEach(gKey => {
+                                            const parts = gKey.split('_');
+                                            if (parts.length >= 4) {
+                                                const lvl = parts[0].replace('L', '');
+                                                const ori = parts[1];
+                                                const mbStr = parts[2].replace('mb', '');
+                                                const tIdStr = parts[3].replace('t', '');
+                                                if (String(lvl) === String(currentLevelId) && ori === currentMapOrientation && String(mbStr) === String(activeMinimapIndex)) {
+                                                    const iconKey = meta.activatedGenerators[gKey]?.imageKey || 'building';
+                                                    pushMarker({ tileId: parseInt(tIdStr, 10), type: iconKey }, iconKey);
+                                                }
+                                            }
+                                        });
                                     }
 
                                     if (isPlayerOnCurrentMapOrientation && Array.isArray(bm.tiles)) {
@@ -20031,7 +20425,7 @@ class DungeonPage extends React.Component {
                                     const key = `${markerType}_${marker.tileId}_${marker.vendorGroupId || ''}`;
                                     if (seenKeys.has(key)) return;
                                     seenKeys.add(key);
-                                    const iconKey = markerType === 'shrine' ? 'shrine' : null;
+                                    const iconKey = images[markerType] ? markerType : (markerType === 'shrine' ? 'shrine' : null);
                                     const xPct = toBoardDetailPercent(coords[1]);
                                     const yPct = toBoardDetailPercent(coords[0]);
                                     markers.push({
@@ -20049,6 +20443,24 @@ class DungeonPage extends React.Component {
                                     (Array.isArray(group.stairs) ? group.stairs : []).forEach((marker) => pushMarker(marker, 'stairs'));
                                     (Array.isArray(group.gates) ? group.gates : []).forEach((marker) => pushMarker(marker, 'gate'));
                                     (Array.isArray(group.misc) ? group.misc : []).forEach((marker) => pushMarker(marker, 'location'));
+                                }
+
+                                const meta = getMeta() || {};
+                                if (meta && meta.activatedGenerators) {
+                                    const locOri = this.state.mapOrientation || (bm && bm.currentOrientation) || 'F';
+                                    Object.keys(meta.activatedGenerators).forEach(gKey => {
+                                        const parts = gKey.split('_');
+                                        if (parts.length >= 4) {
+                                            const lvl = parts[0].replace('L', '');
+                                            const ori = parts[1];
+                                            const mbStr = parts[2].replace('mb', '');
+                                            const tIdStr = parts[3].replace('t', '');
+                                            if (String(lvl) === String(currentLevelId) && ori === locOri && String(mbStr) === String(activeMinimapIndex)) {
+                                                const iconKey = meta.activatedGenerators[gKey]?.imageKey || 'building';
+                                                pushMarker({ tileId: parseInt(tIdStr, 10), type: iconKey }, iconKey);
+                                            }
+                                        }
+                                    });
                                 }
 
                                 if (Array.isArray(bm.tiles)) {
@@ -21041,7 +21453,7 @@ class DungeonPage extends React.Component {
                         {this.state.playerFloatVisible && !this.state.activeConstruction && (
                             <div
                                 ref={this.playerFloatRef}
-                                className={`floating-player ${this.state.isAvatarDamaged ? 'damaged' : ''}`}
+                                className={`floating-player ${this.state.isAvatarDamaged ? 'damaged' : ''} ${this.state.isPlayerGliding ? 'player-glide' : ''}`.trim()}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     this.setState((prev) => ({ showAvatarRadialMenu: !prev.showAvatarRadialMenu }));
@@ -21056,6 +21468,8 @@ class DungeonPage extends React.Component {
                                     cursor: 'pointer',
                                     transform: this.state.playerFloatStyle.transform,
                                     zIndex: 25,
+                                    '--glide-x': this.state.playerGlideVector ? `${this.state.playerGlideVector.x}px` : '0px',
+                                    '--glide-y': this.state.playerGlideVector ? `${this.state.playerGlideVector.y}px` : '0px'
                                 }}
                             >
                                 <div
@@ -21677,6 +22091,8 @@ class DungeonPage extends React.Component {
                                         borderRadius: '50%',
                                         width: '32px',
                                         height: '32px',
+                                        padding: '0',
+                                        boxSizing: 'border-box',
                                         cursor: 'pointer',
                                         fontSize: '16px',
                                         display: 'flex',
@@ -21791,8 +22207,9 @@ class DungeonPage extends React.Component {
                                             btnText = `UPGRADING (${remainMins}m remaining)`;
                                         }
 
-                                        return (
+                                        const upgradeButton = (
                                             <button
+                                                key="upgrade"
                                                 onClick={() => this.handleUpgradeGenerator(tile)}
                                                 disabled={btnDisabled}
                                                 style={{
@@ -21816,6 +22233,41 @@ class DungeonPage extends React.Component {
                                             >
                                                 {btnText}
                                             </button>
+                                        );
+
+                                        let collectButton = null;
+                                        if (isActivated && def.cap > 0) {
+                                            collectButton = (
+                                                <button
+                                                    key="collect"
+                                                    onClick={this.handleCollectGenerator}
+                                                    style={{
+                                                        width: '100%',
+                                                        boxSizing: 'border-box',
+                                                        padding: '12px 24px',
+                                                        borderRadius: '12px',
+                                                        border: '1px solid #f9b115',
+                                                        background: 'linear-gradient(135deg, rgba(201, 132, 10, 0.4) 0%, rgba(249, 177, 21, 0.7) 100%)',
+                                                        color: '#ffffff',
+                                                        fontFamily: "'Cinzel', serif",
+                                                        fontSize: '15px',
+                                                        fontWeight: '700',
+                                                        letterSpacing: '1px',
+                                                        cursor: 'pointer',
+                                                        boxShadow: '0 4px 15px rgba(249, 177, 21, 0.3)',
+                                                        transition: 'all 0.2s ease'
+                                                    }}
+                                                >
+                                                    COLLECT {def.resource.toUpperCase()} ({accumulated}/{def.cap})
+                                                </button>
+                                            );
+                                        }
+
+                                        return (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+                                                {collectButton}
+                                                {upgradeButton}
+                                            </div>
                                         );
                                     }
 
@@ -21908,18 +22360,26 @@ class DungeonPage extends React.Component {
                                     if (isActivated) {
                                         if (isOwner) {
                                             if (def.cap === 0) {
+                                                const isMonolith = def.key === 'domain_monolith' || def.key === 'dark_domain_monolith';
+                                                const isActiveMsg = def.key === 'observer_platform' ? 'OBSERVATION ACTIVE (FOG REVEALED)' : 'TERRITORY ACTIVE & EXPANDING';
+                                                const actTime = gData.activatedAt || gData.activatedTime || tile.activatedAt || (tile.generatorData && tile.generatorData.activatedAt);
                                                 return (
-                                                    <div style={{
-                                                        width: '100%',
-                                                        textAlign: 'center',
-                                                        padding: '12px 24px',
-                                                        color: '#f9b115',
-                                                        fontFamily: "'Cinzel', serif",
-                                                        fontSize: '15px',
-                                                        fontWeight: '700',
-                                                        letterSpacing: '1px'
-                                                    }}>
-                                                        TERRITORY ACTIVE & EXPANDING
+                                                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                                        <div style={{
+                                                            width: '100%',
+                                                            textAlign: 'center',
+                                                            padding: '12px 24px',
+                                                            color: '#f9b115',
+                                                            fontFamily: "'Cinzel', serif",
+                                                            fontSize: '15px',
+                                                            fontWeight: '700',
+                                                            letterSpacing: '1px'
+                                                        }}>
+                                                            {isActiveMsg}
+                                                        </div>
+                                                        {isMonolith && (
+                                                            <MonolithCountdownTimer activatedAt={actTime} />
+                                                        )}
                                                     </div>
                                                 );
                                             }

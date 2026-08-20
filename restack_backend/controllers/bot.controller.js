@@ -125,21 +125,28 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
   let consecutiveMovements = 0;
   let firstMovementTime = null;
 
+  const flushMovementLog = () => {
+    if (consecutiveMovements > 0) {
+      const moveMsg = `Movement (${consecutiveMovements})`;
+      console.log(`[Bot ${username}] ${moveMsg}`);
+      actionLog.push(`[${new Date(firstMovementTime || Date.now()).toLocaleTimeString()}] ${moveMsg}`);
+      consecutiveMovements = 0;
+      firstMovementTime = null;
+    }
+  };
+
   const logAction = (msg, screenshotBase64 = null) => {
     if (msg.startsWith('Pressed movement key:')) {
       consecutiveMovements++;
       if (!firstMovementTime) firstMovementTime = Date.now();
+      const dirStr = msg.replace('Pressed movement key: ', '');
+      const actionName = `Movement: ${dirStr}`;
+      console.log(`[Bot ${username}] ${actionName}`);
+      replayEvents.push({ timestamp: Date.now(), action: actionName, screenshot: screenshotBase64 });
       return;
     }
 
-    if (consecutiveMovements > 0) {
-      const moveMsg = `Movement (${consecutiveMovements})`;
-      console.log(`[Bot ${username}] ${moveMsg}`);
-      actionLog.push(`[${new Date(firstMovementTime).toLocaleTimeString()}] ${moveMsg}`);
-      replayEvents.push({ timestamp: firstMovementTime, action: moveMsg, screenshot: screenshotBase64 });
-      consecutiveMovements = 0;
-      firstMovementTime = null;
-    }
+    flushMovementLog();
 
     console.log(`[Bot ${username}] ${msg}`);
     actionLog.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
@@ -360,7 +367,13 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
             const dirs = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
             const dir = dirs[Math.floor(Math.random() * dirs.length)];
             await page.keyboard.press(dir);
-            logAction(`Pressed movement key: ${dir.replace('Arrow', '')}`, screenshotBase64);
+            let postMoveScreenshot = null;
+            try {
+                postMoveScreenshot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 30 });
+            } catch (e) {
+                postMoveScreenshot = screenshotBase64;
+            }
+            logAction(`Pressed movement key: ${dir.replace('Arrow', '')}`, postMoveScreenshot);
         } else if (action) {
             logAction(`Clicked: ${action}`, screenshotBase64);
         } else {
@@ -382,6 +395,8 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
       await browser.close();
     }
     
+    flushMovementLog();
+
     // Save the structured events to the database for the Replay UI
     try {
       await BotReplay.create({

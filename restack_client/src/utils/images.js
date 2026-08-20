@@ -152,6 +152,7 @@ import reaper_death_knight from '../assets/graphics/card_duel/reaper/reaper_deat
 import reaper_bone_archer from '../assets/graphics/card_duel/reaper/reaper_bone_archer.jpg'
 import reaper_grave_knight from '../assets/graphics/card_duel/reaper/reaper_grave_knight.jpg'
 import reaper_rally_undead from '../assets/graphics/card_duel/reaper/reaper_rally_undead.jpg'
+import the_principalities_portrait from '../assets/gemini_images/the_principalities_portrait.png'
 
 // ------------------------------------------------------------------------------------------------
 
@@ -1013,6 +1014,8 @@ import camp from '../assets/icons/misc/camp/camp.png'
 import camping from '../assets/gemini_images/camping.png';
 import merchant_bg from '../assets/gemini_images/merchant.png';
 import alchemist_bg from '../assets/gemini_images/alchemist.png';
+import dream_den from '../assets/gemini_images/dream_den.png';
+import dream_den_bg from '../assets/gemini_images/dream_den.png';
 import litter_scattered_rocks from '../assets/gemini_images/litter_scattered_rocks.png';
 import litter_broken_wood from '../assets/gemini_images/litter_broken_wood.png';
 import litter_old_barrels from '../assets/gemini_images/litter_old_barrels.png';
@@ -1023,6 +1026,7 @@ import litter_small_barrel from '../assets/gemini_images/litter_small_barrel.png
 import litter_edge_bones from '../assets/gemini_images/litter_edge_bones.png';
 import chemical_lantern from '../assets/gemini_images/chemical_lantern.png';
 import territorial_lantern from '../assets/gemini_images/territorial_lantern.png';
+import automaton from '../assets/automatons/automaton.png';
 import codex from '../assets/icons/codex.png';
 
 // global skills
@@ -1253,7 +1257,17 @@ import woodland_warband from '../assets/portraits/pygmies/woodland warband.png';
 import woodland_group from '../assets/portraits/pygmies/woodland-group.png';
 import woodland_individual from '../assets/portraits/pygmies/woodland-individual.png';
 
-const walker_glowing_square = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIiB2aWV3Qm94PSIwIDAgMTIwIDEyMCI+PGRlZnM+PGZpbHRlciBpZD0iZ2xvdyIgeD0iLTMwJSIgeT0iLTMwJSIgd2lkdGg9IjE2MCUiIGhlaWdodD0iMTYwJSI+PGZlR2F1c3NpYW5CbHVyIHN0ZERldmlhdGlvbj0iOCIgcmVzdWx0PSJibHVyIi8+PGZlQ29tcG9zaXRlIGluPSJTb3VyY2VHcmFwaGljIiBpbjI9ImJsdXIiIG9wZXJhdG9yPSJvdmVyIi8+PC9maWx0ZXI+PGxpbmVhckdyYWRpZW50IGlkPSJ5ZWxsb3dHcmFkIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjZmZmNTY2Ii8+PHN0b3Agb2Zmc2V0PSI1MCUiIHN0b3AtY29sb3I9IiNmZmQ3MDAiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNkNDliMDAiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB4PSIxMCIgeT0iMTAiIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiByeD0iMTQiIGZpbGw9InVybCgjeWVsbG93R3JhZCkiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSI1IiBmaWx0ZXI9InVybCgjZ2xvdykiLz48cmVjdCB4PSIyMiIgeT0iMjIiIHdpZHRoPSI3NiIgaGVpZ2h0PSI3NiIgcng9IjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZmZmZiIgc3Ryb2tlLXdpZHRoPSIzIiBvcGFjaXR5PSIwLjg1Ii8+PHJlY3QgeD0iMzYiIHk9IjM2IiB3aWR0aD0iNDgiIGhlaWdodD0iNDgiIHJ4PSI0IiBmaWxsPSIjZmZmZmZmIiBvcGFjaXR5PSIwLjk1Ii8+PC9zdmc+";
+import walker_turret_full from '../assets/icons/turret_machine/turret_full_clean.png';
+import walker_chassis from '../assets/icons/turret_machine/turret_chassis_and_arm.png';
+import walker_leg_fl from '../assets/icons/turret_machine/leg_front_left.png';
+import walker_leg_fr from '../assets/icons/turret_machine/leg_front_right.png';
+import walker_leg_ml from '../assets/icons/turret_machine/leg_mid_left.png';
+import walker_leg_mr from '../assets/icons/turret_machine/leg_mid_right.png';
+import walker_leg_bl from '../assets/icons/turret_machine/leg_back_left.png';
+import walker_leg_br from '../assets/icons/turret_machine/leg_back_right.png';
+
+const walker = walker_turret_full;
+const walker_glowing_square = walker_turret_full;
 
 const mud_pygmies = mud_group;
 const cave_pygmies = cave_squad;
@@ -1463,6 +1477,7 @@ export {
     grand_health_potion,
     supreme_health_potion,
     lantern,
+    automaton,
 
     buckler,
     infantry_shield,
@@ -1872,7 +1887,16 @@ export {
     engineer,
     turret_icon as turret,
     turret_icon,
+    walker,
     walker_glowing_square,
+    walker_turret_full,
+    walker_chassis,
+    walker_leg_fl,
+    walker_leg_fr,
+    walker_leg_ml,
+    walker_leg_mr,
+    walker_leg_bl,
+    walker_leg_br,
     wall_icon as wall,
     turret_blade_icon as turret_blade,
     turret_blade_icon,
@@ -2038,6 +2062,9 @@ export {
     reaper_bone_archer,
     reaper_grave_knight,
     reaper_rally_undead,
+    the_principalities_portrait,
+    the_principalities_portrait as the_principalities,
+    the_principalities_portrait as eshu_portrait,
 
     glyph,
     glyph_inverted,
@@ -2306,6 +2333,8 @@ export {
     camping,
     merchant_bg,
     alchemist_bg,
+    dream_den,
+    dream_den_bg,
     awake_refreshed_sage,
     awake_refreshed_soldier,
     strong_resolve_soldier,

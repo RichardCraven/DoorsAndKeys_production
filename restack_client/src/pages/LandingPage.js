@@ -6,8 +6,11 @@ import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updat
 
 
 import skillsMatrix from '../utils/skills-matrix';
+import * as images from '../utils/images';
 import { getCrewPortraitBackground } from '../utils/images';
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
+import InfirmaryModal from '../components/InfirmaryModal';
+import { getInfirmary } from '../utils/infirmary-manager';
 
 const DEFAULT_CLASS_LORE = {
   summoner: 'A conduit for unstable arcana who overwhelms enemies with elemental pressure by opening rifts and summoning minions.',
@@ -257,6 +260,7 @@ const CLASS_SPECIALTIES = {
 export default function LandingPage(props) {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showIOSPrompt, setShowIOSPrompt] = useState(false);
+  const [showInfirmary, setShowInfirmary] = useState(false);
 
   useEffect(() => {
     // Check if iOS and not standalone
@@ -810,7 +814,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.5.6 BETA</span>
+          <span className="logo-subtitle">v 0.5.7 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
 
@@ -822,6 +826,8 @@ export default function LandingPage(props) {
           </button>
         </div>
       </header>
+
+      {showInfirmary && <InfirmaryModal onClose={() => setShowInfirmary(false)} crewManager={props.crewManager} />}
 
       <main className="landing-main-grid">
         {/* Dungeon Change Warning Modal */}
@@ -1028,10 +1034,78 @@ export default function LandingPage(props) {
                               style={{
                                 backgroundImage: getCrewPortraitBackground(member.portrait, member.type || member.image),
                                 backgroundSize: 'cover',
-                                backgroundPosition: 'center'
+                                backgroundPosition: 'center',
+                                position: 'relative'
                               }}
                             >
                               <img src={member.portrait || member.image} alt={member.name} className="crew-avatar-img" onError={(e) => { e.target.style.display = 'none'; }} />
+                              {(() => {
+                                const hp = typeof member.hp === 'number' ? member.hp : (member.stats?.hp || member.starting_hp || 100);
+                                const maxHp = member.stats?.hp || member.starting_hp || 100;
+                                const isMissingHp = hp < maxHp;
+                                const hpPct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+                                const isDead = member.dead || hp <= 0;
+                                
+                                return (
+                                  <>
+                                    {(isMissingHp || isDead) && (
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          top: 0, left: 0, right: 0, bottom: 0,
+                                          borderRadius: '50%',
+                                          pointerEvents: 'none',
+                                          zIndex: 5,
+                                          background: isDead
+                                            ? 'rgba(0, 0, 0, 0.75)'
+                                            : `linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.75) ${100 - hpPct}%, transparent ${100 - hpPct}%, transparent 100%)`
+                                        }}
+                                      />
+                                    )}
+                                    {isDead && (
+                                      <div
+                                        style={{
+                                          position: 'absolute',
+                                          top: '-4px',
+                                          right: '-4px',
+                                          width: '24px',
+                                          height: '24px',
+                                          zIndex: 6,
+                                          backgroundImage: `url("${images?.whiteskull?.default || images?.whiteskull || images?.['whiteskull'] || ''}")`,
+                                          backgroundSize: 'contain',
+                                          backgroundRepeat: 'no-repeat',
+                                          backgroundPosition: 'center',
+                                          filter: 'drop-shadow(0 0 2px rgba(0,0,0,0.8))'
+                                        }}
+                                      />
+                                    )}
+                                    {(hpPct < 15 || isDead) && (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setShowInfirmary(true); }}
+                                        style={{
+                                          position: 'absolute',
+                                          bottom: '-8px',
+                                          left: '50%',
+                                          transform: 'translateX(-50%)',
+                                          zIndex: 7,
+                                          backgroundColor: '#b91c1c',
+                                          color: '#fff',
+                                          border: '1px solid #fca5a5',
+                                          borderRadius: '4px',
+                                          padding: '2px 6px',
+                                          fontSize: '0.65rem',
+                                          fontWeight: 'bold',
+                                          cursor: 'pointer',
+                                          boxShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                                          whiteSpace: 'nowrap'
+                                        }}
+                                      >
+                                        Injured
+                                      </button>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </div>
                             <span className="selected-crew-name" title={member.name}>
                               {member.name}
@@ -1075,6 +1149,23 @@ export default function LandingPage(props) {
                     Enter Dungeon
                   </button>
                 );
+              })()}
+
+              {(() => {
+                const infirmary = getInfirmary();
+                if (infirmary && (infirmary.patients.length > 0 || infirmary.sageCommitted)) {
+                  return (
+                    <button
+                      className="btn-play btn-play-desktop"
+                      onClick={() => setShowInfirmary(true)}
+                      type="button"
+                      style={{ backgroundColor: '#16a34a', borderColor: '#4ade80' }}
+                    >
+                      Visit Infirmary ({infirmary.patients.length} Healing)
+                    </button>
+                  );
+                }
+                return null;
               })()}
             </div>
           </div>

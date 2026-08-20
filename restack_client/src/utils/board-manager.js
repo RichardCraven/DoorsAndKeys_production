@@ -391,6 +391,7 @@ export function BoardManager(){
         const buildingSubtypes = [
             'outpost', 'buildable_outpost',
             'observer_platform', 'buildable_observer_platform',
+            'observation_platform', 'buildable_observation_platform',
             'earthen_fort', 'buildable_earthen_fort',
             'war_camp', 'buildable_war_camp',
             'war_fort', 'buildable_war_fort',
@@ -3315,6 +3316,119 @@ export function BoardManager(){
             });
         } catch (e) {}
 
+        let isObserverPlatformActive = false;
+        try {
+            const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+            const meta = getMeta() || {};
+            if (this.tiles) {
+                for (let t of this.tiles) {
+                    let gData = t.generatorData || (t.contains && t.contains.generatorData);
+                    if (!gData && this.currentLevel && this.currentBoard) {
+                        const tileKey = `${this.currentLevel.id}_${this.currentBoard.id}_${t.id}`;
+                        if (meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
+                            gData = meta.activatedGenerators[tileKey];
+                        }
+                    }
+                    if (gData && gData.activated) {
+                        const ct = typeof t.contains === 'string' ? t.contains : (t.contains && t.contains.type);
+                        const k = gData.key || t.key || t.type || ct;
+                        if (k === 'observer_platform' || k === 'observation_platform') {
+                            let isOwner = false;
+                            if (gData.ownerId && gData.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest' && gData.ownerId === currentUserId) isOwner = true;
+                            else if (gData.ownedByPlayer !== undefined) isOwner = !!gData.ownedByPlayer;
+                            else if (!gData.ownerId) isOwner = gData.owned !== false;
+
+                            if (isOwner) {
+                                isObserverPlatformActive = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
+        let hasTerritorialLantern = false;
+        try {
+            const inv = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || [];
+            hasTerritorialLantern = inv.some(item => item && (item.name === 'territorial lantern' || item._im_key === 'territorial_lantern'));
+        } catch(e) {}
+        
+        const getTileClan = (tId) => {
+            const t = this.tiles[tId];
+            if (!t) return null;
+            let raw = t.territory || (t.contains && t.contains.territory);
+            if (!raw && this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tId]) {
+                const cbTile = this.currentBoard.tiles[tId];
+                raw = cbTile.territory || (cbTile.contains && cbTile.contains.territory);
+            }
+            if (!raw) {
+                const row = Math.floor(tId / 15), col = tId % 15;
+                const neighbors = [];
+                if (row > 0) neighbors.push((row - 1) * 15 + col);
+                if (row < 14) neighbors.push((row + 1) * 15 + col);
+                if (col > 0) neighbors.push(row * 15 + (col - 1));
+                if (col < 14) neighbors.push(row * 15 + (col + 1));
+                for (const nId of neighbors) {
+                    const nTile = this.tiles[nId];
+                    if (!nTile) continue;
+                    
+                    const dx = (nId % 15) - col;
+                    const dy = Math.floor(nId / 15) - row;
+                    const sideMap = {
+                        '0,-1': { self: 'top', opp: 'bottom' },
+                        '0,1': { self: 'bottom', opp: 'top' },
+                        '-1,0': { self: 'left', opp: 'right' },
+                        '1,0': { self: 'right', opp: 'left' }
+                    };
+                    const sides = sideMap[`${dx},${dy}`];
+                    
+                    const isWallBlocked = this.isPassageWallBlockingBetween(tId, nId) ||
+                        (sides?.self && this.hasSolidBorder(t, sides.self)) ||
+                        (sides?.opp && this.hasSolidBorder(nTile, sides.opp));
+                        
+                    if (isWallBlocked) continue;
+                    
+                    let nRaw = nTile.territory || (nTile.contains && nTile.contains.territory);
+                    if (!nRaw && this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[nId]) {
+                        const cbNTile = this.currentBoard.tiles[nId];
+                        nRaw = cbNTile.territory || (cbNTile.contains && cbNTile.contains.territory);
+                    }
+                    if (nRaw) {
+                        raw = nRaw;
+                        break;
+                    }
+                }
+            }
+            return raw ? (typeof raw === 'object' ? raw.clan || raw.type : String(raw)) : null;
+        };
+
+        let lanternTerritory = null;
+        let contiguousLanternTiles = new Set();
+        if (hasTerritorialLantern && destinationTile) {
+            lanternTerritory = getTileClan(destinationTile.id);
+            if (lanternTerritory) {
+                const queue = [destinationTile.id];
+                contiguousLanternTiles.add(destinationTile.id);
+                while (queue.length > 0) {
+                    const curr = queue.shift();
+                    const row = Math.floor(curr / 15);
+                    const col = curr % 15;
+                    const neighbors = [];
+                    if (row > 0 && !this.isPassageWallBlockingBetween(curr, (row - 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row - 1) * 15 + col);
+                    if (row < 14 && !this.isPassageWallBlockingBetween(curr, (row + 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row + 1) * 15 + col);
+                    if (col > 0 && !this.isPassageWallBlockingBetween(curr, row * 15 + (col - 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col - 1));
+                    if (col < 14 && !this.isPassageWallBlockingBetween(curr, row * 15 + (col + 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col + 1));
+                    for (const n of neighbors) {
+                        if (!contiguousLanternTiles.has(n) && getTileClan(n) === lanternTerritory) {
+                            contiguousLanternTiles.add(n);
+                            queue.push(n);
+                        }
+                    }
+                }
+            }
+        }
+
         const destCoords = this.getCoordinatesFromIndex(destinationTile.id);
 
         this.tiles.forEach((e) => {
@@ -3352,10 +3466,17 @@ export function BoardManager(){
                         }
                     }
                 }
+                
+                let inLanternTerritory = false;
+                if (lanternTerritory) {
+                    if (contiguousLanternTiles.has(e.id)) {
+                        inLanternTerritory = true;
+                    }
+                }
 
                 const isVoid = this.isVoidTile(e);
                 const hasInscriptions = e.inscriptions && Object.values(e.inscriptions).some(v => !!v);
-                const isRevealed = revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
+                const isRevealed = inLanternTerritory || isObserverPlatformActive || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= 2 && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
 
                 if (isRevealed && (!isVoid || hasInscriptions)) {
 

@@ -217,8 +217,18 @@ class CrewManagerPage extends React.Component {
 
     componentDidMount() {
         window.addEventListener('keydown', this.handleKeyDown);
-        let options = this.props.crewManager.adventurers;
+        let options = this.props.crewManager.adventurers || [];
         const meta = getMeta();
+        
+        let infirmaryPatients = meta?.infirmary?.patients || [];
+        let sageCommitted = meta?.infirmary?.sageCommitted || false;
+        
+        options = options.filter(opt => {
+            if (sageCommitted && opt.type === 'sage') return false;
+            if (infirmaryPatients.some(p => p.id === opt.id)) return false;
+            return true;
+        });
+
         let selectedCrew = [];
         if (meta && meta.crew && meta.crew.length) {
             // Re-hydrate portrait from the live adventurers list so stale sessionStorage
