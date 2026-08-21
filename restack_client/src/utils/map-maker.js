@@ -14,6 +14,7 @@ export function MapMaker(props){
         'pocket buildings',
         'generators',
         'dungeon litter',
+        'terrain',
         'delete',
         'door',
         'way up',
@@ -191,6 +192,15 @@ export function MapMaker(props){
         { key: 'litter_edge_wood', name: 'Edge Wood', image: 'litter_edge_wood' },
         { key: 'litter_small_barrel', name: 'Small Barrel', image: 'litter_small_barrel' },
         { key: 'litter_edge_bones', name: 'Edge Bones & Rubble', image: 'litter_edge_bones' },
+    ];
+
+    this.terrainOptions = [
+        { key: 'terrain_tree_1', name: 'Pine Trees', image: 'terrain_tree_1' },
+        { key: 'terrain_tree_2', name: 'Oak Trees', image: 'terrain_tree_2' },
+        { key: 'terrain_tree_3', name: 'Ancient Grove', image: 'terrain_tree_3' },
+        { key: 'terrain_mountain_1', name: 'Mountain Peak', image: 'terrain_mountain_1' },
+        { key: 'terrain_mountain_2', name: 'Twin Mountains', image: 'terrain_mountain_2' },
+        { key: 'terrain_mountain_3', name: 'Grassy Mountain', image: 'terrain_mountain_3' },
     ];
 
     this.paletteTiles = [];
@@ -512,6 +522,15 @@ export function MapMaker(props){
                     image: 'litter_scattered_rocks',
                     color: null,
                     isDungeonLitter: true,
+                    id: i
+                })
+            } else if(key === 'terrain'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'terrain',
+                    image: 'terrain_tree_1',
+                    color: null,
+                    isTerrain: true,
                     id: i
                 })
             } else {
@@ -863,6 +882,8 @@ export function MapMaker(props){
                 return 'dust_collector'
             case 'dungeon litter':
                 return 'litter_scattered_rocks'
+            case 'terrain':
+                return 'terrain_tree_1'
             default:
                 return false
         }

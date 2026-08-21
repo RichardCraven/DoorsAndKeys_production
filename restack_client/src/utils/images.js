@@ -1252,6 +1252,14 @@ import pocket_tower_4 from '../assets/icons/buildings/pocket dimension/tower_4.p
 import pocket_tower_5 from '../assets/icons/buildings/pocket dimension/tower_5.png';
 import pocket_blacksmith from '../assets/icons/buildings/pocket dimension/blacksmith.png';
 
+// ── Terrain Assets ────────────────────────────────────────────────────────
+import terrain_tree_1 from '../assets/icons/terrain/terrain_tree_1.png';
+import terrain_tree_2 from '../assets/icons/terrain/terrain_tree_2.png';
+import terrain_tree_3 from '../assets/icons/terrain/terrain_tree_3.png';
+import terrain_mountain_1 from '../assets/icons/terrain/terrain_mountain_1.png';
+import terrain_mountain_2 from '../assets/icons/terrain/terrain_mountain_2.png';
+import terrain_mountain_3 from '../assets/icons/terrain/terrain_mountain_3.png';
+
 // ── Generators ─────────────────────────────────────────────────────────────
 import cultivation_vat from '../assets/icons/buildings/cultivation vat.png';
 import larder from '../assets/icons/buildings/larder.png';
@@ -2581,6 +2589,14 @@ export {
     pocket_tower_4,
     pocket_tower_5,
     pocket_blacksmith,
+
+    // Terrain Assets
+    terrain_tree_1,
+    terrain_tree_2,
+    terrain_tree_3,
+    terrain_mountain_1,
+    terrain_mountain_2,
+    terrain_mountain_3,
 
     pocket_town_1 as town_1,
     pocket_town_2 as town_2,

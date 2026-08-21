@@ -762,13 +762,13 @@ export function BoardManager(){
                 normalized[side] = null;
                 return;
             }
-            const asText = String(raw);
-            if (asText.includes('transparent')) {
+            const asText = String(raw).toLowerCase();
+            if (asText.includes('transparent') || asText === 'none' || asText.includes('d4a844') || asText.includes('e5b54f') || asText.includes('gold')) {
                 normalized[side] = '1px solid transparent';
             } else {
                 normalized[side] = '1px solid black';
+                hasAny = true;
             }
-            hasAny = true;
         });
 
         return hasAny ? normalized : null;
@@ -3338,12 +3338,13 @@ export function BoardManager(){
             });
         } catch (e) {}
 
-        let isObserverPlatformActive = false;
+        const observerPlatforms = [];
         try {
             const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
             const meta = getMeta() || {};
             if (this.tiles) {
                 for (let t of this.tiles) {
+                    if (!t) continue;
                     let gData = t.generatorData || (t.contains && t.contains.generatorData);
                     if (!gData && this.currentLevel && this.currentBoard) {
                         const tileKey = `${this.currentLevel.id}_${this.currentBoard.id}_${t.id}`;
@@ -3351,19 +3352,21 @@ export function BoardManager(){
                             gData = meta.activatedGenerators[tileKey];
                         }
                     }
-                    if (gData && gData.activated) {
-                        const ct = typeof t.contains === 'string' ? t.contains : (t.contains && t.contains.type);
-                        const k = gData.key || t.key || t.type || ct;
-                        if (k === 'observer_platform' || k === 'observation_platform') {
-                            let isOwner = false;
+                    const ct = typeof t.contains === 'string' ? t.contains : (t.contains && t.contains.type);
+                    const k = (gData && gData.key) || t.key || t.type || t.subtype || (t.contains && t.contains.subtype) || ct || t.building || (t.contains && t.contains.building);
+                    if (['observer_platform', 'observation_platform', 'observer_platform_under_construction'].includes(k)) {
+                        let isOwner = false;
+                        if (gData) {
                             if (gData.ownerId && gData.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest' && gData.ownerId === currentUserId) isOwner = true;
                             else if (gData.ownedByPlayer !== undefined) isOwner = !!gData.ownedByPlayer;
                             else if (!gData.ownerId) isOwner = gData.owned !== false;
+                        } else {
+                            isOwner = true;
+                        }
 
-                            if (isOwner) {
-                                isObserverPlatformActive = true;
-                                break;
-                            }
+                        if (isOwner) {
+                            const [r, c] = this.getCoordinatesFromIndex(t.id);
+                            observerPlatforms.push({ row: r, col: c });
                         }
                     }
                 }
@@ -3496,9 +3499,15 @@ export function BoardManager(){
                     }
                 }
 
+                const inObsPlatformVision = observerPlatforms.some(op => {
+                    const dr = Math.abs(coords[0] - op.row);
+                    const dc = Math.abs(coords[1] - op.col);
+                    return (dr * dr + dc * dc <= 100) || (dr <= 10 && dc <= 10);
+                });
+
                 const isVoid = this.isVoidTile(e);
                 const hasInscriptions = e.inscriptions && Object.values(e.inscriptions).some(v => !!v);
-                const isRevealed = inLanternTerritory || isObserverPlatformActive || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
+                const isRevealed = inLanternTerritory || inObsPlatformVision || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
 
                 if (isRevealed && (!isVoid || hasInscriptions)) {
 

@@ -787,7 +787,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.5.9 BETA</span>
+          <span className="logo-subtitle">v 0.5.10 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
 
@@ -1257,7 +1257,6 @@ export default function LandingPage(props) {
                       className="btn-play btn-play-desktop"
                       onClick={() => setShowInfirmary(true)}
                       type="button"
-                      style={{ backgroundColor: '#16a34a', borderColor: '#4ade80' }}
                     >
                       Visit Infirmary ({infirmary.patients.length} Healing)
                     </button>

@@ -697,7 +697,7 @@ class DungeonView extends React.Component {
         const darkMiniboards = getSuperboardData('dark');
 
         return (
-            <div className="superboards-levels-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '100%' }}>
+            <div className="superboards-levels-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
                 {/* Context Menu Popup */}
                 {this.state.superboardContextMenu?.visible && (
                     <div
@@ -764,7 +764,7 @@ class DungeonView extends React.Component {
                     </div>
                 )}
 
-                <div className="level-wrapper superboards-level-wrapper" style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '100%' }}>
+                <div className="level-wrapper superboards-level-wrapper" style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
                     {/* Header Readout / Breadcrumbs */}
                     <div className="level-info superboard-level-info" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(168, 85, 247, 0.3)', paddingBottom: '8px', marginBottom: '12px' }}>
                         {isZoomed ? (
@@ -803,6 +803,8 @@ class DungeonView extends React.Component {
                                             </option>
                                         ))}
                                     </select>
+                                    <button style={{ background: 'transparent', border: 'none', color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', padding: '0 4px', textShadow: currentZoomKey === 'light' ? '0 0 5px rgba(251, 191, 36, 0.8)' : '0 0 5px rgba(168, 85, 247, 0.8)', marginLeft: '4px' }}>+</button>
+                                    <button style={{ background: 'transparent', border: 'none', color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', padding: '0 4px', textShadow: currentZoomKey === 'light' ? '0 0 5px rgba(251, 191, 36, 0.8)' : '0 0 5px rgba(168, 85, 247, 0.8)' }}>-</button>
                                 </div>
                             </div>
                         ) : (

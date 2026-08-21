@@ -32,7 +32,6 @@
             background-color: rgba(151, 176, 208, 0.2) !important;
         }
         &.active{
-            background-color: transparent !important;
             border-color: #f9b115 !important;
         }
     }
@@ -812,6 +811,49 @@
                             margin-left: -1px;
                             margin-top: -1px;
                         }
+                        &.outpost {
+                            height: 7px;
+                            width: 7px;
+                            border-radius: 50%;
+                            margin-left: -1.5px;
+                            margin-top: -1.5px;
+                            background-color: #ff4500;
+                            box-shadow: 0 0 6px #ff4500, 0 0 12px #ff7700;
+                            animation: outpostPulse 1.2s infinite ease-in-out;
+                            z-index: 4;
+                        }
+                        &.observer-platform {
+                            height: 6px;
+                            width: 6px;
+                            border-radius: 50%;
+                            margin-left: -1px;
+                            margin-top: -1px;
+                            background-color: #ffffff;
+                            box-shadow: 0 0 6px #ffffff, 0 0 10px rgba(255, 255, 255, 0.8);
+                            z-index: 4;
+                        }
+                        &.war-structure {
+                            height: 20px;
+                            width: 20px;
+                            border-radius: 2px;
+                            margin-left: -2px;
+                            margin-top: -2px;
+                            background-color: #ff3300;
+                            box-shadow: 0 0 8px #ff4500, 0 0 16px #ff6600, inset 0 0 3px #ffe680;
+                            animation: warStructureGlow 1.5s infinite ease-in-out;
+                            z-index: 4;
+                        }
+                        &.dream-den {
+                            height: 20px;
+                            width: 20px;
+                            border-radius: 2px;
+                            margin-left: -2px;
+                            margin-top: -2px;
+                            background-color: #d8b4fe;
+                            box-shadow: 0 0 8px #c084fc, 0 0 16px #a855f7, inset 0 0 3px #f3e8ff;
+                            animation: dreamDenGlow 1.8s infinite ease-in-out;
+                            z-index: 4;
+                        }
                         &.gate {
                             height: 8px;
                             width: 8px;
@@ -974,6 +1016,49 @@
                         margin-top: -0.5px;
                         box-shadow: 0 0 3px #2ecc71;
                     }
+                    &.outpost{
+                        width: 4px;
+                        height: 4px;
+                        border-radius: 50%;
+                        background-color: #ff4500;
+                        box-shadow: 0 0 4px #ff4500, 0 0 8px #ff7700;
+                        margin-left: -1px;
+                        margin-top: -1px;
+                        animation: outpostPulse 1.2s infinite ease-in-out;
+                        z-index: 4;
+                    }
+                    &.observer-platform{
+                        width: 4px;
+                        height: 4px;
+                        border-radius: 50%;
+                        background-color: #ffffff;
+                        box-shadow: 0 0 4px #ffffff, 0 0 8px rgba(255, 255, 255, 0.8);
+                        margin-left: -1px;
+                        margin-top: -1px;
+                        z-index: 4;
+                    }
+                    &.war-structure{
+                        width: 7px;
+                        height: 7px;
+                        border-radius: 1px;
+                        background-color: #ff3300;
+                        box-shadow: 0 0 5px #ff4500, 0 0 10px #ff6600, inset 0 0 2px #ffe680;
+                        margin-left: -1px;
+                        margin-top: -1px;
+                        animation: warStructureGlow 1.5s infinite ease-in-out;
+                        z-index: 4;
+                    }
+                    &.dream-den{
+                        width: 7px;
+                        height: 7px;
+                        border-radius: 1px;
+                        background-color: #d8b4fe;
+                        box-shadow: 0 0 5px #c084fc, 0 0 10px #a855f7, inset 0 0 2px #f3e8ff;
+                        margin-left: -1px;
+                        margin-top: -1px;
+                        animation: dreamDenGlow 1.8s infinite ease-in-out;
+                        z-index: 4;
+                    }
                     &.enemy{
                         background-color: red;
                     }
@@ -994,14 +1079,76 @@
                         background-color: #ffd700;
                         box-shadow: 0 0 2px rgba(255, 215, 0, 0.9);
                     }
-                    &.generator{
-                        width: 3px;
-                        height: 3px;
-                        border-radius: 3px;
-                        background-color: #00ff66;
-                        box-shadow: 0 0 2px rgba(0, 255, 102, 0.9);
-                    }
                 }
+            }
+        }
+
+        @keyframes outpostPulse {
+            0% {
+                transform: scale(1);
+                background-color: #ff4500;
+                box-shadow: 0 0 4px #ff4500, 0 0 8px #ff7700;
+            }
+            50% {
+                transform: scale(1.4);
+                background-color: #ff8800;
+                box-shadow: 0 0 8px #ffaa00, 0 0 16px #ff4500;
+            }
+            100% {
+                transform: scale(1);
+                background-color: #ff4500;
+                box-shadow: 0 0 4px #ff4500, 0 0 8px #ff7700;
+            }
+        }
+
+        @keyframes warStructureGlow {
+            0% {
+                transform: scale(1);
+                background-color: #ff3300;
+                box-shadow: 0 0 5px #ff4500, 0 0 10px #ff6600;
+            }
+            50% {
+                transform: scale(1.08);
+                background-color: #ff5500;
+                box-shadow: 0 0 8px #ff6600, 0 0 15px #ffaa00;
+            }
+            100% {
+                transform: scale(1);
+                background-color: #ff3300;
+                box-shadow: 0 0 5px #ff4500, 0 0 10px #ff6600;
+            }
+        }
+
+        @keyframes dreamDenGlow {
+            0% {
+                transform: scale(1);
+                background-color: #d8b4fe;
+                box-shadow: 0 0 5px #c084fc, 0 0 10px #a855f7;
+            }
+            50% {
+                transform: scale(1.08);
+                background-color: #e9d5ff;
+                box-shadow: 0 0 8px #d8b4fe, 0 0 15px #c084fc;
+            }
+            100% {
+                transform: scale(1);
+                background-color: #d8b4fe;
+                box-shadow: 0 0 5px #c084fc, 0 0 10px #a855f7;
+            }
+        }
+
+        @keyframes structureRingPulse {
+            0% {
+                transform: scale(0.98);
+                opacity: 0.85;
+            }
+            50% {
+                transform: scale(1.02);
+                opacity: 1;
+            }
+            100% {
+                transform: scale(0.98);
+                opacity: 0.85;
             }
         }
         .backside-indicator{
@@ -2107,7 +2254,6 @@
                     pointer-events: auto;
 
                     .tile {
-                        background-color: transparent !important;
                         border: none !important;
                         margin: 0 !important;
                         width: 100% !important;
@@ -4806,4 +4952,167 @@
         opacity: 1;
         transform: scale(1);
     }
+}
+
+@keyframes pocketWarpOut {
+    0% {
+        transform: scale(1) perspective(1000px) rotateX(0deg);
+        filter: blur(0px) sepia(0%);
+        opacity: 1;
+    }
+    40% {
+        transform: scale(1.1) perspective(1000px) rotateX(-10deg);
+        filter: blur(2px) sepia(50%);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(0) perspective(1000px) rotateX(90deg);
+        filter: blur(10px) sepia(100%);
+        opacity: 0;
+    }
+}
+
+@keyframes pocketWarpIn {
+    0% {
+        transform: scale(0) perspective(1000px) rotateX(-90deg);
+        filter: blur(10px) sepia(100%);
+        opacity: 0;
+    }
+    60% {
+        transform: scale(1.1) perspective(1000px) rotateX(10deg);
+        filter: blur(2px) sepia(50%);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(1) perspective(1000px) rotateX(0deg);
+        filter: blur(0px) sepia(0%);
+        opacity: 1;
+    }
+}
+
+.pocket-transition-out {
+    animation: pocketWarpOut 0.6s ease-in forwards;
+}
+
+.pocket-transition-in {
+    animation: pocketWarpIn 0.6s ease-out forwards;
+}
+
+.minimap-indicator.war-structure.player-built {
+    border: 1px solid #2ecc71;
+    box-sizing: border-box;
+    box-shadow: 0 0 5px #ff4500, 0 0 10px #ff6600, inset 0 0 2px #ffe680, 0 0 2px 1px #2ecc71;
+}
+
+.minimap-indicator.friendly-unit {
+    height: 3px;
+    width: 3px;
+    border-radius: 50%;
+    background-color: #3b82f6;
+    margin-left: -0.5px;
+    margin-top: -0.5px;
+    box-shadow: none;
+    animation: none;
+}
+
+.minimap-indicator.hostile-unit {
+    height: 3px;
+    width: 3px;
+    border-radius: 50%;
+    background-color: #ef4444;
+    margin-left: -0.5px;
+    margin-top: -0.5px;
+    box-shadow: none;
+    animation: none;
+}
+
+/* ─── ARCANE MODAL RESTYLE (GLOBALLY APPLIED TO ALL POPUPS) ─── */
+.modal-content, .modal-dialog .modal-content {
+    background: rgba(17, 18, 20, 0.85) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 4px !important;
+    backdrop-filter: blur(12px) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(179, 136, 255, 0.05) !important;
+    font-family: 'Cinzel', serif !important;
+}
+
+.modal-content h2, .modal-content h3, .modal-content h4, .modal-content .modal-title {
+    font-family: 'Cinzel', serif !important;
+    font-weight: 400 !important;
+    letter-spacing: 2px !important;
+}
+
+.modal-content button, 
+.modal-content .btn, 
+.modal-content .c-btn,
+.modal-content .buy-btn,
+.modal-content .vendor-tab-btn {
+    background: transparent !important;
+    color: #b388ff !important;
+    border: 1px solid rgba(179, 136, 255, 0.3) !important;
+    border-radius: 2px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 2px !important;
+    box-shadow: inset 0 0 15px rgba(179, 136, 255, 0.05), 0 0 10px rgba(179, 136, 255, 0.05) !important;
+    transition: all 0.3s ease !important;
+    font-family: 'Cinzel', serif !important;
+    text-shadow: 0 0 8px rgba(179, 136, 255, 0.4) !important;
+}
+
+.modal-content button:hover, 
+.modal-content .btn:hover, 
+.modal-content .c-btn:hover,
+.modal-content .buy-btn:hover,
+.modal-content .vendor-tab-btn:hover {
+    background: rgba(179, 136, 255, 0.1) !important;
+    border: 1px solid rgba(179, 136, 255, 0.6) !important;
+    color: #d8c2ff !important;
+}
+
+
+.modal-content .sharpen-blades-details-zone,
+.modal-content .updates-zone,
+.modal-content .prep-complete-zone,
+.modal-content .ritual-complete-zone,
+.modal-content .food-complete-zone,
+.modal-content .merchant-screen,
+.modal-content .alchemist-screen,
+.modal-content .dream-den-screen {
+    background-color: transparent !important;
+    background: transparent !important;
+}
+
+.modal-content .vendor-panel {
+    background-color: rgba(0, 0, 0, 0.4) !important;
+    border: 1px solid rgba(179, 136, 255, 0.1) !important;
+    border-radius: 4px !important;
+}
+
+.modal-content .modal-header,
+.modal-content .modal-footer {
+    background-color: transparent !important;
+    border-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+@keyframes pygmyBumpAbsorb {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+    35% {
+        transform: translate3d(var(--bumped-x, 0%), var(--bumped-y, 0%), 0) scale(0.9);
+        filter: brightness(0.8) sepia(0.3) drop-shadow(0 0 10px rgba(255, 100, 100, 0.5));
+    }
+    65% {
+        transform: translate3d(calc(var(--bumped-x, 0%) * 0.2), calc(var(--bumped-y, 0%) * 0.2), 0) scale(1.05);
+        filter: brightness(1.1);
+    }
+    100% {
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+}
+
+.tile.pygmy-bump-absorb .portrait,
+.tile.pygmy-bump-absorb .monster-portrait-glow,
+.tile.pygmy-bump-absorb .pygmy-hp-bar {
+    animation: pygmyBumpAbsorb 0.65s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
 }

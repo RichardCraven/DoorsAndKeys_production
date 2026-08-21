@@ -141,6 +141,13 @@ function App(props) {
     const handleKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
         e.preventDefault();
+        const meta = getMeta() || {};
+        if (meta.inSuperboard || (props.boardManager && props.boardManager.inSuperboard)) {
+          if (dungeonMessagingRef.current) {
+            try { dungeonMessagingRef.current('Saving is disabled in Pocket Dimensions!'); } catch (err) {}
+          }
+          return;
+        }
         if (saveUserDataRef.current) saveUserDataRef.current();
       }
     };
@@ -240,11 +247,16 @@ function App(props) {
   }
 
   const saveUserData = async () => {
-    // ...existing code...
     setMenuTrayExpanded(false);
+    const meta = getMeta() || {};
+    if (meta.inSuperboard || (props.boardManager && props.boardManager.inSuperboard)) {
+      if (dungeonMessagingRef.current) {
+        try { dungeonMessagingRef.current('Saving is disabled in Pocket Dimensions!'); } catch (err) {}
+      }
+      return;
+    }
     if (!props.boardManager.dungeon || !props.boardManager.dungeon.id || props.boardManager.dungeon.id === 'tutorial_dungeon' || props.boardManager.dungeon.isTutorial) return
     if (!props.boardManager.playerTile || !props.boardManager.playerTile.location) return
-    const meta = getMeta()
     const userId = getUserId();
 
     let boardIndex = props.boardManager.getBoardIndexFromBoard(props.boardManager.currentBoard)

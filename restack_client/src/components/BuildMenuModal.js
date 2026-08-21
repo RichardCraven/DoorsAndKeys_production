@@ -22,17 +22,6 @@ export const BUILDINGS = [
         description: 'Safe haven for the crew. Prevents Pygmy ambushes on this tile. Replaces any previously placed Hut.',
     },
     {
-        key: 'dream_den',
-        name: 'Dream Den',
-        category: 'earthly',
-        imageKey: 'dream_den',
-        fallbackImageKey: 'dream_den',
-        costs: { wood: 5, stone: 5, slate: 0 },
-        buildTime: 30,
-        tag: 'FUNCTIONAL',
-        description: 'Rest area for resting unit energy. 2x2 structure.',
-    },
-    {
         key: 'outpost',
         name: 'Outpost',
         category: 'earthly',
@@ -173,19 +162,19 @@ const TABS = [
         id: 'advanced',
         label: 'Advanced',
         icon: '⚙️',
-        isDisabled: (crew) => !hasEngineerUnit(crew),
+        isDisabled: (crew, inSuperboard) => inSuperboard ? false : !hasEngineerUnit(crew),
     },
     {
         id: 'arcane',
         label: 'Arcane',
         icon: '🔮',
-        isDisabled: (crew) => !hasArcaneUnit(crew),
+        isDisabled: (crew, inSuperboard) => inSuperboard ? false : !hasArcaneUnit(crew),
     },
     {
         id: 'obscure',
         label: 'Obscure',
-        icon: '💀',
-        isDisabled: () => true,
+        icon: <img src={images.whiteskull?.default || images.whiteskull || ''} alt="Obscure" style={{ width: '15px', height: '15px', objectFit: 'contain', filter: 'invert(1) drop-shadow(0 0 2px rgba(255,255,255,0.5))' }} />,
+        isDisabled: (crew, inSuperboard) => inSuperboard ? false : true,
     },
 ];
 
@@ -223,6 +212,7 @@ class BuildMenuModal extends Component {
     };
 
     canAfford = (costs, available) => {
+        if (this.props.inSuperboard) return true;
         return (
             available.wood >= (costs.wood || 0) &&
             available.stone >= (costs.stone || 0) &&
@@ -283,17 +273,21 @@ class BuildMenuModal extends Component {
                         maxWidth: '780px',
                         maxHeight: '85vh',
                         minHeight: '620px',
-                        background: 'linear-gradient(145deg, rgba(22, 18, 14, 0.98) 0%, rgba(12, 9, 7, 0.99) 100%)',
-                        border: '2px solid #e5b54f',
-                        borderRadius: '16px',
-                        boxShadow: '0 20px 60px rgba(0,0,0,0.9), 0 0 30px rgba(229, 181, 79, 0.25)',
+                        background: 'rgba(17, 18, 20, 0.85)',
+                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        borderRadius: '4px',
+                        backdropFilter: 'blur(12px)',
+                        WebkitBackdropFilter: 'blur(12px)',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(179, 136, 255, 0.05)',
                         padding: '24px 28px',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '16px',
                         overflowY: 'auto',
-                        color: '#f0ede5'
+                        color: '#f0ede5',
+                        fontFamily: "'Cinzel', serif"
                     }}
+                    className="arcane-modal"
                     onClick={e => e.stopPropagation()}
                 >
                     {/* Header */}
@@ -341,7 +335,7 @@ class BuildMenuModal extends Component {
                     <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(229, 181, 79, 0.2)', paddingBottom: '1px' }}>
                         {TABS.map(tab => {
                             const isActive = this.state.activeTab === tab.id;
-                            const isDisabled = tab.isDisabled(crew);
+                            const isDisabled = tab.isDisabled(crew, this.props.inSuperboard);
 
                             return (
                                 <button
@@ -355,12 +349,12 @@ class BuildMenuModal extends Component {
                                     title={isDisabled ? (tab.id === 'arcane' ? 'Requires a Wizard or Summoner in your crew' : 'Obscure buildings are currently locked') : undefined}
                                     style={{
                                         padding: '8px 18px',
-                                        borderRadius: '8px 8px 0 0',
+                                        borderRadius: '4px 4px 0 0',
                                         border: '1px solid',
                                         borderColor: isActive ? '#e5b54f' : 'transparent',
                                         borderBottom: isActive ? '2px solid #f9b115' : '1px solid transparent',
                                         background: isActive
-                                            ? 'linear-gradient(180deg, rgba(249, 177, 21, 0.22) 0%, rgba(20, 15, 9, 0.85) 100%)'
+                                            ? 'linear-gradient(180deg, rgba(249, 177, 21, 0.15) 0%, rgba(20, 15, 9, 0.85) 100%)'
                                             : isDisabled
                                                 ? 'rgba(0, 0, 0, 0.3)'
                                                 : 'rgba(255, 255, 255, 0.04)',
@@ -391,29 +385,37 @@ class BuildMenuModal extends Component {
                         alignItems: 'center',
                         justifyContent: 'space-around',
                         background: 'rgba(0, 0, 0, 0.5)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(229, 181, 79, 0.3)',
                         borderRadius: '10px',
                         padding: '10px 16px',
                     }}>
-                        {this.state.activeTab !== 'arcane' && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
-                                <img src={images.wood} alt="Wood" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
-                                <span>Wood: <strong style={{ color: '#f9b115' }}>{available.wood}</strong></span>
+                        {this.props.inSuperboard ? (
+                            <div style={{ color: '#4ade80', fontSize: '13px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span>✨</span> POCKET DIMENSION TESTING: ALL BUILDINGS & CATEGORIES ARE FREE TO BUILD
                             </div>
-                        )}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
-                            <img src={images.stone} alt="Stone" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
-                            <span>Stone: <strong style={{ color: '#f9b115' }}>{available.stone}</strong></span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
-                            <img src={images.slate} alt="Slate" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
-                            <span>Slate: <strong style={{ color: '#f9b115' }}>{available.slate}</strong></span>
-                        </div>
-                        {this.state.activeTab === 'arcane' && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
-                                <img src={images.spectral_dust} alt="Dust" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
-                                <span>Dust: <strong style={{ color: '#f9b115' }}>{available.dust}</strong></span>
-                            </div>
+                        ) : (
+                            <>
+                                {this.state.activeTab !== 'arcane' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                        <img src={images.wood} alt="Wood" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                                        <span>Wood: <strong style={{ color: '#f9b115' }}>{available.wood}</strong></span>
+                                    </div>
+                                )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                    <img src={images.stone} alt="Stone" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                                    <span>Stone: <strong style={{ color: '#f9b115' }}>{available.stone}</strong></span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                    <img src={images.slate} alt="Slate" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                                    <span>Slate: <strong style={{ color: '#f9b115' }}>{available.slate}</strong></span>
+                                </div>
+                                {this.state.activeTab === 'arcane' && (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                        <img src={images.spectral_dust} alt="Dust" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                                        <span>Dust: <strong style={{ color: '#f9b115' }}>{available.dust}</strong></span>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
 
@@ -452,9 +454,9 @@ class BuildMenuModal extends Component {
                         {visibleBuildings.map((b) => {
                             const imgUrl = images[b.imageKey] || images[b.fallbackImageKey] || images.building;
                             const affordable = this.canAfford(b.costs, available) && !activeConstruction;
-                            const isFree = b.costs.wood === 0 && b.costs.stone === 0 && b.costs.slate === 0;
+                            const isFree = this.props.inSuperboard || (b.costs.wood === 0 && b.costs.stone === 0 && b.costs.slate === 0 && (b.costs.dust || 0) === 0);
 
-                            const adjustedBuildTime = getAdjustedBuildTime(b.buildTime, crew);
+                            const adjustedBuildTime = getAdjustedBuildTime(b.buildTime, crew, this.props.inSuperboard);
                             const isTimeIncreased = adjustedBuildTime > b.buildTime;
 
                             return (
@@ -466,13 +468,13 @@ class BuildMenuModal extends Component {
                                         padding: '14px',
                                         background: 'rgba(255, 255, 255, 0.03)',
                                         border: affordable ? '1px solid rgba(229, 181, 79, 0.3)' : '1px solid rgba(255, 255, 255, 0.07)',
-                                        borderRadius: '12px',
+                                        borderRadius: '4px',
                                         transition: 'all 0.2s ease',
                                         position: 'relative'
                                     }}
                                 >
                                     {/* Icon Preview */}
-                                    <div style={{ width: '70px', height: '70px', borderRadius: '10px', background: 'radial-gradient(circle, #2a1f14 0%, #120c06 100%)', border: '1.5px solid #e5b54f', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}>
+                                    <div style={{ width: '70px', height: '70px', borderRadius: '4px', background: 'radial-gradient(circle, #2a1f14 0%, #120c06 100%)', border: '1.5px solid #e5b54f', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(0,0,0,0.6)' }}>
                                         {imgUrl && <img src={imgUrl} alt={b.name} style={{ width: '56px', height: '56px', objectFit: 'contain' }} />}
                                     </div>
 
@@ -542,31 +544,33 @@ class BuildMenuModal extends Component {
                                                 onClick={() => this.handleBuildClick(b)}
                                                 disabled={!affordable}
                                                 style={{
-                                                    padding: '6px 16px',
-                                                    borderRadius: '20px',
-                                                    border: 'none',
+                                                    padding: '8px 18px',
+                                                    borderRadius: '4px',
+                                                    border: '1px solid rgba(229, 181, 79, 0.4)',
                                                     background: affordable
-                                                        ? 'linear-gradient(135deg, rgba(201, 132, 10, 0.35) 0%, rgba(249, 177, 21, 0.5) 100%)'
-                                                        : 'rgba(255, 255, 255, 0.05)',
-                                                    outline: affordable ? '1px solid rgba(249, 177, 21, 0.6)' : '1px solid rgba(255, 255, 255, 0.1)',
-                                                    color: affordable ? '#f9b115' : 'rgba(255, 255, 255, 0.3)',
-                                                    fontSize: '12px',
-                                                    fontWeight: '700',
+                                                        ? 'rgba(22, 19, 17, 0.45)'
+                                                        : 'rgba(0, 0, 0, 0.3)',
+                                                    color: affordable ? '#e5b54f' : 'rgba(255, 255, 255, 0.3)',
                                                     fontFamily: "'Cinzel', serif",
-                                                    letterSpacing: '0.05em',
+                                                    fontWeight: '700',
+                                                    fontSize: '0.95rem',
+                                                    letterSpacing: '2px',
+                                                    textTransform: 'uppercase',
+                                                    boxShadow: affordable ? '0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(229, 181, 79, 0.03)' : 'none',
                                                     cursor: affordable ? 'pointer' : 'not-allowed',
-                                                    transition: 'all 0.18s ease',
+                                                    transition: 'all 0.2s ease',
+                                                    alignSelf: 'flex-end',
                                                 }}
                                                 onMouseEnter={e => {
                                                     if (affordable) {
-                                                        e.currentTarget.style.background = 'linear-gradient(135deg, rgba(201, 132, 10, 0.55) 0%, rgba(249, 177, 21, 0.75) 100%)';
-                                                        e.currentTarget.style.color = '#fff';
+                                                        e.currentTarget.style.background = 'rgba(32, 26, 22, 0.8)';
+                                                        e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.6), inset 0 0 15px rgba(229, 181, 79, 0.15)';
                                                     }
                                                 }}
                                                 onMouseLeave={e => {
                                                     if (affordable) {
-                                                        e.currentTarget.style.background = 'linear-gradient(135deg, rgba(201, 132, 10, 0.35) 0%, rgba(249, 177, 21, 0.5) 100%)';
-                                                        e.currentTarget.style.color = '#f9b115';
+                                                        e.currentTarget.style.background = 'rgba(22, 19, 17, 0.45)';
+                                                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(229, 181, 79, 0.03)';
                                                     }
                                                 }}
                                             >
