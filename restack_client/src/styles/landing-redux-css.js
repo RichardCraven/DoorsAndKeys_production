@@ -688,7 +688,7 @@ export const LANDING_REDUX_CSS = `
   height: 130px;
   border-radius: 50%;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: center;

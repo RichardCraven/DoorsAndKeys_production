@@ -25,6 +25,7 @@ class BoardsPalette extends React.Component {
         if (optionType === 'connecting path') return 'Connecting Path';
         if (optionType === 'territory') return 'Territory';
         if (optionType === 'buildings') return 'Buildings';
+        if (optionType === 'pocket buildings') return 'Pocket Buildings';
         if (optionType === 'generators') return 'Generators';
         if (optionType === 'dungeon litter') return 'Dungeon Litter';
         return optionType;
@@ -119,7 +120,7 @@ class BoardsPalette extends React.Component {
                                     </button>
                                 </div>
                             )}
-                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'territory', 'buildings', 'generators', 'dungeon litter'].includes(tile.optionType) && (() => {
+                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter'].includes(tile.optionType) && (() => {
                                 const isExpanded = this.props.optionClickedIdx === i;
                                 return (
                                     <div style={{ marginRight: '15px', display: 'flex', alignItems: 'center', userSelect: 'none' }}>
@@ -584,6 +585,36 @@ class BoardsPalette extends React.Component {
                                     index={bi}
                                     image={images[bItem.image]}
                                     imageOverride={images[bItem.image]}
+                                    handleHover={null}
+                                    handleClick={null}
+                                    type={'item'}>
+                                    </Tile>
+                                </div>
+                            })}
+                        </div>}
+                        {tile.optionType === 'pocket buildings' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
+                            {(this.props.mapMaker.pocketBuildingOptions || []).map((pbItem, pbi) => {
+                                const isHovered = this.state.hoveredSubItem?.type === 'pocket-building' && this.state.hoveredSubItem?.id === pbi;
+                                const isSelected = this.props.pinnedOption?.type === 'pocket-building-tile' && this.props.pinnedOption?.id === pbi;
+                                return <div
+                                key={`pocket-building-${pbi}`}
+                                className={`palette-option-subcontainer${isHovered ? ' sub-hovered' : ''}${isSelected ? ' sub-selected' : ''}`}
+                                onMouseEnter={() => this.setState({ hoveredSubItem: { type: 'pocket-building', id: pbi } })}
+                                onMouseLeave={() => this.setState({ hoveredSubItem: null })}
+                                onClick={() => {
+                                    this.props.handleClick({
+                                        type: 'pocket-building-tile',
+                                        id: pbi
+                                    })
+                                }}
+                                >
+                                    <div className="text-container">{pbItem.name}</div>
+                                    <Tile
+                                    id={pbi}
+                                    tileSize={this.props.tileSize}
+                                    index={pbi}
+                                    image={images[pbItem.image] || images[pbItem.key]}
+                                    imageOverride={images[pbItem.image] || images[pbItem.key]}
                                     handleHover={null}
                                     handleClick={null}
                                     type={'item'}>

@@ -5149,6 +5149,11 @@ class DungeonPage extends React.Component {
             }
         }
 
+        this.ensurePocketPygmiesAndStructures(superboard, type);
+
+        const activeMinimapIdx = Math.floor(spawnGy / 15) * 3 + Math.floor(spawnGx / 15);
+        const minimap = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => ({ active: i === activeMinimapIdx }));
+
         this.setState({
             inSuperboard: true,
             superboardType: type,
@@ -5156,7 +5161,8 @@ class DungeonPage extends React.Component {
             superboardSpawnCoords: { gx: spawnGx, gy: spawnGy },
             superboardPlayerPos: { gx: spawnGx, gy: spawnGy },
             justSpawnedInSuperboard: true,
-            dungeon: dungeon
+            dungeon: dungeon,
+            minimap
         }, () => {
             this.updateSuperboardViewport();
             this.displayMessage(`🌀 Entered the ${type.toUpperCase()} Pocket Dimension!`);
@@ -5235,10 +5241,14 @@ class DungeonPage extends React.Component {
             bm.currentBoard = { id: 'superboard', tiles: viewportTiles };
         }
 
+        const activeMinimapIdx = Math.floor(gy / 15) * 3 + Math.floor(gx / 15);
+        const minimap = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(i => ({ active: i === activeMinimapIdx }));
+
         this.setState({
             tiles: viewportTiles,
             superboardViewMinX: viewMinX,
-            superboardViewMinY: viewMinY
+            superboardViewMinY: viewMinY,
+            minimap
         }, () => {
             if (bm && typeof bm.refreshTiles === 'function') {
                 bm.refreshTiles();
@@ -5306,6 +5316,68 @@ class DungeonPage extends React.Component {
                 return; // Block movement onto interactables
             }
 
+            // Check if target tile contains a Pocket Pygmy or Automaton
+            const targetContains = targetTile?.contains;
+            const isPocketPygmyTarget = targetContains && (targetContains.isPocketPygmy || targetContains.subtype === 'pocket_pygmy' || (targetContains.type === 'pygmies' && typeof targetContains.hp === 'number'));
+            const isAutomatonTarget = targetContains && (targetContains.isAutomaton || targetContains.subtype === 'automaton');
+
+            if (isPocketPygmyTarget || isAutomatonTarget) {
+                // Player crew attacks the target unit!
+                const meta = getMeta() || {};
+                const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : (meta.crew || []);
+                const livingCrew = crew.filter(m => m && !(m.dead === true || (typeof m.hp === 'number' && m.hp <= 0)));
+                const totalAtk = Math.max(10, livingCrew.reduce((sum, m) => sum + (m.stats?.atk || m.stats?.strength || 10), 0));
+
+                // Damage range: 1/2 totalAtk up to 1.0 totalAtk
+                const minDmg = totalAtk * 0.5;
+                const maxDmg = totalAtk * 1.0;
+                const dmg = Math.round(minDmg + Math.random() * (maxDmg - minDmg));
+
+                // Trigger player bump animation towards target
+                const playerVTileIdx = 112; // Center of 15x15 viewport
+                const playerTileObj = bm.tiles[playerVTileIdx] || bm.tiles[112];
+
+                if (playerTileObj) {
+                    playerTileObj.isBumpingAttack = true;
+                    playerTileObj.bumpVector = { dRow: dy, dCol: dx };
+                    if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                    this.forceUpdate();
+                    setTimeout(() => {
+                        if (playerTileObj) {
+                            playerTileObj.isBumpingAttack = false;
+                            playerTileObj.bumpVector = null;
+                            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                            this.forceUpdate();
+                        }
+                    }, 550);
+                }
+
+                targetContains.hp = (targetContains.hp || 15) - dmg;
+                const maxHpVal = targetContains.maxHp || (isAutomatonTarget ? 15 : 10);
+                const targetName = isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy';
+
+                if (targetContains.hp <= 0) {
+                    if (targetContains.homeStructureKey) {
+                        if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
+                        this._pocketStructureRespawns.push({
+                            readyTime: Date.now() + 10000,
+                            structureKey: targetContains.homeStructureKey,
+                            mbIdx,
+                            tIdx,
+                            superboardType
+                        });
+                    }
+                    targetTile.contains = null;
+                    targetTile.image = null;
+                    this.displayMessage(`💥 Crew dealt ${dmg} damage and destroyed the ${targetName}!`);
+                } else {
+                    this.displayMessage(`⚔ Crew dealt ${dmg} damage to ${targetName}! (HP: ${targetContains.hp}/${maxHpVal})`);
+                }
+
+                this.updateSuperboardViewport();
+                return; // Block movement onto unit tile while attacking
+            }
+
             const isItemKind = cType === 'item' || cType === 'key' || cType === 'rune' || cType === 'jewel' || cType === 'shard' || cType === 'consumable' || targetTile.isLoot || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(cSubtype) || (cType && typeof cType === 'string' && cType.startsWith('chest_'));
             
             if (isItemKind) {
@@ -5346,12 +5418,17 @@ class DungeonPage extends React.Component {
 
     exitSuperboardPocketDimension = () => {
         const origin = this.state.savedDreamDenOrigin;
+        const minimap = (this.state.minimap || []).map((e, idx) => ({
+            ...(e || {}),
+            active: origin ? idx === (origin.boardIndex ?? 4) : e.active
+        }));
         this.setState({
             inSuperboard: false,
             superboardType: null,
             savedDreamDenOrigin: null,
             superboardSpawnCoords: null,
-            superboardPlayerPos: null
+            superboardPlayerPos: null,
+            minimap
         }, () => {
             if (origin && origin.levelId !== undefined) {
                 this.teleportCrew(origin);
@@ -5533,7 +5610,7 @@ class DungeonPage extends React.Component {
                 };
                 const sides = sideMap[direction];
 
-                const isWallBlocked = (destIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, destIndex, { ignoreBuilding: true })) ||
+                const hasPassageWallBetween = (destIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, destIndex, { ignoreBuilding: true })) ||
                     (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
                     (sides?.opp && bm.hasSolidBorder(destTileObj, sides.opp));
 
@@ -5542,7 +5619,7 @@ class DungeonPage extends React.Component {
                 const anyInscription = oppInscription || selfInscription;
 
                 let targetBuilding = null;
-                if (!isWallBlocked && this.isBuildingOrGeneratorTile(destTileObj)) {
+                if (!hasPassageWallBetween && this.isBuildingOrGeneratorTile(destTileObj)) {
                     targetBuilding = destTileObj;
                 } else if (this.isBuildingOrGeneratorTile(playerTileObj)) {
                     targetBuilding = playerTileObj;
@@ -6589,11 +6666,490 @@ class DungeonPage extends React.Component {
         return 1;
     };
 
+    ensurePocketPygmiesAndStructures = (superboard, superboardType) => {
+        if (!superboard || !Array.isArray(superboard.miniboards)) return;
+
+        const structures = [];
+        let totalPocketPygmies = 0;
+
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (!tile) continue;
+
+                if (tile.contains && (tile.contains.isPocketPygmy || tile.contains.subtype === 'pocket_pygmy')) {
+                    if ((tile.contains.hp || 0) > 0) totalPocketPygmies++;
+                    continue;
+                }
+
+                // Check for structures
+                const cType = typeof tile.contains === 'object' && tile.contains ? (tile.contains.type || tile.contains.subtype) : tile.contains;
+                const cSub = typeof tile.contains === 'object' && tile.contains ? tile.contains.subtype : null;
+                const structKey = cSub || cType || tile.building || tile.contains?.building;
+
+                if (['earthen_fort', 'war_camp', 'war_fort'].includes(structKey)) {
+                    const lX = tIdx % 15;
+                    const lY = Math.floor(tIdx / 15);
+                    const gx = mbX * 15 + lX;
+                    const gy = mbY * 15 + lY;
+                    const targetCapacity = structKey === 'earthen_fort' ? 1 : 3;
+                    structures.push({
+                        key: `${mbIdx}_${tIdx}_${structKey}`,
+                        structKey,
+                        mbIdx,
+                        tIdx,
+                        gx,
+                        gy,
+                        targetCapacity,
+                        name: structKey === 'earthen_fort' ? 'Earthen Fort' : (structKey === 'war_camp' ? 'War Camp' : 'War Fort')
+                    });
+                }
+            }
+        }
+
+        const now = Date.now();
+        if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
+
+        // Ensure each structure maintains its quota of pygmies
+        structures.forEach(struct => {
+            let assignedCount = 0;
+            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                const mb = superboard.miniboards[mbIdx];
+                if (!mb || !Array.isArray(mb.tiles)) continue;
+                for (let i = 0; i < mb.tiles.length; i++) {
+                    const t = mb.tiles[i];
+                    if (t && t.contains && t.contains.homeStructureKey === struct.key && (t.contains.hp || 0) > 0) {
+                        assignedCount++;
+                    }
+                }
+            }
+
+            const pendingCount = this._pocketStructureRespawns.filter(item => item.structureKey === struct.key).length;
+            const needed = struct.targetCapacity - (assignedCount + pendingCount);
+
+            for (let k = 0; k < needed; k++) {
+                const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, struct.gx, struct.gy);
+                if (spawnCoord) {
+                    const newPygmy = {
+                        type: 'pygmies',
+                        subtype: 'pocket_pygmy',
+                        isPocketPygmy: true,
+                        hp: 10,
+                        maxHp: 10,
+                        id: `pocket_pygmy_${now}_${Math.random().toString(36).substring(2, 7)}_${k}`,
+                        lastAttackTime: 0,
+                        homeStructureKey: struct.key
+                    };
+                    const targetMb = superboard.miniboards[spawnCoord.mbIdx];
+                    if (targetMb && targetMb.tiles[spawnCoord.tIdx]) {
+                        targetMb.tiles[spawnCoord.tIdx].contains = newPygmy;
+                        targetMb.tiles[spawnCoord.tIdx].image = images.woodland_individual || 'woodland_individual';
+                        totalPocketPygmies++;
+                    }
+                }
+            }
+        });
+
+        // Ensure total pocket pygmies on superboard is at least 20
+        let spawnAttempts = 0;
+        while (totalPocketPygmies < 20 && spawnAttempts < 100) {
+            spawnAttempts++;
+            const randomMbIdx = Math.floor(Math.random() * 9);
+            const randomTileIdx = Math.floor(Math.random() * 225);
+            const mb = superboard.miniboards[randomMbIdx];
+            if (mb && Array.isArray(mb.tiles)) {
+                const tile = mb.tiles[randomTileIdx];
+                const storedColor = tile?.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                const isVoid = (tile?.contains === 'void' || (tile?.contains && tile.contains.type === 'void')) ||
+                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                const isEmpty = !isVoid && (!tile.contains || (typeof tile.contains === 'object' && tile.contains.type === 'empty_space'));
+
+                if (tile && isEmpty) {
+                    tile.contains = {
+                        type: 'pygmies',
+                        subtype: 'pocket_pygmy',
+                        isPocketPygmy: true,
+                        hp: 10,
+                        maxHp: 10,
+                        id: `pocket_pygmy_${now}_${Math.random().toString(36).substring(2, 7)}_${spawnAttempts}`,
+                        lastAttackTime: 0,
+                        homeStructureKey: null
+                    };
+                    tile.image = images.woodland_individual || 'woodland_individual';
+                    totalPocketPygmies++;
+                }
+            }
+        }
+
+        // Ensure 8 Automatons are spawned on the superboard
+        let totalAutomatons = 0;
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            for (let i = 0; i < mb.tiles.length; i++) {
+                const tile = mb.tiles[i];
+                if (tile && tile.contains && (tile.contains.isAutomaton || tile.contains.subtype === 'automaton')) {
+                    if ((tile.contains.hp || 0) > 0) totalAutomatons++;
+                }
+            }
+        }
+
+        let autoAttempts = 0;
+        while (totalAutomatons < 8 && autoAttempts < 100) {
+            autoAttempts++;
+            const randomMbIdx = Math.floor(Math.random() * 9);
+            const randomTileIdx = Math.floor(Math.random() * 225);
+            const mb = superboard.miniboards[randomMbIdx];
+            if (mb && Array.isArray(mb.tiles)) {
+                const tile = mb.tiles[randomTileIdx];
+                const storedColor = tile?.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                const isVoid = (tile?.contains === 'void' || (tile?.contains && tile.contains.type === 'void')) ||
+                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                const isEmpty = !isVoid && (!tile.contains || (typeof tile.contains === 'object' && tile.contains.type === 'empty_space'));
+
+                if (tile && isEmpty) {
+                    tile.contains = {
+                        type: 'monster',
+                        subtype: 'automaton',
+                        isAutomaton: true,
+                        hp: 15,
+                        maxHp: 15,
+                        id: `pocket_automaton_${now}_${Math.random().toString(36).substring(2, 7)}_${autoAttempts}`,
+                        homeStructureKey: null
+                    };
+                    tile.image = images.automaton || 'automaton';
+                    totalAutomatons++;
+                }
+            }
+        }
+    };
+
+    findAdjacentSuperboardEmptyTile = (superboard, gx, gy) => {
+        const adj = this.getAdjacentSuperboardTiles(superboard, gx, gy).filter(c => c.isEmpty);
+        return adj.length > 0 ? adj[Math.floor(Math.random() * adj.length)] : null;
+    };
+
+    getAdjacentSuperboardTiles = (superboard, gx, gy) => {
+        const candidates = [
+            { gx: gx, gy: gy - 1 }, // North
+            { gx: gx, gy: gy + 1 }, // South
+            { gx: gx - 1, gy: gy }, // West
+            { gx: gx + 1, gy: gy }  // East
+        ];
+        const results = [];
+        candidates.forEach(c => {
+            if (c.gx >= 0 && c.gx < 45 && c.gy >= 0 && c.gy < 45) {
+                const mbX = Math.floor(c.gx / 15);
+                const mbY = Math.floor(c.gy / 15);
+                const mbIdx = mbY * 3 + mbX;
+                const lX = c.gx % 15;
+                const lY = c.gy % 15;
+                const tIdx = lY * 15 + lX;
+                const tile = superboard.miniboards?.[mbIdx]?.tiles?.[tIdx];
+                const storedColor = tile?.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                const isVoid = (tile?.contains === 'void' || (tile?.contains && tile.contains.type === 'void')) ||
+                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                const isEmpty = !isVoid && (!tile?.contains || (typeof tile.contains === 'object' && tile.contains.type === 'empty_space'));
+                results.push({
+                    gx: c.gx,
+                    gy: c.gy,
+                    mbIdx,
+                    tIdx,
+                    tile,
+                    isVoid,
+                    isEmpty
+                });
+            }
+        });
+        return results;
+    };
+
+    movePocketPygmyUnit = (superboard, fromMbIdx, fromTIdx, toMbIdx, toTIdx, fromGx, fromGy, toGx, toGy) => {
+        const fromMb = superboard.miniboards[fromMbIdx];
+        const toMb = superboard.miniboards[toMbIdx];
+        if (!fromMb || !toMb) return;
+
+        const fromTile = fromMb.tiles[fromTIdx];
+        const toTile = toMb.tiles[toTIdx];
+        if (!fromTile || !toTile || !fromTile.contains) return;
+
+        const pygmy = fromTile.contains;
+        fromTile.contains = null;
+        fromTile.image = null;
+
+        const dRow = fromGy - toGy;
+        const dCol = fromGx - toGx;
+        toTile.contains = pygmy;
+        toTile.image = images.woodland_individual || 'woodland_individual';
+        toTile.isGliding = true;
+        toTile.glideVector = { dRow, dCol };
+
+        setTimeout(() => {
+            if (toTile) {
+                toTile.isGliding = false;
+                toTile.glideVector = null;
+                if (typeof this.props.boardManager?.refreshTiles === 'function') this.props.boardManager.refreshTiles();
+                if (this && this._isMounted && typeof this.forceUpdate === 'function') this.forceUpdate();
+            }
+        }, 400);
+    };
+
+    animatePocketPygmyBump = async (superboard, mbIdx, tIdx, dCol, dRow) => {
+        const tile = superboard.miniboards?.[mbIdx]?.tiles?.[tIdx];
+        if (!tile) return;
+        const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+        tile.isBumpingAttack = true;
+        tile.bumpVector = { dRow: Math.sign(dRow), dCol: Math.sign(dCol) };
+        if (typeof this.props.boardManager?.refreshTiles === 'function') this.props.boardManager.refreshTiles();
+        this.updateSuperboardViewport();
+
+        await sleep(550);
+
+        tile.isBumpingAttack = false;
+        tile.bumpVector = null;
+        if (typeof this.props.boardManager?.refreshTiles === 'function') this.props.boardManager.refreshTiles();
+        this.updateSuperboardViewport();
+    };
+
+    damagePlayerCrew = (dmg) => {
+        const meta = getMeta() || {};
+        const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : (meta.crew || []);
+        const livingCrew = crew.filter(m => m && !(m.dead === true || (typeof m.hp === 'number' && m.hp <= 0)));
+        if (livingCrew.length > 0) {
+            const member = livingCrew[0];
+            member.hp = Math.max(0, (member.hp || 100) - dmg);
+            if (member.hp <= 0) {
+                member.dead = true;
+                this.displayMessage(`⚠️ ${member.name || 'Crew member'} has fallen!`);
+            }
+            if (typeof this.props.saveUserData === 'function') this.props.saveUserData();
+        }
+    };
+
+    tickPocketPygmies = async () => {
+        const { superboardType, dungeon, superboardPlayerPos } = this.state;
+        if (!superboardType || !dungeon || !dungeon.superboards?.[superboardType]) return;
+
+        const superboard = dungeon.superboards[superboardType];
+        const now = Date.now();
+
+        // 1. Process Structure Cooldowns & Respawns
+        if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
+        const pending = [...this._pocketStructureRespawns];
+        this._pocketStructureRespawns = [];
+
+        for (const item of pending) {
+            if (now >= item.readyTime) {
+                const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, item.gx || 22, item.gy || 22);
+                if (spawnCoord) {
+                    const newPygmy = {
+                        type: 'pygmies',
+                        subtype: 'pocket_pygmy',
+                        isPocketPygmy: true,
+                        hp: 10,
+                        maxHp: 10,
+                        id: `pocket_pygmy_${now}_${Math.random().toString(36).substring(2, 7)}`,
+                        lastAttackTime: 0,
+                        homeStructureKey: item.structureKey
+                    };
+                    const targetMb = superboard.miniboards[spawnCoord.mbIdx];
+                    if (targetMb && targetMb.tiles[spawnCoord.tIdx]) {
+                        targetMb.tiles[spawnCoord.tIdx].contains = newPygmy;
+                        targetMb.tiles[spawnCoord.tIdx].image = images.woodland_individual || 'woodland_individual';
+                        this.displayMessage(`🛖 A new Pocket Pygmy spawned from structure!`);
+                    }
+                } else {
+                    this._pocketStructureRespawns.push(item);
+                }
+            } else {
+                this._pocketStructureRespawns.push(item);
+            }
+        }
+
+        // 2. Ensure initial pygmies and structure quotas
+        this.ensurePocketPygmiesAndStructures(superboard, superboardType);
+
+        // 3. Collect all living pocket pygmies across 45x45 superboard grid
+        const pygmiesList = [];
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (tile && tile.contains && (tile.contains.isPocketPygmy || tile.contains.subtype === 'pocket_pygmy')) {
+                    const lX = tIdx % 15;
+                    const lY = Math.floor(tIdx / 15);
+                    const gx = mbX * 15 + lX;
+                    const gy = mbY * 15 + lY;
+                    pygmiesList.push({
+                        gx, gy, mbIdx, tIdx, tile, pygmy: tile.contains
+                    });
+                }
+            }
+        }
+
+        if (pygmiesList.length === 0) return;
+
+        // Process each pygmy action
+        for (const unit of pygmiesList) {
+            const currentTile = superboard.miniboards[unit.mbIdx]?.tiles?.[unit.tIdx];
+            if (!currentTile || !currentTile.contains || currentTile.contains.id !== unit.pygmy.id) continue;
+            const pygmy = currentTile.contains;
+            if ((pygmy.hp || 0) <= 0) continue;
+
+            const { gx, gy } = unit;
+
+            // ── A. Low HP Fleeing (hp <= 2: <= 20% of 10) ──
+            if ((pygmy.hp || 10) <= 2) {
+                let nearestThreat = null;
+                let minDist = 999;
+                if (superboardPlayerPos) {
+                    const distToPlayer = Math.abs(gx - superboardPlayerPos.gx) + Math.abs(gy - superboardPlayerPos.gy);
+                    if (distToPlayer <= 4) {
+                        minDist = distToPlayer;
+                        nearestThreat = superboardPlayerPos;
+                    }
+                }
+                for (const other of pygmiesList) {
+                    if (other.pygmy.id === pygmy.id) continue;
+                    const d = Math.abs(gx - other.gx) + Math.abs(gy - other.gy);
+                    if (d <= 4 && d < minDist) {
+                        minDist = d;
+                        nearestThreat = { gx: other.gx, gy: other.gy };
+                    }
+                }
+
+                if (nearestThreat) {
+                    const adjCandidates = this.getAdjacentSuperboardTiles(superboard, gx, gy).filter(c => c.isEmpty);
+                    if (adjCandidates.length > 0) {
+                        adjCandidates.sort((a, b) => {
+                            const distA = Math.abs(a.gx - nearestThreat.gx) + Math.abs(a.gy - nearestThreat.gy);
+                            const distB = Math.abs(b.gx - nearestThreat.gx) + Math.abs(b.gy - nearestThreat.gy);
+                            return distB - distA; // Farthest first
+                        });
+                        const bestFlee = adjCandidates[0];
+                        if (bestFlee) {
+                            this.movePocketPygmyUnit(superboard, unit.mbIdx, unit.tIdx, bestFlee.mbIdx, bestFlee.tIdx, gx, gy, bestFlee.gx, bestFlee.gy);
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // ── B. Attack Check (Adjacent Player or Other Pygmy) ──
+            const canAttack = (now - (pygmy.lastAttackTime || 0)) >= 2000;
+            if (canAttack) {
+                const adjTiles = this.getAdjacentSuperboardTiles(superboard, gx, gy);
+
+                // Target Option 1: Player Avatar
+                if (superboardPlayerPos) {
+                    const isPlayerAdjacent = Math.abs(gx - superboardPlayerPos.gx) + Math.abs(gy - superboardPlayerPos.gy) === 1;
+                    if (isPlayerAdjacent) {
+                        pygmy.lastAttackTime = now;
+                        await this.animatePocketPygmyBump(superboard, unit.mbIdx, unit.tIdx, superboardPlayerPos.gx - gx, superboardPlayerPos.gy - gy);
+                        const dmg = Math.floor(Math.random() * 3) + 1; // 1-3 damage
+                        this.damagePlayerCrew(dmg);
+                        this.displayMessage(`⚔ Pocket Pygmy dealt ${dmg} damage to your crew!`);
+                        continue;
+                    }
+                }
+
+                // Target Option 2: Other Pocket Pygmy or Automaton
+                const adjacentEnemyUnit = adjTiles.find(c => c.tile && c.tile.contains && (c.tile.contains.isPocketPygmy || c.tile.contains.isAutomaton) && c.tile.contains.id !== pygmy.id && (c.tile.contains.hp || 0) > 0);
+                if (adjacentEnemyUnit) {
+                    pygmy.lastAttackTime = now;
+                    const dCol = adjacentEnemyUnit.gx - gx;
+                    const dRow = adjacentEnemyUnit.gy - gy;
+
+                    await this.animatePocketPygmyBump(superboard, unit.mbIdx, unit.tIdx, dCol, dRow);
+                    const dmg = Math.floor(Math.random() * 3) + 1; // 1-3 damage
+                    const targetUnit = adjacentEnemyUnit.tile.contains;
+                    const targetName = targetUnit.isAutomaton ? 'Automaton' : 'Pygmy';
+                    const maxHpVal = targetUnit.maxHp || 10;
+                    targetUnit.hp = (targetUnit.hp || maxHpVal) - dmg;
+                    this.displayMessage(`⚔ Pygmy dealt ${dmg} damage to ${targetName}! (HP: ${targetUnit.hp}/${maxHpVal})`);
+
+                    if (targetUnit.hp <= 0) {
+                        if (targetUnit.homeStructureKey) {
+                            this._pocketStructureRespawns.push({
+                                readyTime: now + 10000,
+                                structureKey: targetUnit.homeStructureKey,
+                                gx: adjacentEnemyUnit.gx,
+                                gy: adjacentEnemyUnit.gy,
+                                superboardType
+                            });
+                        }
+                        adjacentEnemyUnit.tile.contains = null;
+                        adjacentEnemyUnit.tile.image = null;
+                        this.displayMessage(`💥 An ${targetName} was destroyed in combat!`);
+                    }
+                    if (typeof this.props.boardManager?.refreshTiles === 'function') this.props.boardManager.refreshTiles();
+                    this.updateSuperboardViewport();
+                    continue;
+                }
+            }
+
+            // ── C. Random Roam Movement ──
+            const adjEmpty = this.getAdjacentSuperboardTiles(superboard, gx, gy).filter(c => c.isEmpty);
+            if (adjEmpty.length > 0) {
+                const chosen = adjEmpty[Math.floor(Math.random() * adjEmpty.length)];
+                this.movePocketPygmyUnit(superboard, unit.mbIdx, unit.tIdx, chosen.mbIdx, chosen.tIdx, gx, gy, chosen.gx, chosen.gy);
+            }
+        }
+
+        // 4. Collect all living Automatons & process their peaceful roaming movement
+        const automatonsList = [];
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (tile && tile.contains && (tile.contains.isAutomaton || tile.contains.subtype === 'automaton')) {
+                    const lX = tIdx % 15;
+                    const lY = Math.floor(tIdx / 15);
+                    const gx = mbX * 15 + lX;
+                    const gy = mbY * 15 + lY;
+                    automatonsList.push({
+                        gx, gy, mbIdx, tIdx, tile, automaton: tile.contains
+                    });
+                }
+            }
+        }
+
+        for (const auto of automatonsList) {
+            const currentTile = superboard.miniboards[auto.mbIdx]?.tiles?.[auto.tIdx];
+            if (!currentTile || !currentTile.contains || currentTile.contains.id !== auto.automaton.id) continue;
+            if ((currentTile.contains.hp || 0) <= 0) continue;
+
+            const adjEmpty = this.getAdjacentSuperboardTiles(superboard, auto.gx, auto.gy).filter(c => c.isEmpty);
+            if (adjEmpty.length > 0) {
+                const chosen = adjEmpty[Math.floor(Math.random() * adjEmpty.length)];
+                this.movePocketPygmyUnit(superboard, auto.mbIdx, auto.tIdx, chosen.mbIdx, chosen.tIdx, auto.gx, auto.gy, chosen.gx, chosen.gy);
+            }
+        }
+
+        this.updateSuperboardViewport();
+    };
+
     tickPygmiesMovement = async () => {
         if (this._pygmiesMoving) return;
         this._pygmiesMoving = true;
 
         try {
+            if (this.state.inSuperboard) {
+                await this.tickPocketPygmies();
+                return;
+            }
             const bm = this.props.boardManager;
             if (!bm || !bm.tiles || !bm.playerTile || !bm.playerTile.location) return;
 
@@ -7950,7 +8506,8 @@ class DungeonPage extends React.Component {
         const collapsed = this.isSectionCollapsed('minimap');
         const bm = this.props.boardManager;
         const isBackside = bm && (bm.currentOrientation === 'B' || bm.currentOrientation === 'back');
-        const titleText = isBackside ? 'Minimap (backside)' : 'Minimap';
+        const titleText = this.state.inSuperboard ? `Minimap (${(this.state.superboardType || 'Pocket').toUpperCase()})` : (isBackside ? 'Minimap (backside)' : 'Minimap');
+        const isSuperboard = bm?.currentLevel?.isSuperboard;
         return (
             <div className="dungeon-panel-section section-minimap">
                 <div
@@ -7965,13 +8522,14 @@ class DungeonPage extends React.Component {
                 {!collapsed && (
                     <div className="section-content">
                         <div className="minimap-container">
-                            <div className="map-wrapper">
+                            <div className={`map-wrapper ${isSuperboard ? 'superboard-minimap' : ''}`}>
                                 <div className="level-indicator">
                                     {this.state.levelTracker && this.state.levelTracker.map((e, i) => {
                                         return <div key={i} className={`floor-level ${e.active ? 'active' : ''} `}></div>
                                     })}
                                 </div>
                                 {this.state.minimap.map((e, i) => {
+                                    if (isSuperboard && !e.active) return null;
                                     const bcTrail = (() => {
                                         try {
                                             const now = Date.now();
@@ -8095,13 +8653,23 @@ class DungeonPage extends React.Component {
                                             });
 
                                             try {
-                                                const dungeon = this.state.dungeon;
-                                                const levelObj = dungeon && dungeon.levels && dungeon.levels.find(l => String(l.id) === String(currentLevelId));
-                                                const plane = levelObj ? (currentOrientation === 'B' ? levelObj.back : levelObj.front) : null;
-                                                const boardObj = plane && plane.miniboards && plane.miniboards[i];
-                                                let boardTiles = boardObj && Array.isArray(boardObj.tiles) ? boardObj.tiles : [];
-                                                if (bm && bm.currentBoard && bm.playerTile && bm.playerTile.boardIndex === i && Array.isArray(bm.tiles) && bm.tiles.length > 0) {
-                                                    boardTiles = bm.tiles;
+                                                const dungeon = this.state.dungeon || this.props.boardManager?.dungeon;
+                                                let boardObj = null;
+                                                let boardTiles = [];
+                                                let levelObj = null;
+
+                                                if (this.state.inSuperboard && this.state.superboardType && dungeon?.superboards?.[this.state.superboardType]) {
+                                                    const superboard = dungeon.superboards[this.state.superboardType];
+                                                    boardObj = superboard.miniboards && superboard.miniboards[i];
+                                                    boardTiles = boardObj && Array.isArray(boardObj.tiles) ? boardObj.tiles : [];
+                                                } else {
+                                                    levelObj = dungeon && dungeon.levels && dungeon.levels.find(l => String(l.id) === String(currentLevelId));
+                                                    const plane = levelObj ? (currentOrientation === 'B' ? levelObj.back : levelObj.front) : null;
+                                                    boardObj = plane && plane.miniboards && plane.miniboards[i];
+                                                    boardTiles = boardObj && Array.isArray(boardObj.tiles) ? boardObj.tiles : [];
+                                                    if (bm && bm.currentBoard && bm.playerTile && bm.playerTile.boardIndex === i && Array.isArray(bm.tiles) && bm.tiles.length > 0) {
+                                                        boardTiles = bm.tiles;
+                                                    }
                                                 }
 
                                                 // Inject persistent generators from meta, but respect orientation
@@ -8125,7 +8693,7 @@ class DungeonPage extends React.Component {
                                                                         isOnCurrentPlane = true;
                                                                     } else {
                                                                         // Check opposite plane to see if it definitively belongs there
-                                                                        const oppositePlane = currentOrientation === 'B' ? levelObj.front : levelObj.back;
+                                                                        const oppositePlane = levelObj ? (currentOrientation === 'B' ? levelObj.front : levelObj.back) : null;
                                                                         const oppBoard = oppositePlane && oppositePlane.miniboards && oppositePlane.miniboards[i];
                                                                         const oppTile = oppBoard && oppBoard.tiles && oppBoard.tiles.find(bt => Number(bt.id) === tId);
                                                                         if (oppTile && (oppTile.generatorData || oppTile.building || (oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'generator' || oppTile.contains.type === 'building')))) {
@@ -10352,7 +10920,14 @@ class DungeonPage extends React.Component {
 
         let chestLootStyle = null;
         if (tile && tile.id !== undefined && tile.id !== null) {
-            const index = Number(tile.id);
+            let targetIndex = tile.id;
+            if (this.props.boardManager?.currentLevel?.isSuperboard && tile.globalX !== undefined && tile.globalY !== undefined) {
+                const currentTile = this.state.tiles.find(t => t.globalX === tile.globalX && t.globalY === tile.globalY);
+                if (currentTile && currentTile.id !== undefined) {
+                    targetIndex = currentTile.id;
+                }
+            }
+            const index = Number(targetIndex);
             if (!isNaN(index)) {
                 const pixel = this.getPixelForIndex(index);
                 if (pixel) {
@@ -12546,8 +13121,7 @@ class DungeonPage extends React.Component {
 
                 const type = bm.getContainsType(t.contains);
                 const subtype = bm.getContainsSubtype(t.contains);
-                if (type === 'building' && subtype === 'earthen_fort') return true;
-                if (type === 'earthen_fort' || subtype === 'earthen_fort' || t.building === 'earthen_fort') return true;
+                if (bm.isImpassableBuildingTile && bm.isImpassableBuildingTile(t)) return true;
                 if ((bm.isVoidTile(t) || type === 'void' || type === 'inscription') && !bm.isConnectingPathTile(t)) return true;
 
                 const gateType = bm.getGateTypeFromTile(t);
@@ -14854,14 +15428,22 @@ class DungeonPage extends React.Component {
         })
     }
     calcPlayerIndicatorTop = () => {
-        let formattedCoords = { x: this.props.boardManager.playerTile.location[0] - 15, y: this.props.boardManager.playerTile.location[1] - 15 };
-        let fromTop = formattedCoords.x
-        return `${fromTop / 14 * 100}%`
+        if (this.state.inSuperboard && this.state.superboardPlayerPos) {
+            const localY = this.state.superboardPlayerPos.gy % 15;
+            return `${(localY / 14) * 100}%`;
+        }
+        const loc = this.props.boardManager?.playerTile?.location || [15, 15];
+        let fromTop = loc[0] >= 15 ? loc[0] - 15 : loc[0];
+        return `${fromTop / 14 * 100}%`;
     }
     calcPlayerIndicatorLeft = () => {
-        let formattedCoords = { x: this.props.boardManager.playerTile.location[0] - 15, y: this.props.boardManager.playerTile.location[1] - 15 }
-        let fromLeft = formattedCoords.y;
-        return `${fromLeft / 14 * 100}%`
+        if (this.state.inSuperboard && this.state.superboardPlayerPos) {
+            const localX = this.state.superboardPlayerPos.gx % 15;
+            return `${(localX / 14) * 100}%`;
+        }
+        const loc = this.props.boardManager?.playerTile?.location || [15, 15];
+        let fromLeft = loc[1] >= 15 ? loc[1] - 15 : loc[1];
+        return `${fromLeft / 14 * 100}%`;
     }
     calcIndicator = (tileId) => {
         let coords = this.props.boardManager.getCoordinatesFromIndex(tileId);
@@ -17910,7 +18492,7 @@ class DungeonPage extends React.Component {
                 this.displayMessage(`You found an item: ${rewardStr.replace(/_/g, ' ')}!`);
             }
         }
-    }
+    };
 
     closeNarrativeOverlay = () => {
         this.setState({
@@ -17918,7 +18500,7 @@ class DungeonPage extends React.Component {
             showNarrativeOverlay: false,
             keysLocked: false
         });
-    }
+    };
 
     removeExistingHuts = () => {
         const bm = this.props.boardManager;
@@ -17945,6 +18527,10 @@ class DungeonPage extends React.Component {
         if (!constructionState || !constructionState.buildingDef) return;
         const { buildingDef, targetTileIdx, actualBuildTimeSec, livingContributorIds } = constructionState;
         const bm = this.props.boardManager;
+        const footprint = constructionState.footprint || [targetTileIdx];
+        const isLarge = constructionState.isLargeBuilding || footprint.length === 4;
+        const vendorGroupId = isLarge ? `building_${buildingDef.key}_${targetTileIdx}` : null;
+        const vendorCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
 
         if (buildingDef.key === 'hut') {
             // Replaces any hut the crew has placed previously
@@ -17960,24 +18546,63 @@ class DungeonPage extends React.Component {
         };
 
         if (bm) {
-            if (bm.tiles && bm.tiles[targetTileIdx]) {
-                bm.tiles[targetTileIdx].contains = buildingObj;
-                bm.tiles[targetTileIdx].building = buildingDef.key;
-            }
-            if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[targetTileIdx]) {
-                bm.currentBoard.tiles[targetTileIdx].contains = buildingObj;
-                bm.currentBoard.tiles[targetTileIdx].building = buildingDef.key;
-            }
-            if (bm.dungeon && bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
+            footprint.forEach((tId, idx) => {
+                const tileObj = { ...buildingObj };
+                if (isLarge) {
+                    tileObj.vendorGroupId = vendorGroupId;
+                    tileObj.vendorAnchorId = targetTileIdx;
+                    tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                }
+                if (bm.tiles && bm.tiles[tId]) {
+                    bm.tiles[tId].contains = tileObj;
+                    bm.tiles[tId].building = buildingDef.key;
+                }
+                if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
+                    bm.currentBoard.tiles[tId].contains = tileObj;
+                    bm.currentBoard.tiles[tId].building = buildingDef.key;
+                }
+            });
+
+            if (bm.dungeon) {
                 try {
-                    const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
-                    if (levelEntry) {
-                        const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
-                        if (targetPlane && targetPlane.miniboards) {
-                            const b = targetPlane.miniboards[bm.playerTile.boardIndex];
-                            if (b && b.tiles && b.tiles[targetTileIdx]) {
-                                b.tiles[targetTileIdx].contains = buildingObj;
-                                b.tiles[targetTileIdx].building = buildingDef.key;
+                    const pocketType = this.state.superboardPocketDimension || (getMeta() || {}).pocketDimension;
+                    if (pocketType && bm.dungeon.superboards && bm.dungeon.superboards[pocketType]) {
+                        const sb = bm.dungeon.superboards[pocketType];
+                        const mbIdx = bm.playerTile?.boardIndex ?? 0;
+                        if (sb.miniboards && sb.miniboards[mbIdx] && sb.miniboards[mbIdx].tiles) {
+                            footprint.forEach((tId, idx) => {
+                                if (sb.miniboards[mbIdx].tiles[tId]) {
+                                    const tileObj = { ...buildingObj };
+                                    if (isLarge) {
+                                        tileObj.vendorGroupId = vendorGroupId;
+                                        tileObj.vendorAnchorId = targetTileIdx;
+                                        tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                    }
+                                    sb.miniboards[mbIdx].tiles[tId].contains = tileObj;
+                                    sb.miniboards[mbIdx].tiles[tId].building = buildingDef.key;
+                                }
+                            });
+                        }
+                    } else if (bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
+                        const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
+                        if (levelEntry) {
+                            const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
+                            if (targetPlane && targetPlane.miniboards) {
+                                const b = targetPlane.miniboards[bm.playerTile.boardIndex];
+                                if (b && b.tiles) {
+                                    footprint.forEach((tId, idx) => {
+                                        if (b.tiles[tId]) {
+                                            const tileObj = { ...buildingObj };
+                                            if (isLarge) {
+                                                tileObj.vendorGroupId = vendorGroupId;
+                                                tileObj.vendorAnchorId = targetTileIdx;
+                                                tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                            }
+                                            b.tiles[tId].contains = tileObj;
+                                            b.tiles[tId].building = buildingDef.key;
+                                        }
+                                    });
+                                }
                             }
                         }
                     }
@@ -18025,14 +18650,45 @@ class DungeonPage extends React.Component {
                     const res = await loadDungeonRequest(meta.dungeonId);
                     if (res && res.data && res.data.length > 0) {
                         let dData = JSON.parse(res.data[0].content);
-                        const lvl = dData.levels.find(l => String(l.id) === String(meta.location.levelId));
-                        if (lvl) {
-                            const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
-                            const mb = plane.miniboards[meta.location.boardIndex];
-                            if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
-                                mb.tiles[targetTileIdx].contains = buildingObj;
-                                mb.tiles[targetTileIdx].building = buildingDef.key;
+                        const pocketType = this.state.superboardPocketDimension || meta.pocketDimension;
+                        if (pocketType && dData.superboards && dData.superboards[pocketType]) {
+                            const sb = dData.superboards[pocketType];
+                            const mbIdx = meta.location?.boardIndex ?? bm.playerTile?.boardIndex ?? 0;
+                            if (sb.miniboards && sb.miniboards[mbIdx] && sb.miniboards[mbIdx].tiles) {
+                                footprint.forEach((tId, idx) => {
+                                    if (sb.miniboards[mbIdx].tiles[tId]) {
+                                        const tileObj = { ...buildingObj };
+                                        if (isLarge) {
+                                            tileObj.vendorGroupId = vendorGroupId;
+                                            tileObj.vendorAnchorId = targetTileIdx;
+                                            tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                        }
+                                        sb.miniboards[mbIdx].tiles[tId].contains = tileObj;
+                                        sb.miniboards[mbIdx].tiles[tId].building = buildingDef.key;
+                                    }
+                                });
                                 await updateDungeonRequest(res.data[0]._id, dData);
+                            }
+                        } else {
+                            const lvl = dData.levels.find(l => String(l.id) === String(meta.location.levelId));
+                            if (lvl) {
+                                const plane = meta.location.orientation === 'B' ? lvl.back : lvl.front;
+                                const mb = plane && plane.miniboards && plane.miniboards[meta.location.boardIndex];
+                                if (mb && mb.tiles) {
+                                    footprint.forEach((tId, idx) => {
+                                        if (mb.tiles[tId]) {
+                                            const tileObj = { ...buildingObj };
+                                            if (isLarge) {
+                                                tileObj.vendorGroupId = vendorGroupId;
+                                                tileObj.vendorAnchorId = targetTileIdx;
+                                                tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                            }
+                                            mb.tiles[tId].contains = tileObj;
+                                            mb.tiles[tId].building = buildingDef.key;
+                                        }
+                                    });
+                                    await updateDungeonRequest(res.data[0]._id, dData);
+                                }
                             }
                         }
                     }
@@ -18063,7 +18719,7 @@ class DungeonPage extends React.Component {
         if (playerIdx === null || playerIdx === undefined) return;
 
         let footprint = [playerIdx];
-        const isLarge = buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort' || buildingDef.key === 'dream_den';
+        const isLarge = buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort' || buildingDef.key === 'dream_den' || buildingDef.key === 'hut' || buildingDef.key === 'alchemist' || buildingDef.key === 'merchant' || buildingDef.key === 'keep' || buildingDef.key === 'fortress' || buildingDef.key === 'summoning_temple' || buildingDef.key === 'rift' || buildingDef.key === 'rift_2' || buildingDef.isLarge === true || buildingDef.isMultiTile === true;
         if (isLarge) {
             const loc = bm.playerTile.location;
             const idx1 = bm.getIndexFromCoordinates([loc[0], loc[1]]);
@@ -18219,26 +18875,46 @@ class DungeonPage extends React.Component {
                     bm.currentBoard.tiles[tId].building = expectedBuildingKey;
                 }
             });
-            if (bm.dungeon && bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
+            if (bm.dungeon) {
                 try {
-                    const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
-                    if (levelEntry) {
-                        const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
-                        if (targetPlane && targetPlane.miniboards) {
-                            const b = targetPlane.miniboards[bm.playerTile.boardIndex];
-                            if (b && b.tiles) {
-                                footprint.forEach((tId, idx) => {
-                                    if (b.tiles[tId]) {
-                                        const tileObj = { ...buildingObj };
-                                        if (isLarge) {
-                                            tileObj.vendorGroupId = vendorGroupId;
-                                            tileObj.vendorAnchorId = playerIdx;
-                                            tileObj.vendorCell = vendorCells[idx] || 'anchor';
-                                        }
-                                        b.tiles[tId].contains = tileObj;
-                                        b.tiles[tId].building = expectedBuildingKey;
+                    const pocketType = this.state.superboardPocketDimension || (getMeta() || {}).pocketDimension;
+                    if (pocketType && bm.dungeon.superboards && bm.dungeon.superboards[pocketType]) {
+                        const sb = bm.dungeon.superboards[pocketType];
+                        const mbIdx = bm.playerTile?.boardIndex ?? 0;
+                        if (sb.miniboards && sb.miniboards[mbIdx] && sb.miniboards[mbIdx].tiles) {
+                            footprint.forEach((tId, idx) => {
+                                if (sb.miniboards[mbIdx].tiles[tId]) {
+                                    const tileObj = { ...buildingObj };
+                                    if (isLarge) {
+                                        tileObj.vendorGroupId = vendorGroupId;
+                                        tileObj.vendorAnchorId = playerIdx;
+                                        tileObj.vendorCell = vendorCells[idx] || 'anchor';
                                     }
-                                });
+                                    sb.miniboards[mbIdx].tiles[tId].contains = tileObj;
+                                    sb.miniboards[mbIdx].tiles[tId].building = expectedBuildingKey;
+                                }
+                            });
+                        }
+                    } else if (bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
+                        const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
+                        if (levelEntry) {
+                            const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
+                            if (targetPlane && targetPlane.miniboards) {
+                                const b = targetPlane.miniboards[bm.playerTile.boardIndex];
+                                if (b && b.tiles) {
+                                    footprint.forEach((tId, idx) => {
+                                        if (b.tiles[tId]) {
+                                            const tileObj = { ...buildingObj };
+                                            if (isLarge) {
+                                                tileObj.vendorGroupId = vendorGroupId;
+                                                tileObj.vendorAnchorId = playerIdx;
+                                                tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                            }
+                                            b.tiles[tId].contains = tileObj;
+                                            b.tiles[tId].building = expectedBuildingKey;
+                                        }
+                                    });
+                                }
                             }
                         }
                     }
@@ -21752,6 +22428,8 @@ class DungeonPage extends React.Component {
                             style={{
                                 width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
                                 backgroundColor: 'white',
+                                backgroundImage: (this.props.boardManager && this.props.boardManager.currentLevel && this.props.boardManager.currentLevel.floorTexture) ? `url(${this.props.boardManager.currentLevel.floorTexture})` : undefined,
+                                backgroundSize: '100% 100%',
                                 touchAction: 'none'
                             }}>
                             {this.state.tiles && (() => {
@@ -21832,7 +22510,7 @@ class DungeonPage extends React.Component {
                                     partialObscured={!!tile.partialObscured}
                                     trapRevealed={!!tile.trapRevealed}
                                     hasTrap={!!tile.hasTrap}
-                                    illuminated={activeIlluminatedAnchorId === tile.id || !!tile.illuminated}
+                                    illuminated={activeIlluminatedAnchorId === tile.id || (activeIlluminatedAnchorId !== null && tile.contains?.vendorAnchorId === activeIlluminatedAnchorId) || !!tile.illuminated}
                                     coordinates={tile.coordinates}
                                     index={tile.id}
                                     showCoordinates={this.props.showCoordinates}
@@ -21840,7 +22518,7 @@ class DungeonPage extends React.Component {
                                     handleHover={this.handleHover}
                                     type={tile.type}
                                     handleClick={this.handleClick}
-                                    isMobileTouchHover={activeTouchAnchorId === tile.id}
+                                    isMobileTouchHover={activeTouchAnchorId === tile.id || (activeTouchAnchorId !== null && tile.contains?.vendorAnchorId === activeTouchAnchorId)}
                                     isFadingOut={!!tile.isFadingOut}
                                 >
                                 </Tile>

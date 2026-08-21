@@ -378,6 +378,12 @@ class MapMakerPage extends React.Component {
         containsObj = { type: 'building', subtype: buildingOption.key };
         tileImage = buildingOption.image;
       }
+    } else if (pinnedOption.type === 'pocket-building-tile') {
+      const pocketBuildingOption = this.props.mapMaker?.pocketBuildingOptions?.[pinnedOption.id];
+      if (pocketBuildingOption) {
+        containsObj = { type: 'building', subtype: pocketBuildingOption.key };
+        tileImage = images[pocketBuildingOption.image] || images[pocketBuildingOption.key] || pocketBuildingOption.image;
+      }
     } else if (pinnedOption.type === 'generator-tile') {
       const generatorOption = this.props.mapMaker?.generatorOptions?.[pinnedOption.id];
       if (generatorOption) {
@@ -448,10 +454,47 @@ class MapMakerPage extends React.Component {
             }
         }
     } else {
-        const tile = board.tiles[tileIdx];
-        if (!tile) return;
-        const updatedTile = this.applyPinnedOptionToTile(tile);
-        board.tiles[tileIdx] = updatedTile;
+        const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
+        if (isMultiTile) {
+            const footprint = this.getVendorFootprintTileIds(tileIdx);
+            if (this.canPlaceVendorFootprint(board.tiles, tileIdx)) {
+                let baseType = 'vendor';
+                let vendorKey = 'unknown';
+                let image = null;
+                if (this.state.pinnedOption.type === 'vendor-tile') {
+                    const vendorOption = this.props.mapMaker?.vendorOptions?.[this.state.pinnedOption.id];
+                    if (vendorOption) vendorKey = vendorOption.key;
+                } else if (this.state.pinnedOption.type === 'building-tile') {
+                    baseType = 'building';
+                    const buildingOption = this.props.mapMaker?.buildingOptions?.[this.state.pinnedOption.id];
+                    if (buildingOption) {
+                        vendorKey = buildingOption.key;
+                        image = buildingOption.image;
+                    }
+                } else if (this.state.pinnedOption.type === 'pocket-building-tile') {
+                    baseType = 'building';
+                    const pocketBuildingOption = this.props.mapMaker?.pocketBuildingOptions?.[this.state.pinnedOption.id];
+                    if (pocketBuildingOption) {
+                        vendorKey = pocketBuildingOption.key;
+                        image = images[pocketBuildingOption.image] || images[pocketBuildingOption.key] || pocketBuildingOption.image;
+                    }
+                } else if (this.state.pinnedOption.type === 'palette-tile') {
+                    const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[this.state.pinnedOption.id];
+                    if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'dream den' || pinnedPaletteTile.optionType === 'dream_den')) {
+                         vendorKey = 'dream_den';
+                    }
+                }
+                board.tiles = this.placeVendorFootprint([...board.tiles], tileIdx, vendorKey, baseType, image);
+            } else {
+                this.toast("Requires a 2x2 empty space.");
+                return;
+            }
+        } else {
+            const tile = board.tiles[tileIdx];
+            if (!tile) return;
+            const updatedTile = this.applyPinnedOptionToTile(tile);
+            board.tiles[tileIdx] = updatedTile;
+        }
     }
 
     this.setState({
@@ -461,6 +504,13 @@ class MapMakerPage extends React.Component {
   }
 
   handleSuperboardTileHover = (superboardKey, mbIndex, tileIdx) => {
+    const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
+    const multiTileFootprint = isMultiTile ? this.getVendorFootprintTileIds(tileIdx) : null;
+    this.setState({
+      hoveredTileIdx: tileIdx,
+      hoveredTileFootprint: multiTileFootprint
+    });
+
     if (this.state.mouseDown && this.state.pinnedOption) {
       this.handleSuperboardTileClick(superboardKey, mbIndex, tileIdx);
     }
@@ -469,6 +519,15 @@ class MapMakerPage extends React.Component {
   toggleSuperboardBrush3x3 = (e) => {
     if (e) e.stopPropagation();
     this.setState(prevState => ({ superboardBrush3x3: !prevState.superboardBrush3x3 }));
+  }
+
+  handleSuperboardFloorTextureChange = (superboardKey, textureUrl) => {
+    if (!this.state.loadedDungeon) return;
+    let dungeon = JSON.parse(JSON.stringify(this.state.loadedDungeon));
+    dungeon = initializeSuperboards(dungeon);
+    if (!dungeon.superboards || !dungeon.superboards[superboardKey]) return;
+    dungeon.superboards[superboardKey].floorTexture = textureUrl;
+    this.setState({ loadedDungeon: dungeon, dungeonHasUnsavedChanges: true });
   }
 
   handleSuperboardFill = (superboardKey, fillType) => {
@@ -1115,7 +1174,7 @@ class MapMakerPage extends React.Component {
   }
 
   isParentPaletteOption = (optionType) => {
-    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'generators', 'dungeon litter'].includes(optionType);
+    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter'].includes(optionType);
   }
 
   getVendorFootprintTileIds = (anchorTileId) => {
@@ -1129,9 +1188,15 @@ class MapMakerPage extends React.Component {
   is2x2FootprintPinnedOption = (pinnedOption) => {
     if (!pinnedOption) return false;
     if (pinnedOption.type === 'vendor-tile') return true;
+    if (pinnedOption.type === 'pocket-building-tile') {
+      const pocketBuildingOption = this.props.mapMaker?.pocketBuildingOptions?.[pinnedOption.id];
+      if (pocketBuildingOption && (pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key))) {
+        return true;
+      }
+    }
     if (pinnedOption.type === 'building-tile') {
       const buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
-      if (buildingOption && (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort' || buildingOption.isMultiTile)) {
+      if (buildingOption && (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort' || buildingOption.isMultiTile || buildingOption.isLarge || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(buildingOption.key))) {
         return true;
       }
     }
@@ -1315,7 +1380,7 @@ class MapMakerPage extends React.Component {
       vendorOption = this.props.mapMaker.vendorOptions[pinnedOption.id];
     }
 
-    let shrineOption = null, territoryOption = null, buildingOption = null, generatorOption = null, dungeonLitterOption = null;
+    let shrineOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null;
     if (pinnedOption.type === 'shrine-tile') {
       shrineOption = this.props.mapMaker.shrineOptions[pinnedOption.id];
     }
@@ -1325,6 +1390,9 @@ class MapMakerPage extends React.Component {
     if (pinnedOption.type === 'building-tile') {
       buildingOption = this.props.mapMaker.buildingOptions[pinnedOption.id];
     }
+    if (pinnedOption.type === 'pocket-building-tile') {
+      pocketBuildingOption = this.props.mapMaker.pocketBuildingOptions[pinnedOption.id];
+    }
     if (pinnedOption.type === 'generator-tile') {
       generatorOption = this.props.mapMaker.generatorOptions[pinnedOption.id];
     }
@@ -1332,7 +1400,7 @@ class MapMakerPage extends React.Component {
       dungeonLitterOption = this.props.mapMaker.dungeonLitterOptions[pinnedOption.id];
     }
 
-    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || generatorOption || dungeonLitterOption;
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption;
     if (!isSpecialOption && !pinned) return null;
 
     let arr = this.state.tiles.map(t => ({ ...t }));
@@ -1405,6 +1473,24 @@ class MapMakerPage extends React.Component {
         }
         arr[tileId].contains = { type: 'building', subtype: buildingOption.key, level: fortLevel };
         arr[tileId].image = images[buildingOption.image] || buildingOption.image;
+        arr[tileId].color = null;
+      }
+    } else if (pocketBuildingOption) {
+      const isPocketDimensionBoard = this.state.selectedView === 'dungeon' || this.state.isSuperboard || (this.state.loadedBoard && (this.state.loadedBoard.isPocketDimension || String(this.state.loadedBoard.folderPath || '').toLowerCase().includes('pocket')));
+      if (!isPocketDimensionBoard) {
+        this.toast('❌ Pocket buildings can only exist in a pocket dimension!');
+        return null;
+      }
+      const isLargePocketBuilding = pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key);
+      if (isLargePocketBuilding) {
+        if (!this.canPlaceVendorFootprint(arr, tileId)) {
+          this.toast(`${pocketBuildingOption.name} requires a 2x2 empty space.`);
+          return null;
+        }
+        arr = this.placeVendorFootprint(arr, tileId, pocketBuildingOption.key, 'building', images[pocketBuildingOption.image] || pocketBuildingOption.image);
+      } else {
+        arr[tileId].contains = { type: 'building', subtype: pocketBuildingOption.key };
+        arr[tileId].image = images[pocketBuildingOption.image] || pocketBuildingOption.image;
         arr[tileId].color = null;
       }
     } else if (generatorOption) {
@@ -1505,7 +1591,7 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'generator-tile', 'dungeon-litter-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
@@ -2340,7 +2426,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile') {
       this.setState({
         pinnedOption: tile
       })
@@ -9026,11 +9112,13 @@ class MapMakerPage extends React.Component {
                 compatibilityMatrix={this.state.compatibilityMatrix}
                 hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
                 hoveredTileIdx={this.state.hoveredTileIdx}
+                hoveredTileFootprint={this.state.hoveredTileFootprint}
                 hoveredTileId={this.state.hoveredTileIdx}
                 optionClickedIdx={this.state.optionClickedIdx}
                 selectedView={this.state.selectedView}
                 showCoordinates={this.state.showCoordinates}
                 mapMaker={this.props.mapMaker}
+                applyPinnedOptionToTile={this.applyPinnedOptionToTile}
 
                 loadedPlane={this.state.loadedPlane}
                 planes={this.state.planes}
@@ -9113,6 +9201,7 @@ class MapMakerPage extends React.Component {
                 handleSuperboardTileClick={this.handleSuperboardTileClick}
                 handleSuperboardTileHover={this.handleSuperboardTileHover}
                 handleSuperboardFill={this.handleSuperboardFill}
+                handleSuperboardFloorTextureChange={this.handleSuperboardFloorTextureChange}
                 pinnedOption={this.state.pinnedOption}
               ></DungeonView>}
 

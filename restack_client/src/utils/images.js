@@ -1230,6 +1230,28 @@ import infernal_tower from '../assets/icons/buildings/infernal tower.png';
 import infernal_pit from '../assets/icons/buildings/infernal pit.png';
 import temple from '../assets/icons/buildings/temple.png';
 
+// ── Pocket Dimension Buildings ──────────────────────────────────────────────
+import pocket_town_1 from '../assets/icons/buildings/pocket dimension/town_1.png';
+import pocket_town_2 from '../assets/icons/buildings/pocket dimension/town_2.png';
+import pocket_town_3 from '../assets/icons/buildings/pocket dimension/town_3.png';
+import pocket_windmill from '../assets/icons/buildings/pocket dimension/windmill.png';
+import pocket_farm from '../assets/icons/buildings/pocket dimension/farm.png';
+import pocket_house from '../assets/icons/buildings/pocket dimension/house.png';
+import pocket_manor from '../assets/icons/buildings/pocket dimension/manor.png';
+import pocket_estate from '../assets/icons/buildings/pocket dimension/estate.png';
+import pocket_keep from '../assets/icons/buildings/pocket dimension/keep.png';
+import pocket_fortress from '../assets/icons/buildings/pocket dimension/fortress.png';
+import pocket_graveyard from '../assets/icons/buildings/pocket dimension/graveyard.png';
+import pocket_tower from '../assets/icons/buildings/pocket dimension/tower.png';
+import pocket_tower_2 from '../assets/icons/buildings/pocket dimension/tower_2.png';
+import pocket_tower_3 from '../assets/icons/buildings/pocket dimension/tower_3.png';
+import pocket_summoning_temple from '../assets/icons/buildings/pocket dimension/summoning_temple.png';
+import pocket_rift from '../assets/icons/buildings/pocket dimension/rift.png';
+import pocket_rift_2 from '../assets/icons/buildings/pocket dimension/rift_2.png';
+import pocket_tower_4 from '../assets/icons/buildings/pocket dimension/tower_4.png';
+import pocket_tower_5 from '../assets/icons/buildings/pocket dimension/tower_5.png';
+import pocket_blacksmith from '../assets/icons/buildings/pocket dimension/blacksmith.png';
+
 // ── Generators ─────────────────────────────────────────────────────────────
 import cultivation_vat from '../assets/icons/buildings/cultivation vat.png';
 import larder from '../assets/icons/buildings/larder.png';
@@ -2537,6 +2559,49 @@ export {
     litter_edge_bones,
     chemical_lantern,
     territorial_lantern,
+
+    // Pocket Dimension Buildings
+    pocket_town_1,
+    pocket_town_2,
+    pocket_town_3,
+    pocket_windmill,
+    pocket_farm,
+    pocket_house,
+    pocket_manor,
+    pocket_estate,
+    pocket_keep,
+    pocket_fortress,
+    pocket_graveyard,
+    pocket_tower,
+    pocket_tower_2,
+    pocket_tower_3,
+    pocket_summoning_temple,
+    pocket_rift,
+    pocket_rift_2,
+    pocket_tower_4,
+    pocket_tower_5,
+    pocket_blacksmith,
+
+    pocket_town_1 as town_1,
+    pocket_town_2 as town_2,
+    pocket_town_3 as town_3,
+    pocket_windmill as windmill,
+    pocket_farm as farm,
+    pocket_house as house,
+    pocket_manor as manor,
+    pocket_estate as estate,
+    pocket_keep as keep,
+    pocket_fortress as fortress,
+    pocket_graveyard as graveyard,
+    pocket_tower as tower,
+    pocket_tower_2 as tower_2,
+    pocket_tower_3 as tower_3,
+    pocket_summoning_temple as summoning_temple,
+    pocket_rift as rift,
+    pocket_rift_2 as rift_2,
+    pocket_tower_4 as tower_4,
+    pocket_tower_5 as tower_5,
+    pocket_blacksmith as blacksmith,
 };
 
 const portraitMap = {

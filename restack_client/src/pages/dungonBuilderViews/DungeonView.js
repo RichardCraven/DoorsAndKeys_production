@@ -4,6 +4,7 @@ import '@coreui/coreui/dist/css/coreui.min.css'
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 import Tile from '../../components/tile'
+import { FLOOR_TEXTURES } from './BoardView'
 import { CDropdown, CDropdownToggle, CDropdownMenu, CDropdownItem, CSpinner, CFormSelect} from '@coreui/react';
 import  CIcon  from '@coreui/icons-react'
 import { cilSave, cilQrCode, cilLevelDown, cilLevelUp, cilLibraryAdd, cilTrash, cilOptions, cilPlus, cilHistory } from '@coreui/icons';
@@ -779,6 +780,30 @@ class DungeonView extends React.Component {
                                 <span style={{ color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc' }}>
                                     {currentZoomKey === 'light' ? 'Light Superboard' : 'Dark Superboard'}
                                 </span>
+                                <div style={{ marginLeft: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a4b0be' }}>Floor:</span>
+                                    <select
+                                        value={this.props.loadedDungeon?.superboards?.[currentZoomKey]?.floorTexture || ''}
+                                        onChange={(e) => this.props.handleSuperboardFloorTextureChange && this.props.handleSuperboardFloorTextureChange(currentZoomKey, e.target.value)}
+                                        style={{
+                                            background: '#1c1c1e',
+                                            color: '#f9b115',
+                                            border: '1px solid rgba(249, 177, 21, 0.4)',
+                                            borderRadius: '4px',
+                                            padding: '2px 6px',
+                                            fontSize: '11px',
+                                            outline: 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <option value="">(Default)</option>
+                                        {FLOOR_TEXTURES.map((tex) => (
+                                            <option key={tex.key} value={tex.src}>
+                                                {tex.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         ) : (
                             <div className="level-readout" style={{ color: '#c084fc', fontSize: '15px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
@@ -981,6 +1006,7 @@ class DungeonView extends React.Component {
                         (() => {
                             const activeMiniboards = currentZoomKey === 'light' ? lightMiniboards : darkMiniboards;
                             const isDark = currentZoomKey === 'dark';
+                            const superboardTexture = this.props.loadedDungeon?.superboards?.[currentZoomKey]?.floorTexture;
 
                             return (
                                 <div
@@ -991,6 +1017,9 @@ class DungeonView extends React.Component {
                                         width: '720px',
                                         height: '720px',
                                         backgroundColor: isDark ? '#0b0914' : '#13131a',
+                                        backgroundImage: superboardTexture ? `url(${superboardTexture})` : undefined,
+                                        backgroundRepeat: superboardTexture ? 'repeat' : undefined,
+                                        backgroundSize: superboardTexture ? '240px 240px' : undefined,
                                         border: isDark ? '2px solid #c084fc' : '2px solid #fbbf24',
                                         borderRadius: '8px',
                                         boxShadow: isDark ? '0 0 35px rgba(168, 85, 247, 0.35)' : '0 0 35px rgba(251, 191, 36, 0.3)',
@@ -1011,30 +1040,53 @@ class DungeonView extends React.Component {
                                                 display: 'grid',
                                                 gridTemplateColumns: 'repeat(15, 1fr)',
                                                 gridTemplateRows: 'repeat(15, 1fr)',
-                                                background: isDark ? '#07050e' : '#0d0d12'
+                                                background: superboardTexture ? 'transparent' : (isDark ? '#07050e' : '#0d0d12')
                                             }}
                                         >
                                             {mb.tiles && mb.tiles.map((tile, tileIdx) => {
                                                 const globalIdx = mbIdx * 225 + tileIdx;
-                                                const isHovered = this.state.hoveredSuperboardTileIdx === globalIdx;
+                                                const hoveredMbIdx = Math.floor((this.state.hoveredSuperboardTileIdx !== null && this.state.hoveredSuperboardTileIdx !== undefined ? this.state.hoveredSuperboardTileIdx : -1) / 225);
+                                                const hoveredTileFootprint = Array.isArray(this.props.hoveredTileFootprint) ? this.props.hoveredTileFootprint : [];
+                                                const isHovered = (this.state.hoveredSuperboardTileIdx === globalIdx) || (hoveredMbIdx === mbIdx && hoveredTileFootprint.includes(tile.id));
 
                                                 const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
                                                 const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
                                                                (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
-                                                const tileColor = isVoid ? 'black' : (storedColor || (isDark ? 'rgba(25, 20, 45, 0.95)' : '#6b6057'));
+                                                const defaultEmptyColor = isDark ? 'rgba(25, 20, 45, 0.95)' : '#6b6057';
+                                                const tileColor = isVoid ? 'black' : (storedColor || (superboardTexture ? 'rgba(15, 15, 20, 0.55)' : defaultEmptyColor));
+
+                                                let displayImage = tile.image;
+                                                let displayColor = tileColor;
+                                                let displayContains = tile.contains;
+
+                                                if (isHovered && this.props.pinnedOption) {
+                                                    const previewTile = this.props.applyPinnedOptionToTile ? this.props.applyPinnedOptionToTile(tile) : tile;
+                                                    const tileMatchesPreview = previewTile.contains != null &&
+                                                        tile.contains?.type === previewTile.contains?.type &&
+                                                        (previewTile.contains?.subtype == null || tile.contains?.subtype === previewTile.contains?.subtype);
+                                                    
+                                                    if (!tileMatchesPreview) {
+                                                        displayImage = previewTile.image || tile.image;
+                                                        if (previewTile.color !== null && previewTile.color !== undefined) {
+                                                            displayColor = previewTile.color;
+                                                        }
+                                                        displayContains = previewTile.contains || tile.contains;
+                                                    }
+                                                }
 
                                                 return (
                                                     <Tile
                                                         key={tileIdx}
                                                         id={tile.id}
                                                         tileSize="100%"
-                                                        contains={tile.contains}
+                                                        contains={displayContains}
                                                         boardTiles={mb.tiles}
-                                                        color={tileColor}
-                                                        image={tile.image}
-                                                        imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
+                                                        color={displayColor}
+                                                        image={displayImage}
+                                                        imageOverride={displayImage && displayImage.includes('/') ? displayImage : null}
                                                         coordinates={tile.coordinates}
                                                         index={tile.id}
+                                                        hoveredTileFootprint={this.props.hoveredTileFootprint}
                                                         showCoordinates={false}
                                                         editMode={true}
                                                         isBuilder={true}
@@ -1195,8 +1247,10 @@ class DungeonView extends React.Component {
                                             transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
                                         }}
                                     >
-                                        <path d="M21 8L17 4M21 8L17 12M21 8H11C7.13401 8 4 11.134 4 15V16" />
-                                        <path d="M3 16L7 20M3 16L7 12M3 16H13C16.866 16 20 12.866 20 9V8" />
+                                        <path d="M21 12A9 9 0 0 0 6 5.3L3 8" />
+                                        <path d="M3 3V8H8" />
+                                        <path d="M3 12A9 9 0 0 0 18 18.7L21 16" />
+                                        <path d="M21 21V16H16" />
                                     </svg>
                                 </button>
                             </div>

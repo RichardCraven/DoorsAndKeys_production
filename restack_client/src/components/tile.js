@@ -111,10 +111,10 @@ function Tile(props) {
     const isVendorType = (val) => {
         if (!val) return false;
         if (typeof val === 'object') {
-            return !!val.isMultiTile || isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.key) || isVendorType(val.name);
+            return !!val.isMultiTile || !!val.isLarge || isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.key) || isVendorType(val.name);
         }
         const s = String(val).toLowerCase();
-        return s === 'vendor' || s === 'alchemist' || s === 'merchant' || s === 'war_camp' || s === 'war_fort' || s === 'dream_den' || s === 'dream den' || s.includes('vendor') || s.includes('alchemist') || s.includes('merchant') || s.includes('dream_den') || s.includes('dream den');
+        return s === 'vendor' || s === 'alchemist' || s === 'merchant' || s === 'war_camp' || s === 'war_fort' || s === 'dream_den' || s === 'dream den' || s === 'keep' || s === 'fortress' || s === 'summoning_temple' || s === 'rift' || s === 'rift_2' || s.includes('vendor') || s.includes('alchemist') || s.includes('merchant') || s.includes('dream_den') || s.includes('dream den') || s.includes('keep') || s.includes('fortress') || s.includes('summoning_temple') || s.includes('rift');
     };
     const isVendorCell = !isPaletteTile && (
         isVendorType(props.contains) ||
@@ -1069,6 +1069,30 @@ function Tile(props) {
                         }}
                     />
                 </div>
+           )}
+
+           {/* Pocket Pygmy Health Bar Overlay */}
+           { currentContains && typeof currentContains.hp === 'number' && currentContains.maxHp && currentContains.hp < currentContains.maxHp && (
+               <div className="pygmy-hp-bar" style={{
+                   position: 'absolute',
+                   bottom: '3px',
+                   left: '10%',
+                   right: '10%',
+                   height: '5px',
+                   backgroundColor: 'rgba(0,0,0,0.85)',
+                   border: '1px solid rgba(255,255,255,0.5)',
+                   borderRadius: '2px',
+                   overflow: 'hidden',
+                   zIndex: 25,
+                   pointerEvents: 'none'
+               }}>
+                   <div style={{
+                       width: `${Math.max(0, Math.min(100, (currentContains.hp / currentContains.maxHp) * 100))}%`,
+                       height: '100%',
+                       backgroundColor: (currentContains.hp / currentContains.maxHp) <= 0.2 ? '#e74c3c' : '#2ecc71',
+                       transition: 'width 0.2s ease-in-out, background-color 0.2s'
+                   }} />
+               </div>
            )}
 
            {/* Obscured space texture overlay */}

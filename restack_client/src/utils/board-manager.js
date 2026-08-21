@@ -2942,6 +2942,12 @@ export function BoardManager(){
         const destTileInscription = destInscribedSide && destinationTile.inscriptions && destinationTile.inscriptions[destInscribedSide];
 
         const destType = this.getContainsType(destinationTile.contains);
+        const destSubtype = this.getContainsSubtype(destinationTile.contains);
+        const isBuildingTile = ['building', 'outpost', 'generator', 'war_camp', 'war_fort', 'dream_den', 'alchemist', 'merchant', 'shrine', 'observer_platform', 'earthen_fort'].includes(destType) ||
+                               ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction', 'dream_den', 'dream_den_under_construction'].includes(destSubtype) ||
+                               ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction', 'dream_den', 'dream_den_under_construction'].includes(destinationTile.building) ||
+                               !!destinationTile.generatorData;
+
         if (destType === 'void') {
             const anyDestInscription = destinationTile.inscriptions && Object.values(destinationTile.inscriptions).find(v => !!v);
             if (destTileInscription) {
@@ -2950,7 +2956,7 @@ export function BoardManager(){
                 this.handleInscriptionRead(anyDestInscription);
             } else if (currentTileInscription) {
                 this.handleInscriptionRead(currentTileInscription);
-            } else {
+            } else if (!isBuildingTile) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             }
             return;
@@ -2960,7 +2966,7 @@ export function BoardManager(){
                 this.handleInscriptionRead(destTileInscription);
             } else if (currentTileInscription) {
                 this.handleInscriptionRead(currentTileInscription);
-            } else {
+            } else if (!isBuildingTile) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
             }
             return;
