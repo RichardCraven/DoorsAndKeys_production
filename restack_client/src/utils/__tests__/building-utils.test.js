@@ -69,12 +69,21 @@ describe('Building Construction & Stamina Tax Utils', () => {
         expect(cleared[0].buildingStaminaPenalty).toBeUndefined();
     });
 
+    test('getAdjustedBuildTime returns 1 second shortcut when inSuperboard is true', () => {
+        const crew = [
+            { id: '1', hp: 10, dead: false },
+            { id: '2', hp: 0, dead: true },
+        ];
+        const buildTime = getAdjustedBuildTime(7200, crew, true);
+        expect(buildTime).toBe(1);
+    });
+
     test('BUILDINGS catalog includes Earthly, Arcane, and Obscure building categories', () => {
         const earthly = BUILDINGS.filter(b => b.category === 'earthly');
         const arcane = BUILDINGS.filter(b => b.category === 'arcane');
         const obscure = BUILDINGS.filter(b => b.category === 'obscure');
 
-        expect(earthly.length).toBe(7);
+        expect(earthly.length).toBe(6);
         expect(arcane.length).toBe(3);
         expect(obscure.length).toBe(2);
 

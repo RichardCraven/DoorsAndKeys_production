@@ -25,6 +25,56 @@ function Tile(props) {
     const color = isRevealedBySpiritSight ? 'spirit-sight' : colorVal;
     const hoverLabelTimerRef = React.useRef(null);
     const [showDelayedHoverLabel, setShowDelayedHoverLabel] = React.useState(false);
+    
+    const isIlluminatedGlow = !!(props.illuminated || props.isIlluminated || (props.contains && props.contains.illuminated) || (props.data && props.data.illuminated));
+    
+    const tileIndexForContains = (typeof props.id === 'number') ? props.id : ((typeof props.index === 'number') ? props.index : null);
+    const boardTilesForContains = Array.isArray(props.boardTiles) ? props.boardTiles : null;
+    const currentTileForContains = (tileIndexForContains !== null && boardTilesForContains && boardTilesForContains[tileIndexForContains]) ? boardTilesForContains[tileIndexForContains] : null;
+    const topCurrentContains = currentTileForContains ? currentTileForContains.contains : props.contains;
+    
+    const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
+    const sKey = (props.building || containsObj?.subtype || containsObj?.building || containsObj?.type || containsObj?.key || containsObj?.name || props.contains || props.image || '').toString().toLowerCase();
+    const is3x3Structure = sKey.includes('keep') || sKey.includes('fortress');
+    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('dream_den') || is3x3Structure;
+
+    const containsObjForHp = props.contains || containsObj || topCurrentContains;
+    const currentContainsHp = containsObjForHp && typeof containsObjForHp.hp === 'number' ? containsObjForHp.hp : undefined;
+    const containsId = containsObjForHp && containsObjForHp.id;
+
+    const [hpBarVisible, setHpBarVisible] = React.useState(false);
+    const hpBarTimerRef = React.useRef(null);
+    const prevHpRef = React.useRef(currentContainsHp);
+    const prevUnitIdRef = React.useRef(containsId);
+
+    React.useEffect(() => {
+        if (containsId !== prevUnitIdRef.current) {
+            prevUnitIdRef.current = containsId;
+            prevHpRef.current = currentContainsHp;
+            setHpBarVisible(false);
+            if (hpBarTimerRef.current) clearTimeout(hpBarTimerRef.current);
+            return;
+        }
+
+        if (typeof currentContainsHp === 'number') {
+            if (prevHpRef.current !== undefined && currentContainsHp < prevHpRef.current) {
+                setHpBarVisible(true);
+                if (containsObjForHp) {
+                    containsObjForHp.lastDamageTime = Date.now();
+                }
+                if (hpBarTimerRef.current) clearTimeout(hpBarTimerRef.current);
+                hpBarTimerRef.current = setTimeout(() => {
+                    setHpBarVisible(false);
+                }, 3000);
+            }
+            prevHpRef.current = currentContainsHp;
+        } else {
+            setHpBarVisible(false);
+        }
+        return () => {
+            if (hpBarTimerRef.current) clearTimeout(hpBarTimerRef.current);
+        };
+    }, [currentContainsHp, containsId]);
 
     React.useEffect(() => {
         return () => {
@@ -106,7 +156,6 @@ function Tile(props) {
     // Determine if the current image is a portal that should render above walls/items
     const foregroundPortalImages = ['archway', 'gryphon_gate_opened', 'bat_gate_opened', 'evil_gate_opened', 'dungeon_door_opened'];
     const portraitZIndex = foregroundPortalImages.includes(props.image) ? 25 : 20;
-    const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
     const isPaletteTile = props.type === 'palette-tile';
     const isVendorType = (val) => {
         if (!val) return false;
@@ -135,7 +184,7 @@ function Tile(props) {
         let anchorId = null;
         const currentId = props.id !== undefined && props.id !== null ? props.id : props.index;
 
-        if (props.hoveredTileFootprint && props.hoveredTileFootprint.length === 4 && currentId !== null && currentId !== undefined) {
+        if (props.hoveredTileFootprint && (props.hoveredTileFootprint.length === 4 || props.hoveredTileFootprint.length === 9) && currentId !== null && currentId !== undefined) {
             if (props.hoveredTileFootprint.includes(currentId)) {
                 anchorId = props.hoveredTileFootprint[0];
             }
@@ -153,11 +202,25 @@ function Tile(props) {
 
             const dRow = tileRow - anchorRow;
             const dCol = tileCol - anchorCol;
+            
+            const isHovering3x3 = props.hoveredTileFootprint?.length === 9 || is3x3Structure;
 
             if (dRow === 0 && dCol === 0) return 'anchor';
-            if (dRow === 0 && dCol === 1) return 'top_right';
-            if (dRow === 1 && dCol === 0) return 'bottom_left';
-            if (dRow === 1 && dCol === 1) return 'bottom_right';
+            
+            if (isHovering3x3) {
+                if (dRow === 0 && dCol === 1) return 'top_center';
+                if (dRow === 0 && dCol === 2) return 'top_right';
+                if (dRow === 1 && dCol === 0) return 'middle_left';
+                if (dRow === 1 && dCol === 1) return 'center';
+                if (dRow === 1 && dCol === 2) return 'middle_right';
+                if (dRow === 2 && dCol === 0) return 'bottom_left';
+                if (dRow === 2 && dCol === 1) return 'bottom_center';
+                if (dRow === 2 && dCol === 2) return 'bottom_right';
+            } else {
+                if (dRow === 0 && dCol === 1) return 'top_right';
+                if (dRow === 1 && dCol === 0) return 'bottom_left';
+                if (dRow === 1 && dCol === 1) return 'bottom_right';
+            }
         }
 
         return 'anchor';
@@ -167,12 +230,14 @@ function Tile(props) {
     const vendorBorderless = isVendorCell ? '0px solid transparent' : null;
     const vendorBackgroundPosition = (() => {
         switch (vendorCellRole) {
-            case 'top_right':
-                return '100% 0%';
-            case 'bottom_left':
-                return '0% 100%';
-            case 'bottom_right':
-                return '100% 100%';
+            case 'top_center': return '50% 0%';
+            case 'top_right': return '100% 0%';
+            case 'middle_left': return '0% 50%';
+            case 'center': return '50% 50%';
+            case 'middle_right': return '100% 50%';
+            case 'bottom_left': return '0% 100%';
+            case 'bottom_center': return '50% 100%';
+            case 'bottom_right': return '100% 100%';
             case 'anchor':
             default:
                 return '0% 0%';
@@ -485,6 +550,11 @@ function Tile(props) {
     const bumpX = `${(bumpVector?.dCol ?? 0) * 85}%`;
     const bumpY = `${(bumpVector?.dRow ?? -1) * 85}%`;
 
+    const isBumpedBack = !!(currentTile && currentTile.isBumpedBack) || !!props.isBumpedBack || !!(currentContains && currentContains.isBumpedBack);
+    const bumpedBackVector = (currentTile && currentTile.bumpedBackVector) || props.bumpedBackVector || (currentContains && currentContains.bumpedBackVector) || { dRow: -1, dCol: 0 };
+    const bumpedX = `${(bumpedBackVector?.dCol ?? 0) * 45}%`;
+    const bumpedY = `${(bumpedBackVector?.dRow ?? -1) * 45}%`;
+
     const isGliding = !!(currentTile && currentTile.isGliding) || !!props.isGliding || !!(currentContains && currentContains.isGliding);
     const glideVector = (currentTile && currentTile.glideVector) || props.glideVector || (currentContains && currentContains.glideVector) || { dRow: 0, dCol: 0 };
     const glideX = `${(glideVector?.dCol ?? 0) * 100}%`;
@@ -513,9 +583,9 @@ function Tile(props) {
                         imageString.includes('rune') ||
                         imageString.includes('shard');
 
-    const isLitterCell = imageString.includes('litter') ||
-                         (containsObj && containsObj.type === 'dungeon_litter') ||
-                         props.optionType === 'dungeon litter';
+    const isLitterCell = imageString.includes('litter') || imageString.includes('terrain') ||
+                         (containsObj && (containsObj.type === 'dungeon_litter' || containsObj.type === 'terrain')) ||
+                         props.optionType === 'dungeon litter' || props.optionType === 'terrain';
 
     const isItemCell = !isLitterCell && (props.type === 'item' || 
                        (containsObj && (containsObj.type === 'item' || containsObj.type === 'key')) ||
@@ -572,12 +642,16 @@ function Tile(props) {
         (props.data && props.data.generatorData && props.data.generatorData.automated)
     );
 
+
+
     return (
         <div 
             data-portal-id={props['data-portal-id']}
             style={{
             '--bump-x': bumpX,
             '--bump-y': bumpY,
+            '--bumped-x': bumpedX,
+            '--bumped-y': bumpedY,
             '--glide-x': glideX,
             '--glide-y': glideY,
             opacity: props.isPreview ? 0.6 : 1,
@@ -596,8 +670,8 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: (isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
-            zIndex: isBumpingAttack ? 100 : (isGliding ? 90 : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (((isEnlargeableStructure && isOccupied) || isUnderConstruction) ? 5 : undefined)))),
+            overflow: (isStructureTile || isIlluminatedGlow || isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
+            zIndex: isBumpingAttack ? 100 : (isGliding ? 90 : (isRevealedBySpiritSight ? 15 : (isStructureTile ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 14 : 8) : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : ((((isEnlargeableStructure && isOccupied) || isUnderConstruction) ? 5 : undefined))))))),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
@@ -645,14 +719,14 @@ function Tile(props) {
                 }
             }}
             onDragStart={(e) => e.preventDefault()}
-            className={`tile ${props.className || ''} ${props.type || ''} ${isBumpingAttack ? 'pygmy-bump-hit' : (isGliding ? 'pygmy-glide' : '')}`.trim()}
+            className={`tile ${props.className || ''} ${props.type || ''} ${isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : ''))}`.trim()}
             data-tile-id={props.index}
         >
            {props.isMobileTouchHover && (
                <div style={{
                    position: 'absolute', top: 0, left: 0,
-                   right: (isVendorCell && getVendorCellRole() === 'anchor') ? '-100%' : 0,
-                   bottom: (isVendorCell && getVendorCellRole() === 'anchor') ? '-100%' : 0,
+                   right: (isVendorCell && getVendorCellRole() === 'anchor') ? (is3x3Structure ? '-200%' : '-100%') : 0,
+                   bottom: (isVendorCell && getVendorCellRole() === 'anchor') ? (is3x3Structure ? '-200%' : '-100%') : 0,
                    border: '3px solid gold', zIndex: 100, pointerEvents: 'none',
                    boxShadow: 'inset 0 0 10px rgba(255, 215, 0, 0.5)'
                }} />
@@ -740,6 +814,69 @@ function Tile(props) {
                    <span style={{ fontSize: '8px', color: '#fca5a5', fontWeight: 'bold', fontFamily: "'Inter', sans-serif", letterSpacing: '0.5px' }}>DISABLED</span>
                </div>
            )}
+
+            {/* Structure Faction Base Glow Ring Overlay */}
+            { color !== 'black' && (() => {
+                if (!isStructureTile) return null;
+
+                // For multi-tile structures, only render the ring once on the anchor cell
+                const vRole = getVendorCellRole();
+                if (vRole && vRole !== 'anchor') return null;
+
+                const isPlayerBuilt = !!(
+                    (containsObj && (containsObj.placedBy === 'player' || containsObj.ownerId === 'player' || containsObj.faction === 'player' || containsObj.isAllied)) ||
+                    props.placedBy === 'player' ||
+                    props.isPlayerBuilt
+                );
+
+                const isHostile = !isPlayerBuilt && !!(
+                    (containsObj && (containsObj.faction === 'wild' || containsObj.faction === 'hostile' || containsObj.isHostile || containsObj.homeStructureKey)) ||
+                    props.isHostile ||
+                    sKey.includes('hostile')
+                );
+
+                let ringColor = 'rgba(245, 158, 11, 0.85)'; // Neutral Amber
+                let ringGlow = '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 10px rgba(245, 158, 11, 0.45)';
+                let bgGradient = 'radial-gradient(ellipse at center, rgba(245, 158, 11, 0.25) 0%, rgba(245, 158, 11, 0.05) 70%, transparent 100%)';
+                let labelTitle = 'Neutral Structure';
+
+                if (isPlayerBuilt) {
+                    ringColor = 'rgba(59, 130, 246, 0.9)'; // Allied Blue
+                    ringGlow = '0 0 16px rgba(59, 130, 246, 0.85), inset 0 0 12px rgba(59, 130, 246, 0.5)';
+                    bgGradient = 'radial-gradient(ellipse at center, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.08) 70%, transparent 100%)';
+                    labelTitle = 'Player-Owned Structure';
+                } else if (isHostile) {
+                    ringColor = 'rgba(239, 68, 68, 0.9)'; // Hostile Red
+                    ringGlow = '0 0 16px rgba(239, 68, 68, 0.85), inset 0 0 12px rgba(239, 68, 68, 0.5)';
+                    bgGradient = 'radial-gradient(ellipse at center, rgba(239, 68, 68, 0.3) 0%, rgba(239, 68, 68, 0.08) 70%, transparent 100%)';
+                    labelTitle = 'Hostile Structure';
+                }
+
+                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den');
+                const isSingleTileStructure = sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer');
+                const isMulti = !isSingleTileStructure && (isVendorCell || vRole === 'anchor' || is2x2Structure || is3x3Structure);
+                return (
+                    <div
+                        className="structure-faction-ring"
+                        title={labelTitle}
+                        style={{
+                            position: 'absolute',
+                            top: '4%',
+                            left: '4%',
+                            right: isMulti ? (is3x3Structure ? '-196%' : '-96%') : '4%',
+                            bottom: isMulti ? (is3x3Structure ? '-196%' : '-96%') : '4%',
+                            borderRadius: '50%',
+                            border: `2px solid ${ringColor}`,
+                            boxShadow: ringGlow,
+                            background: bgGradient,
+                            zIndex: 14,
+                            pointerEvents: 'none',
+                            transition: 'all 0.3s ease-in-out',
+                            animation: 'structureRingPulse 2.5s infinite ease-in-out'
+                        }}
+                    />
+                );
+            })()}
 
            {/* Automated Generator Badge Overlay */}
            { color !== 'black' && isAutomatedTile && (
@@ -882,32 +1019,43 @@ function Tile(props) {
                          );
                       })()}
 
-                      {/* Faint red light source glow emanating from behind monster/pygmy portrait */}
-                      {isMonsterOrPygmyTile && !isBlackTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (
-                          <div 
-                              className={`monster-portrait-glow ${isChargingAmbush ? 'charging-ambush-glow' : (isNearbyMonster ? 'nearby-glow' : '')}`}
-                              style={{
-                                  position: 'absolute',
-                                  top: isChargingAmbush ? '-25%' : '-15%',
-                                  left: isChargingAmbush ? '-25%' : '-15%',
-                                  right: isChargingAmbush ? '-25%' : '-15%',
-                                  bottom: isChargingAmbush ? '-25%' : '-15%',
-                                  borderRadius: '50%',
-                                  background: isChargingAmbush
-                                      ? 'radial-gradient(circle at center, rgba(255, 0, 0, 1) 0%, rgba(245, 15, 15, 0.88) 38%, rgba(200, 10, 10, 0.55) 68%, transparent 95%)'
-                                      : (isNearbyMonster 
-                                          ? 'radial-gradient(circle at center, rgba(255, 40, 40, 0.95) 0%, rgba(230, 25, 25, 0.70) 38%, rgba(180, 15, 15, 0.35) 65%, transparent 92%)'
-                                          : 'radial-gradient(circle at center, rgba(240, 40, 40, 0.75) 0%, rgba(190, 25, 25, 0.48) 38%, rgba(130, 15, 15, 0.22) 65%, transparent 88%)'),
-                                  zIndex: 2,
-                                  pointerEvents: 'none',
-                                  opacity: (color === 'black' || props.type === 'overlay-tile' || props.isFadingOut) ? 0 : 1,
-                                  transition: 'opacity 0.35s ease-in-out, background 0.2s ease-in-out, top 0.2s ease-in-out, left 0.2s ease-in-out',
-                                  animation: isChargingAmbush
-                                      ? 'pygmyChargePulse 0.35s ease-in-out infinite alternate'
-                                      : (isNearbyMonster ? 'monsterGlowPulse 1.1s ease-in-out infinite alternate' : 'monsterGlowPulse 1.8s ease-in-out infinite alternate')
-                              }}
-                          />
-                      )}
+                      {/* Faint light source glow emanating from behind monster/pygmy portrait */}
+                      {isMonsterOrPygmyTile && !isBlackTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (() => {
+                          const isAlliedUnit = !!(
+                              props.isAllied ||
+                              (containsObj && (containsObj.isAllied || containsObj.faction === 'player' || containsObj.placedBy === 'player' || containsObj.isPlayerAllied)) ||
+                              (currentContains && (currentContains.isAllied || currentContains.faction === 'player' || currentContains.placedBy === 'player' || currentContains.isPlayerAllied))
+                          );
+                          const blueGradient = 'radial-gradient(circle at center, rgba(59, 130, 246, 0.95) 0%, rgba(37, 99, 235, 0.65) 38%, rgba(29, 78, 216, 0.3) 65%, transparent 88%)';
+                          const redGradient = isChargingAmbush
+                              ? 'radial-gradient(circle at center, rgba(255, 0, 0, 1) 0%, rgba(245, 15, 15, 0.88) 38%, rgba(200, 10, 10, 0.55) 68%, transparent 95%)'
+                              : (isNearbyMonster 
+                                  ? 'radial-gradient(circle at center, rgba(255, 40, 40, 0.95) 0%, rgba(230, 25, 25, 0.70) 38%, rgba(180, 15, 15, 0.35) 65%, transparent 92%)'
+                                  : 'radial-gradient(circle at center, rgba(240, 40, 40, 0.75) 0%, rgba(190, 25, 25, 0.48) 38%, rgba(130, 15, 15, 0.22) 65%, transparent 88%)');
+
+                          return (
+                              <div 
+                                  className={`monster-portrait-glow ${isAlliedUnit ? 'allied-glow' : (isChargingAmbush ? 'charging-ambush-glow' : (isNearbyMonster ? 'nearby-glow' : ''))}`}
+                                  style={{
+                                      position: 'absolute',
+                                      top: isChargingAmbush ? '-25%' : '-15%',
+                                      left: isChargingAmbush ? '-25%' : '-15%',
+                                      right: isChargingAmbush ? '-25%' : '-15%',
+                                      bottom: isChargingAmbush ? '-25%' : '-15%',
+                                      borderRadius: '50%',
+                                      background: isAlliedUnit ? blueGradient : redGradient,
+                                      boxShadow: isAlliedUnit ? '0 0 12px rgba(59, 130, 246, 0.8)' : undefined,
+                                      zIndex: 2,
+                                      pointerEvents: 'none',
+                                      opacity: (color === 'black' || props.type === 'overlay-tile' || props.isFadingOut) ? 0 : 1,
+                                      transition: 'opacity 0.35s ease-in-out, background 0.2s ease-in-out, top 0.2s ease-in-out, left 0.2s ease-in-out',
+                                      animation: isChargingAmbush
+                                          ? 'pygmyChargePulse 0.35s ease-in-out infinite alternate'
+                                          : (isNearbyMonster ? 'monsterGlowPulse 1.1s ease-in-out infinite alternate' : 'monsterGlowPulse 1.8s ease-in-out infinite alternate')
+                                  }}
+                              />
+                          );
+                      })()}
 
                       {/* Faint gold light source glow emanating from behind key items in the dungeon (disabled in palette/builder/inventory) */}
                       {isKeyTile && !isBlackTile && !isBuilderTile && props.type !== 'overlay-tile' && props.type !== 'inventory-tile' && props.type !== 'crew-tile' && props.type !== 'equip-slot' && !props.isInInventory && color !== 'black' && currentTileColor !== 'black' && (
@@ -937,7 +1085,7 @@ function Tile(props) {
                                position: 'absolute',
                                top: 0, left: 0, right: 0, bottom: 0,
                                backgroundImage: toCssUrl(resolvedPortraitUrl),
-                               backgroundSize: isVendorCell ? '200% 200%' : (isItemCell ? '80% 80%' : '100% 100%'),
+                               backgroundSize: isVendorCell ? (is3x3Structure ? '300% 300%' : '200% 200%') : (isItemCell ? '80% 80%' : '100% 100%'),
                                backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
                                backgroundRepeat: 'no-repeat',
                                zIndex: isVendorCell ? 40 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex),
@@ -1071,29 +1219,36 @@ function Tile(props) {
                 </div>
            )}
 
-           {/* Pocket Pygmy Health Bar Overlay */}
-           { currentContains && typeof currentContains.hp === 'number' && currentContains.maxHp && currentContains.hp < currentContains.maxHp && (
-               <div className="pygmy-hp-bar" style={{
-                   position: 'absolute',
-                   bottom: '3px',
-                   left: '10%',
-                   right: '10%',
-                   height: '5px',
-                   backgroundColor: 'rgba(0,0,0,0.85)',
-                   border: '1px solid rgba(255,255,255,0.5)',
-                   borderRadius: '2px',
-                   overflow: 'hidden',
-                   zIndex: 25,
-                   pointerEvents: 'none'
-               }}>
-                   <div style={{
-                       width: `${Math.max(0, Math.min(100, (currentContains.hp / currentContains.maxHp) * 100))}%`,
-                       height: '100%',
-                       backgroundColor: (currentContains.hp / currentContains.maxHp) <= 0.2 ? '#e74c3c' : '#2ecc71',
-                       transition: 'width 0.2s ease-in-out, background-color 0.2s'
-                   }} />
-               </div>
-           )}
+           {/* Pocket Pygmy / Unit Health Bar Overlay */}
+           {(() => {
+               const targetUnit = currentContains || containsObjForHp;
+               const lastDmg = targetUnit && targetUnit.lastDamageTime;
+               const isRecentlyDamaged = !!(lastDmg && (Date.now() - lastDmg < 3000));
+               const shouldShow = targetUnit && typeof targetUnit.hp === 'number' && targetUnit.maxHp && targetUnit.hp < targetUnit.maxHp && (hpBarVisible || isRecentlyDamaged);
+               if (!shouldShow) return null;
+               return (
+                   <div className="pygmy-hp-bar" style={{
+                       position: 'absolute',
+                       bottom: '3px',
+                       left: '10%',
+                       right: '10%',
+                       height: '5px',
+                       backgroundColor: 'rgba(0,0,0,0.85)',
+                       border: '1px solid rgba(255,255,255,0.5)',
+                       borderRadius: '2px',
+                       overflow: 'hidden',
+                       zIndex: 25,
+                       pointerEvents: 'none'
+                   }}>
+                       <div style={{
+                           width: `${Math.max(0, Math.min(100, (targetUnit.hp / targetUnit.maxHp) * 100))}%`,
+                           height: '100%',
+                           backgroundColor: (targetUnit.hp / targetUnit.maxHp) <= 0.2 ? '#e74c3c' : '#2ecc71',
+                           transition: 'width 0.2s ease-in-out, background-color 0.2s'
+                       }} />
+                   </div>
+               );
+           })()}
 
            {/* Obscured space texture overlay */}
            { ((props.contains && props.contains.type === 'obscured_space') || props.optionType === 'obscured space') && (
@@ -1108,11 +1263,11 @@ function Tile(props) {
            )}
 
            {/* Interactive Building Illumination Glow Overlay */}
-           { (props.illuminated || props.isIlluminated || (props.contains && props.contains.illuminated) || (props.data && props.data.illuminated)) && (
+           { (props.illuminated || props.isIlluminated || (props.contains && props.contains.illuminated) || (props.data && props.data.illuminated)) && (!isVendorCell || getVendorCellRole() === 'anchor' || getVendorCellRole() === null) && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, 
-                    right: (isVendorCell && getVendorCellRole() === 'anchor') ? '-100%' : 0,
-                    bottom: (isVendorCell && getVendorCellRole() === 'anchor') ? '-100%' : 0,
+                    width: (isVendorCell && getVendorCellRole() === 'anchor') ? (is3x3Structure ? '300%' : '200%') : '100%',
+                    height: (isVendorCell && getVendorCellRole() === 'anchor') ? (is3x3Structure ? '300%' : '200%') : '100%',
                     boxShadow: 'inset 0 0 16px rgba(255, 215, 0, 0.95), 0 0 12px rgba(255, 215, 0, 0.9)',
                     border: '2px solid #ffd700',
                     borderRadius: '2px',
@@ -1491,7 +1646,7 @@ function Tile(props) {
                   </div>
              )}
 
-           { (props.partialObscured || isRevealedBySpiritSight) && (
+           { (props.partialObscured || isRevealedBySpiritSight) && !isIlluminatedGlow && (
                 <div style={{
                     position: 'absolute',
                     top: 0,
@@ -1649,6 +1804,30 @@ function Tile(props) {
                     pointerEvents: 'none'
                 }} title="Automated Generator">
                     <span style={{ fontSize: '11px' }}>🤖</span>
+                </div>
+            )}
+
+            {/* Destroyed Badge Overlay */}
+            {(props.contains?.hp !== undefined && props.contains?.hp <= 0 && props.contains?.destroyedAt && (!props.contains.vendorCell || props.contains.vendorCell === 'anchor')) && (
+                <div style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    background: 'rgba(0, 0, 0, 0.75)',
+                    border: '1px solid #ef4444',
+                    borderRadius: '4px',
+                    padding: '2px 4px',
+                    color: '#ef4444',
+                    fontWeight: 'bold',
+                    fontSize: '9px',
+                    textTransform: 'uppercase',
+                    whiteSpace: 'nowrap',
+                    zIndex: 50,
+                    pointerEvents: 'none',
+                    boxShadow: '0 0 5px rgba(239, 68, 68, 0.8)'
+                }}>
+                    Destroyed
                 </div>
             )}
 

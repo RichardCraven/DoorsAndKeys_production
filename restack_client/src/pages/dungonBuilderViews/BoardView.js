@@ -106,6 +106,9 @@ class BoardView extends React.Component {
             const litterMatch = (this.props.mapMaker?.dungeonLitterOptions || []).find((entry) => entry.key === subtype);
             if (litterMatch?.name) return litterMatch.name;
 
+            const terrainMatch = (this.props.mapMaker?.terrainOptions || []).find((entry) => entry.key === subtype);
+            if (terrainMatch?.name) return terrainMatch.name;
+
             return this.formatHoverLabel(subtype);
         }
 
@@ -174,7 +177,7 @@ class BoardView extends React.Component {
                 vendorOption = this.props.mapMaker?.vendorOptions?.[pinnedOption.id];
             }
 
-            let shrineOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null;
+            let shrineOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null, terrainOption = null;
             if (pinnedOption.type === 'shrine-tile') {
                 shrineOption = this.props.mapMaker?.shrineOptions?.[pinnedOption.id];
             }
@@ -192,6 +195,9 @@ class BoardView extends React.Component {
             }
             if (pinnedOption.type === 'dungeon-litter-tile') {
                 dungeonLitterOption = this.props.mapMaker?.dungeonLitterOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'terrain-tile') {
+                terrainOption = this.props.mapMaker?.terrainOptions?.[pinnedOption.id];
             }
 
             if (monster) {
@@ -238,6 +244,9 @@ class BoardView extends React.Component {
             } else if (dungeonLitterOption) {
                 previewContains = { type: 'dungeon_litter', subtype: dungeonLitterOption.key };
                 previewImage = images[dungeonLitterOption.image] || dungeonLitterOption.image;
+            } else if (terrainOption) {
+                previewContains = { type: 'terrain', subtype: terrainOption.key };
+                previewImage = images[terrainOption.image] || terrainOption.image;
             } else if (pinned.optionType === 'passage') {
                 previewContains = { type: 'passage', subtype: null };
             } else if (pinned.optionType === 'empty space') {

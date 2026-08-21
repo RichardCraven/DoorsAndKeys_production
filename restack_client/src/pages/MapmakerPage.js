@@ -396,6 +396,12 @@ class MapMakerPage extends React.Component {
         containsObj = { type: 'dungeon_litter', subtype: litterOption.key };
         tileImage = litterOption.image;
       }
+    } else if (pinnedOption.type === 'terrain-tile') {
+      const terrainOption = this.props.mapMaker?.terrainOptions?.[pinnedOption.id];
+      if (terrainOption) {
+        containsObj = { type: 'terrain', subtype: terrainOption.key };
+        tileImage = terrainOption.image;
+      }
     } else if (pinned) {
       if (pinned.optionType === 'void') {
         containsObj = { type: 'void', subtype: null };
@@ -660,6 +666,14 @@ class MapMakerPage extends React.Component {
     this._mapmakerKeyHandler = (e) => {
       const targetTag = (e.target && e.target.tagName ? e.target.tagName : '').toLowerCase();
       const isEditable = targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select' || (e.target && e.target.isContentEditable);
+
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        if (this.state.showInscriptionModal || this.state.inscriptionWallPicker || this.state.inscriptionPendingTileId) {
+          this.cancelInscription();
+          e.preventDefault();
+          return;
+        }
+      }
 
       if ((e.key === 's' || e.key === 'S') && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -1174,7 +1188,7 @@ class MapMakerPage extends React.Component {
   }
 
   isParentPaletteOption = (optionType) => {
-    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter'].includes(optionType);
+    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'terrain'].includes(optionType);
   }
 
   getVendorFootprintTileIds = (anchorTileId) => {
@@ -1399,8 +1413,12 @@ class MapMakerPage extends React.Component {
     if (pinnedOption.type === 'dungeon-litter-tile') {
       dungeonLitterOption = this.props.mapMaker.dungeonLitterOptions[pinnedOption.id];
     }
+    let terrainOption = null;
+    if (pinnedOption.type === 'terrain-tile') {
+      terrainOption = this.props.mapMaker.terrainOptions[pinnedOption.id];
+    }
 
-    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption;
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption || terrainOption;
     if (!isSpecialOption && !pinned) return null;
 
     let arr = this.state.tiles.map(t => ({ ...t }));
@@ -1502,6 +1520,10 @@ class MapMakerPage extends React.Component {
       arr[tileId].contains = { type: 'dungeon_litter', subtype: dungeonLitterOption.key, rotation: existingRot };
       arr[tileId].image = images[dungeonLitterOption.image] || dungeonLitterOption.image;
       arr[tileId].color = null;
+    } else if (terrainOption) {
+      arr[tileId].contains = { type: 'terrain', subtype: terrainOption.key };
+      arr[tileId].image = images[terrainOption.image] || terrainOption.image;
+      arr[tileId].color = null;
     } else if (pinned.optionType === 'passage') {
       let prevTileIdx = this.state.hoveredTileIdx;
       let connectedTop = false, connectedBot = false, connectedLeft = false, connectedRight = false;
@@ -1591,7 +1613,7 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile', 'terrain-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
@@ -2426,7 +2448,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile' || tile.type === 'terrain-tile') {
       this.setState({
         pinnedOption: tile
       })
@@ -7893,6 +7915,12 @@ class MapMakerPage extends React.Component {
                 }}
                 onFocus={e => { e.currentTarget.style.borderColor = '#f9b115'; e.currentTarget.style.boxShadow = '0 0 10px rgba(249, 177, 21, 0.3)'; }}
                 onBlur={e => { e.currentTarget.style.borderColor = 'rgba(229, 181, 79, 0.4)'; e.currentTarget.style.boxShadow = 'none'; }}
+                onKeyDown={e => {
+                  if (e.key === 'Escape' || e.key === 'Esc') {
+                    this.cancelInscription();
+                    e.stopPropagation();
+                  }
+                }}
                 value={this.state.inscriptionTextInput}
                 onChange={this.handleInscriptionTextChange}
                 placeholder="e.g. 'Beware the shadow that walks in three...' "

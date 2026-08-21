@@ -24,7 +24,8 @@ import { updateUserRequest } from './api-handler';
  * @param {Array} crew - Current crew list
  * @returns {number} Adjusted build time in seconds
  */
-export function getAdjustedBuildTime(baseBuildTimeSec, crew = []) {
+export function getAdjustedBuildTime(baseBuildTimeSec, crew = [], inSuperboard = false) {
+    if (inSuperboard) return 1;
     const base = typeof baseBuildTimeSec === 'number' ? baseBuildTimeSec : 20;
     if (!Array.isArray(crew) || crew.length === 0) return base;
 
