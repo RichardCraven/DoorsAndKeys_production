@@ -790,6 +790,39 @@
             position: relative;
             /* space below map-wrapper for the backside indicator */
             margin-bottom: 6px;
+
+            &.superboard-minimap {
+                .minimap-tile {
+                    width: 154px;
+                    height: 154px;
+                    border: 2px solid #5a5a5a;
+                    .player-position-indicator {
+                        height: 4px;
+                        width: 4px;
+                        border-radius: 4px;
+                        background-color: white;
+                    }
+                    .minimap-indicator {
+                        height: 4px;
+                        width: 4px;
+                        border-radius: 4px;
+                        &.generator {
+                            height: 6px;
+                            width: 6px;
+                            margin-left: -1px;
+                            margin-top: -1px;
+                        }
+                        &.gate {
+                            height: 8px;
+                            width: 8px;
+                            border-radius: 0;
+                            margin-left: -2px;
+                            margin-top: -2px;
+                        }
+                    }
+                }
+            }
+
             .level-indicator{
                 position: absolute;
                 border: 1px solid #2a2929;
@@ -3028,8 +3061,13 @@
     }
 }
 
-.pygmy-bump-hit {
+.tile.pygmy-bump-hit .portrait,
+.tile.pygmy-bump-hit .monster-portrait-glow,
+.tile.pygmy-bump-hit .pygmy-hp-bar {
     animation: pygmyBumpHit 0.65s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
+}
+
+.tile.pygmy-bump-hit {
     z-index: 100 !important;
 }
 

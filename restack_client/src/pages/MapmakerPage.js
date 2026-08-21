@@ -46,6 +46,44 @@ const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__
 const GENERATE_DUNGEON_VALUE = '__generate_dungeon__';
 const UNIQUE_DUNGEON_INSTANCE_NAME_REGEX = /.+_.+_[^_]{4}$/i;
 
+export function createEmptySuperboard() {
+  const miniboards = [];
+  for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+    const tiles = [];
+    for (let tIdx = 0; tIdx < 225; tIdx++) {
+      const col = tIdx % 15;
+      const row = Math.floor(tIdx / 15);
+      tiles.push({
+        type: 'board-tile',
+        id: tIdx,
+        coordinates: [col, row],
+        contains: { type: 'empty_space', subtype: null },
+        color: null
+      });
+    }
+    miniboards.push({
+      id: mbIdx,
+      name: `superboard_slot_${mbIdx}`,
+      tiles: tiles
+    });
+  }
+  return { miniboards };
+}
+
+export function initializeSuperboards(dungeon) {
+  if (!dungeon) return dungeon;
+  if (!dungeon.superboards) {
+    dungeon.superboards = {};
+  }
+  if (!dungeon.superboards.light || !Array.isArray(dungeon.superboards.light.miniboards) || dungeon.superboards.light.miniboards.length !== 9) {
+    dungeon.superboards.light = createEmptySuperboard();
+  }
+  if (!dungeon.superboards.dark || !Array.isArray(dungeon.superboards.dark.miniboards) || dungeon.superboards.dark.miniboards.length !== 9) {
+    dungeon.superboards.dark = createEmptySuperboard();
+  }
+  return dungeon;
+}
+
 const GATES = [
   { key: 'archway', requires: '' },
   { key: 'minor_gate', requires: 'minor_key' },
@@ -159,6 +197,7 @@ class MapMakerPage extends React.Component {
       pinnedOption: null,
       mouseDown: false,
       lastWallBreakerTileId: null,
+      superboardBrush3x3: false,
       // Inscription placement state
       inscriptionDragStartId: null,
       showInscriptionModal: false,
@@ -245,6 +284,7 @@ class MapMakerPage extends React.Component {
       devConsoleInput: '',
       devConsoleOutput: [],
       showTeleporterInterface: false,
+      superboardZoom: null, // null | 'light' | 'dark'
       // ── Mobile / touch state ────────────────────────────────────────
       isMobile: typeof window !== 'undefined' && window.innerWidth <= 1024,
       mobileZoom: 1,
@@ -258,6 +298,265 @@ class MapMakerPage extends React.Component {
     this.boardViewportRef = React.createRef();
     // Mutable gesture state — stored on instance to avoid render churn
     this._touchState = null;
+  }
+
+  setSuperboardZoom = (zoom) => {
+    this.setState({ superboardZoom: zoom });
+  }
+
+  applyPinnedOptionToTile = (tile) => {
+    const pinnedOption = this.state.pinnedOption;
+    if (!pinnedOption) return tile;
+    const pinned = this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
+    
+    let containsObj = { type: 'empty_space', subtype: null };
+    let tileImage = null;
+    let tileColor = null;
+
+    if (pinnedOption.type === 'monster-tile') {
+      const paletteMonsters = typeof this.props.monsterManager?.getPaletteMonsters === 'function'
+        ? this.props.monsterManager.getPaletteMonsters()
+        : Object.values(this.props.monsterManager?.monsters || {});
+      const monster = pinnedOption.monsterType
+        ? (this.props.monsterManager?.monsters?.[pinnedOption.monsterType] || paletteMonsters[pinnedOption.id])
+        : paletteMonsters[pinnedOption.id];
+      if (monster) {
+        containsObj = { type: 'monster', subtype: monster.key };
+        tileImage = monster.portrait;
+      }
+    } else if (pinnedOption.type === 'gate-tile') {
+      const gate = (GATES || [])[pinnedOption.id];
+      if (gate) {
+        containsObj = { type: 'gate', subtype: gate.key };
+        tileImage = gate.key;
+      }
+    } else if (pinnedOption.type === 'key-tile') {
+      const key = (KEYS || [])[pinnedOption.id];
+      if (key) {
+        containsObj = { type: 'item', subtype: key.key };
+        tileImage = key.key;
+      }
+    } else if (pinnedOption.type === 'tier-tile') {
+      const tierOption = this.props.mapMaker?.tierOptions?.[pinnedOption.id];
+      if (tierOption) {
+        containsObj = { type: tierOption.key, subtype: null };
+        tileImage = tierOption.image;
+      }
+    } else if (pinnedOption.type === 'jewel-tile') {
+      const jewelOption = this.props.mapMaker?.jewelOptions?.[pinnedOption.id];
+      if (jewelOption) {
+        containsObj = { type: 'item', subtype: jewelOption.key };
+        tileImage = jewelOption.image;
+      }
+    } else if (pinnedOption.type === 'rune-tile') {
+      const runeOption = this.props.mapMaker?.runeOptions?.[pinnedOption.id];
+      if (runeOption) {
+        containsObj = { type: 'item', subtype: runeOption.key };
+        tileImage = runeOption.image;
+      }
+    } else if (pinnedOption.type === 'treasure-tile') {
+      const treasureOption = this.props.mapMaker?.treasureOptions?.[pinnedOption.id];
+      if (treasureOption) {
+        containsObj = { type: 'item', subtype: treasureOption.key };
+        tileImage = treasureOption.image;
+      }
+    } else if (pinnedOption.type === 'vendor-tile') {
+      const vendorOption = this.props.mapMaker?.vendorOptions?.[pinnedOption.id];
+      if (vendorOption) {
+        containsObj = { type: 'vendor', subtype: vendorOption.key || vendorOption.vendorKey };
+        tileImage = vendorOption.image;
+      }
+    } else if (pinnedOption.type === 'shrine-tile') {
+      const shrineOption = this.props.mapMaker?.shrineOptions?.[pinnedOption.id];
+      if (shrineOption) {
+        containsObj = { type: 'shrine', subtype: shrineOption.classKey };
+        tileColor = shrineOption.color;
+      }
+    } else if (pinnedOption.type === 'building-tile') {
+      const buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
+      if (buildingOption) {
+        containsObj = { type: 'building', subtype: buildingOption.key };
+        tileImage = buildingOption.image;
+      }
+    } else if (pinnedOption.type === 'pocket-building-tile') {
+      const pocketBuildingOption = this.props.mapMaker?.pocketBuildingOptions?.[pinnedOption.id];
+      if (pocketBuildingOption) {
+        containsObj = { type: 'building', subtype: pocketBuildingOption.key };
+        tileImage = images[pocketBuildingOption.image] || images[pocketBuildingOption.key] || pocketBuildingOption.image;
+      }
+    } else if (pinnedOption.type === 'generator-tile') {
+      const generatorOption = this.props.mapMaker?.generatorOptions?.[pinnedOption.id];
+      if (generatorOption) {
+        containsObj = { type: 'building', subtype: generatorOption.key };
+        tileImage = generatorOption.image;
+      }
+    } else if (pinnedOption.type === 'dungeon-litter-tile') {
+      const litterOption = this.props.mapMaker?.dungeonLitterOptions?.[pinnedOption.id];
+      if (litterOption) {
+        containsObj = { type: 'dungeon_litter', subtype: litterOption.key };
+        tileImage = litterOption.image;
+      }
+    } else if (pinned) {
+      if (pinned.optionType === 'void') {
+        containsObj = { type: 'void', subtype: null };
+        tileColor = 'black';
+      } else if (pinned.optionType === 'empty space' || pinned.optionType === 'delete') {
+        containsObj = { type: 'empty_space', subtype: null };
+        tileImage = null;
+        tileColor = null;
+      } else if (pinned.optionType === 'obscured space') {
+        containsObj = { type: 'obscured_space', subtype: null };
+        tileColor = '#111012';
+      } else if (pinned.optionType === 'passage') {
+        containsObj = { type: 'passage', subtype: null };
+      } else {
+        containsObj = { type: pinned.optionType || 'misc', subtype: pinned.image };
+        tileImage = pinned.image;
+        tileColor = pinned.color || null;
+      }
+    }
+
+    return {
+      ...tile,
+      contains: containsObj,
+      image: tileImage,
+      color: tileColor
+    };
+  }
+
+  handleSuperboardTileClick = (superboardKey, mbIndex, tileIdx) => {
+    if (!this.state.loadedDungeon) return;
+    let dungeon = JSON.parse(JSON.stringify(this.state.loadedDungeon));
+    dungeon = initializeSuperboards(dungeon);
+    if (!dungeon.superboards || !dungeon.superboards[superboardKey]) return;
+
+    const board = dungeon.superboards[superboardKey].miniboards[mbIndex];
+    if (!board || !board.tiles) return;
+
+    // Check if 3x3 brush mode is active for empty/void
+    const pinnedTile = this.state.pinnedOption && this.state.pinnedOption.type === 'palette-tile' ? this.props.mapMaker.paletteTiles[this.state.pinnedOption.id] : null;
+    const isBrushEligible = pinnedTile && (pinnedTile.optionType === 'empty space' || pinnedTile.optionType === 'void');
+
+    if (this.state.superboardBrush3x3 && isBrushEligible) {
+        const cx = tileIdx % 15;
+        const cy = Math.floor(tileIdx / 15);
+        for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+                const nx = cx + dx;
+                const ny = cy + dy;
+                if (nx >= 0 && nx < 15 && ny >= 0 && ny < 15) {
+                    const nIdx = ny * 15 + nx;
+                    const nTile = board.tiles[nIdx];
+                    if (nTile) {
+                        board.tiles[nIdx] = this.applyPinnedOptionToTile(nTile);
+                    }
+                }
+            }
+        }
+    } else {
+        const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
+        if (isMultiTile) {
+            const footprint = this.getVendorFootprintTileIds(tileIdx);
+            if (this.canPlaceVendorFootprint(board.tiles, tileIdx)) {
+                let baseType = 'vendor';
+                let vendorKey = 'unknown';
+                let image = null;
+                if (this.state.pinnedOption.type === 'vendor-tile') {
+                    const vendorOption = this.props.mapMaker?.vendorOptions?.[this.state.pinnedOption.id];
+                    if (vendorOption) vendorKey = vendorOption.key;
+                } else if (this.state.pinnedOption.type === 'building-tile') {
+                    baseType = 'building';
+                    const buildingOption = this.props.mapMaker?.buildingOptions?.[this.state.pinnedOption.id];
+                    if (buildingOption) {
+                        vendorKey = buildingOption.key;
+                        image = buildingOption.image;
+                    }
+                } else if (this.state.pinnedOption.type === 'pocket-building-tile') {
+                    baseType = 'building';
+                    const pocketBuildingOption = this.props.mapMaker?.pocketBuildingOptions?.[this.state.pinnedOption.id];
+                    if (pocketBuildingOption) {
+                        vendorKey = pocketBuildingOption.key;
+                        image = images[pocketBuildingOption.image] || images[pocketBuildingOption.key] || pocketBuildingOption.image;
+                    }
+                } else if (this.state.pinnedOption.type === 'palette-tile') {
+                    const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[this.state.pinnedOption.id];
+                    if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'dream den' || pinnedPaletteTile.optionType === 'dream_den')) {
+                         vendorKey = 'dream_den';
+                    }
+                }
+                board.tiles = this.placeVendorFootprint([...board.tiles], tileIdx, vendorKey, baseType, image);
+            } else {
+                this.toast("Requires a 2x2 empty space.");
+                return;
+            }
+        } else {
+            const tile = board.tiles[tileIdx];
+            if (!tile) return;
+            const updatedTile = this.applyPinnedOptionToTile(tile);
+            board.tiles[tileIdx] = updatedTile;
+        }
+    }
+
+    this.setState({
+      loadedDungeon: dungeon,
+      dungeonHasUnsavedChanges: true
+    });
+  }
+
+  handleSuperboardTileHover = (superboardKey, mbIndex, tileIdx) => {
+    const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
+    const multiTileFootprint = isMultiTile ? this.getVendorFootprintTileIds(tileIdx) : null;
+    this.setState({
+      hoveredTileIdx: tileIdx,
+      hoveredTileFootprint: multiTileFootprint
+    });
+
+    if (this.state.mouseDown && this.state.pinnedOption) {
+      this.handleSuperboardTileClick(superboardKey, mbIndex, tileIdx);
+    }
+  }
+
+  toggleSuperboardBrush3x3 = (e) => {
+    if (e) e.stopPropagation();
+    this.setState(prevState => ({ superboardBrush3x3: !prevState.superboardBrush3x3 }));
+  }
+
+  handleSuperboardFloorTextureChange = (superboardKey, textureUrl) => {
+    if (!this.state.loadedDungeon) return;
+    let dungeon = JSON.parse(JSON.stringify(this.state.loadedDungeon));
+    dungeon = initializeSuperboards(dungeon);
+    if (!dungeon.superboards || !dungeon.superboards[superboardKey]) return;
+    dungeon.superboards[superboardKey].floorTexture = textureUrl;
+    this.setState({ loadedDungeon: dungeon, dungeonHasUnsavedChanges: true });
+  }
+
+  handleSuperboardFill = (superboardKey, fillType) => {
+    if (!this.state.loadedDungeon) return;
+    let dungeon = JSON.parse(JSON.stringify(this.state.loadedDungeon));
+    dungeon = initializeSuperboards(dungeon);
+    if (!dungeon.superboards || !dungeon.superboards[superboardKey]) return;
+
+    const isVoid = fillType === 'void';
+    dungeon.superboards[superboardKey].miniboards.forEach(mb => {
+      if (!mb || !Array.isArray(mb.tiles)) return;
+      mb.tiles = mb.tiles.map((tile, i) => {
+        const col = i % 15;
+        const row = Math.floor(i / 15);
+        return {
+          type: 'board-tile',
+          id: i,
+          coordinates: [col, row],
+          contains: isVoid ? { type: 'void', subtype: null } : { type: 'empty_space', subtype: null },
+          color: isVoid ? 'black' : null,
+          image: null
+        };
+      });
+    });
+
+    this.setState({
+      loadedDungeon: dungeon,
+      dungeonHasUnsavedChanges: true
+    });
   }
 
 
@@ -875,7 +1174,7 @@ class MapMakerPage extends React.Component {
   }
 
   isParentPaletteOption = (optionType) => {
-    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'generators', 'dungeon litter'].includes(optionType);
+    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter'].includes(optionType);
   }
 
   getVendorFootprintTileIds = (anchorTileId) => {
@@ -889,9 +1188,21 @@ class MapMakerPage extends React.Component {
   is2x2FootprintPinnedOption = (pinnedOption) => {
     if (!pinnedOption) return false;
     if (pinnedOption.type === 'vendor-tile') return true;
+    if (pinnedOption.type === 'pocket-building-tile') {
+      const pocketBuildingOption = this.props.mapMaker?.pocketBuildingOptions?.[pinnedOption.id];
+      if (pocketBuildingOption && (pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key))) {
+        return true;
+      }
+    }
     if (pinnedOption.type === 'building-tile') {
       const buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
-      if (buildingOption && (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort' || buildingOption.isMultiTile)) {
+      if (buildingOption && (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort' || buildingOption.isMultiTile || buildingOption.isLarge || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(buildingOption.key))) {
+        return true;
+      }
+    }
+    if (pinnedOption.type === 'palette-tile') {
+      const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
+      if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'dream den' || pinnedPaletteTile.optionType === 'dream_den')) {
         return true;
       }
     }
@@ -916,7 +1227,7 @@ class MapMakerPage extends React.Component {
     });
   }
 
-  placeVendorFootprint = (tiles, anchorTileId, vendorKey, baseType = 'vendor') => {
+  placeVendorFootprint = (tiles, anchorTileId, vendorKey, baseType = 'vendor', imageOverride = null) => {
     const footprint = this.getVendorFootprintTileIds(anchorTileId);
     if (!footprint) return tiles;
     const vendorGroupId = `${baseType}_${vendorKey}_${anchorTileId}`;
@@ -957,7 +1268,7 @@ class MapMakerPage extends React.Component {
         vendorAnchorId: anchorTileId,
         vendorCell: vendorCells[idx] || 'anchor'
       };
-      tiles[tileId].image = vendorKey;
+      tiles[tileId].image = imageOverride || vendorKey;
       tiles[tileId].color = null;
       tiles[tileId].borders = newBorders;
     });
@@ -1069,7 +1380,7 @@ class MapMakerPage extends React.Component {
       vendorOption = this.props.mapMaker.vendorOptions[pinnedOption.id];
     }
 
-    let shrineOption = null, territoryOption = null, buildingOption = null, generatorOption = null, dungeonLitterOption = null;
+    let shrineOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null;
     if (pinnedOption.type === 'shrine-tile') {
       shrineOption = this.props.mapMaker.shrineOptions[pinnedOption.id];
     }
@@ -1079,6 +1390,9 @@ class MapMakerPage extends React.Component {
     if (pinnedOption.type === 'building-tile') {
       buildingOption = this.props.mapMaker.buildingOptions[pinnedOption.id];
     }
+    if (pinnedOption.type === 'pocket-building-tile') {
+      pocketBuildingOption = this.props.mapMaker.pocketBuildingOptions[pinnedOption.id];
+    }
     if (pinnedOption.type === 'generator-tile') {
       generatorOption = this.props.mapMaker.generatorOptions[pinnedOption.id];
     }
@@ -1086,7 +1400,7 @@ class MapMakerPage extends React.Component {
       dungeonLitterOption = this.props.mapMaker.dungeonLitterOptions[pinnedOption.id];
     }
 
-    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || generatorOption || dungeonLitterOption;
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption;
     if (!isSpecialOption && !pinned) return null;
 
     let arr = this.state.tiles.map(t => ({ ...t }));
@@ -1161,6 +1475,24 @@ class MapMakerPage extends React.Component {
         arr[tileId].image = images[buildingOption.image] || buildingOption.image;
         arr[tileId].color = null;
       }
+    } else if (pocketBuildingOption) {
+      const isPocketDimensionBoard = this.state.selectedView === 'dungeon' || this.state.isSuperboard || (this.state.loadedBoard && (this.state.loadedBoard.isPocketDimension || String(this.state.loadedBoard.folderPath || '').toLowerCase().includes('pocket')));
+      if (!isPocketDimensionBoard) {
+        this.toast('❌ Pocket buildings can only exist in a pocket dimension!');
+        return null;
+      }
+      const isLargePocketBuilding = pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key);
+      if (isLargePocketBuilding) {
+        if (!this.canPlaceVendorFootprint(arr, tileId)) {
+          this.toast(`${pocketBuildingOption.name} requires a 2x2 empty space.`);
+          return null;
+        }
+        arr = this.placeVendorFootprint(arr, tileId, pocketBuildingOption.key, 'building', images[pocketBuildingOption.image] || pocketBuildingOption.image);
+      } else {
+        arr[tileId].contains = { type: 'building', subtype: pocketBuildingOption.key };
+        arr[tileId].image = images[pocketBuildingOption.image] || pocketBuildingOption.image;
+        arr[tileId].color = null;
+      }
     } else if (generatorOption) {
       arr[tileId].contains = { type: 'building', subtype: generatorOption.key };
       arr[tileId].image = images[generatorOption.image] || generatorOption.image;
@@ -1230,6 +1562,12 @@ class MapMakerPage extends React.Component {
       return arr;
     } else if (pinned.optionType === 'delete') {
       arr = this.deleteTileWithVendorSupport(arr, tileId);
+    } else if (pinned.optionType === 'dream den' || pinned.optionType === 'dream_den') {
+      if (!this.canPlaceVendorFootprint(arr, tileId)) {
+        this.toast('Dream Den requires a 2x2 empty space.');
+        return null;
+      }
+      arr = this.placeVendorFootprint(arr, tileId, 'dream_den', 'dream_den', 'moon_castle');
     } else {
       const rawType = pinned.optionType || pinned.image || pinned.type || 'misc';
       const normalizedType = String(rawType).replace(/\s+/g, '_');
@@ -1253,7 +1591,7 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'generator-tile', 'dungeon-litter-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
@@ -2088,7 +2426,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile') {
       this.setState({
         pinnedOption: tile
       })
@@ -3298,27 +3636,30 @@ class MapMakerPage extends React.Component {
           });
           
           if (matchedBoard) {
-            const cloned = clone(matchedBoard);
-            // Preserve portal links from currentBoard
-            if (currentBoard.tiles && cloned.tiles) {
-              currentBoard.tiles.forEach(cTile => {
-                if (cTile && cTile.contains) {
-                  const type = cTile.contains.type || cTile.contains;
-                  if (type === 'dungeon_portal' || type === 'dungeon portal' || type === 'portal' || type === 'teleporter') {
-                    const matchedTile = cloned.tiles.find(t => t && t.id === cTile.id);
-                    if (matchedTile && matchedTile.contains) {
-                      matchedTile.contains.targetPortalId = cTile.contains.targetPortalId;
-                      matchedTile.contains.targetLevelId = cTile.contains.targetLevelId;
-                      matchedTile.contains.targetOrientation = cTile.contains.targetOrientation;
-                      matchedTile.contains.targetMiniboardIndex = cTile.contains.targetMiniboardIndex;
-                      matchedTile.contains.targetCoordinates = cTile.contains.targetCoordinates;
-                      matchedTile.contains.portalId = cTile.contains.portalId;
+            // If currentBoard already has populated tiles, do NOT overwrite it with template board
+            if (!currentBoard.tiles || !Array.isArray(currentBoard.tiles) || currentBoard.tiles.length === 0) {
+              const cloned = clone(matchedBoard);
+              // Preserve portal links from currentBoard
+              if (currentBoard.tiles && cloned.tiles) {
+                currentBoard.tiles.forEach(cTile => {
+                  if (cTile && cTile.contains) {
+                    const type = cTile.contains.type || cTile.contains;
+                    if (type === 'dungeon_portal' || type === 'dungeon portal' || type === 'portal' || type === 'teleporter') {
+                      const matchedTile = cloned.tiles.find(t => t && t.id === cTile.id);
+                      if (matchedTile && matchedTile.contains) {
+                        matchedTile.contains.targetPortalId = cTile.contains.targetPortalId;
+                        matchedTile.contains.targetLevelId = cTile.contains.targetLevelId;
+                        matchedTile.contains.targetOrientation = cTile.contains.targetOrientation;
+                        matchedTile.contains.targetMiniboardIndex = cTile.contains.targetMiniboardIndex;
+                        matchedTile.contains.targetCoordinates = cTile.contains.targetCoordinates;
+                        matchedTile.contains.portalId = cTile.contains.portalId;
+                      }
                     }
                   }
-                }
-              });
+                });
+              }
+              plane.miniboards[idx] = cloned;
             }
-            plane.miniboards[idx] = cloned;
           }
         }
       };
@@ -4922,6 +5263,7 @@ class MapMakerPage extends React.Component {
     try {
       // Sync dungeon planes with the latest boards list in state before validation/saving
       let validatedDungeon = clone(this.state.loadedDungeon);
+      validatedDungeon = initializeSuperboards(validatedDungeon);
       if (this.state.boards && this.state.boards.length > 0) {
         validatedDungeon = this.syncDungeonPlanesWithBoards(validatedDungeon, this.state.boards);
       }
@@ -4947,6 +5289,7 @@ class MapMakerPage extends React.Component {
           name: validatedDungeon.name,
           levels: validatedDungeon.levels,
           pocket_planes: validatedDungeon.pocket_planes,
+          superboards: validatedDungeon.superboards,
           descriptions: 'new dungeon description',
           valid: validatedDungeon.valid === true
         };
@@ -8519,7 +8862,7 @@ class MapMakerPage extends React.Component {
           </div>
           <div className="row-wrapper">
 
-            <BoardsPanel
+            {!this.state.superboardZoom && <BoardsPanel
               tileSize={this.state.tileSize}
               loadedBoard={this.state.loadedBoard}
               boardSize={this.state.boardSize}
@@ -8570,7 +8913,7 @@ class MapMakerPage extends React.Component {
               showUnstagedBoards={this.state.showUnstagedBoards}
               toggleShowUnstagedBoards={this.toggleShowUnstagedBoards}
             >
-            </BoardsPanel>
+            </BoardsPanel>}
 
             {this.state.selectedView === 'board' && (
               <div
@@ -8769,11 +9112,13 @@ class MapMakerPage extends React.Component {
                 compatibilityMatrix={this.state.compatibilityMatrix}
                 hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
                 hoveredTileIdx={this.state.hoveredTileIdx}
+                hoveredTileFootprint={this.state.hoveredTileFootprint}
                 hoveredTileId={this.state.hoveredTileIdx}
                 optionClickedIdx={this.state.optionClickedIdx}
                 selectedView={this.state.selectedView}
                 showCoordinates={this.state.showCoordinates}
                 mapMaker={this.props.mapMaker}
+                applyPinnedOptionToTile={this.applyPinnedOptionToTile}
 
                 loadedPlane={this.state.loadedPlane}
                 planes={this.state.planes}
@@ -8851,10 +9196,17 @@ class MapMakerPage extends React.Component {
                 showTeleporterInterface={this.state.showTeleporterInterface}
                 deleteDungeonLevel={this.deleteDungeonLevel}
                 toggleTeleporterInterface={this.toggleTeleporterInterface}
+                superboardZoom={this.state.superboardZoom}
+                setSuperboardZoom={this.setSuperboardZoom}
+                handleSuperboardTileClick={this.handleSuperboardTileClick}
+                handleSuperboardTileHover={this.handleSuperboardTileHover}
+                handleSuperboardFill={this.handleSuperboardFill}
+                handleSuperboardFloorTextureChange={this.handleSuperboardFloorTextureChange}
+                pinnedOption={this.state.pinnedOption}
               ></DungeonView>}
 
             {(this.state.selectedView === 'plane' ||
-              this.state.selectedView === 'dungeon')
+              (this.state.selectedView === 'dungeon' && !this.state.superboardZoom))
               && <PlanesPanel
                 tileSize={this.state.tileSize}
                 boardSize={this.state.boardSize}
@@ -8926,6 +9278,50 @@ class MapMakerPage extends React.Component {
                 deleteDungeonLevel={this.deleteDungeonLevel}
                 isMobile={this.state.isMobile}
               ></PlanesPanel>}
+
+            {(this.state.selectedView === 'dungeon' && this.state.superboardZoom) && !this.state.isMobile && <BoardsPalette
+              superboardZoom={this.state.superboardZoom}
+              superboardBrush3x3={this.state.superboardBrush3x3}
+              toggleSuperboardBrush3x3={this.toggleSuperboardBrush3x3}
+              tileSize={this.state.tileSize}
+              loadedBoard={this.state.loadedBoard}
+              boardSize={this.state.boardSize}
+              boardsFolders={this.state.boardsFolders}
+              boardsFoldersExpanded={this.state.boardsFoldersExpanded}
+              boards={this.state.boards}
+              tiles={this.state.tiles}
+              compatibilityMatrix={this.state.compatibilityMatrix}
+              pinnedOption={this.state.pinnedOption}
+              hoveredPaletteTileIdx={this.state.hoveredPaletteTileIdx}
+              hoveredTileIdx={this.state.hoveredTileIdx}
+              hoveredTileId={this.state.hoveredTileIdx}
+              optionClickedIdx={this.state.optionClickedIdx}
+              selectedView={this.state.selectedView}
+              showCoordinates={this.state.showCoordinates}
+              mapMaker={this.props.mapMaker}
+
+              setViewState={this.setViewState}
+              addNewBoard={this.addNewBoard}
+              cloneBoard={this.cloneBoard}
+              clearLoadedBoard={this.clearLoadedBoard}
+              writeBoard={this.writeBoard}
+              deleteBoard={this.deleteBoard}
+              renameBoard={this.renameBoard}
+              adjacencyFilterClicked={this.adjacencyFilterClicked}
+              nameFilterClicked={this.nameFilterClicked}
+              expandCollapseBoardFolders={this.expandCollapseBoardFolders}
+              collapseFilterHeader={this.collapseFilterHeader}
+              setHover={this.setHover}
+              handleClick={this.handleClick}
+              handleDoubleClick={this.handleDoubleClick}
+              handleHover={this.handleHover}
+              setPaletteHover={this.setPaletteHover}
+              loadBoard={this.loadBoard}
+              monsterManager={this.props.monsterManager}
+              gates={GATES}
+              keys={KEYS}
+              isSavingBoard={this.state.isSavingBoard}
+            />}
 
           </div>
         </div>

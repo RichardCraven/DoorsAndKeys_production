@@ -74,7 +74,7 @@ describe('Building Construction & Stamina Tax Utils', () => {
         const arcane = BUILDINGS.filter(b => b.category === 'arcane');
         const obscure = BUILDINGS.filter(b => b.category === 'obscure');
 
-        expect(earthly.length).toBe(6);
+        expect(earthly.length).toBe(7);
         expect(arcane.length).toBe(3);
         expect(obscure.length).toBe(2);
 

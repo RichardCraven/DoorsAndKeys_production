@@ -17,25 +17,25 @@ export default function InfirmaryModal({ onClose, crewManager }) {
     useEffect(() => {
         // Find injured units in roster/crew that are NOT in infirmary
         const meta = getMeta();
-        const allRoster = crewManager?.adventurers || [];
-        const selectedCrew = meta?.crew || [];
+        const allRoster = (crewManager && Array.isArray(crewManager.adventurers)) ? crewManager.adventurers : (meta?.adventurers || meta?.roster || []);
+        const selectedCrew = (meta && Array.isArray(meta.crew)) ? meta.crew : [];
         
-        // Merge them
-        let allUnits = [...allRoster];
-        selectedCrew.forEach(c => {
-            if (!allUnits.find(u => u.id === c.id)) {
-                allUnits.push(c);
+        // Merge roster & selected crew without duplicates
+        const unitMap = new Map();
+        [...selectedCrew, ...allRoster].forEach(c => {
+            if (c && c.id && !unitMap.has(c.id)) {
+                unitMap.set(c.id, c);
             }
         });
+        const allUnits = Array.from(unitMap.values());
         
         const injured = allUnits.filter(u => {
             const hp = typeof u.hp === 'number' ? u.hp : (u.stats?.hp || u.starting_hp || 100);
             const maxHp = u.stats?.hp || u.starting_hp || 100;
-            const hpPct = (hp / maxHp) * 100;
-            // Exclude already in infirmary
-            if (infirmary.patients.find(p => p.id === u.id)) return false;
-            // Only < 15% or dead
-            return hpPct < 15 || u.dead || hp <= 0;
+            const isInjured = hp < maxHp || u.dead || hp <= 0;
+            // Exclude units already in the infirmary
+            if (infirmary.patients && infirmary.patients.some(p => p.id === u.id)) return false;
+            return isInjured;
         });
         
         setInjuredRoster(injured);
@@ -43,12 +43,15 @@ export default function InfirmaryModal({ onClose, crewManager }) {
     
     const handleCommit = (unit) => {
         commitToInfirmary(unit);
-        setInfirmary(getInfirmary());
+        const updated = getInfirmary();
+        setInfirmary(updated);
+        setInjuredRoster(prev => prev.filter(u => u.id !== unit.id));
     };
     
     const handleDischarge = (unitId) => {
         dischargeFromInfirmary(unitId);
-        setInfirmary(getInfirmary());
+        const updated = getInfirmary();
+        setInfirmary(updated);
     };
     
     const hasSageInRoster = crewManager?.adventurers?.find(a => a.type === 'sage') || (getMeta()?.crew || []).find(c => c.type === 'sage');
@@ -124,7 +127,7 @@ export default function InfirmaryModal({ onClose, crewManager }) {
                 
                 {injuredRoster.length > 0 && (
                     <>
-                        <h3 style={{ color: '#fca5a5', borderBottom: '1px solid #333', paddingBottom: '10px', marginTop: '30px' }}>Critically Injured Crew</h3>
+                        <h3 style={{ color: '#fca5a5', borderBottom: '1px solid #333', paddingBottom: '10px', marginTop: '30px' }}>Injured Crew (Available for Admission)</h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                             {injuredRoster.map(u => {
                                 const maxHp = u.stats?.hp || u.starting_hp || 100;

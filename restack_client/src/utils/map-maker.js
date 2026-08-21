@@ -11,6 +11,7 @@ export function MapMaker(props){
         'connecting path',
         'territory',
         'buildings',
+        'pocket buildings',
         'generators',
         'dungeon litter',
         'delete',
@@ -144,6 +145,29 @@ export function MapMaker(props){
         { key: 'earthen_fort', name: 'Earthen Fort', image: 'buildable_earthen_fort' },
         { key: 'war_camp', name: 'War Camp', image: 'buildable_war_camp', isMultiTile: true },
         { key: 'war_fort', name: 'War Fort', image: 'buildable_war_fort', isMultiTile: true },
+    ];
+
+    this.pocketBuildingOptions = [
+        { key: 'town_1', name: 'Town 1', image: 'pocket_town_1' },
+        { key: 'town_2', name: 'Town 2', image: 'pocket_town_2' },
+        { key: 'town_3', name: 'Town 3', image: 'pocket_town_3' },
+        { key: 'windmill', name: 'Windmill', image: 'pocket_windmill' },
+        { key: 'farm', name: 'Farm', image: 'pocket_farm' },
+        { key: 'house', name: 'House', image: 'pocket_house' },
+        { key: 'manor', name: 'Manor', image: 'pocket_manor' },
+        { key: 'estate', name: 'Estate', image: 'pocket_estate' },
+        { key: 'keep', name: 'Keep', image: 'pocket_keep', isMultiTile: true, isLarge: true },
+        { key: 'fortress', name: 'Fortress', image: 'pocket_fortress', isMultiTile: true, isLarge: true },
+        { key: 'graveyard', name: 'Graveyard', image: 'pocket_graveyard' },
+        { key: 'tower', name: 'Tower', image: 'pocket_tower' },
+        { key: 'tower_2', name: 'Tower 2', image: 'pocket_tower_2' },
+        { key: 'tower_3', name: 'Tower 3', image: 'pocket_tower_3' },
+        { key: 'summoning_temple', name: 'Summoning Temple', image: 'pocket_summoning_temple', isMultiTile: true, isLarge: true },
+        { key: 'rift', name: 'Rift', image: 'pocket_rift', isMultiTile: true, isLarge: true },
+        { key: 'rift_2', name: 'Rift 2', image: 'pocket_rift_2', isMultiTile: true, isLarge: true },
+        { key: 'tower_4', name: 'Tower 4', image: 'pocket_tower_4' },
+        { key: 'tower_5', name: 'Tower 5', image: 'pocket_tower_5' },
+        { key: 'blacksmith', name: 'Blacksmith', image: 'pocket_blacksmith' },
     ];
 
     this.generatorOptions = [
@@ -468,6 +492,16 @@ export function MapMaker(props){
                     optionType: 'buildings',
                     image: 'buildable_outpost',
                     color: null,
+                    isBuilding: true,
+                    id: i
+                })
+            } else if(key === 'pocket buildings'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'pocket buildings',
+                    image: 'pocket_keep',
+                    color: null,
+                    isPocketBuilding: true,
                     isBuilding: true,
                     id: i
                 })
@@ -823,6 +857,8 @@ export function MapMaker(props){
                 return 'woodland_warband'
             case 'buildings':
                 return 'buildable_outpost'
+            case 'pocket buildings':
+                return 'pocket_keep'
             case 'generators':
                 return 'dust_collector'
             case 'dungeon litter':

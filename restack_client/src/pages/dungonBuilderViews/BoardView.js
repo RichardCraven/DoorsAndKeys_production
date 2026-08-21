@@ -174,7 +174,7 @@ class BoardView extends React.Component {
                 vendorOption = this.props.mapMaker?.vendorOptions?.[pinnedOption.id];
             }
 
-            let shrineOption = null, territoryOption = null, buildingOption = null, generatorOption = null, dungeonLitterOption = null;
+            let shrineOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null;
             if (pinnedOption.type === 'shrine-tile') {
                 shrineOption = this.props.mapMaker?.shrineOptions?.[pinnedOption.id];
             }
@@ -183,6 +183,9 @@ class BoardView extends React.Component {
             }
             if (pinnedOption.type === 'building-tile') {
                 buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'pocket-building-tile') {
+                pocketBuildingOption = this.props.mapMaker?.pocketBuildingOptions?.[pinnedOption.id];
             }
             if (pinnedOption.type === 'generator-tile') {
                 generatorOption = this.props.mapMaker?.generatorOptions?.[pinnedOption.id];
@@ -226,6 +229,9 @@ class BoardView extends React.Component {
             } else if (buildingOption) {
                 previewContains = { type: 'building', subtype: buildingOption.key };
                 previewImage = images[buildingOption.image] || buildingOption.image;
+            } else if (pocketBuildingOption) {
+                previewContains = { type: 'building', subtype: pocketBuildingOption.key };
+                previewImage = images[pocketBuildingOption.image] || images[pocketBuildingOption.key] || pocketBuildingOption.image;
             } else if (generatorOption) {
                 previewContains = { type: 'building', subtype: generatorOption.key };
                 previewImage = images[generatorOption.image] || generatorOption.image;

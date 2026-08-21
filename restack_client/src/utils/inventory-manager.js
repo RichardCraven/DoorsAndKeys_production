@@ -66,6 +66,7 @@ const axes = [
 
 export function InventoryManager() {
     this.tiles = [];
+    this.inventory = [];
     this.gold = 0;
     this.shimmering_dust = 0;
     this.totems = 0;
@@ -2860,7 +2861,10 @@ export function InventoryManager() {
                     : (e.name || '').replaceAll(' ', '_');
                 if (this.allItems[key]) {
                     const v = copy(this.allItems[key]);
-                    if (v) v.equippedBy = equippedBy;
+                    if (v) {
+                        v.equippedBy = equippedBy;
+                        if (e && e.active !== undefined) v.active = e.active;
+                    }
                     return v;
                 } else {
                     console.warn('InventoryManager: unknown saved item key:', key, '| item:', e);
@@ -2936,6 +2940,7 @@ export function InventoryManager() {
     //     this.inventory.concat(items)
     // }
     this.addItem = (item) => {
+        if (!this.inventory) this.inventory = [];
         this.inventory.push(item);
     }
     this.removeItemByIndex = (index) => {

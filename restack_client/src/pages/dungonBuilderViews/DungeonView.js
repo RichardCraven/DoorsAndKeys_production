@@ -4,6 +4,7 @@ import '@coreui/coreui/dist/css/coreui.min.css'
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 import Tile from '../../components/tile'
+import { FLOOR_TEXTURES } from './BoardView'
 import { CDropdown, CDropdownToggle, CDropdownMenu, CDropdownItem, CSpinner, CFormSelect} from '@coreui/react';
 import  CIcon  from '@coreui/icons-react'
 import { cilSave, cilQrCode, cilLevelDown, cilLevelUp, cilLibraryAdd, cilTrash, cilOptions, cilPlus, cilHistory } from '@coreui/icons';
@@ -19,10 +20,32 @@ class DungeonView extends React.Component {
       super(props)
       this.state = {
         hoveredPlane : null,
-        showTeleporterInterface: false
+        showTeleporterInterface: false,
+        isFlipped: false,
+        superboardContextMenu: { visible: false, x: 0, y: 0, superboardKey: 'light' },
+        hoveredSuperboardTileIdx: null
       }
       this.clickTimer = null;
       this.lastClickInfo = null;
+    }
+
+    componentDidMount() {
+        this.closeSuperboardMenu = () => {
+            if (this.state.superboardContextMenu?.visible) {
+                this.setState({ superboardContextMenu: { visible: false, x: 0, y: 0, superboardKey: 'light' } });
+            }
+        };
+        window.addEventListener('click', this.closeSuperboardMenu);
+    }
+
+    componentWillUnmount() {
+        if (this.closeSuperboardMenu) {
+            window.removeEventListener('click', this.closeSuperboardMenu);
+        }
+      if (this.clickTimer) {
+        clearTimeout(this.clickTimer);
+        this.clickTimer = null;
+      }
     }
 
     getTeleporters = () => {
@@ -34,18 +57,17 @@ class DungeonView extends React.Component {
                 if (plane && Array.isArray(plane.miniboards)) {
                     plane.miniboards.forEach((mb, mbIndex) => {
                         if (mb && Array.isArray(mb.tiles)) {
-                            mb.tiles.forEach(tile => {
+                            mb.tiles.forEach((tile, tileIndex) => {
                                 if (tile.contains && (tile.contains.type === 'dungeon_portal' || tile.contains.type === 'dungeon portal')) {
                                     teleporters.push({
                                         portalId: tile.contains.portalId,
-                                        subtype: tile.contains.subtype || 'Unnamed',
-                                        levelId: level.id,
-                                        orientation: orientation,
-                                        miniboardIndex: mbIndex,
-                                        coordinates: tile.coordinates || [tile.id % 15, Math.floor(tile.id / 15)],
                                         targetPortalId: tile.contains.targetPortalId,
-                                        targetLevelId: tile.contains.targetLevelId,
-                                        targetOrientation: tile.contains.targetOrientation
+                                        targetCoordinates: tile.contains.targetCoordinates,
+                                        levelId: level.id,
+                                        orientation,
+                                        miniboardIndex: mbIndex,
+                                        tileIndex,
+                                        tile
                                     });
                                 }
                             });
@@ -55,13 +77,6 @@ class DungeonView extends React.Component {
             });
         });
         return teleporters;
-    }
-
-    componentWillUnmount() {
-      if (this.clickTimer) {
-        clearTimeout(this.clickTimer);
-        this.clickTimer = null;
-      }
     }
 
     handleBoardClick = (level, miniboardIndex, orientation) => {
@@ -115,11 +130,18 @@ class DungeonView extends React.Component {
         }
     }
 
-    shouldComponentUpdate(nextProps) {
+    shouldComponentUpdate(nextProps, nextState) {
         // Prevent re-rendering the entire dungeon tile grid when only unrelated
         // parent state changes (e.g. a dropdown toggling open/closed).
-        // The dungeon content changes only when these specific props change.
+        // The dungeon content changes only when these specific props or state change.
         return (
+            nextState.isFlipped !== this.state.isFlipped ||
+            nextState.showTeleporterInterface !== this.state.showTeleporterInterface ||
+            nextState.hoveredPlane !== this.state.hoveredPlane ||
+            nextState.superboardContextMenu !== this.state.superboardContextMenu ||
+            nextState.hoveredSuperboardTileIdx !== this.state.hoveredSuperboardTileIdx ||
+            nextProps.superboardZoom !== this.props.superboardZoom ||
+            nextProps.pinnedOption !== this.props.pinnedOption ||
             nextProps.loadedDungeon !== this.props.loadedDungeon ||
             nextProps.overlayData !== this.props.overlayData ||
             nextProps.hoveredDungeonSection !== this.props.hoveredDungeonSection ||
@@ -625,6 +647,476 @@ class DungeonView extends React.Component {
         }
     }
 
+    handleSuperboardContextMenu = (e, superboardKey) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.setState({
+            superboardContextMenu: {
+                visible: true,
+                x: e.clientX,
+                y: e.clientY,
+                superboardKey
+            }
+        });
+    }
+
+    renderSuperboardsView = () => {
+        const boardSize = this.props.boardSize || 675;
+        const tileSize = this.props.tileSize || 48;
+        const superboardSize = tileSize * 6; // Matching plane preview size in un-zoomed mode
+        const isZoomed = !!this.props.superboardZoom;
+        const currentZoomKey = this.props.superboardZoom; // 'light' | 'dark'
+
+        // Retrieve superboard data from loadedDungeon (or fallback to empty 9 miniboards)
+        const getSuperboardData = (key) => {
+            const sb = this.props.loadedDungeon?.superboards?.[key];
+            if (sb && Array.isArray(sb.miniboards) && sb.miniboards.length === 9) {
+                return sb.miniboards;
+            }
+            // Fallback: 9 empty miniboards with 225 tiles each
+            const fallback = [];
+            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                const tiles = [];
+                for (let tIdx = 0; tIdx < 225; tIdx++) {
+                    const col = tIdx % 15;
+                    const row = Math.floor(tIdx / 15);
+                    tiles.push({
+                        type: 'board-tile',
+                        id: tIdx,
+                        coordinates: [col, row],
+                        contains: { type: 'empty_space', subtype: null },
+                        color: null
+                    });
+                }
+                fallback.push({ id: mbIdx, name: `superboard_slot_${mbIdx}`, tiles });
+            }
+            return fallback;
+        };
+
+        const lightMiniboards = getSuperboardData('light');
+        const darkMiniboards = getSuperboardData('dark');
+
+        return (
+            <div className="superboards-levels-wrapper" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '100%' }}>
+                {/* Context Menu Popup */}
+                {this.state.superboardContextMenu?.visible && (
+                    <div
+                        className="superboard-context-menu"
+                        style={{
+                            position: 'fixed',
+                            left: this.state.superboardContextMenu.x,
+                            top: this.state.superboardContextMenu.y,
+                            zIndex: 99999,
+                            background: '#1a1625',
+                            border: '1.5px solid rgba(168, 85, 247, 0.6)',
+                            borderRadius: '8px',
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.9)',
+                            padding: '6px 0',
+                            minWidth: '190px'
+                        }}
+                    >
+                        <div
+                            style={{
+                                padding: '10px 16px',
+                                color: '#f3e8ff',
+                                fontSize: '13px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'background 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(168, 85, 247, 0.2)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                            onClick={() => {
+                                if (this.props.handleSuperboardFill) {
+                                    this.props.handleSuperboardFill(this.state.superboardContextMenu.superboardKey, 'void');
+                                }
+                                this.setState({ superboardContextMenu: { visible: false } });
+                            }}
+                        >
+                            <span>⬛</span> Fill with Void
+                        </div>
+                        <div
+                            style={{
+                                padding: '10px 16px',
+                                color: '#f3e8ff',
+                                fontSize: '13px',
+                                fontWeight: '600',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '8px',
+                                transition: 'background 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(168, 85, 247, 0.2)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                            onClick={() => {
+                                if (this.props.handleSuperboardFill) {
+                                    this.props.handleSuperboardFill(this.state.superboardContextMenu.superboardKey, 'empty');
+                                }
+                                this.setState({ superboardContextMenu: { visible: false } });
+                            }}
+                        >
+                            <span>⬜</span> Fill with Empty Space
+                        </div>
+                    </div>
+                )}
+
+                <div className="level-wrapper superboards-level-wrapper" style={{ marginTop: '5px', display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: '100%' }}>
+                    {/* Header Readout / Breadcrumbs */}
+                    <div className="level-info superboard-level-info" style={{ width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', borderBottom: '1px solid rgba(168, 85, 247, 0.3)', paddingBottom: '8px', marginBottom: '12px' }}>
+                        {isZoomed ? (
+                            <div className="superboard-breadcrumbs" style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#c084fc', fontSize: '15px', fontWeight: 'bold' }}>
+                                <span
+                                    onClick={() => this.props.setSuperboardZoom && this.props.setSuperboardZoom(null)}
+                                    style={{ cursor: 'pointer', opacity: 0.85, textDecoration: 'underline', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                    title="Click to return to side-by-side overview"
+                                >
+                                    ✦ Superboards (Pocket Dimensions)
+                                </span>
+                                <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>/</span>
+                                <span style={{ color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc' }}>
+                                    {currentZoomKey === 'light' ? 'Light Superboard' : 'Dark Superboard'}
+                                </span>
+                                <div style={{ marginLeft: '16px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a4b0be' }}>Floor:</span>
+                                    <select
+                                        value={this.props.loadedDungeon?.superboards?.[currentZoomKey]?.floorTexture || ''}
+                                        onChange={(e) => this.props.handleSuperboardFloorTextureChange && this.props.handleSuperboardFloorTextureChange(currentZoomKey, e.target.value)}
+                                        style={{
+                                            background: '#1c1c1e',
+                                            color: '#f9b115',
+                                            border: '1px solid rgba(249, 177, 21, 0.4)',
+                                            borderRadius: '4px',
+                                            padding: '2px 6px',
+                                            fontSize: '11px',
+                                            outline: 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <option value="">(Default)</option>
+                                        {FLOOR_TEXTURES.map((tex) => (
+                                            <option key={tex.key} value={tex.src}>
+                                                {tex.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="level-readout" style={{ color: '#c084fc', fontSize: '15px', fontWeight: 'bold', letterSpacing: '0.5px' }}>
+                                ✦ Superboards (Pocket Dimensions)
+                            </div>
+                        )}
+                    </div>
+
+                    {!isZoomed ? (
+                        /* Side-by-side unzoomed view */
+                        <div className="plane-board-displays-wrapper superboard-displays-wrapper" style={{ display: 'flex', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: '48px', padding: '10px 20px' }}>
+                            {/* Light Superboard Preview */}
+                            <div
+                                className="superboard-container light-superboard"
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
+                                onClick={() => this.props.setSuperboardZoom && this.props.setSuperboardZoom('light')}
+                                onDoubleClick={() => this.props.setSuperboardZoom && this.props.setSuperboardZoom('light')}
+                                title="Click or double-click to zoom into Light Superboard"
+                            >
+                                <div className="superboard-title" style={{ color: '#fbbf24', fontSize: '13px', fontWeight: '600', marginBottom: '10px', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>Light Superboard</span>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (this.props.setSuperboardZoom) this.props.setSuperboardZoom('light');
+                                        }}
+                                        style={{
+                                            background: 'rgba(251, 191, 36, 0.15)',
+                                            border: '1px solid rgba(251, 191, 36, 0.5)',
+                                            color: '#fbbf24',
+                                            borderRadius: '4px',
+                                            padding: '2px 8px',
+                                            fontSize: '11px',
+                                            cursor: 'pointer',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        🔍 Zoom In
+                                    </button>
+                                </div>
+                                <div
+                                    className="plane-preview superboard-preview"
+                                    style={{
+                                        height: superboardSize + 'px',
+                                        width: superboardSize + 'px',
+                                        border: '1.5px solid rgba(251, 191, 36, 0.6)',
+                                        borderRadius: '6px',
+                                        boxShadow: '0 0 20px rgba(251, 191, 36, 0.2)',
+                                        background: '#13131a',
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(3, 1fr)',
+                                        gridTemplateRows: 'repeat(3, 1fr)',
+                                        boxSizing: 'border-box',
+                                        gap: '2px',
+                                        padding: '2px',
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                        pointerEvents: 'none'
+                                    }}
+                                >
+                                    {lightMiniboards.map((mb, mbIdx) => (
+                                        <div
+                                            key={mbIdx}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                boxSizing: 'border-box',
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(15, 1fr)',
+                                                gridTemplateRows: 'repeat(15, 1fr)',
+                                                background: '#0d0d12'
+                                            }}
+                                        >
+                                            {mb.tiles && mb.tiles.map((tile, tileIdx) => {
+                                                const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                                                const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                                                const tileColor = isVoid ? 'black' : (storedColor || '#6b6057');
+
+                                                return <Tile
+                                                    key={tileIdx}
+                                                    id={tile.id}
+                                                    tileSize="100%"
+                                                    contains={tile.contains}
+                                                    boardTiles={mb.tiles}
+                                                    color={tileColor}
+                                                    image={tile.image}
+                                                    imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
+                                                    coordinates={tile.coordinates}
+                                                    index={tile.id}
+                                                    showCoordinates={false}
+                                                    editMode={true}
+                                                    isBuilder={true}
+                                                    handleHover={null}
+                                                    handleClick={null}
+                                                    type={tile.type}
+                                                    hovered={false}
+                                                />;
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Dark Superboard Preview */}
+                            <div
+                                className="superboard-container dark-superboard"
+                                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
+                                onClick={() => this.props.setSuperboardZoom && this.props.setSuperboardZoom('dark')}
+                                onDoubleClick={() => this.props.setSuperboardZoom && this.props.setSuperboardZoom('dark')}
+                                title="Click or double-click to zoom into Dark Superboard"
+                            >
+                                <div className="superboard-title" style={{ color: '#c084fc', fontSize: '13px', fontWeight: '600', marginBottom: '10px', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span>Dark Superboard</span>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (this.props.setSuperboardZoom) this.props.setSuperboardZoom('dark');
+                                        }}
+                                        style={{
+                                            background: 'rgba(168, 85, 247, 0.15)',
+                                            border: '1px solid rgba(168, 85, 247, 0.5)',
+                                            color: '#c084fc',
+                                            borderRadius: '4px',
+                                            padding: '2px 8px',
+                                            fontSize: '11px',
+                                            cursor: 'pointer',
+                                            fontWeight: 'bold'
+                                        }}
+                                    >
+                                        🔍 Zoom In
+                                    </button>
+                                </div>
+                                <div
+                                    className="plane-preview superboard-preview"
+                                    style={{
+                                        height: superboardSize + 'px',
+                                        width: superboardSize + 'px',
+                                        border: '1.5px solid rgba(168, 85, 247, 0.6)',
+                                        borderRadius: '6px',
+                                        boxShadow: '0 0 20px rgba(168, 85, 247, 0.25)',
+                                        background: '#0b0914',
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(3, 1fr)',
+                                        gridTemplateRows: 'repeat(3, 1fr)',
+                                        boxSizing: 'border-box',
+                                        gap: '2px',
+                                        padding: '2px',
+                                        position: 'relative',
+                                        overflow: 'hidden',
+                                        pointerEvents: 'none'
+                                    }}
+                                >
+                                    {darkMiniboards.map((mb, mbIdx) => (
+                                        <div
+                                            key={mbIdx}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                boxSizing: 'border-box',
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(15, 1fr)',
+                                                gridTemplateRows: 'repeat(15, 1fr)',
+                                                background: '#07050e'
+                                            }}
+                                        >
+                                            {mb.tiles && mb.tiles.map((tile, tileIdx) => {
+                                                const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                                                const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                                                const tileColor = isVoid ? 'black' : (storedColor || 'rgba(25, 20, 45, 0.95)');
+
+                                                return <Tile
+                                                    key={tileIdx}
+                                                    id={tile.id}
+                                                    tileSize="100%"
+                                                    contains={tile.contains}
+                                                    boardTiles={mb.tiles}
+                                                    color={tileColor}
+                                                    image={tile.image}
+                                                    imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
+                                                    coordinates={tile.coordinates}
+                                                    index={tile.id}
+                                                    showCoordinates={false}
+                                                    editMode={true}
+                                                    isBuilder={true}
+                                                    handleHover={null}
+                                                    handleClick={null}
+                                                    type={tile.type}
+                                                    hovered={false}
+                                                />;
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        /* Zoomed-in 45x45 editing view */
+                        (() => {
+                            const activeMiniboards = currentZoomKey === 'light' ? lightMiniboards : darkMiniboards;
+                            const isDark = currentZoomKey === 'dark';
+                            const superboardTexture = this.props.loadedDungeon?.superboards?.[currentZoomKey]?.floorTexture;
+
+                            return (
+                                <div
+                                    className="superboard-zoomed-board"
+                                    onContextMenu={(e) => this.handleSuperboardContextMenu(e, currentZoomKey)}
+                                    style={{
+                                        position: 'relative',
+                                        width: '720px',
+                                        height: '720px',
+                                        backgroundColor: isDark ? '#0b0914' : '#13131a',
+                                        backgroundImage: superboardTexture ? `url(${superboardTexture})` : undefined,
+                                        backgroundRepeat: superboardTexture ? 'repeat' : undefined,
+                                        backgroundSize: superboardTexture ? '240px 240px' : undefined,
+                                        border: isDark ? '2px solid #c084fc' : '2px solid #fbbf24',
+                                        borderRadius: '8px',
+                                        boxShadow: isDark ? '0 0 35px rgba(168, 85, 247, 0.35)' : '0 0 35px rgba(251, 191, 36, 0.3)',
+                                        display: 'grid',
+                                        gridTemplateColumns: 'repeat(3, 1fr)',
+                                        gridTemplateRows: 'repeat(3, 1fr)',
+                                        gap: '2px',
+                                        padding: '2px',
+                                        boxSizing: 'border-box'
+                                    }}
+                                >
+                                    {activeMiniboards.map((mb, mbIdx) => (
+                                        <div
+                                            key={mbIdx}
+                                            style={{
+                                                width: '100%',
+                                                height: '100%',
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(15, 1fr)',
+                                                gridTemplateRows: 'repeat(15, 1fr)',
+                                                background: superboardTexture ? 'transparent' : (isDark ? '#07050e' : '#0d0d12')
+                                            }}
+                                        >
+                                            {mb.tiles && mb.tiles.map((tile, tileIdx) => {
+                                                const globalIdx = mbIdx * 225 + tileIdx;
+                                                const hoveredMbIdx = Math.floor((this.state.hoveredSuperboardTileIdx !== null && this.state.hoveredSuperboardTileIdx !== undefined ? this.state.hoveredSuperboardTileIdx : -1) / 225);
+                                                const hoveredTileFootprint = Array.isArray(this.props.hoveredTileFootprint) ? this.props.hoveredTileFootprint : [];
+                                                const isHovered = (this.state.hoveredSuperboardTileIdx === globalIdx) || (hoveredMbIdx === mbIdx && hoveredTileFootprint.includes(tile.id));
+
+                                                const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                                                const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                                                const defaultEmptyColor = isDark ? 'rgba(25, 20, 45, 0.95)' : '#6b6057';
+                                                const tileColor = isVoid ? 'black' : (storedColor || (superboardTexture ? 'rgba(15, 15, 20, 0.55)' : defaultEmptyColor));
+
+                                                let displayImage = tile.image;
+                                                let displayColor = tileColor;
+                                                let displayContains = tile.contains;
+
+                                                if (isHovered && this.props.pinnedOption) {
+                                                    const previewTile = this.props.applyPinnedOptionToTile ? this.props.applyPinnedOptionToTile(tile) : tile;
+                                                    const tileMatchesPreview = previewTile.contains != null &&
+                                                        tile.contains?.type === previewTile.contains?.type &&
+                                                        (previewTile.contains?.subtype == null || tile.contains?.subtype === previewTile.contains?.subtype);
+                                                    
+                                                    if (!tileMatchesPreview) {
+                                                        displayImage = previewTile.image || tile.image;
+                                                        if (previewTile.color !== null && previewTile.color !== undefined) {
+                                                            displayColor = previewTile.color;
+                                                        }
+                                                        displayContains = previewTile.contains || tile.contains;
+                                                    }
+                                                }
+
+                                                return (
+                                                    <Tile
+                                                        key={tileIdx}
+                                                        id={tile.id}
+                                                        tileSize="100%"
+                                                        contains={displayContains}
+                                                        boardTiles={mb.tiles}
+                                                        color={displayColor}
+                                                        image={displayImage}
+                                                        imageOverride={displayImage && displayImage.includes('/') ? displayImage : null}
+                                                        coordinates={tile.coordinates}
+                                                        index={tile.id}
+                                                        hoveredTileFootprint={this.props.hoveredTileFootprint}
+                                                        showCoordinates={false}
+                                                        editMode={true}
+                                                        isBuilder={true}
+                                                        handleHover={() => {
+                                                            this.setState({ hoveredSuperboardTileIdx: globalIdx });
+                                                            if (this.props.handleSuperboardTileHover) {
+                                                                this.props.handleSuperboardTileHover(currentZoomKey, mbIdx, tileIdx);
+                                                            }
+                                                        }}
+                                                        handleClick={() => {
+                                                            if (this.props.handleSuperboardTileClick) {
+                                                                this.props.handleSuperboardTileClick(currentZoomKey, mbIdx, tileIdx);
+                                                            }
+                                                        }}
+                                                        type={tile.type}
+                                                        hovered={isHovered}
+                                                    />
+                                                );
+                                            })}
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     render() {
         return (
             <div className="board-view-container" style={{ position: 'relative' }}>
@@ -633,8 +1125,10 @@ class DungeonView extends React.Component {
                     onMouseLeave={() => {return this.props.setHover(null)}}
                     className="board map-board dungeon-map-board" 
                     style={{
-                        width: this.props.boardSize+'px', height: this.props.boardSize+ 'px',
-                        backgroundColor: 'white'
+                        width: this.props.superboardZoom ? '750px' : (this.props.boardSize + 'px'),
+                        height: this.props.superboardZoom ? '790px' : (this.props.boardSize + 'px'),
+                        backgroundColor: 'white',
+                        transition: 'all 0.3s ease'
                     }}
                     >
                         <div className="dungeon-info">
@@ -696,7 +1190,7 @@ class DungeonView extends React.Component {
                                     </CDropdown>
                                 </div>
                             </div>}
-                            <div className="dungeon-name">
+                            <div className="dungeon-name" style={{ display: 'flex', alignItems: 'center' }}>
                                 { this.props.loadedDungeon && <div className={`dungeon-validity-indicator ${this.props.loadedDungeon.valid ? 'valid' : 'invalid'}`}></div>}
                                 <CFormSelect 
                                 aria-label="Dungeon Selector"
@@ -712,14 +1206,64 @@ class DungeonView extends React.Component {
                                     ]}
                                 onChange={this.props.dungeonSelectOnChange}
                                 />
+                                <button
+                                    type="button"
+                                    className={`flip-surface-btn ${this.state.isFlipped ? 'flipped' : ''}`}
+                                    title={this.state.isFlipped ? "Flip back to Levels View" : "Flip surface over to Superboards (Pocket Dimensions)"}
+                                    onClick={() => this.setState({ isFlipped: !this.state.isFlipped })}
+                                    style={{
+                                        marginLeft: '8px',
+                                        background: this.state.isFlipped
+                                            ? 'linear-gradient(135deg, rgba(168, 85, 247, 0.35) 0%, rgba(126, 34, 206, 0.35) 100%)'
+                                            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.04) 100%)',
+                                        border: this.state.isFlipped
+                                            ? '1px solid #c084fc'
+                                            : '1px solid rgba(255, 255, 255, 0.25)',
+                                        borderRadius: '6px',
+                                        color: this.state.isFlipped ? '#f3e8ff' : '#d1d5db',
+                                        height: '31px',
+                                        padding: '0 9px',
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '6px',
+                                        transition: 'all 0.25s ease',
+                                        boxShadow: this.state.isFlipped ? '0 0 10px rgba(168, 85, 247, 0.4)' : 'none',
+                                        flexShrink: 0
+                                    }}
+                                >
+                                    <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2.2"
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        style={{
+                                            transform: this.state.isFlipped ? 'rotate(180deg) scaleX(-1)' : 'none',
+                                            transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)'
+                                        }}
+                                    >
+                                        <path d="M21 12A9 9 0 0 0 6 5.3L3 8" />
+                                        <path d="M3 3V8H8" />
+                                        <path d="M3 12A9 9 0 0 0 18 18.7L21 16" />
+                                        <path d="M21 21V16H16" />
+                                    </svg>
+                                </button>
                             </div>
                         </div>
                         <div className="dungeon-planes-container">
                         {this.props.loadedDungeon && !this.props.loadingData && !this.props.planeSyncInProgress && <div className="loaded-dungeon-wrapper"
                             style={{
-                                justifyContent: this.props.loadedDungeon.levels.length > 2 ? 'flex-start' : 'center'
+                                justifyContent: this.state.isFlipped || this.props.loadedDungeon.levels.length > 2 ? 'flex-start' : 'center'
                             }}
                             >
+                                {(this.state.isFlipped || !!this.props.superboardZoom) ? (
+                                    this.renderSuperboardsView()
+                                ) : (
                                 <div className="dungeon-levels-container" style={{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                                     { this.props.loadedDungeon.levels.sort((a,b) => b.id - a.id).map((level,levelIndex)=>{
                                       const levelErrors = [];
@@ -1013,8 +1557,9 @@ class DungeonView extends React.Component {
                                              draw={this.drawPortalConnections}
                                          />
                                      );
-                                 })()}
-                                 </div>
+                                  })()}
+                                  </div>
+                                )}
                              </div>}
 
                              {!this.props.loadedDungeon && !this.props.loadingData && <div className="empty-dungeons-container">

@@ -135,14 +135,22 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
     }
   };
 
+  let lastValidScreenshot = null;
+  let lastScreenshotTime = 0;
+
   const logAction = (msg, screenshotBase64 = null) => {
+    if (screenshotBase64) {
+      lastValidScreenshot = screenshotBase64;
+    }
+    const screenshotToStore = screenshotBase64 || lastValidScreenshot;
+
     if (msg.startsWith('Pressed movement key:')) {
       consecutiveMovements++;
       if (!firstMovementTime) firstMovementTime = Date.now();
       const dirStr = msg.replace('Pressed movement key: ', '');
       const actionName = `Movement: ${dirStr}`;
       console.log(`[Bot ${username}] ${actionName}`);
-      replayEvents.push({ timestamp: Date.now(), action: actionName, screenshot: screenshotBase64 });
+      replayEvents.push({ timestamp: Date.now(), action: actionName, screenshot: screenshotToStore });
       return;
     }
 
@@ -150,7 +158,7 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
 
     console.log(`[Bot ${username}] ${msg}`);
     actionLog.push(`[${new Date().toLocaleTimeString()}] ${msg}`);
-    replayEvents.push({ timestamp: Date.now(), action: msg, screenshot: screenshotBase64 });
+    replayEvents.push({ timestamp: Date.now(), action: msg, screenshot: screenshotToStore });
   };
 
   logAction("Starting simulation...");
@@ -158,20 +166,22 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
   let browser;
 
   try {
-    // Launch headless browser with memory-saving flags
+    // Launch headless browser with software WebGL rendering
     browser = await puppeteer.launch({
       headless: "new",
       args: [
         '--no-sandbox', 
         '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage', // Critical for Docker/Render environments
-        '--disable-gpu'
+        '--disable-dev-shm-usage',
+        '--use-gl=swiftshader',
+        '--enable-webgl',
+        '--disable-gpu-sandbox'
       ]
     });
     
     const page = await browser.newPage();
     
-    // Optimize memory by blocking media (audio/video) but keep visuals for replays
+    // Optimize memory by blocking audio/video media streams
     await page.setRequestInterception(true);
     page.on('request', (req) => {
       const type = req.resourceType();
@@ -183,7 +193,7 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
     });
 
     // Set viewport
-    await page.setViewport({ width: 1280, height: 800 });
+    await page.setViewport({ width: 1024, height: 640 });
     
     logAction(`Navigating to ${targetUrl}`);
     await page.goto(targetUrl, { waitUntil: 'networkidle2' });
@@ -206,18 +216,33 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
 
     await sleep(3000);
     
-    // After login, we are at the landing page. We need to select a dungeon and click "Enter Dungeon".
-    
+    // Initial screenshot after login
+    try {
+        const initialSs = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 25 });
+        lastValidScreenshot = initialSs;
+        lastScreenshotTime = Date.now();
+    } catch (e) {}
+
     let runTime = 0;
     const MAX_RUN_TIME = 300 * 1000; // 5 minutes
     
-    logAction("Entering game loop...");
+    logAction("Entering game loop...", lastValidScreenshot);
     while (runTime < MAX_RUN_TIME) {
         let screenshotBase64 = null;
-        try {
-            screenshotBase64 = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 30 });
-        } catch (e) {
-            console.error(`[Bot ${username}] Failed to take screenshot`, e.message);
+        const now = Date.now();
+
+        // Rate-limit automated screenshots to every 1.5 seconds during loop unless major action occurs
+        if (now - lastScreenshotTime > 1500) {
+            try {
+                screenshotBase64 = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 25 });
+                lastValidScreenshot = screenshotBase64;
+                lastScreenshotTime = now;
+            } catch (e) {
+                console.error(`[Bot ${username}] Failed to take screenshot`, e.message);
+                screenshotBase64 = lastValidScreenshot;
+            }
+        } else {
+            screenshotBase64 = lastValidScreenshot;
         }
 
         let action = "No action";
@@ -266,6 +291,14 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
                     trigger.click();
                     return "Opened Dungeon Select Menu";
                 }
+            }
+
+            // Priority 0: Check for Inscription Modal -> Press Escape immediately to exit
+            const inscriptionModal = document.querySelector('.inscription-modal') ||
+                                     document.querySelector('[aria-label="Close inscription"]') ||
+                                     Array.from(document.querySelectorAll('h2, h3, div')).find(el => isElementVisible(el) && (el.textContent.trim().toLowerCase() === 'inscription' || el.textContent.trim().toLowerCase().includes('inscribe')));
+            if (inscriptionModal && isElementVisible(inscriptionModal)) {
+                return 'ESCAPE_INSCRIPTION';
             }
 
             // Find interactable buttons, playable cards, & quick actions
@@ -347,8 +380,63 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
                 return 'Played Combat Card';
             }
 
-            // Default Behavior: Pathfind & Explore around the map (no random button clicking)
-            return 'MOVE';
+            // Priority 5: Smart Pathfinding Movement -> Evaluate non-void tiles
+            let px = 7, py = 7;
+            try {
+                const metaStr = localStorage.getItem('restack_meta') || localStorage.getItem('meta');
+                if (metaStr) {
+                    const meta = JSON.parse(metaStr);
+                    if (meta.location && typeof meta.location.x === 'number') {
+                        px = meta.location.x;
+                        py = meta.location.y;
+                    } else if (Array.isArray(meta.location)) {
+                        px = meta.location[0];
+                        py = meta.location[1];
+                    }
+                }
+            } catch(e) {}
+
+            const tileEls = Array.from(document.querySelectorAll('[data-tile-id]'));
+            
+            const isTileBlocked = (tx, ty) => {
+                if (tx < 0 || tx >= 15 || ty < 0 || ty >= 15) return true; // Out of miniboard bounds
+                const tIdx = ty * 15 + tx;
+                const el = tileEls.find(e => Number(e.getAttribute('data-tile-id')) === tIdx);
+                if (!el) return false;
+
+                const style = window.getComputedStyle(el);
+                const bg = style.backgroundColor;
+                const isBlack = bg === 'rgb(0, 0, 0)' || bg === 'rgba(0, 0, 0, 1)' || bg === '#000000' || bg === '#000';
+                
+                const html = el.innerHTML || '';
+                const classStr = el.className || '';
+
+                const isVoid = isBlack || classStr.includes('void') || html.includes('void_fill') || html.includes('void');
+                const isWall = classStr.includes('wall') || html.includes('dungeon_wall');
+                
+                return isVoid || isWall;
+            };
+
+            const allDirs = [
+                { name: 'Up', key: 'ArrowUp', dx: 0, dy: -1 },
+                { name: 'Down', key: 'ArrowDown', dx: 0, dy: 1 },
+                { name: 'Left', key: 'ArrowLeft', dx: -1, dy: 0 },
+                { name: 'Right', key: 'ArrowRight', dx: 1, dy: 0 }
+            ];
+
+            const validDirs = allDirs.filter(d => !isTileBlocked(px + d.dx, py + d.dy));
+
+            if (validDirs.length > 0) {
+                const chosen = validDirs[Math.floor(Math.random() * validDirs.length)];
+                return `SMART_MOVE:${chosen.key}:${chosen.name}`;
+            }
+
+            const fallbackDirs = allDirs.filter(d => {
+                const tx = px + d.dx, ty = py + d.dy;
+                return tx >= 0 && tx < 15 && ty >= 0 && ty < 15;
+            });
+            const fallback = fallbackDirs.length > 0 ? fallbackDirs[Math.floor(Math.random() * fallbackDirs.length)] : allDirs[Math.floor(Math.random() * 4)];
+            return `SMART_MOVE:${fallback.key}:${fallback.name}`;
         }, preferredDungeon);
         } catch (evalErr) {
             if (evalErr.message.includes('detached Frame') || evalErr.message.includes('Execution context was destroyed')) {
@@ -359,7 +447,18 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
             }
         }
 
-        if (typeof action === 'string' && action.startsWith('RECUPERATE_KEY')) {
+        if (typeof action === 'string' && action === 'ESCAPE_INSCRIPTION') {
+            await page.keyboard.press('Escape');
+            logAction("Closed Inscription Interface (Pressed Escape)", screenshotBase64);
+            await sleep(400);
+            continue;
+        } else if (typeof action === 'string' && action.startsWith('SMART_MOVE:')) {
+            const parts = action.split(':');
+            const key = parts[1];
+            const name = parts[2];
+            await page.keyboard.press(key);
+            logAction(`Pressed movement key: ${name}`, screenshotBase64);
+        } else if (typeof action === 'string' && action.startsWith('RECUPERATE_KEY')) {
             const hpPct = action.split(':')[1] || 'below 50';
             await page.keyboard.press('r');
             logAction(`Crew Health at ${hpPct}% - Pressed 'r' to Recuperate`, screenshotBase64);
@@ -367,15 +466,17 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
             const dirs = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
             const dir = dirs[Math.floor(Math.random() * dirs.length)];
             await page.keyboard.press(dir);
-            let postMoveScreenshot = null;
-            try {
-                postMoveScreenshot = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 30 });
-            } catch (e) {
-                postMoveScreenshot = screenshotBase64;
-            }
-            logAction(`Pressed movement key: ${dir.replace('Arrow', '')}`, postMoveScreenshot);
+            logAction(`Pressed movement key: ${dir.replace('Arrow', '')}`, screenshotBase64);
         } else if (action) {
-            logAction(`Clicked: ${action}`, screenshotBase64);
+            // Force a fresh screenshot on major interactive actions
+            try {
+                const freshSs = await page.screenshot({ encoding: 'base64', type: 'jpeg', quality: 25 });
+                lastValidScreenshot = freshSs;
+                lastScreenshotTime = Date.now();
+                logAction(`Clicked: ${action}`, freshSs);
+            } catch (e) {
+                logAction(`Clicked: ${action}`, screenshotBase64);
+            }
         } else {
             logAction("No actions available.", screenshotBase64);
         }
@@ -386,19 +487,32 @@ const runBotSimulation = async (username, password, preferredDungeon, playstyle)
         runTime += delay;
     }
 
-    logAction("5 minute simulation complete.");
+    logAction("5 minute simulation complete.", lastValidScreenshot);
   } catch (error) {
-    logAction(`ERROR: ${error.message}`);
+    logAction(`ERROR: ${error.message}`, lastValidScreenshot);
   } finally {
     if (browser) {
-      logAction("Closing browser.");
+      logAction("Closing browser.", lastValidScreenshot);
       await browser.close();
     }
     
     flushMovementLog();
 
-    // Save the structured events to the database for the Replay UI
+    // Ensure total MongoDB document size stays safely under 12MB by keeping keyframes if needed
     try {
+      let payloadString = JSON.stringify(replayEvents);
+      if (payloadString.length > 12 * 1024 * 1024) {
+        console.log(`[Bot ${username}] Replay size (${(payloadString.length / 1024 / 1024).toFixed(2)} MB) exceeds 12MB. Compressing screenshots...`);
+        let stepCount = 0;
+        replayEvents.forEach(evt => {
+          stepCount++;
+          // Keep screenshot every 3rd step, strip redundant intermediate screenshots
+          if (stepCount % 3 !== 0 && !evt.action.includes('Entered') && !evt.action.includes('Combat') && !evt.action.includes('Clicked')) {
+            evt.screenshot = null;
+          }
+        });
+      }
+
       await BotReplay.create({
         botUsername: username,
         actions: replayEvents

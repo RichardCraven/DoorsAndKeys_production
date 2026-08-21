@@ -29,7 +29,6 @@ class PlanesPanel extends React.Component {
         }
     }
     miniboardClicked(event, board, boardIndex){
-        console.log('miniboard clicked', event.detail);
         if(this.props.adjacencyHoverIdx === boardIndex && board.tiles){
             this.props.adjacencyFilter(board, boardIndex)
         }

@@ -1,0 +1,77 @@
+src//utils/combat-manager-redux.js:2962:                            const inventory = (typeof this.getCurrentInventory === 'function') ? this.getCurrentInventory() : [];
+src//utils/combat-manager-redux.js:3603:                const inventory = (typeof this.getCurrentInventory === 'function') ? this.getCurrentInventory() : [];
+src//utils/combat-manager-redux.js:5895:            const inventory = (typeof this.getCurrentInventory === 'function') ? this.getCurrentInventory() : [];
+src//utils/combat-manager-redux.js:6026:            const inventory = (typeof this.getCurrentInventory === 'function') ? this.getCurrentInventory() : [];
+src//utils/board-manager.js:507:        let inventory = [];
+src//utils/board-manager.js:509:            inventory = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || [];
+src//utils/board-manager.js:511:            inventory = [];
+src//utils/board-manager.js:568:        let inventory = [];
+src//utils/board-manager.js:570:            inventory = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || [];
+src//utils/board-manager.js:572:            inventory = [];
+src//utils/board-manager.js:899:        const inventory = this.getCurrentInventory ? this.getCurrentInventory() : null;
+src//utils/board-manager.js:975:        const inventory = this.getCurrentInventory ? this.getCurrentInventory() : null;
+src//utils/board-manager.js:992:        const inventory = this.getCurrentInventory ? this.getCurrentInventory() : null;
+src//utils/board-manager.js:2241:                        const inventory = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || [];
+src//utils/board-manager.js:2605:        const inventory = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || [];
+src//utils/monster-ai/profiles/Goblin.js:54:        let inventory = [];
+src//utils/monster-ai/profiles/Goblin.js:55:        try { inventory = this.getCurrentInventory() || []; } catch (e) { console.warn('[Goblin] getCurrentInventory threw:', e); }
+src//utils/inventory-manager.js:2838:        this.inventory = [];
+src//utils/inventory-manager.js:2841:            this.inventory = this.getStarterPack();
+src//utils/inventory-manager.js:2852:            this.inventory = itemsArray.map(e => {
+src//utils/inventory-manager.js:2886:        if (!Array.isArray(this.inventory)) this.inventory = [];
+src//utils/inventory-manager.js:2936:        this.inventory = this.inventory.concat(arr);
+src//utils/__tests__/sharpen-blades.test.js:85:    mockInventoryManager.inventory = [];
+src//utils/__tests__/sharpen-blades.test.js:86:    soldier.inventory = [
+src//utils/__tests__/sharpen-blades.test.js:107:    mockInventoryManager.inventory = [];
+src//utils/__tests__/sharpen-blades.test.js:108:    soldier.inventory = [];
+src//utils/__tests__/potion-combining.test.js:109:    im.inventory = [];
+src//utils/__tests__/shield-slam-progression.test.js:74:        soldier.inventory = [{ subtype: 'shield', equippedSlot: 'left' }];
+src//utils/__tests__/shield-slam-progression.test.js:83:        soldier.inventory = [{ subtype: 'shield', equippedSlot: 'left' }];
+src//utils/__tests__/shield-slam-progression.test.js:92:        soldier.inventory = [{ subtype: 'shield', equippedSlot: 'left' }];
+src//utils/__tests__/automaton.test.js:38:        let inventory = [
+src//utils/__tests__/displacement-ray-mentality.test.js:69:    target.inventory = [
+src//utils/__tests__/pc-auto-potion.test.js:17:    const inventory = [
+src//utils/__tests__/pc-auto-potion.test.js:66:    const inventory = [
+src//utils/__tests__/pc-auto-potion.test.js:115:    const inventory = [
+src//utils/session-handler.js:89:        safe.inventory = safe.inventory.map(i => ({ type: i && i.type, subtype: i && i.subtype, amount: i && i.amount }));
+src//pages/DungeonPage.js:2938:                this.props.crewManager.crew.forEach(m => { if (m && Array.isArray(m.inventory)) m.inventory = this.props.inventoryManager.refreshWeaponStats(m.inventory); });
+src//pages/DungeonPage.js:2948:                this.props.crewManager.crew.forEach(m => { if (m && Array.isArray(m.inventory)) m.inventory = this.props.inventoryManager.refreshWeaponStats(m.inventory); });
+src//pages/DungeonPage.js:3147:                this.props.inventoryManager.inventory = this.props.inventoryManager.inventory.filter(item => {
+src//pages/DungeonPage.js:3165:        meta.inventory = {
+src//pages/DungeonPage.js:9804:                                meta.inventory = {
+src//pages/DungeonPage.js:9851:                            meta.inventory = {
+src//pages/DungeonPage.js:9884:                            meta.inventory = {
+src//pages/DungeonPage.js:10439:                meta.inventory = { items: meta.inventory };
+src//pages/DungeonPage.js:10441:                meta.inventory = {};
+src//pages/DungeonPage.js:11144:                minion.inventory = [];
+src//pages/DungeonPage.js:11154:        monster.inventory = [];
+src//pages/DungeonPage.js:11177:                    minion.inventory = [];
+src//pages/DungeonPage.js:11186:        monster.inventory = [];
+src//pages/DungeonPage.js:12273:                        meta.inventory = {
+src//pages/DungeonPage.js:12286:                        meta.inventory = meta.inventory || {};
+src//pages/DungeonPage.js:12876:        if (!Array.isArray(selected.inventory)) selected.inventory = [];
+src//pages/DungeonPage.js:12925:            found.inventory = selected.inventory;
+src//pages/DungeonPage.js:12976:        if (!Array.isArray(selected.inventory)) selected.inventory = [];
+src//pages/DungeonPage.js:13064:                found.inventory = selected.inventory;
+src//pages/DungeonPage.js:13105:            if (!c.inventory) c.inventory = [];
+src//pages/DungeonPage.js:14680:                        this.props.crewManager.crew.forEach(m => { if (m && Array.isArray(m.inventory)) m.inventory = this.props.inventoryManager.refreshWeaponStats(m.inventory); });
+src//pages/DungeonPage.js:15816:            meta.inventory = {
+src//pages/DungeonPage.js:15856:            meta.inventory = {
+src//pages/DungeonPage.js:15924:            meta.inventory = {
+src//pages/DungeonPage.js:17588:                meta.inventory = {
+src//pages/CombatSimulator.js:450:        monster.inventory = [];
+src//pages/CombatSimulator.js:462:            minion.inventory = [];
+src//pages/CombatSimulator.js:701:                    member.inventory = member.inventory || [];
+src//pages/CombatSimulator.js:703:                    member.inventory = member.inventory.filter(i => !i || i.type !== 'weapon');
+src//pages/CombatSimulator.js:815:                                member.inventory = member.inventory || [];
+src//pages/CombatSimulator.js:816:                                member.inventory = member.inventory.filter(i => !i || i.type !== 'weapon');
+src//pages/CombatSimulator.js:834:                        firstPC.inventory = firstPC.inventory || [];
+src//pages/CombatSimulator.js:835:                        firstPC.inventory = firstPC.inventory.filter(i => !i || i.equippedSlot !== 'pet');
+src//pages/CombatSimulator.js:851:        monster.inventory = [];
+src//pages/CombatSimulator.js:863:            minion.inventory = [];
+src//pages/sub-views/MonsterBattle.js:639:                    member.inventory = this.props.inventoryManager.refreshWeaponStats(member.inventory);
+src//pages/sub-views/MonsterBattle.js:3493:                    const inventory = typeof cm.getCurrentInventory === 'function' ? cm.getCurrentInventory() : [];
+src//pages/UserProfilePage.js:115:        this.props.inventoryManager.inventory = this.props.inventoryManager.inventory.filter(item => {
+src//pages/UserProfilePage.js:131:    meta.inventory = {
+src//pages/CrewManagerPage.js:479:            if (!member.inventory) member.inventory = [];
+src//App.js:258:    meta.inventory = {
