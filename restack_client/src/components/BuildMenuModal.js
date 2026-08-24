@@ -255,14 +255,14 @@ class BuildMenuModal extends Component {
                 style={{
                     position: 'fixed',
                     inset: 0,
-                    backgroundColor: 'rgba(5, 4, 10, 0.85)',
-                    backdropFilter: 'blur(8px)',
+                    backgroundColor: 'transparent',
+                    backdropFilter: 'none',
+                    WebkitBackdropFilter: 'none',
                     zIndex: 10000,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontFamily: "'Inter', sans-serif",
-                    animation: 'fadeIn 0.2s ease-out'
+                    fontFamily: "'Inter', sans-serif"
                 }}
                 onClick={onClose}
             >
@@ -271,14 +271,15 @@ class BuildMenuModal extends Component {
                         position: 'relative',
                         width: '92%',
                         maxWidth: '780px',
-                        maxHeight: '85vh',
+                        height: '85vh',
+                        maxHeight: '850px',
                         minHeight: '620px',
-                        background: 'rgba(17, 18, 20, 0.85)',
-                        border: '1px solid rgba(255, 255, 255, 0.05)',
+                        background: 'rgba(17, 18, 20, 0.98)',
+                        border: '1px solid rgba(229, 181, 79, 0.4)',
                         borderRadius: '4px',
-                        backdropFilter: 'blur(12px)',
-                        WebkitBackdropFilter: 'blur(12px)',
-                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.8), inset 0 0 20px rgba(179, 136, 255, 0.05)',
+                        backdropFilter: 'none',
+                        WebkitBackdropFilter: 'none',
+                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.9), inset 0 0 20px rgba(179, 136, 255, 0.05)',
                         padding: '24px 28px',
                         display: 'flex',
                         flexDirection: 'column',

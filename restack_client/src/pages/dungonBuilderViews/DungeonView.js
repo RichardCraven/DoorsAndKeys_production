@@ -1432,6 +1432,7 @@ class DungeonView extends React.Component {
                                                                  handleHover={null}
                                                                  handleClick={null}
                                                                  type={tile.type}
+                                                                 pinnedOption={this.props.pinnedOption}
                                                                  hovered={false}
                                                                  />
                                                                  })}

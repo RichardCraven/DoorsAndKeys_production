@@ -36,10 +36,12 @@ function Tile(props) {
     const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
     const sKey = (props.building || containsObj?.subtype || containsObj?.building || containsObj?.type || containsObj?.key || containsObj?.name || props.contains || props.image || '').toString().toLowerCase();
     const is3x3Structure = sKey.includes('keep') || sKey.includes('fortress');
-    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('dream_den') || is3x3Structure;
+    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || is3x3Structure;
 
-    const containsObjForHp = props.contains || containsObj || topCurrentContains;
-    const currentContainsHp = containsObjForHp && typeof containsObjForHp.hp === 'number' ? containsObjForHp.hp : undefined;
+    const containsObjForHp = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined')
+        ? (typeof currentTileForContains.contains === 'object' ? currentTileForContains.contains : null)
+        : (props.contains || containsObj || topCurrentContains);
+    const currentContainsHp = (containsObjForHp && typeof containsObjForHp.hp === 'number' && containsObjForHp.hp > 0 && !containsObjForHp.dead && !containsObjForHp.destroyedAt) ? containsObjForHp.hp : undefined;
     const containsId = containsObjForHp && containsObjForHp.id;
 
     const [hpBarVisible, setHpBarVisible] = React.useState(false);
@@ -56,7 +58,7 @@ function Tile(props) {
             return;
         }
 
-        if (typeof currentContainsHp === 'number') {
+        if (typeof currentContainsHp === 'number' && currentContainsHp > 0) {
             if (prevHpRef.current !== undefined && currentContainsHp < prevHpRef.current) {
                 setHpBarVisible(true);
                 if (containsObjForHp) {
@@ -70,6 +72,7 @@ function Tile(props) {
             prevHpRef.current = currentContainsHp;
         } else {
             setHpBarVisible(false);
+            if (hpBarTimerRef.current) clearTimeout(hpBarTimerRef.current);
         }
         return () => {
             if (hpBarTimerRef.current) clearTimeout(hpBarTimerRef.current);
@@ -160,18 +163,38 @@ function Tile(props) {
     const isVendorType = (val) => {
         if (!val) return false;
         if (typeof val === 'object') {
-            return !!val.isMultiTile || !!val.isLarge || isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.key) || isVendorType(val.name);
+            return !!val.isMultiTile || !!val.isLarge || !!val.vendorCell || (val.vendorAnchorId !== undefined && val.vendorAnchorId !== null) || isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.building) || isVendorType(val.key) || isVendorType(val.name);
         }
         const s = String(val).toLowerCase();
-        return s === 'vendor' || s === 'alchemist' || s === 'merchant' || s === 'war_camp' || s === 'war_fort' || s === 'dream_den' || s === 'dream den' || s === 'keep' || s === 'fortress' || s === 'summoning_temple' || s === 'rift' || s === 'rift_2' || s.includes('vendor') || s.includes('alchemist') || s.includes('merchant') || s.includes('dream_den') || s.includes('dream den') || s.includes('keep') || s.includes('fortress') || s.includes('summoning_temple') || s.includes('rift');
+        const multiKeys = [
+            'vendor', 'alchemist', 'merchant',
+            'war_camp', 'war_fort',
+            'dream_den', 'dream den',
+            'keep', 'fortress',
+            'infernal_pit', 'infernal_tower', 'pit',
+            'frozen_locus', 'emerald_locus', 'cosmic_locus', 'locus',
+            'cultivation_vat', 'vat',
+            'domain_monolith', 'dark_domain_monolith', 'monolith',
+            'generator',
+            'summoning_temple', 'rift', 'rift_2'
+        ];
+        if (multiKeys.includes(s)) return true;
+        return multiKeys.some(k => s.includes(k));
     };
     const isVendorCell = !isPaletteTile && (
         isVendorType(props.contains) ||
         isVendorType(containsObj?.type) ||
         isVendorType(containsObj?.subtype) ||
+        isVendorType(containsObj?.building) ||
         isVendorType(containsObj?.key) ||
+        isVendorType(containsObj?.name) ||
+        isVendorType(props.building) ||
         isVendorType(props.image) ||
-        isVendorType(props.optionType)
+        isVendorType(props.optionType) ||
+        !!(containsObj && containsObj.vendorCell) ||
+        (containsObj && containsObj.vendorAnchorId !== undefined && containsObj.vendorAnchorId !== null) ||
+        !!props.vendorCell ||
+        !!props.isMultiTile
     );
 
     const getVendorCellRole = () => {
@@ -179,6 +202,10 @@ function Tile(props) {
 
         if (containsObj && containsObj.vendorCell && containsObj.vendorCell !== 'footprint') {
             return containsObj.vendorCell;
+        }
+
+        if (props.vendorCell && props.vendorCell !== 'footprint') {
+            return props.vendorCell;
         }
 
         let anchorId = null;
@@ -404,6 +431,40 @@ function Tile(props) {
     const isBuilderTile = !!(props.isBuilder || props.isMapmaker || props.disableFogShading || props.disableShading || props.type === 'palette-tile' || props.type === 'builder-tile');
     const isDebugMode = !isBuilderTile && !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
     const fogEdgeBoxShadow = (isDebugMode && isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
+
+    const isCurrentDarkTile = isBlackRenderedTile(currentContains, currentTileColor);
+    let isConcaveFogCorner = false;
+    let concaveFogGradient = null;
+
+    if (props.inSuperboard && isCurrentDarkTile && !isBuilderTile && isBoardGridTile && props.type !== 'overlay-tile' && props.type !== 'builder-tile' && props.type !== 'palette-tile') {
+        const topVis = !topIsShaded;
+        const bottomVis = !bottomIsShaded;
+        const leftVis = !leftIsShaded;
+        const rightVis = !rightIsShaded;
+        
+        if ((leftVis && rightVis) || (topVis && bottomVis)) {
+            isConcaveFogCorner = true;
+            concaveFogGradient = 'transparent';
+        } else if (topVis && rightVis) {
+            isConcaveFogCorner = true;
+            concaveFogGradient = 'radial-gradient(circle at 100% 0%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 40%, #000 75%, #000 100%)';
+        } else if (topVis && leftVis) {
+            isConcaveFogCorner = true;
+            concaveFogGradient = 'radial-gradient(circle at 0% 0%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 40%, #000 75%, #000 100%)';
+        } else if (bottomVis && rightVis) {
+            isConcaveFogCorner = true;
+            concaveFogGradient = 'radial-gradient(circle at 100% 100%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 40%, #000 75%, #000 100%)';
+        } else if (bottomVis && leftVis) {
+            isConcaveFogCorner = true;
+            concaveFogGradient = 'radial-gradient(circle at 0% 100%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 40%, #000 75%, #000 100%)';
+        }
+    }
+    
+    if (isConcaveFogCorner && typeof window !== 'undefined' && window.debugFog) {
+        console.log('Concave corner rendering at id:', props.id, 'global:', props.globalX, props.globalY, 'neighbors:', {top: topNeighbor?.color, right: rightNeighbor?.color, bottom: bottomNeighbor?.color, left: leftNeighbor?.color});
+    }
+
+
 
     const edgeLines = isBoardGridTile ? {
         top: edgeColorForBoundary(
@@ -667,7 +728,7 @@ function Tile(props) {
                 '#8080807a' : 
                 ( props.type === 'overlay-tile' ? 
                     'transparent': 
-                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
+                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : (isConcaveFogCorner ? (props.baseColor || 'transparent') : color))),
             fontSize: '0.7em',
             position: 'relative',
             overflow: (isStructureTile || isIlluminatedGlow || isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
@@ -819,32 +880,41 @@ function Tile(props) {
             { color !== 'black' && (() => {
                 if (!isStructureTile) return null;
 
+                // Palette tiles must NEVER render structure rings
+                if (props.type === 'palette-tile' || props.isPaletteTile) return null;
+
                 // For multi-tile structures, only render the ring once on the anchor cell
                 const vRole = getVendorCellRole();
                 if (vRole && vRole !== 'anchor') return null;
 
-                const isPlayerBuilt = !!(
+                const containsAffiliation = containsObj?.affiliation || props.affiliation;
+
+                const isPlayerBuilt = containsAffiliation === 'friendly' || !!(
                     (containsObj && (containsObj.placedBy === 'player' || containsObj.ownerId === 'player' || containsObj.faction === 'player' || containsObj.isAllied)) ||
                     props.placedBy === 'player' ||
                     props.isPlayerBuilt
                 );
 
-                const isHostile = !isPlayerBuilt && !!(
-                    (containsObj && (containsObj.faction === 'wild' || containsObj.faction === 'hostile' || containsObj.isHostile || containsObj.homeStructureKey)) ||
-                    props.isHostile ||
-                    sKey.includes('hostile')
-                );
+                const isHostile = containsAffiliation === 'hostile' || (!isPlayerBuilt && !!(
+                    (containsObj && (containsObj.faction === 'wild' || containsObj.faction === 'hostile' || containsObj.isHostile)) ||
+                    props.isHostile
+                ));
 
-                let ringColor = 'rgba(245, 158, 11, 0.85)'; // Neutral Amber
-                let ringGlow = '0 0 14px rgba(245, 158, 11, 0.75), inset 0 0 10px rgba(245, 158, 11, 0.45)';
-                let bgGradient = 'radial-gradient(ellipse at center, rgba(245, 158, 11, 0.25) 0%, rgba(245, 158, 11, 0.05) 70%, transparent 100%)';
+                const isNeutral = containsAffiliation === 'neutral' || (!isPlayerBuilt && !isHostile);
+
+                // By default, neutral structures in Dungeon Builder show NO colored ring
+                if (isBuilderTile && isNeutral) return null;
+
+                let ringColor = 'rgba(255, 255, 255, 0.85)'; // Neutral White in-game
+                let ringGlow = '0 0 14px rgba(255, 255, 255, 0.75), inset 0 0 10px rgba(255, 255, 255, 0.45)';
+                let bgGradient = 'radial-gradient(ellipse at center, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 70%, transparent 100%)';
                 let labelTitle = 'Neutral Structure';
 
                 if (isPlayerBuilt) {
-                    ringColor = 'rgba(59, 130, 246, 0.9)'; // Allied Blue
+                    ringColor = 'rgba(59, 130, 246, 0.9)'; // Allied / Friendly Blue
                     ringGlow = '0 0 16px rgba(59, 130, 246, 0.85), inset 0 0 12px rgba(59, 130, 246, 0.5)';
                     bgGradient = 'radial-gradient(ellipse at center, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.08) 70%, transparent 100%)';
-                    labelTitle = 'Player-Owned Structure';
+                    labelTitle = 'Friendly Structure';
                 } else if (isHostile) {
                     ringColor = 'rgba(239, 68, 68, 0.9)'; // Hostile Red
                     ringGlow = '0 0 16px rgba(239, 68, 68, 0.85), inset 0 0 12px rgba(239, 68, 68, 0.5)';
@@ -875,6 +945,147 @@ function Tile(props) {
                             animation: 'structureRingPulse 2.5s infinite ease-in-out'
                         }}
                     />
+                );
+            })()}
+
+            {/* Delete Tool Red Hover Outline Overlay for Multi-Tile Buildings & Tiles */}
+            { color !== 'black' && (() => {
+                const currentIdVal = props.id !== undefined ? props.id : props.index;
+                const isFootprintHovered = Array.isArray(props.hoveredTileFootprint) && props.hoveredTileFootprint.includes(currentIdVal);
+                const isDeleteTool = props.pinnedOption?.optionType === 'delete' || props.optionType === 'delete';
+                const showDeleteHighlight = (props.hovered || isFootprintHovered) && isDeleteTool;
+                if (!showDeleteHighlight) return null;
+
+                return (
+                    <div
+                        key="delete-hover-overlay"
+                        style={{
+                            position: 'absolute',
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            border: '2px solid #ef4444',
+                            boxShadow: 'inset 0 0 10px rgba(239, 68, 68, 0.8), 0 0 12px rgba(239, 68, 68, 0.9)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.25)',
+                            zIndex: 55,
+                            pointerEvents: 'none'
+                        }}
+                    />
+                );
+            })()}
+
+            {/* Pocket Dimension Territory Boundary Glow Line Overlay */}
+            { color !== 'black' && (() => {
+                const isSuperboardTile = props.isBuilderTile || props.isBuilder || props.type === 'board-tile';
+                if (!isSuperboardTile) return null;
+
+                const boardTiles = Array.isArray(props.boardTiles) ? props.boardTiles : null;
+                const currentIdx = props.id !== undefined ? props.id : props.index;
+
+                const getTileTerritoryAffiliation = (tObj, fallbackProps) => {
+                    if (!tObj && !fallbackProps) return null;
+                    const cObj = tObj?.contains && typeof tObj.contains === 'object' ? tObj.contains : null;
+                    const fObj = fallbackProps?.contains && typeof fallbackProps.contains === 'object' ? fallbackProps.contains : null;
+
+                    const raw = (
+                        tObj?.territoryAffiliation ||
+                        cObj?.territoryAffiliation ||
+                        tObj?.territory ||
+                        cObj?.territory ||
+                        tObj?.affiliation ||
+                        cObj?.affiliation ||
+                        fallbackProps?.territoryAffiliation ||
+                        fObj?.territoryAffiliation ||
+                        fallbackProps?.territory ||
+                        fObj?.territory ||
+                        fallbackProps?.affiliation ||
+                        fObj?.affiliation ||
+                        null
+                    );
+
+                    if (!raw) return null;
+
+                    const s = String(raw).toLowerCase();
+                    if (s === 'friendly' || s === 'player' || s.includes('woodland') || s.includes('player')) return 'friendly';
+                    if (s === 'hostile' || s === 'wild' || s.includes('hostile')) return 'hostile';
+                    if (s === 'neutral') return 'neutral';
+                    if (s.includes('mud')) return 'mud';
+                    if (s.includes('cave')) return 'cave';
+                    if (s.includes('shadow')) return 'shadow';
+                    if (s.includes('paradox')) return 'paradox';
+                    return s;
+                };
+
+                const currentTileObj = (currentIdx !== null && currentIdx !== undefined && boardTiles) ? boardTiles[currentIdx] : null;
+                const currentAff = getTileTerritoryAffiliation(currentTileObj, props);
+
+                if (!currentAff) return null;
+
+                const affColor = (currentAff === 'friendly')
+                    ? '#3b82f6'
+                    : (currentAff === 'hostile' ? '#ef4444' : '#ffffff');
+
+                const getNeighborAff = (delta) => {
+                    if (currentIdx === null || currentIdx === undefined || !boardTiles) return null;
+                    const row = Math.floor(currentIdx / 15);
+                    const col = currentIdx % 15;
+                    if (delta === -1 && col === 0) return null;
+                    if (delta === 1 && col === 14) return null;
+                    if (delta === -15 && row === 0) return null;
+                    if (delta === 15 && row === 14) return null;
+
+                    const n = boardTiles[currentIdx + delta];
+                    return getTileTerritoryAffiliation(n, null);
+                };
+
+                const topAff = getNeighborAff(-15);
+                const bottomAff = getNeighborAff(15);
+                const leftAff = getNeighborAff(-1);
+                const rightAff = getNeighborAff(1);
+
+                const hasTopBoundary = topAff !== currentAff;
+                const hasBottomBoundary = bottomAff !== currentAff;
+                const hasLeftBoundary = leftAff !== currentAff;
+                const hasRightBoundary = rightAff !== currentAff;
+
+                if (!hasTopBoundary && !hasBottomBoundary && !hasLeftBoundary && !hasRightBoundary) return null;
+
+                return (
+                    <div
+                        key="pocket-territory-boundary"
+                        style={{
+                            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                            pointerEvents: 'none',
+                            zIndex: 18
+                        }}
+                    >
+                        {hasTopBoundary && (
+                            <div style={{
+                                position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
+                                backgroundColor: affColor,
+                                boxShadow: `0 0 6px ${affColor}`
+                            }} />
+                        )}
+                        {hasBottomBoundary && (
+                            <div style={{
+                                position: 'absolute', bottom: 0, left: 0, right: 0, height: '2px',
+                                backgroundColor: affColor,
+                                boxShadow: `0 0 6px ${affColor}`
+                            }} />
+                        )}
+                        {hasLeftBoundary && (
+                            <div style={{
+                                position: 'absolute', top: 0, left: 0, bottom: 0, width: '2px',
+                                backgroundColor: affColor,
+                                boxShadow: `0 0 6px ${affColor}`
+                            }} />
+                        )}
+                        {hasRightBoundary && (
+                            <div style={{
+                                position: 'absolute', top: 0, right: 0, bottom: 0, width: '2px',
+                                backgroundColor: affColor,
+                                boxShadow: `0 0 6px ${affColor}`
+                            }} />
+                        )}
+                    </div>
                 );
             })()}
 
@@ -971,7 +1182,7 @@ function Tile(props) {
                      {/* Terrain background: chosen per-tile (terrain_1..terrain_16) and rendered beneath portrait/items */}
                      { props.terrain && (() => {
                          let terrainUrl = (props.terrain && props.terrain.includes('/')) ? props.terrain : (images[props.terrain] || null);
-                         return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: color === 'black' ? 0 : 0.5, transition: 'opacity 0.35s ease-in-out'}} />
+                         return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: (color === 'black' && !isConcaveFogCorner) ? 0 : 0.5, transition: 'opacity 0.35s ease-in-out'}} />
                      })()}
 
                      {/* Territory Layer: renders clan-specific territory shading beneath items/monsters/buildings */}
@@ -1080,22 +1291,30 @@ function Tile(props) {
 
 
                       {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
-                      {resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (
-                          <div className="portrait" style={{
-                               position: 'absolute',
-                               top: 0, left: 0, right: 0, bottom: 0,
-                               backgroundImage: toCssUrl(resolvedPortraitUrl),
-                               backgroundSize: isVendorCell ? (is3x3Structure ? '300% 300%' : '200% 200%') : (isItemCell ? '80% 80%' : '100% 100%'),
-                               backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
-                               backgroundRepeat: 'no-repeat',
-                               zIndex: isVendorCell ? 40 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex),
-                               opacity: (color === 'black' || props.isFadingOut) ? 0 : 1,
-                               transform: isUnderConstruction ? `scale(1.5) rotate(${rotationDeg}deg)` : (isEnlargeableStructure && isOccupied ? `scale(2.0) rotate(${rotationDeg}deg)` : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')),
-                               transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction ? 'bottom center' : 'center center',
-                               transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
-                               pointerEvents: 'none'
-                           }} />
-                      )}
+                      {resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (() => {
+                           const isPlayerUnit = !!(props.isPlayerTile || props.isPlayerOnTile || (props.contains && (props.contains.type === 'avatar' || props.contains.type === 'camp')));
+                           const isFlippedLeft = isPlayerUnit && (props.playerFacing === 'left' || props.playerFacingDirection === 'left');
+                           const flipTransform = isFlippedLeft ? 'scaleX(-1)' : '';
+                           const baseTransform = isUnderConstruction ? `scale(1.5) rotate(${rotationDeg}deg)` : (isEnlargeableStructure && isOccupied ? `scale(2.0) rotate(${rotationDeg}deg)` : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none'));
+                           const portraitTransform = flipTransform ? (baseTransform === 'none' ? flipTransform : `${flipTransform} ${baseTransform}`) : baseTransform;
+
+                           return (
+                               <div className="portrait" style={{
+                                    position: 'absolute',
+                                    top: 0, left: 0, right: 0, bottom: 0,
+                                    backgroundImage: toCssUrl(resolvedPortraitUrl),
+                                    backgroundSize: isVendorCell ? (is3x3Structure ? '300% 300%' : '200% 200%') : (isItemCell ? '80% 80%' : '100% 100%'),
+                                    backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
+                                    backgroundRepeat: 'no-repeat',
+                                    zIndex: isVendorCell ? 40 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex),
+                                    opacity: ((color === 'black' && !isConcaveFogCorner) || props.isFadingOut) ? 0 : 1,
+                                    transform: portraitTransform,
+                                    transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction ? 'bottom center' : 'center center',
+                                    transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
+                                    pointerEvents: 'none'
+                                }} />
+                           );
+                       })()}
 
             {/* Soul Shard custom overlay */}
             { props.data && props.data.type === 'soul_shard' && (() => {
@@ -1219,36 +1438,44 @@ function Tile(props) {
                 </div>
            )}
 
-           {/* Pocket Pygmy / Unit Health Bar Overlay */}
-           {(() => {
-               const targetUnit = currentContains || containsObjForHp;
-               const lastDmg = targetUnit && targetUnit.lastDamageTime;
-               const isRecentlyDamaged = !!(lastDmg && (Date.now() - lastDmg < 3000));
-               const shouldShow = targetUnit && typeof targetUnit.hp === 'number' && targetUnit.maxHp && targetUnit.hp < targetUnit.maxHp && (hpBarVisible || isRecentlyDamaged);
-               if (!shouldShow) return null;
-               return (
-                   <div className="pygmy-hp-bar" style={{
-                       position: 'absolute',
-                       bottom: '3px',
-                       left: '10%',
-                       right: '10%',
-                       height: '5px',
-                       backgroundColor: 'rgba(0,0,0,0.85)',
-                       border: '1px solid rgba(255,255,255,0.5)',
-                       borderRadius: '2px',
-                       overflow: 'hidden',
-                       zIndex: 25,
-                       pointerEvents: 'none'
-                   }}>
-                       <div style={{
-                           width: `${Math.max(0, Math.min(100, (targetUnit.hp / targetUnit.maxHp) * 100))}%`,
-                           height: '100%',
-                           backgroundColor: (targetUnit.hp / targetUnit.maxHp) <= 0.2 ? '#e74c3c' : '#2ecc71',
-                           transition: 'width 0.2s ease-in-out, background-color 0.2s'
-                       }} />
-                   </div>
-               );
-           })()}
+            {/* Pocket Pygmy / Unit Health Bar Overlay */}
+            {(() => {
+                const activeUnit = (currentTile && typeof currentTile.contains !== 'undefined')
+                    ? (typeof currentTile.contains === 'object' ? currentTile.contains : null)
+                    : (typeof props.contains === 'object' ? props.contains : null);
+
+                if (!activeUnit || activeUnit.dead || activeUnit.destroyedAt) return null;
+                if (typeof activeUnit.hp !== 'number' || activeUnit.hp <= 0) return null;
+                if (!activeUnit.maxHp || activeUnit.maxHp <= 0 || activeUnit.hp >= activeUnit.maxHp) return null;
+
+                const lastDmg = activeUnit.lastDamageTime;
+                const isRecentlyDamaged = !!(lastDmg && (Date.now() - lastDmg < 3000));
+                const shouldShow = hpBarVisible || isRecentlyDamaged;
+                if (!shouldShow) return null;
+
+                return (
+                    <div className="pygmy-hp-bar" style={{
+                        position: 'absolute',
+                        bottom: '3px',
+                        left: '10%',
+                        right: '10%',
+                        height: '5px',
+                        backgroundColor: 'rgba(0,0,0,0.85)',
+                        border: '1px solid rgba(255,255,255,0.5)',
+                        borderRadius: '2px',
+                        overflow: 'hidden',
+                        zIndex: 25,
+                        pointerEvents: 'none'
+                    }}>
+                        <div style={{
+                            width: `${Math.max(0, Math.min(100, (activeUnit.hp / activeUnit.maxHp) * 100))}%`,
+                            height: '100%',
+                            backgroundColor: (activeUnit.hp / activeUnit.maxHp) <= 0.2 ? '#e74c3c' : '#2ecc71',
+                            transition: 'width 0.2s ease-in-out, background-color 0.2s'
+                        }} />
+                    </div>
+                );
+            })()}
 
            {/* Obscured space texture overlay */}
            { ((props.contains && props.contains.type === 'obscured_space') || props.optionType === 'obscured space') && (
@@ -1864,6 +2091,22 @@ function Tile(props) {
                 }
                 return null;
             })()}
+
+            {isConcaveFogCorner && concaveFogGradient && (
+                <div
+                    className="concave-fog-corner"
+                    style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: concaveFogGradient,
+                        zIndex: 99,
+                        pointerEvents: 'none'
+                    }}
+                />
+            )}
         </div>
     )
 }
@@ -1873,13 +2116,13 @@ export function propsAreEqual(prevProps, nextProps) {
 
     const keysToCompare = [
         'id', 'index', 'type', 'color', 'tileSize', 'hovered', 'selected',
-        'isPreview', 'passThrough', 'backgroundColor', 'terrain', 'territory',
+        'isPreview', 'passThrough', 'backgroundColor', 'terrain', 'territory', 'territoryAffiliation',
         'isShrine', 'isLoreTablet', 'trapRevealed', 'hasTrap', 'connectedEdge',
         'partialObscured', 'showCoordinates', 'image', 'imageOverride',
         'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
         'isPlayerOnTile', 'className', 'illuminated', 'sabotageProgress', 'monolithActivationProgress',
         'isDisabledOutpost', 'disabledUntil', 'inscriptions', 'debugMode',
-        'isPlayerTile', 'hasLivingSummoner', 'playerImgKey', 'cursor', 'isFadingOut',
+        'isPlayerTile', 'hasLivingSummoner', 'playerImgKey', 'playerFacing', 'cursor', 'isFadingOut',
         'ownedByPlayer', 'ownedByEnemy', 'isBumpingAttack', 'bumpVector', 'isGliding', 'glideVector', 'hoveredTileFootprint', 'isAutomated'
     ];
 
@@ -1938,10 +2181,16 @@ export function propsAreEqual(prevProps, nextProps) {
                 const x = tileId % 15;
                 const y = Math.floor(tileId / 15);
                 const neighborIndices = [];
-                if (y > 0) neighborIndices.push(tileId - 15);
-                if (y < 14) neighborIndices.push(tileId + 15);
-                if (x > 0) neighborIndices.push(tileId - 1);
-                if (x < 14) neighborIndices.push(tileId + 1);
+                for (let dy = -1; dy <= 1; dy++) {
+                    for (let dx = -1; dx <= 1; dx++) {
+                        if (dx === 0 && dy === 0) continue;
+                        const ny = y + dy;
+                        const nx = x + dx;
+                        if (ny >= 0 && ny < 15 && nx >= 0 && nx < 15) {
+                            neighborIndices.push(ny * 15 + nx);
+                        }
+                    }
+                }
 
                 for (let idx of neighborIndices) {
                     const prevN = prevBoard[idx];
@@ -1949,6 +2198,7 @@ export function propsAreEqual(prevProps, nextProps) {
                     if (!prevN && !nextN) continue;
                     if (!prevN || !nextN) return false;
                     if (prevN.color !== nextN.color) return false;
+                    if (prevN.territory !== nextN.territory || prevN.territoryAffiliation !== nextN.territoryAffiliation) return false;
                     if (!isContainsEqual(prevN.contains, nextN.contains)) return false;
                 }
             }

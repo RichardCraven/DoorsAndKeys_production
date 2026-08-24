@@ -497,11 +497,42 @@ class MapMakerPage extends React.Component {
                 return;
             }
         } else {
-            const tile = board.tiles[tileIdx];
-            if (!tile) return;
-            const updatedTile = this.applyPinnedOptionToTile(tile);
-            board.tiles[tileIdx] = updatedTile;
-            board.tiles = updateTerrainAutotiles(board.tiles, tileIdx);
+        const tile = board.tiles[tileIdx];
+        if (!tile) return;
+
+        // Check if clicking a placed military building
+        const contains = tile.contains;
+        const containsType = this.getContainsType(contains);
+        const containsSubtype = typeof contains === 'object' ? (contains.subtype || contains.key || contains.building) : (typeof contains === 'string' ? contains : null);
+        const sKey = (tile.building || containsSubtype || containsType || (typeof contains === 'object' ? contains.building || contains.key || contains.name : contains) || '').toString().toLowerCase();
+        const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'generator', 'cultivation_vat'];
+        const isMilitaryBuilding = militaryKeys.some(k => sKey.includes(k));
+
+        if (isMilitaryBuilding) {
+          const pinnedOption = this.state.pinnedOption;
+          const pinnedPaletteTile = pinnedOption && this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
+          const isDeleteOrVoid = pinnedPaletteTile && (pinnedPaletteTile.optionType === 'delete' || pinnedPaletteTile.optionType === 'void' || pinnedPaletteTile.optionType === 'empty space');
+          if (!isDeleteOrVoid) {
+            this.setState({
+              showMilitaryAffiliationModal: true,
+              militaryModalTile: tile,
+              militaryModalTileId: tileIdx,
+              militaryModalSuperboardKey: superboardKey,
+              militaryModalMbIndex: mbIndex
+            });
+            return;
+          }
+        }
+
+        const pinnedOption = this.state.pinnedOption;
+        const pinnedPaletteTile = pinnedOption && this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
+        if (pinnedPaletteTile && pinnedPaletteTile.optionType === 'delete') {
+          board.tiles = this.deleteTileWithVendorSupport(board.tiles, tileIdx);
+        } else {
+          const updatedTile = this.applyPinnedOptionToTile(tile);
+          board.tiles[tileIdx] = updatedTile;
+          board.tiles = updateTerrainAutotiles(board.tiles, tileIdx);
+        }
         }
     }
 
@@ -512,8 +543,22 @@ class MapMakerPage extends React.Component {
   }
 
   handleSuperboardTileHover = (superboardKey, mbIndex, tileIdx) => {
+    let boardTiles = null;
+    if (this.state.loadedDungeon?.superboards?.[superboardKey]?.miniboards?.[mbIndex]) {
+      boardTiles = this.state.loadedDungeon.superboards[superboardKey].miniboards[mbIndex].tiles;
+    }
+    const pinnedOption = this.state.pinnedOption;
+    const pinnedPaletteTile = pinnedOption && this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
+    let deleteGroupFootprint = null;
+    if (pinnedPaletteTile && pinnedPaletteTile.optionType === 'delete' && boardTiles) {
+      deleteGroupFootprint = this.getVendorGroupTileIds(boardTiles, tileIdx);
+    }
+
     const footprintType = this.getFootprintTypeForPinnedOption(this.state.pinnedOption);
-    const multiTileFootprint = footprintType ? this.getVendorFootprintTileIds(tileIdx, footprintType) : null;
+    const multiTileFootprint = (deleteGroupFootprint && deleteGroupFootprint.length > 0)
+      ? deleteGroupFootprint
+      : (footprintType ? this.getVendorFootprintTileIds(tileIdx, footprintType) : null);
+
     this.setState({
       hoveredTileIdx: tileIdx,
       hoveredTileFootprint: multiTileFootprint
@@ -1221,8 +1266,8 @@ class MapMakerPage extends React.Component {
     }
 
     if (keyToCheck) {
-      if (['keep', 'summoning_temple', 'rift', 'rift_2'].includes(keyToCheck)) return '3x3';
-      if (['fortress', 'war_camp', 'war_fort', 'dream_den'].includes(keyToCheck)) return '2x2';
+      if (['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(keyToCheck)) return '3x3';
+      if (['war_camp', 'war_fort', 'dream_den'].includes(keyToCheck)) return '2x2';
     }
 
     if (pinnedOption.type === 'vendor-tile') return '2x2';
@@ -1552,11 +1597,15 @@ class MapMakerPage extends React.Component {
       }
       const isLargePocketBuilding = pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key);
       if (isLargePocketBuilding) {
-        if (!this.canPlaceVendorFootprint(arr, tileId)) {
-          this.toast(`${pocketBuildingOption.name} requires a 2x2 empty space.`);
+        let footprintType = '2x2';
+        if (['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key)) {
+            footprintType = '3x3';
+        }
+        if (!this.canPlaceVendorFootprint(arr, tileId, footprintType)) {
+          this.toast(`${pocketBuildingOption.name} requires a ${footprintType} empty space.`);
           return null;
         }
-        arr = this.placeVendorFootprint(arr, tileId, pocketBuildingOption.key, 'building', images[pocketBuildingOption.image] || pocketBuildingOption.image);
+        arr = this.placeVendorFootprint(arr, tileId, pocketBuildingOption.key, 'building', images[pocketBuildingOption.image] || pocketBuildingOption.image, footprintType);
       } else {
         arr[tileId].contains = { type: 'building', subtype: pocketBuildingOption.key };
         arr[tileId].image = images[pocketBuildingOption.image] || pocketBuildingOption.image;
@@ -1716,10 +1765,23 @@ class MapMakerPage extends React.Component {
           hoveredTileFootprint: null
         })
       } else {
+        const pinnedOption = this.state.pinnedOption;
+        const pinnedPaletteTile = pinnedOption && this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
+        let deleteGroupFootprint = null;
+        if (pinnedPaletteTile && pinnedPaletteTile.optionType === 'delete' && this.state.tiles) {
+          deleteGroupFootprint = this.getVendorGroupTileIds(this.state.tiles, id);
+        }
+
+        const footprintType = this.getFootprintTypeForPinnedOption(this.state.pinnedOption);
+        const multiTileFootprint = (deleteGroupFootprint && deleteGroupFootprint.length > 0)
+          ? deleteGroupFootprint
+          : (footprintType ? this.getVendorFootprintTileIds(id, footprintType) : null);
+
         this.setState({
+          hoveredTileIdx: id,
           previousHoveredTileIdx: this.state.hoveredTileIdx !== id ? this.state.hoveredTileIdx : this.state.previousHoveredTileIdx,
-          hoveredTileFootprint: null
-        })
+          hoveredTileFootprint: multiTileFootprint
+        });
       }
     }
   }
@@ -2381,6 +2443,112 @@ class MapMakerPage extends React.Component {
   _toggleMobilePalette = () => {
     this.setState(prev => ({ mobilePaletteOpen: !prev.mobilePaletteOpen }));
   }
+  closeMilitaryAffiliationModal = () => {
+    this.setState({
+      showMilitaryAffiliationModal: false,
+      militaryModalTile: null,
+      militaryModalTileId: null
+    });
+  };
+
+  setMilitaryAffiliation = (affiliation) => {
+    const { militaryModalTileId, militaryModalSuperboardKey, militaryModalMbIndex } = this.state;
+    if (militaryModalTileId === null || militaryModalTileId === undefined) return;
+
+    const buildUpdatedContains = (baseObj) => ({
+      ...baseObj,
+      affiliation: affiliation,
+      placedBy: affiliation === 'friendly' ? 'player' : undefined,
+      ownerId: affiliation === 'friendly' ? 'player' : undefined,
+      faction: affiliation === 'friendly' ? 'player' : (affiliation === 'hostile' ? 'wild' : 'neutral'),
+      isAllied: affiliation === 'friendly',
+      isHostile: affiliation === 'hostile'
+    });
+
+    let currentTile = this.state.tiles[militaryModalTileId];
+    if (militaryModalSuperboardKey && militaryModalMbIndex !== undefined && this.state.loadedDungeon?.superboards?.[militaryModalSuperboardKey]) {
+      const sbBoard = this.state.loadedDungeon.superboards[militaryModalSuperboardKey].miniboards[militaryModalMbIndex];
+      if (sbBoard && sbBoard.tiles) {
+        currentTile = sbBoard.tiles[militaryModalTileId];
+      }
+    }
+    if (!currentTile) return;
+
+    const existingContains = typeof currentTile.contains === 'object' && currentTile.contains ? currentTile.contains : { type: 'building', subtype: currentTile.contains };
+    const targetGroupId = existingContains.vendorGroupId;
+
+    const nextTiles = this.state.tiles.map((t, idx) => {
+      if (idx === militaryModalTileId || (targetGroupId && t.contains && t.contains.vendorGroupId === targetGroupId)) {
+        const cObj = typeof t.contains === 'object' && t.contains ? t.contains : { type: 'building', subtype: t.contains };
+        return {
+          ...t,
+          affiliation: affiliation,
+          contains: buildUpdatedContains(cObj)
+        };
+      }
+      return t;
+    });
+
+    const updatedLoadedBoard = this.state.loadedBoard ? {
+      ...this.state.loadedBoard,
+      tiles: nextTiles
+    } : null;
+
+    let dungeon = this.state.loadedDungeon ? clone(this.state.loadedDungeon) : null;
+    if (dungeon) {
+      if (militaryModalSuperboardKey && militaryModalMbIndex !== undefined && dungeon.superboards?.[militaryModalSuperboardKey]) {
+        const sbBoard = dungeon.superboards[militaryModalSuperboardKey].miniboards[militaryModalMbIndex];
+        if (sbBoard && sbBoard.tiles) {
+          sbBoard.tiles.forEach((t, idx) => {
+            if (idx === militaryModalTileId || (targetGroupId && t.contains && t.contains.vendorGroupId === targetGroupId)) {
+              const cObj = typeof t.contains === 'object' && t.contains ? t.contains : { type: 'building', subtype: t.contains };
+              t.contains = buildUpdatedContains(cObj);
+              t.affiliation = affiliation;
+            }
+          });
+        }
+      }
+
+      if (Array.isArray(dungeon.levels)) {
+        dungeon.levels.forEach(level => {
+          ['front', 'back'].forEach(orientation => {
+            const plane = level[orientation];
+            if (plane && Array.isArray(plane.miniboards)) {
+              plane.miniboards.forEach(mb => {
+                if (mb && (mb.id === this.state.loadedBoard?.id || mb.name === this.state.loadedBoard?.name)) {
+                  if (mb.tiles) {
+                    mb.tiles.forEach((mbTile, mbIdx) => {
+                      if (mbIdx === militaryModalTileId || (targetGroupId && mbTile?.contains?.vendorGroupId === targetGroupId)) {
+                        const cObj = typeof mbTile.contains === 'object' && mbTile.contains ? mbTile.contains : { type: 'building', subtype: mbTile.contains };
+                        mbTile.contains = buildUpdatedContains(cObj);
+                        mbTile.affiliation = affiliation;
+                      }
+                    });
+                  }
+                }
+              });
+            }
+          });
+        });
+      }
+    }
+
+    this.setState({
+      tiles: nextTiles,
+      loadedBoard: updatedLoadedBoard,
+      loadedDungeon: dungeon || this.state.loadedDungeon,
+      dungeonHasUnsavedChanges: true,
+      boardHasUnsavedChanges: true,
+      showMilitaryAffiliationModal: false,
+      militaryModalTile: null,
+      militaryModalTileId: null,
+      militaryModalSuperboardKey: null,
+      militaryModalMbIndex: null
+    });
+
+    this.toast(`Building affiliation set to: ${affiliation.toUpperCase()}`);
+  };
+
   handleDoubleClick = (tile) => {
     const tileId = tile ? (tile.id !== undefined ? tile.id : tile.index) : null;
     if (tileId === undefined || tileId === null) return;
@@ -2389,7 +2557,20 @@ class MapMakerPage extends React.Component {
     if (currentTile) {
       const contains = currentTile.contains;
       const containsType = this.getContainsType(contains);
-      const containsSubtype = typeof contains === 'object' ? (contains.subtype || contains.key) : (typeof contains === 'string' ? contains : null);
+      const containsSubtype = typeof contains === 'object' ? (contains.subtype || contains.key || contains.building) : (typeof contains === 'string' ? contains : null);
+      const sKey = (currentTile.building || containsSubtype || containsType || (typeof contains === 'object' ? contains.building || contains.key || contains.name : contains) || '').toString().toLowerCase();
+
+      const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'generator', 'cultivation_vat'];
+      const isMilitaryBuilding = militaryKeys.some(k => sKey.includes(k));
+
+      if (isMilitaryBuilding) {
+        this.setState({
+          showMilitaryAffiliationModal: true,
+          militaryModalTile: currentTile,
+          militaryModalTileId: tileId
+        });
+        return;
+      }
 
       const isLitter = containsType === 'dungeon_litter' ||
                        containsType === 'dungeon litter' ||
@@ -8327,6 +8508,47 @@ class MapMakerPage extends React.Component {
             <CModalFooter>
               <CButton color="secondary" onClick={this.closePortalModal}>
                 Close
+              </CButton>
+            </CModalFooter>
+          </CModal>
+        )}
+
+        {this.state.showMilitaryAffiliationModal && (
+          <CModal alignment="center" backdrop="static" size="md" visible={this.state.showMilitaryAffiliationModal} onClose={this.closeMilitaryAffiliationModal}>
+            <CModalHeader>
+              <CModalTitle><span role="img" aria-label="Castle">🏰</span> Select Building Affiliation</CModalTitle>
+            </CModalHeader>
+            <CModalBody style={{ textAlign: 'center', padding: '24px' }}>
+              <p style={{ fontSize: '1.05em', marginBottom: '20px', color: '#ddd' }}>
+                Set faction affiliation for this military structure. Neutral structures have no colored ring in builder and a white ring in-game.
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', flexWrap: 'wrap', marginTop: '16px' }}>
+                <button
+                  className="btn btn-outline-danger btn-lg"
+                  style={{ minWidth: '130px', fontWeight: 'bold', border: '2px solid #ef4444', color: '#ef4444', background: 'rgba(239, 68, 68, 0.1)' }}
+                  onClick={() => this.setMilitaryAffiliation('hostile')}
+                >
+                  🔴 Hostile
+                </button>
+                <button
+                  className="btn btn-outline-light btn-lg"
+                  style={{ minWidth: '130px', fontWeight: 'bold', border: '2px solid #ffffff', color: '#ffffff', background: 'rgba(255, 255, 255, 0.1)' }}
+                  onClick={() => this.setMilitaryAffiliation('neutral')}
+                >
+                  ⚪ Neutral
+                </button>
+                <button
+                  className="btn btn-outline-primary btn-lg"
+                  style={{ minWidth: '130px', fontWeight: 'bold', border: '2px solid #3b82f6', color: '#3b82f6', background: 'rgba(59, 130, 246, 0.1)' }}
+                  onClick={() => this.setMilitaryAffiliation('friendly')}
+                >
+                  🔵 Friendly
+                </button>
+              </div>
+            </CModalBody>
+            <CModalFooter>
+              <CButton color="secondary" onClick={this.closeMilitaryAffiliationModal}>
+                Cancel
               </CButton>
             </CModalFooter>
           </CModal>
