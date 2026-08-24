@@ -533,7 +533,7 @@ class CrewManagerPage extends React.Component {
     startRandomCombat = async () => {
         const { monsterManager } = this.props;
         const budget = this.state.randomTierPoints;
-        const allRosterKeys = ['skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok', 'qlippoth', 'eidolon'];
+        const allRosterKeys = ['sobek', 'skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok', 'qlippoth', 'eidolon'];
         const rosterMonsters = allRosterKeys
             .map(k => monsterManager.getMonster(k))
             .filter(m => m && m.tier && !m.isMinion);
@@ -1373,7 +1373,7 @@ class CrewManagerPage extends React.Component {
                             {/* Monster roster */}
                             <div className="monster-roster-label">Monster Roster — click to select, click again to add to slot</div>
                             <div className="monster-roster">
-                                {['goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'eidolon', 'djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
+                                {['sobek', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'eidolon', 'djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
                                     .map(k => this.props.monsterManager.getMonster(k))
                                     .filter(Boolean)
                                     .map((m, i) => (

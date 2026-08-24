@@ -23,7 +23,8 @@ class DungeonView extends React.Component {
         showTeleporterInterface: false,
         isFlipped: false,
         superboardContextMenu: { visible: false, x: 0, y: 0, superboardKey: 'light' },
-        hoveredSuperboardTileIdx: null
+        hoveredSuperboardTileIdx: null,
+        superboardVisualZoomLevel: 1
       }
       this.clickTimer = null;
       this.lastClickInfo = null;
@@ -140,6 +141,7 @@ class DungeonView extends React.Component {
             nextState.hoveredPlane !== this.state.hoveredPlane ||
             nextState.superboardContextMenu !== this.state.superboardContextMenu ||
             nextState.hoveredSuperboardTileIdx !== this.state.hoveredSuperboardTileIdx ||
+            nextState.superboardVisualZoomLevel !== this.state.superboardVisualZoomLevel ||
             nextProps.superboardZoom !== this.props.superboardZoom ||
             nextProps.pinnedOption !== this.props.pinnedOption ||
             nextProps.loadedDungeon !== this.props.loadedDungeon ||
@@ -803,8 +805,26 @@ class DungeonView extends React.Component {
                                             </option>
                                         ))}
                                     </select>
-                                    <button style={{ background: 'transparent', border: 'none', color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', padding: '0 4px', textShadow: currentZoomKey === 'light' ? '0 0 5px rgba(251, 191, 36, 0.8)' : '0 0 5px rgba(168, 85, 247, 0.8)', marginLeft: '4px' }}>+</button>
-                                    <button style={{ background: 'transparent', border: 'none', color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', padding: '0 4px', textShadow: currentZoomKey === 'light' ? '0 0 5px rgba(251, 191, 36, 0.8)' : '0 0 5px rgba(168, 85, 247, 0.8)' }}>-</button>
+                                    <button
+                                        type="button" 
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            this.setState({ superboardVisualZoomLevel: Math.min((this.state.superboardVisualZoomLevel || 1) + 1, 4) });
+                                        }}
+                                        title="Zoom In"
+                                        style={{ background: 'transparent', border: 'none', color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', padding: '0 4px', textShadow: currentZoomKey === 'light' ? '0 0 5px rgba(251, 191, 36, 0.8)' : '0 0 5px rgba(168, 85, 247, 0.8)', marginLeft: '4px' }}
+                                    >+</button>
+                                    <button 
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            this.setState({ superboardVisualZoomLevel: Math.max((this.state.superboardVisualZoomLevel || 1) - 1, 1) });
+                                        }}
+                                        title="Zoom Out"
+                                        style={{ background: 'transparent', border: 'none', color: currentZoomKey === 'light' ? '#fbbf24' : '#c084fc', fontSize: '18px', fontWeight: 'bold', cursor: 'pointer', padding: '0 4px', textShadow: currentZoomKey === 'light' ? '0 0 5px rgba(251, 191, 36, 0.8)' : '0 0 5px rgba(168, 85, 247, 0.8)' }}
+                                    >-</button>
                                 </div>
                             </div>
                         ) : (
@@ -1009,25 +1029,40 @@ class DungeonView extends React.Component {
                             const activeMiniboards = currentZoomKey === 'light' ? lightMiniboards : darkMiniboards;
                             const isDark = currentZoomKey === 'dark';
                             const superboardTexture = this.props.loadedDungeon?.superboards?.[currentZoomKey]?.floorTexture;
+                            const visualZoomLevel = this.state.superboardVisualZoomLevel || 1;
+                            const boardPixelSize = 720 * visualZoomLevel;
+                            const bgSize = 240 * visualZoomLevel;
 
                             return (
-                                <div
-                                    className="superboard-zoomed-board"
-                                    onContextMenu={(e) => this.handleSuperboardContextMenu(e, currentZoomKey)}
-                                    style={{
-                                        position: 'relative',
-                                        width: '720px',
-                                        height: '720px',
-                                        backgroundColor: isDark ? '#0b0914' : '#13131a',
-                                        backgroundImage: superboardTexture ? `url(${superboardTexture})` : undefined,
-                                        backgroundRepeat: superboardTexture ? 'repeat' : undefined,
-                                        backgroundSize: superboardTexture ? '240px 240px' : undefined,
-                                        border: isDark ? '2px solid #c084fc' : '2px solid #fbbf24',
-                                        borderRadius: '8px',
-                                        boxShadow: isDark ? '0 0 35px rgba(168, 85, 247, 0.35)' : '0 0 35px rgba(251, 191, 36, 0.3)',
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(3, 1fr)',
-                                        gridTemplateRows: 'repeat(3, 1fr)',
+                                <div style={{ 
+                                    width: '100%', 
+                                    maxWidth: '90vw', 
+                                    maxHeight: '75vh', 
+                                    overflow: 'auto', 
+                                    display: 'flex', 
+                                    justifyContent: visualZoomLevel > 1 ? 'flex-start' : 'center', 
+                                    alignItems: visualZoomLevel > 1 ? 'flex-start' : 'center' 
+                                }}>
+                                    <div
+                                        className="superboard-zoomed-board"
+                                        onContextMenu={(e) => this.handleSuperboardContextMenu(e, currentZoomKey)}
+                                        style={{
+                                            position: 'relative',
+                                            flexShrink: 0,
+                                            width: `${boardPixelSize}px`,
+                                            height: `${boardPixelSize}px`,
+                                            minWidth: `${boardPixelSize}px`,
+                                            minHeight: `${boardPixelSize}px`,
+                                            backgroundColor: isDark ? '#0b0914' : '#13131a',
+                                            backgroundImage: superboardTexture ? `url(${superboardTexture})` : undefined,
+                                            backgroundRepeat: superboardTexture ? 'repeat' : undefined,
+                                            backgroundSize: superboardTexture ? `${bgSize}px ${bgSize}px` : undefined,
+                                            border: isDark ? '2px solid #c084fc' : '2px solid #fbbf24',
+                                            borderRadius: '8px',
+                                            boxShadow: isDark ? '0 0 35px rgba(168, 85, 247, 0.35)' : '0 0 35px rgba(251, 191, 36, 0.3)',
+                                            display: 'grid',
+                                            gridTemplateColumns: 'repeat(3, 1fr)',
+                                            gridTemplateRows: 'repeat(3, 1fr)',
                                         gap: '2px',
                                         padding: '2px',
                                         boxSizing: 'border-box'
@@ -1110,6 +1145,7 @@ class DungeonView extends React.Component {
                                             })}
                                         </div>
                                     ))}
+                                </div>
                                 </div>
                             );
                         })()

@@ -12,6 +12,7 @@ import * as images from '../../utils/images';
 import Overlay from '../Overlay';
 import { runesData } from '../../utils/rune-data';
 import WalkerAnimatedUnit from '../WalkerAnimatedUnit';
+import SobekAnimatedUnit from '../SobekAnimatedUnit';
 
 
 const TILE_SIZE = 100;
@@ -1627,7 +1628,7 @@ export default function CombatGrid(props) {
                     <div
                         className={portraitClasses}
                         style={{
-                            backgroundImage: (fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') ? 'none' : `url("${resolvePortrait(
+                            backgroundImage: ((fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') || fighter.type === 'sobek' || fighter.key === 'sobek') ? 'none' : `url("${resolvePortrait(
                                 (fighter.type === 'archaic_familiar' && activeAnimations.some(a => a.sourceUnitId === fighter.id))
                                 ? 'stone_familiar_glowing'
                                 : (fighter.portrait || fighter.type || fighter.class || 'soldier')
@@ -1700,6 +1701,9 @@ export default function CombatGrid(props) {
                     >
                         {(fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') && (
                             <WalkerAnimatedUnit isMoving={true} />
+                        )}
+                        {(fighter.type === 'sobek' || fighter.key === 'sobek' || fighter.name === 'Sobek') && (
+                            <SobekAnimatedUnit isMoving={true} />
                         )}
                         {fighter.type === 'wizard' && (
                             <div
@@ -2546,11 +2550,12 @@ export default function CombatGrid(props) {
                 >
                     {(() => {
                         const isWalkerUnit = unit.type === 'walker' || unit.key === 'walker' || (unit.name && String(unit.name).toLowerCase().includes('walker'));
+                        const isSobekUnit = unit.type === 'sobek' || unit.key === 'sobek' || (unit.name && String(unit.name).toLowerCase().includes('sobek'));
                         return (
                             <div
                                 className={portraitClasses}
                                 style={{
-                                    backgroundImage: isWalkerUnit ? 'none' : (() => {
+                                    backgroundImage: (isWalkerUnit || isSobekUnit) ? 'none' : (() => {
                                         const url = getCombatantPortrait(unit, greetingInProcess, activeAnimations);
                                         if (!url) {
                                             console.warn(`[PvP Diagnostic] renderMonsterUnit: unit id="${unit.id}" name="${unit.name}" has empty portrait URL`, unit);
@@ -2599,6 +2604,7 @@ export default function CombatGrid(props) {
                                 }}
                             >
                                 {isWalkerUnit && <WalkerAnimatedUnit isMoving={true} />}
+                                {isSobekUnit && <SobekAnimatedUnit isMoving={true} />}
                                 {unit.isLord && unit.lordBadge && (
                                     <div 
                                         className="lord-badge"

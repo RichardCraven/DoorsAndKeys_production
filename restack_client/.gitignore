@@ -22,3 +22,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Python & scratch files
+scratch/
+venv/
+.venv/
+__pycache__/
+*.pyc

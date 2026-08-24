@@ -173,6 +173,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[tierItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -208,6 +209,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={monster.portrait}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={monster.type}
                                     hovered={
                                         this.props.hoveredPaletteTileIdx === monster.id ?
@@ -248,6 +250,7 @@ class BoardsPalette extends React.Component {
                                     borders={{ top: '2px solid black', left: '2px solid black', right: '2px solid transparent', bottom: '2px solid black' }}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -282,6 +285,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[gate.key]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'gate'}>
                                     </Tile>
                                     
@@ -315,6 +319,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[keyItem.key]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -348,6 +353,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[tierItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -380,6 +386,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[treasureItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -412,6 +419,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[jewelItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -444,6 +452,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[runeItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -476,6 +485,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[vendorItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -588,6 +598,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[bItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -618,6 +629,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[pbItem.image] || images[pbItem.key]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -648,6 +660,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[gItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -678,6 +691,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[lItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
@@ -708,6 +722,7 @@ class BoardsPalette extends React.Component {
                                     imageOverride={images[tItem.image]}
                                     handleHover={null}
                                     handleClick={null}
+                                    isPaletteTile={true}
                                     type={'item'}>
                                     </Tile>
                                 </div>
