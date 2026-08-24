@@ -28,6 +28,36 @@ export function MonsterManager() {
     }
     this.battleMonster = null;
     this.monsters = {
+        sobek: {
+            type: 'sobek',
+            tier: 5,
+            subtype: 'beast',
+            key: 'sobek',
+            image_names: ['sobek'],
+            monster_names: ['Sobek'],
+            lordName: 'Sobek the Crocodile God',
+            stats: {
+                hp: 300,
+                atk: 25,
+                def: 25,
+                speed: 8,
+                willpower: 10,
+                str: 20,
+                int: 5,
+                dex: 5,
+                fort: 20
+            },
+            level: 15,
+            portrait: images['sobek_head'],
+            greetings: ['ROAAAR!'],
+            deathCries: ['Gurgle...'],
+            skills: ['claw_strike', 'bite'],
+            minions: [],
+            weaknesses: ['electricity'],
+            drops: [],
+            isComplexUnit: true,
+            size: 3
+        },
         // ── Level 2 ──────────────────────────────────────────────────────
         goblin_thief: {
             type: 'goblin_thief',

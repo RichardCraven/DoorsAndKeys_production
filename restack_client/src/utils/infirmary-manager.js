@@ -24,7 +24,36 @@ export const updateInfirmary = () => {
         });
     }
     
-    // Auto return sage
+    // Auto-discharge any patients who have reached full health
+    const fullyHealed = infirmary.patients.filter(p => {
+        const maxHp = p.stats?.hp || p.starting_hp || 100;
+        return p.hp >= maxHp;
+    });
+
+    if (fullyHealed.length > 0) {
+        updated = true;
+        fullyHealed.forEach(p => {
+            const maxHp = p.stats?.hp || p.starting_hp || 100;
+            // Sync full HP & revived status back to meta rosters
+            ['adventurers', 'roster', 'crew'].forEach(key => {
+                if (Array.isArray(meta[key])) {
+                    const target = meta[key].find(u => u && u.id === p.id);
+                    if (target) {
+                        target.hp = maxHp;
+                        target.dead = false;
+                    }
+                }
+            });
+        });
+
+        // Remove fully healed patients from infirmary (auto-discharge)
+        infirmary.patients = infirmary.patients.filter(p => {
+            const maxHp = p.stats?.hp || p.starting_hp || 100;
+            return p.hp < maxHp;
+        });
+    }
+    
+    // Auto return sage if no patients remain in infirmary
     if (infirmary.sageCommitted && infirmary.patients.length === 0) {
         infirmary.sageCommitted = false;
         updated = true;
@@ -69,8 +98,28 @@ export const dischargeFromInfirmary = (memberId) => {
     if (!meta) return;
     let infirmary = meta.infirmary || { patients: [], sageCommitted: false, lastUpdateTs: Date.now() };
     
+    const patient = infirmary.patients.find(p => p.id === memberId);
+    if (patient) {
+        const maxHp = patient.stats?.hp || patient.starting_hp || 100;
+        const healedHp = Math.min(maxHp, patient.hp);
+        
+        ['adventurers', 'roster', 'crew'].forEach(key => {
+            if (Array.isArray(meta[key])) {
+                const target = meta[key].find(u => u && u.id === memberId);
+                if (target) {
+                    target.hp = healedHp;
+                    if (healedHp > 0) target.dead = false;
+                }
+            }
+        });
+    }
+
     infirmary.patients = infirmary.patients.filter(p => p.id !== memberId);
     
+    if (infirmary.sageCommitted && infirmary.patients.length === 0) {
+        infirmary.sageCommitted = false;
+    }
+
     infirmary.lastUpdateTs = Date.now();
     meta.infirmary = infirmary;
     storeMeta(meta);

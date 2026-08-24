@@ -41,6 +41,7 @@ import * as images from '../utils/images'
 import BoardsPalette from './dungonBuilderViews/BoardsPalette'
 import { generateRandomDungeon } from '../utils/dungeon-generator'
 import { getRandomInscription } from '../utils/inscriptions-manager'
+import { updateTerrainAutotiles } from '../utils/autotile-utils'
 
 const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__';
 const GENERATE_DUNGEON_VALUE = '__generate_dungeon__';
@@ -460,10 +461,10 @@ class MapMakerPage extends React.Component {
             }
         }
     } else {
-        const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
-        if (isMultiTile) {
-            const footprint = this.getVendorFootprintTileIds(tileIdx);
-            if (this.canPlaceVendorFootprint(board.tiles, tileIdx)) {
+        const footprintType = this.getFootprintTypeForPinnedOption(this.state.pinnedOption);
+        if (footprintType) {
+            const footprint = this.getVendorFootprintTileIds(tileIdx, footprintType);
+            if (this.canPlaceVendorFootprint(board.tiles, tileIdx, footprintType)) {
                 let baseType = 'vendor';
                 let vendorKey = 'unknown';
                 let image = null;
@@ -490,9 +491,9 @@ class MapMakerPage extends React.Component {
                          vendorKey = 'dream_den';
                     }
                 }
-                board.tiles = this.placeVendorFootprint([...board.tiles], tileIdx, vendorKey, baseType, image);
+                board.tiles = this.placeVendorFootprint([...board.tiles], tileIdx, vendorKey, baseType, image, footprintType);
             } else {
-                this.toast("Requires a 2x2 empty space.");
+                this.toast(`Requires a ${footprintType} empty space.`);
                 return;
             }
         } else {
@@ -500,6 +501,7 @@ class MapMakerPage extends React.Component {
             if (!tile) return;
             const updatedTile = this.applyPinnedOptionToTile(tile);
             board.tiles[tileIdx] = updatedTile;
+            board.tiles = updateTerrainAutotiles(board.tiles, tileIdx);
         }
     }
 
@@ -510,8 +512,8 @@ class MapMakerPage extends React.Component {
   }
 
   handleSuperboardTileHover = (superboardKey, mbIndex, tileIdx) => {
-    const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
-    const multiTileFootprint = isMultiTile ? this.getVendorFootprintTileIds(tileIdx) : null;
+    const footprintType = this.getFootprintTypeForPinnedOption(this.state.pinnedOption);
+    const multiTileFootprint = footprintType ? this.getVendorFootprintTileIds(tileIdx, footprintType) : null;
     this.setState({
       hoveredTileIdx: tileIdx,
       hoveredTileFootprint: multiTileFootprint
@@ -1177,50 +1179,70 @@ class MapMakerPage extends React.Component {
     const tile = tiles?.[tileId];
     if (!tile?.contains?.vendorGroupId) {
       tiles[tileId] = this.getDeleteResultForTile(tile);
-      return tiles;
+      return updateTerrainAutotiles(tiles, tileId);
     }
 
     const vendorTileIds = this.getVendorGroupTileIds(tiles, tileId);
     vendorTileIds.forEach((id) => {
       tiles[id] = this.getDeleteResultForTile(tiles[id]);
     });
-    return tiles;
+    return updateTerrainAutotiles(tiles, tileId);
   }
 
   isParentPaletteOption = (optionType) => {
     return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'terrain'].includes(optionType);
   }
 
-  getVendorFootprintTileIds = (anchorTileId) => {
+  getVendorFootprintTileIds = (anchorTileId, footprintType = '2x2') => {
     if (anchorTileId === null || anchorTileId === undefined) return null;
     const row = Math.floor(anchorTileId / 15);
     const col = anchorTileId % 15;
+    if (footprintType === '3x3') {
+      if (row > 12 || col > 12) return null;
+      return [
+        anchorTileId, anchorTileId + 1, anchorTileId + 2,
+        anchorTileId + 15, anchorTileId + 16, anchorTileId + 17,
+        anchorTileId + 30, anchorTileId + 31, anchorTileId + 32
+      ];
+    }
     if (row > 13 || col > 13) return null;
     return [anchorTileId, anchorTileId + 1, anchorTileId + 15, anchorTileId + 16];
   }
 
-  is2x2FootprintPinnedOption = (pinnedOption) => {
-    if (!pinnedOption) return false;
-    if (pinnedOption.type === 'vendor-tile') return true;
+  getFootprintTypeForPinnedOption = (pinnedOption) => {
+    if (!pinnedOption) return null;
+    let keyToCheck = null;
     if (pinnedOption.type === 'pocket-building-tile') {
       const pocketBuildingOption = this.props.mapMaker?.pocketBuildingOptions?.[pinnedOption.id];
-      if (pocketBuildingOption && (pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key))) {
-        return true;
-      }
-    }
-    if (pinnedOption.type === 'building-tile') {
+      if (pocketBuildingOption) keyToCheck = pocketBuildingOption.key;
+    } else if (pinnedOption.type === 'building-tile') {
       const buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
-      if (buildingOption && (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort' || buildingOption.isMultiTile || buildingOption.isLarge || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(buildingOption.key))) {
-        return true;
-      }
+      if (buildingOption) keyToCheck = buildingOption.key;
     }
+
+    if (keyToCheck) {
+      if (['keep', 'summoning_temple', 'rift', 'rift_2'].includes(keyToCheck)) return '3x3';
+      if (['fortress', 'war_camp', 'war_fort', 'dream_den'].includes(keyToCheck)) return '2x2';
+    }
+
+    if (pinnedOption.type === 'vendor-tile') return '2x2';
     if (pinnedOption.type === 'palette-tile') {
       const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
       if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'dream den' || pinnedPaletteTile.optionType === 'dream_den')) {
-        return true;
+        return '2x2';
       }
     }
-    return false;
+    
+    // Fallbacks
+    if (pinnedOption.type === 'pocket-building-tile') {
+      const pocketBuildingOption = this.props.mapMaker?.pocketBuildingOptions?.[pinnedOption.id];
+      if (pocketBuildingOption && (pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile)) return '2x2';
+    }
+    if (pinnedOption.type === 'building-tile') {
+      const buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
+      if (buildingOption && (buildingOption.isLarge || buildingOption.isMultiTile)) return '2x2';
+    }
+    return null;
   }
 
   getContainsType = (contains) => {
@@ -1230,8 +1252,8 @@ class MapMakerPage extends React.Component {
     return null;
   }
 
-  canPlaceVendorFootprint = (tiles, anchorTileId) => {
-    const footprint = this.getVendorFootprintTileIds(anchorTileId);
+  canPlaceVendorFootprint = (tiles, anchorTileId, footprintType = '2x2') => {
+    const footprint = this.getVendorFootprintTileIds(anchorTileId, footprintType);
     if (!footprint) return false;
     return footprint.every((tileId) => {
       const tile = tiles[tileId];
@@ -1241,13 +1263,20 @@ class MapMakerPage extends React.Component {
     });
   }
 
-  placeVendorFootprint = (tiles, anchorTileId, vendorKey, baseType = 'vendor', imageOverride = null) => {
-    const footprint = this.getVendorFootprintTileIds(anchorTileId);
+  placeVendorFootprint = (tiles, anchorTileId, vendorKey, baseType = 'vendor', imageOverride = null, footprintType = '2x2') => {
+    const footprint = this.getVendorFootprintTileIds(anchorTileId, footprintType);
     if (!footprint) return tiles;
     const vendorGroupId = `${baseType}_${vendorKey}_${anchorTileId}`;
-    const vendorCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
+    let vendorCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
+    if (footprintType === '3x3') {
+      vendorCells = [
+        'anchor', 'top_center', 'top_right',
+        'middle_left', 'center', 'middle_right',
+        'bottom_left', 'bottom_center', 'bottom_right'
+      ];
+    }
 
-    // Copy the original borders for all 4 tiles in the footprint to preserve the outer boundaries
+    // Copy the original borders for all tiles in the footprint to preserve the outer boundaries
     const originalBorders = footprint.map(tileId => tiles[tileId]?.borders ? { ...tiles[tileId].borders } : null);
 
     footprint.forEach((tileId, idx) => {
@@ -1259,16 +1288,38 @@ class MapMakerPage extends React.Component {
         if (idx === 0) { // anchor (top left)
           if (orig.top) newBorders.top = orig.top;
           if (orig.left) newBorders.left = orig.left;
-        } else if (idx === 1) { // top_right
+        } else if (idx === 1) { // top center or top right
           if (orig.top) newBorders.top = orig.top;
+          if (footprintType === '2x2' && orig.right) newBorders.right = orig.right;
+        } else if (idx === 2) { // bottom left or top right
+          if (footprintType === '2x2') {
+            if (orig.bottom) newBorders.bottom = orig.bottom;
+            if (orig.left) newBorders.left = orig.left;
+          } else {
+            if (orig.top) newBorders.top = orig.top;
+            if (orig.right) newBorders.right = orig.right;
+          }
+        } else if (idx === 3) { // bottom right or middle left
+          if (footprintType === '2x2') {
+            if (orig.bottom) newBorders.bottom = orig.bottom;
+            if (orig.right) newBorders.right = orig.right;
+          } else {
+            if (orig.left) newBorders.left = orig.left;
+          }
+        } else if (idx === 4) { // center
+          // no borders
+        } else if (idx === 5) { // middle right
           if (orig.right) newBorders.right = orig.right;
-        } else if (idx === 2) { // bottom_left
+        } else if (idx === 6) { // bottom left
           if (orig.bottom) newBorders.bottom = orig.bottom;
           if (orig.left) newBorders.left = orig.left;
-        } else if (idx === 3) { // bottom_right
+        } else if (idx === 7) { // bottom center
+          if (orig.bottom) newBorders.bottom = orig.bottom;
+        } else if (idx === 8) { // bottom right
           if (orig.bottom) newBorders.bottom = orig.bottom;
           if (orig.right) newBorders.right = orig.right;
         }
+        
         // If there are no outer borders preserved, set to null
         if (Object.keys(newBorders).length === 0) {
           newBorders = null;
@@ -1486,7 +1537,7 @@ class MapMakerPage extends React.Component {
           const isExistingFort = currentContains && currentContains.type === 'building' && currentContains.subtype === 'earthen_fort';
           if (isExistingFort) {
             const existingLvl = typeof currentContains.level === 'number' ? currentContains.level : 1;
-            fortLevel = Math.min(3, existingLvl + 1);
+            fortLevel = existingLvl + 1;
           }
         }
         arr[tileId].contains = { type: 'building', subtype: buildingOption.key, level: fortLevel };
@@ -1601,7 +1652,7 @@ class MapMakerPage extends React.Component {
       arr[tileId].image = pinned.image;
       arr[tileId].color = pinned.color || null;
     }
-    return arr;
+    return updateTerrainAutotiles(arr, tileId);
   };
 
   handleHover = (id, type) => {
@@ -1665,12 +1716,9 @@ class MapMakerPage extends React.Component {
           hoveredTileFootprint: null
         })
       } else {
-        const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
-        const multiTileFootprint = isMultiTile ? this.getVendorFootprintTileIds(id) : null;
         this.setState({
           previousHoveredTileIdx: this.state.hoveredTileIdx !== id ? this.state.hoveredTileIdx : this.state.previousHoveredTileIdx,
-          hoveredTileIdx: id,
-          hoveredTileFootprint: multiTileFootprint
+          hoveredTileFootprint: null
         })
       }
     }
@@ -2599,8 +2647,8 @@ class MapMakerPage extends React.Component {
     }
   }
   setHover = (id) => {
-    const isMultiTile = this.is2x2FootprintPinnedOption(this.state.pinnedOption);
-    const multiTileFootprint = (id !== null && id !== undefined && isMultiTile) ? this.getVendorFootprintTileIds(id) : null;
+    const footprintType = this.getFootprintTypeForPinnedOption(this.state.pinnedOption);
+    const multiTileFootprint = (id !== null && id !== undefined && footprintType) ? this.getVendorFootprintTileIds(id, footprintType) : null;
     this.setState({
       hoveredTileIdx: id,
       hoveredTileFootprint: multiTileFootprint

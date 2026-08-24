@@ -196,6 +196,7 @@ export function MapMaker(props){
 
     this.terrainOptions = [
         { key: 'terrain_tree_1', name: 'Pine Trees', image: 'terrain_tree_1' },
+        { key: 'terrain_naked_trees', name: 'Naked Trees', image: 'pine_tree_medium' },
         { key: 'terrain_tree_2', name: 'Oak Trees', image: 'terrain_tree_2' },
         { key: 'terrain_tree_3', name: 'Ancient Grove', image: 'terrain_tree_3' },
         { key: 'terrain_mountain_1', name: 'Mountain Peak', image: 'terrain_mountain_1' },

@@ -529,11 +529,33 @@ export default function LandingPage(props) {
     }
 
     const meta = getMeta() || {};
-    const selectedId = meta.selectedDungeonTemplateId || null;
+    let selectedId = meta.selectedDungeonTemplateId || null;
+
+    // If selectedId is missing but meta.dungeonId exists, attempt to resolve matching template from baseValidOnly
+    if (!selectedId && meta.dungeonId && baseValidOnly.length > 0) {
+      const activeInst = all.find(x => String(x.id || x._id || '') === String(meta.dungeonId));
+      const activeName = activeInst ? activeInst.name : (typeof meta.dungeonId === 'string' ? meta.dungeonId : null);
+      if (activeName) {
+        const baseName = activeName.split('_')[0].toLowerCase();
+        const matchedTmpl = baseValidOnly.find(b => (b.name || '').toLowerCase() === baseName || (b.name || '').toLowerCase().startsWith(baseName));
+        if (matchedTmpl) {
+          selectedId = matchedTmpl.id;
+          meta.selectedDungeonTemplateId = matchedTmpl.id;
+          meta.selectedDungeonTemplateName = matchedTmpl.name;
+          storeMeta(meta);
+        }
+      }
+    }
+
     const selected = selectedId ? baseValidOnly.find((d) => d.id === selectedId) : null;
     if (selected) {
       setSelectedDungeonTemplateId(selected.id);
-    } else if (selectedId) {
+      if (!meta.selectedDungeonTemplateId) {
+        meta.selectedDungeonTemplateId = selected.id;
+        meta.selectedDungeonTemplateName = selected.name;
+        storeMeta(meta);
+      }
+    } else if (selectedId && baseValidOnly.length > 0) {
       setSelectedDungeonTemplateId(null);
       delete meta.selectedDungeonTemplateId;
       delete meta.selectedDungeonTemplateName;
@@ -664,6 +686,32 @@ export default function LandingPage(props) {
     }
   }
 
+  const isSameDungeon = (dungeon, meta, allDungeons = []) => {
+    if (!dungeon || !meta) return false;
+    if (meta.selectedDungeonTemplateId && meta.selectedDungeonTemplateId === dungeon.id) return true;
+    if (meta.selectedDungeonTemplateName && meta.selectedDungeonTemplateName.toLowerCase() === (dungeon.name || '').toLowerCase()) return true;
+    if (meta.dungeonId && (meta.dungeonId === dungeon.id || meta.dungeonId === dungeon._id)) return true;
+
+    if (meta.dungeonId && Array.isArray(allDungeons)) {
+      const activeInst = allDungeons.find(x => String(x.id || x._id || '') === String(meta.dungeonId));
+      if (activeInst) {
+        const instName = (activeInst.name || '').toLowerCase();
+        const selName = (dungeon.name || '').toLowerCase();
+        if (instName === selName || instName.startsWith(selName + '_') || selName.startsWith(instName + '_')) {
+          return true;
+        }
+      }
+    }
+
+    if (meta.dungeonId && typeof meta.dungeonId === 'string' && dungeon.name) {
+      const dName = dungeon.name.toLowerCase();
+      const activeIdStr = String(meta.dungeonId).toLowerCase();
+      if (activeIdStr.startsWith(dName) || activeIdStr.includes(dName)) return true;
+    }
+
+    return false;
+  };
+
   const selectDungeonTemplate = (dungeon) => {
     const meta = getMeta() || {};
     if (!dungeon) {
@@ -675,7 +723,8 @@ export default function LandingPage(props) {
       return;
     }
 
-    if (meta.dungeonId && meta.selectedDungeonTemplateId !== dungeon.id) {
+    // Only show warning if switching to a TRULY DIFFERENT dungeon template
+    if (meta.dungeonId && !isSameDungeon(dungeon, meta, validDungeons)) {
       setPendingDungeonSelection(dungeon);
       setShowDungeonPicker(false);
       return;

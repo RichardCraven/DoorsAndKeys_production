@@ -5334,6 +5334,14 @@ class DungeonPage extends React.Component {
 
                 const isRevealed = inPlayerVision || inObsPlatformVision || inAnimVision;
 
+                const storedColor = mbTile?.color && mbTile.color !== 'null' && mbTile.color !== 'undefined' ? mbTile.color : null;
+                const isVoid = (mbTile?.contains === 'void' || (mbTile?.contains && mbTile.contains.type === 'void')) ||
+                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                               
+                const superboardTexture = superboard.floorTexture;
+                const defaultEmptyColor = superboardType === 'dark' ? 'rgba(25, 20, 45, 0.95)' : '#6b6057';
+                const tileColor = isVoid ? 'black' : (storedColor || (superboardTexture ? 'rgba(15, 15, 20, 0.55)' : defaultEmptyColor));
+
                 if (!isRevealed) {
                     viewportTiles.push({
                         id: vTileIdx,
@@ -5342,21 +5350,15 @@ class DungeonPage extends React.Component {
                         globalY,
                         coordinates: [vx, vy],
                         color: 'black',
+                        baseColor: tileColor,
                         type: 'board-tile',
                         contains: null,
                         building: null,
-                        image: null
+                        image: mbTile?.image,
+                        terrain: mbTile?.terrain
                     });
                     continue;
                 }
-
-                const storedColor = mbTile?.color && mbTile.color !== 'null' && mbTile.color !== 'undefined' ? mbTile.color : null;
-                const isVoid = (mbTile?.contains === 'void' || (mbTile?.contains && mbTile.contains.type === 'void')) ||
-                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
-                               
-                const superboardTexture = superboard.floorTexture;
-                const defaultEmptyColor = superboardType === 'dark' ? 'rgba(25, 20, 45, 0.95)' : '#6b6057';
-                const tileColor = isVoid ? 'black' : (storedColor || (superboardTexture ? 'rgba(15, 15, 20, 0.55)' : defaultEmptyColor));
 
                 if (mbTile && mbTile.terrain === undefined) {
                     if (!isVoid && !superboardTexture) {
@@ -5377,6 +5379,7 @@ class DungeonPage extends React.Component {
                     globalY,
                     coordinates: [vx, vy],
                     color: tileColor,
+                    baseColor: tileColor,
                     type: 'board-tile',
                     contains: mbTile?.contains,
                     building: mbTile?.building || (typeof mbTile?.contains === 'object' ? (mbTile.contains?.building || mbTile.contains?.subtype) : null)
@@ -5448,11 +5451,7 @@ class DungeonPage extends React.Component {
         const isSpawnTile = (superboardSpawnCoords && nextGx === superboardSpawnCoords.gx && nextGy === superboardSpawnCoords.gy) ||
                             cType === 'spawn_point' || cSubtype === 'spawn_point' || String(img).includes('spawn_point');
 
-        if (isSpawnTile && !justSpawnedInSuperboard) {
-            // Teleport return to Dream Den
-            this.exitSuperboardPocketDimension();
-            return;
-        }
+        const shouldExitSuperboard = isSpawnTile && !justSpawnedInSuperboard;
 
         const bm = this.props.boardManager;
         let encounterToTrigger = null;
@@ -5471,7 +5470,10 @@ class DungeonPage extends React.Component {
             const isEnemyBuildingTarget = targetContains && ['earthen_fort', 'war_camp', 'war_fort'].includes(structKey) && !isTargetAllied && (typeof targetContains.hp === 'number' && targetContains.hp > 0);
 
             if (bm.isImpassableBuildingTile && bm.isImpassableBuildingTile(mockTile) && !isEnemyBuildingTarget) {
-                return; // Block movement into impassable buildings like War Camps
+                if (this.isBuildingOrGeneratorTile(mockTile) || this.isBuildingOrGeneratorTile(targetTile)) {
+                    this.openGeneratorModal(targetTile);
+                }
+                return; // Block movement into impassable buildings
             }
 
             if (cType === 'vendor' || cType === 'shrine' || cType === 'narrative' || cType === 'dream den' || cType === 'dream_den') {
@@ -5536,6 +5538,13 @@ class DungeonPage extends React.Component {
                 targetContains.lastDamageTime = Date.now();
                 const targetName = isEnemyBuildingTarget ? (structKey.includes('war_fort') ? 'War Fort' : 'War Camp') : (isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy');
 
+                // Mutual damage exchange: Target unit counter-attacks crew if it's a mobile unit
+                let unitCounterDmg = 0;
+                if ((isPocketPygmyTarget || isAutomatonTarget) && !isEnemyBuildingTarget) {
+                    unitCounterDmg = Math.floor(Math.random() * 3) + 1; // 1-3 damage counter-attack
+                    this.damagePlayerCrew(unitCounterDmg);
+                }
+
                 if (isEnemyBuildingTarget && targetContains.vendorGroupId) {
                     const sb = this.state.dungeon?.superboards?.[this.state.superboardType];
                     if (sb) {
@@ -5570,10 +5579,18 @@ class DungeonPage extends React.Component {
                         }
                         targetTile.contains = null;
                         targetTile.image = null;
-                        this.displayMessage(`💥 Crew dealt ${dmg} damage and destroyed the ${targetName}!`);
+                        if (unitCounterDmg > 0) {
+                            this.displayMessage(`💥 Crew dealt ${dmg} damage and slain ${targetName} (${targetName} dealt ${unitCounterDmg} counter-damage to crew)!`);
+                        } else {
+                            this.displayMessage(`💥 Crew dealt ${dmg} damage and destroyed the ${targetName}!`);
+                        }
                     }
                 } else {
-                    this.displayMessage(`⚔ Crew dealt ${dmg} damage to ${targetName}! (HP: ${targetContains.hp}/${maxHpVal})`);
+                    if (unitCounterDmg > 0) {
+                        this.displayMessage(`⚔ Crew dealt ${dmg} dmg to ${targetName}; ${targetName} dealt ${unitCounterDmg} dmg back! (HP: ${targetContains.hp}/${maxHpVal})`);
+                    } else {
+                        this.displayMessage(`⚔ Crew dealt ${dmg} damage to ${targetName}! (HP: ${targetContains.hp}/${maxHpVal})`);
+                    }
                 }
 
                 this.updateSuperboardViewport();
@@ -5610,6 +5627,12 @@ class DungeonPage extends React.Component {
         }, () => {
             this.updateSuperboardViewport();
             
+            if (shouldExitSuperboard) {
+                // Now that the player avatar has visually stepped onto the spawn point tile, trigger portal transition back to main dungeon
+                this.exitSuperboardPocketDimension();
+                return;
+            }
+
             if (encounterToTrigger === 'monster' && typeof bm.triggerMonsterBattle === 'function') {
                 bm.triggerMonsterBattle(true, encounterTileId);
             } else if (encounterToTrigger === 'pygmies' && typeof bm.triggerPygmyAmbushCallback === 'function') {
@@ -7200,20 +7223,93 @@ class DungeonPage extends React.Component {
     };
 
     damagePlayerCrew = (dmg) => {
-        const meta = getMeta() || {};
+        let meta = getMeta() || {};
         const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : (meta.crew || []);
         const livingCrew = crew.filter(m => m && !(m.dead === true || (typeof m.hp === 'number' && m.hp <= 0)));
-        if (livingCrew.length > 0) {
-            const member = livingCrew[0];
-            member.hp = Math.max(0, (member.hp || 100) - dmg);
-            if (member.hp <= 0) {
-                member.dead = true;
+        if (livingCrew.length === 0) return;
+
+        let totalMaxHp = 0;
+        let initialCurrentHp = 0;
+        crew.forEach(member => {
+            if (!member) return;
+            const maxHp = (member.stats && typeof member.stats.hp === 'number')
+                ? member.stats.hp
+                : (typeof member.starting_hp === 'number'
+                    ? member.starting_hp
+                    : (typeof member.max_hp === 'number'
+                        ? member.max_hp
+                        : 10));
+            totalMaxHp += maxHp;
+            if (!member.dead) {
+                initialCurrentHp += (typeof member.hp !== 'undefined') ? member.hp : maxHp;
+            }
+        });
+
+        let remainingDmgToApply = dmg;
+        const updatedCrew = crew.map(member => {
+            if (!member || member.dead || remainingDmgToApply <= 0) return member;
+            const subDmg = Math.min((typeof member.hp === 'number' ? member.hp : 10), remainingDmgToApply);
+            remainingDmgToApply -= subDmg;
+            const newHp = Math.max(0, (member.hp || 10) - subDmg);
+            const isDead = newHp <= 0;
+            if (isDead) {
                 this.displayMessage(`⚠️ ${member.name || 'Crew member'} has fallen!`);
             }
-            if (this.props.crewManager) this.props.crewManager.crew = crew;
-            meta.crew = crew;
-            storeMeta(meta);
-        }
+            return {
+                ...member,
+                hp: newHp,
+                dead: isDead,
+                lastDamageTime: Date.now()
+            };
+        });
+
+        let finalCurrentHp = 0;
+        updatedCrew.forEach(member => {
+            if (!member) return;
+            if (!member.dead) {
+                finalCurrentHp += member.hp;
+            }
+        });
+
+        const initialPct = totalMaxHp > 0 ? (initialCurrentHp / totalMaxHp) * 100 : 0;
+        const finalPct = totalMaxHp > 0 ? (finalCurrentHp / totalMaxHp) * 100 : 0;
+
+        if (this.hpBarTimer1) clearTimeout(this.hpBarTimer1);
+        if (this.hpBarTimer2) clearTimeout(this.hpBarTimer2);
+        if (this.hpBarTimer3) clearTimeout(this.hpBarTimer3);
+        if (this.hpBarTimer4) clearTimeout(this.hpBarTimer4);
+
+        this.setState({
+            showDamageHpBar: true,
+            damageHpBarPct: initialPct,
+            damageHpBarOpacity: 0,
+            isAvatarDamaged: true
+        });
+        if (this.avatarDamageTimeout) clearTimeout(this.avatarDamageTimeout);
+        this.avatarDamageTimeout = setTimeout(() => {
+            this.setState({ isAvatarDamaged: false });
+        }, 500);
+
+        this.hpBarTimer1 = setTimeout(() => {
+            this.setState({ damageHpBarOpacity: 1 });
+
+            this.hpBarTimer2 = setTimeout(() => {
+                this.setState({ damageHpBarPct: finalPct });
+
+                this.hpBarTimer3 = setTimeout(() => {
+                    this.setState({ damageHpBarOpacity: 0 });
+
+                    this.hpBarTimer4 = setTimeout(() => {
+                        this.setState({ showDamageHpBar: false });
+                    }, 300);
+                }, 1200);
+            }, 400);
+        }, 50);
+
+        if (this.props.crewManager) this.props.crewManager.crew = updatedCrew;
+        meta.crew = updatedCrew;
+        storeMeta(meta);
+        try { if (typeof updateUserRequest === 'function') updateUserRequest(getUserId(), meta).catch(() => {}); } catch(e) {}
     };
 
     tickPocketPygmies = async () => {
@@ -7348,10 +7444,67 @@ class DungeonPage extends React.Component {
                     const isPlayerAdjacent = Math.max(Math.abs(gx - superboardPlayerPos.gx), Math.abs(gy - superboardPlayerPos.gy)) === 1;
                     if (isPlayerAdjacent) {
                         pygmy.lastAttackTime = now;
-                        await this.animatePocketPygmyBump(superboard, unit.mbIdx, unit.tIdx, superboardPlayerPos.gx - gx, superboardPlayerPos.gy - gy);
-                        const dmg = Math.floor(Math.random() * 3) + 1; // 1-3 damage
-                        this.damagePlayerCrew(dmg);
-                        this.displayMessage(`⚔ Hostile Pocket Pygmy dealt ${dmg} damage to your crew!`);
+                        const dCol = superboardPlayerPos.gx - gx;
+                        const dRow = superboardPlayerPos.gy - gy;
+
+                        // Trigger recoil bump-back animation on the player avatar tile
+                        const pVx = superboardPlayerPos.gx - this.state.superboardViewMinX;
+                        const pVy = superboardPlayerPos.gy - this.state.superboardViewMinY;
+                        const playerVTileIdx = (pVy >= 0 && pVy < 15 && pVx >= 0 && pVx < 15) ? pVy * 15 + pVx : -1;
+                        const bm = this.props.boardManager;
+                        const playerTileObj = (playerVTileIdx >= 0 && bm && bm.tiles) ? bm.tiles[playerVTileIdx] : null;
+
+                        if (playerTileObj) {
+                            playerTileObj.isBumpedBack = true;
+                            playerTileObj.bumpedBackVector = { dRow, dCol };
+                            if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                            this.forceUpdate();
+                            setTimeout(() => {
+                                if (playerTileObj) {
+                                    playerTileObj.isBumpedBack = false;
+                                    playerTileObj.bumpedBackVector = null;
+                                    if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                                    this.forceUpdate();
+                                }
+                            }, 550);
+                        }
+
+                        await this.animatePocketPygmyBump(superboard, unit.mbIdx, unit.tIdx, dCol, dRow);
+                        
+                        // 1. Pygmy damages crew
+                        const pygmyDmg = Math.floor(Math.random() * 3) + 1; // 1-3 damage
+                        this.damagePlayerCrew(pygmyDmg);
+
+                        // 2. Crew automatically counter-attacks Pygmy in mutual exchange
+                        const meta = getMeta() || {};
+                        const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : (meta.crew || []);
+                        const livingCrew = crew.filter(m => m && !(m.dead === true || (typeof m.hp === 'number' && m.hp <= 0)));
+                        const totalAtk = Math.max(10, livingCrew.reduce((sum, m) => sum + (m.stats?.atk || m.stats?.strength || 10), 0));
+                        const minDmg = totalAtk * 0.3;
+                        const crewDmg = Math.max(1, Math.round(minDmg + Math.random() * (totalAtk * 0.4)));
+
+                        const maxHpVal = pygmy.maxHp || 10;
+                        pygmy.hp = (pygmy.hp || maxHpVal) - crewDmg;
+                        pygmy.lastDamageTime = now;
+
+                        if (pygmy.hp <= 0) {
+                            // Attacking Pygmy dies from crew's counter-attack!
+                            if (pygmy.homeStructureKey) {
+                                this._pocketStructureRespawns.push({
+                                    readyTime: now + 10000,
+                                    structureKey: pygmy.homeStructureKey,
+                                    gx, gy,
+                                    isAllied: false,
+                                    superboardType
+                                });
+                            }
+                            currentTile.contains = null;
+                            currentTile.image = null;
+                            this.displayMessage(`⚔ Hostile Pygmy dealt ${pygmyDmg} dmg to crew, but crew dealt ${crewDmg} dmg back and slain the Pygmy!`);
+                        } else {
+                            this.displayMessage(`⚔ Hostile Pygmy dealt ${pygmyDmg} dmg to crew; Crew dealt ${crewDmg} dmg back! (Pygmy HP: ${pygmy.hp}/${maxHpVal})`);
+                        }
+                        this.updateSuperboardViewport();
                         continue;
                     }
                 }
@@ -13550,6 +13703,22 @@ class DungeonPage extends React.Component {
                 const dx = tile.coordinates[0] - localX;
                 const dy = tile.coordinates[1] - localY;
                 if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && (dx !== 0 || dy !== 0)) {
+                    const targetGx = superboardPlayerPos.gx + dx;
+                    const targetGy = superboardPlayerPos.gy + dy;
+                    const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
+                    if (superboard) {
+                        const mbX = Math.floor(targetGx / 15);
+                        const mbY = Math.floor(targetGy / 15);
+                        const mbIdx = mbY * 3 + mbX;
+                        const lX = targetGx % 15;
+                        const lY = targetGy % 15;
+                        const tIdx = lY * 15 + lX;
+                        const targetTileObj = superboard.miniboards?.[mbIdx]?.tiles?.[tIdx];
+                        if (targetTileObj && this.isBuildingOrGeneratorTile(targetTileObj)) {
+                            this.openGeneratorModal(targetTileObj);
+                            return;
+                        }
+                    }
                     this.movePlayerInSuperboard(dx, dy);
                     return;
                 }
@@ -17818,13 +17987,13 @@ class DungeonPage extends React.Component {
             earthen_fort: {
                 key: 'earthen_fort',
                 name: 'Earthen Fort',
-                resource: 'Fortification',
-                currencyType: null,
+                resource: 'Stone',
+                currencyType: 'stone',
                 rate: 0,
                 cap: 0,
                 imageKey: 'buildable_earthen_fort',
                 iconEmoji: '🛡️',
-                description: 'A reinforced earthen mound with defensive palisades.'
+                description: 'A reinforced earthen mound with defensive palisades. Upgrading strengthens the fort level and HP.'
             },
             war_camp: {
                 key: 'war_camp',
@@ -19407,20 +19576,34 @@ class DungeonPage extends React.Component {
         
         if (this.state.activeConstruction) return;
 
-        if (!bm || !bm.playerTile || !bm.playerTile.location) return;
+        if (this.state.activeConstruction) return;
+
+        const isInPocketDimension = !!this.state.inSuperboard;
+        if (isInPocketDimension) {
+            if (!this.state.superboardPlayerPos) return;
+        } else {
+            if (!bm || !bm.playerTile || !bm.playerTile.location) return;
+        }
 
         const meta = getMeta() || {};
         const crew = (meta && meta.crew) || (this.props.crewManager && this.props.crewManager.crew) || [];
         const livingContributors = crew.filter(m => m && !(m.dead === true || (typeof m.hp === 'number' && m.hp <= 0)));
 
         if (crew.length > 0 && livingContributors.length === 0) {
-            if (typeof bm.messaging === 'function') {
+            if (typeof bm?.messaging === 'function') {
                 bm.messaging(`❌ Cannot build ${buildingDef.name}: All crew members are dead!`);
             }
             return;
         }
 
-        const playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+        let playerIdx = 0;
+        if (isInPocketDimension && this.state.superboardPlayerPos) {
+            const { gx, gy } = this.state.superboardPlayerPos;
+            playerIdx = (gy % 15) * 15 + (gx % 15);
+        } else if (bm && bm.playerTile && bm.playerTile.location) {
+            playerIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+        }
+
         if (playerIdx === null || playerIdx === undefined) return;
 
         let footprint = [playerIdx];
@@ -19428,53 +19611,127 @@ class DungeonPage extends React.Component {
         const isLarge = !isHuge && (buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort' || buildingDef.key === 'dream_den' || buildingDef.key === 'hut' || buildingDef.key === 'alchemist' || buildingDef.key === 'merchant' || buildingDef.key === 'summoning_temple' || buildingDef.key === 'rift' || buildingDef.key === 'rift_2' || buildingDef.isLarge === true || buildingDef.isMultiTile === true);
         
         if (isHuge) {
-            const loc = bm.playerTile.location;
-            const x = loc[0]; const y = loc[1];
-            footprint = [
-                bm.getIndexFromCoordinates([x, y]),
-                bm.getIndexFromCoordinates([x + 1, y]),
-                bm.getIndexFromCoordinates([x + 2, y]),
-                bm.getIndexFromCoordinates([x, y + 1]),
-                bm.getIndexFromCoordinates([x + 1, y + 1]),
-                bm.getIndexFromCoordinates([x + 2, y + 1]),
-                bm.getIndexFromCoordinates([x, y + 2]),
-                bm.getIndexFromCoordinates([x + 1, y + 2]),
-                bm.getIndexFromCoordinates([x + 2, y + 2])
-            ];
-            
-            const canBuild = footprint.every(id => {
-                if (id === null || id === undefined) return false;
-                const tile = bm.tiles[id] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[id]);
-                if (!tile) return false;
-                if (id === playerIdx) return true;
-                const type = bm.getContainsType(tile.contains);
-                return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage';
-            });
-            
-            if (!canBuild) {
-                if (typeof bm.messaging === 'function') bm.messaging(`❌ Cannot build ${buildingDef.name} here: Requires a 3x3 empty space! (Make sure the tiles to your right and bottom are clear)`);
-                return;
+            if (isInPocketDimension && this.state.superboardPlayerPos) {
+                const { gx, gy } = this.state.superboardPlayerPos;
+                const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+                const dungeonObj = this.state.dungeon || bm?.dungeon;
+                const sb = dungeonObj?.superboards?.[sbKey];
+                const offsets = [
+                    { dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 },
+                    { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 2, dy: 1 },
+                    { dx: 0, dy: 2 }, { dx: 1, dy: 2 }, { dx: 2, dy: 2 }
+                ];
+                
+                footprint = [];
+                let canBuild = true;
+                if (sb && sb.miniboards) {
+                    offsets.forEach(({ dx, dy }) => {
+                        const tGx = gx + dx;
+                        const tGy = gy + dy;
+                        if (tGx >= 45 || tGy >= 45) { canBuild = false; return; }
+                        const mbX = Math.floor(tGx / 15);
+                        const mbY = Math.floor(tGy / 15);
+                        const targetMbIdx = mbY * 3 + mbX;
+                        const targetTileIdx = (tGy % 15) * 15 + (tGx % 15);
+                        footprint.push(targetTileIdx);
+                        const mb = sb.miniboards[targetMbIdx];
+                        const tile = mb && mb.tiles && mb.tiles[targetTileIdx];
+                        if (dx !== 0 || dy !== 0) {
+                            const cType = tile && tile.contains ? (typeof tile.contains === 'object' ? tile.contains.type : tile.contains) : null;
+                            if (cType && cType !== 'empty_space' && cType !== 'obscured_space' && cType !== 'passage') {
+                                canBuild = false;
+                            }
+                        }
+                    });
+                }
+                if (!canBuild) {
+                    if (typeof bm?.messaging === 'function') bm.messaging(`❌ Cannot build ${buildingDef.name} here: Requires a 3x3 empty space!`);
+                    return;
+                }
+            } else {
+                const loc = bm.playerTile.location;
+                const x = loc[0]; const y = loc[1];
+                footprint = [
+                    bm.getIndexFromCoordinates([x, y]),
+                    bm.getIndexFromCoordinates([x + 1, y]),
+                    bm.getIndexFromCoordinates([x + 2, y]),
+                    bm.getIndexFromCoordinates([x, y + 1]),
+                    bm.getIndexFromCoordinates([x + 1, y + 1]),
+                    bm.getIndexFromCoordinates([x + 2, y + 1]),
+                    bm.getIndexFromCoordinates([x, y + 2]),
+                    bm.getIndexFromCoordinates([x + 1, y + 2]),
+                    bm.getIndexFromCoordinates([x + 2, y + 2])
+                ];
+                
+                const canBuild = footprint.every(id => {
+                    if (id === null || id === undefined) return false;
+                    const tile = bm.tiles[id] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[id]);
+                    if (!tile) return false;
+                    if (id === playerIdx) return true;
+                    const type = bm.getContainsType(tile.contains);
+                    return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage';
+                });
+                
+                if (!canBuild) {
+                    if (typeof bm?.messaging === 'function') bm.messaging(`❌ Cannot build ${buildingDef.name} here: Requires a 3x3 empty space! (Make sure the tiles to your right and bottom are clear)`);
+                    return;
+                }
             }
         } else if (isLarge) {
-            const loc = bm.playerTile.location;
-            const idx1 = bm.getIndexFromCoordinates([loc[0], loc[1]]);
-            const idx2 = bm.getIndexFromCoordinates([loc[0] + 1, loc[1]]);
-            const idx3 = bm.getIndexFromCoordinates([loc[0], loc[1] + 1]);
-            const idx4 = bm.getIndexFromCoordinates([loc[0] + 1, loc[1] + 1]);
-            footprint = [idx1, idx2, idx3, idx4];
-            
-            const canBuild = footprint.every(id => {
-                if (id === null || id === undefined) return false;
-                const tile = bm.tiles[id] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[id]);
-                if (!tile) return false;
-                if (id === playerIdx) return true; // Player is standing here
-                const type = bm.getContainsType(tile.contains);
-                return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage';
-            });
-            
-            if (!canBuild) {
-                if (typeof bm.messaging === 'function') bm.messaging(`❌ Cannot build ${buildingDef.name} here: Requires a 2x2 empty space! (Make sure the tiles to your right and bottom are clear)`);
-                return;
+            if (isInPocketDimension && this.state.superboardPlayerPos) {
+                const { gx, gy } = this.state.superboardPlayerPos;
+                const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+                const dungeonObj = this.state.dungeon || bm?.dungeon;
+                const sb = dungeonObj?.superboards?.[sbKey];
+                const offsets = [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }];
+                
+                footprint = [];
+                let canBuild = true;
+                if (sb && sb.miniboards) {
+                    offsets.forEach(({ dx, dy }) => {
+                        const tGx = gx + dx;
+                        const tGy = gy + dy;
+                        if (tGx >= 45 || tGy >= 45) { canBuild = false; return; }
+                        const mbX = Math.floor(tGx / 15);
+                        const mbY = Math.floor(tGy / 15);
+                        const targetMbIdx = mbY * 3 + mbX;
+                        const targetTileIdx = (tGy % 15) * 15 + (tGx % 15);
+                        footprint.push(targetTileIdx);
+                        const mb = sb.miniboards[targetMbIdx];
+                        const tile = mb && mb.tiles && mb.tiles[targetTileIdx];
+                        if (dx !== 0 || dy !== 0) {
+                            const cType = tile && tile.contains ? (typeof tile.contains === 'object' ? tile.contains.type : tile.contains) : null;
+                            if (cType && cType !== 'empty_space' && cType !== 'obscured_space' && cType !== 'passage') {
+                                canBuild = false;
+                            }
+                        }
+                    });
+                }
+                if (!canBuild) {
+                    if (typeof bm?.messaging === 'function') bm.messaging(`❌ Cannot build ${buildingDef.name} here: Requires a 2x2 empty space!`);
+                    return;
+                }
+            } else {
+                const loc = bm.playerTile.location;
+                const idx1 = bm.getIndexFromCoordinates([loc[0], loc[1]]);
+                const idx2 = bm.getIndexFromCoordinates([loc[0] + 1, loc[1]]);
+                const idx3 = bm.getIndexFromCoordinates([loc[0], loc[1] + 1]);
+                const idx4 = bm.getIndexFromCoordinates([loc[0] + 1, loc[1] + 1]);
+                footprint = [idx1, idx2, idx3, idx4];
+                
+                const canBuild = footprint.every(id => {
+                    if (id === null || id === undefined) return false;
+                    const tile = bm.tiles[id] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[id]);
+                    if (!tile) return false;
+                    if (id === playerIdx) return true; // Player is standing here
+                    const type = bm.getContainsType(tile.contains);
+                    return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage';
+                });
+                
+                if (!canBuild) {
+                    if (typeof bm?.messaging === 'function') bm.messaging(`❌ Cannot build ${buildingDef.name} here: Requires a 2x2 empty space! (Make sure the tiles to your right and bottom are clear)`);
+                    return;
+                }
             }
         }
 
@@ -19482,35 +19739,36 @@ class DungeonPage extends React.Component {
             // Replaces any hut the crew has placed previously immediately
             this.removeExistingHuts();
         } else if (buildingDef.key === 'outpost') {
-            // Outpost territory rules
-            const playerTile = bm.tiles[playerIdx] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[playerIdx]);
-            const isPlayerTerritory = playerTile && (playerTile.territory === 'player' || (playerTile.contains && playerTile.contains.territory === 'player'));
-            if (!isPlayerTerritory) {
-                if (typeof bm.messaging === 'function') bm.messaging(`❌ Cannot build Outpost here: You must be standing on your own territory!`);
-                return;
-            }
-
-            // Check if there's already an outpost in this contiguous territory block
-            const contiguousTiles = this.getContiguousTerritoryTileIds(playerIdx, 'player');
-            let hasExistingOutpost = false;
-            for (const tId of contiguousTiles) {
-                const t = bm.tiles[tId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]);
-                if (t && (t.building === 'outpost' || t.building === 'outpost_under_construction' || (t.contains && (t.contains.subtype === 'outpost' || t.contains.subtype === 'outpost_under_construction')))) {
-                    hasExistingOutpost = true;
-                    break;
+            if (!isInPocketDimension) {
+                // Outpost territory rules in main dungeon
+                const playerTile = bm.tiles[playerIdx] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[playerIdx]);
+                const isPlayerTerritory = playerTile && (playerTile.territory === 'player' || (playerTile.contains && playerTile.contains.territory === 'player'));
+                if (!isPlayerTerritory) {
+                    if (typeof bm?.messaging === 'function') bm.messaging(`❌ Cannot build Outpost here: You must be standing on your own territory!`);
+                    return;
                 }
-            }
 
-            if (hasExistingOutpost) {
-                if (typeof bm.messaging === 'function') bm.messaging(`❌ Cannot build Outpost: This contiguous territory block already contains an outpost!`);
-                return;
+                // Check if there's already an outpost in this contiguous territory block
+                const contiguousTiles = this.getContiguousTerritoryTileIds(playerIdx, 'player');
+                let hasExistingOutpost = false;
+                for (const tId of contiguousTiles) {
+                    const t = bm.tiles[tId] || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]);
+                    if (t && (t.building === 'outpost' || t.building === 'outpost_under_construction' || (t.contains && (t.contains.subtype === 'outpost' || t.contains.subtype === 'outpost_under_construction')))) {
+                        hasExistingOutpost = true;
+                        break;
+                    }
+                }
+
+                if (hasExistingOutpost) {
+                    if (typeof bm?.messaging === 'function') bm.messaging(`❌ Cannot build Outpost: This contiguous territory block already contains an outpost!`);
+                    return;
+                }
             }
         }
 
         const invManager = this.props.inventoryManager;
         const inv = (invManager && invManager.inventory) || [];
 
-        const isInPocketDimension = !!this.state.inSuperboard;
         const costs = isInPocketDimension ? { wood: 0, stone: 0, slate: 0, dust: 0 } : (buildingDef.costs || { wood: 0, stone: 0, slate: 0 });
         const toRemove = { wood: costs.wood || 0, stone: costs.stone || 0, slate: costs.slate || 0, dust: costs.dust || 0 };
 
@@ -23253,6 +23511,7 @@ class DungeonPage extends React.Component {
                                     boardTiles={this.state.tiles}
                                     terrain={tile.terrain}
                                     color={safeColor}
+                                    baseColor={tile.baseColor}
                                     borders={tile.borders}
                                     inscriptions={tile.inscriptions}
                                     partialObscured={!!tile.partialObscured}

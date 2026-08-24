@@ -1253,12 +1253,114 @@ import pocket_tower_5 from '../assets/icons/buildings/pocket dimension/tower_5.p
 import pocket_blacksmith from '../assets/icons/buildings/pocket dimension/blacksmith.png';
 
 // ── Terrain Assets ────────────────────────────────────────────────────────
-import terrain_tree_1 from '../assets/icons/terrain/terrain_tree_1.png';
-import terrain_tree_2 from '../assets/icons/terrain/terrain_tree_2.png';
-import terrain_tree_3 from '../assets/icons/terrain/terrain_tree_3.png';
-import terrain_mountain_1 from '../assets/icons/terrain/terrain_mountain_1.png';
-import terrain_mountain_2 from '../assets/icons/terrain/terrain_mountain_2.png';
-import terrain_mountain_3 from '../assets/icons/terrain/terrain_mountain_3.png';
+import grass_rocks_base from '../assets/icons/terrain/grass_rocks_base.png';
+import grass_rocks_base_2 from '../assets/icons/terrain/grass_rocks_base_2.png';
+import grass_rocks_base_3 from '../assets/icons/terrain/grass_rocks_base_3.png';
+import pine_tree_tall from '../assets/icons/terrain/pine_trees/pine_tree_tall.png';
+import pine_tree_medium from '../assets/icons/terrain/pine_trees/pine_tree_medium.png';
+import pine_tree_small from '../assets/icons/terrain/pine_trees/pine_tree_small.png';
+import terrain_tree_1 from "../assets/icons/terrain/terrain_tree_1.png";
+import terrain_tree_1_0 from "../assets/icons/terrain/terrain_tree_1_0.png";
+import terrain_tree_1_1 from "../assets/icons/terrain/terrain_tree_1_1.png";
+import terrain_tree_1_2 from "../assets/icons/terrain/terrain_tree_1_2.png";
+import terrain_tree_1_3 from "../assets/icons/terrain/terrain_tree_1_3.png";
+import terrain_tree_1_4 from "../assets/icons/terrain/terrain_tree_1_4.png";
+import terrain_tree_1_5 from "../assets/icons/terrain/terrain_tree_1_5.png";
+import terrain_tree_1_6 from "../assets/icons/terrain/terrain_tree_1_6.png";
+import terrain_tree_1_7 from "../assets/icons/terrain/terrain_tree_1_7.png";
+import terrain_tree_1_8 from "../assets/icons/terrain/terrain_tree_1_8.png";
+import terrain_tree_1_9 from "../assets/icons/terrain/terrain_tree_1_9.png";
+import terrain_tree_1_10 from "../assets/icons/terrain/terrain_tree_1_10.png";
+import terrain_tree_1_11 from "../assets/icons/terrain/terrain_tree_1_11.png";
+import terrain_tree_1_12 from "../assets/icons/terrain/terrain_tree_1_12.png";
+import terrain_tree_1_13 from "../assets/icons/terrain/terrain_tree_1_13.png";
+import terrain_tree_1_14 from "../assets/icons/terrain/terrain_tree_1_14.png";
+import terrain_tree_1_15 from "../assets/icons/terrain/terrain_tree_1_15.png";
+import terrain_tree_2 from "../assets/icons/terrain/terrain_tree_2.png";
+import terrain_tree_2_0 from "../assets/icons/terrain/terrain_tree_2_0.png";
+import terrain_tree_2_1 from "../assets/icons/terrain/terrain_tree_2_1.png";
+import terrain_tree_2_2 from "../assets/icons/terrain/terrain_tree_2_2.png";
+import terrain_tree_2_3 from "../assets/icons/terrain/terrain_tree_2_3.png";
+import terrain_tree_2_4 from "../assets/icons/terrain/terrain_tree_2_4.png";
+import terrain_tree_2_5 from "../assets/icons/terrain/terrain_tree_2_5.png";
+import terrain_tree_2_6 from "../assets/icons/terrain/terrain_tree_2_6.png";
+import terrain_tree_2_7 from "../assets/icons/terrain/terrain_tree_2_7.png";
+import terrain_tree_2_8 from "../assets/icons/terrain/terrain_tree_2_8.png";
+import terrain_tree_2_9 from "../assets/icons/terrain/terrain_tree_2_9.png";
+import terrain_tree_2_10 from "../assets/icons/terrain/terrain_tree_2_10.png";
+import terrain_tree_2_11 from "../assets/icons/terrain/terrain_tree_2_11.png";
+import terrain_tree_2_12 from "../assets/icons/terrain/terrain_tree_2_12.png";
+import terrain_tree_2_13 from "../assets/icons/terrain/terrain_tree_2_13.png";
+import terrain_tree_2_14 from "../assets/icons/terrain/terrain_tree_2_14.png";
+import terrain_tree_2_15 from "../assets/icons/terrain/terrain_tree_2_15.png";
+import terrain_tree_3 from "../assets/icons/terrain/terrain_tree_3.png";
+import terrain_tree_3_0 from "../assets/icons/terrain/terrain_tree_3_0.png";
+import terrain_tree_3_1 from "../assets/icons/terrain/terrain_tree_3_1.png";
+import terrain_tree_3_2 from "../assets/icons/terrain/terrain_tree_3_2.png";
+import terrain_tree_3_3 from "../assets/icons/terrain/terrain_tree_3_3.png";
+import terrain_tree_3_4 from "../assets/icons/terrain/terrain_tree_3_4.png";
+import terrain_tree_3_5 from "../assets/icons/terrain/terrain_tree_3_5.png";
+import terrain_tree_3_6 from "../assets/icons/terrain/terrain_tree_3_6.png";
+import terrain_tree_3_7 from "../assets/icons/terrain/terrain_tree_3_7.png";
+import terrain_tree_3_8 from "../assets/icons/terrain/terrain_tree_3_8.png";
+import terrain_tree_3_9 from "../assets/icons/terrain/terrain_tree_3_9.png";
+import terrain_tree_3_10 from "../assets/icons/terrain/terrain_tree_3_10.png";
+import terrain_tree_3_11 from "../assets/icons/terrain/terrain_tree_3_11.png";
+import terrain_tree_3_12 from "../assets/icons/terrain/terrain_tree_3_12.png";
+import terrain_tree_3_13 from "../assets/icons/terrain/terrain_tree_3_13.png";
+import terrain_tree_3_14 from "../assets/icons/terrain/terrain_tree_3_14.png";
+import terrain_tree_3_15 from "../assets/icons/terrain/terrain_tree_3_15.png";
+import terrain_mountain_1 from "../assets/icons/terrain/terrain_mountain_1.png";
+import terrain_mountain_1_0 from "../assets/icons/terrain/terrain_mountain_1_0.png";
+import terrain_mountain_1_1 from "../assets/icons/terrain/terrain_mountain_1_1.png";
+import terrain_mountain_1_2 from "../assets/icons/terrain/terrain_mountain_1_2.png";
+import terrain_mountain_1_3 from "../assets/icons/terrain/terrain_mountain_1_3.png";
+import terrain_mountain_1_4 from "../assets/icons/terrain/terrain_mountain_1_4.png";
+import terrain_mountain_1_5 from "../assets/icons/terrain/terrain_mountain_1_5.png";
+import terrain_mountain_1_6 from "../assets/icons/terrain/terrain_mountain_1_6.png";
+import terrain_mountain_1_7 from "../assets/icons/terrain/terrain_mountain_1_7.png";
+import terrain_mountain_1_8 from "../assets/icons/terrain/terrain_mountain_1_8.png";
+import terrain_mountain_1_9 from "../assets/icons/terrain/terrain_mountain_1_9.png";
+import terrain_mountain_1_10 from "../assets/icons/terrain/terrain_mountain_1_10.png";
+import terrain_mountain_1_11 from "../assets/icons/terrain/terrain_mountain_1_11.png";
+import terrain_mountain_1_12 from "../assets/icons/terrain/terrain_mountain_1_12.png";
+import terrain_mountain_1_13 from "../assets/icons/terrain/terrain_mountain_1_13.png";
+import terrain_mountain_1_14 from "../assets/icons/terrain/terrain_mountain_1_14.png";
+import terrain_mountain_1_15 from "../assets/icons/terrain/terrain_mountain_1_15.png";
+import terrain_mountain_2 from "../assets/icons/terrain/terrain_mountain_2.png";
+import terrain_mountain_2_0 from "../assets/icons/terrain/terrain_mountain_2_0.png";
+import terrain_mountain_2_1 from "../assets/icons/terrain/terrain_mountain_2_1.png";
+import terrain_mountain_2_2 from "../assets/icons/terrain/terrain_mountain_2_2.png";
+import terrain_mountain_2_3 from "../assets/icons/terrain/terrain_mountain_2_3.png";
+import terrain_mountain_2_4 from "../assets/icons/terrain/terrain_mountain_2_4.png";
+import terrain_mountain_2_5 from "../assets/icons/terrain/terrain_mountain_2_5.png";
+import terrain_mountain_2_6 from "../assets/icons/terrain/terrain_mountain_2_6.png";
+import terrain_mountain_2_7 from "../assets/icons/terrain/terrain_mountain_2_7.png";
+import terrain_mountain_2_8 from "../assets/icons/terrain/terrain_mountain_2_8.png";
+import terrain_mountain_2_9 from "../assets/icons/terrain/terrain_mountain_2_9.png";
+import terrain_mountain_2_10 from "../assets/icons/terrain/terrain_mountain_2_10.png";
+import terrain_mountain_2_11 from "../assets/icons/terrain/terrain_mountain_2_11.png";
+import terrain_mountain_2_12 from "../assets/icons/terrain/terrain_mountain_2_12.png";
+import terrain_mountain_2_13 from "../assets/icons/terrain/terrain_mountain_2_13.png";
+import terrain_mountain_2_14 from "../assets/icons/terrain/terrain_mountain_2_14.png";
+import terrain_mountain_2_15 from "../assets/icons/terrain/terrain_mountain_2_15.png";
+import terrain_mountain_3 from "../assets/icons/terrain/terrain_mountain_3.png";
+import terrain_mountain_3_0 from "../assets/icons/terrain/terrain_mountain_3_0.png";
+import terrain_mountain_3_1 from "../assets/icons/terrain/terrain_mountain_3_1.png";
+import terrain_mountain_3_2 from "../assets/icons/terrain/terrain_mountain_3_2.png";
+import terrain_mountain_3_3 from "../assets/icons/terrain/terrain_mountain_3_3.png";
+import terrain_mountain_3_4 from "../assets/icons/terrain/terrain_mountain_3_4.png";
+import terrain_mountain_3_5 from "../assets/icons/terrain/terrain_mountain_3_5.png";
+import terrain_mountain_3_6 from "../assets/icons/terrain/terrain_mountain_3_6.png";
+import terrain_mountain_3_7 from "../assets/icons/terrain/terrain_mountain_3_7.png";
+import terrain_mountain_3_8 from "../assets/icons/terrain/terrain_mountain_3_8.png";
+import terrain_mountain_3_9 from "../assets/icons/terrain/terrain_mountain_3_9.png";
+import terrain_mountain_3_10 from "../assets/icons/terrain/terrain_mountain_3_10.png";
+import terrain_mountain_3_11 from "../assets/icons/terrain/terrain_mountain_3_11.png";
+import terrain_mountain_3_12 from "../assets/icons/terrain/terrain_mountain_3_12.png";
+import terrain_mountain_3_13 from "../assets/icons/terrain/terrain_mountain_3_13.png";
+import terrain_mountain_3_14 from "../assets/icons/terrain/terrain_mountain_3_14.png";
+import terrain_mountain_3_15 from "../assets/icons/terrain/terrain_mountain_3_15.png";
 
 // ── Generators ─────────────────────────────────────────────────────────────
 import cultivation_vat from '../assets/icons/buildings/cultivation vat.png';
@@ -1294,6 +1396,12 @@ import walker_leg_ml from '../assets/icons/turret_machine/leg_mid_left.png';
 import walker_leg_mr from '../assets/icons/turret_machine/leg_mid_right.png';
 import walker_leg_bl from '../assets/icons/turret_machine/leg_back_left.png';
 import walker_leg_br from '../assets/icons/turret_machine/leg_back_right.png';
+import sobek_head from "../assets/gpt_images/head.png";
+import sobek_torso from "../assets/gpt_images/torso.png";
+import sobek_left_upper_arm from "../assets/gpt_images/left_upper_arm.png";
+import sobek_right_upper_arm from "../assets/gpt_images/right_upper_arm.png";
+import sobek_left_forearm from "../assets/gpt_images/left_forearm_hand.png";
+import sobek_right_forearm from "../assets/gpt_images/right_forearm_hand.png";
 
 const walker = walker_turret_full;
 const walker_glowing_square = walker_turret_full;
@@ -1354,6 +1462,12 @@ const gold = Math.random() < 0.5 ? gold1 : gold2;
 
 
 export {
+    grass_rocks_base,
+    grass_rocks_base_2,
+    grass_rocks_base_3,
+    pine_tree_tall,
+    pine_tree_medium,
+            pine_tree_small,
     hand_1,
     hand_2,
     hand_3,
@@ -1508,6 +1622,108 @@ export {
     supreme_health_potion,
     lantern,
     automaton,
+    terrain_tree_1,
+    terrain_tree_1_0,
+    terrain_tree_1_1,
+    terrain_tree_1_2,
+    terrain_tree_1_3,
+    terrain_tree_1_4,
+    terrain_tree_1_5,
+    terrain_tree_1_6,
+    terrain_tree_1_7,
+    terrain_tree_1_8,
+    terrain_tree_1_9,
+    terrain_tree_1_10,
+    terrain_tree_1_11,
+    terrain_tree_1_12,
+    terrain_tree_1_13,
+    terrain_tree_1_14,
+    terrain_tree_1_15,
+    terrain_tree_2,
+    terrain_tree_2_0,
+    terrain_tree_2_1,
+    terrain_tree_2_2,
+    terrain_tree_2_3,
+    terrain_tree_2_4,
+    terrain_tree_2_5,
+    terrain_tree_2_6,
+    terrain_tree_2_7,
+    terrain_tree_2_8,
+    terrain_tree_2_9,
+    terrain_tree_2_10,
+    terrain_tree_2_11,
+    terrain_tree_2_12,
+    terrain_tree_2_13,
+    terrain_tree_2_14,
+    terrain_tree_2_15,
+    terrain_tree_3,
+    terrain_tree_3_0,
+    terrain_tree_3_1,
+    terrain_tree_3_2,
+    terrain_tree_3_3,
+    terrain_tree_3_4,
+    terrain_tree_3_5,
+    terrain_tree_3_6,
+    terrain_tree_3_7,
+    terrain_tree_3_8,
+    terrain_tree_3_9,
+    terrain_tree_3_10,
+    terrain_tree_3_11,
+    terrain_tree_3_12,
+    terrain_tree_3_13,
+    terrain_tree_3_14,
+    terrain_tree_3_15,
+    terrain_mountain_1,
+    terrain_mountain_1_0,
+    terrain_mountain_1_1,
+    terrain_mountain_1_2,
+    terrain_mountain_1_3,
+    terrain_mountain_1_4,
+    terrain_mountain_1_5,
+    terrain_mountain_1_6,
+    terrain_mountain_1_7,
+    terrain_mountain_1_8,
+    terrain_mountain_1_9,
+    terrain_mountain_1_10,
+    terrain_mountain_1_11,
+    terrain_mountain_1_12,
+    terrain_mountain_1_13,
+    terrain_mountain_1_14,
+    terrain_mountain_1_15,
+    terrain_mountain_2,
+    terrain_mountain_2_0,
+    terrain_mountain_2_1,
+    terrain_mountain_2_2,
+    terrain_mountain_2_3,
+    terrain_mountain_2_4,
+    terrain_mountain_2_5,
+    terrain_mountain_2_6,
+    terrain_mountain_2_7,
+    terrain_mountain_2_8,
+    terrain_mountain_2_9,
+    terrain_mountain_2_10,
+    terrain_mountain_2_11,
+    terrain_mountain_2_12,
+    terrain_mountain_2_13,
+    terrain_mountain_2_14,
+    terrain_mountain_2_15,
+    terrain_mountain_3,
+    terrain_mountain_3_0,
+    terrain_mountain_3_1,
+    terrain_mountain_3_2,
+    terrain_mountain_3_3,
+    terrain_mountain_3_4,
+    terrain_mountain_3_5,
+    terrain_mountain_3_6,
+    terrain_mountain_3_7,
+    terrain_mountain_3_8,
+    terrain_mountain_3_9,
+    terrain_mountain_3_10,
+    terrain_mountain_3_11,
+    terrain_mountain_3_12,
+    terrain_mountain_3_13,
+    terrain_mountain_3_14,
+    terrain_mountain_3_15,
 
     buckler,
     infantry_shield,
@@ -1927,6 +2143,12 @@ export {
     walker_leg_mr,
     walker_leg_bl,
     walker_leg_br,
+    sobek_head,
+    sobek_torso,
+    sobek_left_upper_arm,
+    sobek_right_upper_arm,
+    sobek_left_forearm,
+    sobek_right_forearm,
     wall_icon as wall,
     turret_blade_icon as turret_blade,
     turret_blade_icon,
@@ -2591,12 +2813,6 @@ export {
     pocket_blacksmith,
 
     // Terrain Assets
-    terrain_tree_1,
-    terrain_tree_2,
-    terrain_tree_3,
-    terrain_mountain_1,
-    terrain_mountain_2,
-    terrain_mountain_3,
 
     pocket_town_1 as town_1,
     pocket_town_2 as town_2,
