@@ -832,6 +832,53 @@ export function BoardManager(){
                 t.contains = null;
             }
         }
+
+        // Normalize 2x2 multi-tile structures (domain_monolith, dark_domain_monolith)
+        for (let i = 0; i < board.tiles.length; i++) {
+            const t = board.tiles[i];
+            if (!t || !t.contains) continue;
+            const cType = typeof t.contains === 'object' ? (t.contains.type || '') : String(t.contains);
+            const cSub = typeof t.contains === 'object' ? (t.contains.subtype || '') : '';
+            const bldg = t.building || (typeof t.contains === 'object' ? t.contains.building : '') || '';
+            const rawKey = String(cSub || bldg || cType).toLowerCase();
+
+            const isMonolith = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith';
+            if (isMonolith) {
+                const cObj = typeof t.contains === 'object' ? t.contains : { type: 'building', subtype: rawKey };
+                if (!cObj.vendorGroupId && (!cObj.vendorCell || cObj.vendorCell === 'anchor')) {
+                    const col = i % 15;
+                    const row = Math.floor(i / 15);
+                    if (col < 14 && row < 14) {
+                        const vendorGroupId = `building_${rawKey}_${i}`;
+                        const vendorKey = rawKey;
+                        const imageKey = rawKey;
+                        const cellOffsets = [
+                            { idx: i, role: 'anchor' },
+                            { idx: i + 1, role: 'top_right' },
+                            { idx: i + 15, role: 'bottom_left' },
+                            { idx: i + 16, role: 'bottom_right' }
+                        ];
+                        cellOffsets.forEach(({ idx, role }) => {
+                            if (board.tiles[idx]) {
+                                const target = board.tiles[idx];
+                                const existingContains = typeof target.contains === 'object' && target.contains ? target.contains : {};
+                                target.contains = {
+                                    ...existingContains,
+                                    type: 'building',
+                                    subtype: vendorKey,
+                                    building: vendorKey,
+                                    vendorGroupId,
+                                    vendorAnchorId: i,
+                                    vendorCell: role
+                                };
+                                target.building = vendorKey;
+                                target.image = imageKey;
+                            }
+                        });
+                    }
+                }
+            }
+        }
     }
 
     // Normalize entire dungeon (all levels/miniboards). Returns true if any change is made.
@@ -3575,35 +3622,44 @@ export function BoardManager(){
             }
         } catch (e) {}
 
-        // Vendor visibility rule:
-        // - If player is cardinal-adjacent to any tile in a vendor 2x2 group,
-        //   reveal the entire group with full vendor art.
-        // - Otherwise, visible vendor tiles stay obscured (no vendor art).
-        const fullyRevealedVendorTileIds = new Set();
+        // Multi-tile building visibility rule:
+        // - If any single tile in a multi-tile building group (domain monolith, war camp, vendor, outpost, etc.) is revealed,
+        //   reveal all tiles in the building group so the full structure footprint is un-fogged.
+        const fullyRevealedBuildingTileIds = new Set();
         try {
             const playerCoords = this.getCoordinatesFromIndex(destinationTile.id);
-            const vendorGroups = new Map();
+            const buildingGroups = new Map();
 
             this.tiles.forEach((tile) => {
-                if (!tile || !tile.contains || typeof tile.contains !== 'object') return;
-                const groupId = tile.contains.vendorGroupId;
+                if (!tile) return;
+                const cSub = tile.contains?.subtype || tile.contains?.building || tile.contains?.type || tile.building || tile.image || '';
+                const sKey = String(cSub).toLowerCase();
+                if (sKey.includes('observer') || sKey.includes('outpost') || sKey.includes('earthen_fort') || sKey.includes('hut')) return;
+
+                const vCell = (typeof tile.contains === 'object' && tile.contains?.vendorCell) || tile.vendorCell;
+                const vAnchor = (typeof tile.contains === 'object' && tile.contains?.vendorAnchorId) ?? tile.vendorAnchorId;
+                const vGroup = (typeof tile.contains === 'object' && tile.contains?.vendorGroupId) || tile.vendorGroupId;
+                
+                let groupId = vGroup;
+                if (!groupId && vAnchor !== undefined && vAnchor !== null) {
+                    groupId = `bldg_anchor_${vAnchor}`;
+                }
                 if (!groupId) return;
-                if (!vendorGroups.has(groupId)) vendorGroups.set(groupId, []);
-                vendorGroups.get(groupId).push(tile);
+
+                if (!buildingGroups.has(groupId)) buildingGroups.set(groupId, []);
+                buildingGroups.get(groupId).push(tile);
             });
 
-            vendorGroups.forEach((groupTiles) => {
-                const isAdjacentToGroup = groupTiles.some((tile) => {
+            buildingGroups.forEach((groupTiles) => {
+                const isGroupRevealed = groupTiles.some((tile) => {
+                    if (tile.color && tile.color !== 'black') return true;
                     const coords = this.getCoordinatesFromIndex(tile.id);
                     const manhattan = Math.abs(coords[0] - playerCoords[0]) + Math.abs(coords[1] - playerCoords[1]);
-                    if (manhattan !== 1) return false;
-                    if (!visibleTileIds.has(tile.id)) return false;
-                    if (this.isPassageWallBlockingBetween(destinationTile.id, tile.id, { ignoreBuilding: true })) return false;
-                    return true;
+                    return (manhattan <= fogRadius && visibleTileIds.has(tile.id));
                 });
 
-                if (isAdjacentToGroup) {
-                    // Fully reveal all four vendor tiles when adjacent to any one of them.
+                if (isGroupRevealed) {
+                    // Fully reveal all tiles in the building group when any tile is revealed.
                     groupTiles.forEach((tile) => {
                         const persistedColor = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id] && this.currentBoard.tiles[tile.id].color);
                         const persistedBorders = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id] && this.currentBoard.tiles[tile.id].borders);
@@ -3613,19 +3669,13 @@ export function BoardManager(){
                         tile.image = this.getImageForContains(tile.contains, tile);
                         tile.borders = this.normalizeFogBorders(persistedBorders);
                         tile.partialObscured = false;
-                        fullyRevealedVendorTileIds.add(tile.id);
+                        fullyRevealedBuildingTileIds.add(tile.id);
                     });
-                    return;
                 }
-
-                // Not adjacent: keep vendor tiles obscured when they are otherwise visible.
-                groupTiles.forEach((tile) => {
-                    if (tile.color === 'black') return;
-                    tile.image = null;
-                    tile.partialObscured = true;
-                });
             });
-        } catch (e) {}
+        } catch (e) {
+            console.error("Multi-tile building fog reveal error:", e);
+        }
 
         // Calculate partialObscured for tiles around corners, walls, or void tiles
         try {
@@ -3650,7 +3700,7 @@ export function BoardManager(){
 
             this.tiles.forEach((tile) => {
                 if (!tile || tile.color === 'black') return;
-                if (fullyRevealedVendorTileIds.has(tile.id)) return;
+                if (fullyRevealedBuildingTileIds.has(tile.id)) return;
 
                 const coords = this.getCoordinatesFromIndex(tile.id);
                 const dr = coords[0] - playerRow;

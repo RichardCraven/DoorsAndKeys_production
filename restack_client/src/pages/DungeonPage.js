@@ -5355,7 +5355,7 @@ class DungeonPage extends React.Component {
                         type: 'board-tile',
                         contains: null,
                         building: null,
-                        image: mbTile?.image,
+                        image: null,
                         terrain: mbTile?.terrain
                     });
                     continue;
@@ -7341,6 +7341,7 @@ class DungeonPage extends React.Component {
 
                 const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 if (!isDomainMonolith) return;
+                if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') return;
 
                 const affiliation = cObj?.affiliation || tile.affiliation;
                 if (!affiliation || affiliation === 'none') return;
@@ -18408,6 +18409,26 @@ class DungeonPage extends React.Component {
 
     openGeneratorModal = (tile) => {
         if (!tile) return;
+        const bm = this.props.boardManager;
+        const vAnchor = (typeof tile.contains === 'object' && tile.contains?.vendorAnchorId) ?? tile.vendorAnchorId;
+        if (vAnchor !== undefined && vAnchor !== null && Number(vAnchor) !== Number(tile.id)) {
+            if (bm && bm.tiles && bm.tiles[vAnchor]) {
+                tile = bm.tiles[vAnchor];
+            } else {
+                const superboard = this.state.dungeon?.superboards?.[this.state.superboardType] || bm?.dungeon?.superboards?.[this.state.superboardType];
+                if (superboard && superboard.miniboards) {
+                    for (const mb of superboard.miniboards) {
+                        if (mb && mb.tiles) {
+                            const match = mb.tiles.find(t => t && Number(t.id) === Number(vAnchor));
+                            if (match) {
+                                tile = match;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         this.clearIlluminatedTile();
         this._isMoving = false;
         this._processingQueuedMove = false;
@@ -18418,7 +18439,7 @@ class DungeonPage extends React.Component {
             this._movementRepeatInterval = null;
         }
 
-        const bm = this.props.boardManager;
+        const meta = getMeta() || {};
         if (bm && bm.tiles && bm.tiles[tile.id]) {
             const bmTile = bm.tiles[tile.id];
             const gData = bmTile.generatorData || (bmTile.contains && bmTile.contains.generatorData);
@@ -18426,24 +18447,29 @@ class DungeonPage extends React.Component {
                 tile.generatorData = { ...gData };
             }
         }
-        if (!tile.generatorData && bm && bm.currentLevel && bm.currentBoard) {
+        if (!tile.generatorData) {
             try {
-                const meta = getMeta() || {};
-                const tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
-                if (meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
+                let tileKey = null;
+                if (bm && bm.currentLevel && bm.currentBoard) {
+                    tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
+                }
+                if (tileKey && meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
                     tile.generatorData = { ...meta.activatedGenerators[tileKey] };
+                } else if (meta.activatedGenerators) {
+                    const match = Object.values(meta.activatedGenerators).find(g => g && Number(g.tileId) === Number(tile.id));
+                    if (match) tile.generatorData = { ...match };
                 }
             } catch (e) { }
         }
-        if (bm && bm.currentLevel && bm.currentBoard) {
-            try {
-                const meta = getMeta() || {};
-                const tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
-                if (meta.disabledOutposts && meta.disabledOutposts[tileKey] && Date.now() < meta.disabledOutposts[tileKey]) {
-                    tile.disabledUntil = meta.disabledOutposts[tileKey];
-                }
-            } catch (e) { }
-        }
+        try {
+            let tileKey = null;
+            if (bm && bm.currentLevel && bm.currentBoard) {
+                tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
+            }
+            if (tileKey && meta.disabledOutposts && meta.disabledOutposts[tileKey] && Date.now() < meta.disabledOutposts[tileKey]) {
+                tile.disabledUntil = meta.disabledOutposts[tileKey];
+            }
+        } catch (e) { }
 
         this.setState({
             showGeneratorModal: true,

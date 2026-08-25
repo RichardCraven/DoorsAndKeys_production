@@ -163,9 +163,14 @@ function Tile(props) {
     const isVendorType = (val) => {
         if (!val) return false;
         if (typeof val === 'object') {
+            const sKey = String(val.subtype || val.building || val.type || val.key || val.name || '').toLowerCase();
+            if (sKey.includes('observer') || sKey.includes('outpost') || sKey.includes('earthen_fort') || sKey.includes('hut')) {
+                return false;
+            }
             return !!val.isMultiTile || !!val.isLarge || !!val.vendorCell || (val.vendorAnchorId !== undefined && val.vendorAnchorId !== null) || isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.building) || isVendorType(val.key) || isVendorType(val.name);
         }
         const s = String(val).toLowerCase();
+        if (s.includes('observer') || s.includes('outpost') || s.includes('earthen_fort') || s.includes('hut')) return false;
         const multiKeys = [
             'vendor', 'alchemist', 'merchant',
             'war_camp', 'war_fort',
@@ -181,7 +186,50 @@ function Tile(props) {
         if (multiKeys.includes(s)) return true;
         return multiKeys.some(k => s.includes(k));
     };
-    const isVendorCell = !isPaletteTile && (
+
+    // Check if this tile is a quadrant of an adjacent 2x2 multi-tile structure anchor in boardTiles
+    const findNearbyStructureAnchor = () => {
+        if (isPaletteTile || !boardTilesForContains || isDarkColor || color === 'black') return null;
+        const cId = props.id !== undefined && props.id !== null ? props.id : props.index;
+        if (cId === null || cId === undefined) return null;
+        const cRow = Math.floor(cId / 15);
+        const cCol = cId % 15;
+
+        // Check if an anchor tile is at left, top, or top-left
+        const checks = [
+            { dRow: 0, dCol: 1, role: 'top_right', anchorOffset: -1 },
+            { dRow: 1, dCol: 0, role: 'bottom_left', anchorOffset: -15 },
+            { dRow: 1, dCol: 1, role: 'bottom_right', anchorOffset: -16 }
+        ];
+
+        for (const { dRow, dCol, role, anchorOffset } of checks) {
+            if (cRow >= dRow && cCol >= dCol) {
+                const aIdx = cId + anchorOffset;
+                const aTile = boardTilesForContains[aIdx];
+                if (aTile && aTile.color !== 'black' && (aTile.contains || aTile.building || aTile.image)) {
+                    const aContains = typeof aTile.contains === 'object' && aTile.contains ? aTile.contains : { type: aTile.contains };
+                    const aKey = String(aContains.subtype || aContains.building || aContains.type || aTile.building || aTile.image || '').toLowerCase();
+                    if (aKey.includes('observer') || aKey.includes('outpost') || aKey.includes('earthen_fort') || aKey.includes('hut')) continue;
+                    const is2x2 = (aKey.includes('domain_monolith') || aKey.includes('dark_domain_monolith') || (aKey.includes('monolith') && !aKey.includes('shrine')));
+                    if (is2x2) {
+                        const aRole = aContains.vendorCell || aTile.vendorCell;
+                        if (!aRole || aRole === 'anchor' || aContains.vendorAnchorId === aIdx) {
+                            return { anchorTile: aTile, role, anchorId: aIdx, anchorKey: aKey };
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    };
+    const nearbyAnchorInfo = findNearbyStructureAnchor();
+
+    const isSingleTile = (() => {
+        const s = String(containsObj?.subtype || containsObj?.building || containsObj?.type || props.building || props.image || props.optionType || '').toLowerCase();
+        return s.includes('observer') || s.includes('outpost') || s.includes('earthen_fort') || s.includes('hut');
+    })();
+
+    const isVendorCell = !isPaletteTile && !isSingleTile && (
         isVendorType(props.contains) ||
         isVendorType(containsObj?.type) ||
         isVendorType(containsObj?.subtype) ||
@@ -194,7 +242,8 @@ function Tile(props) {
         !!(containsObj && containsObj.vendorCell) ||
         (containsObj && containsObj.vendorAnchorId !== undefined && containsObj.vendorAnchorId !== null) ||
         !!props.vendorCell ||
-        !!props.isMultiTile
+        !!props.isMultiTile ||
+        !!nearbyAnchorInfo
     );
 
     const getVendorCellRole = () => {
@@ -206,6 +255,10 @@ function Tile(props) {
 
         if (props.vendorCell && props.vendorCell !== 'footprint') {
             return props.vendorCell;
+        }
+
+        if (nearbyAnchorInfo && nearbyAnchorInfo.role) {
+            return nearbyAnchorInfo.role;
         }
 
         let anchorId = null;
@@ -574,6 +627,17 @@ function Tile(props) {
                 }
             }
         }
+        if (nearbyAnchorInfo && nearbyAnchorInfo.anchorTile) {
+            const aTile = nearbyAnchorInfo.anchorTile;
+            const aContains = typeof aTile.contains === 'object' && aTile.contains ? aTile.contains : {};
+            const key = String(aContains.subtype || aContains.building || aTile.building || aContains.type || aTile.image || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+            if (images[key]) return images[key];
+            if (images[`buildable_${key}`]) return images[`buildable_${key}`];
+            if (images[`${key}_portrait`]) return images[`${key}_portrait`];
+            if (aTile.image && typeof aTile.image === 'string' && (aTile.image.includes('/') || aTile.image.startsWith('data:'))) {
+                return aTile.image;
+            }
+        }
         return null;
     })();
 
@@ -922,7 +986,7 @@ function Tile(props) {
                     labelTitle = 'Hostile Structure';
                 }
 
-                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den');
+                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 const isSingleTileStructure = sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer');
                 const isMulti = !isSingleTileStructure && (isVendorCell || vRole === 'anchor' || is2x2Structure || is3x3Structure);
                 return (
@@ -1307,7 +1371,7 @@ function Tile(props) {
                                     backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
                                     backgroundRepeat: 'no-repeat',
                                     zIndex: isVendorCell ? 40 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex),
-                                    opacity: ((color === 'black' && !isConcaveFogCorner) || props.isFadingOut) ? 0 : 1,
+                                    opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
                                     transform: portraitTransform,
                                     transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction ? 'bottom center' : 'center center',
                                     transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
