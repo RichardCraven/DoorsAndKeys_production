@@ -9437,14 +9437,16 @@ class DungeonPage extends React.Component {
                                                                     } else {
                                                                         // Legacy: Check if the actual tile on this plane looks like a generator
                                                                         const t = boardTiles.find(bt => Number(bt.id) === tId);
-                                                                        if (t && (t.generatorData || t.building || (t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'generator' || t.contains.type === 'building')))) {
+                                                                        const isTerr = t && (t.territory || t.contains?.territory || t.contains?.type === 'territory' || t.contains?.subtype === 'territory');
+                                                                        if (t && !isTerr && (t.generatorData || t.building || (t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'generator' || (t.contains.type === 'building' && t.contains.subtype !== 'territory'))))) {
                                                                             isOnCurrentPlane = true;
                                                                         } else {
                                                                             // Check opposite plane to see if it definitively belongs there
                                                                             const oppositePlane = levelObj ? (currentOrientation === 'B' ? levelObj.front : levelObj.back) : null;
                                                                             const oppBoard = oppositePlane && oppositePlane.miniboards && oppositePlane.miniboards[i];
                                                                             const oppTile = oppBoard && oppBoard.tiles && oppBoard.tiles.find(bt => Number(bt.id) === tId);
-                                                                            if (oppTile && (oppTile.generatorData || oppTile.building || (oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'generator' || oppTile.contains.type === 'building')))) {
+                                                                            const isOppTerr = oppTile && (oppTile.territory || oppTile.contains?.territory || oppTile.contains?.type === 'territory' || oppTile.contains?.subtype === 'territory');
+                                                                            if (oppTile && !isOppTerr && (oppTile.generatorData || oppTile.building || (oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'generator' || (oppTile.contains.type === 'building' && oppTile.contains.subtype !== 'territory'))))) {
                                                                                 isOnCurrentPlane = false; // It definitively belongs to the other plane
                                                                             }
                                                                         }
@@ -9467,18 +9469,29 @@ class DungeonPage extends React.Component {
 
                                                         // Inject ANY generator we've physically discovered
                                                         if (meta && meta.discoveredGenerators) {
+                                                            let metaChanged = false;
                                                             Object.keys(meta.discoveredGenerators).forEach(key => {
                                                                 const parts = key.split('_');
                                                                 if (parts.length >= 3 && String(parts[0]) === String(currentLevelId) && Number(parts[1]) === i) {
                                                                     const tId = Number(parts[2]);
                                                                     const genData = meta.discoveredGenerators[key];
                                                                     if (genData && genData.orientation === currentOrientation) {
-                                                                        if (!isNaN(tId) && !mergedByTile.has(`generator_${tId}`)) {
-                                                                            mergedByTile.set(`generator_${tId}`, { tileId: tId, indicatorType: 'generator' });
+                                                                        const t = boardTiles.find(bt => Number(bt.id) === tId);
+                                                                        if (t && this.isBuildingOrGeneratorTile(t)) {
+                                                                            if (!isNaN(tId) && !mergedByTile.has(`generator_${tId}`)) {
+                                                                                mergedByTile.set(`generator_${tId}`, { tileId: tId, indicatorType: 'generator' });
+                                                                            }
+                                                                        } else if (t) {
+                                                                            // Clean up stale or non-generator tile from local cache
+                                                                            delete meta.discoveredGenerators[key];
+                                                                            metaChanged = true;
                                                                         }
                                                                     }
                                                                 }
                                                             });
+                                                            if (metaChanged && typeof storeMeta === 'function') {
+                                                                storeMeta(meta);
+                                                            }
                                                         }
                                                     } catch (e) {}
                                                 }
@@ -9541,7 +9554,8 @@ class DungeonPage extends React.Component {
                                                             mergedByTile.set(`unit_${tile.id}`, { tileId: tile.id, indicatorType: isFriendly ? 'friendly-unit' : 'hostile-unit' });
                                                         }
 
-                                                        const isGen = this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData || isOutpost || isObserverPlatform || isWarStructure || isDreamDen;
+                                                        const isTerritory = containsType === 'territory' || containsSubtype === 'territory' || tile.territory || (typeof contains === 'object' && contains?.territory);
+                                                        const isGen = !isTerritory && (this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData || isOutpost || isObserverPlatform || isWarStructure || isDreamDen);
                                                         if (isGen && !isVendor) {
                                                             if (isWarStructure) {
                                                                 const isPB = (typeof contains === 'object' && (contains.placedBy === 'player' || contains.ownerId)) || tile.placedBy === 'player';
@@ -18011,6 +18025,10 @@ class DungeonPage extends React.Component {
         const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
         const isOwner = ownerId === currentUserId;
 
+        if (containsType === 'territory' || containsSubtype === 'territory' || tile.territory || tile.contains?.territory) {
+            return false;
+        }
+
         const hutKeys = ['hut', 'hut_under_construction', 'buildable_hut'];
         if (hutKeys.includes(containsSubtype) || hutKeys.includes(bldg) || hutKeys.includes(img)) {
             return false;
@@ -19825,7 +19843,7 @@ class DungeonPage extends React.Component {
 
         let footprint = [playerIdx];
         const isHuge = buildingDef.key === 'keep' || buildingDef.key === 'fortress';
-        const isLarge = !isHuge && (buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort' || buildingDef.key === 'dream_den' || buildingDef.key === 'hut' || buildingDef.key === 'alchemist' || buildingDef.key === 'merchant' || buildingDef.key === 'summoning_temple' || buildingDef.key === 'rift' || buildingDef.key === 'rift_2' || buildingDef.isLarge === true || buildingDef.isMultiTile === true);
+        const isLarge = !isHuge && (buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort' || buildingDef.key === 'dream_den' || buildingDef.key === 'hut' || buildingDef.key === 'alchemist' || buildingDef.key === 'merchant' || buildingDef.key === 'summoning_temple' || buildingDef.key === 'rift' || buildingDef.key === 'rift_2' || buildingDef.key === 'domain_monolith' || buildingDef.key === 'dark_domain_monolith' || buildingDef.isLarge === true || buildingDef.isMultiTile === true);
         
         if (isHuge) {
             if (isInPocketDimension && this.state.superboardPlayerPos) {

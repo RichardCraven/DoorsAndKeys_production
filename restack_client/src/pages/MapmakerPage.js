@@ -485,6 +485,13 @@ class MapMakerPage extends React.Component {
                         vendorKey = pocketBuildingOption.key;
                         image = images[pocketBuildingOption.image] || images[pocketBuildingOption.key] || pocketBuildingOption.image;
                     }
+                } else if (this.state.pinnedOption.type === 'generator-tile') {
+                    baseType = 'building';
+                    const generatorOption = this.props.mapMaker?.generatorOptions?.[this.state.pinnedOption.id];
+                    if (generatorOption) {
+                        vendorKey = generatorOption.key;
+                        image = images[generatorOption.image] || generatorOption.image;
+                    }
                 } else if (this.state.pinnedOption.type === 'palette-tile') {
                     const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[this.state.pinnedOption.id];
                     if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'dream den' || pinnedPaletteTile.optionType === 'dream_den')) {
@@ -1263,6 +1270,9 @@ class MapMakerPage extends React.Component {
     } else if (pinnedOption.type === 'building-tile') {
       const buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
       if (buildingOption) keyToCheck = buildingOption.key;
+    } else if (pinnedOption.type === 'generator-tile') {
+      const generatorOption = this.props.mapMaker?.generatorOptions?.[pinnedOption.id];
+      if (generatorOption && (generatorOption.isLarge || generatorOption.isMultiTile)) return '2x2';
     }
 
     if (keyToCheck) {
@@ -1289,6 +1299,7 @@ class MapMakerPage extends React.Component {
     }
     return null;
   }
+
 
   getContainsType = (contains) => {
     if (!contains) return null;
@@ -1612,9 +1623,17 @@ class MapMakerPage extends React.Component {
         arr[tileId].color = null;
       }
     } else if (generatorOption) {
-      arr[tileId].contains = { type: 'building', subtype: generatorOption.key };
-      arr[tileId].image = images[generatorOption.image] || generatorOption.image;
-      arr[tileId].color = null;
+      if (generatorOption.isLarge || generatorOption.isMultiTile) {
+        if (!this.canPlaceVendorFootprint(arr, tileId)) {
+          this.toast(`${generatorOption.name} requires a 2x2 empty space.`);
+          return null;
+        }
+        arr = this.placeVendorFootprint(arr, tileId, generatorOption.key, 'building', images[generatorOption.image] || generatorOption.image);
+      } else {
+        arr[tileId].contains = { type: 'building', subtype: generatorOption.key };
+        arr[tileId].image = images[generatorOption.image] || generatorOption.image;
+        arr[tileId].color = null;
+      }
     } else if (dungeonLitterOption) {
       const existingRot = (arr[tileId] && arr[tileId].contains && (arr[tileId].contains.type === 'dungeon_litter' || arr[tileId].contains.type === 'dungeon litter') && (arr[tileId].contains.subtype === dungeonLitterOption.key || arr[tileId].contains === dungeonLitterOption.key) && typeof arr[tileId].contains.rotation === 'number') ? arr[tileId].contains.rotation : 0;
       arr[tileId].contains = { type: 'dungeon_litter', subtype: dungeonLitterOption.key, rotation: existingRot };

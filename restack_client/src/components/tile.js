@@ -802,13 +802,13 @@ function Tile(props) {
                 </>
            )}
 
-           {/* Sabotage Progress Bar under tile (in dungeon) */}
-           { (props.sabotageProgress !== undefined && props.sabotageProgress !== null) && (
+           {/* Sabotage Progress Bar under tile/complex (in dungeon) */}
+           { (!isVendorCell || getVendorCellRole() === 'anchor') && (props.sabotageProgress !== undefined && props.sabotageProgress !== null) && (
                <div style={{
                    position: 'absolute',
-                   bottom: '-12px',
+                   bottom: is3x3Structure ? 'calc(-200% - 12px)' : (isVendorCell ? 'calc(-100% - 12px)' : '-12px'),
                    left: '1px',
-                   right: '1px',
+                   right: is3x3Structure ? '-200%' : (isVendorCell ? '-100%' : '1px'),
                    height: '7px',
                    backgroundColor: 'rgba(0, 0, 0, 0.9)',
                    border: '1px solid #f59e0b',
@@ -831,13 +831,13 @@ function Tile(props) {
                </div>
            )}
 
-           {/* Monolith Activation Progress Bar under tile (in dungeon) */}
-           { (props.monolithActivationProgress !== undefined && props.monolithActivationProgress !== null) && (
+           {/* Monolith Activation Progress Bar under tile/complex (in dungeon) */}
+           { (!isVendorCell || getVendorCellRole() === 'anchor') && (props.monolithActivationProgress !== undefined && props.monolithActivationProgress !== null) && (
                <div style={{
                    position: 'absolute',
-                   bottom: '-12px',
+                   bottom: is3x3Structure ? 'calc(-200% - 12px)' : (isVendorCell ? 'calc(-100% - 12px)' : '-12px'),
                    left: '1px',
-                   right: '1px',
+                   right: is3x3Structure ? '-200%' : (isVendorCell ? '-100%' : '1px'),
                    height: '7px',
                    backgroundColor: 'rgba(0, 0, 0, 0.9)',
                    border: '1px solid #c084fc',
