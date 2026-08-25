@@ -16,6 +16,91 @@ const getContainsSubtype = (contains) => {
     return null;
 };
 
+function DomainMonolithTimerBadge({ lastGrowthTime, growthCycles, maxGrowthCycles, is2x2, strokeColor, badgeGlow, isMax }) {
+    const [now, setNow] = React.useState(Date.now());
+
+    React.useEffect(() => {
+        if (isMax) return;
+        const intervalId = setInterval(() => {
+            setNow(Date.now());
+        }, 1000);
+        return () => clearInterval(intervalId);
+    }, [isMax, lastGrowthTime]);
+
+    const elapsed = Math.max(0, now - (lastGrowthTime || now));
+    const interval = 30000;
+    const remainingMs = Math.max(0, interval - elapsed);
+    const remainingSec = Math.ceil(remainingMs / 1000);
+    const progress = isMax ? 1 : Math.min(1, Math.max(0, elapsed / interval));
+
+    const radius = 13;
+    const circumference = 2 * Math.PI * radius; // ~81.68
+    const strokeDashoffset = circumference * (1 - progress);
+
+    return (
+        <div
+            className="domain-monolith-timer-badge"
+            title={isMax ? `Domain Expansion: MAX (${growthCycles}/${maxGrowthCycles})` : `Next Domain Expansion in ${remainingSec}s (${growthCycles}/${maxGrowthCycles})`}
+            style={{
+                position: 'absolute',
+                top: '4px',
+                right: is2x2 ? '-92%' : '4px',
+                width: '34px',
+                height: '34px',
+                borderRadius: '50%',
+                background: 'radial-gradient(circle, rgba(15, 23, 42, 0.95) 0%, rgba(10, 15, 30, 0.9) 100%)',
+                border: `1.5px solid ${strokeColor}`,
+                boxShadow: `0 2px 10px rgba(0, 0, 0, 0.8), 0 0 12px ${badgeGlow}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 45,
+                pointerEvents: 'none',
+                userSelect: 'none'
+            }}
+        >
+            <svg width="34" height="34" viewBox="0 0 34 34" style={{ position: 'absolute', top: 0, left: 0 }}>
+                <circle
+                    cx="17"
+                    cy="17"
+                    r={radius}
+                    fill="none"
+                    stroke="rgba(255, 255, 255, 0.12)"
+                    strokeWidth="2.5"
+                />
+                <circle
+                    cx="17"
+                    cy="17"
+                    r={radius}
+                    fill="none"
+                    stroke={strokeColor}
+                    strokeWidth="2.5"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={strokeDashoffset}
+                    strokeLinecap="round"
+                    transform="rotate(-90 17 17)"
+                    style={{
+                        transition: 'stroke-dashoffset 0.8s ease-in-out'
+                    }}
+                />
+            </svg>
+            <div style={{
+                position: 'relative',
+                zIndex: 2,
+                fontSize: isMax ? '9px' : '10.5px',
+                fontWeight: 800,
+                fontFamily: '"Cinzel", "Segoe UI", sans-serif',
+                color: isMax ? '#facc15' : '#f0f9ff',
+                textShadow: `0 0 6px ${badgeGlow}`,
+                letterSpacing: isMax ? '0.5px' : '0px',
+                lineHeight: 1
+            }}>
+                {isMax ? 'MAX' : `${remainingSec}s`}
+            </div>
+        </div>
+    );
+}
+
 function Tile(props) {
     const colorVal = (props.color === 'null' || props.color === 'undefined') ? null : props.color;
     const isShrine = (props.contains && props.contains.type === 'shrine') || props.optionType === 'shrine' || props.isShrine;
@@ -36,7 +121,7 @@ function Tile(props) {
     const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
     const sKey = (props.building || containsObj?.subtype || containsObj?.building || containsObj?.type || containsObj?.key || containsObj?.name || props.contains || props.image || '').toString().toLowerCase();
     const is3x3Structure = sKey.includes('keep') || sKey.includes('fortress');
-    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || is3x3Structure;
+    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || is3x3Structure;
 
     const containsObjForHp = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined')
         ? (typeof currentTileForContains.contains === 'object' ? currentTileForContains.contains : null)
@@ -1012,6 +1097,52 @@ function Tile(props) {
                 );
             })()}
 
+            {/* Pocket Dimension Domain Monolith Expansion Countdown Radial Badge (Pocket Dimension Only) */}
+            {(() => {
+                if (!props.inSuperboard) return null;
+                if (color === 'black') return null;
+
+                const cObj = props.contains && typeof props.contains === 'object' ? props.contains : null;
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof props.contains === 'string' ? props.contains : null);
+                const sKey = String(containsSubtype || props.building || cObj?.type || props.image || '').toLowerCase();
+
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                if (!isDomainMonolith) return null;
+
+                const isVendorCell = !!(cObj && cObj.vendorCell);
+                const vRole = cObj?.vendorCell;
+                // Only render once on the anchor tile of the monolith (or single tile if not multi)
+                if (isVendorCell && vRole !== 'anchor') return null;
+
+                const affiliation = cObj?.affiliation || props.affiliation || props.territory || cObj?.territory;
+                if (!affiliation || affiliation === 'none') return null;
+
+                const level = cObj?.level || props.level || 1;
+                const maxGrowthCycles = cObj?.maxGrowthCycles || props.maxGrowthCycles || (level >= 2 ? 10 : 5);
+                const growthCycles = cObj?.growthCycles ?? props.growthCycles ?? 1;
+                const lastGrowthTime = cObj?.lastGrowthTime ?? props.lastGrowthTime ?? Date.now();
+
+                const isMax = growthCycles >= maxGrowthCycles;
+                const is2x2 = isVendorCell || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+
+                const isPlayer = String(affiliation).toLowerCase().includes('player') || String(affiliation).toLowerCase().includes('friendly') || String(affiliation).toLowerCase().includes('crew');
+                const badgeGlow = isPlayer ? 'rgba(56, 189, 248, 0.6)' : 'rgba(239, 68, 68, 0.6)';
+                const strokeColor = isMax ? '#facc15' : (isPlayer ? '#38bdf8' : '#f87171');
+
+                return (
+                    <DomainMonolithTimerBadge
+                        key={`monolith_badge_${growthCycles}_${lastGrowthTime}`}
+                        lastGrowthTime={lastGrowthTime}
+                        growthCycles={growthCycles}
+                        maxGrowthCycles={maxGrowthCycles}
+                        is2x2={is2x2}
+                        strokeColor={strokeColor}
+                        badgeGlow={badgeGlow}
+                        isMax={isMax}
+                    />
+                );
+            })()}
+
             {/* Delete Tool Red Hover Outline Overlay for Multi-Tile Buildings & Tiles */}
             { color !== 'black' && (() => {
                 const currentIdVal = props.id !== undefined ? props.id : props.index;
@@ -1037,7 +1168,7 @@ function Tile(props) {
             })()}
 
             {/* Pocket Dimension Territory Boundary Glow Line Overlay */}
-            { color !== 'black' && (() => {
+            {(() => {
                 const isSuperboardTile = props.isBuilderTile || props.isBuilder || props.type === 'board-tile';
                 if (!isSuperboardTile) return null;
 
@@ -1066,26 +1197,24 @@ function Tile(props) {
                     );
 
                     if (!raw) return null;
-
-                    const s = String(raw).toLowerCase();
-                    if (s === 'friendly' || s === 'player' || s.includes('woodland') || s.includes('player')) return 'friendly';
-                    if (s === 'hostile' || s === 'wild' || s.includes('hostile')) return 'hostile';
-                    if (s === 'neutral') return 'neutral';
-                    if (s.includes('mud')) return 'mud';
-                    if (s.includes('cave')) return 'cave';
-                    if (s.includes('shadow')) return 'shadow';
-                    if (s.includes('paradox')) return 'paradox';
-                    return s;
+                    return typeof raw === 'object' ? (raw.clan || raw.type || raw.affiliation || 'unknown') : String(raw);
                 };
 
                 const currentTileObj = (currentIdx !== null && currentIdx !== undefined && boardTiles) ? boardTiles[currentIdx] : null;
-                const currentAff = getTileTerritoryAffiliation(currentTileObj, props);
+                const currentRawTerr = getTileTerritoryAffiliation(currentTileObj, props);
 
-                if (!currentAff) return null;
+                if (!currentRawTerr) return null;
 
-                const affColor = (currentAff === 'friendly')
-                    ? '#3b82f6'
-                    : (currentAff === 'hostile' ? '#ef4444' : '#ffffff');
+                const currentStr = currentRawTerr.toLowerCase();
+                const isFriendlyDomain = currentStr === 'friendly' || currentStr === 'player' || currentStr === 'crew' || currentStr.includes('player') || currentStr.includes('crew');
+                const isPygmyOrHostile = !isFriendlyDomain && (
+                    currentStr === 'hostile' || currentStr === 'wild' || currentStr.includes('hostile') ||
+                    currentStr.includes('pygmy') || currentStr.includes('pygmies') ||
+                    currentStr.includes('woodland') || currentStr.includes('cave') || currentStr.includes('shadow') ||
+                    currentStr.includes('paradox') || currentStr.includes('mud')
+                );
+
+                const affColor = isFriendlyDomain ? '#3b82f6' : (isPygmyOrHostile ? '#ef4444' : '#ffffff');
 
                 const getNeighborAff = (delta) => {
                     if (currentIdx === null || currentIdx === undefined || !boardTiles) return null;
@@ -1105,10 +1234,10 @@ function Tile(props) {
                 const leftAff = getNeighborAff(-1);
                 const rightAff = getNeighborAff(1);
 
-                const hasTopBoundary = topAff !== currentAff;
-                const hasBottomBoundary = bottomAff !== currentAff;
-                const hasLeftBoundary = leftAff !== currentAff;
-                const hasRightBoundary = rightAff !== currentAff;
+                const hasTopBoundary = topAff !== currentRawTerr;
+                const hasBottomBoundary = bottomAff !== currentRawTerr;
+                const hasLeftBoundary = leftAff !== currentRawTerr;
+                const hasRightBoundary = rightAff !== currentRawTerr;
 
                 if (!hasTopBoundary && !hasBottomBoundary && !hasLeftBoundary && !hasRightBoundary) return null;
 
@@ -1125,28 +1254,32 @@ function Tile(props) {
                             <div style={{
                                 position: 'absolute', top: 0, left: 0, right: 0, height: '2px',
                                 backgroundColor: affColor,
-                                boxShadow: `0 0 6px ${affColor}`
+                                boxShadow: `0 0 6px ${affColor}`,
+                                animation: (props.newlyClaimed || (props.contains && props.contains.newlyClaimed)) ? 'territoryBoundaryPulse 1.5s ease-out' : 'none'
                             }} />
                         )}
                         {hasBottomBoundary && (
                             <div style={{
                                 position: 'absolute', bottom: 0, left: 0, right: 0, height: '2px',
                                 backgroundColor: affColor,
-                                boxShadow: `0 0 6px ${affColor}`
+                                boxShadow: `0 0 6px ${affColor}`,
+                                animation: (props.newlyClaimed || (props.contains && props.contains.newlyClaimed)) ? 'territoryBoundaryPulse 1.5s ease-out' : 'none'
                             }} />
                         )}
                         {hasLeftBoundary && (
                             <div style={{
                                 position: 'absolute', top: 0, left: 0, bottom: 0, width: '2px',
                                 backgroundColor: affColor,
-                                boxShadow: `0 0 6px ${affColor}`
+                                boxShadow: `0 0 6px ${affColor}`,
+                                animation: (props.newlyClaimed || (props.contains && props.contains.newlyClaimed)) ? 'territoryBoundaryPulse 1.5s ease-out' : 'none'
                             }} />
                         )}
                         {hasRightBoundary && (
                             <div style={{
                                 position: 'absolute', top: 0, right: 0, bottom: 0, width: '2px',
                                 backgroundColor: affColor,
-                                boxShadow: `0 0 6px ${affColor}`
+                                boxShadow: `0 0 6px ${affColor}`,
+                                animation: (props.newlyClaimed || (props.contains && props.contains.newlyClaimed)) ? 'territoryBoundaryPulse 1.5s ease-out' : 'none'
                             }} />
                         )}
                     </div>
@@ -1252,29 +1385,30 @@ function Tile(props) {
                      {/* Territory Layer: renders clan-specific territory shading beneath items/monsters/buildings */}
                      { (props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory) && (() => {
                          const rawClan = props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory;
-                         const clan = typeof rawClan === 'object' ? rawClan.clan || rawClan.type : String(rawClan);
+                         const clan = (typeof rawClan === 'object' ? rawClan.clan || rawClan.type || rawClan.affiliation : String(rawClan)).toLowerCase();
                          if (color === 'black') return null;
                          let territoryBg = 'rgba(90, 60, 30, 0.22)';
                          let borderColor = 'rgba(125, 85, 45, 0.35)';
-                         if (clan === 'cave' || clan === 'cave_clan') {
+                         if (clan.includes('cave')) {
                              territoryBg = 'rgba(60, 70, 90, 0.20)';
                              borderColor = 'rgba(85, 95, 120, 0.35)';
-                         } else if (clan === 'woodland' || clan === 'woodland_clan') {
+                         } else if (clan.includes('woodland')) {
                              territoryBg = 'rgba(25, 75, 30, 0.22)';
                              borderColor = 'rgba(40, 110, 50, 0.35)';
-                         } else if (clan === 'shadow' || clan === 'shadow_clan') {
+                         } else if (clan.includes('shadow')) {
                              territoryBg = 'rgba(50, 10, 75, 0.22)';
                              borderColor = 'rgba(75, 20, 110, 0.35)';
-                         } else if (clan === 'paradox' || clan === 'paradox_clan') {
+                         } else if (clan.includes('paradox')) {
                              territoryBg = 'rgba(95, 20, 95, 0.20)';
                              borderColor = 'rgba(130, 35, 130, 0.35)';
-                         } else if (clan === 'mud' || clan === 'mud_clan') {
+                         } else if (clan.includes('mud')) {
                              territoryBg = 'rgba(90, 60, 30, 0.22)';
                              borderColor = 'rgba(125, 85, 45, 0.35)';
-                         } else if (clan === 'player' || clan === 'crew') {
+                         } else if (clan.includes('player') || clan.includes('crew') || clan.includes('friendly')) {
                              territoryBg = 'rgba(30, 90, 160, 0.20)';
-                             borderColor = 'rgba(60, 135, 210, 0.35)';
+                             borderColor = 'transparent';
                          }
+                         const isFriendly = clan.includes('player') || clan.includes('crew') || clan.includes('friendly');
                          return (
                              <div 
                                  className={`territory-bg ${props.newlyClaimed ? 'newly-claimed' : ''}`} 
@@ -1282,8 +1416,8 @@ function Tile(props) {
                                      position: 'absolute', 
                                      top: 0, left: 0, right: 0, bottom: 0, 
                                      backgroundColor: territoryBg, 
-                                     boxShadow: `inset 0 0 5px ${borderColor}`, 
-                                     border: `1px dashed ${borderColor}`,
+                                     boxShadow: isFriendly ? 'none' : `inset 0 0 5px ${borderColor}`, 
+                                     border: isFriendly ? 'none' : `1px dashed ${borderColor}`,
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
                                      opacity: (isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') ? 0 : 1, 
@@ -1359,7 +1493,19 @@ function Tile(props) {
                            const isPlayerUnit = !!(props.isPlayerTile || props.isPlayerOnTile || (props.contains && (props.contains.type === 'avatar' || props.contains.type === 'camp')));
                            const isFlippedLeft = isPlayerUnit && (props.playerFacing === 'left' || props.playerFacingDirection === 'left');
                            const flipTransform = isFlippedLeft ? 'scaleX(-1)' : '';
-                           const baseTransform = isUnderConstruction ? `scale(1.5) rotate(${rotationDeg}deg)` : (isEnlargeableStructure && isOccupied ? `scale(2.0) rotate(${rotationDeg}deg)` : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none'));
+                           
+                           const isObsPlatform = sKey.includes('observer') || sKey.includes('observation') || (containsObj && (containsObj.type === 'observer_platform' || containsObj.subtype === 'observer_platform' || containsObj.building === 'observer_platform'));
+                           const rawTerritory = props.territory || props.territoryAffiliation || containsObj?.territory || containsObj?.territoryAffiliation || containsObj?.affiliation || props.affiliation || currentContains?.territory || currentContains?.territoryAffiliation || currentContains?.affiliation || (props.boardTiles && (props.boardTiles[props.index]?.territory || props.boardTiles[props.id]?.territory));
+                           const isEncompassedByFriendlyDomain = isObsPlatform && (rawTerritory === 'player' || rawTerritory === 'friendly' || rawTerritory === 'crew');
+                           const obsScale = isEncompassedByFriendlyDomain ? 1.5 : 1.0;
+
+                           const baseTransform = isUnderConstruction 
+                               ? `scale(${1.5 * obsScale}) rotate(${rotationDeg}deg)` 
+                               : (isEnlargeableStructure && isOccupied 
+                                   ? `scale(${2.0 * obsScale}) rotate(${rotationDeg}deg)` 
+                                   : (isEncompassedByFriendlyDomain 
+                                       ? `scale(1.5) ${rotationDeg ? `rotate(${rotationDeg}deg)` : ''}`.trim() 
+                                       : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')));
                            const portraitTransform = flipTransform ? (baseTransform === 'none' ? flipTransform : `${flipTransform} ${baseTransform}`) : baseTransform;
 
                            return (
@@ -1370,10 +1516,10 @@ function Tile(props) {
                                     backgroundSize: isVendorCell ? (is3x3Structure ? '300% 300%' : '200% 200%') : (isItemCell ? '80% 80%' : '100% 100%'),
                                     backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
                                     backgroundRepeat: 'no-repeat',
-                                    zIndex: isVendorCell ? 40 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex),
+                                    zIndex: isVendorCell ? 40 : (isObsPlatform || isEncompassedByFriendlyDomain ? 12 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex)),
                                     opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
                                     transform: portraitTransform,
-                                    transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction ? 'bottom center' : 'center center',
+                                    transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform ? 'bottom center' : 'center center',
                                     transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
                                     pointerEvents: 'none'
                                 }} />

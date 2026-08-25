@@ -4969,6 +4969,21 @@
     }
 }
 
+@keyframes territoryBoundaryPulse {
+    0% {
+        opacity: 0;
+        box-shadow: 0 0 16px #60a5fa, 0 0 24px #3b82f6;
+    }
+    50% {
+        opacity: 1;
+        box-shadow: 0 0 20px #60a5fa, 0 0 30px #3b82f6;
+    }
+    100% {
+        opacity: 1;
+        box-shadow: 0 0 6px #3b82f6;
+    }
+}
+
 @keyframes pocketWarpOut {
     0% {
         transform: scale(1) perspective(1000px) rotateX(0deg);
