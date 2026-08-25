@@ -286,7 +286,7 @@ export function BoardManager(){
         const isMatch = (str) => {
             if (!str || typeof str !== 'string') return false;
             const norm = str.toLowerCase().replace(/\s+/g, '_');
-            return norm === 'connecting_path' || norm === 'passage' || norm === 'path' || norm === 'connecting_path_tile';
+            return norm === 'connecting_path' || norm === 'passage' || norm === 'connecting_path_tile';
         };
 
         // Check runtime tile
@@ -297,7 +297,7 @@ export function BoardManager(){
         const opt = tile.optionType;
 
         if (isMatch(cType) || isMatch(cSubtype) || isMatch(bldg) || isMatch(opt)) return true;
-        if (tile.isConnectingPath || tile.isPassage || tile.type === 'path' || tile.type === 'connecting_path') return true;
+        if (tile.isConnectingPath || tile.isPassage || tile.type === 'connecting_path') return true;
 
         // Check persistent boardTile
         if (boardTile && boardTile !== tile) {
@@ -324,11 +324,11 @@ export function BoardManager(){
         let cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
         if (typeof cType === 'string') cType = cType.toLowerCase().replace(/\s+/g, '_');
 
-        // EXPLICITLY ignore empty_space, obscured_space, connecting_path, and passage
-        if (cType === 'empty_space' || cType === 'obscured_space' || cType === 'connecting_path' || cType === 'passage' || cType === 'path') return false;
+        // EXPLICITLY ignore empty_space, obscured_space, connecting_path, passage, and inscription
+        if (cType === 'empty_space' || cType === 'obscured_space' || cType === 'connecting_path' || cType === 'passage' || cType === 'path' || cType === 'inscription') return false;
 
         // If explicitly marked as NOT void
-        if (tile.isVoid === false || tile.type === 'empty_space' || tile.type === 'path' || tile.type === 'connecting_path') return false;
+        if (tile.isVoid === false || tile.type === 'empty_space' || tile.type === 'path' || tile.type === 'connecting_path' || tile.type === 'inscription') return false;
 
         // 'empty' usually means Mapmaker void, UNLESS it has a painted terrain
         if (cType === 'empty') {
@@ -604,6 +604,15 @@ export function BoardManager(){
 
     this.hasSolidBorder = (tileData, side) => {
         if (!tileData || !tileData.borders) return false;
+        if (this.isConnectingPathTile(tileData)) {
+            const loc = tileData.coordinates || (tileData.location ? [tileData.location[0], tileData.location[1]] : [tileData.id % 15, Math.floor(tileData.id / 15)]);
+            const col = loc[0] % 15;
+            const row = loc[1] % 15;
+            if (side === 'top' && (row === 0 || tileData.location?.[0] === 15)) return false;
+            if (side === 'bottom' && (row === 14 || tileData.location?.[0] === 29)) return false;
+            if (side === 'left' && (col === 0 || tileData.location?.[1] === 15)) return false;
+            if (side === 'right' && (col === 14 || tileData.location?.[1] === 29)) return false;
+        }
         const borderValue = tileData.borders[side];
         if (!borderValue || String(borderValue).includes('transparent') || String(borderValue) === 'none') return false;
         const str = String(borderValue).toLowerCase();
@@ -842,8 +851,8 @@ export function BoardManager(){
             const bldg = t.building || (typeof t.contains === 'object' ? t.contains.building : '') || '';
             const rawKey = String(cSub || bldg || cType).toLowerCase();
 
-            const isMonolith = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith';
-            if (isMonolith) {
+            const is2x2Structure = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith' || rawKey === 'war_camp' || rawKey === 'war_fort' || rawKey === 'earthen_fort' || rawKey === 'alchemist' || rawKey === 'merchant' || (rawKey.includes('monolith') && !rawKey.includes('shrine'));
+            if (is2x2Structure) {
                 const cObj = typeof t.contains === 'object' ? t.contains : { type: 'building', subtype: rawKey };
                 if (!cObj.vendorGroupId && (!cObj.vendorCell || cObj.vendorCell === 'anchor')) {
                     const col = i % 15;
@@ -1792,71 +1801,9 @@ export function BoardManager(){
         }
 
     this.ensurePygmiesSpawned = (board, spawnTileIndex = -1) => {
-        if (!board || !Array.isArray(board.tiles)) return;
-        const isTutorialDungeon = !!(this.dungeon && (this.dungeon.id === 'tutorial_dungeon' || this.dungeon.name === 'tutorial' || this.dungeon.isTutorial));
-        if (isTutorialDungeon) return;
-
-        const isDebugMode = !!(this.debugMode || (typeof window !== 'undefined' && window.debugMode === true));
-
-        // Check if pygmies are already present on this board
-        const existingPygmiesCount = board.tiles.filter(t => {
-            const type = t.contains ? (typeof t.contains === 'string' ? t.contains : t.contains.type) : null;
-            return type === 'pygmies';
-        }).length;
-
-        // If pygmies already exist, nothing more to do
-        if (existingPygmiesCount > 0) {
-            board.pygmiesRolled = true;
-            return;
-        }
-
-        // If not already rolled OR in debug mode with 0 existing pygmies:
-        if (!board.pygmiesRolled || isDebugMode) {
-            const pygmiesChance = 25;
-            const rollPygmies = Math.floor(Math.random() * 100);
-
-            if (rollPygmies < pygmiesChance) {
-                const pygmySubtypes = [
-                    'cave_individual',
-                    'cave_squad',
-                    'mud_group',
-                    'mud_individual',
-                    'mud_warband',
-                    'woodland_warband',
-                    'woodland_group',
-                    'woodland_individual'
-                ];
-                // Find all interior empty tiles
-                const emptyTiles = board.tiles.filter(t => {
-                    const type = t.contains ? (typeof t.contains === 'string' ? t.contains : t.contains.type) : null;
-                    const isEmpty = !type || type === 'empty_space' || type === 'obscured_space';
-                    const isSpawn = t.id === spawnTileIndex;
-                    let row = Math.floor(t.id / 15);
-                    let col = t.id % 15;
-                    const isInterior = row > 0 && row < 14 && col > 0 && col < 14;
-                    return isEmpty && !isSpawn && isInterior;
-                });
-
-                const shuffled = [...emptyTiles].sort(() => Math.random() - 0.5);
-                const spawnCount = Math.min(2, shuffled.length);
-
-                for (let i = 0; i < spawnCount; i++) {
-                    const chosenSubtype = pygmySubtypes[Math.floor(Math.random() * pygmySubtypes.length)];
-                    shuffled[i].contains = { type: 'pygmies', subtype: chosenSubtype };
-                    shuffled[i].image = this.getImageForContains(shuffled[i].contains, shuffled[i]);
-                    // If in-memory tiles array exists, sync to it as well
-                    if (Array.isArray(this.tiles) && this.tiles[shuffled[i].id]) {
-                        this.tiles[shuffled[i].id].contains = { type: 'pygmies', subtype: chosenSubtype };
-                        this.tiles[shuffled[i].id].image = this.getImageForContains(shuffled[i].contains, shuffled[i]);
-                    }
-                }
-            }
-            board.pygmiesRolled = true;
-        }
+        // Pygmies are now only spawned dynamically by unit generator buildings in Pygmy territory.
+        // Random dungeon load spawning has been removed.
     };
-
-        // Ensure board has pygmies rolled
-        this.ensurePygmiesSpawned(board, spawnTileIndex);
 
         // Cleanup malformed monster tile shapes that may have been saved in
         // older formats. Ensure every monster tile has the canonical object
@@ -1920,6 +1867,21 @@ export function BoardManager(){
             const _containsRaw = typeof tile.contains === 'string' ? tile.contains : (tile.contains && tile.contains.type);
             if (_containsRaw === 'avatar' || _containsRaw === 'camp') {
                 tile.contains = null;
+            }
+            if (_containsRaw === 'pygmies') {
+                const hasGeneratorInPygmyTerritory = board.tiles.some(bt => {
+                    if (!bt) return false;
+                    const cType = typeof bt.contains === 'object' ? bt.contains?.type : bt.contains;
+                    const cSub = typeof bt.contains === 'object' ? bt.contains?.subtype : '';
+                    const bldg = bt.building || cSub;
+                    const isGen = (cType === 'building' || bt.building) && (bldg === 'earthen_fort' || bldg === 'war_camp' || bldg === 'war_fort');
+                    if (!isGen) return false;
+                    const terr = String(bt.territory || bt.contains?.territory || '').toLowerCase();
+                    return terr.includes('mud') || terr.includes('cave') || terr.includes('woodland');
+                });
+                if (!hasGeneratorInPygmyTerritory) {
+                    tile.contains = null;
+                }
             }
             // ensure tile.contains is object-shaped (normalizeBoardTiles already attempted this)
             if (typeof tile.contains === 'string') {
@@ -2212,10 +2174,30 @@ export function BoardManager(){
         const subtype = this.getContainsSubtype(destinationTile.contains);
         
         if (this.isImpassableBuildingTile(destinationTile)) {
-            const rawBldg = subtype || destinationTile.building || 'building';
-            const bldgName = rawBldg.replace(/_/g, ' ').replace(' under construction', '');
+            const cObj = typeof destinationTile.contains === 'object' ? destinationTile.contains : null;
+            const rawBldg = String(
+                subtype ||
+                destinationTile.building ||
+                cObj?.building ||
+                cObj?.subtype ||
+                cObj?.name ||
+                cObj?.key ||
+                destinationTile.image ||
+                cObj?.image ||
+                type ||
+                'building'
+            ).toLowerCase();
+            const bldgName = (subtype || destinationTile.building || type || 'building').replace(/_/g, ' ').replace(' under construction', '');
             const article = ['a', 'e', 'i', 'o', 'u'].includes(bldgName.charAt(0).toLowerCase()) ? 'An' : 'A';
-            if (this.messaging) this.messaging(`${article} ${bldgName} obstructs your movement.`);
+            if (rawBldg.includes('dream_den') || rawBldg.includes('dream den')) {
+                try {
+                    if (this.triggerVendorEncounter) {
+                        this.triggerVendorEncounter('dream_den');
+                    }
+                } catch (e) {}
+            } else {
+                if (this.messaging) this.messaging(`${article} ${bldgName} obstructs your movement.`);
+            }
             return 'impassable';
         }
         
@@ -2346,7 +2328,7 @@ export function BoardManager(){
             case 'dream_den':
                 try {
                     if (this.triggerVendorEncounter) {
-                        this.triggerVendorEncounter('dream_den');
+                        this.triggerVendorEncounter('dream_den', destinationTile);
                     }
                 } catch (e) {}
                 return 'vendor';
@@ -2356,7 +2338,7 @@ export function BoardManager(){
             case 'vendor':
                 try {
                     if (this.triggerVendorEncounter) {
-                        this.triggerVendorEncounter(subtype);
+                        this.triggerVendorEncounter(subtype, destinationTile);
                     }
                 } catch (e) {}
                 return 'vendor';
@@ -2990,9 +2972,9 @@ export function BoardManager(){
 
         const destType = this.getContainsType(destinationTile.contains);
         const destSubtype = this.getContainsSubtype(destinationTile.contains);
-        const isBuildingTile = ['building', 'outpost', 'generator', 'war_camp', 'war_fort', 'dream_den', 'alchemist', 'merchant', 'shrine', 'observer_platform', 'earthen_fort'].includes(destType) ||
-                               ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction', 'dream_den', 'dream_den_under_construction'].includes(destSubtype) ||
-                               ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction', 'dream_den', 'dream_den_under_construction'].includes(destinationTile.building) ||
+        const isBuildingTile = ['building', 'outpost', 'generator', 'war_camp', 'war_fort', 'alchemist', 'merchant', 'shrine', 'observer_platform', 'earthen_fort'].includes(destType) ||
+                               ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'].includes(destSubtype) ||
+                               ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'].includes(destinationTile.building) ||
                                !!destinationTile.generatorData;
 
         if (destType === 'void') {
@@ -3159,7 +3141,7 @@ export function BoardManager(){
         if(this.playerTile.location[0] === 15){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'top')) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3178,7 +3160,7 @@ export function BoardManager(){
         if(this.playerTile.location[0] === 29){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'bottom')) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3197,7 +3179,7 @@ export function BoardManager(){
         if(this.playerTile.location[1] === 15){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'left')) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3216,7 +3198,7 @@ export function BoardManager(){
         if(this.playerTile.location[1] === 29){
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
             const currentTile = this.tiles[currentTileIdx];
-            if (!this.isConnectingPathTile(currentTile) || this.hasSolidBorder(currentTile, 'right')) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3285,6 +3267,9 @@ export function BoardManager(){
         }
     } 
     this.handleFogOfWar = (destinationTile, options = {}) => {
+        if (this.inSuperboard || this.currentBoard?.id === 'superboard') {
+            return [];
+        }
         const { skipRefresh = false } = options;
         // Reset all tiles to hidden
         this.tiles.forEach((e) => {
