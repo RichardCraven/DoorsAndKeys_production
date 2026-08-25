@@ -7041,7 +7041,6 @@ class DungeonPage extends React.Component {
 
         const structures = [];
         const seenGroupIds = new Set();
-        let totalInitialEnemies = 0;
 
         for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
             const mb = superboard.miniboards[mbIdx];
@@ -7052,13 +7051,6 @@ class DungeonPage extends React.Component {
             for (let tIdx = 0; tIdx < 225; tIdx++) {
                 const tile = mb.tiles[tIdx];
                 if (!tile) continue;
-
-                if (tile.contains && typeof tile.contains === 'object') {
-                    if (tile.contains.isPocketPygmy || tile.contains.subtype === 'pocket_pygmy' || tile.contains.isAutomaton || tile.contains.subtype === 'automaton') {
-                        if ((tile.contains.hp || 0) > 0) totalInitialEnemies++;
-                        continue;
-                    }
-                }
 
                 // Check for structures
                 const cType = typeof tile.contains === 'object' && tile.contains ? (tile.contains.type || tile.contains.subtype) : tile.contains;
@@ -7120,41 +7112,7 @@ class DungeonPage extends React.Component {
         const now = Date.now();
         if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
 
-        // 1. Spawn 4 initial enemies on very first load of this superboard instance
-        if (!superboard.initialEnemiesSpawned) {
-            superboard.initialEnemiesSpawned = true;
-            let neededInitial = Math.max(0, 4 - totalInitialEnemies);
-            let attempts = 0;
-            while (neededInitial > 0 && attempts < 100) {
-                attempts++;
-                const randomMbIdx = Math.floor(Math.random() * 9);
-                const randomTileIdx = Math.floor(Math.random() * 225);
-                const mb = superboard.miniboards[randomMbIdx];
-                if (mb && Array.isArray(mb.tiles)) {
-                    const tile = mb.tiles[randomTileIdx];
-                    const storedColor = tile?.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
-                    const isVoid = (tile?.contains === 'void' || (tile?.contains && tile.contains.type === 'void')) ||
-                                   (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
-                    const isEmpty = !isVoid && (!tile.contains || (typeof tile.contains === 'object' && tile.contains.type === 'empty_space'));
-
-                    if (tile && isEmpty) {
-                        tile.contains = {
-                            type: 'monster',
-                            subtype: 'automaton',
-                            isAutomaton: true,
-                            hp: 15,
-                            maxHp: 15,
-                            id: `pocket_automaton_${now}_${Math.random().toString(36).substring(2, 7)}_${attempts}`,
-                            homeStructureKey: null
-                        };
-                        tile.image = images.automaton || 'automaton';
-                        neededInitial--;
-                    }
-                }
-            }
-        }
-
-        // 2. Structures maintain their assigned capacity
+        // Structures maintain their assigned capacity (capped by building capacity)
         structures.forEach(struct => {
             if (struct.isDestroyed) return;
             
@@ -7548,39 +7506,56 @@ class DungeonPage extends React.Component {
         // 0. Process Domain Monolith territory expansion in pocket dimension
         this.tickPocketDomainMonoliths(superboard);
 
-        // 1. Process Structure Cooldowns & Respawns
+        // 1. Process Structure Cooldowns & Respawns (strictly enforcing quota caps)
         if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
         const pending = [...this._pocketStructureRespawns];
         this._pocketStructureRespawns = [];
 
         for (const item of pending) {
             if (now >= item.readyTime) {
-                const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, item.gx || 22, item.gy || 22);
-                if (spawnCoord) {
-                    const isAllied = !!item.isAllied;
-                    const newPygmy = {
-                        type: 'pygmies',
-                        subtype: 'pocket_pygmy',
-                        isPocketPygmy: true,
-                        isAllied: isAllied,
-                        faction: isAllied ? 'player' : 'wild',
-                        placedBy: isAllied ? 'player' : undefined,
-                        hp: 10,
-                        maxHp: 10,
-                        id: `pocket_pygmy_${now}_${Math.random().toString(36).substring(2, 7)}`,
-                        lastAttackTime: 0,
-                        homeStructureKey: item.structureKey
-                    };
-                    const targetMb = superboard.miniboards[spawnCoord.mbIdx];
-                    if (targetMb && targetMb.tiles[spawnCoord.tIdx]) {
-                        targetMb.tiles[spawnCoord.tIdx].contains = newPygmy;
-                        targetMb.tiles[spawnCoord.tIdx].image = images.woodland_individual || 'woodland_individual';
-                        if (this.isSuperboardCoordVisibleToUser(spawnCoord.gx, spawnCoord.gy, targetMb.tiles[spawnCoord.tIdx])) {
-                            this.displayMessage(`🛖 A new ${isAllied ? 'Allied' : 'Hostile'} Pocket Pygmy spawned from structure!`);
+                // Verify living pygmies for this structure to avoid exceeding quota
+                let currentLiving = 0;
+                for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                    const mb = superboard.miniboards[mbIdx];
+                    if (!mb || !Array.isArray(mb.tiles)) continue;
+                    for (let i = 0; i < mb.tiles.length; i++) {
+                        const t = mb.tiles[i];
+                        if (t && t.contains && t.contains.homeStructureKey === item.structureKey && (t.contains.hp || 0) > 0) {
+                            currentLiving++;
                         }
                     }
-                } else {
-                    this._pocketStructureRespawns.push(item);
+                }
+                const structType = (item.structureKey || '').split('_').slice(2).join('_');
+                const capacityCap = structType === 'war_fort' ? 5 : (structType === 'war_camp' ? 2 : 1);
+
+                if (currentLiving < capacityCap) {
+                    const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, item.gx || 22, item.gy || 22);
+                    if (spawnCoord) {
+                        const isAllied = !!item.isAllied;
+                        const newPygmy = {
+                            type: 'pygmies',
+                            subtype: 'pocket_pygmy',
+                            isPocketPygmy: true,
+                            isAllied: isAllied,
+                            faction: isAllied ? 'player' : 'wild',
+                            placedBy: isAllied ? 'player' : undefined,
+                            hp: 10,
+                            maxHp: 10,
+                            id: `pocket_pygmy_${now}_${Math.random().toString(36).substring(2, 7)}`,
+                            lastAttackTime: 0,
+                            homeStructureKey: item.structureKey
+                        };
+                        const targetMb = superboard.miniboards[spawnCoord.mbIdx];
+                        if (targetMb && targetMb.tiles[spawnCoord.tIdx]) {
+                            targetMb.tiles[spawnCoord.tIdx].contains = newPygmy;
+                            targetMb.tiles[spawnCoord.tIdx].image = images.woodland_individual || 'woodland_individual';
+                            if (this.isSuperboardCoordVisibleToUser(spawnCoord.gx, spawnCoord.gy, targetMb.tiles[spawnCoord.tIdx])) {
+                                this.displayMessage(`🛖 A new ${isAllied ? 'Allied' : 'Hostile'} Pocket Pygmy spawned from structure!`);
+                            }
+                        }
+                    } else {
+                        this._pocketStructureRespawns.push(item);
+                    }
                 }
             } else {
                 this._pocketStructureRespawns.push(item);
@@ -9562,10 +9537,10 @@ class DungeonPage extends React.Component {
                                                 if (!mergedByTile.has(`merchant_${indicator.tileId}`)) mergedByTile.set(`merchant_${indicator.tileId}`, { ...indicator, indicatorType: 'merchant' });
                                             });
 
+                                            let boardTiles = [];
                                             try {
                                                 const dungeon = this.state.dungeon || this.props.boardManager?.dungeon;
                                                 let boardObj = null;
-                                                let boardTiles = [];
                                                 let levelObj = null;
 
                                                 if (this.state.inSuperboard && this.state.superboardType && dungeon?.superboards?.[this.state.superboardType]) {
@@ -9768,7 +9743,7 @@ class DungeonPage extends React.Component {
                                                 });
                                             } catch (err) { }
 
-                                            return Array.from(mergedByTile.values()).map((indicator, idx) => (
+                                            const renderedIndicators = Array.from(mergedByTile.values()).map((indicator, idx) => (
                                                 <div
                                                     key={`${indicator.indicatorType}_${indicator.tileId}_${idx}`}
                                                     className={`minimap-indicator ${indicator.indicatorType} ${indicator.isPlayerBuilt ? 'player-built' : ''}`}
@@ -9779,6 +9754,85 @@ class DungeonPage extends React.Component {
                                                 >
                                                 </div>
                                             ));
+
+                                            let domainSvg = null;
+                                            if (isInSuperboard && boardTiles && boardTiles.length > 0) {
+                                                const domainCells = [];
+                                                const boundaryLines = [];
+
+                                                for (let by = 0; by < 15; by++) {
+                                                    for (let bx = 0; bx < 15; bx++) {
+                                                        const bIdx = by * 15 + bx;
+                                                        const t = boardTiles[bIdx];
+                                                        if (!t) continue;
+                                                        const cObj = t.contains && typeof t.contains === 'object' ? t.contains : null;
+                                                        const terr = t.territory || t.territoryAffiliation || cObj?.territory || cObj?.territoryAffiliation || t.affiliation || cObj?.affiliation;
+                                                        const isFriendly = terr && (String(terr).toLowerCase().includes('player') || String(terr).toLowerCase().includes('friendly') || String(terr).toLowerCase().includes('crew'));
+
+                                                        if (isFriendly) {
+                                                            domainCells.push(<rect key={`dm_${bx}_${by}`} x={bx} y={by} width={1} height={1} fill="rgba(56, 189, 248, 0.35)" />);
+
+                                                            const isTopFriendly = by > 0 && (() => {
+                                                                const nt = boardTiles[(by - 1) * 15 + bx];
+                                                                const nc = nt?.contains && typeof nt.contains === 'object' ? nt.contains : null;
+                                                                const nterr = nt?.territory || nt?.territoryAffiliation || nc?.territory || nc?.territoryAffiliation || nt?.affiliation || nc?.affiliation;
+                                                                return nterr && (String(nterr).toLowerCase().includes('player') || String(nterr).toLowerCase().includes('friendly') || String(nterr).toLowerCase().includes('crew'));
+                                                            })();
+                                                            const isBottomFriendly = by < 14 && (() => {
+                                                                const nt = boardTiles[(by + 1) * 15 + bx];
+                                                                const nc = nt?.contains && typeof nt.contains === 'object' ? nt.contains : null;
+                                                                const nterr = nt?.territory || nt?.territoryAffiliation || nc?.territory || nc?.territoryAffiliation || nt?.affiliation || nc?.affiliation;
+                                                                return nterr && (String(nterr).toLowerCase().includes('player') || String(nterr).toLowerCase().includes('friendly') || String(nterr).toLowerCase().includes('crew'));
+                                                            })();
+                                                            const isLeftFriendly = bx > 0 && (() => {
+                                                                const nt = boardTiles[by * 15 + (bx - 1)];
+                                                                const nc = nt?.contains && typeof nt.contains === 'object' ? nt.contains : null;
+                                                                const nterr = nt?.territory || nt?.territoryAffiliation || nc?.territory || nc?.territoryAffiliation || nt?.affiliation || nc?.affiliation;
+                                                                return nterr && (String(nterr).toLowerCase().includes('player') || String(nterr).toLowerCase().includes('friendly') || String(nterr).toLowerCase().includes('crew'));
+                                                            })();
+                                                            const isRightFriendly = bx < 14 && (() => {
+                                                                const nt = boardTiles[by * 15 + (bx + 1)];
+                                                                const nc = nt?.contains && typeof nt.contains === 'object' ? nt.contains : null;
+                                                                const nterr = nt?.territory || nt?.territoryAffiliation || nc?.territory || nc?.territoryAffiliation || nt?.affiliation || nc?.affiliation;
+                                                                return nterr && (String(nterr).toLowerCase().includes('player') || String(nterr).toLowerCase().includes('friendly') || String(nterr).toLowerCase().includes('crew'));
+                                                            })();
+
+                                                            if (!isTopFriendly) boundaryLines.push(<line key={`bt_${bx}_${by}`} x1={bx} y1={by} x2={bx + 1} y2={by} stroke="#38bdf8" strokeWidth="0.5" strokeLinecap="round" />);
+                                                            if (!isBottomFriendly) boundaryLines.push(<line key={`bb_${bx}_${by}`} x1={bx} y1={by + 1} x2={bx + 1} y2={by + 1} stroke="#38bdf8" strokeWidth="0.5" strokeLinecap="round" />);
+                                                            if (!isLeftFriendly) boundaryLines.push(<line key={`bl_${bx}_${by}`} x1={bx} y1={by} x2={bx} y2={by + 1} stroke="#38bdf8" strokeWidth="0.5" strokeLinecap="round" />);
+                                                            if (!isRightFriendly) boundaryLines.push(<line key={`br_${bx}_${by}`} x1={bx + 1} y1={by} x2={bx + 1} y2={by + 1} stroke="#38bdf8" strokeWidth="0.5" strokeLinecap="round" />);
+                                                        }
+                                                    }
+                                                }
+
+                                                if (domainCells.length > 0 || boundaryLines.length > 0) {
+                                                    domainSvg = (
+                                                        <svg
+                                                            className="minimap-domain-overlay"
+                                                            viewBox="0 0 15 15"
+                                                            style={{
+                                                                position: 'absolute',
+                                                                top: 0,
+                                                                left: 0,
+                                                                width: '100%',
+                                                                height: '100%',
+                                                                pointerEvents: 'none',
+                                                                zIndex: 2
+                                                            }}
+                                                        >
+                                                            {domainCells}
+                                                            {boundaryLines}
+                                                        </svg>
+                                                    );
+                                                }
+                                            }
+
+                                            return (
+                                                <React.Fragment>
+                                                    {domainSvg}
+                                                    {renderedIndicators}
+                                                </React.Fragment>
+                                            );
                                         })()}
                                     </div>
                                 })}
