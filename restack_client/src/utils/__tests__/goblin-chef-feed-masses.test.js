@@ -139,7 +139,7 @@ describe('Goblin Chef & Feed the Masses', () => {
                 stats: { speed: 11, hp: 40, atk: 10 },
                 coordinates: { x: 2, y: 2 },
                 skills: ['feed_the_masses', 'bite'],
-                cooldowns: { bite: 0 },
+                cooldowns: { feed_the_masses: 2, bite: 0 },
                 movesTakenThisRound: 0,
             },
             adjacentEnemy: {
@@ -148,7 +148,7 @@ describe('Goblin Chef & Feed the Masses', () => {
                 isMonster: false,
                 hp: 100,
                 starting_hp: 100,
-                stats: { speed: 0, dex: 0, hp: 100 },
+                stats: { speed: 0, dex: 0, hp: 100, def: 0 },
                 coordinates: { x: 1, y: 2 },
             }
         };

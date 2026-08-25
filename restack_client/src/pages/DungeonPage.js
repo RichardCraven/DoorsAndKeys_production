@@ -2648,6 +2648,7 @@ class DungeonPage extends React.Component {
             , isPvPMode: false
             , pvpMatchData: null
             , playerFloatStyle: { left: 0, top: 0, transform: 'translate3d(0px, 0px, 0px)' }
+            , playerFacing: 'right'
             , mobileTouchTileId: null
             , showAvatarRadialMenu: false
             , showPygmiesAttackPopup: false
@@ -5354,7 +5355,7 @@ class DungeonPage extends React.Component {
                         type: 'board-tile',
                         contains: null,
                         building: null,
-                        image: mbTile?.image,
+                        image: null,
                         terrain: mbTile?.terrain
                     });
                     continue;
@@ -5419,6 +5420,12 @@ class DungeonPage extends React.Component {
     movePlayerInSuperboard = (dx, dy) => {
         const { superboardPlayerPos, superboardSpawnCoords, justSpawnedInSuperboard, dungeon, superboardType } = this.state;
         if (!superboardPlayerPos || !dungeon || !superboardType) return;
+
+        if (dx < 0 && this.state.playerFacing !== 'left') {
+            this.setState({ playerFacing: 'left' });
+        } else if (dx > 0 && this.state.playerFacing !== 'right') {
+            this.setState({ playerFacing: 'right' });
+        }
 
         const nextGx = superboardPlayerPos.gx + dx;
         const nextGy = superboardPlayerPos.gy + dy;
@@ -5735,6 +5742,14 @@ class DungeonPage extends React.Component {
         const { fromQueue = false, fromTutorial = false, allowWhileLocked = false } = options;
         const isTutorialAllowed = fromTutorial || (this.state.isTutorialMode && !fromQueue);
         if (!direction || (this.state.keysLocked && !isTutorialAllowed && !allowWhileLocked) || this.state.inMonsterBattle || this._isMoving) return;
+
+        const isLeftDir = direction === 'left' || direction === 'upleft' || direction === 'downleft';
+        const isRightDir = direction === 'right' || direction === 'upright' || direction === 'downright';
+        if (isLeftDir && this.state.playerFacing !== 'left') {
+            this.setState({ playerFacing: 'left' });
+        } else if (isRightDir && this.state.playerFacing !== 'right') {
+            this.setState({ playerFacing: 'right' });
+        }
 
         if (this.state.dungeonInscriptionPicker) {
             const candidateDirection = direction === 'up' ? 'North' : direction === 'down' ? 'South' : direction === 'left' ? 'West' : direction === 'right' ? 'East' : null;
@@ -7312,12 +7327,98 @@ class DungeonPage extends React.Component {
         try { if (typeof updateUserRequest === 'function') updateUserRequest(getUserId(), meta).catch(() => {}); } catch(e) {}
     };
 
+    tickPocketDomainMonoliths = (superboard) => {
+        if (!superboard || !superboard.miniboards) return;
+        const now = Date.now();
+
+        superboard.miniboards.forEach((mb, mbIdx) => {
+            if (!mb || !mb.tiles) return;
+            mb.tiles.forEach((tile, tIdx) => {
+                if (!tile || !tile.contains) return;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
+                const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
+
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                if (!isDomainMonolith) return;
+                if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') return;
+
+                const affiliation = cObj?.affiliation || tile.affiliation;
+                if (!affiliation || affiliation === 'none') return;
+
+                const level = cObj?.level || tile.level || 1;
+                const maxGrowthCycles = level >= 2 ? 10 : 5;
+                let growthCycles = cObj?.growthCycles ?? tile.growthCycles ?? 0;
+                let lastGrowthTime = cObj?.lastGrowthTime ?? tile.lastGrowthTime ?? now;
+
+                if (growthCycles < maxGrowthCycles && (now - lastGrowthTime >= 30000)) {
+                    const nextCycle = growthCycles + 1;
+                    const anchorGx = (mbIdx % 3) * 15 + (tIdx % 15);
+                    const anchorGy = Math.floor(mbIdx / 3) * 15 + Math.floor(tIdx / 15);
+
+                    superboard.miniboards.forEach((targetMb, targetMbIdx) => {
+                        if (!targetMb || !targetMb.tiles) return;
+                        const mbX = (targetMbIdx % 3) * 15;
+                        const mbY = Math.floor(targetMbIdx / 3) * 15;
+
+                        targetMb.tiles.forEach((targetTile, targetTidx) => {
+                            if (!targetTile) return;
+                            const gx = mbX + (targetTidx % 15);
+                            const gy = mbY + Math.floor(targetTidx / 15);
+
+                            const dist = Math.max(Math.abs(gx - anchorGx), Math.abs(gy - anchorGy));
+                            if (dist <= nextCycle) {
+                                targetTile.territory = affiliation;
+                                targetTile.territoryAffiliation = affiliation;
+                                targetTile.territoryMonolithId = cObj?.id || `monolith_${mbIdx}_${tIdx}`;
+                            }
+                        });
+                    });
+
+                    const updatedContains = {
+                        ...(cObj || { type: 'generator', subtype: containsSubtype }),
+                        growthCycles: nextCycle,
+                        maxGrowthCycles: maxGrowthCycles,
+                        lastGrowthTime: now,
+                        level: level
+                    };
+
+                    tile.contains = updatedContains;
+                    tile.growthCycles = nextCycle;
+                    tile.lastGrowthTime = now;
+
+                    const affTitle = affiliation.toUpperCase();
+                    this.displayMessage(`✦ Domain Monolith expanded ${affTitle} territory (Ring ${nextCycle}/${maxGrowthCycles})!`);
+                }
+            });
+        });
+    };
+
+    isSuperboardCoordVisibleToUser = (gx, gy, targetTile) => {
+        if (typeof gx !== 'number' || typeof gy !== 'number') return true;
+        if (this.state.currentView !== 'dungeon') return true;
+
+        const minX = typeof this.state.superboardViewMinX === 'number' ? this.state.superboardViewMinX : 0;
+        const minY = typeof this.state.superboardViewMinY === 'number' ? this.state.superboardViewMinY : 0;
+
+        const vx = gx - minX;
+        const vy = gy - minY;
+        const inViewport = vx >= 0 && vx < 15 && vy >= 0 && vy < 15;
+        if (!inViewport) return false;
+
+        if (targetTile && targetTile.color === 'black') return false;
+        return true;
+    };
+
     tickPocketPygmies = async () => {
         const { superboardType, dungeon, superboardPlayerPos } = this.state;
         if (!superboardType || !dungeon || !dungeon.superboards?.[superboardType]) return;
 
         const superboard = dungeon.superboards[superboardType];
         const now = Date.now();
+
+        // 0. Process Domain Monolith territory expansion in pocket dimension
+        this.tickPocketDomainMonoliths(superboard);
 
         // 1. Process Structure Cooldowns & Respawns
         if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
@@ -7346,7 +7447,9 @@ class DungeonPage extends React.Component {
                     if (targetMb && targetMb.tiles[spawnCoord.tIdx]) {
                         targetMb.tiles[spawnCoord.tIdx].contains = newPygmy;
                         targetMb.tiles[spawnCoord.tIdx].image = images.woodland_individual || 'woodland_individual';
-                        this.displayMessage(`🛖 A new ${isAllied ? 'Allied' : 'Hostile'} Pocket Pygmy spawned from structure!`);
+                        if (this.isSuperboardCoordVisibleToUser(spawnCoord.gx, spawnCoord.gy, targetMb.tiles[spawnCoord.tIdx])) {
+                            this.displayMessage(`🛖 A new ${isAllied ? 'Allied' : 'Hostile'} Pocket Pygmy spawned from structure!`);
+                        }
                     }
                 } else {
                     this._pocketStructureRespawns.push(item);
@@ -7434,13 +7537,90 @@ class DungeonPage extends React.Component {
                 }
             }
 
-            // ── B. Attack Check (Adjacent Player or Other Pygmy, including diagonals) ──
+            // ── B. Scan for Enemy Buildings within Vision Radius (4 tiles) ──
+            const pygmyAff = pygmy.affiliation || (isAlliedPygmy ? 'friendly' : 'hostile');
+            const getBuildingAff = (targetObj, tileObj) => {
+                const aff = targetObj?.affiliation || tileObj?.affiliation;
+                if (aff) return aff;
+                if (targetObj?.placedBy === 'player' || targetObj?.ownerId === 'player' || targetObj?.isAllied || targetObj?.faction === 'player' || tileObj?.placedBy === 'player') return 'friendly';
+                if (targetObj?.faction === 'wild' || targetObj?.faction === 'hostile' || targetObj?.isHostile) return 'hostile';
+                return 'neutral';
+            };
+
+            const militaryBuildingKeys = ['outpost', 'earthen_fort', 'war_camp', 'war_fort', 'keep', 'fortress'];
+            let scannedEnemyBuilding = null;
+            let bestBuildingPriority = -1; // 2 = outpost, 1 = generator
+            let minBuildingDist = 999;
+
+            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                const mb = superboard.miniboards[mbIdx];
+                if (!mb || !Array.isArray(mb.tiles)) continue;
+                const mbX = mbIdx % 3;
+                const mbY = Math.floor(mbIdx / 3);
+                for (let tIdx = 0; tIdx < 225; tIdx++) {
+                    const t = mb.tiles[tIdx];
+                    if (!t || !t.contains) continue;
+                    const targetObj = typeof t.contains === 'object' ? t.contains : null;
+                    if (!targetObj) continue;
+
+                    const cSubtypeOrType = targetObj.subtype || targetObj.type;
+                    const structKey = String(cSubtypeOrType || t.building || targetObj.building || '').toLowerCase();
+                    const matchingKey = militaryBuildingKeys.find(k => structKey.includes(k));
+                    if (!matchingKey) continue;
+
+                    const hp = typeof targetObj.hp === 'number' ? targetObj.hp : 10;
+                    if (hp <= 0 || targetObj.destroyedAt) continue;
+
+                    const bAff = getBuildingAff(targetObj, t);
+                    if (bAff === pygmyAff) continue; // Must be non-same-affiliation!
+
+                    const lX = tIdx % 15;
+                    const lY = Math.floor(tIdx / 15);
+                    const bgx = mbX * 15 + lX;
+                    const bgy = mbY * 15 + lY;
+
+                    const dist = Math.max(Math.abs(gx - bgx), Math.abs(gy - bgy));
+                    if (dist > 4) continue; // Vision radius <= 4 tiles
+
+                    const isOutpost = matchingKey.includes('outpost');
+                    const priority = isOutpost ? 2 : 1; // Outpost wins priority over unit generators
+
+                    if (priority > bestBuildingPriority || (priority === bestBuildingPriority && dist < minBuildingDist)) {
+                        bestBuildingPriority = priority;
+                        minBuildingDist = dist;
+                        scannedEnemyBuilding = {
+                            gx: bgx,
+                            gy: bgy,
+                            mbIdx,
+                            tIdx,
+                            tile: t,
+                            targetObj,
+                            structKey: matchingKey,
+                            dist
+                        };
+                    }
+                }
+            }
+
+            // ── C. Attack Check (Adjacent Player, Enemy Building, or Other Unit) ──
             const canAttack = (now - (pygmy.lastAttackTime || 0)) >= 2000;
             if (canAttack) {
                 const adjTiles = this.getAdjacentSuperboardTiles(superboard, gx, gy);
 
-                // Target Option 1: Player Avatar (ONLY ATTACK PLAYER IF HOSTILE / NOT ALLIED)
-                if (!isAlliedPygmy && superboardPlayerPos) {
+                // Priority 1: Adjacent Enemy Building scanned within vision
+                let targetEnemyUnit = null;
+                if (scannedEnemyBuilding && scannedEnemyBuilding.dist === 1) {
+                    targetEnemyUnit = {
+                        gx: scannedEnemyBuilding.gx,
+                        gy: scannedEnemyBuilding.gy,
+                        mbIdx: scannedEnemyBuilding.mbIdx,
+                        tIdx: scannedEnemyBuilding.tIdx,
+                        tile: scannedEnemyBuilding.tile
+                    };
+                }
+
+                // Target Option 1: Player Avatar (ONLY ATTACK PLAYER IF HOSTILE / NOT ALLIED and no adjacent building)
+                if (!targetEnemyUnit && !isAlliedPygmy && superboardPlayerPos) {
                     const isPlayerAdjacent = Math.max(Math.abs(gx - superboardPlayerPos.gx), Math.abs(gy - superboardPlayerPos.gy)) === 1;
                     if (isPlayerAdjacent) {
                         pygmy.lastAttackTime = now;
@@ -7509,51 +7689,50 @@ class DungeonPage extends React.Component {
                     }
                 }
 
-                // Target Option 2: Other Pocket Pygmy or Automaton
-                // Allied pygmies ONLY attack non-allied (red-glow / hostile) pygmies or hostile Automatons!
-                // Hostile pygmies attack allied (blue-glow) pygmies!
-                const adjacentEnemyUnit = adjTiles.find(c => {
-                    if (!c.tile || !c.tile.contains || (c.tile.contains.hp || 0) <= 0) return false;
-                    const targetUnit = c.tile.contains;
-                    if (targetUnit.id && targetUnit.id === pygmy.id) return false;
-                    const isTargetAllied = !!(targetUnit.isAllied || targetUnit.faction === 'player' || targetUnit.placedBy === 'player' || targetUnit.ownerId) || c.tile.placedBy === 'player';
-                    const cSubtypeOrType = targetUnit.subtype || targetUnit.type;
-                    const structKey = cSubtypeOrType || c.tile.building || targetUnit.building;
-                    const isBuilding = ['earthen_fort', 'war_camp', 'war_fort'].includes(structKey);
-                    const isUnit = targetUnit.isPocketPygmy || targetUnit.subtype === 'pocket_pygmy' || targetUnit.isAutomaton;
+                // Target Option 2: Adjacent Enemy Unit or Building
+                if (!targetEnemyUnit) {
+                    targetEnemyUnit = adjTiles.find(c => {
+                        if (!c.tile || !c.tile.contains || (c.tile.contains.hp || 0) <= 0) return false;
+                        const targetUnit = c.tile.contains;
+                        if (targetUnit.id && targetUnit.id === pygmy.id) return false;
+                        const cSubtypeOrType = targetUnit.subtype || targetUnit.type;
+                        const structKey = cSubtypeOrType || c.tile.building || targetUnit.building;
+                        const isBuilding = ['earthen_fort', 'war_camp', 'war_fort', 'outpost', 'keep', 'fortress'].some(k => String(structKey).toLowerCase().includes(k));
+                        const isUnit = targetUnit.isPocketPygmy || targetUnit.subtype === 'pocket_pygmy' || targetUnit.isAutomaton;
 
-                    if (isAlliedPygmy) {
-                        return (isUnit || isBuilding) && !isTargetAllied;
-                    } else {
-                        return (isUnit || isBuilding) && isTargetAllied;
-                    }
-                });
+                        const targetAff = getBuildingAff(targetUnit, c.tile);
+                        return (isUnit || isBuilding) && targetAff !== pygmyAff;
+                    });
+                }
 
-                if (adjacentEnemyUnit) {
+                if (targetEnemyUnit) {
                     pygmy.lastAttackTime = now;
-                    const dCol = adjacentEnemyUnit.gx - gx;
-                    const dRow = adjacentEnemyUnit.gy - gy;
+                    const dCol = targetEnemyUnit.gx - gx;
+                    const dRow = targetEnemyUnit.gy - gy;
 
                     await this.animatePocketPygmyBump(superboard, unit.mbIdx, unit.tIdx, dCol, dRow);
                     const dmg = Math.floor(Math.random() * 3) + 1; // 1-3 damage
-                    const targetUnit = adjacentEnemyUnit.tile.contains;
-                    const isTargetAllied = !!(targetUnit.isAllied || targetUnit.faction === 'player' || targetUnit.placedBy === 'player' || targetUnit.ownerId) || adjacentEnemyUnit.tile.placedBy === 'player';
+                    const targetUnit = targetEnemyUnit.tile.contains;
                     const cSubtypeOrType = targetUnit.subtype || targetUnit.type;
-                    const structKey = cSubtypeOrType || adjacentEnemyUnit.tile.building || targetUnit.building;
-                    const isBuilding = ['earthen_fort', 'war_camp', 'war_fort'].includes(structKey);
+                    const structKey = cSubtypeOrType || targetEnemyUnit.tile.building || targetUnit.building;
+                    const isBuilding = ['earthen_fort', 'war_camp', 'war_fort', 'outpost', 'keep', 'fortress'].some(k => String(structKey).toLowerCase().includes(k));
                     
                     let targetName = 'Unknown Target';
                     if (isBuilding) {
-                        targetName = structKey.includes('war_fort') ? 'War Fort' : 'War Camp';
+                        targetName = String(structKey).includes('outpost') ? 'Outpost' : (String(structKey).includes('war_fort') ? 'War Fort' : 'War Structure');
                     } else {
-                        targetName = targetUnit.isAutomaton ? 'Automaton' : (isTargetAllied ? 'Allied Pygmy' : 'Hostile Pygmy');
+                        targetName = targetUnit.isAutomaton ? 'Automaton' : (isAlliedPygmy ? 'Hostile Pygmy' : 'Allied Pygmy');
                     }
                     
                     const attackerName = isAlliedPygmy ? 'Allied Pygmy' : 'Hostile Pygmy';
-                    const maxHpVal = targetUnit.maxHp || (isBuilding ? (structKey.includes('war_fort') ? 100 : 50) : 10);
+                    const maxHpVal = targetUnit.maxHp || (isBuilding ? (String(structKey).includes('war_fort') ? 100 : 50) : 10);
                     targetUnit.hp = (targetUnit.hp || maxHpVal) - dmg;
                     targetUnit.lastDamageTime = now;
-                    this.displayMessage(`⚔ ${attackerName} dealt ${dmg} damage to ${targetName}! (HP: ${targetUnit.hp}/${maxHpVal})`);
+                    
+                    const isCombatVisible = this.isSuperboardCoordVisibleToUser(targetEnemyUnit.gx, targetEnemyUnit.gy, targetEnemyUnit.tile);
+                    if (isCombatVisible) {
+                        this.displayMessage(`⚔ ${attackerName} dealt ${dmg} damage to ${targetName}! (HP: ${targetUnit.hp}/${maxHpVal})`);
+                    }
 
                     if (isBuilding && targetUnit.vendorGroupId) {
                         for (let mb of superboard.miniboards) {
@@ -7572,21 +7751,25 @@ class DungeonPage extends React.Component {
                         if (isBuilding) {
                             targetUnit.hp = 0;
                             if (!targetUnit.destroyedAt) targetUnit.destroyedAt = now;
-                            this.displayMessage(`💥 A ${targetName} was destroyed in combat!`);
+                            if (isCombatVisible) {
+                                this.displayMessage(`💥 A ${targetName} was destroyed in combat!`);
+                            }
                         } else {
                             if (targetUnit.homeStructureKey) {
                                 this._pocketStructureRespawns.push({
                                     readyTime: now + 10000,
                                     structureKey: targetUnit.homeStructureKey,
-                                    gx: adjacentEnemyUnit.gx,
-                                    gy: adjacentEnemyUnit.gy,
-                                    isAllied: isTargetAllied,
+                                    gx: targetEnemyUnit.gx,
+                                    gy: targetEnemyUnit.gy,
+                                    isAllied: targetUnit.isAllied,
                                     superboardType
                                 });
                             }
-                            adjacentEnemyUnit.tile.contains = null;
-                            adjacentEnemyUnit.tile.image = null;
-                            this.displayMessage(`💥 A ${targetName} was destroyed in combat!`);
+                            targetEnemyUnit.tile.contains = null;
+                            targetEnemyUnit.tile.image = null;
+                            if (isCombatVisible) {
+                                this.displayMessage(`💥 A ${targetName} was destroyed in combat!`);
+                            }
                         }
                     }
                     if (typeof this.props.boardManager?.refreshTiles === 'function') this.props.boardManager.refreshTiles();
@@ -7595,13 +7778,15 @@ class DungeonPage extends React.Component {
                 }
             }
 
-            // ── C. Roam & Pursuit Movement ──
+            // ── D. Roam & Pursuit Movement (Prioritizing Enemy Buildings in Vision Radius) ──
             const adjEmpty = this.getAdjacentSuperboardTiles(superboard, gx, gy).filter(c => c.isEmpty);
             if (adjEmpty.length > 0) {
                 let targetEnemyCoord = null;
-                let minEnemyDist = 999;
-
-                if (isAlliedPygmy) {
+                if (scannedEnemyBuilding && scannedEnemyBuilding.dist > 1) {
+                    // Prioritize moving towards enemy building in vision radius!
+                    targetEnemyCoord = { gx: scannedEnemyBuilding.gx, gy: scannedEnemyBuilding.gy };
+                } else if (isAlliedPygmy) {
+                    let minEnemyDist = 999;
                     for (const other of pygmiesList) {
                         const isOtherAllied = !!(other.pygmy.isAllied || other.pygmy.faction === 'player' || other.pygmy.placedBy === 'player');
                         if (!isOtherAllied && (other.pygmy.hp || 0) > 0) {
@@ -7613,6 +7798,7 @@ class DungeonPage extends React.Component {
                         }
                     }
                 } else {
+                    let minEnemyDist = 999;
                     if (superboardPlayerPos) {
                         const dPlayer = Math.max(Math.abs(gx - superboardPlayerPos.gx), Math.abs(gy - superboardPlayerPos.gy));
                         if (dPlayer <= 8) {
@@ -8322,6 +8508,16 @@ class DungeonPage extends React.Component {
 
                 if (outpost.disabledUntil && Date.now() < outpost.disabledUntil) {
                     return; // A disabled outpost will NOT fire projectiles!
+                }
+
+                // Check outpost affiliation vs target affiliation (Player avatar is 'friendly')
+                const containsObj = typeof outpost.contains === 'object' ? outpost.contains : null;
+                const outpostAff = outpost.affiliation || containsObj?.affiliation || (outpost.placedBy === 'player' || containsObj?.placedBy === 'player' || containsObj?.isAllied ? 'friendly' : (outpost.isHostile || containsObj?.isHostile ? 'hostile' : 'neutral'));
+                const playerAff = 'friendly';
+
+                // Outposts ONLY shoot at non-affiliated units!
+                if (outpostAff === playerAff) {
+                    return; // Friendly outpost will NOT shoot at friendly player crew!
                 }
                 let rawClan = outpost.territory || outpost.contains?.territory;
                 if (!rawClan && bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[outpost.id]) {
@@ -9242,14 +9438,16 @@ class DungeonPage extends React.Component {
                                                                     } else {
                                                                         // Legacy: Check if the actual tile on this plane looks like a generator
                                                                         const t = boardTiles.find(bt => Number(bt.id) === tId);
-                                                                        if (t && (t.generatorData || t.building || (t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'generator' || t.contains.type === 'building')))) {
+                                                                        const isTerr = t && (t.territory || t.contains?.territory || t.contains?.type === 'territory' || t.contains?.subtype === 'territory');
+                                                                        if (t && !isTerr && (t.generatorData || t.building || (t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'generator' || (t.contains.type === 'building' && t.contains.subtype !== 'territory'))))) {
                                                                             isOnCurrentPlane = true;
                                                                         } else {
                                                                             // Check opposite plane to see if it definitively belongs there
                                                                             const oppositePlane = levelObj ? (currentOrientation === 'B' ? levelObj.front : levelObj.back) : null;
                                                                             const oppBoard = oppositePlane && oppositePlane.miniboards && oppositePlane.miniboards[i];
                                                                             const oppTile = oppBoard && oppBoard.tiles && oppBoard.tiles.find(bt => Number(bt.id) === tId);
-                                                                            if (oppTile && (oppTile.generatorData || oppTile.building || (oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'generator' || oppTile.contains.type === 'building')))) {
+                                                                            const isOppTerr = oppTile && (oppTile.territory || oppTile.contains?.territory || oppTile.contains?.type === 'territory' || oppTile.contains?.subtype === 'territory');
+                                                                            if (oppTile && !isOppTerr && (oppTile.generatorData || oppTile.building || (oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'generator' || (oppTile.contains.type === 'building' && oppTile.contains.subtype !== 'territory'))))) {
                                                                                 isOnCurrentPlane = false; // It definitively belongs to the other plane
                                                                             }
                                                                         }
@@ -9272,18 +9470,29 @@ class DungeonPage extends React.Component {
 
                                                         // Inject ANY generator we've physically discovered
                                                         if (meta && meta.discoveredGenerators) {
+                                                            let metaChanged = false;
                                                             Object.keys(meta.discoveredGenerators).forEach(key => {
                                                                 const parts = key.split('_');
                                                                 if (parts.length >= 3 && String(parts[0]) === String(currentLevelId) && Number(parts[1]) === i) {
                                                                     const tId = Number(parts[2]);
                                                                     const genData = meta.discoveredGenerators[key];
                                                                     if (genData && genData.orientation === currentOrientation) {
-                                                                        if (!isNaN(tId) && !mergedByTile.has(`generator_${tId}`)) {
-                                                                            mergedByTile.set(`generator_${tId}`, { tileId: tId, indicatorType: 'generator' });
+                                                                        const t = boardTiles.find(bt => Number(bt.id) === tId);
+                                                                        if (t && this.isBuildingOrGeneratorTile(t)) {
+                                                                            if (!isNaN(tId) && !mergedByTile.has(`generator_${tId}`)) {
+                                                                                mergedByTile.set(`generator_${tId}`, { tileId: tId, indicatorType: 'generator' });
+                                                                            }
+                                                                        } else if (t) {
+                                                                            // Clean up stale or non-generator tile from local cache
+                                                                            delete meta.discoveredGenerators[key];
+                                                                            metaChanged = true;
                                                                         }
                                                                     }
                                                                 }
                                                             });
+                                                            if (metaChanged && typeof storeMeta === 'function') {
+                                                                storeMeta(meta);
+                                                            }
                                                         }
                                                     } catch (e) {}
                                                 }
@@ -9346,7 +9555,8 @@ class DungeonPage extends React.Component {
                                                             mergedByTile.set(`unit_${tile.id}`, { tileId: tile.id, indicatorType: isFriendly ? 'friendly-unit' : 'hostile-unit' });
                                                         }
 
-                                                        const isGen = this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData || isOutpost || isObserverPlatform || isWarStructure || isDreamDen;
+                                                        const isTerritory = containsType === 'territory' || containsSubtype === 'territory' || tile.territory || (typeof contains === 'object' && contains?.territory);
+                                                        const isGen = !isTerritory && (this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData || isOutpost || isObserverPlatform || isWarStructure || isDreamDen);
                                                         if (isGen && !isVendor) {
                                                             if (isWarStructure) {
                                                                 const isPB = (typeof contains === 'object' && (contains.placedBy === 'player' || contains.ownerId)) || tile.placedBy === 'player';
@@ -13095,7 +13305,7 @@ class DungeonPage extends React.Component {
 
         // Suppress directional movement and game hotkeys when an input is focused or any modal is open
         if (isInputFocused || (this.state.showModal && this.state.modalType) || this.state.dungeonInscriptionPicker || this.state.showGeneratorModal) {
-            if (!isModifierHeld && (dirMap[key] || key === 'b' || key === 'B')) {
+            if (!isModifierHeld && (dirMap[key] || ['b', 'B', 'i', 'I', 'c', 'C', 'q', 'Q', 'm', 'M', 'r', 'R', '1', 'x', 'X'].includes(key))) {
                 return;
             }
         }
@@ -13157,8 +13367,13 @@ class DungeonPage extends React.Component {
                     });
                     return;
                 } else if (this.state.inSuperboard) {
-                    event.preventDefault();
-                    this.updateSuperboardViewport(true);
+                    const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+                    if (activeTag !== 'input' && activeTag !== 'textarea') {
+                        event.preventDefault();
+                        this.updateSuperboardViewport(true);
+                    } else {
+                        return;
+                    }
                     this.displayMessage('🎯 Viewport recentered on avatar.');
                     return;
                 }
@@ -13731,6 +13946,13 @@ class DungeonPage extends React.Component {
         const tileIndex = tile.index !== undefined ? tile.index : (tile.id !== undefined ? tile.id : null);
         const startCoords = bm.playerTile.location;
         const endCoords = tile.coordinates;
+
+        const colDelta = endCoords[1] - startCoords[1];
+        if (colDelta < 0 && this.state.playerFacing !== 'left') {
+            this.setState({ playerFacing: 'left' });
+        } else if (colDelta > 0 && this.state.playerFacing !== 'right') {
+            this.setState({ playerFacing: 'right' });
+        }
 
         // Check if clicked tile is orthogonally adjacent to avatar (distance === 1)
         const dx = endCoords[0] - startCoords[0];
@@ -17767,7 +17989,16 @@ class DungeonPage extends React.Component {
         }
 
         const def = this.getGeneratorDef(tile);
-        const bName = def?.name || (tile.contains?.subtype ? tile.contains.subtype.replace(/_/g, ' ') : 'Structure');
+        let bName = 'Structure';
+        if (def && def.key !== 'unknown_building' && def.name) {
+            bName = def.name;
+        } else if (tile.contains && tile.contains.subtype) {
+            bName = tile.contains.subtype.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        } else if (tile.contains && tile.contains.type) {
+            bName = tile.contains.type.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        } else if (tile.building) {
+            bName = tile.building.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        }
         this.displayMessage(`${bName} illuminated. Tap or move into it again to interact.`);
 
         this.setState({ illuminatedTileId: tileId });
@@ -17794,6 +18025,10 @@ class DungeonPage extends React.Component {
         const ownerId = tile.contains?.ownerId || tile.generatorData?.ownerId;
         const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
         const isOwner = ownerId === currentUserId;
+
+        if (containsType === 'territory' || containsSubtype === 'territory' || tile.territory || tile.contains?.territory) {
+            return false;
+        }
 
         const hutKeys = ['hut', 'hut_under_construction', 'buildable_hut'];
         if (hutKeys.includes(containsSubtype) || hutKeys.includes(bldg) || hutKeys.includes(img)) {
@@ -18035,8 +18270,8 @@ class DungeonPage extends React.Component {
         }
 
         return {
-            key: 'unknown_building',
-            name: 'Unknown Building',
+            key: containsSubtype || 'unknown_building',
+            name: containsSubtype ? containsSubtype.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : (containsType ? containsType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Unknown Building'),
             resource: 'Unknown',
             currencyType: null,
             rate: 0,
@@ -18174,6 +18409,26 @@ class DungeonPage extends React.Component {
 
     openGeneratorModal = (tile) => {
         if (!tile) return;
+        const bm = this.props.boardManager;
+        const vAnchor = (typeof tile.contains === 'object' && tile.contains?.vendorAnchorId) ?? tile.vendorAnchorId;
+        if (vAnchor !== undefined && vAnchor !== null && Number(vAnchor) !== Number(tile.id)) {
+            if (bm && bm.tiles && bm.tiles[vAnchor]) {
+                tile = bm.tiles[vAnchor];
+            } else {
+                const superboard = this.state.dungeon?.superboards?.[this.state.superboardType] || bm?.dungeon?.superboards?.[this.state.superboardType];
+                if (superboard && superboard.miniboards) {
+                    for (const mb of superboard.miniboards) {
+                        if (mb && mb.tiles) {
+                            const match = mb.tiles.find(t => t && Number(t.id) === Number(vAnchor));
+                            if (match) {
+                                tile = match;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
         this.clearIlluminatedTile();
         this._isMoving = false;
         this._processingQueuedMove = false;
@@ -18184,7 +18439,7 @@ class DungeonPage extends React.Component {
             this._movementRepeatInterval = null;
         }
 
-        const bm = this.props.boardManager;
+        const meta = getMeta() || {};
         if (bm && bm.tiles && bm.tiles[tile.id]) {
             const bmTile = bm.tiles[tile.id];
             const gData = bmTile.generatorData || (bmTile.contains && bmTile.contains.generatorData);
@@ -18192,24 +18447,29 @@ class DungeonPage extends React.Component {
                 tile.generatorData = { ...gData };
             }
         }
-        if (!tile.generatorData && bm && bm.currentLevel && bm.currentBoard) {
+        if (!tile.generatorData) {
             try {
-                const meta = getMeta() || {};
-                const tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
-                if (meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
+                let tileKey = null;
+                if (bm && bm.currentLevel && bm.currentBoard) {
+                    tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
+                }
+                if (tileKey && meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
                     tile.generatorData = { ...meta.activatedGenerators[tileKey] };
+                } else if (meta.activatedGenerators) {
+                    const match = Object.values(meta.activatedGenerators).find(g => g && Number(g.tileId) === Number(tile.id));
+                    if (match) tile.generatorData = { ...match };
                 }
             } catch (e) { }
         }
-        if (bm && bm.currentLevel && bm.currentBoard) {
-            try {
-                const meta = getMeta() || {};
-                const tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
-                if (meta.disabledOutposts && meta.disabledOutposts[tileKey] && Date.now() < meta.disabledOutposts[tileKey]) {
-                    tile.disabledUntil = meta.disabledOutposts[tileKey];
-                }
-            } catch (e) { }
-        }
+        try {
+            let tileKey = null;
+            if (bm && bm.currentLevel && bm.currentBoard) {
+                tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
+            }
+            if (tileKey && meta.disabledOutposts && meta.disabledOutposts[tileKey] && Date.now() < meta.disabledOutposts[tileKey]) {
+                tile.disabledUntil = meta.disabledOutposts[tileKey];
+            }
+        } catch (e) { }
 
         this.setState({
             showGeneratorModal: true,
@@ -19331,6 +19591,7 @@ class DungeonPage extends React.Component {
                 ] : (isLarge ? [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }] : [{ dx: 0, dy: 0 }]);
 
                 if (sb && sb.miniboards) {
+                    const anchorTileIdx = (gy % 15) * 15 + (gx % 15);
                     offsets.forEach(({ dx, dy }, idx) => {
                         const tGx = gx + dx;
                         const tGy = gy + dy;
@@ -19346,7 +19607,7 @@ class DungeonPage extends React.Component {
                             const tileObj = { ...buildingObj };
                             if (isLarge) {
                                 tileObj.vendorGroupId = vendorGroupId;
-                                tileObj.vendorAnchorId = targetTileIdx;
+                                tileObj.vendorAnchorId = anchorTileIdx;
                                 tileObj.vendorCell = vendorCells[idx] || 'anchor';
                             }
                             mb.tiles[targetTileIdx].contains = tileObj;
@@ -19608,7 +19869,7 @@ class DungeonPage extends React.Component {
 
         let footprint = [playerIdx];
         const isHuge = buildingDef.key === 'keep' || buildingDef.key === 'fortress';
-        const isLarge = !isHuge && (buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort' || buildingDef.key === 'dream_den' || buildingDef.key === 'hut' || buildingDef.key === 'alchemist' || buildingDef.key === 'merchant' || buildingDef.key === 'summoning_temple' || buildingDef.key === 'rift' || buildingDef.key === 'rift_2' || buildingDef.isLarge === true || buildingDef.isMultiTile === true);
+        const isLarge = !isHuge && (buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort' || buildingDef.key === 'dream_den' || buildingDef.key === 'hut' || buildingDef.key === 'alchemist' || buildingDef.key === 'merchant' || buildingDef.key === 'summoning_temple' || buildingDef.key === 'rift' || buildingDef.key === 'rift_2' || buildingDef.key === 'domain_monolith' || buildingDef.key === 'dark_domain_monolith' || buildingDef.isLarge === true || buildingDef.isMultiTile === true);
         
         if (isHuge) {
             if (isInPocketDimension && this.state.superboardPlayerPos) {
@@ -23403,12 +23664,15 @@ class DungeonPage extends React.Component {
                                     imageOverride={overlayImage && overlayImage.includes('/') ? overlayImage : null}
                                     contains={tile.contains}
                                     boardTiles={this.state.tiles}
+                                    inSuperboard={this.state.inSuperboard}
                                     terrain={tile.terrain}
                                     color={(tile.color && tile.color !== 'null' && tile.color !== 'undefined' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : 'transparent'}
                                     borders={tile.borders}
                                     partialObscured={!!tile.partialObscured}
                                     coordinates={tile.coordinates}
                                     index={tile.id}
+globalX={tile.globalX}
+globalY={tile.globalY}
                                     editMode={false}
                                     handleHover={this.handleOverlayHover}
                                     type={'overlay-tile'}
@@ -23509,6 +23773,7 @@ class DungeonPage extends React.Component {
                                     building={tile.building || (typeof tile.contains === 'object' ? (tile.contains?.building || tile.contains?.subtype) : null)}
                                     territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                                     boardTiles={this.state.tiles}
+                                    inSuperboard={this.state.inSuperboard}
                                     terrain={tile.terrain}
                                     color={safeColor}
                                     baseColor={tile.baseColor}
@@ -23520,6 +23785,8 @@ class DungeonPage extends React.Component {
                                     illuminated={activeIlluminatedAnchorId === tile.id || (activeIlluminatedAnchorId !== null && tile.contains?.vendorAnchorId === activeIlluminatedAnchorId) || !!tile.illuminated}
                                     coordinates={tile.coordinates}
                                     index={tile.id}
+globalX={tile.globalX}
+globalY={tile.globalY}
                                     showCoordinates={this.props.showCoordinates}
                                     editMode={false}
                                     handleHover={this.handleHover}
@@ -23527,6 +23794,7 @@ class DungeonPage extends React.Component {
                                     handleClick={this.handleClick}
                                     isMobileTouchHover={activeTouchAnchorId === tile.id || (activeTouchAnchorId !== null && tile.contains?.vendorAnchorId === activeTouchAnchorId)}
                                     isFadingOut={!!tile.isFadingOut}
+                                    playerFacing={this.state.playerFacing || 'right'}
                                 >
                                 </Tile>
                                 })
@@ -23699,6 +23967,7 @@ class DungeonPage extends React.Component {
                                         backgroundSize: 'contain',
                                         backgroundRepeat: 'no-repeat',
                                         backgroundPosition: 'center',
+                                        transform: (this.state.playerFacing === 'left') ? 'scaleX(-1)' : 'scaleX(1)',
                                     }}
                                     className="avatar-image-inner"
                                 />
@@ -24069,14 +24338,14 @@ class DungeonPage extends React.Component {
                         style={{
                             position: 'fixed',
                             inset: 0,
-                            backgroundColor: 'rgba(5, 4, 10, 0.85)',
-                            backdropFilter: 'blur(8px)',
+                            backgroundColor: 'transparent',
+                            backdropFilter: 'none',
+                            WebkitBackdropFilter: 'none',
                             zIndex: 10000,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontFamily: "'Inter', sans-serif",
-                            animation: 'fadeIn 0.2s ease-out'
+                            fontFamily: "'Inter', sans-serif"
                         }}
                         onClick={() => this.setState({ showDungeonInscriptionModal: false })}
                     >
@@ -24276,14 +24545,14 @@ class DungeonPage extends React.Component {
                             style={{
                                 position: 'fixed',
                                 inset: 0,
-                                backgroundColor: 'rgba(5, 4, 10, 0.85)',
-                                backdropFilter: 'blur(8px)',
+                                backgroundColor: 'transparent',
+                                backdropFilter: 'none',
+                                WebkitBackdropFilter: 'none',
                                 zIndex: 10000,
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontFamily: "'Inter', sans-serif",
-                                animation: 'fadeIn 0.2s ease-out'
+                                fontFamily: "'Cinzel', serif"
                             }}
                             onClick={() => this.closeGeneratorModal()}
                         >
@@ -24292,10 +24561,12 @@ class DungeonPage extends React.Component {
                                     position: 'relative',
                                     width: '92%',
                                     maxWidth: '480px',
-                                    background: 'linear-gradient(145deg, rgba(22, 18, 14, 0.98) 0%, rgba(12, 9, 7, 0.99) 100%)',
-                                    border: '2px solid #e5b54f',
-                                    borderRadius: '16px',
-                                    boxShadow: '0 20px 60px rgba(0,0,0,0.9), 0 0 30px rgba(229, 181, 79, 0.25)',
+                                    background: 'rgba(17, 18, 20, 0.98)',
+                                    border: '1px solid rgba(229, 181, 79, 0.5)',
+                                    borderRadius: '4px',
+                                    backdropFilter: 'none',
+                                    WebkitBackdropFilter: 'none',
+                                    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.9), inset 0 0 25px rgba(229, 181, 79, 0.05)',
                                     padding: '28px',
                                     color: '#f0ede5',
                                     textAlign: 'center'
@@ -24309,47 +24580,48 @@ class DungeonPage extends React.Component {
                                         position: 'absolute',
                                         top: '14px',
                                         right: '14px',
-                                        background: 'rgba(255,255,255,0.06)',
-                                        border: '1px solid rgba(255,255,255,0.2)',
-                                        color: '#ccc',
-                                        borderRadius: '50%',
-                                        width: '32px',
-                                        height: '32px',
+                                        background: 'transparent',
+                                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                                        borderRadius: '2px',
+                                        color: 'rgba(255, 255, 255, 0.7)',
+                                        width: '28px',
+                                        height: '28px',
                                         padding: '0',
                                         boxSizing: 'border-box',
                                         cursor: 'pointer',
                                         fontSize: '16px',
                                         display: 'flex',
                                         alignItems: 'center',
-                                        justifyContent: 'center'
+                                        justifyContent: 'center',
+                                        transition: 'all 0.2s ease'
                                     }}
                                 >✕</button>
 
                                 {/* Building Icon */}
                                 <div style={{
-                                    width: '80px',
-                                    height: '80px',
+                                    width: '76px',
+                                    height: '76px',
                                     margin: '0 auto 16px auto',
-                                    borderRadius: '16px',
-                                    background: 'radial-gradient(circle, #2a1f14 0%, #120c06 100%)',
-                                    border: '2px solid #e5b54f',
+                                    borderRadius: '4px',
+                                    background: 'rgba(0, 0, 0, 0.5)',
+                                    border: '1px solid rgba(229, 181, 79, 0.6)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    boxShadow: '0 6px 16px rgba(0,0,0,0.8)'
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.8), inset 0 0 10px rgba(229, 181, 79, 0.1)'
                                 }}>
                                     {imgUrl ? (
-                                        <img src={imgUrl} alt={def.name} style={{ width: '60px', height: '60px', objectFit: 'contain' }} />
+                                        <img src={imgUrl} alt={def.name} style={{ width: '56px', height: '56px', objectFit: 'contain' }} />
                                     ) : (
                                         <span style={{ fontSize: '36px' }}>{def.iconEmoji}</span>
                                     )}
                                 </div>
 
-                                <h2 style={{ color: '#f9b115', marginBottom: '8px', letterSpacing: '2px', fontSize: '22px', fontFamily: "'Cinzel', serif" }}>
+                                <h2 style={{ color: '#f9b115', marginBottom: '10px', letterSpacing: '2px', fontSize: '20px', fontFamily: "'Cinzel', serif", fontWeight: 400 }}>
                                     {def.name.toUpperCase()}{gData.automated ? ' (AUTOMATED)' : ''}
                                 </h2>
 
-                                <p style={{ fontSize: '14px', lineHeight: '1.6', color: 'rgba(240, 237, 229, 0.85)', marginBottom: '20px' }}>
+                                <p style={{ fontSize: '13px', lineHeight: '1.6', color: 'rgba(240, 237, 229, 0.85)', marginBottom: '20px', letterSpacing: '0.5px' }}>
                                     {(def.key === 'domain_monolith' || def.key === 'dark_domain_monolith') && hasUserPerk('domain_growth_reduction')
                                         ? def.description.replace('Every 12 hours', 'Every 10.8 hours (10% perk reduction active)')
                                         : def.description}
@@ -24357,9 +24629,9 @@ class DungeonPage extends React.Component {
 
                                 {def.rate > 0 && (
                                     <div style={{
-                                        background: 'rgba(0,0,0,0.5)',
-                                        border: '1px solid rgba(229, 181, 79, 0.3)',
-                                        borderRadius: '10px',
+                                        background: 'rgba(0,0,0,0.4)',
+                                        border: '1px solid rgba(229, 181, 79, 0.2)',
+                                        borderRadius: '3px',
                                         padding: '14px',
                                         marginBottom: '20px'
                                     }}>
@@ -24397,17 +24669,19 @@ class DungeonPage extends React.Component {
                                                 width: '100%',
                                                 boxSizing: 'border-box',
                                                 padding: '12px 24px',
-                                                borderRadius: '12px',
-                                                border: '1px solid #06b6d4',
-                                                background: 'linear-gradient(135deg, rgba(6, 182, 212, 0.4) 0%, rgba(14, 165, 233, 0.7) 100%)',
-                                                color: '#ffffff',
+                                                borderRadius: '2px',
+                                                border: '1px solid rgba(6, 182, 212, 0.6)',
+                                                background: 'rgba(6, 182, 212, 0.12)',
+                                                color: '#a5f3fc',
                                                 fontFamily: "'Cinzel', serif",
-                                                fontSize: '14px',
-                                                fontWeight: '700',
-                                                letterSpacing: '1px',
+                                                fontSize: '13px',
+                                                fontWeight: '400',
+                                                letterSpacing: '2px',
+                                                textTransform: 'uppercase',
                                                 cursor: 'pointer',
-                                                boxShadow: '0 4px 15px rgba(6, 182, 212, 0.3)',
-                                                transition: 'all 0.2s ease'
+                                                boxShadow: 'inset 0 0 15px rgba(6, 182, 212, 0.08), 0 0 10px rgba(6, 182, 212, 0.15)',
+                                                textShadow: '0 0 8px rgba(6, 182, 212, 0.5)',
+                                                transition: 'all 0.25s ease'
                                             }}
                                         >
                                             🤖 DEPLOY AUTOMATON
@@ -24422,17 +24696,19 @@ class DungeonPage extends React.Component {
                                                     width: '100%',
                                                     boxSizing: 'border-box',
                                                     padding: '12px 24px',
-                                                    borderRadius: '12px',
-                                                    border: '1px solid #f59e0b',
-                                                    background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.6) 0%, rgba(245, 158, 11, 0.85) 100%)',
-                                                    color: '#ffffff',
+                                                    borderRadius: '2px',
+                                                    border: '1px solid rgba(245, 158, 11, 0.6)',
+                                                    background: 'rgba(217, 119, 6, 0.12)',
+                                                    color: '#fde68a',
                                                     fontFamily: "'Cinzel', serif",
-                                                    fontSize: '15px',
-                                                    fontWeight: '700',
-                                                    letterSpacing: '1px',
+                                                    fontSize: '13px',
+                                                    fontWeight: '400',
+                                                    letterSpacing: '2px',
+                                                    textTransform: 'uppercase',
                                                     cursor: 'pointer',
-                                                    boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)',
-                                                    transition: 'all 0.2s ease'
+                                                    boxShadow: 'inset 0 0 15px rgba(245, 158, 11, 0.08), 0 0 10px rgba(245, 158, 11, 0.15)',
+                                                    textShadow: '0 0 8px rgba(245, 158, 11, 0.5)',
+                                                    transition: 'all 0.25s ease'
                                                 }}
                                             >
                                                 SABOTAGE WALL (1 Minute)
@@ -24468,19 +24744,19 @@ class DungeonPage extends React.Component {
                                                     width: '100%',
                                                     boxSizing: 'border-box',
                                                     padding: '12px 24px',
-                                                    borderRadius: '12px',
-                                                    border: `1px solid ${!btnDisabled ? '#3b82f6' : '#555555'}`,
-                                                    background: !btnDisabled
-                                                        ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.6) 0%, rgba(37, 99, 235, 0.85) 100%)'
-                                                        : 'linear-gradient(135deg, rgba(60, 60, 60, 0.5) 0%, rgba(90, 90, 90, 0.5) 100%)',
-                                                    color: !btnDisabled ? '#ffffff' : '#aaaaaa',
+                                                    borderRadius: '2px',
+                                                    border: `1px solid ${!btnDisabled ? 'rgba(59, 130, 246, 0.6)' : 'rgba(100, 100, 100, 0.3)'}`,
+                                                    background: !btnDisabled ? 'rgba(59, 130, 246, 0.12)' : 'rgba(30, 30, 30, 0.4)',
+                                                    color: !btnDisabled ? '#93c5fd' : '#666666',
                                                     fontFamily: "'Cinzel', serif",
-                                                    fontSize: '14px',
-                                                    fontWeight: '700',
-                                                    letterSpacing: '1px',
+                                                    fontSize: '13px',
+                                                    fontWeight: '400',
+                                                    letterSpacing: '2px',
+                                                    textTransform: 'uppercase',
                                                     cursor: btnDisabled ? 'not-allowed' : 'pointer',
-                                                    textShadow: !btnDisabled ? '0 1px 3px rgba(0,0,0,0.8)' : 'none',
-                                                    transition: 'all 0.2s ease',
+                                                    boxShadow: !btnDisabled ? 'inset 0 0 15px rgba(59, 130, 246, 0.08), 0 0 10px rgba(59, 130, 246, 0.15)' : 'none',
+                                                    textShadow: !btnDisabled ? '0 0 8px rgba(59, 130, 246, 0.5)' : 'none',
+                                                    transition: 'all 0.25s ease'
                                                 }}
                                             >
                                                 {btnText}
@@ -24497,17 +24773,19 @@ class DungeonPage extends React.Component {
                                                         width: '100%',
                                                         boxSizing: 'border-box',
                                                         padding: '12px 24px',
-                                                        borderRadius: '12px',
-                                                        border: '1px solid #f9b115',
-                                                        background: 'linear-gradient(135deg, rgba(201, 132, 10, 0.4) 0%, rgba(249, 177, 21, 0.7) 100%)',
-                                                        color: '#ffffff',
+                                                        borderRadius: '2px',
+                                                        border: '1px solid rgba(249, 177, 21, 0.6)',
+                                                        background: 'rgba(249, 177, 21, 0.12)',
+                                                        color: '#ffeb99',
                                                         fontFamily: "'Cinzel', serif",
-                                                        fontSize: '15px',
-                                                        fontWeight: '700',
-                                                        letterSpacing: '1px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '400',
+                                                        letterSpacing: '2px',
+                                                        textTransform: 'uppercase',
                                                         cursor: 'pointer',
-                                                        boxShadow: '0 4px 15px rgba(249, 177, 21, 0.3)',
-                                                        transition: 'all 0.2s ease'
+                                                        boxShadow: 'inset 0 0 15px rgba(249, 177, 21, 0.08), 0 0 10px rgba(249, 177, 21, 0.15)',
+                                                        textShadow: '0 0 8px rgba(249, 177, 21, 0.5)',
+                                                        transition: 'all 0.25s ease'
                                                     }}
                                                 >
                                                     COLLECT {def.resource.toUpperCase()} ({accumulated}/{def.cap})
@@ -24536,20 +24814,20 @@ class DungeonPage extends React.Component {
                                                     width: '100%',
                                                     boxSizing: 'border-box',
                                                     padding: '12px 24px',
-                                                    borderRadius: '12px',
-                                                    border: `1px solid ${canAfford ? '#a855f7' : '#555555'}`,
-                                                    background: canAfford
-                                                        ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.6) 0%, rgba(168, 85, 247, 0.85) 100%)'
-                                                        : 'linear-gradient(135deg, rgba(60, 60, 60, 0.5) 0%, rgba(90, 90, 90, 0.5) 100%)',
-                                                    color: canAfford ? '#ffffff' : '#aaaaaa',
+                                                    borderRadius: '2px',
+                                                    border: `1px solid ${canAfford ? 'rgba(168, 85, 247, 0.6)' : 'rgba(100, 100, 100, 0.3)'}`,
+                                                    background: canAfford ? 'rgba(147, 51, 234, 0.12)' : 'rgba(30, 30, 30, 0.4)',
+                                                    color: canAfford ? '#e9d5ff' : '#666666',
                                                     fontFamily: "'Cinzel', serif",
-                                                    fontSize: '14px',
-                                                    fontWeight: '700',
-                                                    letterSpacing: '1px',
+                                                    fontSize: '13px',
+                                                    fontWeight: '400',
+                                                    letterSpacing: '2px',
+                                                    textTransform: 'uppercase',
                                                     cursor: canAfford ? 'pointer' : 'not-allowed',
-                                                    boxShadow: canAfford ? '0 4px 15px rgba(168, 85, 247, 0.4)' : 'none',
+                                                    boxShadow: canAfford ? 'inset 0 0 15px rgba(168, 85, 247, 0.08), 0 0 10px rgba(168, 85, 247, 0.15)' : 'none',
+                                                    textShadow: canAfford ? '0 0 8px rgba(168, 85, 247, 0.5)' : 'none',
                                                     opacity: canAfford ? 1 : 0.6,
-                                                    transition: 'all 0.2s ease'
+                                                    transition: 'all 0.25s ease'
                                                 }}
                                             >
                                                 ATTEMPT TO OVERTAKE ({overtakeCost} RESOLVE)
@@ -24567,14 +24845,15 @@ class DungeonPage extends React.Component {
                                                         width: '100%',
                                                         boxSizing: 'border-box',
                                                         padding: '12px 24px',
-                                                        borderRadius: '12px',
-                                                        border: '1px solid #ef4444',
-                                                        background: 'rgba(239, 68, 68, 0.2)',
+                                                        borderRadius: '2px',
+                                                        border: '1px solid rgba(239, 68, 68, 0.4)',
+                                                        background: 'rgba(239, 68, 68, 0.12)',
                                                         color: '#fca5a5',
                                                         fontFamily: "'Cinzel', serif",
-                                                        fontSize: '14px',
-                                                        fontWeight: '700',
-                                                        letterSpacing: '1px',
+                                                        fontSize: '13px',
+                                                        fontWeight: '400',
+                                                        letterSpacing: '2px',
+                                                        textTransform: 'uppercase',
                                                         cursor: 'not-allowed',
                                                         opacity: 0.8
                                                     }}
@@ -24591,17 +24870,19 @@ class DungeonPage extends React.Component {
                                                     width: '100%',
                                                     boxSizing: 'border-box',
                                                     padding: '12px 24px',
-                                                    borderRadius: '12px',
-                                                    border: '1px solid #f59e0b',
-                                                    background: 'linear-gradient(135deg, rgba(217, 119, 6, 0.6) 0%, rgba(245, 158, 11, 0.85) 100%)',
-                                                    color: '#ffffff',
+                                                    borderRadius: '2px',
+                                                    border: '1px solid rgba(245, 158, 11, 0.6)',
+                                                    background: 'rgba(217, 119, 6, 0.12)',
+                                                    color: '#fde68a',
                                                     fontFamily: "'Cinzel', serif",
-                                                    fontSize: '15px',
-                                                    fontWeight: '700',
-                                                    letterSpacing: '1px',
+                                                    fontSize: '13px',
+                                                    fontWeight: '400',
+                                                    letterSpacing: '2px',
+                                                    textTransform: 'uppercase',
                                                     cursor: 'pointer',
-                                                    boxShadow: '0 4px 15px rgba(245, 158, 11, 0.4)',
-                                                    transition: 'all 0.2s ease'
+                                                    boxShadow: 'inset 0 0 15px rgba(245, 158, 11, 0.08), 0 0 10px rgba(245, 158, 11, 0.15)',
+                                                    textShadow: '0 0 8px rgba(245, 158, 11, 0.5)',
+                                                    transition: 'all 0.25s ease'
                                                 }}
                                             >
                                                 ATTEMPT TO SABOTAGE
@@ -24614,9 +24895,18 @@ class DungeonPage extends React.Component {
                                             if (def.cap === 0) {
                                                 const isMonolith = def.key === 'domain_monolith' || def.key === 'dark_domain_monolith';
                                                 const isObs = def.key === 'observer_platform' || def.key === 'observation_platform';
-                                                const isActiveMsg = isObs
-                                                    ? (gData.automated ? 'OBSERVATION AUTOMATED (PERMANENTLY REVEALED)' : 'OBSERVATION ACTIVE (FOG REVEALED)')
-                                                    : 'TERRITORY ACTIVE & EXPANDING';
+                                                let isActiveMsg = 'ACTIVE';
+                                                if (isMonolith) {
+                                                    isActiveMsg = 'TERRITORY ACTIVE & EXPANDING';
+                                                } else if (isObs) {
+                                                    isActiveMsg = gData.automated ? 'OBSERVATION AUTOMATED (PERMANENTLY REVEALED)' : 'OBSERVATION ACTIVE (FOG REVEALED)';
+                                                } else if (def.key === 'war_camp' || def.key === 'war_fort') {
+                                                    isActiveMsg = 'GARRISON ACTIVE';
+                                                } else if (def.key === 'earthen_fort') {
+                                                    isActiveMsg = 'FORTIFICATION ACTIVE';
+                                                } else if (def.key === 'outpost') {
+                                                    isActiveMsg = 'TERRITORY SECURED';
+                                                }
                                                 const actTime = gData.activatedAt || gData.activatedTime || tile.activatedAt || (tile.generatorData && tile.generatorData.activatedAt);
                                                 return (
                                                     <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
@@ -24626,9 +24916,10 @@ class DungeonPage extends React.Component {
                                                             padding: '12px 24px',
                                                             color: '#f9b115',
                                                             fontFamily: "'Cinzel', serif",
-                                                            fontSize: '15px',
-                                                            fontWeight: '700',
-                                                            letterSpacing: '1px'
+                                                            fontSize: '14px',
+                                                            fontWeight: '400',
+                                                            letterSpacing: '2px',
+                                                            textTransform: 'uppercase'
                                                         }}>
                                                             {isActiveMsg}
                                                         </div>
@@ -24647,17 +24938,19 @@ class DungeonPage extends React.Component {
                                                             width: '100%',
                                                             boxSizing: 'border-box',
                                                             padding: '12px 24px',
-                                                            borderRadius: '12px',
-                                                            border: '1px solid #f9b115',
-                                                            background: 'linear-gradient(135deg, rgba(201, 132, 10, 0.4) 0%, rgba(249, 177, 21, 0.7) 100%)',
-                                                            color: '#ffffff',
+                                                            borderRadius: '2px',
+                                                            border: '1px solid rgba(249, 177, 21, 0.6)',
+                                                            background: 'rgba(249, 177, 21, 0.12)',
+                                                            color: '#ffeb99',
                                                             fontFamily: "'Cinzel', serif",
-                                                            fontSize: '15px',
-                                                            fontWeight: '700',
-                                                            letterSpacing: '1px',
+                                                            fontSize: '13px',
+                                                            fontWeight: '400',
+                                                            letterSpacing: '2px',
+                                                            textTransform: 'uppercase',
                                                             cursor: 'pointer',
-                                                            boxShadow: '0 4px 15px rgba(249, 177, 21, 0.3)',
-                                                            transition: 'all 0.2s ease'
+                                                            boxShadow: 'inset 0 0 15px rgba(249, 177, 21, 0.08), 0 0 10px rgba(249, 177, 21, 0.15)',
+                                                            textShadow: '0 0 8px rgba(249, 177, 21, 0.5)',
+                                                            transition: 'all 0.25s ease'
                                                         }}
                                                     >
                                                         COLLECT {def.resource.toUpperCase()} ({accumulated}/{def.cap})
@@ -24679,20 +24972,20 @@ class DungeonPage extends React.Component {
                                                     width: '100%',
                                                     boxSizing: 'border-box',
                                                     padding: '12px 24px',
-                                                    borderRadius: '12px',
-                                                    border: `1px solid ${canAfford ? '#c084fc' : '#555555'}`,
-                                                    background: canAfford
-                                                        ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.5) 0%, rgba(192, 132, 252, 0.8) 100%)'
-                                                        : 'linear-gradient(135deg, rgba(60, 60, 60, 0.5) 0%, rgba(90, 90, 90, 0.5) 100%)',
-                                                    color: canAfford ? '#ffffff' : '#aaaaaa',
+                                                    borderRadius: '2px',
+                                                    border: `1px solid ${canAfford ? 'rgba(192, 132, 252, 0.6)' : 'rgba(100, 100, 100, 0.3)'}`,
+                                                    background: canAfford ? 'rgba(147, 51, 234, 0.12)' : 'rgba(30, 30, 30, 0.4)',
+                                                    color: canAfford ? '#d8c2ff' : '#666666',
                                                     fontFamily: "'Cinzel', serif",
-                                                    fontSize: '14px',
-                                                    fontWeight: '700',
-                                                    letterSpacing: '1px',
+                                                    fontSize: '13px',
+                                                    fontWeight: '400',
+                                                    letterSpacing: '2px',
+                                                    textTransform: 'uppercase',
                                                     cursor: canAfford ? 'pointer' : 'not-allowed',
-                                                    boxShadow: canAfford ? '0 4px 15px rgba(168, 85, 247, 0.4)' : 'none',
+                                                    boxShadow: canAfford ? 'inset 0 0 15px rgba(179, 136, 255, 0.08), 0 0 10px rgba(179, 136, 255, 0.1)' : 'none',
+                                                    textShadow: canAfford ? '0 0 8px rgba(179, 136, 255, 0.5)' : 'none',
                                                     opacity: canAfford ? 1 : 0.6,
-                                                    transition: 'all 0.2s ease'
+                                                    transition: 'all 0.25s ease'
                                                 }}
                                             >
                                                 ATTEMPT TO ACTIVATE (80 RESOLVE)
@@ -24708,17 +25001,19 @@ class DungeonPage extends React.Component {
                                                     width: '100%',
                                                     boxSizing: 'border-box',
                                                     padding: '12px 24px',
-                                                    borderRadius: '12px',
-                                                    border: '1px solid #4ade80',
-                                                    background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.4) 0%, rgba(74, 222, 128, 0.7) 100%)',
-                                                    color: '#ffffff',
+                                                    borderRadius: '2px',
+                                                    border: '1px solid rgba(74, 222, 128, 0.6)',
+                                                    background: 'rgba(34, 197, 94, 0.12)',
+                                                    color: '#bbf7d0',
                                                     fontFamily: "'Cinzel', serif",
-                                                    fontSize: '15px',
-                                                    fontWeight: '700',
-                                                    letterSpacing: '1px',
+                                                    fontSize: '13px',
+                                                    fontWeight: '400',
+                                                    letterSpacing: '2px',
+                                                    textTransform: 'uppercase',
                                                     cursor: 'pointer',
-                                                    boxShadow: '0 4px 15px rgba(74, 222, 128, 0.3)',
-                                                    transition: 'all 0.2s ease'
+                                                    boxShadow: 'inset 0 0 15px rgba(74, 222, 128, 0.08), 0 0 10px rgba(74, 222, 128, 0.15)',
+                                                    textShadow: '0 0 8px rgba(74, 222, 128, 0.5)',
+                                                    transition: 'all 0.25s ease'
                                                 }}
                                             >
                                                 ACTIVATE {def.name.toUpperCase()}
@@ -24738,8 +25033,9 @@ class DungeonPage extends React.Component {
                         style={{
                             position: 'fixed',
                             inset: 0,
-                            backgroundColor: 'rgba(5, 4, 10, 0.85)',
-                            backdropFilter: 'blur(8px)',
+                            backgroundColor: 'transparent',
+                            backdropFilter: 'none',
+                            WebkitBackdropFilter: 'none',
                             zIndex: 10005,
                             display: 'flex',
                             alignItems: 'center',
@@ -24800,8 +25096,9 @@ class DungeonPage extends React.Component {
                         style={{
                             position: 'fixed',
                             inset: 0,
-                            backgroundColor: 'rgba(5, 4, 10, 0.85)',
-                            backdropFilter: 'blur(8px)',
+                            backgroundColor: 'transparent',
+                            backdropFilter: 'none',
+                            WebkitBackdropFilter: 'none',
                             zIndex: 10005,
                             display: 'flex',
                             alignItems: 'center',
@@ -25912,8 +26209,9 @@ class DungeonPage extends React.Component {
                             left: 0,
                             right: 0,
                             bottom: 0,
-                            backgroundColor: 'rgba(0, 0, 0, 0.65)',
-                            backdropFilter: 'blur(4px)',
+                            backgroundColor: 'transparent',
+                            backdropFilter: 'none',
+                            WebkitBackdropFilter: 'none',
                             zIndex: 99988,
                             display: 'flex',
                             alignItems: 'center',
