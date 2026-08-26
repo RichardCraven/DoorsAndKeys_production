@@ -522,6 +522,7 @@ function Tile(props) {
     };
     const isBlackRenderedTile = (contains, color) => {
         if (isVoidContains(contains)) return true;
+        if (props.inSuperboard) return false;
         if (color === null || color === undefined) return false;
         const normalized = String(color).trim().toLowerCase();
         const compact = normalized.replace(/\s+/g, '');
@@ -567,44 +568,10 @@ function Tile(props) {
     if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0, 0, 0, 0.85)');
     if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0, 0, 0, 0.85)');
     const isBuilderTile = !!(props.isBuilder || props.isMapmaker || props.disableFogShading || props.disableShading || props.type === 'palette-tile' || props.type === 'builder-tile');
-    const isDebugMode = !isBuilderTile && !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
+    const isDebugMode = !isBuilderTile && !props.inSuperboard && !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
     const fogEdgeBoxShadow = (isDebugMode && isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
 
-    const isCurrentDarkTile = isBlackRenderedTile(currentContains, currentTileColor);
-    let isConcaveFogCorner = false;
-    let concaveFogGradient = null;
-
-    if (props.inSuperboard && isCurrentDarkTile && !isBuilderTile && isBoardGridTile && props.type !== 'overlay-tile' && props.type !== 'builder-tile' && props.type !== 'palette-tile') {
-        const topVis = !topIsShaded;
-        const bottomVis = !bottomIsShaded;
-        const leftVis = !leftIsShaded;
-        const rightVis = !rightIsShaded;
-        
-        if ((leftVis && rightVis) || (topVis && bottomVis)) {
-            isConcaveFogCorner = true;
-            concaveFogGradient = 'transparent';
-        } else if (topVis && rightVis) {
-            isConcaveFogCorner = true;
-            concaveFogGradient = 'radial-gradient(circle at 100% 0%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 40%, #000 75%, #000 100%)';
-        } else if (topVis && leftVis) {
-            isConcaveFogCorner = true;
-            concaveFogGradient = 'radial-gradient(circle at 0% 0%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 40%, #000 75%, #000 100%)';
-        } else if (bottomVis && rightVis) {
-            isConcaveFogCorner = true;
-            concaveFogGradient = 'radial-gradient(circle at 100% 100%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 40%, #000 75%, #000 100%)';
-        } else if (bottomVis && leftVis) {
-            isConcaveFogCorner = true;
-            concaveFogGradient = 'radial-gradient(circle at 0% 100%, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 40%, #000 75%, #000 100%)';
-        }
-    }
-    
-    if (isConcaveFogCorner && typeof window !== 'undefined' && window.debugFog) {
-        console.log('Concave corner rendering at id:', props.id, 'global:', props.globalX, props.globalY, 'neighbors:', {top: topNeighbor?.color, right: rightNeighbor?.color, bottom: bottomNeighbor?.color, left: leftNeighbor?.color});
-    }
-
-
-
-    const edgeLines = isBoardGridTile ? {
+    const edgeLines = (isBoardGridTile && !props.inSuperboard) ? {
         top: edgeColorForBoundary(
             props.borders && props.borders.top,
             topNeighbor && topNeighbor.borders ? topNeighbor.borders.bottom : null,
@@ -877,7 +844,7 @@ function Tile(props) {
                 '#8080807a' : 
                 ( props.type === 'overlay-tile' ? 
                     'transparent': 
-                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : (isConcaveFogCorner ? (props.baseColor || 'transparent') : color))),
+                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
             overflow: (isStructureTile || isIlluminatedGlow || isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden',
@@ -1376,17 +1343,37 @@ function Tile(props) {
                 );
             })()}
 
+                     {/* Void / Space Background for edges of pocket dimension */}
+                     { (props.isVoid || isVoidContains(currentContains) || currentContains === 'void' || (typeof currentContains === 'object' && currentContains?.type === 'void')) && (
+                         <div
+                             className="void-space-tile-bg"
+                             style={{
+                                 position: 'absolute',
+                                 top: 0,
+                                 left: 0,
+                                 right: 0,
+                                 bottom: 0,
+                                 backgroundColor: '#05030a',
+                                 backgroundImage: images.dream_tower_background ? `url(${images.dream_tower_background})` : 'none',
+                                 backgroundSize: '4500% 4500%',
+                                 backgroundPosition: `${((props.globalX ?? props.coordinates?.[1] ?? 0) / 45) * 100}% ${((props.globalY ?? props.coordinates?.[0] ?? 0) / 45) * 100}%`,
+                                 zIndex: 0,
+                                 pointerEvents: 'none'
+                             }}
+                         />
+                     )}
+
                      {/* Terrain background: chosen per-tile (terrain_1..terrain_16) and rendered beneath portrait/items */}
                      { props.terrain && (() => {
                          let terrainUrl = (props.terrain && props.terrain.includes('/')) ? props.terrain : (images[props.terrain] || null);
-                         return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: (color === 'black' && !isConcaveFogCorner) ? 0 : 0.5, transition: 'opacity 0.35s ease-in-out'}} />
+                         return <div className="terrain-bg" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundImage: terrainUrl ? toCssUrl(terrainUrl) : 'none', backgroundSize: 'cover', backgroundRepeat: 'no-repeat', backgroundPosition: 'center center', zIndex: 0, opacity: (color === 'black' && !props.inSuperboard) ? 0 : 0.5, transition: 'opacity 0.35s ease-in-out'}} />
                      })()}
 
                      {/* Territory Layer: renders clan-specific territory shading beneath items/monsters/buildings */}
                      { (props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory) && (() => {
                          const rawClan = props.territory || props.contains?.territory || currentContains?.territory || props.boardTiles?.[props.index]?.territory || props.boardTiles?.[props.id]?.territory;
                          const clan = (typeof rawClan === 'object' ? rawClan.clan || rawClan.type || rawClan.affiliation : String(rawClan)).toLowerCase();
-                         if (color === 'black') return null;
+                         if (color === 'black' && !props.inSuperboard) return null;
                          let territoryBg = 'rgba(90, 60, 30, 0.22)';
                          let borderColor = 'rgba(125, 85, 45, 0.35)';
                          if (clan.includes('cave')) {
@@ -1417,10 +1404,10 @@ function Tile(props) {
                                      top: 0, left: 0, right: 0, bottom: 0, 
                                      backgroundColor: territoryBg, 
                                      boxShadow: isFriendly ? 'none' : `inset 0 0 5px ${borderColor}`, 
-                                     border: isFriendly ? 'none' : `1px dashed ${borderColor}`,
+                                     border: isFriendly ? 'none' : `1px dashed ${borderColor}`, 
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
-                                     opacity: (isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') ? 0 : 1, 
+                                     opacity: ((isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') && !props.inSuperboard) ? 0 : 1, 
                                      transition: 'opacity 0.35s ease-in-out',
                                      animation: props.newlyClaimed ? 'territoryFadeIn 1.5s ease-in-out forwards' : 'none'
                                  }} 
@@ -1429,7 +1416,7 @@ function Tile(props) {
                       })()}
 
                       {/* Faint light source glow emanating from behind monster/pygmy portrait */}
-                      {isMonsterOrPygmyTile && !isBlackTile && props.type !== 'overlay-tile' && color !== 'black' && currentTileColor !== 'black' && (() => {
+                      {isMonsterOrPygmyTile && (!isBlackTile || props.inSuperboard) && props.type !== 'overlay-tile' && ((color !== 'black' && currentTileColor !== 'black') || props.inSuperboard) && (() => {
                           const isAlliedUnit = !!(
                               props.isAllied ||
                               (containsObj && (containsObj.isAllied || containsObj.faction === 'player' || containsObj.placedBy === 'player' || containsObj.isPlayerAllied)) ||
@@ -1477,54 +1464,50 @@ function Tile(props) {
                                   right: '-15%',
                                   bottom: '-15%',
                                   borderRadius: '50%',
-                                  background: 'radial-gradient(circle at center, rgba(255, 215, 0, 0.85) 0%, rgba(218, 165, 32, 0.55) 38%, rgba(180, 130, 15, 0.25) 65%, transparent 88%)',
                                   zIndex: 2,
-                                  pointerEvents: 'none',
-                                  opacity: (color === 'black' || props.type === 'overlay-tile') ? 0 : 1,
-                                  transition: 'opacity 0.2s ease-in-out, background 0.2s ease-in-out',
-                                  animation: 'keyGlowPulse 1.8s ease-in-out infinite alternate'
+                                  pointerEvents: 'none'
                               }}
                           />
                       )}
 
 
-                      {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
-                      {resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (() => {
-                           const isPlayerUnit = !!(props.isPlayerTile || props.isPlayerOnTile || (props.contains && (props.contains.type === 'avatar' || props.contains.type === 'camp')));
-                           const isFlippedLeft = isPlayerUnit && (props.playerFacing === 'left' || props.playerFacingDirection === 'left');
-                           const flipTransform = isFlippedLeft ? 'scaleX(-1)' : '';
-                           
-                           const isObsPlatform = sKey.includes('observer') || sKey.includes('observation') || (containsObj && (containsObj.type === 'observer_platform' || containsObj.subtype === 'observer_platform' || containsObj.building === 'observer_platform'));
-                           const rawTerritory = props.territory || props.territoryAffiliation || containsObj?.territory || containsObj?.territoryAffiliation || containsObj?.affiliation || props.affiliation || currentContains?.territory || currentContains?.territoryAffiliation || currentContains?.affiliation || (props.boardTiles && (props.boardTiles[props.index]?.territory || props.boardTiles[props.id]?.territory));
-                           const isEncompassedByFriendlyDomain = isObsPlatform && (rawTerritory === 'player' || rawTerritory === 'friendly' || rawTerritory === 'crew');
-                           const obsScale = isEncompassedByFriendlyDomain ? 1.5 : 1.0;
+           {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
+           {resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (() => {
+                const isAvatarPortrait = !!(props.contains && (props.contains.type === 'avatar' || props.contains.type === 'camp'));
+                const isFlippedLeft = isAvatarPortrait && (props.playerFacing === 'left' || props.playerFacingDirection === 'left');
+                const flipTransform = isFlippedLeft ? 'scaleX(-1)' : '';
+                
+                const isObsPlatform = sKey.includes('observer') || sKey.includes('observation') || (containsObj && (containsObj.type === 'observer_platform' || containsObj.subtype === 'observer_platform' || containsObj.building === 'observer_platform'));
+                const rawTerritory = props.territory || props.territoryAffiliation || containsObj?.territory || containsObj?.territoryAffiliation || containsObj?.affiliation || props.affiliation || currentContains?.territory || currentContains?.territoryAffiliation || currentContains?.affiliation || (props.boardTiles && (props.boardTiles[props.index]?.territory || props.boardTiles[props.id]?.territory));
+                const isEncompassedByFriendlyDomain = isObsPlatform && (rawTerritory === 'player' || rawTerritory === 'friendly' || rawTerritory === 'crew');
+                const obsScale = isEncompassedByFriendlyDomain ? 1.5 : 1.0;
 
-                           const baseTransform = isUnderConstruction 
-                               ? `scale(${1.5 * obsScale}) rotate(${rotationDeg}deg)` 
-                               : (isEnlargeableStructure && isOccupied 
-                                   ? `scale(${2.0 * obsScale}) rotate(${rotationDeg}deg)` 
-                                   : (isEncompassedByFriendlyDomain 
-                                       ? `scale(1.5) ${rotationDeg ? `rotate(${rotationDeg}deg)` : ''}`.trim() 
-                                       : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')));
-                           const portraitTransform = flipTransform ? (baseTransform === 'none' ? flipTransform : `${flipTransform} ${baseTransform}`) : baseTransform;
+                const baseTransform = isUnderConstruction 
+                    ? `scale(${1.5 * obsScale}) rotate(${rotationDeg}deg)` 
+                    : (isEnlargeableStructure && isOccupied 
+                        ? `scale(${2.0 * obsScale}) rotate(${rotationDeg}deg)` 
+                        : (isEncompassedByFriendlyDomain 
+                            ? `scale(1.5) ${rotationDeg ? `rotate(${rotationDeg}deg)` : ''}`.trim() 
+                            : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')));
+                const portraitTransform = flipTransform ? (baseTransform === 'none' ? flipTransform : `${flipTransform} ${baseTransform}`) : baseTransform;
 
-                           return (
-                               <div className="portrait" style={{
-                                    position: 'absolute',
-                                    top: 0, left: 0, right: 0, bottom: 0,
-                                    backgroundImage: toCssUrl(resolvedPortraitUrl),
-                                    backgroundSize: isVendorCell ? (is3x3Structure ? '300% 300%' : '200% 200%') : (isItemCell ? '80% 80%' : '100% 100%'),
-                                    backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
-                                    backgroundRepeat: 'no-repeat',
-                                    zIndex: isVendorCell ? 40 : (isObsPlatform || isEncompassedByFriendlyDomain ? 12 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex)),
-                                    opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
-                                    transform: portraitTransform,
-                                    transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform ? 'bottom center' : 'center center',
-                                    transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
-                                    pointerEvents: 'none'
-                                }} />
-                           );
-                       })()}
+                return (
+                    <div className="portrait" style={{
+                         position: 'absolute',
+                         top: 0, left: 0, right: 0, bottom: 0,
+                         backgroundImage: toCssUrl(resolvedPortraitUrl),
+                         backgroundSize: isVendorCell ? (is3x3Structure ? '300% 300%' : '200% 200%') : (isItemCell ? '80% 80%' : '100% 100%'),
+                         backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
+                         backgroundRepeat: 'no-repeat',
+                         zIndex: isVendorCell ? 40 : (isObsPlatform || isEncompassedByFriendlyDomain ? 12 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex)),
+                         opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
+                         transform: portraitTransform,
+                         transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform ? 'bottom center' : 'center center',
+                         transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
+                         pointerEvents: 'none'
+                    }} />
+                );
+            })()}
 
             {/* Soul Shard custom overlay */}
             { props.data && props.data.type === 'soul_shard' && (() => {
@@ -2301,22 +2284,6 @@ function Tile(props) {
                 }
                 return null;
             })()}
-
-            {isConcaveFogCorner && concaveFogGradient && (
-                <div
-                    className="concave-fog-corner"
-                    style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: concaveFogGradient,
-                        zIndex: 99,
-                        pointerEvents: 'none'
-                    }}
-                />
-            )}
         </div>
     )
 }

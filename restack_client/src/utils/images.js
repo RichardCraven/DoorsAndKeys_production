@@ -24,6 +24,7 @@ import hand_21 from '../assets/icons/items/weapons/hands/hands_numbered/hand_21.
 import hand_22 from '../assets/icons/items/weapons/hands/hands_numbered/hand_22.png';
 
 import fist_punch from '../assets/icons/items/weapons/hands/punch.png';
+import dream_tower_background from '../assets/graphics/dream_tower_background.jpg';
 // monsters
 import monster from '../assets/icons/monster.png'
 import avatar from '../assets/icons/avatar.png'
@@ -2834,6 +2835,7 @@ export {
     pocket_tower_4 as tower_4,
     pocket_tower_5 as tower_5,
     pocket_blacksmith as blacksmith,
+    dream_tower_background,
 };
 
 const portraitMap = {

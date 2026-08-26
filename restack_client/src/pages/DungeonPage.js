@@ -2590,6 +2590,7 @@ class DungeonPage extends React.Component {
             minimapMarkerTrayOpen: false,
             minimapPlaceMapMarkerStarted: false,
             minimapIndicators: [],
+            superboardFogVisibility: null,
             overlayHoveredTileId: null,
             mapMarkerInput: React.createRef(),
             markerSelectVal: React.createRef(),
@@ -5358,8 +5359,11 @@ class DungeonPage extends React.Component {
         const localPlayerX = gx - viewMinX;
         const localPlayerY = gy - viewMinY;
 
-        // Build the 15x15 viewport tile array (225 tiles)
+        // Build the 15x15 viewport tile array (225 tiles) and fog visibility
         const viewportTiles = [];
+        const fogVisibility = new Array(225).fill(false);
+        const domainTiles = [];
+
         for (let vy = 0; vy < 15; vy++) {
             for (let vx = 0; vx < 15; vx++) {
                 const globalX = viewMinX + vx;
@@ -5410,37 +5414,19 @@ class DungeonPage extends React.Component {
                     ))
                 );
 
+                if (inFriendlyDomain) {
+                    domainTiles.push({ vx, vy });
+                }
+
                 const isRevealed = inPlayerVision || inObsPlatformVision || inAnimVision || inFriendlyDomain;
+                fogVisibility[vTileIdx] = !!isRevealed;
 
                 const storedColor = mbTile?.color && mbTile.color !== 'null' && mbTile.color !== 'undefined' ? mbTile.color : null;
-                const isVoid = (mbTile?.contains === 'void' || (mbTile?.contains && mbTile.contains.type === 'void')) ||
-                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                const isVoid = !mbTile || (mbTile?.contains === 'void' || (mbTile?.contains && mbTile.contains.type === 'void')) || mbTile?.isVoid === true || globalX >= 45 || globalY >= 45 || mbX >= 3 || mbY >= 3;
                                
                 const superboardTexture = superboard.floorTexture;
                 const defaultEmptyColor = superboardType === 'dark' ? 'rgba(25, 20, 45, 0.95)' : '#6b6057';
-                const tileColor = isVoid ? 'black' : (storedColor || (superboardTexture ? 'rgba(15, 15, 20, 0.55)' : defaultEmptyColor));
-
-                if (!isRevealed) {
-                    viewportTiles.push({
-                        id: vTileIdx,
-                        index: vTileIdx,
-                        globalX,
-                        globalY,
-                        coordinates: [vx, vy],
-                        color: 'black',
-                        baseColor: tileColor,
-                        type: 'board-tile',
-                        contains: null,
-                        building: null,
-                        image: null,
-                        terrain: mbTile?.terrain,
-                        territory: mbTile?.territory,
-                        territoryAffiliation: mbTile?.territoryAffiliation,
-                        territoryMonolithId: mbTile?.territoryMonolithId,
-                        newlyClaimed: mbTile?.newlyClaimed
-                    });
-                    continue;
-                }
+                const tileColor = isVoid ? 'black' : (storedColor && storedColor !== 'black' && storedColor !== '#000000' && storedColor !== '#000' ? storedColor : (superboardTexture ? 'rgba(15, 15, 20, 0.55)' : defaultEmptyColor));
 
                 if (mbTile && mbTile.terrain === undefined) {
                     if (!isVoid && !superboardTexture) {
@@ -5463,8 +5449,9 @@ class DungeonPage extends React.Component {
                     color: tileColor,
                     baseColor: tileColor,
                     type: 'board-tile',
-                    contains: mbTile?.contains,
-                    building: mbTile?.building || (typeof mbTile?.contains === 'object' ? (mbTile.contains?.building || mbTile.contains?.subtype) : null)
+                    contains: isVoid ? { type: 'void' } : mbTile?.contains,
+                    building: isVoid ? null : (mbTile?.building || (typeof mbTile?.contains === 'object' ? (mbTile.contains?.building || mbTile.contains?.subtype) : null)),
+                    isVoid: isVoid
                 });
             }
         }
@@ -5484,6 +5471,10 @@ class DungeonPage extends React.Component {
 
         this.setState({
             tiles: viewportTiles,
+            superboardFogVisibility: fogVisibility,
+            superboardObserverPlatforms: observerPlatforms,
+            superboardDomainTiles: domainTiles,
+            superboardFogRadius: fogRadius,
             superboardViewMinX: viewMinX,
             superboardViewMinY: viewMinY,
             minimap
@@ -24281,7 +24272,7 @@ class DungeonPage extends React.Component {
                             backgroundColor: 'transparent',
                             pointerEvents: this.state.minimapPlaceMapMarkerStarted ? 'auto' : 'none'
                         }}>
-                            {this.state.overlayTiles && this.state.overlayTiles.map((tile, i) => {
+                            {!this.state.inSuperboard && this.state.overlayTiles && this.state.overlayTiles.map((tile, i) => {
                                 let overlayImage = tile.image ? tile.image : null;
                                 return <Tile
                                     key={i}
@@ -24366,10 +24357,15 @@ globalY={tile.globalY}
                                     playerImgKey = 'avatar';
                                 }
 
-                                const defaultEmptyColor = 'black';
-                                const rawColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : defaultEmptyColor;
+                                const isVoidTile = tile.isVoid === true || (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void'));
+                                const defaultEmptyColor = (this.state.inSuperboard && !isVoidTile) ? '#6b6057' : 'black';
+                                const rawColor = isVoidTile 
+                                    ? 'black' 
+                                    : (tile.color && tile.color !== 'null' && tile.color !== 'undefined' && (!this.state.inSuperboard || (tile.color !== 'black' && tile.color !== '#000000' && tile.color !== '#000'))
+                                        ? tile.color 
+                                        : (this.state.inSuperboard ? '#6b6057' : defaultEmptyColor));
                                 const isMonsterTile = bm && typeof bm.isMonster === 'function' ? bm.isMonster(tile) : false;
-                                const safeColor = (String(rawColor).includes('ff0000') && (!isMonsterTile || !this.state.debugMode)) ? 'black' : rawColor;
+                                const safeColor = (String(rawColor).includes('ff0000') && (!isMonsterTile || !this.state.debugMode)) ? ((this.state.inSuperboard && !isVoidTile) ? '#6b6057' : 'black') : rawColor;
 
                                 const isPlayerOnTile = playerIdx !== null && tile.id === playerIdx;
 
@@ -24406,6 +24402,7 @@ globalY={tile.globalY}
                                     territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                                     boardTiles={this.state.tiles}
                                     inSuperboard={this.state.inSuperboard}
+                                    isVoid={isVoidTile}
                                     terrain={tile.terrain}
                                     color={safeColor}
                                     baseColor={tile.baseColor}
@@ -24432,6 +24429,114 @@ globalY={tile.globalY}
                                 })
                             })()}
                         </div>
+
+                        {/* Pocket Dimension Lightweight Fog of War SVG Mask Overlay */}
+                        {this.state.inSuperboard && (() => {
+                            const tileSize = this.state.tileSize || 48;
+                            const boardSize = this.state.boardSize || (tileSize * 15);
+                            const { superboardPlayerPos, superboardViewMinX = 0, superboardViewMinY = 0, superboardFogRadius = 2 } = this.state;
+                            const playerLocalX = superboardPlayerPos ? (superboardPlayerPos.gx - superboardViewMinX) : 7;
+                            const playerLocalY = superboardPlayerPos ? (superboardPlayerPos.gy - superboardViewMinY) : 7;
+                            const playerCx = (playerLocalX + 0.5) * tileSize;
+                            const playerCy = (playerLocalY + 0.5) * tileSize;
+                            const playerR = (superboardFogRadius + 0.5) * tileSize;
+
+                            return (
+                                <svg
+                                    className="pocket-fog-overlay"
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: boardSize + 'px',
+                                        height: boardSize + 'px',
+                                        pointerEvents: 'none',
+                                        zIndex: 24
+                                    }}
+                                    viewBox={`0 0 ${boardSize} ${boardSize}`}
+                                >
+                                    <defs>
+                                        <filter id="pocket-fog-feather">
+                                            <feGaussianBlur stdDeviation="3" />
+                                        </filter>
+                                        <mask id="pocket-fog-mask">
+                                            {/* Base shroud: entire canvas is covered */}
+                                            <rect x="0" y="0" width={boardSize} height={boardSize} fill="white" />
+
+                                            {/* Vision cutouts with slight feather blur for smooth edges */}
+                                            <g filter="url(#pocket-fog-feather)">
+                                                {/* 1. Player circular spotlight */}
+                                                <circle
+                                                    cx={playerCx}
+                                                    cy={playerCy}
+                                                    r={playerR}
+                                                    fill="black"
+                                                />
+
+                                                {/* 2. Observation platforms 10-tile radius circular vision */}
+                                                {(this.state.superboardObserverPlatforms || []).map((op, idx) => {
+                                                    const opLocalX = op.gx - superboardViewMinX;
+                                                    const opLocalY = op.gy - superboardViewMinY;
+                                                    const cx = (opLocalX + 0.5) * tileSize;
+                                                    const cy = (opLocalY + 0.5) * tileSize;
+                                                    const r = 10.5 * tileSize;
+                                                    return (
+                                                        <circle
+                                                            key={`op_mask_${idx}`}
+                                                            cx={cx}
+                                                            cy={cy}
+                                                            r={r}
+                                                            fill="black"
+                                                        />
+                                                    );
+                                                })}
+
+                                                {/* 3. Active vision reveal animation */}
+                                                {this.state.activeVisionRevealAnim && (() => {
+                                                    const anim = this.state.activeVisionRevealAnim;
+                                                    const animLocalX = anim.gx - superboardViewMinX;
+                                                    const animLocalY = anim.gy - superboardViewMinY;
+                                                    const cx = (animLocalX + 0.5) * tileSize;
+                                                    const cy = (animLocalY + 0.5) * tileSize;
+                                                    const r = (anim.radius + 0.5) * tileSize;
+                                                    return (
+                                                        <circle
+                                                            cx={cx}
+                                                            cy={cy}
+                                                            r={r}
+                                                            fill="black"
+                                                        />
+                                                    );
+                                                })()}
+
+                                                {/* 4. Friendly domain territory tiles */}
+                                                {(this.state.superboardDomainTiles || []).map((dt, idx) => (
+                                                    <rect
+                                                        key={`dt_mask_${idx}`}
+                                                        x={dt.vx * tileSize}
+                                                        y={dt.vy * tileSize}
+                                                        width={tileSize}
+                                                        height={tileSize}
+                                                        fill="black"
+                                                    />
+                                                ))}
+                                            </g>
+                                        </mask>
+                                    </defs>
+
+                                    {/* Black shroud rect masked by transparent vision holes */}
+                                    <rect
+                                        x="0"
+                                        y="0"
+                                        width={boardSize}
+                                        height={boardSize}
+                                        fill="#000000"
+                                        mask="url(#pocket-fog-mask)"
+                                    />
+                                </svg>
+                            );
+                        })()}
+
                         {/* Peer Players Overlay Elements */}
                         {Array.from(this.state.peerPlayers?.values() || []).map((peer) => {
                             if (!peer || !peer.location) return null;
