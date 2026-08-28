@@ -42,6 +42,7 @@ import BoardsPalette from './dungonBuilderViews/BoardsPalette'
 import { generateRandomDungeon } from '../utils/dungeon-generator'
 import { getRandomInscription } from '../utils/inscriptions-manager'
 import { updateTerrainAutotiles } from '../utils/autotile-utils'
+import { superboardCleanup } from '../utils/cache-cleanup'
 
 const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__';
 const GENERATE_DUNGEON_VALUE = '__generate_dungeon__';
@@ -68,7 +69,7 @@ export function createEmptySuperboard() {
       tiles: tiles
     });
   }
-  return { miniboards };
+  return { miniboards, victoryReward: { gold: 1000, dust: 100 } };
 }
 
 export function initializeSuperboards(dungeon) {
@@ -82,6 +83,13 @@ export function initializeSuperboards(dungeon) {
   if (!dungeon.superboards.dark || !Array.isArray(dungeon.superboards.dark.miniboards) || dungeon.superboards.dark.miniboards.length !== 9) {
     dungeon.superboards.dark = createEmptySuperboard();
   }
+  if (!dungeon.superboards.light.victoryReward) {
+    dungeon.superboards.light.victoryReward = { gold: 1000, dust: 100 };
+  }
+  if (!dungeon.superboards.dark.victoryReward) {
+    dungeon.superboards.dark.victoryReward = { gold: 1000, dust: 100 };
+  }
+  superboardCleanup(dungeon);
   return dungeon;
 }
 
@@ -403,6 +411,22 @@ class MapMakerPage extends React.Component {
         containsObj = { type: 'terrain', subtype: terrainOption.key };
         tileImage = terrainOption.image;
       }
+    } else if (pinnedOption.type === 'territory-tile') {
+      const territoryOption = this.props.mapMaker?.territoryOptions?.[pinnedOption.id];
+      if (territoryOption) {
+        containsObj = { type: 'empty_space', subtype: null };
+        tileImage = null;
+        tileColor = null;
+        const copy = { ...tile };
+        copy.territory = territoryOption.clan;
+        copy.affiliation = territoryOption.clan;
+        return {
+          ...copy,
+          contains: containsObj,
+          image: tileImage,
+          color: tileColor
+        };
+      }
     } else if (pinned) {
       if (pinned.optionType === 'void') {
         containsObj = { type: 'void', subtype: null };
@@ -423,8 +447,29 @@ class MapMakerPage extends React.Component {
       }
     }
 
+    const copy = { ...tile };
+    if (pinned && (pinned.optionType === 'empty space' || pinned.optionType === 'delete' || pinned.optionType === 'void')) {
+      delete copy.territory;
+      delete copy.affiliation;
+      delete copy.territoryAffiliation;
+      delete copy.isHostile;
+      delete copy.isPlayerBuilt;
+      delete copy.placedBy;
+      delete copy.ownerId;
+      delete copy.building;
+      delete copy.containsBuilding;
+      delete copy.inscriptions;
+      delete copy.wallInscription;
+      delete copy.inscriptionMarker;
+      delete copy.vendorCell;
+      delete copy.vendorAnchorId;
+      delete copy.vendorGroupId;
+      delete copy.newlyClaimed;
+      delete copy.borders;
+    }
+
     return {
-      ...tile,
+      ...copy,
       contains: containsObj,
       image: tileImage,
       color: tileColor
@@ -587,6 +632,15 @@ class MapMakerPage extends React.Component {
     dungeon = initializeSuperboards(dungeon);
     if (!dungeon.superboards || !dungeon.superboards[superboardKey]) return;
     dungeon.superboards[superboardKey].floorTexture = textureUrl;
+    this.setState({ loadedDungeon: dungeon, dungeonHasUnsavedChanges: true });
+  }
+
+  handleSuperboardVictoryRewardChange = (superboardKey, rewardObj) => {
+    if (!this.state.loadedDungeon) return;
+    let dungeon = JSON.parse(JSON.stringify(this.state.loadedDungeon));
+    dungeon = initializeSuperboards(dungeon);
+    if (!dungeon.superboards || !dungeon.superboards[superboardKey]) return;
+    dungeon.superboards[superboardKey].victoryReward = rewardObj;
     this.setState({ loadedDungeon: dungeon, dungeonHasUnsavedChanges: true });
   }
 
@@ -1185,24 +1239,39 @@ class MapMakerPage extends React.Component {
       return typeof borderValue === 'string' && borderValue.indexOf('2px solid') !== -1;
     });
 
+    const copy = { ...tile };
+    delete copy.territory;
+    delete copy.affiliation;
+    delete copy.territoryAffiliation;
+    delete copy.isHostile;
+    delete copy.isPlayerBuilt;
+    delete copy.placedBy;
+    delete copy.ownerId;
+    delete copy.building;
+    delete copy.containsBuilding;
+    delete copy.inscriptions;
+    delete copy.wallInscription;
+    delete copy.inscriptionMarker;
+    delete copy.vendorCell;
+    delete copy.vendorAnchorId;
+    delete copy.vendorGroupId;
+    delete copy.newlyClaimed;
+
     if (tile?.contains?.type === 'item' && hasPassageBorders) {
       return {
-        ...tile,
+        ...copy,
         image: null,
         color: null,
-        contains: { type: 'passage', subtype: null },
-        territory: null
+        contains: { type: 'passage', subtype: null }
       };
     }
 
+    delete copy.borders;
     return {
-      ...tile,
+      ...copy,
       image: null,
       color: null,
-      contains: { type: 'empty_space', subtype: null },
-      borders: null,
-      territory: null,
-      inscriptions: null
+      contains: { type: 'empty_space', subtype: null }
     };
   }
 
@@ -5838,6 +5907,43 @@ class MapMakerPage extends React.Component {
 
     return plane;
   }
+  validateSuperboard = (superboard) => {
+    if (!superboard || !Array.isArray(superboard.miniboards)) {
+      return { valid: false, hasSpawn: false, hasEnemySpawn: false, errors: ['Superboard has no miniboards'] };
+    }
+    let hasSpawn = false;
+    let hasEnemySpawn = false;
+
+    for (const mb of superboard.miniboards) {
+      if (!mb || !Array.isArray(mb.tiles)) continue;
+      for (const t of mb.tiles) {
+        if (!t) continue;
+        const cType = typeof t.contains === 'object' && t.contains ? (t.contains.type || t.contains.subtype) : t.contains;
+        const cSubtype = typeof t.contains === 'object' && t.contains ? t.contains.subtype : null;
+        const img = String(t.image || '').toLowerCase();
+        const opt = String(t.optionType || '').toLowerCase();
+
+        if (cType === 'spawn_point' || cSubtype === 'spawn_point' || img.includes('spawn_point')) {
+          hasSpawn = true;
+        }
+        if (cType === 'narrative' || cSubtype === 'narrative' || cType === 'narrative_visited' || img === 'narrative' || opt === 'narrative' || t.isEnemySpawn || t.originalMarker === 'narrative') {
+          hasEnemySpawn = true;
+        }
+      }
+    }
+
+    const errors = [];
+    if (!hasSpawn) errors.push('Pocket plane missing Player Spawn Point tile.');
+    if (!hasEnemySpawn) errors.push('Pocket plane missing Enemy Spawn Point (Narrative marker tile).');
+
+    return {
+      valid: hasSpawn && hasEnemySpawn,
+      hasSpawn,
+      hasEnemySpawn,
+      errors
+    };
+  };
+
   validateDungeon = (dungeon) => {
     if (!dungeon) return null;
     if (!Array.isArray(dungeon.levels)) {
@@ -5868,6 +5974,21 @@ class MapMakerPage extends React.Component {
       }
       level.valid = levelValid;
     }
+
+    if (dungeon.superboards && typeof dungeon.superboards === 'object') {
+      Object.keys(dungeon.superboards).forEach(sbKey => {
+        const sb = dungeon.superboards[sbKey];
+        if (sb) {
+          const res = this.validateSuperboard(sb);
+          sb.valid = res.valid;
+          sb.validationErrors = res.errors;
+          if (!res.valid) {
+            dungeonValid = false;
+          }
+        }
+      });
+    }
+
     const hasSpawnPoints = this.dungeonHasSpawnPoint(dungeon);
     dungeon.valid = dungeonValid && hasSpawnPoints;
     return dungeon;
@@ -9519,6 +9640,7 @@ class MapMakerPage extends React.Component {
                 handleSuperboardTileHover={this.handleSuperboardTileHover}
                 handleSuperboardFill={this.handleSuperboardFill}
                 handleSuperboardFloorTextureChange={this.handleSuperboardFloorTextureChange}
+                handleSuperboardVictoryRewardChange={this.handleSuperboardVictoryRewardChange}
                 pinnedOption={this.state.pinnedOption}
               ></DungeonView>}
 

@@ -172,15 +172,16 @@ export function MapMaker(props){
     ];
 
     this.generatorOptions = [
-        { key: 'cultivation_vat', name: 'Cultivation Vat', image: 'cultivation_vat' },
-        { key: 'larder', name: 'Larder', image: 'larder' },
-        { key: 'dust_collector', name: 'Dust Collector', image: 'dust_collector' },
+        { key: 'cultivation_vat', name: 'Cultivation Vat', image: 'cultivation_vat', isMultiTile: true, isLarge: true },
+        { key: 'larder', name: 'Larder', image: 'larder', isMultiTile: true, isLarge: true },
+        { key: 'dust_collector', name: 'Dust Collector', image: 'dust_collector', isMultiTile: true, isLarge: true },
         { key: 'domain_monolith', name: 'Domain Monolith', image: 'domain_monolith', isMultiTile: true, isLarge: true },
         { key: 'dark_domain_monolith', name: 'Dark Domain Monolith', image: 'dark_domain_monolith', isMultiTile: true, isLarge: true },
-        { key: 'lumber_mill', name: 'Lumber Mill', image: 'lumber_mill' },
-        { key: 'ore_mine', name: 'Ore Mine', image: 'ore_mine' },
-        { key: 'slate_mine', name: 'Slate Mine', image: 'slate_mine' },
-        { key: 'fungal_nursery', name: 'Fungal Nursery', image: 'fungal_nursery' },
+        { key: 'lumber_mill', name: 'Lumber Mill', image: 'lumber_mill', isMultiTile: true, isLarge: true },
+        { key: 'sawmill', name: 'Sawmill', image: 'lumber_mill', isMultiTile: true, isLarge: true },
+        { key: 'ore_mine', name: 'Ore Mine', image: 'ore_mine', isMultiTile: true, isLarge: true },
+        { key: 'slate_mine', name: 'Slate Mine', image: 'slate_mine', isMultiTile: true, isLarge: true },
+        { key: 'fungal_nursery', name: 'Fungal Nursery', image: 'fungal_nursery', isMultiTile: true, isLarge: true },
     ];
 
     this.dungeonLitterOptions = [

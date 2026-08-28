@@ -2276,35 +2276,6 @@ export default class CardDuel extends React.Component {
         return (
             <div className="pe-root" style={bgImg ? { backgroundImage: bgImg } : {}}>
                 <div className="pe-overlay" />
-                {(this.props.scrimmage || this.props.onClose) && (
-                    <button
-                        className="pe-btn pe-btn--exit-scrimmage"
-                        onClick={() => {
-                            if (this.props.onClose) this.props.onClose();
-                            else if (this.props.onFinish) this.props.onFinish({ winner: 'reaper', forfeited: true });
-                        }}
-                        style={{
-                            position: 'absolute',
-                            top: '15px',
-                            right: '20px',
-                            zIndex: 1000,
-                            padding: '8px 16px',
-                            backgroundColor: 'rgba(231, 76, 60, 0.25)',
-                            border: '1px solid #e74c3c',
-                            color: '#ff7675',
-                            borderRadius: '6px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: 'bold',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.5)'
-                        }}
-                    >
-                        ✕ Exit Scrimmage
-                    </button>
-                )}
                 <div className="pe-layout pe-layout--tactical">
 
                     {/* ── MAIN ARENA FLEX CONTAINER (Left Log | Center Arena | Right Runes) ── */}
@@ -2501,9 +2472,17 @@ export default class CardDuel extends React.Component {
                                 <div className="pe-hand-controls-left">
                                     <button
                                         className="pe-btn pe-btn--forfeit"
-                                        onClick={() => this.setState({ showForfeitModal: true })}
+                                        onClick={() => {
+                                            if (this.props.scrimmage && this.props.onClose) {
+                                                this.props.onClose();
+                                            } else if (this.props.scrimmage && this.props.onFinish) {
+                                                this.props.onFinish({ winner: 'reaper', forfeited: true });
+                                            } else {
+                                                this.setState({ showForfeitModal: true });
+                                            }
+                                        }}
                                     >
-                                        Forfeit
+                                        {this.props.scrimmage ? 'Exit Scrimmage' : 'Forfeit'}
                                     </button>
                                 </div>
                                 {this.renderFannedPlayerHand()}
@@ -2523,6 +2502,17 @@ export default class CardDuel extends React.Component {
 
                         {/* ── RIGHT SIDE: 3 Equipped Crew Rune Slots ── */}
                         <div className="pe-right-sidebar">
+                            {(this.props.scrimmage || this.props.onClose) && (
+                                <button
+                                    className="pe-exit-scrimmage-btn"
+                                    onClick={() => {
+                                        if (this.props.onClose) this.props.onClose();
+                                        else if (this.props.onFinish) this.props.onFinish({ winner: 'reaper', forfeited: true });
+                                    }}
+                                >
+                                    ✕ Exit Scrimmage
+                                </button>
+                            )}
                             <div className="pe-rune-slots-header">CREW RUNES</div>
                             <div className="pe-rune-slots-list">
                                 {[0, 1, 2].map(idx => {

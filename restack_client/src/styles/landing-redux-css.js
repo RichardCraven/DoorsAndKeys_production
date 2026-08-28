@@ -1680,7 +1680,16 @@ export const LANDING_REDUX_CSS = `
   border-radius: 10px;
   padding: 2px 8px;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.specialty-bonus-tag:hover {
+  background: rgba(229, 181, 79, 0.25) !important;
+  border-color: #ffd700 !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.35);
+  transform: translateY(-1px);
 }
 
 .specialty-card.selected .specialty-bonus-tag {

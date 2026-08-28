@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getMeta } from '../utils/session-handler';
+import * as images from '../utils/images';
 import { getInfirmary, commitToInfirmary, dischargeFromInfirmary, commitSageToInfirmary, returnSageFromInfirmary } from '../utils/infirmary-manager';
 
 export default function InfirmaryModal({ onClose, crewManager }) {
@@ -54,7 +55,18 @@ export default function InfirmaryModal({ onClose, crewManager }) {
         setInfirmary(updated);
     };
     
-    const hasSageInRoster = crewManager?.adventurers?.find(a => a.type === 'sage') || (getMeta()?.crew || []).find(c => c.type === 'sage');
+    const meta = getMeta();
+    const allRoster = (crewManager && Array.isArray(crewManager.adventurers)) ? crewManager.adventurers : (meta?.adventurers || meta?.roster || []);
+    const selectedCrew = (meta && Array.isArray(meta.crew)) ? meta.crew : [];
+    const unitMap = new Map();
+    [...selectedCrew, ...allRoster].forEach(c => {
+        if (c && c.id && !unitMap.has(c.id)) {
+            unitMap.set(c.id, c);
+        }
+    });
+    const allUnits = Array.from(unitMap.values());
+    const availableSage = allUnits.find(u => (u.type === 'sage' || u.class === 'sage' || u.characterClass === 'sage'));
+    const assignedSage = infirmary.assignedSage || availableSage;
     
     return (
         <div className="infirmary-modal-overlay" style={{
@@ -73,24 +85,97 @@ export default function InfirmaryModal({ onClose, crewManager }) {
                     <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '24px', cursor: 'pointer' }}>&times;</button>
                 </div>
                 
-                <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: 'rgba(202, 138, 4, 0.1)', borderRadius: '8px', border: '1px solid rgba(202, 138, 4, 0.3)' }}>
-                    <h3 style={{ margin: '0 0 10px 0', fontSize: '1.1em', color: '#fcd34d' }}>Sage Assistance</h3>
+                <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: 'rgba(202, 138, 4, 0.12)', borderRadius: '8px', border: '1px solid rgba(202, 138, 4, 0.35)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                        <h3 style={{ margin: 0, fontSize: '1.15em', color: '#fcd34d', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span>🌿</span> Sage Assistance
+                        </h3>
+                        {infirmary.sageCommitted && (
+                            <span style={{ fontSize: '0.78em', backgroundColor: '#16a34a', color: '#fff', padding: '2px 8px', borderRadius: '12px', fontWeight: 'bold' }}>
+                                On Duty (2 HP / hr)
+                            </span>
+                        )}
+                    </div>
+
                     {infirmary.sageCommitted ? (
                         <div>
-                            <p style={{ margin: '0 0 10px 0', fontSize: '0.9em' }}>A Sage is currently working in the infirmary, doubling the healing rate (2 HP / hour) for all patients!</p>
-                            <button onClick={() => { returnSageFromInfirmary(); setInfirmary(getInfirmary()); }} style={{ padding: '5px 10px', backgroundColor: '#7f1d1d', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                                Return Sage to Roster
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '14px', backgroundColor: 'rgba(0,0,0,0.35)', padding: '10px 14px', borderRadius: '6px', border: '1px solid rgba(202, 138, 4, 0.25)' }}>
+                                <div style={{
+                                    width: '46px',
+                                    height: '46px',
+                                    borderRadius: '50%',
+                                    backgroundImage: `url(${assignedSage?.portrait || assignedSage?.image || images.sage_portrait || images.sage})`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    border: '2px solid #ca8a04',
+                                    boxShadow: '0 0 10px rgba(202, 138, 4, 0.5)'
+                                }} />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ fontWeight: 'bold', color: '#fef08a', fontSize: '1rem' }}>
+                                        {assignedSage?.name || 'Sage'} <span style={{ fontSize: '0.8em', color: '#ca8a04', fontWeight: 'normal' }}>(Stationed in Infirmary)</span>
+                                    </div>
+                                    <div style={{ fontSize: '0.82em', color: '#86efac', marginTop: '2px' }}>
+                                        Doubling healing rate (2 HP / hr) for all recovering patients.
+                                    </div>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    returnSageFromInfirmary();
+                                    setInfirmary(getInfirmary());
+                                }}
+                                style={{
+                                    padding: '7px 16px',
+                                    backgroundColor: '#991b1b',
+                                    color: '#fff',
+                                    fontWeight: 'bold',
+                                    border: '1px solid #ef4444',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer',
+                                    fontSize: '0.9em',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                Remove Sage from Infirmary
                             </button>
                         </div>
                     ) : (
                         <div>
-                            <p style={{ margin: '0 0 10px 0', fontSize: '0.9em' }}>Assign a Sage to the infirmary to double the healing rate. They will be unavailable for expeditions while assigned.</p>
-                            {hasSageInRoster ? (
-                                <button onClick={() => { commitSageToInfirmary(); setInfirmary(getInfirmary()); }} style={{ padding: '5px 10px', backgroundColor: '#ca8a04', color: '#1c1917', fontWeight: 'bold', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                                    Assign Sage to Infirmary
+                            <p style={{ margin: '0 0 12px 0', fontSize: '0.9em', color: '#d4d4d8', lineHeight: 1.5 }}>
+                                Assign a Sage to the infirmary to double the healing rate (2 HP / hour). They will be unavailable for expeditions while assigned.
+                            </p>
+                            {availableSage ? (
+                                <button
+                                    onClick={() => {
+                                        commitSageToInfirmary(availableSage);
+                                        setInfirmary(getInfirmary());
+                                    }}
+                                    style={{
+                                        padding: '7px 16px',
+                                        backgroundColor: '#ca8a04',
+                                        color: '#1c1917',
+                                        fontWeight: 'bold',
+                                        border: '1px solid #eab308',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer',
+                                        fontSize: '0.9em',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    Assign {availableSage.name ? `${availableSage.name} (Sage)` : 'Sage'} to Infirmary
                                 </button>
                             ) : (
-                                <p style={{ color: '#999', margin: 0, fontStyle: 'italic' }}>No Sage in roster.</p>
+                                <p style={{ color: '#71717a', margin: 0, fontStyle: 'italic', fontSize: '0.9em' }}>
+                                    No Sage in roster.
+                                </p>
                             )}
                         </div>
                     )}

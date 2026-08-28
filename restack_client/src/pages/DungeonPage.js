@@ -36,7 +36,7 @@ import {
     sendDungeonEntryNotification
 } from '../utils/api-handler';
 import { storeMeta, getMeta, getUserId, getUserName, applyResolvePenalty } from '../utils/session-handler';
-import { keyCleanup, itemCleanup, resolveItemPools, resolveMonsterPools } from '../utils/cache-cleanup';
+import { keyCleanup, itemCleanup, resolveItemPools, resolveMonsterPools, superboardCleanup } from '../utils/cache-cleanup';
 import * as CampManager from '../utils/camp-manager';
 import Typewriter from '../utils/typewriter';
 import { getNextNarrativePayload } from '../utils/narrative-manager';
@@ -1233,32 +1233,25 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                             </button>
                             <button
                                 className="c-btn"
+                                disabled={true}
+                                title="Dark Pocket Dimension (Currently Disabled)"
                                 style={{
-                                    background: 'transparent',
-                                    color: '#b388ff',
-                                    border: '1px solid rgba(179, 136, 255, 0.3)',
+                                    background: 'rgba(50, 40, 70, 0.2)',
+                                    color: '#7e6b99',
+                                    border: '1px solid rgba(179, 136, 255, 0.15)',
                                     padding: '10px 30px',
                                     fontSize: '1rem',
                                     borderRadius: '2px',
-                                    cursor: 'pointer',
+                                    cursor: 'not-allowed',
                                     fontWeight: 'normal',
                                     fontFamily: '"Cinzel", serif',
                                     letterSpacing: '2px',
                                     textTransform: 'uppercase',
-                                    textShadow: '0 0 8px rgba(179, 136, 255, 0.4)',
-                                    boxShadow: 'inset 0 0 15px rgba(179, 136, 255, 0.05), 0 0 10px rgba(179, 136, 255, 0.05)',
+                                    textShadow: 'none',
+                                    boxShadow: 'none',
+                                    opacity: 0.45,
+                                    pointerEvents: 'none',
                                     transition: 'all 0.3s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.currentTarget.style.background = 'rgba(179, 136, 255, 0.1)';
-                                    e.currentTarget.style.border = '1px solid rgba(179, 136, 255, 0.6)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.currentTarget.style.background = 'transparent';
-                                    e.currentTarget.style.border = '1px solid rgba(179, 136, 255, 0.3)';
-                                }}
-                                onClick={() => {
-                                    if (onDreamDenSelect) onDreamDenSelect('dark');
                                 }}
                             >
                                 Dark
@@ -1451,6 +1444,18 @@ function TrainingDrillPicker({ member, drills, currentFood, onConfirm }) {
 }
 
 class DungeonPage extends React.Component {
+    openSpecialActionCodex = (actionKey, actionName) => {
+        const entryId = (actionKey || actionName || '').toLowerCase().replace(/\s+/g, '_');
+        this.setState({
+            showCodex: true,
+            codexEntry: {
+                tab: 'actions',
+                entryId: entryId,
+                search: actionName || actionKey
+            }
+        });
+    };
+
     getCharacterActions = (character) => {
         let actions = [];
 
@@ -1859,6 +1864,16 @@ class DungeonPage extends React.Component {
                                     </span>
                                 )}
                             </div>
+                            <div
+                                className="action-codex-btn"
+                                title={`View Codex entry for ${action.name}`}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    this.openSpecialActionCodex(action.type, action.name);
+                                }}
+                            >
+                                ?
+                            </div>
                         </div>
                         {/* <div className="info-icon" style={{backgroundImage: `url(${images['info']})`}}></div> */}
                         <div className={`action-sub-menu ${!action.disabled && (Array.isArray(this.state.actionMenuTypeExpanded) ? this.state.actionMenuTypeExpanded : []).includes(action.type) ? 'expanded' : ''}`}>
@@ -1885,6 +1900,17 @@ class DungeonPage extends React.Component {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
                                                 {subType.count !== 0 && this.getSubtypeImageCountElement(subType)}
                                                 {subType.isCategory && <span className="category-arrow" style={{ marginLeft: 4, fontSize: '10px', opacity: 0.8 }}>{this.state.innerDisciplineCategoryOpen === subType.categoryKey ? '▾' : '▸'}</span>}
+                                                <div
+                                                    className="action-codex-btn"
+                                                    title={`View Codex entry for ${subType.type}`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const key = subType.tacticKey || subType.disciplineKey || subType.scryKey || subType.glyphTier || subType.ritualKey || subType.agentType || subType.bombType || subType.type;
+                                                        this.openSpecialActionCodex(key, subType.type);
+                                                    }}
+                                                >
+                                                    ?
+                                                </div>
                                             </div>
                                         </div>
                                         {/* Nested children for inner discipline categories */}
@@ -1905,7 +1931,19 @@ class DungeonPage extends React.Component {
                                                                 {childIcon && <img src={childIcon} alt="" style={{ width: 15, height: 15, objectFit: 'contain', flexShrink: 0 }} />}
                                                                 <span style={{ whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', textAlign: 'left', fontSize: '11px' }}>{child.type}</span>
                                                             </div>
-                                                            {child.count !== 0 && this.getSubtypeImageCountElement(child)}
+                                                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                                                                {child.count !== 0 && this.getSubtypeImageCountElement(child)}
+                                                                <div
+                                                                    className="action-codex-btn"
+                                                                    title={`View Codex entry for ${child.type}`}
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        this.openSpecialActionCodex(child.disciplineKey || child.type, child.type);
+                                                                    }}
+                                                                >
+                                                                    ?
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     );
                                                 })}
@@ -2538,6 +2576,8 @@ class DungeonPage extends React.Component {
         }
 
         this.state = {
+            pocketInfluence: 0,
+            pocketFreeWill: 50,
             showReaperOfferModal: false,
             showTrophiesModal: false,
             trapVisionEnabled: initialTrapVision,
@@ -2618,6 +2658,8 @@ class DungeonPage extends React.Component {
             showDungeonInscriptionModal: false,
             dungeonInscriptionPendingCandidate: null,
             dungeonInscriptionTextInput: '',
+            showInscriptionCooldownModal: false,
+            inscriptionCooldownText: '',
             respawnUpdateInterval: null,
             monsterBattleTileId: null,
             setMemberRitualOptions: null,
@@ -4404,7 +4446,48 @@ class DungeonPage extends React.Component {
                     }, 1000); // Give boardManager a moment to initialize
                 } else {
                     // Resume construction
-                    if (this.props.boardManager && this.props.boardManager.tiles && this.props.boardManager.tiles[ac.targetTileIdx]) {
+                    if (this.state.inSuperboard || (ac && typeof ac.superboardGx === 'number')) {
+                        const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+                        const dungeonObj = this.state.dungeon || this.props.boardManager?.dungeon;
+                        const sb = dungeonObj?.superboards?.[sbKey];
+                        if (sb && sb.miniboards && typeof ac.superboardGx === 'number' && typeof ac.superboardGy === 'number') {
+                            const expectedBuilding = `${ac.buildingDef.key}_under_construction`;
+                            const gx = ac.superboardGx;
+                            const gy = ac.superboardGy;
+                            const isHuge = (ac.footprint || []).length === 9;
+                            const isLarge = ac.isLargeBuilding || (ac.footprint || []).length === 4;
+                            const offsets = isHuge ? [
+                                { dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 },
+                                { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 2, dy: 1 },
+                                { dx: 0, dy: 2 }, { dx: 1, dy: 2 }, { dx: 2, dy: 2 }
+                            ] : (isLarge ? [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }] : [{ dx: 0, dy: 0 }]);
+
+                            offsets.forEach(({ dx, dy }) => {
+                                const tGx = gx + dx;
+                                const tGy = gy + dy;
+                                if (tGx >= 45 || tGy >= 45) return;
+                                const mbX = Math.floor(tGx / 15);
+                                const mbY = Math.floor(tGy / 15);
+                                const targetMbIdx = mbY * 3 + mbX;
+                                const lX = tGx % 15;
+                                const lY = tGy % 15;
+                                const targetTileIdx = lY * 15 + lX;
+                                const mb = sb.miniboards[targetMbIdx];
+                                if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
+                                    mb.tiles[targetTileIdx].building = expectedBuilding;
+                                    mb.tiles[targetTileIdx].contains = {
+                                        type: 'building',
+                                        subtype: expectedBuilding,
+                                        name: `${ac.buildingDef.name} (Constructing)`,
+                                        placedBy: 'player',
+                                        ownerId: typeof getUserId === 'function' ? getUserId() : null,
+                                        constructionStartTime: ac.startTime,
+                                        constructionDurationMs: ac.durationMs
+                                    };
+                                }
+                            });
+                        }
+                    } else if (this.props.boardManager && this.props.boardManager.tiles && this.props.boardManager.tiles[ac.targetTileIdx]) {
                         const expectedBuildingKey = `${ac.buildingDef.key}_under_construction`;
                         const buildingObj = {
                             type: 'building',
@@ -4437,7 +4520,51 @@ class DungeonPage extends React.Component {
                                 this.finishConstruction(ac);
                             } else {
                                 // Ensure the tile still shows as under construction (recover from rapid refresh desync)
-                                if (this.props.boardManager && this.props.boardManager.tiles) {
+                                if (this.state.inSuperboard || (ac && typeof ac.superboardGx === 'number')) {
+                                    const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+                                    const dungeonObj = this.state.dungeon || this.props.boardManager?.dungeon;
+                                    const sb = dungeonObj?.superboards?.[sbKey];
+                                    if (sb && sb.miniboards && typeof ac.superboardGx === 'number' && typeof ac.superboardGy === 'number') {
+                                        const expectedBuilding = `${ac.buildingDef.key}_under_construction`;
+                                        const gx = ac.superboardGx;
+                                        const gy = ac.superboardGy;
+                                        const isHuge = (ac.footprint || []).length === 9;
+                                        const isLarge = ac.isLargeBuilding || (ac.footprint || []).length === 4;
+                                        const offsets = isHuge ? [
+                                            { dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 },
+                                            { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 2, dy: 1 },
+                                            { dx: 0, dy: 2 }, { dx: 1, dy: 2 }, { dx: 2, dy: 2 }
+                                        ] : (isLarge ? [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }] : [{ dx: 0, dy: 0 }]);
+
+                                        offsets.forEach(({ dx, dy }) => {
+                                            const tGx = gx + dx;
+                                            const tGy = gy + dy;
+                                            if (tGx >= 45 || tGy >= 45) return;
+                                            const mbX = Math.floor(tGx / 15);
+                                            const mbY = Math.floor(tGy / 15);
+                                            const targetMbIdx = mbY * 3 + mbX;
+                                            const lX = tGx % 15;
+                                            const lY = tGy % 15;
+                                            const targetTileIdx = lY * 15 + lX;
+                                            const mb = sb.miniboards[targetMbIdx];
+                                            if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
+                                                const t = mb.tiles[targetTileIdx];
+                                                if (t && t.building !== expectedBuilding && (!t.contains || t.contains.subtype !== expectedBuilding)) {
+                                                    t.building = expectedBuilding;
+                                                    t.contains = {
+                                                        type: 'building',
+                                                        subtype: expectedBuilding,
+                                                        name: `${ac.buildingDef.name} (Constructing)`,
+                                                        placedBy: 'player',
+                                                        ownerId: typeof getUserId === 'function' ? getUserId() : null,
+                                                        constructionStartTime: ac.startTime,
+                                                        constructionDurationMs: ac.durationMs
+                                                    };
+                                                }
+                                            }
+                                        });
+                                    }
+                                } else if (this.props.boardManager && this.props.boardManager.tiles) {
                                     const expectedBuilding = `${ac.buildingDef.key}_under_construction`;
                                     const footprint = ac.footprint || [ac.targetTileIdx];
                                     const isHuge = footprint.length === 9;
@@ -5110,6 +5237,35 @@ class DungeonPage extends React.Component {
                     if (!mb || !Array.isArray(mb.tiles)) return;
                     mb.tiles.forEach(t => {
                         if (!t) return;
+                        const cObj = typeof t.contains === 'object' && t.contains ? t.contains : null;
+                        const cType = cObj ? (cObj.type || cObj.subtype) : t.contains;
+                        const cSub = cObj ? cObj.subtype : null;
+                        const structKey = String(cSub || cType || t.building || cObj?.building || '').toLowerCase();
+
+                        const isPlayerConstructed = (t.placedBy === 'player' || cObj?.placedBy === 'player' || !!cObj?.ownerId || t.isPlayerBuilt || cObj?.isPlayerBuilt) ||
+                            structKey.includes('_under_construction') ||
+                            (cObj?.constructionStartTime !== undefined) ||
+                            (['observer_platform', 'observation_platform', 'outpost', 'war_camp', 'war_fort', 'hut', 'wall', 'archway'].includes(structKey) && (cObj?.placedBy === 'player' || cObj?.ownerId || t.placedBy === 'player' || t.isPlayerBuilt || cObj?.isPlayerBuilt || (cObj?.vendorGroupId && String(cObj.vendorGroupId).startsWith('building_'))));
+
+                        const isGeneratedUnit = (cObj && (cObj.isPocketPygmy || cObj.subtype === 'pocket_pygmy' || cObj.homeStructureKey || cObj.isAutomaton || cObj.subtype === 'automaton')) ||
+                            cType === 'pygmies' || cSub === 'pocket_pygmy';
+
+                        if (isPlayerConstructed || isGeneratedUnit) {
+                            if (t.isEnemySpawn || t.originalMarker === 'narrative') {
+                                t.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                t.image = 'narrative';
+                                t.isEnemySpawn = true;
+                                t.originalMarker = 'narrative';
+                            } else {
+                                t.contains = { type: 'empty_space', subtype: null };
+                                t.building = null;
+                                t.image = null;
+                                t.isEnemySpawn = false;
+                                t.originalMarker = null;
+                            }
+                            delete t.placedBy;
+                        }
+
                         delete t.territory;
                         delete t.territoryAffiliation;
                         delete t.territoryMonolithId;
@@ -5119,6 +5275,10 @@ class DungeonPage extends React.Component {
                         delete t.affiliation;
                         delete t.generatorData;
                         delete t.activated;
+                        delete t.isHostile;
+                        delete t.isPlayerBuilt;
+                        delete t.placedBy;
+
                         if (t.contains && typeof t.contains === 'object') {
                             delete t.contains.territory;
                             delete t.contains.territoryAffiliation;
@@ -5129,11 +5289,30 @@ class DungeonPage extends React.Component {
                             delete t.contains.affiliation;
                             delete t.contains.generatorData;
                             delete t.contains.activated;
+                            delete t.contains.ownerId;
+                            delete t.contains.placedBy;
+                            delete t.contains.isHostile;
+                            delete t.contains.isPlayerBuilt;
+                            delete t.contains.faction;
+                            const sKey = String(t.contains.subtype || t.contains.key || t.contains.building || t.building || t.contains.type || '').toLowerCase();
+                            const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                            if (isDomainMonolith) {
+                                t.contains.activated = false;
+                                if (sKey.includes('dark_domain_monolith')) {
+                                    t.contains.affiliation = 'hostile';
+                                } else {
+                                    delete t.contains.affiliation;
+                                }
+                                t.contains.growthCycles = 0;
+                            }
                         }
                     });
                 });
                 return sb;
             };
+
+            superboardCleanup(dungeon);
+            this._pocketStructureRespawns = [];
 
             if (!this._templateSuperboards) {
                 this._templateSuperboards = {};
@@ -5141,7 +5320,7 @@ class DungeonPage extends React.Component {
 
             if (!dungeon.superboards) dungeon.superboards = {};
 
-            // Cache original unaltered map template if available and not yet cached
+            // Always cache the clean unaltered map template
             if (!this._templateSuperboards[type]) {
                 const existing = dungeon.superboards[type];
                 if (existing && Array.isArray(existing.miniboards) && existing.miniboards.length === 9) {
@@ -5165,6 +5344,8 @@ class DungeonPage extends React.Component {
                     }
                     this._templateSuperboards[type] = { miniboards };
                 }
+            } else {
+                this._templateSuperboards[type] = sanitizeSuperboardTiles(this._templateSuperboards[type]);
             }
 
             // Always reset pocket dimension data on enter to a fresh unaltered clone from map template
@@ -5179,6 +5360,18 @@ class DungeonPage extends React.Component {
 
             const loc = bm?.playerTile?.location;
             meta = getMeta() || meta;
+            if (meta) {
+                delete meta.pocketPlayerBuildings;
+                if (meta.activatedGenerators) {
+                    Object.keys(meta.activatedGenerators).forEach(k => {
+                        if (k.startsWith('pocket_') || k.includes('superboard') || k.includes('monolith') || k.includes('generator')) {
+                            delete meta.activatedGenerators[k];
+                        }
+                    });
+                }
+                storeMeta(meta);
+            }
+
             const origin = {
                 levelId: bm?.currentLevel?.id ?? (meta.location?.levelId ?? 0),
                 boardIndex: bm?.playerTile?.boardIndex ?? (meta.location?.boardIndex ?? 0),
@@ -5249,6 +5442,77 @@ class DungeonPage extends React.Component {
                 }
             }
 
+            // Find Enemy Spawn Point (narrative marker tile) and spawn Automaton unit
+            let foundEnemySpawn = false;
+            for (let mbIdx = 0; mbIdx < superboard.miniboards.length; mbIdx++) {
+                const mb = superboard.miniboards[mbIdx];
+                if (mb && Array.isArray(mb.tiles)) {
+                    for (let tIdx = 0; tIdx < mb.tiles.length; tIdx++) {
+                        const t = mb.tiles[tIdx];
+                        if (!t) continue;
+                        const cType = typeof t.contains === 'object' && t.contains ? (t.contains.type || t.contains.subtype) : t.contains;
+                        const cSubtype = typeof t.contains === 'object' && t.contains ? t.contains.subtype : null;
+                        const img = String(t.image || '').toLowerCase();
+                        const opt = String(t.optionType || '').toLowerCase();
+                        if (cType === 'narrative' || cSubtype === 'narrative' || cType === 'narrative_visited' || img === 'narrative' || opt === 'narrative' || t.isEnemySpawn || t.originalMarker === 'narrative') {
+                            t.isEnemySpawn = true;
+                            t.originalMarker = 'narrative';
+                            const newAutomaton = {
+                                type: 'monsters',
+                                subtype: 'automaton',
+                                isAutomaton: true,
+                                faction: 'enemy',
+                                hp: 1000,
+                                maxHp: 1000,
+                                id: `automaton_enemy_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+                            };
+                            t.contains = newAutomaton;
+                            t.image = images.automaton || 'automaton';
+                            foundEnemySpawn = true;
+                            break;
+                        }
+                    }
+                    if (foundEnemySpawn) break;
+                }
+            }
+
+            // Fallback: If no narrative tile marker was found, spawn Automaton on an open non-void tile far from player spawn
+            if (!foundEnemySpawn) {
+                const targetMbIdxs = [4, 8, 0, 2, 6, 1, 3, 5, 7];
+                for (let mbIdx of targetMbIdxs) {
+                    const mb = superboard.miniboards[mbIdx];
+                    if (!mb || !Array.isArray(mb.tiles)) continue;
+                    const mbX = mbIdx % 3;
+                    const mbY = Math.floor(mbIdx / 3);
+                    for (let tIdx = 0; tIdx < mb.tiles.length; tIdx++) {
+                        const t = mb.tiles[tIdx];
+                        if (!t) continue;
+                        const isVoid = t.isVoid === true || t.contains === 'void' || t.contains?.type === 'void' || t.color === 'black';
+                        const hasBuilding = !!(t.building || t.contains?.building || t.contains?.subtype);
+                        const gx = mbX * 15 + (tIdx % 15);
+                        const gy = mbY * 15 + Math.floor(tIdx / 15);
+                        const distFromPlayer = Math.hypot(gx - spawnGx, gy - spawnGy);
+                        if (!isVoid && !hasBuilding && distFromPlayer >= 8) {
+                            const newAutomaton = {
+                                type: 'monsters',
+                                subtype: 'automaton',
+                                isAutomaton: true,
+                                faction: 'enemy',
+                                hp: 1000,
+                                maxHp: 1000,
+                                id: `automaton_enemy_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+                            };
+                            t.contains = newAutomaton;
+                            t.image = images.automaton || 'automaton';
+                            t.isEnemySpawn = true;
+                            foundEnemySpawn = true;
+                            break;
+                        }
+                    }
+                    if (foundEnemySpawn) break;
+                }
+            }
+
             this.ensurePocketPygmiesAndStructures(superboard, type);
 
             const activeMinimapIdx = Math.floor(spawnGy / 15) * 3 + Math.floor(spawnGx / 15);
@@ -5263,6 +5527,17 @@ class DungeonPage extends React.Component {
                 superboardSpawnCoords: { gx: spawnGx, gy: spawnGy },
                 superboardPlayerPos: { gx: spawnGx, gy: spawnGy },
                 justSpawnedInSuperboard: true,
+                pocketInfluence: 0,
+                pocketFreeWill: 50,
+                pocketResources: {
+                    food: 0,
+                    slate: 0,
+                    ore: 0,
+                    wood: 0,
+                    dust: 0,
+                    mushrooms: 0,
+                    chemicals: 0
+                },
                 dungeon: dungeon,
                 minimap
             }, () => {
@@ -5489,6 +5764,22 @@ class DungeonPage extends React.Component {
         });
     };
 
+    isPocketTileTree = (tile) => {
+        if (!tile) return false;
+        const cObj = (tile.contains && typeof tile.contains === 'object') ? tile.contains : null;
+        const cStr = typeof tile.contains === 'string' ? tile.contains : '';
+        const sType = String(cObj?.type || cObj?.subtype || cObj?.key || cObj?.building || cStr || tile.building || tile.type || tile.subtype || '').toLowerCase();
+        if (sType.includes('tree') || sType.includes('grove') || sType.includes('forest') || sType.includes('pine') || sType.includes('oak')) return true;
+
+        const terrainStr = String(tile.terrain || cObj?.terrain || '').toLowerCase();
+        if (terrainStr.includes('tree') || terrainStr.includes('grove') || terrainStr.includes('forest') || terrainStr.includes('pine') || terrainStr.includes('oak')) return true;
+
+        const imgStr = String(tile.image || cObj?.image || '').toLowerCase();
+        if (imgStr.includes('tree') || imgStr.includes('grove') || imgStr.includes('forest') || imgStr.includes('pine') || imgStr.includes('oak')) return true;
+
+        return false;
+    };
+
     movePlayerInSuperboard = (dx, dy) => {
         const { superboardPlayerPos, superboardSpawnCoords, justSpawnedInSuperboard, dungeon, superboardType } = this.state;
         if (!superboardPlayerPos || !dungeon || !superboardType) return;
@@ -5519,8 +5810,9 @@ class DungeonPage extends React.Component {
         const storedColor = targetTile?.color && targetTile.color !== 'null' && targetTile.color !== 'undefined' ? targetTile.color : null;
         const isVoid = (targetTile?.contains === 'void' || (targetTile?.contains && targetTile.contains.type === 'void')) ||
                        (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+        const isTree = this.isPocketTileTree(targetTile);
 
-        if (isVoid) return; // Blocked by void tile
+        if (isVoid || isTree) return; // Blocked by void tile or impassable tree
 
         // Check if target tile is Spawn Point
         const cType = typeof targetTile?.contains === 'object' && targetTile.contains ? (targetTile.contains.type || targetTile.contains.subtype) : targetTile?.contains;
@@ -5551,7 +5843,10 @@ class DungeonPage extends React.Component {
             const isImpassable = (bm.isImpassableBuildingTile && (bm.isImpassableBuildingTile(mockTile) || bm.isImpassableBuildingTile(targetTile))) || this.isBuildingOrGeneratorTile(mockTile) || this.isBuildingOrGeneratorTile(targetTile);
 
             if (isImpassable && !isEnemyBuildingTarget) {
-                this.openGeneratorModal(targetTile);
+                const targetKey = String(targetTile?.contains?.subtype || targetTile?.contains?.type || targetTile?.building || targetTile?.image || '').toLowerCase();
+                if (!targetKey.includes('house') && !targetKey.includes('farm')) {
+                    this.openGeneratorModal(targetTile);
+                }
                 return; // Block movement into impassable buildings
             }
 
@@ -5612,7 +5907,7 @@ class DungeonPage extends React.Component {
                     }, 550);
                 }
 
-                const maxHpVal = targetContains.maxHp || (isAutomatonTarget ? 15 : (isEnemyBuildingTarget ? (structKey.includes('war_fort') ? 100 : 50) : 10));
+                const maxHpVal = targetContains.maxHp || (isAutomatonTarget ? 1000 : (isEnemyBuildingTarget ? (structKey.includes('war_fort') ? 100 : 50) : 10));
                 targetContains.hp = (targetContains.hp || maxHpVal) - dmg;
                 targetContains.lastDamageTime = Date.now();
                 const targetName = isEnemyBuildingTarget ? (structKey.includes('war_fort') ? 'War Fort' : 'War Camp') : (isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy');
@@ -5656,8 +5951,17 @@ class DungeonPage extends React.Component {
                                 superboardType
                             });
                         }
-                        targetTile.contains = null;
-                        targetTile.image = null;
+                        if (targetTile.isEnemySpawn === true || targetTile.originalMarker === 'narrative') {
+                            targetTile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                            targetTile.image = 'narrative';
+                            targetTile.isEnemySpawn = true;
+                            targetTile.originalMarker = 'narrative';
+                        } else {
+                            targetTile.contains = null;
+                            targetTile.image = null;
+                            targetTile.isEnemySpawn = false;
+                            targetTile.originalMarker = null;
+                        }
                         if (unitCounterDmg > 0) {
                             this.displayMessage(`💥 Crew dealt ${dmg} damage and slain ${targetName} (${targetName} dealt ${unitCounterDmg} counter-damage to crew)!`);
                         } else {
@@ -5679,9 +5983,21 @@ class DungeonPage extends React.Component {
             const isItemKind = cType === 'item' || cType === 'key' || cType === 'rune' || cType === 'jewel' || cType === 'shard' || cType === 'consumable' || targetTile.isLoot || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(cSubtype) || (cType && typeof cType === 'string' && cType.startsWith('chest_'));
             
             if (isItemKind) {
-                const result = bm.handleInteraction(mockTile);
-                if (result === 'impassable') return; // Locked chest blocks movement
-                
+                // In pocket dimension: purely a visual event, do not add to inventory and do not save dungeon
+                const rawKey = cSubtype || cType || targetTile.image || 'treasure';
+                const cleanKey = String(rawKey).trim().replace(/\s+/g, '_');
+                const itemDef = this.props.inventoryManager?.allItems?.[cleanKey];
+                const iconKey = itemDef?.icon || cleanKey;
+                const resolvedIcon = images[iconKey] || images[cleanKey] || images['treasure'] || null;
+                const itemDisplayName = itemDef?.name || cleanKey.replace(/_/g, ' ');
+
+                this.triggerLootRadialArc({
+                    type: 'item',
+                    id: cleanKey + '_' + Math.random(),
+                    icon: resolvedIcon,
+                    name: itemDisplayName
+                }, targetTile);
+
                 targetTile.contains = null;
                 targetTile.image = null;
                 targetTile.isLoot = false;
@@ -5720,7 +6036,309 @@ class DungeonPage extends React.Component {
         });
     };
 
-    exitSuperboardPocketDimension = () => {
+    getTotalPlayerDomainCount = () => {
+        if (!this.state.inSuperboard || !this.state.superboardType) return 0;
+        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
+        if (!superboard || !Array.isArray(superboard.miniboards)) return 0;
+
+        let count = 0;
+        superboard.miniboards.forEach(mb => {
+            if (!mb || !Array.isArray(mb.tiles)) return;
+            mb.tiles.forEach(t => {
+                if (!t) return;
+                const isVoid = t.isVoid === true || t.contains === 'void' || (t.contains && typeof t.contains === 'object' && t.contains.type === 'void');
+                if (isVoid) return;
+
+                const aff = String(t.territory || t.territoryAffiliation || t.contains?.territory || t.contains?.territoryAffiliation || '').toLowerCase();
+                const isFriendly = aff === 'friendly' || aff === 'player' || aff === 'crew' || aff.includes('player') || aff.includes('crew') || aff.includes('friendly');
+                if (isFriendly) {
+                    count++;
+                }
+            });
+        });
+        return count;
+    };
+
+    checkPocketDimensionVictory = () => {
+        if (!this.state.inSuperboard || this.state.pocketDimensionWon) return;
+        const domain = this.getTotalPlayerDomainCount();
+        if (domain >= 150) {
+            this.setState({
+                pocketDimensionWon: true,
+                showPocketVictoryModal: true
+            });
+        }
+    };
+
+    handleClaimPocketVictoryAndExit = () => {
+        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
+        const reward = superboard?.victoryReward || { gold: 1000, dust: 100 };
+
+        if (reward.gold && typeof this.props.inventoryManager?.addGold === 'function') {
+            this.props.inventoryManager.addGold(reward.gold);
+        }
+        if (reward.dust && typeof this.props.inventoryManager?.addShimmeringDust === 'function') {
+            this.props.inventoryManager.addShimmeringDust(reward.dust);
+        }
+        if (reward.wood && this.props.inventoryManager) {
+            this.props.inventoryManager.wood = (this.props.inventoryManager.wood || 0) + reward.wood;
+        }
+        if (reward.stone && this.props.inventoryManager) {
+            this.props.inventoryManager.stone = (this.props.inventoryManager.stone || 0) + reward.stone;
+        }
+
+        const parts = [];
+        if (reward.gold) parts.push(`+${reward.gold} Gold`);
+        if (reward.dust) parts.push(`+${reward.dust} Dust`);
+        if (reward.wood) parts.push(`+${reward.wood} Wood`);
+        if (reward.stone) parts.push(`+${reward.stone} Stone`);
+        const rewardText = parts.join(', ');
+
+        this.setState({ showPocketVictoryModal: false }, () => {
+            this.exitSuperboardPocketDimension(`🏆 Dimension Conquered! Claimed ${rewardText || 'rewards'}!`);
+        });
+    };
+
+    renderPocketVictoryModal = () => {
+        if (!this.state.showPocketVictoryModal) return null;
+        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
+        const reward = superboard?.victoryReward || { gold: 1000, dust: 100 };
+        const domainCount = this.getTotalPlayerDomainCount();
+
+        return (
+            <CModal
+                visible={!!this.state.showPocketVictoryModal}
+                onClose={() => {}}
+                alignment="center"
+                backdrop="static"
+                className="pocket-victory-modal"
+            >
+                <CModalHeader style={{ borderBottom: '1px solid rgba(56, 189, 248, 0.4)', backgroundColor: '#0f172a', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '18px 24px' }}>
+                    <CModalTitle style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '22px', fontWeight: 'bold', margin: 0, letterSpacing: '1.5px', textTransform: 'uppercase', textShadow: '0 0 12px rgba(56, 189, 248, 0.6)' }}>
+                        <span style={{ fontSize: '26px' }}>🏆</span> Dimension Conquered!
+                    </CModalTitle>
+                </CModalHeader>
+                <CModalBody style={{ backgroundColor: '#0b1120', color: '#ffffff', padding: '28px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
+                    <div style={{ fontSize: '16px', color: '#cbd5e1', lineHeight: '1.6', maxWidth: '520px', fontFamily: "'Outfit', 'Inter', sans-serif" }}>
+                        You have claimed <strong style={{ color: '#38bdf8', fontSize: '18px', fontWeight: 'bold', padding: '2px 8px', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.35)', borderRadius: '4px', margin: '0 4px', display: 'inline-block' }}>{domainCount}</strong> territory tiles and established supreme domain over this pocket dimension!
+                    </div>
+                    <div style={{
+                        width: '100%',
+                        maxWidth: '520px',
+                        background: 'rgba(15, 23, 42, 0.8)',
+                        border: '1px solid rgba(56, 189, 248, 0.35)',
+                        borderRadius: '12px',
+                        padding: '20px 24px',
+                        boxSizing: 'border-box',
+                        boxShadow: 'inset 0 0 20px rgba(56, 189, 248, 0.05)'
+                    }}>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#f8fafc', textTransform: 'uppercase', letterSpacing: '1.5px', marginBottom: '14px', fontFamily: "'Cinzel', serif" }}>
+                            🎁 Victory Spoils
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'center', gap: '28px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {reward.gold > 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', fontWeight: 'bold', color: '#facc15', textShadow: '0 0 10px rgba(250, 204, 21, 0.3)' }}>
+                                    <span style={{ fontSize: '20px' }}>🪙</span> +{reward.gold} Gold
+                                </div>
+                            )}
+                            {reward.dust > 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', fontWeight: 'bold', color: '#c084fc', textShadow: '0 0 10px rgba(192, 132, 252, 0.3)' }}>
+                                    <span style={{ fontSize: '20px' }}>✨</span> +{reward.dust} Dust
+                                </div>
+                            )}
+                            {reward.wood > 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', fontWeight: 'bold', color: '#a3e635', textShadow: '0 0 10px rgba(163, 230, 53, 0.3)' }}>
+                                    <span style={{ fontSize: '20px' }}>🪵</span> +{reward.wood} Wood
+                                </div>
+                            )}
+                            {reward.stone > 0 && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '17px', fontWeight: 'bold', color: '#94a3b8', textShadow: '0 0 10px rgba(148, 163, 184, 0.3)' }}>
+                                    <span style={{ fontSize: '20px' }}>🪨</span> +{reward.stone} Stone
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                    <button
+                        className="btn btn-primary"
+                        onClick={this.handleClaimPocketVictoryAndExit}
+                        style={{
+                            width: '100%',
+                            maxWidth: '440px',
+                            background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                            border: '1.5px solid #38bdf8',
+                            color: '#ffffff',
+                            padding: '12px 28px',
+                            fontSize: '15px',
+                            fontWeight: 'bold',
+                            letterSpacing: '1px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            boxShadow: '0 0 20px rgba(56, 189, 248, 0.4), inset 0 0 12px rgba(255, 255, 255, 0.2)',
+                            transition: 'all 0.2s ease-in-out',
+                            fontFamily: "'Cinzel', serif"
+                        }}
+                    >
+                        Claim Spoils & Return to Dungeon
+                    </button>
+                </CModalBody>
+            </CModal>
+        );
+    };
+
+    isSuperboardDomainPerfectSquare = (superboard, anchorGx, anchorGy, growthCycles, expectedAff) => {
+        if (!superboard || !Array.isArray(superboard.miniboards)) return false;
+        const C = Math.max(1, growthCycles || 1);
+        const minGx = anchorGx - C;
+        const maxGx = anchorGx + 1 + C;
+        const minGy = anchorGy - C;
+        const maxGy = anchorGy + 1 + C;
+
+        if (minGx < 0 || maxGx >= 45 || minGy < 0 || maxGy >= 45) return false;
+
+        const expectedStr = String(expectedAff || 'player').toLowerCase();
+        const isFriendly = expectedStr.includes('player') || expectedStr.includes('friendly') || expectedStr.includes('crew');
+        const isHostile = !isFriendly && (expectedStr.includes('hostile') || expectedStr.includes('enemy'));
+
+        for (let gy = minGy; gy <= maxGy; gy++) {
+            for (let gx = minGx; gx <= maxGx; gx++) {
+                if (gx >= anchorGx && gx <= anchorGx + 1 && gy >= anchorGy && gy <= anchorGy + 1) {
+                    continue;
+                }
+
+                const mbIdx = Math.floor(gy / 15) * 3 + Math.floor(gx / 15);
+                const tIdx = (gy % 15) * 15 + (gx % 15);
+                const t = superboard.miniboards[mbIdx]?.tiles?.[tIdx];
+                if (!t) return false;
+
+                const isVoid = t.isVoid === true || t.contains === 'void' || (t.contains && typeof t.contains === 'object' && (t.contains.type === 'void' || t.contains.isVoid));
+                if (isVoid) return false;
+
+                if (this.isPocketTileTree(t)) return false;
+
+                const tAff = String(t.territoryAffiliation || t.territory || t.contains?.territoryAffiliation || t.contains?.territory || '').toLowerCase();
+                if (isFriendly) {
+                    if (!tAff.includes('player') && !tAff.includes('friendly') && !tAff.includes('crew')) return false;
+                } else if (isHostile) {
+                    if (!tAff.includes('hostile') && !tAff.includes('enemy')) return false;
+                } else {
+                    if (tAff !== expectedStr) return false;
+                }
+            }
+        }
+
+        return true;
+    };
+
+    renderSuperboardRotatingDomainSquares = () => {
+        if (!this.state.inSuperboard) return null;
+        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType] || this.props.boardManager?.dungeon?.superboards?.[this.state.superboardType];
+        if (!superboard || !Array.isArray(superboard.miniboards)) return null;
+
+        const viewMinX = typeof this.state.superboardViewMinX === 'number' ? this.state.superboardViewMinX : 0;
+        const viewMinY = typeof this.state.superboardViewMinY === 'number' ? this.state.superboardViewMinY : 0;
+
+        const rotatingSquares = [];
+        const seenMonoliths = new Set();
+
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (!tile || !tile.contains) continue;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
+                const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                if (!isDomainMonolith) continue;
+                if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') continue;
+
+                const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
+                const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
+                if (!isExplicitlyActive) continue;
+
+                const anchorGx = mbX * 15 + (tIdx % 15);
+                const anchorGy = mbY * 15 + Math.floor(tIdx / 15);
+                const mKey = `${anchorGx}_${anchorGy}`;
+                if (seenMonoliths.has(mKey)) continue;
+                seenMonoliths.add(mKey);
+
+                let affiliation = cObj?.affiliation || tile.affiliation || (isGeneratorActive ? 'player' : null);
+                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith')) {
+                    affiliation = 'hostile';
+                }
+                if (!affiliation || affiliation === 'none') continue;
+
+                const growthCycles = Math.max(1, cObj?.growthCycles ?? tile.growthCycles ?? 1);
+                const isSquare = this.isSuperboardDomainPerfectSquare(superboard, anchorGx, anchorGy, growthCycles, affiliation);
+                if (!isSquare) continue;
+
+                const relAnchorX = anchorGx - viewMinX;
+                const relAnchorY = anchorGy - viewMinY;
+                const minRelX = relAnchorX - growthCycles;
+                const maxRelX = relAnchorX + 1 + growthCycles;
+                const minRelY = relAnchorY - growthCycles;
+                const maxRelY = relAnchorY + 1 + growthCycles;
+
+                // Only render if within or intersecting the 15x15 viewport
+                if (maxRelX < 0 || minRelX > 14 || maxRelY < 0 || minRelY > 14) continue;
+
+                const leftPct = (minRelX / 15) * 100;
+                const topPct = (minRelY / 15) * 100;
+                const sizePct = ((2 + 2 * growthCycles) / 15) * 100;
+
+                const affStr = String(affiliation).toLowerCase();
+                const isFriendly = affStr.includes('friendly') || affStr.includes('player') || affStr.includes('crew');
+                const isHostile = !isFriendly && (affStr.includes('hostile') || affStr.includes('enemy') || affStr.includes('dark'));
+                const affBorderColor = isFriendly ? 'rgba(56, 189, 248, 0.95)' : (isHostile ? 'rgba(239, 68, 68, 0.95)' : 'rgba(255, 255, 255, 0.95)');
+                const affGlowColor = isFriendly ? 'rgba(56, 189, 248, 0.7)' : (isHostile ? 'rgba(239, 68, 68, 0.7)' : 'rgba(255, 255, 255, 0.7)');
+
+                rotatingSquares.push(
+                    <div
+                        key={`superboard-domain-square-${anchorGx}-${anchorGy}-${growthCycles}`}
+                        className="domain-rotating-square"
+                        style={{
+                            position: 'absolute',
+                            top: `${topPct}%`,
+                            left: `${leftPct}%`,
+                            width: `${sizePct}%`,
+                            height: `${sizePct}%`,
+                            border: `2px solid ${affBorderColor}`,
+                            boxShadow: `0 0 14px ${affGlowColor}, inset 0 0 10px ${affGlowColor}`,
+                            background: 'transparent',
+                            pointerEvents: 'none',
+                            zIndex: 22,
+                            transformOrigin: 'center center',
+                            animation: 'domainSquareRotate 60s linear infinite'
+                        }}
+                    />
+                );
+            }
+        }
+
+        return rotatingSquares.length > 0 ? (
+            <div
+                className="superboard-rotating-squares-layer"
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    pointerEvents: 'none',
+                    overflow: 'hidden',
+                    zIndex: 22
+                }}
+            >
+                {rotatingSquares}
+            </div>
+        ) : null;
+    };
+
+    exitSuperboardPocketDimension = (customMessage) => {
         this.setState({ keysLocked: true, portalTransitionClass: "pocket-transition-out" });
 
         this._setTimeout(() => {
@@ -5747,6 +6365,9 @@ class DungeonPage extends React.Component {
             if (meta.savedPocketOrigin) {
                 delete meta.savedPocketOrigin;
             }
+            if (meta.pocketResources) {
+                delete meta.pocketResources;
+            }
             storeMeta(meta);
             try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch (e) {}
             const minimap = (this.state.minimap || []).map((e, idx) => ({
@@ -5762,6 +6383,9 @@ class DungeonPage extends React.Component {
                 superboardSpawnCoords: null,
                 superboardPlayerPos: null,
                 superboardViewportOrigin: null,
+                showPocketVictoryModal: false,
+                pocketDimensionWon: false,
+                pocketResources: null,
                 minimap
             }, () => {
                 if (origin && origin.levelId !== undefined) {
@@ -5770,7 +6394,7 @@ class DungeonPage extends React.Component {
                     const bm = this.props.boardManager;
                     if (bm && typeof bm.refreshTiles === 'function') bm.refreshTiles();
                 }
-                this.displayMessage('✨ Teleported back to the Dream Den!');
+                this.displayMessage(customMessage || '✨ Teleported back to the Dream Den!');
             });
                 this._setTimeout(() => {
                 this.setState({ portalTransitionClass: "", keysLocked: false });
@@ -6033,9 +6657,17 @@ class DungeonPage extends React.Component {
                     if (rawClan && !isUserOwned) {
                         this.displayMessage('You cannot inscribe on walls while in enemy territory.');
                     } else {
-                        const candidates = this.getAdjacentWalls(playerIdx);
-                        if (candidates && candidates.length > 0) {
-                            this.setState({ dungeonInscriptionPicker: { tileId: playerIdx, candidates } });
+                        const cooldownCheck = this.checkWallInscriptionCooldown();
+                        if (cooldownCheck.onCooldown) {
+                            this.setState({
+                                showInscriptionCooldownModal: true,
+                                inscriptionCooldownText: cooldownCheck.remainingText
+                            });
+                        } else {
+                            const candidates = this.getAdjacentWalls(playerIdx);
+                            if (candidates && candidates.length > 0) {
+                                this.setState({ dungeonInscriptionPicker: { tileId: playerIdx, candidates } });
+                            }
                         }
                     }
                 }
@@ -7084,6 +7716,21 @@ class DungeonPage extends React.Component {
                     const gy = mbY * 15 + lY;
                     const targetCapacity = structKey === 'war_fort' ? 5 : (structKey === 'war_camp' ? 2 : 1);
                     const isPlayerBuilt = (tile.contains && typeof tile.contains === 'object' && (tile.contains.placedBy === 'player' || tile.contains.ownerId)) || tile.placedBy === 'player';
+                    const structVendorGroupId = tile.contains?.vendorGroupId || `struct_${mbIdx}_${tIdx}`;
+                    const structAff = isPlayerBuilt ? 'friendly' : (tile.contains?.faction === 'hostile' || tile.isHostile ? 'hostile' : 'neutral');
+
+                    if (tile.contains && typeof tile.contains === 'object') {
+                        if (!tile.contains.affiliation || tile.contains.affiliation === 'none') {
+                            tile.contains.affiliation = structAff;
+                        }
+                        if (!tile.contains.faction) {
+                            tile.contains.faction = isPlayerBuilt ? 'player' : (structAff === 'hostile' ? 'hostile' : 'neutral');
+                        }
+                    }
+                    if (!tile.affiliation || tile.affiliation === 'none') {
+                        tile.affiliation = structAff;
+                    }
+
                     structures.push({
                         key: `${mbIdx}_${tIdx}_${structKey}`,
                         structKey,
@@ -7091,6 +7738,7 @@ class DungeonPage extends React.Component {
                         tIdx,
                         gx,
                         gy,
+                        vendorGroupId: structVendorGroupId,
                         targetCapacity,
                         isPlayerBuilt,
                         isDestroyed,
@@ -7101,6 +7749,101 @@ class DungeonPage extends React.Component {
         }
 
         const now = Date.now();
+
+        // Initialize Domain Monoliths and ensure active ones claim their base territory
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (!tile || !tile.contains) continue;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
+                const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                if (!isDomainMonolith) continue;
+                if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') continue;
+
+                const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
+                let isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
+                let affiliation = cObj?.affiliation || tile.affiliation || (isGeneratorActive ? 'player' : null);
+                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith')) {
+                    affiliation = 'hostile';
+                    isExplicitlyActive = true;
+                }
+
+                if (isExplicitlyActive && affiliation && affiliation !== 'none') {
+                    const anchorGx = mbX * 15 + (tIdx % 15);
+                    const anchorGy = mbY * 15 + Math.floor(tIdx / 15);
+                    const monolithId = cObj?.id || tile.id || `monolith_${anchorGx}_${anchorGy}`;
+                    const currentCycles = Math.max(1, cObj?.growthCycles ?? tile.growthCycles ?? 1);
+
+                    const minGx = anchorGx;
+                    const maxGx = anchorGx + 1;
+                    const minGy = anchorGy;
+                    const maxGy = anchorGy + 1;
+
+                    superboard.miniboards.forEach((tMb, tMbIdx) => {
+                        if (!tMb || !tMb.tiles) return;
+                        const tMbX = (tMbIdx % 3) * 15;
+                        const tMbY = Math.floor(tMbIdx / 3) * 15;
+                        tMb.tiles.forEach((t) => {
+                            if (!t) return;
+                            const gx = tMbX + (t.coordinates ? t.coordinates[0] : (t.id % 15));
+                            const gy = tMbY + (t.coordinates ? t.coordinates[1] : Math.floor(t.id / 15));
+                            if (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy) {
+                                const ec = typeof t.contains === 'object' ? t.contains : {};
+                                t.contains = {
+                                    ...ec,
+                                    affiliation: affiliation,
+                                    isHostile: affiliation === 'hostile',
+                                    faction: affiliation,
+                                    growthCycles: currentCycles,
+                                    maxGrowthCycles: 5,
+                                    lastGrowthTime: t.lastGrowthTime || ec.lastGrowthTime || now,
+                                    level: t.level || ec.level || 1,
+                                    id: monolithId,
+                                    activated: true
+                                };
+                                t.affiliation = affiliation;
+                                t.growthCycles = currentCycles;
+                                t.lastGrowthTime = t.lastGrowthTime || ec.lastGrowthTime || now;
+                                t.isHostile = affiliation === 'hostile';
+                                t.activated = true;
+                            }
+
+                            let dx = 0;
+                            if (gx < minGx) dx = minGx - gx;
+                            else if (gx > maxGx) dx = gx - maxGx;
+                            let dy = 0;
+                            if (gy < minGy) dy = minGy - gy;
+                            else if (gy > maxGy) dy = gy - maxGy;
+                            const dist = Math.max(dx, dy);
+                            if (dist <= currentCycles) {
+                                t.territory = affiliation;
+                                t.territoryAffiliation = affiliation;
+                                t.territoryMonolithId = monolithId;
+                            }
+                        });
+                    });
+                } else if (!isExplicitlyActive) {
+                    const ec = typeof tile.contains === 'object' ? tile.contains : {};
+                    tile.contains = {
+                        ...ec,
+                        affiliation: 'none',
+                        activated: false,
+                        growthCycles: 0
+                    };
+                    tile.affiliation = 'none';
+                    tile.activated = false;
+                    tile.growthCycles = 0;
+                }
+            }
+        }
+
         if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
 
         // Structures maintain their assigned capacity (capped by building capacity)
@@ -7126,9 +7869,10 @@ class DungeonPage extends React.Component {
 
             const pendingCount = this._pocketStructureRespawns.filter(item => item.structureKey === struct.key).length;
             const needed = struct.targetCapacity - (assignedCount + pendingCount);
+            const is2x2 = struct.structKey === 'war_camp' || struct.structKey === 'war_fort';
 
             for (let k = 0; k < needed; k++) {
-                const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, struct.gx, struct.gy);
+                const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, struct.gx, struct.gy, is2x2);
                 if (spawnCoord) {
                     const isAllied = !!struct.isPlayerBuilt;
                     const newPygmy = {
@@ -7136,13 +7880,17 @@ class DungeonPage extends React.Component {
                         subtype: 'pocket_pygmy',
                         isPocketPygmy: true,
                         isAllied: isAllied,
-                        faction: isAllied ? 'player' : 'wild',
+                        faction: isAllied ? 'player' : (struct.isHostile ? 'hostile' : 'neutral'),
+                        affiliation: isAllied ? 'friendly' : (struct.isHostile ? 'hostile' : 'neutral'),
                         placedBy: isAllied ? 'player' : undefined,
                         hp: 10,
                         maxHp: 10,
                         id: `pocket_pygmy_${now}_${Math.random().toString(36).substring(2, 7)}_${k}`,
                         lastAttackTime: 0,
-                        homeStructureKey: struct.key
+                        homeStructureKey: struct.key,
+                        homeStructureVendorGroupId: struct.vendorGroupId,
+                        homeStructureGx: struct.gx,
+                        homeStructureGy: struct.gy
                     };
                     const targetMb = superboard.miniboards[spawnCoord.mbIdx];
                     if (targetMb && targetMb.tiles[spawnCoord.tIdx]) {
@@ -7154,22 +7902,61 @@ class DungeonPage extends React.Component {
         });
     };
 
-    findAdjacentSuperboardEmptyTile = (superboard, gx, gy) => {
-        const adj = this.getAdjacentSuperboardTiles(superboard, gx, gy).filter(c => c.isEmpty);
+    findAdjacentSuperboardEmptyTile = (superboard, gx, gy, is2x2 = false) => {
+        const adj = this.getAdjacentSuperboardTiles(superboard, gx, gy, is2x2).filter(c => c.isEmpty);
         return adj.length > 0 ? adj[Math.floor(Math.random() * adj.length)] : null;
     };
 
-    getAdjacentSuperboardTiles = (superboard, gx, gy) => {
-        const candidates = [
-            { gx: gx, gy: gy - 1 },     // North
-            { gx: gx, gy: gy + 1 },     // South
-            { gx: gx - 1, gy: gy },     // West
-            { gx: gx + 1, gy: gy },     // East
-            { gx: gx - 1, gy: gy - 1 }, // North-West
-            { gx: gx + 1, gy: gy - 1 }, // North-East
-            { gx: gx - 1, gy: gy + 1 }, // South-West
-            { gx: gx + 1, gy: gy + 1 }  // South-East
-        ];
+    isPocketTileEmpty = (tile, gx, gy) => {
+        if (!tile) return false;
+        const playerPos = this.state.superboardPlayerPos;
+        if (playerPos && typeof gx === 'number' && typeof gy === 'number' && gx === playerPos.gx && gy === playerPos.gy) {
+            return false;
+        }
+
+        const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+        if (tile.isVoid === true || tile.contains === 'void' || (tile.contains && tile.contains.type === 'void') || storedColor === 'black' || storedColor === '#000000' || storedColor === '#000') {
+            return false;
+        }
+
+        if (this.isPocketTileTree(tile)) return false;
+
+        const cObj = typeof tile.contains === 'object' && tile.contains ? tile.contains : null;
+        const cType = String(cObj?.type || (typeof tile.contains === 'string' ? tile.contains : '') || '').toLowerCase();
+        const cSubtype = String(cObj?.subtype || '').toLowerCase();
+        const bldg = String(tile.building || cObj?.building || '').toLowerCase();
+
+        if (tile.isWall || tile.structure || bldg) return false;
+        if (cObj && (cObj.hp > 0 || cObj.isPocketPygmy || cObj.isAutomaton || cObj.isLarge || cObj.isMultiTile || cObj.vendorCell)) return false;
+
+        const blockedTypes = ['monster', 'monsters', 'pygmies', 'building', 'door', 'gate', 'wall', 'shrine', 'way_up', 'way_down', 'vendor', 'spawn', 'stairs', 'chest'];
+        if (blockedTypes.includes(cType) || blockedTypes.includes(cSubtype)) return false;
+
+        return true;
+    };
+
+    getAdjacentSuperboardTiles = (superboard, gx, gy, is2x2 = false) => {
+        const candidates = [];
+        if (is2x2) {
+            for (let dy = -1; dy <= 2; dy++) {
+                for (let dx = -1; dx <= 2; dx++) {
+                    if ((dx === 0 || dx === 1) && (dy === 0 || dy === 1)) continue;
+                    candidates.push({ gx: gx + dx, gy: gy + dy });
+                }
+            }
+        } else {
+            candidates.push(
+                { gx: gx, gy: gy - 1 },     // North
+                { gx: gx, gy: gy + 1 },     // South
+                { gx: gx - 1, gy: gy },     // West
+                { gx: gx + 1, gy: gy },     // East
+                { gx: gx - 1, gy: gy - 1 }, // North-West
+                { gx: gx + 1, gy: gy - 1 }, // North-East
+                { gx: gx - 1, gy: gy + 1 }, // South-West
+                { gx: gx + 1, gy: gy + 1 }  // South-East
+            );
+        }
+        const playerPos = this.state.superboardPlayerPos;
         const results = [];
         candidates.forEach(c => {
             if (c.gx >= 0 && c.gx < 45 && c.gy >= 0 && c.gy < 45) {
@@ -7183,7 +7970,9 @@ class DungeonPage extends React.Component {
                 const storedColor = tile?.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
                 const isVoid = (tile?.contains === 'void' || (tile?.contains && tile.contains.type === 'void')) ||
                                (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
-                const isEmpty = !isVoid && (!tile?.contains || (typeof tile.contains === 'object' && tile.contains.type === 'empty_space'));
+                const isTree = this.isPocketTileTree(tile);
+                const isPlayerHere = !!(playerPos && c.gx === playerPos.gx && c.gy === playerPos.gy);
+                const isEmpty = this.isPocketTileEmpty(tile, c.gx, c.gy);
                 results.push({
                     gx: c.gx,
                     gy: c.gy,
@@ -7191,6 +7980,7 @@ class DungeonPage extends React.Component {
                     tIdx,
                     tile,
                     isVoid,
+                    isTree,
                     isEmpty
                 });
             }
@@ -7199,6 +7989,9 @@ class DungeonPage extends React.Component {
     };
 
     movePocketPygmyUnit = (superboard, fromMbIdx, fromTIdx, toMbIdx, toTIdx, fromGx, fromGy, toGx, toGy) => {
+        const playerPos = this.state.superboardPlayerPos;
+        if (playerPos && toGx === playerPos.gx && toGy === playerPos.gy) return;
+
         const fromMb = superboard.miniboards[fromMbIdx];
         const toMb = superboard.miniboards[toMbIdx];
         if (!fromMb || !toMb) return;
@@ -7206,15 +7999,38 @@ class DungeonPage extends React.Component {
         const fromTile = fromMb.tiles[fromTIdx];
         const toTile = toMb.tiles[toTIdx];
         if (!fromTile || !toTile || !fromTile.contains) return;
+        if (this.isPocketTileTree(toTile)) return;
 
         const pygmy = fromTile.contains;
-        fromTile.contains = null;
-        fromTile.image = null;
+        const isAutomaton = pygmy && (pygmy.isAutomaton || pygmy.subtype === 'automaton');
+
+        const isFromSpawn = fromTile.isEnemySpawn === true || fromTile.originalMarker === 'narrative';
+        if (isFromSpawn) {
+            fromTile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+            fromTile.image = images.narrative || 'narrative';
+            fromTile.isEnemySpawn = true;
+            fromTile.originalMarker = 'narrative';
+        } else {
+            fromTile.contains = null;
+            fromTile.image = null;
+            fromTile.isEnemySpawn = false;
+            fromTile.originalMarker = null;
+        }
+
+        if (pygmy && typeof pygmy === 'object') {
+            delete pygmy.isEnemySpawn;
+            delete pygmy.originalMarker;
+        }
+
+        if (!toTile.isEnemySpawn && toTile.originalMarker !== 'narrative') {
+            toTile.isEnemySpawn = false;
+            toTile.originalMarker = null;
+        }
 
         const dRow = fromGy - toGy;
         const dCol = fromGx - toGx;
         toTile.contains = pygmy;
-        toTile.image = images.woodland_individual || 'woodland_individual';
+        toTile.image = isAutomaton ? (images.automaton || 'automaton') : (images.woodland_individual || 'woodland_individual');
         toTile.isGliding = true;
         toTile.glideVector = { dRow, dCol };
 
@@ -7269,7 +8085,197 @@ class DungeonPage extends React.Component {
         this.updateSuperboardViewport();
     };
 
+    isPlayerInHut = () => {
+        const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+        if (this.state.inSuperboard && this.state.superboardPlayerPos) {
+            const { gx, gy } = this.state.superboardPlayerPos;
+            const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+            const dungeonObj = this.state.dungeon || this.props.boardManager?.dungeon;
+            const sb = dungeonObj?.superboards?.[sbKey];
+            if (sb && Array.isArray(sb.miniboards)) {
+                const mbIdx = Math.floor(gy / 15) * 3 + Math.floor(gx / 15);
+                const tIdx = (gy % 15) * 15 + (gx % 15);
+                const tile = sb.miniboards[mbIdx]?.tiles?.[tIdx];
+                if (tile) {
+                    const c = tile.contains;
+                    const isHut = tile.building === 'hut' || (c && typeof c === 'object' && (c.subtype === 'hut' || c.building === 'hut' || c.type === 'hut'));
+                    if (isHut) {
+                        const owner = c?.ownerId || c?.placedBy || tile.placedBy;
+                        const isFriendly = !owner || owner === currentUserId || owner === 'player' || c?.affiliation === 'friendly' || tile.affiliation === 'friendly';
+                        if (isFriendly) return true;
+                    }
+                }
+            }
+        }
+        const bm = this.props.boardManager;
+        if (bm && bm.playerTile && bm.playerTile.location && bm.tiles) {
+            const pIdx = bm.getIndexFromCoordinates(bm.playerTile.location);
+            const pTile = bm.tiles[pIdx];
+            if (pTile) {
+                const c = pTile.contains;
+                const isHut = pTile.building === 'hut' || (c && typeof c === 'object' && (c.subtype === 'hut' || c.building === 'hut' || c.type === 'hut'));
+                if (isHut) {
+                    const owner = c?.ownerId || c?.placedBy || pTile.placedBy;
+                    const isFriendly = !owner || owner === currentUserId || owner === 'player' || c?.affiliation === 'friendly' || pTile.affiliation === 'friendly';
+                    if (isFriendly) return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    getPocketResources = () => {
+        if (this.state && this.state.pocketResources) {
+            return this.state.pocketResources;
+        }
+        const meta = getMeta() || {};
+        return meta.pocketResources || {
+            food: 0,
+            slate: 0,
+            ore: 0,
+            wood: 0,
+            dust: 0,
+            mushrooms: 0,
+            chemicals: 0
+        };
+    };
+
+    addPocketResource = (resType, amount) => {
+        if (!amount || amount <= 0) return;
+        const current = { ...this.getPocketResources() };
+        let key = String(resType || '').toLowerCase();
+        if (key.includes('food') || key.includes('meat') || key.includes('larder')) key = 'food';
+        else if (key.includes('slate')) key = 'slate';
+        else if (key.includes('stone') || key.includes('ore') || key.includes('mine')) key = 'ore';
+        else if (key.includes('wood') || key.includes('lumber') || key.includes('sawmill')) key = 'wood';
+        else if (key.includes('dust') || key.includes('shimmering')) key = 'dust';
+        else if (key.includes('mushroom') || key.includes('fungal')) key = 'mushrooms';
+        else if (key.includes('chem') || key.includes('vat')) key = 'chemicals';
+        else return;
+
+        current[key] = (current[key] || 0) + amount;
+        this.setState({ pocketResources: current });
+        try {
+            const meta = getMeta() || {};
+            meta.pocketResources = current;
+            storeMeta(meta);
+        } catch (e) { }
+    };
+
+    getPocketActiveResourceGeneratorsCount = () => {
+        const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+        const dungeonObj = this.state.dungeon || this.props.boardManager?.dungeon;
+        const sb = dungeonObj?.superboards?.[sbKey];
+        if (!sb || !Array.isArray(sb.miniboards)) return 0;
+        const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+        const countedKeys = new Set();
+        let count = 0;
+
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = sb.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const t = mb.tiles[tIdx];
+                if (!t) continue;
+                const def = this.getGeneratorDef(t);
+                if (!def || def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'observer_platform' || def.key === 'observation_platform' || def.key === 'outpost' || def.key === 'wall' || def.key === 'hut') {
+                    continue;
+                }
+
+                const cObj = typeof t.contains === 'object' ? t.contains : null;
+                if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') continue;
+
+                const gData = t.generatorData || cObj?.generatorData;
+                if (!gData || !gData.activated) continue;
+
+                const isOwned = gData.owned !== false && (!gData.ownerId || gData.ownerId === currentUserId || gData.ownerId === 'player' || cObj?.affiliation === 'friendly' || t.affiliation === 'friendly');
+                if (!isOwned) continue;
+
+                const gx = mbX * 15 + (tIdx % 15);
+                const gy = mbY * 15 + Math.floor(tIdx / 15);
+                const bKey = cObj?.vendorGroupId || `gen_${gx}_${gy}`;
+                if (!countedKeys.has(bKey)) {
+                    countedKeys.add(bKey);
+                    count++;
+                }
+            }
+        }
+        return count;
+    };
+
+    tickPocketResourceGenerators = (superboard) => {
+        if (!superboard || !superboard.miniboards) return;
+        const now = Date.now();
+        const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+
+        superboard.miniboards.forEach(mb => {
+            if (!mb || !mb.tiles) return;
+            mb.tiles.forEach(tile => {
+                if (!tile) return;
+                const def = this.getGeneratorDef(tile);
+                if (!def || def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.rate === 0) return;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') return;
+
+                const gData = tile.generatorData || cObj?.generatorData;
+                if (!gData || !gData.activated) return;
+
+                const isOwned = gData.owned !== false && (!gData.ownerId || gData.ownerId === currentUserId || gData.ownerId === 'player' || cObj?.affiliation === 'friendly' || tile.affiliation === 'friendly');
+                if (!isOwned) return;
+
+                const intervalMs = (gData.cycleIntervalSec || 10) * 1000;
+                const lastTick = gData.lastTickTime || gData.activatedAt || now;
+                if (now - lastTick >= intervalMs) {
+                    const elapsedCycles = Math.floor((now - lastTick) / intervalMs);
+                    const cycleAmt = gData.cycleAmount || def.rate || 5;
+                    const addAmt = elapsedCycles * cycleAmt;
+                    if (addAmt > 0) {
+                        this.addPocketResource(def.currencyType || def.key, addAmt);
+                    }
+                    gData.accumulated = 0;
+                    gData.lastTickTime = lastTick + (elapsedCycles * intervalMs);
+                    tile.generatorData = { ...gData };
+                    if (tile.contains && typeof tile.contains === 'object') {
+                        tile.contains.generatorData = { ...gData };
+                    }
+
+                    if (cObj && cObj.vendorGroupId) {
+                        for (let otherMb of superboard.miniboards) {
+                            if (!otherMb?.tiles) continue;
+                            for (let ot of otherMb.tiles) {
+                                if (ot?.contains?.vendorGroupId === cObj.vendorGroupId) {
+                                    ot.generatorData = { ...gData };
+                                    if (ot.contains && typeof ot.contains === 'object') {
+                                        ot.contains.generatorData = { ...gData };
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (Array.isArray(this.state.tiles)) {
+                        this.state.tiles.forEach(st => {
+                            if (!st) return;
+                            const isSame = (st.contains?.vendorGroupId && st.contains.vendorGroupId === cObj?.vendorGroupId) ||
+                                (st.globalX !== undefined && st.globalX === tile.globalX && st.globalY === tile.globalY);
+                            if (isSame) {
+                                st.generatorData = { ...gData };
+                                if (st.contains && typeof st.contains === 'object') {
+                                    st.contains.generatorData = { ...gData };
+                                }
+                            }
+                        });
+                    }
+                }
+            });
+        });
+    };
+
     damagePlayerCrew = (dmg) => {
+        if (this.isPlayerInHut()) return;
         let meta = getMeta() || {};
         const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : (meta.crew || []);
         const livingCrew = crew.filter(m => m && !(m.dead === true || (typeof m.hp === 'number' && m.hp <= 0)));
@@ -7375,15 +8381,30 @@ class DungeonPage extends React.Component {
                 if (!isDomainMonolith) return;
                 if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') return;
 
-                const affiliation = cObj?.affiliation || tile.affiliation;
+                const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
+                const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
+                if (!isExplicitlyActive) return;
+
+                let affiliation = cObj?.affiliation || tile.affiliation || (isGeneratorActive ? 'player' : null);
+                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith')) {
+                    affiliation = 'hostile';
+                }
                 if (!affiliation || affiliation === 'none') return;
 
                 const level = cObj?.level || tile.level || 1;
                 const maxGrowthCycles = level >= 2 ? 10 : 5;
                 let growthCycles = cObj?.growthCycles ?? tile.growthCycles ?? 0;
-                let lastGrowthTime = cObj?.lastGrowthTime ?? tile.lastGrowthTime ?? now;
+                let lastGrowthTime = cObj?.lastGrowthTime || tile.lastGrowthTime || 0;
 
-                if (growthCycles < maxGrowthCycles && (now - lastGrowthTime >= 30000)) {
+                if (!lastGrowthTime) {
+                    lastGrowthTime = now;
+                    if (cObj) cObj.lastGrowthTime = now;
+                    tile.lastGrowthTime = now;
+                }
+
+                const shouldGrow = (growthCycles === 0) || (growthCycles < maxGrowthCycles && (now - lastGrowthTime >= 30000));
+
+                if (shouldGrow) {
                     const nextCycle = growthCycles + 1;
                     const anchorGx = (mbIdx % 3) * 15 + (tIdx % 15);
                     const anchorGy = Math.floor(mbIdx / 3) * 15 + Math.floor(tIdx / 15);
@@ -7392,17 +8413,17 @@ class DungeonPage extends React.Component {
                     const minGy = anchorGy;
                     const maxGy = anchorGy + 1;
 
-                    const monolithId = cObj?.id || `monolith_${anchorGx}_${anchorGy}`;
+                    const monolithId = cObj?.id || tile.id || `monolith_${anchorGx}_${anchorGy}`;
 
                     superboard.miniboards.forEach((targetMb, targetMbIdx) => {
                         if (!targetMb || !targetMb.tiles) return;
                         const mbX = (targetMbIdx % 3) * 15;
                         const mbY = Math.floor(targetMbIdx / 3) * 15;
 
-                        targetMb.tiles.forEach((targetTile, targetTidx) => {
+                        targetMb.tiles.forEach((targetTile) => {
                             if (!targetTile) return;
-                            const gx = mbX + (targetTidx % 15);
-                            const gy = mbY + Math.floor(targetTidx / 15);
+                            const gx = mbX + (targetTile.coordinates ? targetTile.coordinates[0] : (targetTile.id % 15));
+                            const gy = mbY + (targetTile.coordinates ? targetTile.coordinates[1] : Math.floor(targetTile.id / 15));
 
                             let dx = 0;
                             if (gx < minGx) dx = minGx - gx;
@@ -7430,20 +8451,26 @@ class DungeonPage extends React.Component {
                         if (!targetMb || !targetMb.tiles) return;
                         const mbX = (targetMbIdx % 3) * 15;
                         const mbY = Math.floor(targetMbIdx / 3) * 15;
-                        targetMb.tiles.forEach((t, targetTidx) => {
+                        targetMb.tiles.forEach((t) => {
                             if (!t) return;
-                            const tgx = mbX + (targetTidx % 15);
-                            const tgy = mbY + Math.floor(targetTidx / 15);
+                            const tgx = mbX + (t.coordinates ? t.coordinates[0] : (t.id % 15));
+                            const tgy = mbY + (t.coordinates ? t.coordinates[1] : Math.floor(t.id / 15));
                             if (tgx >= minGx && tgx <= maxGx && tgy >= minGy && tgy <= maxGy) {
                                 const existingC = typeof t.contains === 'object' ? t.contains : {};
                                 t.contains = {
                                     ...existingC,
+                                    affiliation: affiliation,
+                                    isHostile: affiliation === 'hostile',
+                                    faction: affiliation,
                                     growthCycles: nextCycle,
                                     maxGrowthCycles: maxGrowthCycles,
                                     lastGrowthTime: now,
                                     level: level,
-                                    id: monolithId
+                                    id: monolithId,
+                                    activated: true
                                 };
+                                t.affiliation = affiliation;
+                                t.isHostile = affiliation === 'hostile';
                                 t.growthCycles = nextCycle;
                                 t.lastGrowthTime = now;
                             }
@@ -7466,9 +8493,97 @@ class DungeonPage extends React.Component {
 
                     const affTitle = affiliation.toUpperCase();
                     this.displayMessage(`✦ Domain Monolith expanded ${affTitle} territory (Ring ${nextCycle}/${maxGrowthCycles})!`);
+                    this.checkPocketDimensionVictory();
                 }
             });
         });
+
+        this.tickPocketResourceGenerators(superboard);
+    };
+
+    activateSuperboardDomainMonolith = (superboard, monolith, affiliation = 'hostile') => {
+        if (!superboard || !monolith) return;
+        const now = Date.now();
+        const { anchorGx, anchorGy } = monolith;
+        const minGx = anchorGx;
+        const maxGx = anchorGx + 1;
+        const minGy = anchorGy;
+        const maxGy = anchorGy + 1;
+        const monolithId = monolith.id || `monolith_${anchorGx}_${anchorGy}`;
+
+        // 1. Update all cells of the 2x2 monolith
+        superboard.miniboards.forEach((mb, mbIdx) => {
+            if (!mb || !mb.tiles) return;
+            const mbX = (mbIdx % 3) * 15;
+            const mbY = Math.floor(mbIdx / 3) * 15;
+            mb.tiles.forEach((t, tIdx) => {
+                if (!t) return;
+                const gx = mbX + (tIdx % 15);
+                const gy = mbY + Math.floor(tIdx / 15);
+                if (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy) {
+                    const existingC = typeof t.contains === 'object' ? t.contains : {};
+                    t.contains = {
+                        ...existingC,
+                        affiliation: affiliation,
+                        isHostile: (affiliation === 'hostile'),
+                        faction: affiliation,
+                        growthCycles: 1,
+                        maxGrowthCycles: 5,
+                        lastGrowthTime: now,
+                        level: 1,
+                        id: monolithId,
+                        activated: true
+                    };
+                    t.affiliation = affiliation;
+                    t.growthCycles = 1;
+                    t.lastGrowthTime = now;
+                    t.isHostile = (affiliation === 'hostile');
+                }
+            });
+        });
+
+        // 2. Claim footprint + Ring 1 as territory immediately
+        superboard.miniboards.forEach((mb, mbIdx) => {
+            if (!mb || !mb.tiles) return;
+            const mbX = (mbIdx % 3) * 15;
+            const mbY = Math.floor(mbIdx / 3) * 15;
+            mb.tiles.forEach((t, tIdx) => {
+                if (!t) return;
+                const gx = mbX + (tIdx % 15);
+                const gy = mbY + Math.floor(tIdx / 15);
+
+                let dx = 0;
+                if (gx < minGx) dx = minGx - gx;
+                else if (gx > maxGx) dx = gx - maxGx;
+
+                let dy = 0;
+                if (gy < minGy) dy = minGy - gy;
+                else if (gy > maxGy) dy = gy - maxGy;
+
+                const dist = Math.max(dx, dy);
+                if (dist <= 1) {
+                    t.territory = affiliation;
+                    t.territoryAffiliation = affiliation;
+                    t.territoryMonolithId = monolithId;
+                    t.newlyClaimed = true;
+                }
+            });
+        });
+
+        this.updateSuperboardViewport();
+        this.checkPocketDimensionVictory();
+        setTimeout(() => {
+            if (superboard && superboard.miniboards) {
+                superboard.miniboards.forEach(mb => {
+                    if (mb && mb.tiles) {
+                        mb.tiles.forEach(t => {
+                            if (t) t.newlyClaimed = false;
+                        });
+                    }
+                });
+            }
+            this.updateSuperboardViewport();
+        }, 2000);
     };
 
     isSuperboardCoordVisibleToUser = (gx, gy, targetTile) => {
@@ -7518,9 +8633,10 @@ class DungeonPage extends React.Component {
                 }
                 const structType = (item.structureKey || '').split('_').slice(2).join('_');
                 const capacityCap = structType === 'war_fort' ? 5 : (structType === 'war_camp' ? 2 : 1);
+                const is2x2 = structType === 'war_camp' || structType === 'war_fort';
 
                 if (currentLiving < capacityCap) {
-                    const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, item.gx || 22, item.gy || 22);
+                    const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, item.gx || 22, item.gy || 22, is2x2);
                     if (spawnCoord) {
                         const isAllied = !!item.isAllied;
                         const newPygmy = {
@@ -7528,7 +8644,8 @@ class DungeonPage extends React.Component {
                             subtype: 'pocket_pygmy',
                             isPocketPygmy: true,
                             isAllied: isAllied,
-                            faction: isAllied ? 'player' : 'wild',
+                            faction: isAllied ? 'player' : (item.isHostile ? 'hostile' : 'neutral'),
+                            affiliation: isAllied ? 'friendly' : (item.isHostile ? 'hostile' : 'neutral'),
                             placedBy: isAllied ? 'player' : undefined,
                             hp: 10,
                             maxHp: 10,
@@ -7541,7 +8658,7 @@ class DungeonPage extends React.Component {
                             targetMb.tiles[spawnCoord.tIdx].contains = newPygmy;
                             targetMb.tiles[spawnCoord.tIdx].image = images.woodland_individual || 'woodland_individual';
                             if (this.isSuperboardCoordVisibleToUser(spawnCoord.gx, spawnCoord.gy, targetMb.tiles[spawnCoord.tIdx])) {
-                                this.displayMessage(`🛖 A new ${isAllied ? 'Allied' : 'Hostile'} Pocket Pygmy spawned from structure!`);
+                                this.displayMessage(`🛖 A new ${isAllied ? 'Allied' : 'Neutral'} Pocket Pygmy spawned from structure!`);
                             }
                         }
                     } else {
@@ -7577,9 +8694,7 @@ class DungeonPage extends React.Component {
             }
         }
 
-        if (pygmiesList.length === 0) return;
-
-        // Process each pygmy action
+        // Process each pygmy action (if any)
         for (const unit of pygmiesList) {
             const currentTile = superboard.miniboards[unit.mbIdx]?.tiles?.[unit.tIdx];
             if (!currentTile || !currentTile.contains || currentTile.contains.id !== unit.pygmy.id) continue;
@@ -7587,7 +8702,10 @@ class DungeonPage extends React.Component {
             if ((pygmy.hp || 0) <= 0) continue;
 
             const { gx, gy } = unit;
-            const isAlliedPygmy = !!(pygmy.isAllied || pygmy.faction === 'player' || pygmy.placedBy === 'player');
+            const isAlliedPygmy = !!(pygmy.isAllied || pygmy.faction === 'player' || pygmy.placedBy === 'player' || pygmy.affiliation === 'friendly');
+            const isNeutralPygmy = !isAlliedPygmy && (pygmy.faction === 'neutral' || pygmy.faction === 'wild' || pygmy.affiliation === 'neutral' || (!pygmy.isHostile && pygmy.faction !== 'hostile' && pygmy.faction !== 'enemy'));
+            const isHostilePygmy = !isAlliedPygmy && !isNeutralPygmy;
+            const pygmyAff = isAlliedPygmy ? 'friendly' : (isNeutralPygmy ? 'neutral' : 'hostile');
 
             // ── A. Low HP Fleeing (hp <= 2: <= 20% of 10) ──
             if ((pygmy.hp || 10) <= 2) {
@@ -7603,9 +8721,12 @@ class DungeonPage extends React.Component {
                 }
                 for (const other of pygmiesList) {
                     if (other.pygmy.id === pygmy.id) continue;
-                    const isOtherAllied = !!(other.pygmy.isAllied || other.pygmy.faction === 'player' || other.pygmy.placedBy === 'player');
-                    // Allied flee from hostile, hostile flee from allied
-                    if (isAlliedPygmy !== isOtherAllied) {
+                    const isOtherAllied = !!(other.pygmy.isAllied || other.pygmy.faction === 'player' || other.pygmy.placedBy === 'player' || other.pygmy.affiliation === 'friendly');
+                    const isOtherNeutral = !isOtherAllied && (other.pygmy.faction === 'neutral' || other.pygmy.faction === 'wild' || other.pygmy.affiliation === 'neutral');
+                    const otherAff = isOtherAllied ? 'friendly' : (isOtherNeutral ? 'neutral' : 'hostile');
+
+                    const isThreat = isNeutralPygmy ? (otherAff !== 'neutral') : (otherAff !== pygmyAff);
+                    if (isThreat) {
                         const d = Math.max(Math.abs(gx - other.gx), Math.abs(gy - other.gy));
                         if (d <= 4 && d < minDist) {
                             minDist = d;
@@ -7632,12 +8753,24 @@ class DungeonPage extends React.Component {
             }
 
             // ── B. Scan for Enemy Buildings within Vision Radius (4 tiles) ──
-            const pygmyAff = pygmy.affiliation || (isAlliedPygmy ? 'friendly' : 'hostile');
+            const isBuildingHomeStructure = (targetObj, bgx, bgy) => {
+                if (!pygmy.homeStructureKey && !pygmy.homeStructureVendorGroupId && typeof pygmy.homeStructureGx !== 'number') return false;
+                if (pygmy.homeStructureVendorGroupId && targetObj?.vendorGroupId && pygmy.homeStructureVendorGroupId === targetObj.vendorGroupId) return true;
+                if (pygmy.homeStructureKey && (targetObj?.id === pygmy.homeStructureKey || targetObj?.key === pygmy.homeStructureKey)) return true;
+                if (typeof pygmy.homeStructureGx === 'number' && typeof pygmy.homeStructureGy === 'number') {
+                    // Check 2x2 footprint of home structure
+                    if (bgx >= pygmy.homeStructureGx && bgx <= pygmy.homeStructureGx + 1 && bgy >= pygmy.homeStructureGy && bgy <= pygmy.homeStructureGy + 1) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
             const getBuildingAff = (targetObj, tileObj) => {
-                const aff = targetObj?.affiliation || tileObj?.affiliation;
-                if (aff) return aff;
+                const rawAff = targetObj?.affiliation || tileObj?.affiliation;
+                if (rawAff && rawAff !== 'none') return rawAff;
                 if (targetObj?.placedBy === 'player' || targetObj?.ownerId === 'player' || targetObj?.isAllied || targetObj?.faction === 'player' || tileObj?.placedBy === 'player') return 'friendly';
-                if (targetObj?.faction === 'wild' || targetObj?.faction === 'hostile' || targetObj?.isHostile) return 'hostile';
+                if (targetObj?.faction === 'hostile' || targetObj?.isHostile || targetObj?.isAutomaton || targetObj?.subtype === 'automaton') return 'hostile';
                 return 'neutral';
             };
 
@@ -7662,16 +8795,22 @@ class DungeonPage extends React.Component {
                     const matchingKey = militaryBuildingKeys.find(k => structKey.includes(k));
                     if (!matchingKey) continue;
 
-                    const hp = typeof targetObj.hp === 'number' ? targetObj.hp : 10;
-                    if (hp <= 0 || targetObj.destroyedAt) continue;
-
-                    const bAff = getBuildingAff(targetObj, t);
-                    if (bAff === pygmyAff) continue; // Must be non-same-affiliation!
-
                     const lX = tIdx % 15;
                     const lY = Math.floor(tIdx / 15);
                     const bgx = mbX * 15 + lX;
                     const bgy = mbY * 15 + lY;
+
+                    // NEVER target own home structure!
+                    if (isBuildingHomeStructure(targetObj, bgx, bgy)) continue;
+
+                    const hp = typeof targetObj.hp === 'number' ? targetObj.hp : 10;
+                    if (hp <= 0 || targetObj.destroyedAt) continue;
+
+                    const bAff = getBuildingAff(targetObj, t);
+                    // Neutral pygmies ONLY target non-neutral buildings (friendly or hostile)
+                    if (isNeutralPygmy && bAff === 'neutral') continue;
+                    // Allied/hostile/neutral pygmies cannot target same affiliation
+                    if (bAff === pygmyAff) continue;
 
                     const dist = Math.max(Math.abs(gx - bgx), Math.abs(gy - bgy));
                     if (dist > 4) continue; // Vision radius <= 4 tiles
@@ -7713,8 +8852,8 @@ class DungeonPage extends React.Component {
                     };
                 }
 
-                // Target Option 1: Player Avatar (ONLY ATTACK PLAYER IF HOSTILE / NOT ALLIED and no adjacent building)
-                if (!targetEnemyUnit && !isAlliedPygmy && superboardPlayerPos) {
+                // Target Option 1: Player Avatar (Attack player only if non-allied since player is 'friendly' and not shielded in friendly Hut)
+                if (!targetEnemyUnit && !isAlliedPygmy && !this.isPlayerInHut() && superboardPlayerPos) {
                     const isPlayerAdjacent = Math.max(Math.abs(gx - superboardPlayerPos.gx), Math.abs(gy - superboardPlayerPos.gy)) === 1;
                     if (isPlayerAdjacent) {
                         pygmy.lastAttackTime = now;
@@ -7761,6 +8900,7 @@ class DungeonPage extends React.Component {
                         pygmy.hp = (pygmy.hp || maxHpVal) - crewDmg;
                         pygmy.lastDamageTime = now;
 
+                        const attackerTitle = isNeutralPygmy ? 'Neutral Pygmy' : (isHostilePygmy ? 'Hostile Pygmy' : 'Pygmy');
                         if (pygmy.hp <= 0) {
                             // Attacking Pygmy dies from crew's counter-attack!
                             if (pygmy.homeStructureKey) {
@@ -7769,14 +8909,15 @@ class DungeonPage extends React.Component {
                                     structureKey: pygmy.homeStructureKey,
                                     gx, gy,
                                     isAllied: false,
+                                    isHostile: isHostilePygmy,
                                     superboardType
                                 });
                             }
                             currentTile.contains = null;
                             currentTile.image = null;
-                            this.displayMessage(`⚔ Hostile Pygmy dealt ${pygmyDmg} dmg to crew, but crew dealt ${crewDmg} dmg back and slain the Pygmy!`);
+                            this.displayMessage(`⚔ ${attackerTitle} dealt ${pygmyDmg} dmg to crew, but crew dealt ${crewDmg} dmg back and slain the Pygmy!`);
                         } else {
-                            this.displayMessage(`⚔ Hostile Pygmy dealt ${pygmyDmg} dmg to crew; Crew dealt ${crewDmg} dmg back! (Pygmy HP: ${pygmy.hp}/${maxHpVal})`);
+                            this.displayMessage(`⚔ ${attackerTitle} dealt ${pygmyDmg} dmg to crew; Crew dealt ${crewDmg} dmg back! (Pygmy HP: ${pygmy.hp}/${maxHpVal})`);
                         }
                         this.updateSuperboardViewport();
                         continue;
@@ -7792,10 +8933,27 @@ class DungeonPage extends React.Component {
                         const cSubtypeOrType = targetUnit.subtype || targetUnit.type;
                         const structKey = cSubtypeOrType || c.tile.building || targetUnit.building;
                         const isBuilding = ['earthen_fort', 'war_camp', 'war_fort', 'outpost', 'keep', 'fortress'].some(k => String(structKey).toLowerCase().includes(k));
-                        const isUnit = targetUnit.isPocketPygmy || targetUnit.subtype === 'pocket_pygmy' || targetUnit.isAutomaton;
+                        const isUnit = targetUnit.isPocketPygmy || targetUnit.subtype === 'pocket_pygmy' || targetUnit.isAutomaton || targetUnit.type === 'monster';
 
-                        const targetAff = getBuildingAff(targetUnit, c.tile);
-                        return (isUnit || isBuilding) && targetAff !== pygmyAff;
+                        if (!isUnit && !isBuilding) return false;
+
+                        if (isBuilding) {
+                            if (isBuildingHomeStructure(targetUnit, c.gx, c.gy)) return false;
+                            const targetAff = getBuildingAff(targetUnit, c.tile);
+                            if (isNeutralPygmy) {
+                                return targetAff !== 'neutral';
+                            }
+                            return targetAff !== pygmyAff;
+                        }
+
+                        const isTargetAllied = targetUnit.isAllied || targetUnit.faction === 'player' || targetUnit.placedBy === 'player' || targetUnit.affiliation === 'friendly';
+                        const isTargetNeutral = !isTargetAllied && (targetUnit.faction === 'neutral' || targetUnit.faction === 'wild' || targetUnit.affiliation === 'neutral' || (!targetUnit.isHostile && targetUnit.faction !== 'hostile' && targetUnit.faction !== 'enemy'));
+                        const targetUnitAff = isTargetAllied ? 'friendly' : (isTargetNeutral ? 'neutral' : 'hostile');
+
+                        if (isNeutralPygmy) {
+                            return targetUnitAff !== 'neutral';
+                        }
+                        return targetUnitAff !== pygmyAff;
                     });
                 }
 
@@ -7813,12 +8971,14 @@ class DungeonPage extends React.Component {
                     
                     let targetName = 'Unknown Target';
                     if (isBuilding) {
-                        targetName = String(structKey).includes('outpost') ? 'Outpost' : (String(structKey).includes('war_fort') ? 'War Fort' : 'War Structure');
+                        targetName = String(structKey).includes('outpost') ? 'Outpost' : (String(structKey).includes('war_fort') ? 'War Fort' : (String(structKey).includes('war_camp') ? 'War Camp' : 'War Structure'));
                     } else {
-                        targetName = targetUnit.isAutomaton ? 'Automaton' : (isAlliedPygmy ? 'Hostile Pygmy' : 'Allied Pygmy');
+                        const isTargetAllied = targetUnit.isAllied || targetUnit.faction === 'player' || targetUnit.placedBy === 'player' || targetUnit.affiliation === 'friendly';
+                        const isTargetNeutral = !isTargetAllied && (targetUnit.faction === 'neutral' || targetUnit.faction === 'wild' || targetUnit.affiliation === 'neutral');
+                        targetName = targetUnit.isAutomaton ? 'Automaton' : (isTargetAllied ? 'Allied Pygmy' : (isTargetNeutral ? 'Neutral Pygmy' : 'Hostile Pygmy'));
                     }
                     
-                    const attackerName = isAlliedPygmy ? 'Allied Pygmy' : 'Hostile Pygmy';
+                    const attackerName = isAlliedPygmy ? 'Allied Pygmy' : (isNeutralPygmy ? 'Neutral Pygmy' : 'Hostile Pygmy');
                     const maxHpVal = targetUnit.maxHp || (isBuilding ? (String(structKey).includes('war_fort') ? 100 : 50) : 10);
                     targetUnit.hp = (targetUnit.hp || maxHpVal) - dmg;
                     targetUnit.lastDamageTime = now;
@@ -7856,11 +9016,21 @@ class DungeonPage extends React.Component {
                                     gx: targetEnemyUnit.gx,
                                     gy: targetEnemyUnit.gy,
                                     isAllied: targetUnit.isAllied,
+                                    isHostile: targetUnit.faction === 'hostile' || targetUnit.isHostile,
                                     superboardType
                                 });
                             }
-                            targetEnemyUnit.tile.contains = null;
-                            targetEnemyUnit.tile.image = null;
+                            if (targetEnemyUnit.tile.isEnemySpawn === true || targetEnemyUnit.tile.originalMarker === 'narrative') {
+                                targetEnemyUnit.tile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                targetEnemyUnit.tile.image = 'narrative';
+                                targetEnemyUnit.tile.isEnemySpawn = true;
+                                targetEnemyUnit.tile.originalMarker = 'narrative';
+                            } else {
+                                targetEnemyUnit.tile.contains = null;
+                                targetEnemyUnit.tile.image = null;
+                                targetEnemyUnit.tile.isEnemySpawn = false;
+                                targetEnemyUnit.tile.originalMarker = null;
+                            }
                             if (isCombatVisible) {
                                 this.displayMessage(`💥 A ${targetName} was destroyed in combat!`);
                             }
@@ -7882,7 +9052,7 @@ class DungeonPage extends React.Component {
                 } else if (isAlliedPygmy) {
                     let minEnemyDist = 999;
                     for (const other of pygmiesList) {
-                        const isOtherAllied = !!(other.pygmy.isAllied || other.pygmy.faction === 'player' || other.pygmy.placedBy === 'player');
+                        const isOtherAllied = !!(other.pygmy.isAllied || other.pygmy.faction === 'player' || other.pygmy.placedBy === 'player' || other.pygmy.affiliation === 'friendly');
                         if (!isOtherAllied && (other.pygmy.hp || 0) > 0) {
                             const d = Math.max(Math.abs(gx - other.gx), Math.abs(gy - other.gy));
                             if (d < minEnemyDist && d <= 10) {
@@ -7891,9 +9061,9 @@ class DungeonPage extends React.Component {
                             }
                         }
                     }
-                } else {
+                } else if (isNeutralPygmy) {
                     let minEnemyDist = 999;
-                    if (superboardPlayerPos) {
+                    if (superboardPlayerPos && !this.isPlayerInHut()) {
                         const dPlayer = Math.max(Math.abs(gx - superboardPlayerPos.gx), Math.abs(gy - superboardPlayerPos.gy));
                         if (dPlayer <= 8) {
                             minEnemyDist = dPlayer;
@@ -7901,7 +9071,27 @@ class DungeonPage extends React.Component {
                         }
                     }
                     for (const other of pygmiesList) {
-                        const isOtherAllied = !!(other.pygmy.isAllied || other.pygmy.faction === 'player' || other.pygmy.placedBy === 'player');
+                        const isOtherAllied = !!(other.pygmy.isAllied || other.pygmy.faction === 'player' || other.pygmy.placedBy === 'player' || other.pygmy.affiliation === 'friendly');
+                        const isOtherNeutral = !isOtherAllied && (other.pygmy.faction === 'neutral' || other.pygmy.faction === 'wild' || other.pygmy.affiliation === 'neutral');
+                        if (!isOtherNeutral && (other.pygmy.hp || 0) > 0) {
+                            const d = Math.max(Math.abs(gx - other.gx), Math.abs(gy - other.gy));
+                            if (d < minEnemyDist && d <= 8) {
+                                minEnemyDist = d;
+                                targetEnemyCoord = { gx: other.gx, gy: other.gy };
+                            }
+                        }
+                    }
+                } else {
+                    let minEnemyDist = 999;
+                    if (superboardPlayerPos && !this.isPlayerInHut()) {
+                        const dPlayer = Math.max(Math.abs(gx - superboardPlayerPos.gx), Math.abs(gy - superboardPlayerPos.gy));
+                        if (dPlayer <= 8) {
+                            minEnemyDist = dPlayer;
+                            targetEnemyCoord = superboardPlayerPos;
+                        }
+                    }
+                    for (const other of pygmiesList) {
+                        const isOtherAllied = !!(other.pygmy.isAllied || other.pygmy.faction === 'player' || other.pygmy.placedBy === 'player' || other.pygmy.affiliation === 'friendly');
                         if (isOtherAllied && (other.pygmy.hp || 0) > 0) {
                             const d = Math.max(Math.abs(gx - other.gx), Math.abs(gy - other.gy));
                             if (d < minEnemyDist && d <= 8) {
@@ -7929,7 +9119,7 @@ class DungeonPage extends React.Component {
             }
         }
 
-        // 4. Collect all living Automatons & process their peaceful roaming movement
+        // 4. Collect all living Automatons & process their behavior (Prioritizing activating Domain Monoliths)
         const automatonsList = [];
         for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
             const mb = superboard.miniboards[mbIdx];
@@ -7950,11 +9140,156 @@ class DungeonPage extends React.Component {
             }
         }
 
+        if (automatonsList.length === 0) {
+            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                const mb = superboard.miniboards[mbIdx];
+                if (!mb || !Array.isArray(mb.tiles)) continue;
+                const mbX = mbIdx % 3;
+                const mbY = Math.floor(mbIdx / 3);
+                for (let tIdx = 0; tIdx < 225; tIdx++) {
+                    const tile = mb.tiles[tIdx];
+                    if (!tile) continue;
+                    const cType = typeof tile.contains === 'object' && tile.contains ? (tile.contains.type || tile.contains.subtype) : tile.contains;
+                    const cSubtype = typeof tile.contains === 'object' && tile.contains ? tile.contains.subtype : null;
+                    const img = String(tile.image || '').toLowerCase();
+                    const opt = String(tile.optionType || '').toLowerCase();
+                    if (tile.isEnemySpawn || tile.originalMarker === 'narrative' || cType === 'narrative' || cSubtype === 'narrative' || img === 'narrative' || opt === 'narrative') {
+                        tile.isEnemySpawn = true;
+                        tile.originalMarker = 'narrative';
+                        const newAutomaton = {
+                            type: 'monsters',
+                            subtype: 'automaton',
+                            isAutomaton: true,
+                            faction: 'enemy',
+                            hp: 1000,
+                            maxHp: 1000,
+                            id: `automaton_enemy_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+                        };
+                        tile.contains = newAutomaton;
+                        tile.image = images.automaton || 'automaton';
+                        const lX = tIdx % 15;
+                        const lY = Math.floor(tIdx / 15);
+                        automatonsList.push({
+                            gx: mbX * 15 + lX,
+                            gy: mbY * 15 + lY,
+                            mbIdx,
+                            tIdx,
+                            tile,
+                            automaton: newAutomaton
+                        });
+                        break;
+                    }
+                }
+                if (automatonsList.length > 0) break;
+            }
+        }
+
+        // Collect all unactivated or non-hostile Domain Monoliths on the superboard
+        const targetMonoliths = [];
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (!tile || !tile.contains) continue;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
+                const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                if (!isDomainMonolith) continue;
+                if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') continue;
+
+                const aff = cObj?.affiliation || tile.affiliation;
+                if (aff !== 'hostile') {
+                    const anchorGx = mbX * 15 + (tIdx % 15);
+                    const anchorGy = mbY * 15 + Math.floor(tIdx / 15);
+                    targetMonoliths.push({
+                        anchorGx,
+                        anchorGy,
+                        mbIdx,
+                        tIdx,
+                        tile,
+                        cObj,
+                        id: cObj?.id || `monolith_${anchorGx}_${anchorGy}`
+                    });
+                }
+            }
+        }
+
         for (const auto of automatonsList) {
             const currentTile = superboard.miniboards[auto.mbIdx]?.tiles?.[auto.tIdx];
-            if (!currentTile || !currentTile.contains || currentTile.contains.id !== auto.automaton.id) continue;
-            if ((currentTile.contains.hp || 0) <= 0) continue;
+            const cContains = currentTile?.contains;
+            const isAuto = cContains && (cContains.isAutomaton || cContains.subtype === 'automaton' || cContains.id === auto.automaton.id);
+            if (!isAuto) continue;
+            if ((cContains.hp || 0) <= 0) continue;
 
+            const isAlliedAutomaton = !!(auto.automaton.isAllied || auto.automaton.faction === 'player' || auto.automaton.placedBy === 'player' || auto.automaton.affiliation === 'friendly');
+
+            // ── Priority 1: Domain Monolith targeting & activation (for hostile Automatons) ──
+            if (!isAlliedAutomaton && targetMonoliths.length > 0) {
+                let closestMonolith = null;
+                let minMonolithDist = 999;
+                let closestCellCoord = null;
+
+                for (const mono of targetMonoliths) {
+                    const monoCoords = [
+                        { gx: mono.anchorGx, gy: mono.anchorGy },
+                        { gx: mono.anchorGx + 1, gy: mono.anchorGy },
+                        { gx: mono.anchorGx, gy: mono.anchorGy + 1 },
+                        { gx: mono.anchorGx + 1, gy: mono.anchorGy + 1 }
+                    ];
+
+                    for (const mc of monoCoords) {
+                        const d = Math.max(Math.abs(auto.gx - mc.gx), Math.abs(auto.gy - mc.gy));
+                        if (d < minMonolithDist) {
+                            minMonolithDist = d;
+                            closestMonolith = mono;
+                            closestCellCoord = mc;
+                        }
+                    }
+                }
+
+                if (closestMonolith) {
+                    if (minMonolithDist === 1) {
+                        // Adjacent: Activate the Domain Monolith for hostile faction!
+                        const dCol = closestCellCoord.gx - auto.gx;
+                        const dRow = closestCellCoord.gy - auto.gy;
+                        await this.animatePocketPygmyBump(superboard, auto.mbIdx, auto.tIdx, dCol, dRow);
+
+                        this.activateSuperboardDomainMonolith(superboard, closestMonolith, 'hostile');
+
+                        const isVisible = this.isSuperboardCoordVisibleToUser(closestMonolith.anchorGx, closestMonolith.anchorGy, closestMonolith.tile);
+                        if (isVisible) {
+                            this.displayMessage(`🤖 Hostile Automaton has activated a Domain Monolith! Red hostile territory is expanding!`);
+                        }
+
+                        const monoIdx = targetMonoliths.findIndex(m => m.id === closestMonolith.id);
+                        if (monoIdx !== -1) targetMonoliths.splice(monoIdx, 1);
+
+                        this.updateSuperboardViewport();
+                        continue;
+                    } else {
+                        // Navigate towards the monolith
+                        const adjEmpty = this.getAdjacentSuperboardTiles(superboard, auto.gx, auto.gy).filter(c => c.isEmpty);
+                        if (adjEmpty.length > 0) {
+                            adjEmpty.sort((a, b) => {
+                                const distA = Math.hypot(a.gx - closestCellCoord.gx, a.gy - closestCellCoord.gy);
+                                const distB = Math.hypot(b.gx - closestCellCoord.gx, b.gy - closestCellCoord.gy);
+                                return distA - distB;
+                            });
+                            const chosen = adjEmpty[0];
+                            if (chosen) {
+                                this.movePocketPygmyUnit(superboard, auto.mbIdx, auto.tIdx, chosen.mbIdx, chosen.tIdx, auto.gx, auto.gy, chosen.gx, chosen.gy);
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Priority 2: Roaming ──
             const adjEmpty = this.getAdjacentSuperboardTiles(superboard, auto.gx, auto.gy).filter(c => c.isEmpty);
             if (adjEmpty.length > 0) {
                 const chosen = adjEmpty[Math.floor(Math.random() * adjEmpty.length)];
@@ -8735,6 +10070,7 @@ class DungeonPage extends React.Component {
             let meta = getMeta() || {};
             const crew = (this.props.crewManager && this.props.crewManager.crew) || meta.crew || [];
             let totalDamageDealt = 0;
+            let killedMembers = [];
 
             // Calculate collective HP before damage
             let totalMaxHp = 0;
@@ -8749,17 +10085,22 @@ class DungeonPage extends React.Component {
                             ? member.max_hp
                             : 10));
                 totalMaxHp += maxHp;
-                if (!member.dead) {
+                if (!member.dead && (typeof member.hp === 'undefined' || member.hp > 0)) {
                     initialCurrentHp += (typeof member.hp !== 'undefined') ? member.hp : maxHp;
                 }
             });
 
             const updatedCrew = crew.map(member => {
                 if (!member || member.dead) return member;
-                const dmg = Math.floor(Math.random() * 4) + 2; // 2-5 damage
+                const memberLevel = Math.max(1, Number(member.level || member.stats?.level || 1));
+                const dmg = memberLevel; // Requirement 1: 1 damage per level to each crew member
                 totalDamageDealt += dmg;
-                const newHp = Math.max(0, (member.hp || 10) - dmg);
+                const currentHp = (typeof member.hp !== 'undefined') ? member.hp : (member.stats?.hp || member.max_hp || 10);
+                const newHp = Math.max(0, currentHp - dmg);
                 const isDead = newHp <= 0;
+                if (isDead && !member.dead) {
+                    killedMembers.push(member.name || member.type || 'Crew member');
+                }
                 return {
                     ...member,
                     hp: newHp,
@@ -8767,12 +10108,32 @@ class DungeonPage extends React.Component {
                 };
             });
 
+            // Requirement 4: Check living members remaining and switch selected avatar
+            const livingMembers = updatedCrew.filter(m => m && !m.dead && (typeof m.hp === 'number' ? m.hp > 0 : true));
+            let nextSelectedMember = null;
+
+            if (livingMembers.length > 0) {
+                const currentSelectedId = this.state.selectedCrewMember?.id;
+                const currentSelectedIsLiving = livingMembers.find(m => m.id === currentSelectedId);
+                if (currentSelectedIsLiving) {
+                    nextSelectedMember = currentSelectedIsLiving;
+                } else {
+                    nextSelectedMember = livingMembers[0];
+                }
+                updatedCrew.forEach(c => {
+                    if (c) c.selected = (c.id === nextSelectedMember.id);
+                });
+            } else {
+                // All crew members dead
+                updatedCrew.forEach(c => { if (c) { c.dead = true; c.hp = 0; c.selected = false; } });
+            }
+
             // Calculate collective HP after damage
             let finalCurrentHp = 0;
             updatedCrew.forEach(member => {
                 if (!member) return;
                 if (!member.dead) {
-                    finalCurrentHp += member.hp;
+                    finalCurrentHp += (member.hp || 0);
                 }
             });
 
@@ -8812,7 +10173,26 @@ class DungeonPage extends React.Component {
             try { if (this.props.crewManager) this.props.crewManager.crew = updatedCrew; } catch (e) { }
             updateUserRequest(getUserId(), meta).catch(err => console.error('Error updating crew after projectile hit:', err));
 
-            this.displayMessage(`💥 An arrow hit your party! Dealt ${totalDamageDealt} total damage to crew.`);
+            if (killedMembers.length > 0) {
+                this.displayMessage(`☠️ ${killedMembers.join(', ')} perished from Outpost tower fire!`);
+            } else {
+                this.displayMessage(`💥 Outpost projectile hit your party! Dealt 1 dmg/lvl (${totalDamageDealt} total damage).`);
+            }
+
+            if (nextSelectedMember) {
+                this.setState({ selectedCrewMember: { ...nextSelectedMember } }, () => {
+                    if (bm && bm.playerTile && bm.playerTile.location) {
+                        this.updateFloatingPlayerPosition(bm.playerTile.location);
+                    }
+                });
+            } else {
+                // All crew members died! Trigger Card Duel / Death Tracker check
+                this.displayMessage('💀 All crew members have perished!');
+                setTimeout(() => {
+                    this.openCardDuel('combat_loss');
+                }, 600);
+            }
+
             this.forceUpdate();
         } catch (e) {
             console.error('Error handling projectile hit player:', e);
@@ -9382,7 +10762,7 @@ class DungeonPage extends React.Component {
         const bm = this.props.boardManager;
         const isBackside = bm && (bm.currentOrientation === 'B' || bm.currentOrientation === 'back');
         const titleText = this.state.inSuperboard ? `Minimap (${(this.state.superboardType || 'Pocket').toUpperCase()})` : (isBackside ? 'Minimap (backside)' : 'Minimap');
-        const isSuperboard = bm?.currentLevel?.isSuperboard;
+        const isSuperboard = bm?.currentLevel?.isSuperboard && !this.state.inSuperboard;
         return (
             <div className="dungeon-panel-section section-minimap">
                 <div
@@ -9500,7 +10880,7 @@ class DungeonPage extends React.Component {
                                             }}></div>}
 
                                         {this.props.boardManager && this.props.boardManager.currentOrientation === 'B' && this.state.minimap[i].active && !this.state.inSuperboard && (
-                                            <div className="backside-badge" title="Backside of map">B</div>
+                                            <div className="backside-accent" title="Backside of map" />
                                         )}
 
                                         {(() => {
@@ -9656,11 +11036,15 @@ class DungeonPage extends React.Component {
                                                             (k === 'outpost' || k === 'outpost_under_construction' || k === 'buildable_outpost' || k.includes('outpost')) && !isObserverPlatform
                                                         );
 
+                                                        const isMonolith = keysToCheck.some(k => 
+                                                            k === 'domain_monolith' || k === 'dark_domain_monolith' || (k.includes('monolith') && !k.includes('shrine'))
+                                                        );
+
                                                         const vCell = (typeof contains === 'object' && contains?.vendorCell) || tile.vendorCell;
                                                         const vAnchor = (typeof contains === 'object' && contains?.vendorAnchorId) ?? tile.vendorAnchorId;
                                                         const isNonAnchorCell = (vCell && vCell !== 'anchor') || (vAnchor !== undefined && vAnchor !== null && Number(vAnchor) !== Number(tile.id));
 
-                                                        if (isNonAnchorCell && (isWarStructure || isDreamDen || isOutpost || isObserverPlatform)) return;
+                                                        if (isNonAnchorCell) return;
 
                                                         const isVendor = containsType === 'vendor' || containsType === 'shop' || ['merchant', 'alchemist', 'vendor'].includes(containsSubtype);
                                                         if (isVendor) {
@@ -9679,14 +11063,49 @@ class DungeonPage extends React.Component {
                                                         );
 
                                                         if (isUnit && !isVendor) {
-                                                            const isFriendly = contains.isAllied || contains.faction === 'player' || contains.placedBy === 'player';
-                                                            mergedByTile.set(`unit_${tile.id}`, { tileId: tile.id, indicatorType: isFriendly ? 'friendly-unit' : 'hostile-unit' });
+                                                            const isAutomaton = contains.isAutomaton || contains.subtype === 'automaton';
+                                                            const isFriendly = contains.isAllied || contains.faction === 'player' || contains.placedBy === 'player' || contains.affiliation === 'friendly';
+                                                            const isNeutral = !isFriendly && !isAutomaton && (contains.faction === 'neutral' || contains.faction === 'wild' || contains.affiliation === 'neutral' || (contains.isPocketPygmy && !contains.isHostile && contains.faction !== 'hostile' && contains.faction !== 'enemy'));
+                                                            let indType = 'hostile-unit';
+                                                            if (isAutomaton) {
+                                                                indType = isFriendly ? 'friendly-unit' : 'automaton-unit';
+                                                            } else if (isFriendly) {
+                                                                indType = 'friendly-unit';
+                                                            } else if (isNeutral) {
+                                                                indType = 'neutral-unit';
+                                                            }
+                                                            mergedByTile.set(`unit_${tile.id}`, { tileId: tile.id, indicatorType: indType });
                                                         }
 
                                                         const isTerritory = containsType === 'territory' || containsSubtype === 'territory' || tile.territory || (typeof contains === 'object' && contains?.territory);
-                                                        const isGen = !isTerritory && (this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData || isOutpost || isObserverPlatform || isWarStructure || isDreamDen);
+                                                        const isGen = !isTerritory && (this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData || isOutpost || isObserverPlatform || isWarStructure || isDreamDen || isMonolith);
                                                         if (isGen && !isVendor) {
-                                                            if (isWarStructure) {
+                                                            if (isMonolith) {
+                                                                const containsObj = typeof contains === 'object' ? contains : null;
+                                                                const affiliation = tile.affiliation || containsObj?.affiliation || tile.territory || containsObj?.territory;
+                                                                const isHostile = tile.isHostile || containsObj?.isHostile || containsObj?.faction === 'hostile' || containsObj?.faction === 'enemy' || keysToCheck.some(k => k.includes('dark_domain_monolith')) || affiliation === 'hostile' || affiliation === 'enemy';
+                                                                const isPlayerBuilt = (containsObj && (containsObj.placedBy === 'player' || containsObj.ownerId)) || tile.placedBy === 'player' || affiliation === 'player' || affiliation === 'friendly' || affiliation === 'crew';
+                                                                
+                                                                let indicatorType = 'neutral-monolith';
+                                                                if (isPlayerBuilt || affiliation === 'player' || affiliation === 'friendly' || affiliation === 'crew') {
+                                                                    indicatorType = 'friendly-monolith';
+                                                                } else if (isHostile) {
+                                                                    indicatorType = 'hostile-monolith';
+                                                                } else {
+                                                                    indicatorType = 'neutral-monolith';
+                                                                }
+
+                                                                mergedByTile.delete(`generator_${tile.id}`);
+                                                                mergedByTile.delete(`outpost_${tile.id}`);
+                                                                mergedByTile.delete(`observer_${tile.id}`);
+                                                                mergedByTile.delete(`war_${tile.id}`);
+                                                                mergedByTile.delete(`dream_${tile.id}`);
+                                                                mergedByTile.set(`monolith_${tile.id}`, {
+                                                                    tileId: tile.id,
+                                                                    indicatorType,
+                                                                    isPlayerBuilt
+                                                                });
+                                                            } else if (isWarStructure) {
                                                                 const isPB = (typeof contains === 'object' && (contains.placedBy === 'player' || contains.ownerId)) || tile.placedBy === 'player';
                                                                 mergedByTile.delete(`generator_${tile.id}`);
                                                                 mergedByTile.delete(`outpost_${tile.id}`);
@@ -9712,7 +11131,7 @@ class DungeonPage extends React.Component {
                                                                 mergedByTile.delete(`dream_${tile.id}`);
                                                                 mergedByTile.set(`outpost_${tile.id}`, { tileId: tile.id, indicatorType: 'outpost' });
                                                             } else {
-                                                                if (!mergedByTile.has(`war_${tile.id}`) && !mergedByTile.has(`dream_${tile.id}`) && !mergedByTile.has(`outpost_${tile.id}`) && !mergedByTile.has(`generator_${tile.id}`) && !mergedByTile.has(`unit_${tile.id}`)) {
+                                                                if (!mergedByTile.has(`war_${tile.id}`) && !mergedByTile.has(`dream_${tile.id}`) && !mergedByTile.has(`outpost_${tile.id}`) && !mergedByTile.has(`generator_${tile.id}`) && !mergedByTile.has(`unit_${tile.id}`) && !mergedByTile.has(`monolith_${tile.id}`)) {
                                                                     mergedByTile.set(`generator_${tile.id}`, { tileId: tile.id, indicatorType: 'generator' });
                                                                 }
                                                             }
@@ -9751,47 +11170,61 @@ class DungeonPage extends React.Component {
                                                 const domainCells = [];
                                                 const boundaryLines = [];
 
+                                                const superboard = (this.state.dungeon || this.props.boardManager?.dungeon)?.superboards?.[this.state.superboardType];
+
+                                                const getTerritoryAtGlobal = (gx, gy) => {
+                                                    if (gx < 0 || gx >= 45 || gy < 0 || gy >= 45) return null;
+                                                    const nMbIdx = Math.floor(gy / 15) * 3 + Math.floor(gx / 15);
+                                                    const nTIdx = (gy % 15) * 15 + (gx % 15);
+                                                    const nTile = (nMbIdx === i && boardTiles[nTIdx]) ? boardTiles[nTIdx] : (superboard?.miniboards?.[nMbIdx]?.tiles?.[nTIdx]);
+                                                    if (!nTile) return null;
+                                                    const nc = nTile.contains && typeof nTile.contains === 'object' ? nTile.contains : null;
+                                                    return nTile.territory || nTile.territoryAffiliation || nc?.territory || nc?.territoryAffiliation || nTile.affiliation || nc?.affiliation;
+                                                };
+
                                                 for (let by = 0; by < 15; by++) {
                                                     for (let bx = 0; bx < 15; bx++) {
                                                         const bIdx = by * 15 + bx;
                                                         const t = boardTiles[bIdx];
                                                         if (!t) continue;
-                                                        const cObj = t.contains && typeof t.contains === 'object' ? t.contains : null;
-                                                        const terr = t.territory || t.territoryAffiliation || cObj?.territory || cObj?.territoryAffiliation || t.affiliation || cObj?.affiliation;
+                                                        const gx = (i % 3) * 15 + bx;
+                                                        const gy = Math.floor(i / 3) * 15 + by;
+                                                        const terr = getTerritoryAtGlobal(gx, gy);
                                                         const isFriendly = terr && (String(terr).toLowerCase().includes('player') || String(terr).toLowerCase().includes('friendly') || String(terr).toLowerCase().includes('crew'));
+                                                        const isHostile = !isFriendly && terr && (String(terr).toLowerCase().includes('hostile') || String(terr).toLowerCase().includes('enemy') || String(terr).toLowerCase().includes('dark'));
 
                                                         if (isFriendly) {
                                                             domainCells.push(<rect key={`dm_${bx}_${by}`} x={bx} y={by} width={1} height={1} fill="rgba(56, 189, 248, 0.35)" />);
 
-                                                            const isTopFriendly = by > 0 && (() => {
-                                                                const nt = boardTiles[(by - 1) * 15 + bx];
-                                                                const nc = nt?.contains && typeof nt.contains === 'object' ? nt.contains : null;
-                                                                const nterr = nt?.territory || nt?.territoryAffiliation || nc?.territory || nc?.territoryAffiliation || nt?.affiliation || nc?.affiliation;
-                                                                return nterr && (String(nterr).toLowerCase().includes('player') || String(nterr).toLowerCase().includes('friendly') || String(nterr).toLowerCase().includes('crew'));
-                                                            })();
-                                                            const isBottomFriendly = by < 14 && (() => {
-                                                                const nt = boardTiles[(by + 1) * 15 + bx];
-                                                                const nc = nt?.contains && typeof nt.contains === 'object' ? nt.contains : null;
-                                                                const nterr = nt?.territory || nt?.territoryAffiliation || nc?.territory || nc?.territoryAffiliation || nt?.affiliation || nc?.affiliation;
-                                                                return nterr && (String(nterr).toLowerCase().includes('player') || String(nterr).toLowerCase().includes('friendly') || String(nterr).toLowerCase().includes('crew'));
-                                                            })();
-                                                            const isLeftFriendly = bx > 0 && (() => {
-                                                                const nt = boardTiles[by * 15 + (bx - 1)];
-                                                                const nc = nt?.contains && typeof nt.contains === 'object' ? nt.contains : null;
-                                                                const nterr = nt?.territory || nt?.territoryAffiliation || nc?.territory || nc?.territoryAffiliation || nt?.affiliation || nc?.affiliation;
-                                                                return nterr && (String(nterr).toLowerCase().includes('player') || String(nterr).toLowerCase().includes('friendly') || String(nterr).toLowerCase().includes('crew'));
-                                                            })();
-                                                            const isRightFriendly = bx < 14 && (() => {
-                                                                const nt = boardTiles[by * 15 + (bx + 1)];
-                                                                const nc = nt?.contains && typeof nt.contains === 'object' ? nt.contains : null;
-                                                                const nterr = nt?.territory || nt?.territoryAffiliation || nc?.territory || nc?.territoryAffiliation || nt?.affiliation || nc?.affiliation;
-                                                                return nterr && (String(nterr).toLowerCase().includes('player') || String(nterr).toLowerCase().includes('friendly') || String(nterr).toLowerCase().includes('crew'));
-                                                            })();
+                                                            const topTerr = getTerritoryAtGlobal(gx, gy - 1);
+                                                            const isTopFriendly = topTerr && (String(topTerr).toLowerCase().includes('player') || String(topTerr).toLowerCase().includes('friendly') || String(topTerr).toLowerCase().includes('crew'));
+                                                            const bottomTerr = getTerritoryAtGlobal(gx, gy + 1);
+                                                            const isBottomFriendly = bottomTerr && (String(bottomTerr).toLowerCase().includes('player') || String(bottomTerr).toLowerCase().includes('friendly') || String(bottomTerr).toLowerCase().includes('crew'));
+                                                            const leftTerr = getTerritoryAtGlobal(gx - 1, gy);
+                                                            const isLeftFriendly = leftTerr && (String(leftTerr).toLowerCase().includes('player') || String(leftTerr).toLowerCase().includes('friendly') || String(leftTerr).toLowerCase().includes('crew'));
+                                                            const rightTerr = getTerritoryAtGlobal(gx + 1, gy);
+                                                            const isRightFriendly = rightTerr && (String(rightTerr).toLowerCase().includes('player') || String(rightTerr).toLowerCase().includes('friendly') || String(rightTerr).toLowerCase().includes('crew'));
 
                                                             if (!isTopFriendly) boundaryLines.push(<line key={`bt_${bx}_${by}`} x1={bx} y1={by} x2={bx + 1} y2={by} stroke="#38bdf8" strokeWidth="0.5" strokeLinecap="round" />);
                                                             if (!isBottomFriendly) boundaryLines.push(<line key={`bb_${bx}_${by}`} x1={bx} y1={by + 1} x2={bx + 1} y2={by + 1} stroke="#38bdf8" strokeWidth="0.5" strokeLinecap="round" />);
                                                             if (!isLeftFriendly) boundaryLines.push(<line key={`bl_${bx}_${by}`} x1={bx} y1={by} x2={bx} y2={by + 1} stroke="#38bdf8" strokeWidth="0.5" strokeLinecap="round" />);
                                                             if (!isRightFriendly) boundaryLines.push(<line key={`br_${bx}_${by}`} x1={bx + 1} y1={by} x2={bx + 1} y2={by + 1} stroke="#38bdf8" strokeWidth="0.5" strokeLinecap="round" />);
+                                                        } else if (isHostile) {
+                                                            domainCells.push(<rect key={`dm_h_${bx}_${by}`} x={bx} y={by} width={1} height={1} fill="rgba(220, 38, 38, 0.42)" />);
+
+                                                            const topTerr = getTerritoryAtGlobal(gx, gy - 1);
+                                                            const isTopHostile = topTerr && (String(topTerr).toLowerCase().includes('hostile') || String(topTerr).toLowerCase().includes('enemy') || String(topTerr).toLowerCase().includes('dark'));
+                                                            const bottomTerr = getTerritoryAtGlobal(gx, gy + 1);
+                                                            const isBottomHostile = bottomTerr && (String(bottomTerr).toLowerCase().includes('hostile') || String(bottomTerr).toLowerCase().includes('enemy') || String(bottomTerr).toLowerCase().includes('dark'));
+                                                            const leftTerr = getTerritoryAtGlobal(gx - 1, gy);
+                                                            const isLeftHostile = leftTerr && (String(leftTerr).toLowerCase().includes('hostile') || String(leftTerr).toLowerCase().includes('enemy') || String(leftTerr).toLowerCase().includes('dark'));
+                                                            const rightTerr = getTerritoryAtGlobal(gx + 1, gy);
+                                                            const isRightHostile = rightTerr && (String(rightTerr).toLowerCase().includes('hostile') || String(rightTerr).toLowerCase().includes('enemy') || String(rightTerr).toLowerCase().includes('dark'));
+
+                                                            if (!isTopHostile) boundaryLines.push(<line key={`bth_${bx}_${by}`} x1={bx} y1={by} x2={bx + 1} y2={by} stroke="#ef4444" strokeWidth="0.5" strokeLinecap="round" />);
+                                                            if (!isBottomHostile) boundaryLines.push(<line key={`bbh_${bx}_${by}`} x1={bx} y1={by + 1} x2={bx + 1} y2={by + 1} stroke="#ef4444" strokeWidth="0.5" strokeLinecap="round" />);
+                                                            if (!isLeftHostile) boundaryLines.push(<line key={`blh_${bx}_${by}`} x1={bx} y1={by} x2={bx} y2={by + 1} stroke="#ef4444" strokeWidth="0.5" strokeLinecap="round" />);
+                                                            if (!isRightHostile) boundaryLines.push(<line key={`brh_${bx}_${by}`} x1={bx + 1} y1={by} x2={bx + 1} y2={by + 1} stroke="#ef4444" strokeWidth="0.5" strokeLinecap="round" />);
                                                         }
                                                     }
                                                 }
@@ -9839,6 +11272,21 @@ class DungeonPage extends React.Component {
         if (!this.state.inSuperboard) return null;
         const collapsed = this.isSectionCollapsed('dimension_limits');
         const counts = this.getPocketDimensionStructureCounts();
+        const domainCount = this.getTotalPlayerDomainCount();
+        const influence = domainCount > 0 ? domainCount : (typeof this.state.pocketInfluence === 'number' ? this.state.pocketInfluence : 0);
+        const freeWill = typeof this.state.pocketFreeWill === 'number' ? this.state.pocketFreeWill : 50;
+        const pRes = this.getPocketResources();
+
+        const temporalResourceDefs = [
+            { key: 'food', label: 'Food', val: pRes.food || 0, iconBg: null, emoji: '🍖', color: '#f87171' },
+            { key: 'slate', label: 'Slate', val: pRes.slate || 0, iconBg: images.slate, emoji: '🧱', color: '#94a3b8' },
+            { key: 'ore', label: 'Ore', val: pRes.ore || 0, iconBg: images.stone, emoji: '⛏️', color: '#cbd5e1' },
+            { key: 'wood', label: 'Wood', val: pRes.wood || 0, iconBg: images.wood, emoji: '🪵', color: '#b45309' },
+            { key: 'dust', label: 'Shimmering Dust', val: pRes.dust || 0, iconBg: images.shimmering_dust, emoji: '✨', color: '#c084fc' },
+            { key: 'mushrooms', label: 'Mushrooms', val: pRes.mushrooms || 0, iconBg: images.mushroom1, emoji: '🍄', color: '#e879f9' },
+            { key: 'chemicals', label: 'Chemicals', val: pRes.chemicals || 0, iconBg: images.chemical_lantern, emoji: '🧪', color: '#4ade80' }
+        ];
+
         return (
             <div className="dungeon-panel-section section-dimension-limits">
                 <div
@@ -9848,11 +11296,27 @@ class DungeonPage extends React.Component {
                     onDragEnd={this.handleDragEnd}
                     onClick={() => this.toggleSectionCollapse('dimension_limits')}
                 >
-                    Dimension Limits {collapsed ? '[+]' : '[-]'}
+                    Dimension Stats {collapsed ? '[+]' : '[-]'}
                 </div>
                 {!collapsed && (
                     <div className="section-content" style={{ padding: '10px 14px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                                <span style={{ color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '13px' }}>🔮</span> Influence:
+                                </span>
+                                <span style={{ color: '#a855f7', fontWeight: 'bold', fontSize: '12px' }}>
+                                    {influence}
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
+                                <span style={{ color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <span style={{ fontSize: '13px' }}>🕊️</span> Free Will:
+                                </span>
+                                <span style={{ color: '#38bdf8', fontWeight: 'bold', fontSize: '12px' }}>
+                                    {freeWill}
+                                </span>
+                            </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px' }}>
                                 <span style={{ color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <span style={{ fontSize: '13px' }}>⛺</span> War Camps:
@@ -9868,6 +11332,82 @@ class DungeonPage extends React.Component {
                                 <span style={{ color: counts.war_fort >= 1 ? '#ef4444' : '#2ecc71', fontWeight: 'bold', fontSize: '12px' }}>
                                     {counts.war_fort}/1
                                 </span>
+                            </div>
+
+                            {/* Temporal Resources Subsection */}
+                            <div style={{
+                                marginTop: '6px',
+                                paddingTop: '8px',
+                                borderTop: '1px solid rgba(255, 255, 255, 0.1)'
+                            }}>
+                                <div style={{
+                                    fontSize: '11px',
+                                    fontWeight: '700',
+                                    color: '#94a3b8',
+                                    letterSpacing: '0.08em',
+                                    textTransform: 'uppercase',
+                                    marginBottom: '8px',
+                                    fontFamily: "'Cinzel', serif"
+                                }}>
+                                    Temporal Resources
+                                </div>
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(4, 1fr)',
+                                    gap: '6px'
+                                }}>
+                                    {temporalResourceDefs.map(res => (
+                                        <div
+                                            key={res.key}
+                                            title={`${res.label}: ${res.val}`}
+                                            aria-label={`${res.label}: ${res.val}`}
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '5px',
+                                                padding: '4px 6px',
+                                                background: 'rgba(0, 0, 0, 0.35)',
+                                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                                borderRadius: '4px',
+                                                cursor: 'help',
+                                                transition: 'all 0.15s ease'
+                                            }}
+                                            onMouseEnter={e => {
+                                                e.currentTarget.style.borderColor = 'rgba(229, 181, 79, 0.4)';
+                                                e.currentTarget.style.background = 'rgba(229, 181, 79, 0.1)';
+                                            }}
+                                            onMouseLeave={e => {
+                                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                                                e.currentTarget.style.background = 'rgba(0, 0, 0, 0.35)';
+                                            }}
+                                        >
+                                            {res.iconBg ? (
+                                                <span style={{
+                                                    display: 'inline-block',
+                                                    backgroundImage: `url(${res.iconBg})`,
+                                                    backgroundSize: 'contain',
+                                                    backgroundRepeat: 'no-repeat',
+                                                    backgroundPosition: 'center',
+                                                    width: '14px',
+                                                    height: '14px',
+                                                    flexShrink: 0
+                                                }} />
+                                            ) : (
+                                                <span style={{ fontSize: '13px', lineHeight: '14px', flexShrink: 0 }}>
+                                                    {res.emoji}
+                                                </span>
+                                            )}
+                                            <span style={{
+                                                fontSize: '11px',
+                                                fontWeight: '700',
+                                                color: res.val > 0 ? (res.color || '#f1f5f9') : 'rgba(255, 255, 255, 0.4)',
+                                                fontFamily: "'Cinzel', serif"
+                                            }}>
+                                                {res.val}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -9925,6 +11465,7 @@ class DungeonPage extends React.Component {
 
     renderPoppedOutResourcesTopBar = () => {
         const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem } = this.getResourcesData();
+        const isInPocket = !!this.state.inSuperboard;
 
         return (
             <div className="popped-out-resources-topbar">
@@ -9959,107 +11500,111 @@ class DungeonPage extends React.Component {
                     <span className="res-icon">🛡</span>
                     <span className="res-val">{totalDef}</span>
                 </div>
-                <div className="topbar-resource-item" title="Food">
-                    <span className="res-icon">🍖</span>
-                    <span className="res-val" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>
-                        {incomeRates.food > 0 && <span className="res-income">+{incomeRates.food}</span>}
-                        {food}/{foodLimit}
-                    </span>
-                </div>
-                <div className="topbar-resource-item" title="Gold">
-                    <span className="res-icon">🪙</span>
-                    <span className="res-val" style={{ color: '#ffd700' }}>
-                        {incomeRates.gold > 0 && <span className="res-income">+{incomeRates.gold}</span>}
-                        {gold}
-                    </span>
-                </div>
-                <div className="topbar-resource-item" title="Dust">
-                    <span className="res-icon">✨</span>
-                    <span className="res-val" style={{ color: '#b388ff' }}>
-                        {incomeRates.shimmering_dust > 0 && <span className="res-income">+{incomeRates.shimmering_dust}</span>}
-                        {dust}
-                    </span>
-                </div>
-                <div className="topbar-resource-item" title="Wood">
-                    <span className="res-icon wood-icon" style={{
-                        display: 'inline-block',
-                        backgroundImage: `url(${images.wood})`,
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center',
-                        width: '13px',
-                        height: '13px',
-                        verticalAlign: 'middle'
-                    }} />
-                    <span className="res-val" style={{ color: '#a0522d' }}>
-                        {incomeRates.wood > 0 && <span className="res-income">+{incomeRates.wood}</span>}
-                        {wood}
-                    </span>
-                </div>
-                <div className="topbar-resource-item" title="Mushrooms">
-                    <span className="res-icon shroom-icon" style={{
-                        display: 'inline-block',
-                        backgroundImage: `url(${images.mushroom1})`,
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center',
-                        width: '13px',
-                        height: '13px',
-                        verticalAlign: 'middle'
-                    }} />
-                    <span className="res-val" style={{ color: '#d488ff' }}>
-                        {incomeRates.mushrooms > 0 && <span className="res-income">+{incomeRates.mushrooms}</span>}
-                        {mushrooms}
-                    </span>
-                </div>
-                <div className="topbar-resource-item" title="Stone">
-                    <span className="res-icon stone-icon" style={{
-                        display: 'inline-block',
-                        backgroundImage: `url(${images.stone})`,
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center',
-                        width: '13px',
-                        height: '13px',
-                        verticalAlign: 'middle'
-                    }} />
-                    <span className="res-val" style={{ color: '#95a5a6' }}>
-                        {incomeRates.stone > 0 && <span className="res-income">+{incomeRates.stone}</span>}
-                        {stone}
-                    </span>
-                </div>
-                <div className="topbar-resource-item" title="Slate">
-                    <span className="res-icon slate-icon" style={{
-                        display: 'inline-block',
-                        backgroundImage: `url(${images.slate})`,
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center',
-                        width: '13px',
-                        height: '13px',
-                        verticalAlign: 'middle'
-                    }} />
-                    <span className="res-val" style={{ color: '#7f8c8d' }}>
-                        {incomeRates.slate > 0 && <span className="res-income">+{incomeRates.slate}</span>}
-                        {slate}
-                    </span>
-                </div>
-                <div className="topbar-resource-item" title={`Chemicals: ${chemicals} (${unstableChem} unstable, ${stableChem} stable)`}>
-                    <span className="res-icon chemical-icon" style={{
-                        display: 'inline-block',
-                        backgroundImage: `url(${images.chemical_lantern})`,
-                        backgroundSize: 'contain',
-                        backgroundRepeat: 'no-repeat',
-                        backgroundPosition: 'center',
-                        width: '13px',
-                        height: '13px',
-                        verticalAlign: 'middle'
-                    }} />
-                    <span className="res-val" style={{ color: '#2ecc71' }}>
-                        {incomeRates.chemicals > 0 && <span className="res-income">+{incomeRates.chemicals}</span>}
-                        {chemicals}
-                    </span>
-                </div>
+                {!isInPocket && (
+                    <React.Fragment>
+                        <div className="topbar-resource-item" title="Food">
+                            <span className="res-icon">🍖</span>
+                            <span className="res-val" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>
+                                {incomeRates.food > 0 && <span className="res-income">+{incomeRates.food}</span>}
+                                {food}/{foodLimit}
+                            </span>
+                        </div>
+                        <div className="topbar-resource-item" title="Gold">
+                            <span className="res-icon">🪙</span>
+                            <span className="res-val" style={{ color: '#ffd700' }}>
+                                {incomeRates.gold > 0 && <span className="res-income">+{incomeRates.gold}</span>}
+                                {gold}
+                            </span>
+                        </div>
+                        <div className="topbar-resource-item" title="Dust">
+                            <span className="res-icon">✨</span>
+                            <span className="res-val" style={{ color: '#b388ff' }}>
+                                {incomeRates.shimmering_dust > 0 && <span className="res-income">+{incomeRates.shimmering_dust}</span>}
+                                {dust}
+                            </span>
+                        </div>
+                        <div className="topbar-resource-item" title="Wood">
+                            <span className="res-icon wood-icon" style={{
+                                display: 'inline-block',
+                                backgroundImage: `url(${images.wood})`,
+                                backgroundSize: 'contain',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'center',
+                                width: '13px',
+                                height: '13px',
+                                verticalAlign: 'middle'
+                            }} />
+                            <span className="res-val" style={{ color: '#a0522d' }}>
+                                {incomeRates.wood > 0 && <span className="res-income">+{incomeRates.wood}</span>}
+                                {wood}
+                            </span>
+                        </div>
+                        <div className="topbar-resource-item" title="Mushrooms">
+                            <span className="res-icon shroom-icon" style={{
+                                display: 'inline-block',
+                                backgroundImage: `url(${images.mushroom1})`,
+                                backgroundSize: 'contain',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'center',
+                                width: '13px',
+                                height: '13px',
+                                verticalAlign: 'middle'
+                            }} />
+                            <span className="res-val" style={{ color: '#d488ff' }}>
+                                {incomeRates.mushrooms > 0 && <span className="res-income">+{incomeRates.mushrooms}</span>}
+                                {mushrooms}
+                            </span>
+                        </div>
+                        <div className="topbar-resource-item" title="Stone">
+                            <span className="res-icon stone-icon" style={{
+                                display: 'inline-block',
+                                backgroundImage: `url(${images.stone})`,
+                                backgroundSize: 'contain',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'center',
+                                width: '13px',
+                                height: '13px',
+                                verticalAlign: 'middle'
+                            }} />
+                            <span className="res-val" style={{ color: '#95a5a6' }}>
+                                {incomeRates.stone > 0 && <span className="res-income">+{incomeRates.stone}</span>}
+                                {stone}
+                            </span>
+                        </div>
+                        <div className="topbar-resource-item" title="Slate">
+                            <span className="res-icon slate-icon" style={{
+                                display: 'inline-block',
+                                backgroundImage: `url(${images.slate})`,
+                                backgroundSize: 'contain',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'center',
+                                width: '13px',
+                                height: '13px',
+                                verticalAlign: 'middle'
+                            }} />
+                            <span className="res-val" style={{ color: '#7f8c8d' }}>
+                                {incomeRates.slate > 0 && <span className="res-income">+{incomeRates.slate}</span>}
+                                {slate}
+                            </span>
+                        </div>
+                        <div className="topbar-resource-item" title={`Chemicals: ${chemicals} (${unstableChem} unstable, ${stableChem} stable)`}>
+                            <span className="res-icon chemical-icon" style={{
+                                display: 'inline-block',
+                                backgroundImage: `url(${images.chemical_lantern})`,
+                                backgroundSize: 'contain',
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'center',
+                                width: '13px',
+                                height: '13px',
+                                verticalAlign: 'middle'
+                            }} />
+                            <span className="res-val" style={{ color: '#2ecc71' }}>
+                                {incomeRates.chemicals > 0 && <span className="res-income">+{incomeRates.chemicals}</span>}
+                                {chemicals}
+                            </span>
+                        </div>
+                    </React.Fragment>
+                )}
                 <button
                     className="resources-popin-btn"
                     onClick={this.togglePopoutResources}
@@ -10074,6 +11619,7 @@ class DungeonPage extends React.Component {
     renderStatusSummarySection = () => {
         const collapsed = this.isSectionCollapsed('status_summary');
         const poppedOut = !!this.state.popoutResources;
+        const isInPocket = !!this.state.inSuperboard;
         const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem } = this.getResourcesData();
 
         return (
@@ -10165,112 +11711,116 @@ class DungeonPage extends React.Component {
                                 </div>
                                 <div className="ql-row"><span className="ql-label"><span role="img" aria-label="crossed swords">⚔</span> Attack</span><span className="ql-value">{totalAtk}</span></div>
                                 <div className="ql-row"><span className="ql-label"><span role="img" aria-label="shield">🛡</span> Defense</span><span className="ql-value">{totalDef}</span></div>
-                                <div className="ql-row">
-                                    <span className="ql-label"><span role="img" aria-label="meat">🍖</span> Food</span>
-                                    <span className="ql-value" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>
-                                        {incomeRates.food > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.food}</span>}
-                                        {food} / {foodLimit}
-                                    </span>
-                                </div>
-                                <div className="ql-row">
-                                    <span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span>
-                                    <span className="ql-value" style={{ color: '#ffd700' }}>
-                                        {incomeRates.gold > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.gold}</span>}
-                                        {gold}
-                                    </span>
-                                </div>
-                                <div className="ql-row">
-                                    <span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span>
-                                    <span className="ql-value" style={{ color: '#b388ff' }}>
-                                        {incomeRates.shimmering_dust > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.shimmering_dust}</span>}
-                                        {dust}
-                                    </span>
-                                </div>
-                                <div className="ql-row">
-                                    <span className="ql-label"><span style={{
-                                        display: 'inline-block',
-                                        backgroundImage: `url(${images.wood})`,
-                                        backgroundSize: 'contain',
-                                        backgroundRepeat: 'no-repeat',
-                                        backgroundPosition: 'center',
-                                        width: '16px',
-                                        height: '16px',
-                                        verticalAlign: 'middle',
-                                        marginRight: '4px'
-                                    }} /> Wood</span>
-                                    <span className="ql-value" style={{ color: '#a0522d' }}>
-                                        {incomeRates.wood > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.wood}</span>}
-                                        {wood}
-                                    </span>
-                                </div>
-                                <div className="ql-row">
-                                    <span className="ql-label"><span style={{
-                                        display: 'inline-block',
-                                        backgroundImage: `url(${images.mushroom1})`,
-                                        backgroundSize: 'contain',
-                                        backgroundRepeat: 'no-repeat',
-                                        backgroundPosition: 'center',
-                                        width: '16px',
-                                        height: '16px',
-                                        verticalAlign: 'middle',
-                                        marginRight: '4px'
-                                    }} /> Mushrooms</span>
-                                    <span className="ql-value" style={{ color: '#d488ff' }}>
-                                        {incomeRates.mushrooms > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.mushrooms}</span>}
-                                        {mushrooms}
-                                    </span>
-                                </div>
-                                <div className="ql-row">
-                                    <span className="ql-label"><span style={{
-                                        display: 'inline-block',
-                                        backgroundImage: `url(${images.stone})`,
-                                        backgroundSize: 'contain',
-                                        backgroundRepeat: 'no-repeat',
-                                        backgroundPosition: 'center',
-                                        width: '16px',
-                                        height: '16px',
-                                        verticalAlign: 'middle',
-                                        marginRight: '4px'
-                                    }} /> Stone</span>
-                                    <span className="ql-value" style={{ color: '#95a5a6' }}>
-                                        {incomeRates.stone > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.stone}</span>}
-                                        {stone}
-                                    </span>
-                                </div>
-                                <div className="ql-row">
-                                    <span className="ql-label"><span style={{
-                                        display: 'inline-block',
-                                        backgroundImage: `url(${images.slate})`,
-                                        backgroundSize: 'contain',
-                                        backgroundRepeat: 'no-repeat',
-                                        backgroundPosition: 'center',
-                                        width: '16px',
-                                        height: '16px',
-                                        verticalAlign: 'middle',
-                                        marginRight: '4px'
-                                    }} /> Slate</span>
-                                    <span className="ql-value" style={{ color: '#7f8c8d' }}>
-                                        {incomeRates.slate > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.slate}</span>}
-                                        {slate}
-                                    </span>
-                                </div>
-                                <div className="ql-row" title={`Chemicals: ${chemicals} (${unstableChem} unstable, ${stableChem} stable)`}>
-                                    <span className="ql-label"><span style={{
-                                        display: 'inline-block',
-                                        backgroundImage: `url(${images.chemical_lantern})`,
-                                        backgroundSize: 'contain',
-                                        backgroundRepeat: 'no-repeat',
-                                        backgroundPosition: 'center',
-                                        width: '16px',
-                                        height: '16px',
-                                        verticalAlign: 'middle',
-                                        marginRight: '4px'
-                                    }} /> Chemicals</span>
-                                    <span className="ql-value" style={{ color: '#2ecc71' }}>
-                                        {incomeRates.chemicals > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.chemicals}</span>}
-                                        {chemicals}
-                                    </span>
-                                </div>
+                                {!isInPocket && (
+                                    <React.Fragment>
+                                        <div className="ql-row">
+                                            <span className="ql-label"><span role="img" aria-label="meat">🍖</span> Food</span>
+                                            <span className="ql-value" style={isOverLimit ? { color: '#e74c3c', fontWeight: 'bold' } : {}}>
+                                                {incomeRates.food > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.food}</span>}
+                                                {food} / {foodLimit}
+                                            </span>
+                                        </div>
+                                        <div className="ql-row">
+                                            <span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span>
+                                            <span className="ql-value" style={{ color: '#ffd700' }}>
+                                                {incomeRates.gold > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.gold}</span>}
+                                                {gold}
+                                            </span>
+                                        </div>
+                                        <div className="ql-row">
+                                            <span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span>
+                                            <span className="ql-value" style={{ color: '#b388ff' }}>
+                                                {incomeRates.shimmering_dust > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.shimmering_dust}</span>}
+                                                {dust}
+                                            </span>
+                                        </div>
+                                        <div className="ql-row">
+                                            <span className="ql-label"><span style={{
+                                                display: 'inline-block',
+                                                backgroundImage: `url(${images.wood})`,
+                                                backgroundSize: 'contain',
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'center',
+                                                width: '16px',
+                                                height: '16px',
+                                                verticalAlign: 'middle',
+                                                marginRight: '4px'
+                                            }} /> Wood</span>
+                                            <span className="ql-value" style={{ color: '#a0522d' }}>
+                                                {incomeRates.wood > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.wood}</span>}
+                                                {wood}
+                                            </span>
+                                        </div>
+                                        <div className="ql-row">
+                                            <span className="ql-label"><span style={{
+                                                display: 'inline-block',
+                                                backgroundImage: `url(${images.mushroom1})`,
+                                                backgroundSize: 'contain',
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'center',
+                                                width: '16px',
+                                                height: '16px',
+                                                verticalAlign: 'middle',
+                                                marginRight: '4px'
+                                            }} /> Mushrooms</span>
+                                            <span className="ql-value" style={{ color: '#d488ff' }}>
+                                                {incomeRates.mushrooms > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.mushrooms}</span>}
+                                                {mushrooms}
+                                            </span>
+                                        </div>
+                                        <div className="ql-row">
+                                            <span className="ql-label"><span style={{
+                                                display: 'inline-block',
+                                                backgroundImage: `url(${images.stone})`,
+                                                backgroundSize: 'contain',
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'center',
+                                                width: '16px',
+                                                height: '16px',
+                                                verticalAlign: 'middle',
+                                                marginRight: '4px'
+                                            }} /> Stone</span>
+                                            <span className="ql-value" style={{ color: '#95a5a6' }}>
+                                                {incomeRates.stone > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.stone}</span>}
+                                                {stone}
+                                            </span>
+                                        </div>
+                                        <div className="ql-row">
+                                            <span className="ql-label"><span style={{
+                                                display: 'inline-block',
+                                                backgroundImage: `url(${images.slate})`,
+                                                backgroundSize: 'contain',
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'center',
+                                                width: '16px',
+                                                height: '16px',
+                                                verticalAlign: 'middle',
+                                                marginRight: '4px'
+                                            }} /> Slate</span>
+                                            <span className="ql-value" style={{ color: '#7f8c8d' }}>
+                                                {incomeRates.slate > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.slate}</span>}
+                                                {slate}
+                                            </span>
+                                        </div>
+                                        <div className="ql-row" title={`Chemicals: ${chemicals} (${unstableChem} unstable, ${stableChem} stable)`}>
+                                            <span className="ql-label"><span style={{
+                                                display: 'inline-block',
+                                                backgroundImage: `url(${images.chemical_lantern})`,
+                                                backgroundSize: 'contain',
+                                                backgroundRepeat: 'no-repeat',
+                                                backgroundPosition: 'center',
+                                                width: '16px',
+                                                height: '16px',
+                                                verticalAlign: 'middle',
+                                                marginRight: '4px'
+                                            }} /> Chemicals</span>
+                                            <span className="ql-value" style={{ color: '#2ecc71' }}>
+                                                {incomeRates.chemicals > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.chemicals}</span>}
+                                                {chemicals}
+                                            </span>
+                                        </div>
+                                    </React.Fragment>
+                                )}
                             </div>
                         )}
                     </div>
@@ -10433,7 +11983,7 @@ class DungeonPage extends React.Component {
                                         title="Play a practice card duel (no penalty)"
                                     >
                                         <span><span role="img" aria-label="card">🃏</span> Card Scrimmage</span>
-                                        <span className="hotkey-indicator">1</span>
+                                        <span className="hotkey-indicator">V</span>
                                     </button>
                                     <button
                                         className="quick-action-btn"
@@ -12014,7 +13564,7 @@ class DungeonPage extends React.Component {
         let chestLootStyle = null;
         if (tile && tile.id !== undefined && tile.id !== null) {
             let targetIndex = tile.id;
-            if (this.props.boardManager?.currentLevel?.isSuperboard && tile.globalX !== undefined && tile.globalY !== undefined) {
+            if ((this.state.inSuperboard || this.props.boardManager?.currentLevel?.isSuperboard) && tile.globalX !== undefined && tile.globalY !== undefined) {
                 const currentTile = this.state.tiles.find(t => t.globalX === tile.globalX && t.globalY === tile.globalY);
                 if (currentTile && currentTile.id !== undefined) {
                     targetIndex = currentTile.id;
@@ -12411,6 +13961,20 @@ class DungeonPage extends React.Component {
         }
         const itemDefinition = this.props.inventoryManager.allItems[tileContains];
         const itemDisplayName = itemDefinition?.name || (typeof tileContains === 'string' ? tileContains.replaceAll('_', ' ') : tileContains);
+
+        if (this.state.inSuperboard) {
+            // Purely visual event in pocket dimension, do not add to inventory or save dungeon
+            const iconKey = itemDefinition?.icon || tileContains;
+            const resolvedIcon = (typeof iconKey === 'string' && images[iconKey]) || (typeof tileContains === 'string' && images[tileContains]) || images['treasure'] || null;
+            this.triggerLootRadialArc({
+                type: 'item',
+                id: tileContains + '_' + Math.random(),
+                icon: resolvedIcon,
+                name: itemDisplayName
+            }, tile);
+            return;
+        }
+
         if (itemDefinition) {
             this.props.inventoryManager.addItem({ ...itemDefinition });
         } else if (tileContains && tileContains !== 'void' && tileContains !== 'empty_space') {
@@ -12460,6 +14024,21 @@ class DungeonPage extends React.Component {
         const itemStr = item.replaceAll('_', ' ');
         const isPluralItem = itemStr.toLowerCase().includes('shards') || itemStr.toLowerCase().includes('gold') || itemStr.toLowerCase().includes('dust');
         const article = isPluralItem ? 'some' : 'a';
+
+        if (this.state.inSuperboard) {
+            // Purely visual event in pocket dimension
+            const itemDefinition = this.props.inventoryManager?.allItems?.[treasure.item];
+            const itemDisplayName = itemDefinition?.name || item.replaceAll('_', ' ');
+            const itemIconName = itemDefinition?.icon || treasure.item;
+            this.triggerLootRadialArc({
+                type: 'item',
+                id: treasure.item + '_' + Math.random(),
+                icon: images[itemIconName] || images[treasure.item] || images['treasure'] || null,
+                name: itemDisplayName
+            }, tile);
+            return;
+        }
+
         const message = `You open the treasure chest and find ${article} ${itemStr} and ${treasure.currency.amount} ${treasure.currency.type.replace('_', ' ')}!`
         this.displayMessage(message);
         this.props.inventoryManager.addItem(this.props.inventoryManager.allItems[treasure.item])
@@ -12513,7 +14092,15 @@ class DungeonPage extends React.Component {
         if (!dungeon || dungeon.id === 'tutorial_dungeon' || dungeon.isTutorial) {
             return;
         }
-        await updateDungeonRequest(dungeon.id, dungeon);
+        try {
+            const dungeonPayload = JSON.parse(JSON.stringify(dungeon));
+            if (dungeonPayload.superboards) {
+                superboardCleanup(dungeonPayload);
+            }
+            await updateDungeonRequest(dungeon.id, dungeonPayload);
+        } catch (e) {
+            console.warn('Error saving dungeon payload:', e);
+        }
     }
     messaging = (message) => {
         this.displayMessage(message)
@@ -13461,6 +15048,11 @@ class DungeonPage extends React.Component {
         }
 
         if (this.state.showGeneratorModal) {
+            if (key === 'Enter' || key === 'Return') {
+                event.preventDefault();
+                this.handleActivateGenerator();
+                return;
+            }
             if (key === 'Escape' || key === 'Esc') {
                 event.preventDefault();
                 this.closeGeneratorModal();
@@ -13498,6 +15090,12 @@ class DungeonPage extends React.Component {
 
         if (this.state.showBuildMenu && !isModifierHeld && !isInputFocused) {
             const lowerKey = key.toLowerCase();
+            if (lowerKey === 'h') {
+                event.preventDefault();
+                this.setState({ showBuildMenu: false });
+                this.handleBuildBuilding('hut');
+                return;
+            }
             if (lowerKey === 'o') {
                 event.preventDefault();
                 this.setState({ showBuildMenu: false });
@@ -13709,14 +15307,23 @@ class DungeonPage extends React.Component {
                     return;
                 }
             }
-            // '1' — Play a practice card duel
-            if ((maybeKey === '1') && !this.state.inMonsterBattle && !event.metaKey && !event.ctrlKey) {
+            // 'v' or 'V' — Play a practice card duel (Card Scrimmage)
+            if ((maybeKey === 'v' || maybeKey === 'V') && !this.state.inMonsterBattle && !event.metaKey && !event.ctrlKey) {
                 const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
                 if (activeTag !== 'input' && activeTag !== 'textarea') {
                     event.preventDefault();
                     this.setState({ isCardScrimmage: true }, () => {
                         this.openCardDuel(null);
                     });
+                    return;
+                }
+            }
+            // '1' — Toggle show/hide side panels in the dungeon
+            if ((maybeKey === '1') && !this.state.inMonsterBattle && !event.metaKey && !event.ctrlKey) {
+                const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+                if (activeTag !== 'input' && activeTag !== 'textarea') {
+                    event.preventDefault();
+                    this.toggleBothSidePanels();
                     return;
                 }
             }
@@ -14178,7 +15785,7 @@ class DungeonPage extends React.Component {
                         }
                     }
 
-                    if (targetTileObj && this.isBuildingOrGeneratorTile(targetTileObj)) {
+                    if (targetTileObj && this.isBuildingOrGeneratorTile(targetTileObj) && !rawKey.includes('farm') && !rawKey.includes('house')) {
                         const vAnchor = (typeof targetTileObj.contains === 'object' && targetTileObj.contains?.vendorAnchorId) ?? targetTileObj.vendorAnchorId;
                         let anchorGx = clickedGx;
                         let anchorGy = clickedGy;
@@ -14344,11 +15951,19 @@ class DungeonPage extends React.Component {
                         if (rawClan && !isUserOwned) {
                             this.displayMessage('You cannot inscribe on walls while in enemy territory.');
                         } else {
-                            const candidates = this.getAdjacentWalls(playerIdx);
-                            if (candidates && candidates.length > 0) {
-                                this.setState({ dungeonInscriptionPicker: { tileId: playerIdx, candidates } });
+                            const cooldownCheck = this.checkWallInscriptionCooldown();
+                            if (cooldownCheck.onCooldown) {
+                                this.setState({
+                                    showInscriptionCooldownModal: true,
+                                    inscriptionCooldownText: cooldownCheck.remainingText
+                                });
                             } else {
-                                this.displayMessage('A wall blocks your way.');
+                                const candidates = this.getAdjacentWalls(playerIdx);
+                                if (candidates && candidates.length > 0) {
+                                    this.setState({ dungeonInscriptionPicker: { tileId: playerIdx, candidates } });
+                                } else {
+                                    this.displayMessage('A wall blocks your way.');
+                                }
                             }
                         }
                     }
@@ -15978,16 +17593,8 @@ class DungeonPage extends React.Component {
             if (!selfTile) return;
 
             if (isWall) {
-                let storeTileId = null;
-                let storeSide = null;
-
-                if (targetTile && isTileAVoidWall(targetTile)) {
-                    storeTileId = d.targetIndex;
-                    storeSide = d.oppSide;
-                } else {
-                    storeTileId = playerIdx;
-                    storeSide = d.selfSide;
-                }
+                const storeTileId = playerIdx;
+                const storeSide = d.selfSide;
 
                 const targetTileInscriptions = targetTile && targetTile.inscriptions && targetTile.inscriptions[d.oppSide];
                 const selfTileInscriptions = selfTile && selfTile.inscriptions && selfTile.inscriptions[d.selfSide];
@@ -16007,7 +17614,37 @@ class DungeonPage extends React.Component {
         return candidates;
     };
 
+    checkWallInscriptionCooldown = (dungeonId) => {
+        const meta = getMeta() || {};
+        const activeDungeonId = dungeonId || (this.props.boardManager?.dungeon?.id) || meta.dungeonId || 'default';
+        const cooldowns = meta.wallInscriptionCooldowns || {};
+        const lastTime = cooldowns[activeDungeonId] || 0;
+        const now = Date.now();
+        const COOLDOWN_DURATION = 24 * 60 * 60 * 1000;
+        const elapsed = now - lastTime;
+
+        if (lastTime > 0 && elapsed < COOLDOWN_DURATION) {
+            const remainingMs = COOLDOWN_DURATION - elapsed;
+            const hours = Math.floor(remainingMs / (60 * 60 * 1000));
+            const minutes = Math.floor((remainingMs % (60 * 60 * 1000)) / (60 * 1000));
+            return {
+                onCooldown: true,
+                remainingText: `${hours}h ${minutes}m`
+            };
+        }
+        return { onCooldown: false, remainingText: '' };
+    };
+
     selectDungeonInscriptionSide = (candidate) => {
+        const cooldownCheck = this.checkWallInscriptionCooldown();
+        if (cooldownCheck.onCooldown) {
+            this.setState({
+                dungeonInscriptionPicker: null,
+                showInscriptionCooldownModal: true,
+                inscriptionCooldownText: cooldownCheck.remainingText
+            });
+            return;
+        }
         this.setState({
             dungeonInscriptionPicker: null,
             showDungeonInscriptionModal: true,
@@ -16017,6 +17654,17 @@ class DungeonPage extends React.Component {
     }
 
     confirmDungeonInscription = async () => {
+        const cooldownCheck = this.checkWallInscriptionCooldown();
+        if (cooldownCheck.onCooldown) {
+            this.setState({
+                showDungeonInscriptionModal: false,
+                dungeonInscriptionPendingCandidate: null,
+                showInscriptionCooldownModal: true,
+                inscriptionCooldownText: cooldownCheck.remainingText
+            });
+            return;
+        }
+
         const candidate = this.state.dungeonInscriptionPendingCandidate;
         if (!candidate) return;
 
@@ -16039,7 +17687,9 @@ class DungeonPage extends React.Component {
                 const orientation = this.props.boardManager.currentOrientation;
                 const miniboards = orientation === 'F' ? levelEntry.front?.miniboards : levelEntry.back?.miniboards;
                 if (miniboards) {
-                    const b = miniboards[this.props.boardManager.currentBoard.id];
+                    const bmBoard = this.props.boardManager.currentBoard;
+                    const playerBoardIndex = this.props.boardManager.playerTile?.boardIndex;
+                    const b = miniboards.find(bi => bi && (bi.id === bmBoard?.id || bi.id === bmBoard?._id)) || miniboards[playerBoardIndex] || miniboards[bmBoard?.id];
                     if (b && b.tiles && b.tiles[tileId]) {
                         b.tiles[tileId].inscriptions = {
                             ...(b.tiles[tileId].inscriptions || {}),
@@ -16049,10 +17699,43 @@ class DungeonPage extends React.Component {
                 }
             }
 
+            // Also update in superboards structure if superboard exists
+            if (activeDungeon.superboards && Array.isArray(activeDungeon.superboards)) {
+                const playerBoardIndex = this.props.boardManager.playerTile?.boardIndex ?? 0;
+                activeDungeon.superboards.forEach(sb => {
+                    if (sb && Array.isArray(sb.miniboards)) {
+                        const bmBoard = this.props.boardManager.currentBoard;
+                        const b = sb.miniboards.find(bi => bi && (bi.id === bmBoard?.id || bi.id === bmBoard?._id)) || sb.miniboards[playerBoardIndex];
+                        if (b && b.tiles && b.tiles[tileId]) {
+                            b.tiles[tileId].inscriptions = {
+                                ...(b.tiles[tileId].inscriptions || {}),
+                                [side]: text
+                            };
+                        }
+                    }
+                });
+            }
+
             // Save to database
-            await updateDungeonRequest(activeDungeon.id, activeDungeon);
+            let dungeonPayload = activeDungeon;
+            try {
+                dungeonPayload = JSON.parse(JSON.stringify(activeDungeon));
+                if (dungeonPayload && dungeonPayload.superboards) {
+                    superboardCleanup(dungeonPayload);
+                }
+            } catch (e) {}
+            const meta = getMeta() || {};
+            const dungeonSaveId = activeDungeon.id || activeDungeon._id || meta.dungeonId;
+            await updateDungeonRequest(dungeonSaveId, dungeonPayload);
 
             // Update local board manager state
+            if (this.props.boardManager && this.props.boardManager.currentBoard && this.props.boardManager.currentBoard.tiles && this.props.boardManager.currentBoard.tiles[tileId]) {
+                this.props.boardManager.currentBoard.tiles[tileId].inscriptions = {
+                    ...(this.props.boardManager.currentBoard.tiles[tileId].inscriptions || {}),
+                    [side]: text
+                };
+            }
+
             if (this.props.boardManager && this.props.boardManager.tiles && this.props.boardManager.tiles[tileId]) {
                 this.props.boardManager.tiles[tileId].inscriptions = {
                     ...(this.props.boardManager.tiles[tileId].inscriptions || {}),
@@ -16069,6 +17752,12 @@ class DungeonPage extends React.Component {
 
                 this.props.boardManager.refreshTiles();
             }
+
+            // Record 24-hour wall inscription cooldown for this dungeon instance
+            meta.wallInscriptionCooldowns = meta.wallInscriptionCooldowns || {};
+            meta.wallInscriptionCooldowns[dungeonSaveId || 'default'] = Date.now();
+            storeMeta(meta);
+            try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch (e) {}
 
             this.setState({
                 showDungeonInscriptionModal: false,
@@ -16155,6 +17844,7 @@ class DungeonPage extends React.Component {
         itemCleanup(dungeon, meta.crew);
         resolveItemPools(dungeon, this.props.inventoryManager.allItems);
         resolveMonsterPools(dungeon, this.props.monsterManager.monsters);
+        superboardCleanup(dungeon);
         this.logKeyTileDiagnostics({
             label: 'loadExistingDungeon post-cleanup',
             dungeon,
@@ -16392,6 +18082,26 @@ class DungeonPage extends React.Component {
         meta.rightExpanded = newVal;
         storeMeta(meta)
         await updateUserRequest(getUserId(), meta)
+    }
+    toggleBothSidePanels = async () => {
+        if (this.state.isTutorialMode) return;
+        const anyExpanded = !!(this.state.leftPanelExpanded || this.state.rightPanelExpanded);
+        const targetExpanded = !anyExpanded;
+
+        this.setState({
+            leftPanelExpanded: targetExpanded,
+            rightPanelExpanded: targetExpanded
+        }, () => {
+            this.handleResize();
+        });
+
+        const meta = getMeta() || {};
+        meta.leftExpanded = targetExpanded;
+        meta.rightExpanded = targetExpanded;
+        storeMeta(meta);
+        try {
+            await updateUserRequest(getUserId(), meta);
+        } catch (e) {}
     }
     toggleActionsTray = () => {
         const newVal = !this.state.actionsTrayExpanded
@@ -18342,17 +20052,24 @@ class DungeonPage extends React.Component {
     isBuildingOrGeneratorTile = (tile) => {
         if (!tile) return false;
         const bm = this.props.boardManager;
+        if (bm && bm.isVoidTile && bm.isVoidTile(tile)) return false;
+
         const containsType = bm?.getContainsType(tile.contains) || tile.contains?.type;
         const containsSubtype = bm?.getContainsSubtype(tile.contains) || tile.contains?.subtype;
         const bldg = tile.building || tile.contains?.building;
         const img = tile.image;
 
-        const ownerId = tile.contains?.ownerId || tile.generatorData?.ownerId;
-        const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
-        const isOwner = ownerId === currentUserId;
+        if (containsType === 'empty' || containsSubtype === 'empty' || containsType === 'void' || containsSubtype === 'void') {
+            return false;
+        }
 
         const dreamDenKeys = ['dream_den', 'dream_den_under_construction', 'buildable_dream_den', 'dream den'];
         if (dreamDenKeys.includes(containsType) || dreamDenKeys.includes(containsSubtype) || dreamDenKeys.includes(bldg) || dreamDenKeys.includes(img)) {
+            return false;
+        }
+
+        const nonInteractableBuildingKeys = ['house', 'farm', 'pocket_farm', 'buildable_farm', 'buildable_house'];
+        if (nonInteractableBuildingKeys.some(k => (typeof containsType === 'string' && containsType.includes(k)) || (typeof containsSubtype === 'string' && containsSubtype.includes(k)) || (typeof bldg === 'string' && bldg.includes(k)) || (typeof img === 'string' && img.includes(k)))) {
             return false;
         }
 
@@ -18362,7 +20079,12 @@ class DungeonPage extends React.Component {
         const hasGenerator = generatorKeys.includes(containsType) || generatorKeys.includes(containsSubtype) || generatorKeys.includes(bldg) || generatorKeys.includes(img) || generatorKeys.some(k => img === 'buildable_' + k);
         const hasBuilding = buildingKeys.includes(containsType) || buildingKeys.includes(containsSubtype) || buildingKeys.includes(bldg) || buildingKeys.includes(img) || buildingKeys.some(k => img === 'buildable_' + k);
 
-        if (hasGenerator || hasBuilding || containsType === 'building' || containsType === 'generator' || !!tile.generatorData || !!tile.contains?.generatorData) {
+        if (hasGenerator || hasBuilding || (containsType === 'building' && containsSubtype && containsSubtype !== 'empty') || (containsType === 'generator' && containsSubtype && containsSubtype !== 'empty')) {
+            return true;
+        }
+
+        const gData = tile.generatorData || tile.contains?.generatorData;
+        if (gData && (gData.key || gData.resource || (gData.type && gData.type !== 'empty'))) {
             return true;
         }
 
@@ -18378,6 +20100,9 @@ class DungeonPage extends React.Component {
         const img = tile.image;
 
         const key = String(containsSubtype || bldg || img || containsType || '').toLowerCase();
+        if (key.includes('farm') || key.includes('house')) {
+            return null;
+        }
 
         const GENERATOR_DEFS = {
             larder: {
@@ -18387,6 +20112,8 @@ class DungeonPage extends React.Component {
                 currencyType: 'food',
                 rate: 5,
                 cap: 300,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'larder',
                 iconEmoji: '🍖',
                 description: 'A cool stone cellar for storing and preserving meat and provisions over time. Generates 5 food per hour (capped at 300).'
@@ -18398,6 +20125,8 @@ class DungeonPage extends React.Component {
                 currencyType: 'wood',
                 rate: 5,
                 cap: 300,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'lumber_mill',
                 iconEmoji: '🪵',
                 description: 'A water-powered mill for processing raw timber into sturdy construction wood. Generates 5 wood per hour (capped at 300).'
@@ -18409,6 +20138,8 @@ class DungeonPage extends React.Component {
                 currencyType: 'wood',
                 rate: 5,
                 cap: 300,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'lumber_mill',
                 iconEmoji: '🪵',
                 description: 'A water-powered mill for processing raw timber into sturdy construction wood. Generates 5 wood per hour (capped at 300).'
@@ -18416,13 +20147,15 @@ class DungeonPage extends React.Component {
             ore_mine: {
                 key: 'ore_mine',
                 name: 'Ore Mine',
-                resource: 'Stone',
-                currencyType: 'stone',
+                resource: 'Ore',
+                currencyType: 'ore',
                 rate: 5,
                 cap: 300,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'ore_mine',
-                iconEmoji: '🪨',
-                description: 'An excavation pit extracting mineral ore and heavy masonry stone. Generates 5 stone per hour (capped at 300).'
+                iconEmoji: '⛏️',
+                description: 'An excavation pit extracting mineral ore and heavy masonry stone. Generates 5 ore per hour (capped at 300).'
             },
             slate_mine: {
                 key: 'slate_mine',
@@ -18431,6 +20164,8 @@ class DungeonPage extends React.Component {
                 currencyType: 'slate',
                 rate: 5,
                 cap: 300,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'slate_mine',
                 iconEmoji: '🧱',
                 description: 'A subterranean quarry carving fine slate tiles for heavy fortifications. Generates 5 slate per hour (capped at 300).'
@@ -18442,6 +20177,8 @@ class DungeonPage extends React.Component {
                 currencyType: 'shimmering_dust',
                 rate: 5,
                 cap: 300,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'dust_collector',
                 iconEmoji: '✨',
                 description: 'An arcane apparatus gathering ambient magical essence and shimmering dust. Generates 5 dust per hour (capped at 300).'
@@ -18453,6 +20190,8 @@ class DungeonPage extends React.Component {
                 currencyType: 'mushrooms',
                 rate: 5,
                 cap: 300,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'fungal_nursery',
                 iconEmoji: '🍄',
                 description: 'A damp subterranean bed cultivating edible and alchemy mushrooms. Generates 5 mushrooms per hour (capped at 300).'
@@ -18464,6 +20203,8 @@ class DungeonPage extends React.Component {
                 currencyType: 'unstable_chemicals',
                 rate: 5,
                 cap: 300,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'cultivation_vat',
                 iconEmoji: '🧪',
                 description: 'A glowing bio-vat synthesizing chemical compounds. Generates 5 unstable chemicals per hour (capped at 300). Upgrades to produce stable chemicals at Level 3.'
@@ -18475,6 +20216,8 @@ class DungeonPage extends React.Component {
                 currencyType: null,
                 rate: 0,
                 cap: 0,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'domain_monolith',
                 iconEmoji: '🗿',
                 description: 'Radiates domain power, generating territory for your crew. Initially claims a 1-tile radius. Every 12 hours, the territory expands by 1 tile. Monolith territory is permanently revealed through the fog of war. If monolith is overtaken, all progress is lost.'
@@ -18486,6 +20229,8 @@ class DungeonPage extends React.Component {
                 currencyType: null,
                 rate: 0,
                 cap: 0,
+                isLarge: true,
+                isMultiTile: true,
                 imageKey: 'dark_domain_monolith',
                 iconEmoji: '🔮',
                 description: 'An ominous shadow pillar that generates territory for your crew. Initially claims a 1-tile radius. Every 12 hours, the territory expands by 1 tile. Monolith territory is permanently revealed through the fog of war. If monolith is overtaken, all progress is lost.'
@@ -18616,10 +20361,20 @@ class DungeonPage extends React.Component {
 
     getAccumulatedGeneratorAmount = (generatorData, cap = 300, rate = 5, noCap = false) => {
         if (!generatorData || !generatorData.activated) return 0;
+        const isPocketGen = !!(generatorData.cycleIntervalSec === 10 || this.state?.inSuperboard || this.state?.isInPocketDimension);
         const lastTime = generatorData.lastCollectedAt || generatorData.activatedAt || Date.now();
         const elapsedMs = Math.max(0, Date.now() - lastTime);
-        const hours = elapsedMs / (1000 * 60 * 60);
-        const generated = Math.floor(hours * rate);
+
+        let generated = 0;
+        if (isPocketGen) {
+            const cycles = Math.floor(elapsedMs / 10000); // 10s per cycle
+            const cycleAmt = generatorData.cycleAmount || rate || 5;
+            generated = cycles * cycleAmt;
+        } else {
+            const hours = elapsedMs / (1000 * 60 * 60);
+            generated = Math.floor(hours * rate);
+        }
+
         const baseStored = generatorData.accumulated || 0;
         if (noCap) {
             return Math.max(0, baseStored + generated);
@@ -18722,12 +20477,34 @@ class DungeonPage extends React.Component {
         }
     };
 
+    getGeneratorKey = (tile) => {
+        if (!tile) return null;
+        if (this.state.inSuperboard || this.state.isInPocketDimension) {
+            const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension || 'sb';
+            const c = typeof tile.contains === 'object' ? tile.contains : {};
+            const anchorGx = c?.anchorGx ?? tile.anchorGx;
+            const anchorGy = c?.anchorGy ?? tile.anchorGy;
+            if (anchorGx !== undefined && anchorGx !== null && anchorGy !== undefined && anchorGy !== null) {
+                return `pocket_${sbKey}_${anchorGx}_${anchorGy}`;
+            }
+            if (typeof tile.globalX === 'number' && typeof tile.globalY === 'number') {
+                return `pocket_${sbKey}_${tile.globalX}_${tile.globalY}`;
+            }
+            return `pocket_${sbKey}_${tile.id}`;
+        }
+        const bm = this.props.boardManager;
+        return bm?.currentLevel && bm?.currentBoard ? `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}` : `0_0_${tile.id}`;
+    };
+
     openGeneratorModal = (tile) => {
         if (!tile) return;
         const bm = this.props.boardManager;
         const cType = bm?.getContainsType(tile.contains) || tile.contains?.type || tile.contains;
         const cSub = bm?.getContainsSubtype(tile.contains) || tile.contains?.subtype || tile.building || tile.contains?.building;
         const rawKey = String(cSub || cType || '').toLowerCase();
+        if (rawKey.includes('house') || rawKey.includes('farm')) {
+            return;
+        }
         if (rawKey.includes('dream_den') || rawKey.includes('dream den')) {
             this.illuminateBuildingTile(tile);
             this.triggerVendorEncounter('dream_den', tile);
@@ -18789,10 +20566,7 @@ class DungeonPage extends React.Component {
         }
         if (!tile.generatorData) {
             try {
-                let tileKey = null;
-                if (bm && bm.currentLevel && bm.currentBoard) {
-                    tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
-                }
+                const tileKey = this.getGeneratorKey(tile);
                 if (tileKey && meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
                     tile.generatorData = { ...meta.activatedGenerators[tileKey] };
                 } else if (meta.activatedGenerators) {
@@ -18802,10 +20576,7 @@ class DungeonPage extends React.Component {
             } catch (e) { }
         }
         try {
-            let tileKey = null;
-            if (bm && bm.currentLevel && bm.currentBoard) {
-                tileKey = `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}`;
-            }
+            const tileKey = this.getGeneratorKey(tile);
             if (tileKey && meta.disabledOutposts && meta.disabledOutposts[tileKey] && Date.now() < meta.disabledOutposts[tileKey]) {
                 tile.disabledUntil = meta.disabledOutposts[tileKey];
             }
@@ -19511,7 +21282,29 @@ class DungeonPage extends React.Component {
 
         tile.generatorData = genData;
 
-        if (bm) {
+        if (this.state.inSuperboard) {
+            const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+            const dungeonObj = this.state.dungeon || bm?.dungeon;
+            const sb = dungeonObj?.superboards?.[sbKey];
+            if (sb && sb.miniboards && typeof tile.globalX === 'number' && typeof tile.globalY === 'number') {
+                const gx = tile.globalX;
+                const gy = tile.globalY;
+                const mbX = Math.floor(gx / 15);
+                const mbY = Math.floor(gy / 15);
+                const targetMbIdx = mbY * 3 + mbX;
+                const lX = gx % 15;
+                const lY = gy % 15;
+                const targetTileIdx = lY * 15 + lX;
+                const mb = sb.miniboards[targetMbIdx];
+                if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
+                    mb.tiles[targetTileIdx].generatorData = genData;
+                    if (mb.tiles[targetTileIdx].contains && typeof mb.tiles[targetTileIdx].contains === 'object') {
+                        mb.tiles[targetTileIdx].contains.generatorData = genData;
+                    }
+                }
+            }
+            this.updateSuperboardViewport(true);
+        } else if (bm) {
             if (bm.tiles && bm.tiles[tileId]) {
                 bm.tiles[tileId].generatorData = genData;
             }
@@ -19537,8 +21330,10 @@ class DungeonPage extends React.Component {
         try {
             const meta = getMeta() || {};
             meta.activatedGenerators = meta.activatedGenerators || {};
-            const key = `${bm?.currentLevel?.id ?? 0}_${bm?.playerTile?.boardIndex ?? 0}_${tileId}`;
-            meta.activatedGenerators[key] = genData;
+            const key = this.getGeneratorKey(tile);
+            if (key) {
+                meta.activatedGenerators[key] = genData;
+            }
 
             if (this.props.inventoryManager) {
                 meta.inventory = {
@@ -19669,6 +21464,26 @@ class DungeonPage extends React.Component {
                     const gx = mbX + (targetTidx % 15);
                     const gy = mbY + Math.floor(targetTidx / 15);
 
+                    if (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy) {
+                        const existingC = typeof targetTile.contains === 'object' ? targetTile.contains : {};
+                        targetTile.contains = {
+                            ...existingC,
+                            affiliation: affiliation,
+                            growthCycles: cycle,
+                            lastGrowthTime: existingC.lastGrowthTime || targetTile.lastGrowthTime || Date.now(),
+                            id: monolithId,
+                            activated: true
+                        };
+                        targetTile.affiliation = affiliation;
+                        targetTile.growthCycles = cycle;
+                        targetTile.activated = true;
+                        targetTile.lastGrowthTime = targetTile.lastGrowthTime || existingC.lastGrowthTime || Date.now();
+                        targetTile.territory = affiliation;
+                        targetTile.territoryAffiliation = affiliation;
+                        targetTile.territoryMonolithId = monolithId;
+                        return;
+                    }
+
                     let dx = 0;
                     if (gx < minGx) dx = minGx - gx;
                     else if (gx > maxGx) dx = gx - maxGx;
@@ -19743,6 +21558,7 @@ class DungeonPage extends React.Component {
 
         const isPocket = !!(this.state.inSuperboard || this.state.isInPocketDimension);
         if (isPocket) {
+            const isDomainMonolith = def.key === 'domain_monolith' || def.key === 'dark_domain_monolith';
             const type = this.state.superboardType;
             const superboardsToUpdate = [];
             if (bm?.dungeon?.superboards?.[type]) superboardsToUpdate.push(bm.dungeon.superboards[type]);
@@ -19783,7 +21599,7 @@ class DungeonPage extends React.Component {
                                 const checkTile = primarySuperboard.miniboards[checkMbIdx]?.tiles?.[checkTidx];
                                 if (checkTile) {
                                     const cKey = String(checkTile.contains?.subtype || checkTile.contains?.key || checkTile.building || checkTile.contains?.type || '').toLowerCase();
-                                    if (cKey.includes('monolith')) {
+                                    if (cKey.includes(def.key) || (isDomainMonolith && cKey.includes('monolith'))) {
                                         const vCell = (checkTile.contains && typeof checkTile.contains === 'object' ? checkTile.contains.vendorCell : checkTile.vendorCell) || 'anchor';
                                         let foundAnchorGx = checkGx;
                                         let foundAnchorGy = checkGy;
@@ -19802,80 +21618,212 @@ class DungeonPage extends React.Component {
                 }
             }
 
-            const now = Date.now();
-            const monolithId = (anchorGx !== null && anchorGy !== null) ? `monolith_${anchorGx}_${anchorGy}` : `monolith_${tile.id}`;
+            if (isDomainMonolith) {
+                const isEnemyMonolith = tile.affiliation === 'hostile' || tile.contains?.affiliation === 'hostile' || tile.isHostile || tile.contains?.isHostile || def.key === 'dark_domain_monolith' || (tile.generatorData && tile.generatorData.affiliation === 'hostile');
 
-            if (anchorGx !== null && anchorGy !== null && superboardsToUpdate.length > 0) {
-                superboardsToUpdate.forEach(superboard => {
-                    if (superboard && superboard.miniboards) {
-                        superboard.miniboards.forEach((mb, mbIdx) => {
+                if (isEnemyMonolith) {
+                    const currentFreeWill = typeof this.state.pocketFreeWill === 'number' ? this.state.pocketFreeWill : 50;
+                    const newFreeWill = currentFreeWill - 5;
+                    if (newFreeWill <= 0) {
+                        this.setState({ pocketFreeWill: 0 });
+                        this.closeGeneratorModal();
+                        this.exitSuperboardPocketDimension('💀 Free Will reduced to 0! You succumbed to the pocket dimension and were expelled!');
+                        return;
+                    }
+                    this.setState({ pocketFreeWill: newFreeWill });
+                }
+
+                const now = Date.now();
+                const monolithId = (anchorGx !== null && anchorGy !== null) ? `monolith_${anchorGx}_${anchorGy}` : `monolith_${tile.id}`;
+
+                // If this was an enemy monolith, reset all previous hostile domain tiles belonging to this monolith
+                if (isEnemyMonolith && superboardsToUpdate.length > 0) {
+                    superboardsToUpdate.forEach(superboard => {
+                        if (!superboard || !superboard.miniboards) return;
+                        superboard.miniboards.forEach(mb => {
                             if (!mb || !mb.tiles) return;
-                            const mbX = (mbIdx % 3) * 15;
-                            const mbY = Math.floor(mbIdx / 3) * 15;
-                            mb.tiles.forEach((t, tIdx) => {
+                            mb.tiles.forEach(t => {
                                 if (!t) return;
-                                const tgx = mbX + (tIdx % 15);
-                                const tgy = mbY + Math.floor(tIdx / 15);
-                                if (tgx >= anchorGx && tgx <= anchorGx + 1 && tgy >= anchorGy && tgy <= anchorGy + 1) {
-                                    t.generatorData = genData;
-                                    const existingC = typeof t.contains === 'object' ? t.contains : {};
-                                    t.contains = {
-                                        ...existingC,
-                                        affiliation: 'player',
-                                        growthCycles: 1,
-                                        lastGrowthTime: now,
-                                        level: existingC.level || 1,
-                                        id: monolithId
-                                    };
-                                    t.affiliation = 'player';
-                                    t.growthCycles = 1;
-                                    t.lastGrowthTime = now;
-                                    t.territory = 'player';
-                                    t.territoryAffiliation = 'player';
-                                    t.territoryMonolithId = monolithId;
+                                const isThisMonolithTerritory = t.territoryMonolithId === monolithId || (t.contains && typeof t.contains === 'object' && t.contains.territoryMonolithId === monolithId);
+                                if (isThisMonolithTerritory) {
+                                    delete t.territory;
+                                    delete t.territoryAffiliation;
+                                    delete t.territoryMonolithId;
+                                    delete t.growthCycles;
+                                    delete t.lastGrowthTime;
+                                    if (t.affiliation === 'hostile') delete t.affiliation;
+                                    if (t.contains && typeof t.contains === 'object') {
+                                        delete t.contains.territory;
+                                        delete t.contains.territoryAffiliation;
+                                        delete t.contains.territoryMonolithId;
+                                        delete t.contains.growthCycles;
+                                        delete t.contains.lastGrowthTime;
+                                        if (t.contains.affiliation === 'hostile') delete t.contains.affiliation;
+                                    }
                                 }
                             });
                         });
+                    });
+                }
+
+                if (anchorGx !== null && anchorGy !== null && superboardsToUpdate.length > 0) {
+                    superboardsToUpdate.forEach(superboard => {
+                        if (superboard && superboard.miniboards) {
+                            superboard.miniboards.forEach((mb, mbIdx) => {
+                                if (!mb || !mb.tiles) return;
+                                const mbX = (mbIdx % 3) * 15;
+                                const mbY = Math.floor(mbIdx / 3) * 15;
+                                mb.tiles.forEach((t, tIdx) => {
+                                    if (!t) return;
+                                    const tgx = mbX + (tIdx % 15);
+                                    const tgy = mbY + Math.floor(tIdx / 15);
+                                    if (tgx >= anchorGx && tgx <= anchorGx + 1 && tgy >= anchorGy && tgy <= anchorGy + 1) {
+                                        t.generatorData = genData;
+                                        const existingC = typeof t.contains === 'object' ? t.contains : {};
+                                        t.contains = {
+                                            ...existingC,
+                                            affiliation: 'player',
+                                            isHostile: false,
+                                            faction: 'player',
+                                            growthCycles: 1,
+                                            maxGrowthCycles: 5,
+                                            lastGrowthTime: now,
+                                            level: existingC.level || 1,
+                                            id: monolithId,
+                                            activated: true,
+                                            generatorData: genData
+                                        };
+                                        t.affiliation = 'player';
+                                        t.isHostile = false;
+                                        t.growthCycles = 1;
+                                        t.maxGrowthCycles = 5;
+                                        t.lastGrowthTime = now;
+                                        t.activated = true;
+                                        t.territory = 'player';
+                                        t.territoryAffiliation = 'player';
+                                        t.territoryMonolithId = monolithId;
+                                    }
+                                });
+                            });
+                        }
+                    });
+                } else {
+                    const existingC = typeof tile.contains === 'object' ? tile.contains : {};
+                    tile.contains = {
+                        ...existingC,
+                        affiliation: 'player',
+                        isHostile: false,
+                        faction: 'player',
+                        growthCycles: 1,
+                        maxGrowthCycles: 5,
+                        lastGrowthTime: now,
+                        level: existingC.level || 1,
+                        id: monolithId,
+                        activated: true,
+                        generatorData: genData
+                    };
+                    tile.affiliation = 'player';
+                    tile.isHostile = false;
+                    tile.growthCycles = 1;
+                    tile.maxGrowthCycles = 5;
+                    tile.lastGrowthTime = now;
+                    tile.activated = true;
+                    tile.territory = 'player';
+                    tile.territoryAffiliation = 'player';
+                    tile.territoryMonolithId = monolithId;
+                }
+
+                // Step 1: Show initial domain on the 2x2 building footprint itself immediately
+                this.updateSuperboardViewport(true);
+                this.forceUpdate();
+                this.closeGeneratorModal();
+                if (isEnemyMonolith) {
+                    const currentFreeWill = typeof this.state.pocketFreeWill === 'number' ? this.state.pocketFreeWill : 50;
+                    this.displayMessage(`✦ Reclaimed enemy Domain Monolith (-5 Free Will, ${currentFreeWill} remaining)! Friendly domain resetting and expanding!`);
+                } else {
+                    this.displayMessage(`✦ Activated ${def.name}! Friendly domain establishing around the monolith!`);
+                }
+
+                // Step 2: After a 1-second delay, expand domain outwards to 1-tile radius around the building
+                const growthAnchor = {
+                    ...tile,
+                    globalX: anchorGx !== null ? anchorGx : tile.globalX,
+                    globalY: anchorGy !== null ? anchorGy : tile.globalY,
+                    contains: {
+                        ...(typeof tile.contains === 'object' ? tile.contains : {}),
+                        id: monolithId
                     }
-                });
-            } else {
-                const existingC = typeof tile.contains === 'object' ? tile.contains : {};
-                tile.contains = {
-                    ...existingC,
-                    affiliation: 'player',
-                    growthCycles: 1,
-                    lastGrowthTime: now,
-                    level: existingC.level || 1,
-                    id: monolithId
                 };
-                tile.affiliation = 'player';
-                tile.growthCycles = 1;
-                tile.lastGrowthTime = now;
-                tile.territory = 'player';
-                tile.territoryAffiliation = 'player';
-                tile.territoryMonolithId = monolithId;
+                setTimeout(() => {
+                    this.triggerSuperboardMonolithImmediateGrowth(growthAnchor, 'player', 1);
+                }, 1000);
+
+                return;
             }
 
-            // Step 1: Show initial domain on the 2x2 building footprint itself immediately
+            // ── Non-Domain Resource Generator in Pocket Dimension ──
+            const currentInfluence = this.getTotalPlayerDomainCount();
+            const maxResourceGenerators = Math.floor(currentInfluence / 5);
+            const activeCount = this.getPocketActiveResourceGeneratorsCount();
+
+            if (activeCount >= maxResourceGenerators) {
+                this.displayMessage(`❌ Cannot activate ${def.name}: Influence threshold not reached! (Requires 5 Influence per Resource Generator. Current Influence: ${currentInfluence})`);
+                return;
+            }
+
+            genData.cycleIntervalSec = 10;
+            genData.cycleAmount = def.rate || 5;
+            genData.lastTickTime = Date.now();
+            genData.activatedAt = Date.now();
+            genData.lastCollectedAt = Date.now();
+            genData.accumulated = 0;
+
+            const cObj = tile.contains && typeof tile.contains === 'object' ? tile.contains : null;
+            const vGroupId = cObj?.vendorGroupId || tile.vendorGroupId;
+
+            superboardsToUpdate.forEach(superboard => {
+                if (superboard && superboard.miniboards) {
+                    superboard.miniboards.forEach((mb, mbIdx) => {
+                        if (!mb || !mb.tiles) return;
+                        const mbX = (mbIdx % 3) * 15;
+                        const mbY = Math.floor(mbIdx / 3) * 15;
+                        mb.tiles.forEach((t, tIdx) => {
+                            if (!t) return;
+                            const tgx = mbX + (tIdx % 15);
+                            const tgy = mbY + Math.floor(tIdx / 15);
+                            const matchVGroup = !!(vGroupId && (t.contains?.vendorGroupId === vGroupId || t.vendorGroupId === vGroupId));
+                            const matchCoords = anchorGx !== null && anchorGy !== null && (tgx >= anchorGx && tgx <= anchorGx + 1 && tgy >= anchorGy && tgy <= anchorGy + 1);
+                            const matchSingleTile = (anchorGx === null && !vGroupId) && (typeof tile.globalX === 'number' ? (tgx === tile.globalX && tgy === tile.globalY) : (this.state.superboardCurrentMbIdx === mbIdx && t.id === tile.id));
+                            if (matchVGroup || matchCoords || matchSingleTile) {
+                                t.generatorData = { ...genData };
+                                const existingC = typeof t.contains === 'object' ? t.contains : {};
+                                t.contains = {
+                                    ...existingC,
+                                    generatorData: { ...genData },
+                                    affiliation: 'friendly',
+                                    faction: 'player',
+                                    placedBy: 'player'
+                                };
+                                t.affiliation = 'friendly';
+                            }
+                        });
+                    });
+                }
+            });
+
+            try {
+                const meta = getMeta() || {};
+                meta.activatedGenerators = meta.activatedGenerators || {};
+                const anchorKeySuffix = anchorGx !== null && anchorGy !== null ? `${anchorGx}_${anchorGy}` : (typeof tile.globalX === 'number' ? `${tile.globalX}_${tile.globalY}` : `${tile.id}`);
+                const key = `pocket_${type || 'sb'}_${anchorKeySuffix}`;
+                meta.activatedGenerators[key] = { ...genData };
+                storeMeta(meta);
+            } catch (e) { }
+
             this.updateSuperboardViewport(true);
             this.forceUpdate();
             this.closeGeneratorModal();
-            this.displayMessage(`✦ Activated ${def.name}! Friendly domain establishing around the monolith!`);
-
-            // Step 2: After a 1-second delay, expand domain outwards to 1-tile radius around the building
-            const growthAnchor = {
-                ...tile,
-                globalX: anchorGx !== null ? anchorGx : tile.globalX,
-                globalY: anchorGy !== null ? anchorGy : tile.globalY,
-                contains: {
-                    ...(typeof tile.contains === 'object' ? tile.contains : {}),
-                    id: monolithId
-                }
-            };
-            setTimeout(() => {
-                this.triggerSuperboardMonolithImmediateGrowth(growthAnchor, 'player', 1);
-            }, 1000);
-
+            this.displayMessage(`✦ Activated ${def.name}! Producing ${def.rate || 5} ${def.resource} every 10 seconds. (Active Generators: ${activeCount + 1}/${maxResourceGenerators})`);
             return;
         }
 
@@ -20008,7 +21956,29 @@ class DungeonPage extends React.Component {
         tile.generatorData.upgradeEndTime = Date.now() + (15 * 60 * 1000); // 15 minutes
 
         const bm = this.props.boardManager;
-        if (bm) {
+        if (this.state.inSuperboard) {
+            const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+            const dungeonObj = this.state.dungeon || bm?.dungeon;
+            const sb = dungeonObj?.superboards?.[sbKey];
+            if (sb && sb.miniboards && typeof tile.globalX === 'number' && typeof tile.globalY === 'number') {
+                const gx = tile.globalX;
+                const gy = tile.globalY;
+                const mbX = Math.floor(gx / 15);
+                const mbY = Math.floor(gy / 15);
+                const targetMbIdx = mbY * 3 + mbX;
+                const lX = gx % 15;
+                const lY = gy % 15;
+                const targetTileIdx = lY * 15 + lX;
+                const mb = sb.miniboards[targetMbIdx];
+                if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
+                    mb.tiles[targetTileIdx].generatorData = { ...tile.generatorData };
+                    if (mb.tiles[targetTileIdx].contains && typeof mb.tiles[targetTileIdx].contains === 'object') {
+                        mb.tiles[targetTileIdx].contains.generatorData = { ...tile.generatorData };
+                    }
+                }
+            }
+            this.updateSuperboardViewport(true);
+        } else if (bm) {
             const tileId = tile.id;
             if (bm.tiles && bm.tiles[tileId]) {
                 bm.tiles[tileId].generatorData = { ...tile.generatorData };
@@ -20020,8 +21990,10 @@ class DungeonPage extends React.Component {
 
         try {
             meta.activatedGenerators = meta.activatedGenerators || {};
-            const key = `${bm?.currentLevel?.id ?? 0}_${bm.playerTile?.boardIndex ?? 0}_${tile.id}`;
-            meta.activatedGenerators[key] = { ...tile.generatorData };
+            const key = this.getGeneratorKey(tile);
+            if (key) {
+                meta.activatedGenerators[key] = { ...tile.generatorData };
+            }
             storeMeta(meta);
         } catch (e) { }
 
@@ -20099,11 +22071,54 @@ class DungeonPage extends React.Component {
             }
         }
 
+        if (this.state.inSuperboard) {
+            const type = this.state.superboardType;
+            const superboardsToUpdate = [];
+            if (bm?.dungeon?.superboards?.[type]) superboardsToUpdate.push(bm.dungeon.superboards[type]);
+            if (this.state.dungeon?.superboards?.[type] && !superboardsToUpdate.includes(this.state.dungeon.superboards[type])) {
+                superboardsToUpdate.push(this.state.dungeon.superboards[type]);
+            }
+            if (this.props.dungeon?.superboards?.[type] && !superboardsToUpdate.includes(this.props.dungeon.superboards[type])) {
+                superboardsToUpdate.push(this.props.dungeon.superboards[type]);
+            }
+
+            const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+            const vGroupId = cObj?.vendorGroupId || tile.vendorGroupId;
+
+            superboardsToUpdate.forEach(sb => {
+                if (sb && sb.miniboards) {
+                    sb.miniboards.forEach((mb, mbIdx) => {
+                        if (!mb || !mb.tiles) return;
+                        const mbX = mbIdx % 3;
+                        const mbY = Math.floor(mbIdx / 3);
+                        mb.tiles.forEach((t, tIdx) => {
+                            if (!t) return;
+                            const tGx = mbX * 15 + (tIdx % 15);
+                            const tGy = mbY * 15 + Math.floor(tIdx / 15);
+                            const matchVGroup = vGroupId && (t.contains?.vendorGroupId === vGroupId || t.vendorGroupId === vGroupId);
+                            const matchGlobal = (typeof tile.globalX === 'number' && typeof tile.globalY === 'number')
+                                ? (tGx === tile.globalX && tGy === tile.globalY)
+                                : (t.id === tile.id);
+                            if (matchVGroup || matchGlobal) {
+                                t.generatorData = { ...tile.generatorData };
+                                if (t.contains && typeof t.contains === 'object') {
+                                    t.contains.generatorData = { ...tile.generatorData };
+                                }
+                            }
+                        });
+                    });
+                }
+            });
+            this.updateSuperboardViewport();
+        }
+
         try {
             const meta = getMeta() || {};
             meta.activatedGenerators = meta.activatedGenerators || {};
-            const key = `${bm?.currentLevel?.id ?? 0}_${bm.playerTile?.boardIndex ?? 0}_${tile.id}`;
-            meta.activatedGenerators[key] = { ...tile.generatorData };
+            const key = this.getGeneratorKey(tile);
+            if (key) {
+                meta.activatedGenerators[key] = { ...tile.generatorData };
+            }
             storeMeta(meta);
         } catch (e) { }
 
@@ -20195,39 +22210,50 @@ class DungeonPage extends React.Component {
             
             if (gx !== undefined && gy !== undefined && gx !== null && gy !== null) {
                 const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
-                const dungeonObj = this.state.dungeon || bm?.dungeon;
-                const sb = dungeonObj?.superboards?.[sbKey];
+                const superboardsToUpdate = [];
+                if (bm?.dungeon?.superboards?.[sbKey]) superboardsToUpdate.push(bm.dungeon.superboards[sbKey]);
+                if (this.state.dungeon?.superboards?.[sbKey] && !superboardsToUpdate.includes(this.state.dungeon.superboards[sbKey])) {
+                    superboardsToUpdate.push(this.state.dungeon.superboards[sbKey]);
+                }
+                if (this.props.dungeon?.superboards?.[sbKey] && !superboardsToUpdate.includes(this.props.dungeon.superboards[sbKey])) {
+                    superboardsToUpdate.push(this.props.dungeon.superboards[sbKey]);
+                }
+
                 const offsets = isHuge ? [
                     { dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 },
                     { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 2, dy: 1 },
                     { dx: 0, dy: 2 }, { dx: 1, dy: 2 }, { dx: 2, dy: 2 }
                 ] : (isLarge ? [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }] : [{ dx: 0, dy: 0 }]);
 
-                if (sb && sb.miniboards) {
-                    const anchorTileIdx = (gy % 15) * 15 + (gx % 15);
-                    offsets.forEach(({ dx, dy }, idx) => {
-                        const tGx = gx + dx;
-                        const tGy = gy + dy;
-                        const mbX = Math.floor(tGx / 15);
-                        const mbY = Math.floor(tGy / 15);
-                        const targetMbIdx = mbY * 3 + mbX;
-                        const lX = tGx % 15;
-                        const lY = tGy % 15;
-                        const targetTileIdx = lY * 15 + lX;
+                const anchorTileIdx = (gy % 15) * 15 + (gx % 15);
+                superboardsToUpdate.forEach(sb => {
+                    if (sb && sb.miniboards) {
+                        offsets.forEach(({ dx, dy }, idx) => {
+                            const tGx = gx + dx;
+                            const tGy = gy + dy;
+                            if (tGx >= 45 || tGy >= 45) return;
+                            const mbX = Math.floor(tGx / 15);
+                            const mbY = Math.floor(tGy / 15);
+                            const targetMbIdx = mbY * 3 + mbX;
+                            const lX = tGx % 15;
+                            const lY = tGy % 15;
+                            const targetTileIdx = lY * 15 + lX;
 
-                        const mb = sb.miniboards[targetMbIdx];
-                        if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
-                            const tileObj = { ...buildingObj };
-                            if (isLarge) {
-                                tileObj.vendorGroupId = vendorGroupId;
-                                tileObj.vendorAnchorId = anchorTileIdx;
-                                tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                            const mb = sb.miniboards[targetMbIdx];
+                            if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
+                                const tileObj = { ...buildingObj };
+                                if (isLarge || isHuge) {
+                                    tileObj.vendorGroupId = vendorGroupId;
+                                    tileObj.vendorAnchorId = anchorTileIdx;
+                                    tileObj.vendorCell = vendorCells[idx] || 'anchor';
+                                }
+                                mb.tiles[targetTileIdx].contains = tileObj;
+                                mb.tiles[targetTileIdx].building = buildingDef.key;
                             }
-                            mb.tiles[targetTileIdx].contains = tileObj;
-                            mb.tiles[targetTileIdx].building = buildingDef.key;
-                        }
-                    });
-                }
+                        });
+                    }
+                });
+
                 if (bm && typeof bm.refreshTiles === 'function') bm.refreshTiles();
                 this.updateSuperboardViewport();
             }
@@ -20384,7 +22410,7 @@ class DungeonPage extends React.Component {
 
     getBuildingDefinitions = () => {
         return {
-            hut: { key: 'hut', name: 'Hut', category: 'earthly', imageKey: 'buildable_hut', fallbackImageKey: 'hut', costs: { wood: 0, stone: 0, slate: 0 }, buildTime: 20, tag: 'FUNCTIONAL' },
+            hut: { key: 'hut', name: 'Hut', category: 'earthly', imageKey: 'buildable_hut', fallbackImageKey: 'hut', costs: { wood: 0, stone: 0, slate: 0, resolve: 5 }, buildTime: 20, tag: 'FUNCTIONAL' },
             outpost: { key: 'outpost', name: 'Outpost', category: 'earthly', imageKey: 'buildable_outpost', fallbackImageKey: 'outpost', costs: { wood: 50, stone: 50, slate: 10 }, buildTime: 7200, tag: 'STRUCTURE' },
             observer_platform: { key: 'observer_platform', name: 'Observation Platform', category: 'earthly', imageKey: 'buildable_observer_platform', fallbackImageKey: 'observer_platform', costs: { wood: 8, stone: 2, slate: 0 }, buildTime: 50, tag: 'STRUCTURE' },
             observation_platform: { key: 'observer_platform', name: 'Observation Platform', category: 'earthly', imageKey: 'buildable_observer_platform', fallbackImageKey: 'observer_platform', costs: { wood: 8, stone: 2, slate: 0 }, buildTime: 50, tag: 'STRUCTURE' },
@@ -20473,6 +22499,17 @@ class DungeonPage extends React.Component {
             return;
         }
 
+        const resolveCost = buildingDef.costs?.resolve || (buildingDef.key === 'hut' ? 5 : 0);
+        if (resolveCost > 0) {
+            const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+            if (currentResolve < resolveCost) {
+                if (typeof bm?.messaging === 'function') {
+                    bm.messaging(`❌ Cannot build ${buildingDef.name}: Requires ${resolveCost} Resolve! (Current: ${currentResolve})`);
+                }
+                return;
+            }
+        }
+
         let playerIdx = 0;
         if (isInPocketDimension && this.state.superboardPlayerPos) {
             const { gx, gy } = this.state.superboardPlayerPos;
@@ -20485,7 +22522,7 @@ class DungeonPage extends React.Component {
 
         let footprint = [playerIdx];
         const isHuge = buildingDef.key === 'keep' || buildingDef.key === 'fortress';
-        const isLarge = !isHuge && (buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort' || buildingDef.key === 'dream_den' || buildingDef.key === 'alchemist' || buildingDef.key === 'merchant' || buildingDef.key === 'summoning_temple' || buildingDef.key === 'rift' || buildingDef.key === 'rift_2' || buildingDef.key === 'domain_monolith' || buildingDef.key === 'dark_domain_monolith' || buildingDef.isLarge === true || buildingDef.isMultiTile === true);
+        const isLarge = !isHuge && (buildingDef.key === 'war_camp' || buildingDef.key === 'war_fort' || buildingDef.key === 'dream_den' || buildingDef.key === 'alchemist' || buildingDef.key === 'merchant' || buildingDef.key === 'summoning_temple' || buildingDef.key === 'rift' || buildingDef.key === 'rift_2' || buildingDef.key === 'domain_monolith' || buildingDef.key === 'dark_domain_monolith' || buildingDef.key === 'cultivation_vat' || buildingDef.key === 'dust_collector' || buildingDef.key === 'larder' || buildingDef.key === 'sawmill' || buildingDef.key === 'lumber_mill' || buildingDef.key === 'ore_mine' || buildingDef.key === 'slate_mine' || buildingDef.key === 'fungal_nursery' || buildingDef.key === 'generator' || buildingDef.isLarge === true || buildingDef.isMultiTile === true);
         
         if (isHuge) {
             if (isInPocketDimension && this.state.superboardPlayerPos) {
@@ -20643,45 +22680,78 @@ class DungeonPage extends React.Component {
             }
         }
 
-        const invManager = this.props.inventoryManager;
-        const inv = (invManager && invManager.inventory) || [];
+        if (isInPocketDimension) {
+            if (buildingDef.key === 'outpost') {
+                const pRes = { ...this.getPocketResources() };
+                const neededWood = 20;
+                const neededOre = 20;
+                if ((pRes.wood || 0) < neededWood || (pRes.ore || 0) < neededOre) {
+                    if (typeof bm?.messaging === 'function') {
+                        bm.messaging(`❌ Cannot build Outpost: Requires ${neededWood} Wood and ${neededOre} Ore! (You have ${pRes.wood || 0} Wood, ${pRes.ore || 0} Ore)`);
+                    }
+                    return;
+                }
+                pRes.wood = Math.max(0, (pRes.wood || 0) - neededWood);
+                pRes.ore = Math.max(0, (pRes.ore || 0) - neededOre);
+                this.setState({ pocketResources: pRes });
+                try {
+                    const m = getMeta() || {};
+                    m.pocketResources = pRes;
+                    storeMeta(m);
+                    try { updateUserRequest(getUserId(), m).catch(() => {}); } catch(e) {}
+                } catch (e) { }
+            }
+        } else {
+            const invManager = this.props.inventoryManager;
+            const inv = (invManager && invManager.inventory) || [];
 
-        const costs = isInPocketDimension ? { wood: 0, stone: 0, slate: 0, dust: 0 } : (buildingDef.costs || { wood: 0, stone: 0, slate: 0 });
-        const toRemove = { wood: costs.wood || 0, stone: costs.stone || 0, slate: costs.slate || 0, dust: costs.dust || 0 };
+            const costs = buildingDef.costs || { wood: 0, stone: 0, slate: 0 };
+            const toRemove = { wood: costs.wood || 0, stone: costs.stone || 0, slate: costs.slate || 0, dust: costs.dust || 0 };
 
-        for (const resKey of Object.keys(toRemove)) {
-            let needed = toRemove[resKey];
-            if (needed <= 0) continue;
+            for (const resKey of Object.keys(toRemove)) {
+                let needed = toRemove[resKey];
+                if (needed <= 0) continue;
 
-            const counterKey = resKey === 'dust' ? 'shimmering_dust' : resKey;
-            if (invManager && typeof invManager[counterKey] === 'number') {
-                const availableCounter = invManager[counterKey];
-                if (availableCounter >= needed) {
-                    invManager[counterKey] -= needed;
-                    needed = 0;
-                } else {
-                    invManager[counterKey] = 0;
-                    needed -= availableCounter;
+                const counterKey = resKey === 'dust' ? 'shimmering_dust' : resKey;
+                if (invManager && typeof invManager[counterKey] === 'number') {
+                    const availableCounter = invManager[counterKey];
+                    if (availableCounter >= needed) {
+                        invManager[counterKey] -= needed;
+                        needed = 0;
+                    } else {
+                        invManager[counterKey] = 0;
+                        needed -= availableCounter;
+                    }
+                }
+
+                while (needed > 0) {
+                    const idx = inv.findIndex(item => {
+                        if (!item) return false;
+                        const k = (item.key || item.id || item._im_key || item.name || '').toLowerCase();
+                        return k.includes(resKey);
+                    });
+                    if (idx === -1) break;
+
+                    const item = inv[idx];
+                    const amt = item.amount || 1;
+                    if (amt > needed) {
+                        item.amount = amt - needed;
+                        needed = 0;
+                    } else {
+                        needed -= amt;
+                        inv.splice(idx, 1);
+                    }
                 }
             }
+        }
 
-            while (needed > 0) {
-                const idx = inv.findIndex(item => {
-                    if (!item) return false;
-                    const k = (item.key || item.id || item._im_key || item.name || '').toLowerCase();
-                    return k.includes(resKey);
-                });
-                if (idx === -1) break;
-
-                const item = inv[idx];
-                const amt = item.amount || 1;
-                if (amt > needed) {
-                    item.amount = amt - needed;
-                    needed = 0;
-                } else {
-                    needed -= amt;
-                    inv.splice(idx, 1);
-                }
+        if (resolveCost > 0) {
+            const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+            meta.resolve = Math.max(0, currentResolve - resolveCost);
+            storeMeta(meta);
+            try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch(e) {}
+            if (typeof bm?.messaging === 'function') {
+                bm.messaging(`⚡ Building ${buildingDef.name} cost ${resolveCost} Resolve. (Remaining: ${meta.resolve})`);
             }
         }
 
@@ -20856,7 +22926,51 @@ class DungeonPage extends React.Component {
                 this.finishConstruction(constructionState);
             } else {
                 // Ensure the tile still shows as under construction (recover from rapid refresh desync)
-                if (this.props.boardManager && this.props.boardManager.tiles) {
+                if (this.state.inSuperboard || (constructionState && typeof constructionState.superboardGx === 'number')) {
+                    const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+                    const dungeonObj = this.state.dungeon || this.props.boardManager?.dungeon;
+                    const sb = dungeonObj?.superboards?.[sbKey];
+                    if (sb && sb.miniboards && typeof constructionState.superboardGx === 'number' && typeof constructionState.superboardGy === 'number') {
+                        const expectedBuilding = `${constructionState.buildingDef.key}_under_construction`;
+                        const gx = constructionState.superboardGx;
+                        const gy = constructionState.superboardGy;
+                        const isHuge = (constructionState.footprint || []).length === 9;
+                        const isLarge = constructionState.isLargeBuilding || (constructionState.footprint || []).length === 4;
+                        const offsets = isHuge ? [
+                            { dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 2, dy: 0 },
+                            { dx: 0, dy: 1 }, { dx: 1, dy: 1 }, { dx: 2, dy: 1 },
+                            { dx: 0, dy: 2 }, { dx: 1, dy: 2 }, { dx: 2, dy: 2 }
+                        ] : (isLarge ? [{ dx: 0, dy: 0 }, { dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 1, dy: 1 }] : [{ dx: 0, dy: 0 }]);
+
+                        offsets.forEach(({ dx, dy }) => {
+                            const tGx = gx + dx;
+                            const tGy = gy + dy;
+                            if (tGx >= 45 || tGy >= 45) return;
+                            const mbX = Math.floor(tGx / 15);
+                            const mbY = Math.floor(tGy / 15);
+                            const targetMbIdx = mbY * 3 + mbX;
+                            const lX = tGx % 15;
+                            const lY = tGy % 15;
+                            const targetTileIdx = lY * 15 + lX;
+                            const mb = sb.miniboards[targetMbIdx];
+                            if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
+                                const t = mb.tiles[targetTileIdx];
+                                if (t && t.building !== expectedBuilding && (!t.contains || t.contains.subtype !== expectedBuilding)) {
+                                    t.building = expectedBuilding;
+                                    t.contains = {
+                                        type: 'building',
+                                        subtype: expectedBuilding,
+                                        name: `${constructionState.buildingDef.name} (Constructing)`,
+                                        placedBy: 'player',
+                                        ownerId: typeof getUserId === 'function' ? getUserId() : null,
+                                        constructionStartTime: constructionState.startTime,
+                                        constructionDurationMs: constructionState.durationMs
+                                    };
+                                }
+                            }
+                        });
+                    }
+                } else if (this.props.boardManager && this.props.boardManager.tiles) {
                     const expectedBuilding = `${constructionState.buildingDef.key}_under_construction`;
                     const footprint = constructionState.footprint || [constructionState.targetTileIdx];
                     const isHuge = footprint.length === 9;
@@ -20983,15 +23097,19 @@ class DungeonPage extends React.Component {
                 theurgyMultiplier = 2;
             }
 
+            const currentFood = typeof meta.food === 'number' ? meta.food : 55;
+            const zeroFoodBonus = currentFood <= 0 ? 35 : 0;
             const prayBonus = hasUserPerk('pray_success_boost') ? 10 : 0;
 
             if (prayerType === 'food') {
                 const roll = Math.random() * 100;
-                const chance = Math.min(100, (25 * theurgyMultiplier) + prayBonus);
+                const chance = Math.min(100, (25 * theurgyMultiplier) + prayBonus + zeroFoodBonus);
                 if (roll < chance) {
                     success = true;
                     meta.food = (typeof meta.food === 'number' ? meta.food : 55) + 50;
-                    feedback = 'Your prayer was heard! 50 food has been granted by alchemical spirits.';
+                    feedback = currentFood <= 0
+                        ? 'Desperation granted! 50 food has been granted by alchemical spirits (+35% 0-food bonus).'
+                        : 'Your prayer was heard! 50 food has been granted by alchemical spirits.';
                     this.displayMessage('🙏 Prayer answered: +50 Food');
                 } else {
                     feedback = 'Silence. The spirits do not answer your plea for sustenance this time.';
@@ -22482,6 +24600,7 @@ class DungeonPage extends React.Component {
                         crew={this.props.crewManager?.crew || this.state.crew}
                         activeConstruction={this.state.activeConstruction}
                         inSuperboard={this.state.inSuperboard}
+                        pocketResources={this.getPocketResources()}
                         onClose={() => this.setState({ showBuildMenu: false })}
                         onBuild={this.handleBuildBuilding}
                     />
@@ -22771,7 +24890,7 @@ class DungeonPage extends React.Component {
 
                                 <div className="training-subtitle">Choose a drill for each crew member. Drills consume food and build toward permanent stat gains.</div>
 
-                                <div className="training-crew-cards">
+                                <div className={`training-crew-cards${crew.length === 1 ? ' single-crew' : ''}`}>
                                     {crew.map((member) => {
                                         // canAfford is now calculated per drill in TrainingDrillPicker
                                         const progress = member.trainingProgress || { str: 0, dex: 0, fort: 0, int: 0 };
@@ -24015,6 +26134,9 @@ class DungeonPage extends React.Component {
                         const minutes = Math.max(0, Math.floor((remainingMs % 3600000) / 60000));
                         const cooldownText = onCooldown ? `${hours}h ${minutes}m remaining` : null;
 
+                        const currentFood = typeof meta.food === 'number' ? meta.food : 55;
+                        const zeroFoodBonus = currentFood <= 0 ? 35 : 0;
+
                         const prayBonus = hasUserPerk('pray_success_boost') ? 10 : 0;
                         const crewForPray = Array.isArray(meta.crew) ? meta.crew : (this.props.crewManager && Array.isArray(this.props.crewManager.crew) ? this.props.crewManager.crew : []);
                         let prayMult = 1;
@@ -24022,7 +26144,7 @@ class DungeonPage extends React.Component {
                         else if (crewForPray.some(m => m && Array.isArray(m.skills) && m.skills.includes('theurgy_2'))) prayMult = 3;
                         else if (crewForPray.some(m => m && Array.isArray(m.skills) && m.skills.includes('theurgy'))) prayMult = 2;
 
-                        const foodRate = Math.min(100, (25 * prayMult) + prayBonus);
+                        const foodRate = Math.min(100, (25 * prayMult) + prayBonus + zeroFoodBonus);
                         const keyRate = Math.min(100, (15 * prayMult) + prayBonus);
 
                         return (
@@ -24072,7 +26194,7 @@ class DungeonPage extends React.Component {
                                             </div>
                                             <div className="pray-option-details">
                                                 <div className="pray-option-name">Prayer for Sustenance</div>
-                                                <div className="pray-option-desc">{foodRate}% chance to materialize +50 Food supply.</div>
+                                                <div className="pray-option-desc">{foodRate}% chance to materialize +50 Food supply.{currentFood <= 0 ? ' (+35% 0-Food desperation bonus)' : ''}</div>
                                                 <div className="pray-option-meta">{foodRate}% Success Rate</div>
                                             </div>
                                             <button
@@ -24309,6 +26431,10 @@ globalY={tile.globalY}
                             onTouchMove={this.handleBoardTouchMove}
                             onTouchEnd={this.handleBoardTouchEnd}
                             style={{
+                                position: 'relative',
+                                zIndex: 10,
+                                isolation: 'isolate',
+                                overflow: 'hidden',
                                 width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
                                 backgroundColor: 'white',
                                 backgroundImage: (this.state.inSuperboard && this.state.dungeon?.superboards?.[this.state.superboardType]?.floorTexture) 
@@ -24323,21 +26449,42 @@ globalY={tile.globalY}
                             {this.state.tiles && (() => {
                                 const touchTile = this.state.mobileTouchTileId !== null ? this.state.tiles[this.state.mobileTouchTileId] : null;
                                 let activeTouchAnchorId = this.state.mobileTouchTileId;
-                                if (touchTile && touchTile.contains?.vendorAnchorId !== undefined && touchTile.contains?.vendorAnchorId !== null) {
-                                    activeTouchAnchorId = touchTile.contains.vendorAnchorId;
+                                let activeTouchGroupId = null;
+                                if (touchTile) {
+                                    const tc = touchTile.contains;
+                                    if (this.state.inSuperboard) {
+                                        activeTouchGroupId = (typeof tc === 'object' && tc !== null ? tc.vendorGroupId : null) ?? touchTile.vendorGroupId ?? touchTile.territoryMonolithId ?? (typeof tc === 'object' ? tc.id : null);
+                                    } else if (tc?.vendorAnchorId !== undefined && tc?.vendorAnchorId !== null) {
+                                        activeTouchAnchorId = tc.vendorAnchorId;
+                                    }
                                 }
 
                                 const illuminatedTile = this.state.illuminatedTileId !== null ? (this.state.tiles[this.state.illuminatedTileId] || bm?.tiles?.[this.state.illuminatedTileId]) : null;
                                 let activeIlluminatedAnchorId = this.state.illuminatedTileId;
+                                let activeIlluminatedGroupId = null;
                                 if (illuminatedTile) {
                                     const c = illuminatedTile.contains;
-                                    const anchor = (typeof c === 'object' && c !== null ? (c.vendorAnchorId ?? c.structureAnchorId ?? c.buildingAnchorId) : null) ?? illuminatedTile.vendorAnchorId ?? illuminatedTile.structureAnchorId ?? illuminatedTile.buildingAnchorId;
-                                    if (anchor !== undefined && anchor !== null) {
-                                        activeIlluminatedAnchorId = anchor;
+                                    if (this.state.inSuperboard) {
+                                        activeIlluminatedGroupId = (typeof c === 'object' && c !== null ? c.vendorGroupId : null) ?? illuminatedTile.vendorGroupId ?? illuminatedTile.territoryMonolithId ?? (typeof c === 'object' ? c.id : null);
+                                    } else {
+                                        const anchor = (typeof c === 'object' && c !== null ? (c.vendorAnchorId ?? c.structureAnchorId ?? c.buildingAnchorId) : null) ?? illuminatedTile.vendorAnchorId ?? illuminatedTile.structureAnchorId ?? illuminatedTile.buildingAnchorId;
+                                        if (anchor !== undefined && anchor !== null) {
+                                            activeIlluminatedAnchorId = anchor;
+                                        }
                                     }
                                 }
                                 return this.state.tiles.map((tile, i) => {
-                                const isBeingBuilt = this.state.activeConstruction && this.state.activeConstruction.targetTileIdx === tile.id;
+                                const isBeingBuilt = this.state.activeConstruction && (
+                                    this.state.inSuperboard
+                                        ? (() => {
+                                            const ac = this.state.activeConstruction;
+                                            if (typeof ac.superboardGx !== 'number' || typeof ac.superboardGy !== 'number') return false;
+                                            const size = ac.isLargeBuilding ? 2 : ((ac.footprint && ac.footprint.length === 9) ? 3 : 1);
+                                            return tile.globalX >= ac.superboardGx && tile.globalX < ac.superboardGx + size &&
+                                                   tile.globalY >= ac.superboardGy && tile.globalY < ac.superboardGy + size;
+                                        })()
+                                        : (this.state.activeConstruction.footprint ? this.state.activeConstruction.footprint.includes(tile.id) : this.state.activeConstruction.targetTileIdx === tile.id)
+                                );
                                 let boardImage =  (tile.image ? tile.image : (tile.icon ? tile.icon : null));
                                 const bm = this.props.boardManager;
                                 const playerIdx = (bm && bm.playerTile && bm.playerTile.location && typeof bm.getIndexFromCoordinates === 'function')
@@ -24369,7 +26516,8 @@ globalY={tile.globalY}
 
                                 const isPlayerOnTile = playerIdx !== null && tile.id === playerIdx;
 
-                                const gDataForTile = (meta.activatedGenerators && meta.activatedGenerators[`${bm?.currentLevel?.id ?? 0}_${bm?.playerTile?.boardIndex ?? 0}_${tile.id}`]) || tile.generatorData || (tile.contains && tile.contains.generatorData);
+                                const genKeyForTile = this.getGeneratorKey(tile);
+                                const gDataForTile = (meta.activatedGenerators && genKeyForTile && meta.activatedGenerators[genKeyForTile]) || tile.generatorData || (tile.contains && tile.contains.generatorData);
                                 const isAutomatedForTile = !!(gDataForTile && gDataForTile.automated);
 
                                 return <Tile
@@ -24400,7 +26548,14 @@ globalY={tile.globalY}
                                     contains={tile.contains}
                                     building={tile.building || (typeof tile.contains === 'object' ? (tile.contains?.building || tile.contains?.subtype) : null)}
                                     territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
+                                    affiliation={tile.affiliation || (tile.contains && typeof tile.contains === 'object' ? tile.contains.affiliation : null)}
+                                    territoryAffiliation={tile.territoryAffiliation || (tile.contains && typeof tile.contains === 'object' ? tile.contains.territoryAffiliation : null)}
+                                    growthCycles={tile.growthCycles ?? (tile.contains && typeof tile.contains === 'object' ? tile.contains.growthCycles : null)}
+                                    lastGrowthTime={tile.lastGrowthTime ?? (tile.contains && typeof tile.contains === 'object' ? tile.contains.lastGrowthTime : null)}
+                                    activated={tile.activated ?? (tile.contains && typeof tile.contains === 'object' ? tile.contains.activated : null)}
+                                    isHostile={tile.isHostile ?? (tile.contains && typeof tile.contains === 'object' ? tile.contains.isHostile : null)}
                                     boardTiles={this.state.tiles}
+                                    superboard={this.state.dungeon?.superboards?.[this.state.superboardType] || this.props.boardManager?.dungeon?.superboards?.[this.state.superboardType]}
                                     inSuperboard={this.state.inSuperboard}
                                     isVoid={isVoidTile}
                                     terrain={tile.terrain}
@@ -24411,7 +26566,29 @@ globalY={tile.globalY}
                                     partialObscured={!!tile.partialObscured}
                                     trapRevealed={!!tile.trapRevealed}
                                     hasTrap={!!tile.hasTrap}
-                                    illuminated={activeIlluminatedAnchorId === tile.id || (activeIlluminatedAnchorId !== null && ((tile.contains && typeof tile.contains === 'object' && (tile.contains.vendorAnchorId === activeIlluminatedAnchorId || tile.contains.structureAnchorId === activeIlluminatedAnchorId || tile.contains.buildingAnchorId === activeIlluminatedAnchorId)) || tile.vendorAnchorId === activeIlluminatedAnchorId || tile.structureAnchorId === activeIlluminatedAnchorId || tile.buildingAnchorId === activeIlluminatedAnchorId)) || !!tile.illuminated}
+                                    illuminated={
+                                        this.state.inSuperboard
+                                            ? (
+                                                (this.state.illuminatedTileId !== null && this.state.illuminatedTileId === tile.id) ||
+                                                (activeIlluminatedGroupId !== null && (
+                                                    tile.vendorGroupId === activeIlluminatedGroupId ||
+                                                    tile.contains?.vendorGroupId === activeIlluminatedGroupId ||
+                                                    tile.territoryMonolithId === activeIlluminatedGroupId ||
+                                                    tile.contains?.id === activeIlluminatedGroupId
+                                                )) ||
+                                                !!tile.illuminated
+                                            )
+                                            : (
+                                                activeIlluminatedAnchorId === tile.id ||
+                                                (activeIlluminatedAnchorId !== null && (
+                                                    (tile.contains && typeof tile.contains === 'object' && (tile.contains.vendorAnchorId === activeIlluminatedAnchorId || tile.contains.structureAnchorId === activeIlluminatedAnchorId || tile.contains.buildingAnchorId === activeIlluminatedAnchorId)) ||
+                                                    tile.vendorAnchorId === activeIlluminatedAnchorId ||
+                                                    tile.structureAnchorId === activeIlluminatedAnchorId ||
+                                                    tile.buildingAnchorId === activeIlluminatedAnchorId
+                                                )) ||
+                                                !!tile.illuminated
+                                            )
+                                    }
                                     coordinates={tile.coordinates}
                                     index={tile.id}
 globalX={tile.globalX}
@@ -24421,13 +26598,26 @@ globalY={tile.globalY}
                                     handleHover={this.handleHover}
                                     type={tile.type}
                                     handleClick={this.handleClick}
-                                    isMobileTouchHover={activeTouchAnchorId === tile.id || (activeTouchAnchorId !== null && tile.contains?.vendorAnchorId === activeTouchAnchorId)}
+                                    isMobileTouchHover={
+                                        this.state.inSuperboard
+                                            ? (
+                                                activeTouchAnchorId === tile.id ||
+                                                (activeTouchGroupId !== null && (
+                                                    tile.vendorGroupId === activeTouchGroupId ||
+                                                    tile.contains?.vendorGroupId === activeTouchGroupId ||
+                                                    tile.territoryMonolithId === activeTouchGroupId ||
+                                                    tile.contains?.id === activeTouchGroupId
+                                                ))
+                                            )
+                                            : (activeTouchAnchorId === tile.id || (activeTouchAnchorId !== null && tile.contains?.vendorAnchorId === activeTouchAnchorId))
+                                    }
                                     isFadingOut={!!tile.isFadingOut}
                                     playerFacing={this.state.playerFacing || 'right'}
                                 >
                                 </Tile>
                                 })
                             })()}
+                            {this.renderSuperboardRotatingDomainSquares()}
                         </div>
 
                         {/* Pocket Dimension Lightweight Fog of War SVG Mask Overlay */}
@@ -24451,7 +26641,7 @@ globalY={tile.globalY}
                                         width: boardSize + 'px',
                                         height: boardSize + 'px',
                                         pointerEvents: 'none',
-                                        zIndex: 24
+                                        zIndex: 150
                                     }}
                                     viewBox={`0 0 ${boardSize} ${boardSize}`}
                                 >
@@ -24696,18 +26886,20 @@ globalY={tile.globalY}
                                     '--glide-y': this.state.playerGlideVector ? `${this.state.playerGlideVector.y}px` : '0px'
                                 }}
                             >
-                                <div
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                        backgroundImage: this.state.playerFloatStyle.backgroundImage,
-                                        backgroundSize: 'contain',
-                                        backgroundRepeat: 'no-repeat',
-                                        backgroundPosition: 'center',
-                                        transform: (this.state.playerFacing === 'left') ? 'scaleX(-1)' : 'scaleX(1)',
-                                    }}
-                                    className="avatar-image-inner"
-                                />
+                                <div className="avatar-damage-shake-wrapper" style={{ width: '100%', height: '100%' }}>
+                                    <div
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            backgroundImage: this.state.playerFloatStyle.backgroundImage,
+                                            backgroundSize: 'contain',
+                                            backgroundRepeat: 'no-repeat',
+                                            backgroundPosition: 'center',
+                                            transform: (this.state.playerFacing === 'left') ? 'scaleX(-1)' : 'scaleX(1)',
+                                        }}
+                                        className="avatar-image-inner"
+                                    />
+                                </div>
                                 {(() => {
                                     const meta = getMeta() || {};
                                     if (meta.camping && meta.campingStart && meta.campingEnd) {
@@ -25248,13 +27440,94 @@ globalY={tile.globalY}
                     </div>
                 )}
 
+                {/* Inscription Cooldown Failure Modal Popup */}
+                {this.state.showInscriptionCooldownModal && (
+                    <div
+                        style={{
+                            position: 'fixed',
+                            inset: 0,
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            backdropFilter: 'blur(4px)',
+                            WebkitBackdropFilter: 'blur(4px)',
+                            zIndex: 10000,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontFamily: "'Inter', sans-serif"
+                        }}
+                        onClick={() => this.setState({ showInscriptionCooldownModal: false })}
+                    >
+                        <div
+                            style={{
+                                position: 'relative',
+                                width: '90%',
+                                maxWidth: '440px',
+                                background: 'rgba(20, 10, 10, 0.98)',
+                                border: '1px solid rgba(239, 68, 68, 0.5)',
+                                borderRadius: '14px',
+                                boxShadow: '0 12px 40px rgba(0, 0, 0, 0.9), 0 0 24px rgba(239, 68, 68, 0.2)',
+                                padding: '28px 26px',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                textAlign: 'center',
+                                color: '#f3f4f6',
+                                fontFamily: "'Cinzel', serif"
+                            }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div style={{ fontSize: '44px', marginBottom: '10px' }}>⏳</div>
+                            <div style={{ fontSize: '20px', fontWeight: '700', color: '#f87171', letterSpacing: '0.05em', marginBottom: '10px' }}>
+                                Inscription Cooldown Active
+                            </div>
+                            <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.75)', fontFamily: "'Inter', sans-serif", lineHeight: '1.5', marginBottom: '20px' }}>
+                                You cannot carve another wall inscription in this dungeon instance yet. A 24-hour cooldown is required between wall inscriptions in each dungeon instance.
+                            </div>
+                            <div style={{
+                                background: 'rgba(239, 68, 68, 0.12)',
+                                border: '1px solid rgba(239, 68, 68, 0.4)',
+                                borderRadius: '8px',
+                                padding: '10px 20px',
+                                color: '#ffd700',
+                                fontWeight: '700',
+                                fontSize: '15px',
+                                marginBottom: '22px',
+                                letterSpacing: '0.05em'
+                            }}>
+                                Time Remaining: <span style={{ color: '#ffffff' }}>{this.state.inscriptionCooldownText || '24h'}</span>
+                            </div>
+                            <button
+                                onClick={() => this.setState({ showInscriptionCooldownModal: false })}
+                                style={{
+                                    padding: '10px 32px',
+                                    borderRadius: '20px',
+                                    border: 'none',
+                                    background: 'linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)',
+                                    color: '#ffffff',
+                                    fontFamily: "'Cinzel', serif",
+                                    fontWeight: '700',
+                                    fontSize: '14px',
+                                    letterSpacing: '0.08em',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 4px 14px rgba(185, 28, 28, 0.4)',
+                                    transition: 'all 0.18s ease'
+                                }}
+                                onMouseEnter={e => { e.currentTarget.style.background = 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)'; }}
+                                onMouseLeave={e => { e.currentTarget.style.background = 'linear-gradient(135deg, #b91c1c 0%, #991b1b 100%)'; }}
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Generator & Structure Activation Modal */}
                 {this.state.showGeneratorModal && this.state.activeGeneratorTile && (() => {
                     const tile = this.state.activeGeneratorTile;
                     const def = this.getGeneratorDef(tile);
                     if (!def) return null;
                     const bm = this.props.boardManager;
-                    const tileKey = bm?.currentLevel && bm?.currentBoard ? `${bm.currentLevel.id}_${bm.currentBoard.id}_${tile.id}` : null;
+                    const tileKey = this.getGeneratorKey(tile);
                     const meta = getMeta() || {};
                     const gData = tile.generatorData ||
                         (tile.contains && tile.contains.generatorData) ||
@@ -25265,7 +27538,13 @@ globalY={tile.globalY}
                     const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
                     const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
 
+                    const isInPocket = !!(this.state.inSuperboard || this.state.isInPocketDimension);
                     let isOwner = (() => {
+                        if (isInPocket) {
+                            const cAff = tile.affiliation || tile.contains?.affiliation || gData.affiliation;
+                            if (cAff === 'hostile' || tile.isHostile || tile.contains?.isHostile || gData.isHostile) return false;
+                            if (cAff === 'player' || tile.affiliation === 'player' || tile.contains?.affiliation === 'player') return true;
+                        }
                         if (gData.ownerId && gData.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest' && gData.ownerId === currentUserId) return true;
                         if (gData.ownerSocketId && mySocketId && gData.ownerSocketId === mySocketId) return true;
                         if (gData.ownedByPlayer !== undefined) return !!gData.ownedByPlayer;
@@ -25359,39 +27638,59 @@ globalY={tile.globalY}
                                 </h2>
 
                                 <p style={{ fontSize: '13px', lineHeight: '1.6', color: 'rgba(240, 237, 229, 0.85)', marginBottom: '20px', letterSpacing: '0.5px' }}>
-                                    {(def.key === 'domain_monolith' || def.key === 'dark_domain_monolith') && hasUserPerk('domain_growth_reduction')
-                                        ? def.description.replace('Every 12 hours', 'Every 10.8 hours (10% perk reduction active)')
-                                        : def.description}
+                                    {(() => {
+                                        const isInPocket = !!(this.state.inSuperboard || this.state.isInPocketDimension);
+                                        let desc = def.description || '';
+                                        if ((def.key === 'domain_monolith' || def.key === 'dark_domain_monolith') && hasUserPerk('domain_growth_reduction')) {
+                                            desc = desc.replace('Every 12 hours', 'Every 10.8 hours (10% perk reduction active)');
+                                        }
+                                        if (isInPocket && def.rate > 0) {
+                                            desc = desc.replace(/per hour/i, 'every 10 seconds');
+                                        }
+                                        return desc;
+                                    })()}
                                 </p>
 
-                                {def.rate > 0 && (
-                                    <div style={{
-                                        background: 'rgba(0,0,0,0.4)',
-                                        border: '1px solid rgba(229, 181, 79, 0.2)',
-                                        borderRadius: '3px',
-                                        padding: '14px',
-                                        marginBottom: '20px'
-                                    }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-                                            <span style={{ color: 'rgba(255,255,255,0.7)' }}>Status:</span>
-                                            <span style={{ color: isActivated ? '#4ade80' : '#f87171', fontWeight: '700' }}>
-                                                {isActivated ? (isOwner ? (gData.automated ? `Automated & Active [Lv ${stats.level}]` : `Active (Owned) [Lv ${stats.level}]`) : `Active (${gData.ownerName || 'Enemy'}) [Lv ${stats.level}]`) : 'Inactive'}
-                                            </span>
+                                {def.rate > 0 && (() => {
+                                    const isInPocket = !!(this.state.inSuperboard || this.state.isInPocketDimension);
+                                    const rateUnit = isInPocket ? '10s' : 'hour';
+                                    return (
+                                        <div style={{
+                                            background: 'rgba(0,0,0,0.4)',
+                                            border: '1px solid rgba(229, 181, 79, 0.2)',
+                                            borderRadius: '3px',
+                                            padding: '14px',
+                                            marginBottom: '20px'
+                                        }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                                                <span style={{ color: 'rgba(255,255,255,0.7)' }}>Status:</span>
+                                                <span style={{ color: isActivated ? '#4ade80' : '#f87171', fontWeight: '700' }}>
+                                                    {isActivated ? (isOwner ? (gData.automated ? `Automated & Active [Lv ${stats.level}]` : `Active (Owned) [Lv ${stats.level}]`) : `Active (${gData.ownerName || 'Enemy'}) [Lv ${stats.level}]`) : 'Inactive'}
+                                                </span>
+                                            </div>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
+                                                <span style={{ color: 'rgba(255,255,255,0.7)' }}>Production Rate:</span>
+                                                <span style={{ color: '#f9b115', fontWeight: '600' }}>{stats.rate} {def.resource} / {rateUnit}</span>
+                                            </div>
+                                            {isInPocket ? (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                                    <span style={{ color: 'rgba(255,255,255,0.7)' }}>Delivery:</span>
+                                                    <span style={{ color: '#4ade80', fontWeight: '700' }}>Auto-Yield to Reserves</span>
+                                                </div>
+                                            ) : (
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
+                                                    <span style={{ color: 'rgba(255,255,255,0.7)' }}>Stored Resources:</span>
+                                                    <span style={{ color: '#f9b115', fontWeight: '700' }}>{accumulated} / {stats.cap} {def.resource}</span>
+                                                </div>
+                                            )}
                                         </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '8px' }}>
-                                            <span style={{ color: 'rgba(255,255,255,0.7)' }}>Production Rate:</span>
-                                            <span style={{ color: '#f9b115', fontWeight: '600' }}>{stats.rate} {def.resource} / hour</span>
-                                        </div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                                            <span style={{ color: 'rgba(255,255,255,0.7)' }}>Stored Resources:</span>
-                                            <span style={{ color: '#f9b115', fontWeight: '700' }}>{accumulated} / {stats.cap} {def.resource}</span>
-                                        </div>
-                                    </div>
-                                )}
+                                    );
+                                })()}
 
                                 {/* Interaction Action Button */}
                                 {(() => {
                                     const meta = getMeta() || {};
+                                    const isInPocketDimension = !!(this.state.inSuperboard || this.state.isInPocketDimension);
                                     const isEnemyOutpost = (def.key === 'outpost' || def.key === 'outpost_under_construction') && !isOwner;
                                     const isEnemyWall = (def.key === 'wall' || def.key === 'wall_under_construction') && !isOwner;
                                     const isEnemyGenerator = def.key !== 'outpost' && def.key !== 'outpost_under_construction' && def.key !== 'wall' && def.key !== 'wall_under_construction' && !isOwner && isActivated;
@@ -25502,32 +27801,56 @@ globalY={tile.globalY}
 
                                         let collectButton = null;
                                         if (isActivated && def.cap > 0) {
-                                            collectButton = (
-                                                <button
-                                                    key="collect"
-                                                    onClick={this.handleCollectGenerator}
-                                                    style={{
-                                                        width: '100%',
-                                                        boxSizing: 'border-box',
-                                                        padding: '12px 24px',
-                                                        borderRadius: '2px',
-                                                        border: '1px solid rgba(249, 177, 21, 0.6)',
-                                                        background: 'rgba(249, 177, 21, 0.12)',
-                                                        color: '#ffeb99',
-                                                        fontFamily: "'Cinzel', serif",
-                                                        fontSize: '13px',
-                                                        fontWeight: '400',
-                                                        letterSpacing: '2px',
-                                                        textTransform: 'uppercase',
-                                                        cursor: 'pointer',
-                                                        boxShadow: 'inset 0 0 15px rgba(249, 177, 21, 0.08), 0 0 10px rgba(249, 177, 21, 0.15)',
-                                                        textShadow: '0 0 8px rgba(249, 177, 21, 0.5)',
-                                                        transition: 'all 0.25s ease'
-                                                    }}
-                                                >
-                                                    COLLECT {def.resource.toUpperCase()} ({accumulated}/{def.cap})
-                                                </button>
-                                            );
+                                            if (isInPocketDimension) {
+                                                collectButton = (
+                                                    <div
+                                                        key="pocket-auto-collect"
+                                                        style={{
+                                                            width: '100%',
+                                                            boxSizing: 'border-box',
+                                                            textAlign: 'center',
+                                                            padding: '12px 20px',
+                                                            background: 'rgba(34, 197, 94, 0.12)',
+                                                            border: '1px solid rgba(74, 222, 128, 0.4)',
+                                                            borderRadius: '2px',
+                                                            color: '#86efac',
+                                                            fontFamily: "'Cinzel', serif",
+                                                            fontSize: '12px',
+                                                            letterSpacing: '1.5px',
+                                                            textTransform: 'uppercase'
+                                                        }}
+                                                    >
+                                                        ⚡ Auto-Yielding to Temporal Reserves
+                                                    </div>
+                                                );
+                                            } else {
+                                                collectButton = (
+                                                    <button
+                                                        key="collect"
+                                                        onClick={this.handleCollectGenerator}
+                                                        style={{
+                                                            width: '100%',
+                                                            boxSizing: 'border-box',
+                                                            padding: '12px 24px',
+                                                            borderRadius: '2px',
+                                                            border: '1px solid rgba(249, 177, 21, 0.6)',
+                                                            background: 'rgba(249, 177, 21, 0.12)',
+                                                            color: '#ffeb99',
+                                                            fontFamily: "'Cinzel', serif",
+                                                            fontSize: '13px',
+                                                            fontWeight: '400',
+                                                            letterSpacing: '2px',
+                                                            textTransform: 'uppercase',
+                                                            cursor: 'pointer',
+                                                            boxShadow: 'inset 0 0 15px rgba(249, 177, 21, 0.08), 0 0 10px rgba(249, 177, 21, 0.15)',
+                                                            textShadow: '0 0 8px rgba(249, 177, 21, 0.5)',
+                                                            transition: 'all 0.25s ease'
+                                                        }}
+                                                    >
+                                                        COLLECT {def.resource.toUpperCase()} ({accumulated}/{def.cap})
+                                                    </button>
+                                                );
+                                            }
                                         }
 
                                         return (
@@ -25540,6 +27863,34 @@ globalY={tile.globalY}
                                     }
 
                                     if (isEnemyGenerator) {
+                                        if (isInPocketDimension && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith')) {
+                                            return (
+                                                <button
+                                                    onClick={this.handleActivateGenerator}
+                                                    style={{
+                                                        width: '100%',
+                                                        boxSizing: 'border-box',
+                                                        padding: '12px 24px',
+                                                        borderRadius: '2px',
+                                                        border: '1px solid rgba(239, 68, 68, 0.8)',
+                                                        background: 'rgba(239, 68, 68, 0.25)',
+                                                        color: '#fecaca',
+                                                        fontFamily: "'Cinzel', serif",
+                                                        fontSize: '13px',
+                                                        fontWeight: '500',
+                                                        letterSpacing: '2px',
+                                                        textTransform: 'uppercase',
+                                                        cursor: 'pointer',
+                                                        boxShadow: 'inset 0 0 15px rgba(239, 68, 68, 0.15), 0 0 12px rgba(239, 68, 68, 0.25)',
+                                                        textShadow: '0 0 8px rgba(239, 68, 68, 0.6)',
+                                                        transition: 'all 0.25s ease'
+                                                    }}
+                                                >
+                                                    CLAIM ENEMY MONOLITH (5 FREE WILL)
+                                                </button>
+                                            );
+                                        }
+
                                         const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
                                         const overtakeCost = (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith') ? 80 : (20 * stats.level);
                                         const canAfford = currentResolve >= overtakeCost;
@@ -25660,9 +28011,34 @@ globalY={tile.globalY}
                                                         }}>
                                                             {isActiveMsg}
                                                         </div>
-                                                        {isMonolith && !(this.state.inSuperboard || this.state.isInPocketDimension) && (
+                                                        {isMonolith && !isInPocketDimension && (
                                                             <MonolithCountdownTimer activatedAt={actTime} />
                                                         )}
+                                                        {deployAutomatonButton}
+                                                    </div>
+                                                );
+                                            }
+                                            if (isInPocketDimension) {
+                                                return (
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+                                                        <div
+                                                            style={{
+                                                                width: '100%',
+                                                                boxSizing: 'border-box',
+                                                                textAlign: 'center',
+                                                                padding: '12px 20px',
+                                                                background: 'rgba(34, 197, 94, 0.12)',
+                                                                border: '1px solid rgba(74, 222, 128, 0.4)',
+                                                                borderRadius: '2px',
+                                                                color: '#86efac',
+                                                                fontFamily: "'Cinzel', serif",
+                                                                fontSize: '12px',
+                                                                letterSpacing: '1.5px',
+                                                                textTransform: 'uppercase'
+                                                            }}
+                                                        >
+                                                            ⚡ Auto-Yielding to Temporal Reserves
+                                                        </div>
                                                         {deployAutomatonButton}
                                                     </div>
                                                 );
@@ -25701,6 +28077,8 @@ globalY={tile.globalY}
                                     if (!isOwner && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith')) {
                                         const isInPocketDimension = !!(this.state.inSuperboard || this.state.isInPocketDimension);
                                         if (isInPocketDimension) {
+                                            const cAff = tile.affiliation || tile.contains?.affiliation || (tile.generatorData && tile.generatorData.affiliation);
+                                            const isEnemyMonolith = cAff === 'hostile' || tile.isHostile || tile.contains?.isHostile || def.key === 'dark_domain_monolith';
                                             return (
                                                 <button
                                                     onClick={this.handleActivateGenerator}
@@ -25709,21 +28087,21 @@ globalY={tile.globalY}
                                                         boxSizing: 'border-box',
                                                         padding: '12px 24px',
                                                         borderRadius: '2px',
-                                                        border: '1px solid rgba(192, 132, 252, 0.8)',
-                                                        background: 'rgba(147, 51, 234, 0.25)',
-                                                        color: '#e9d5ff',
+                                                        border: isEnemyMonolith ? '1px solid rgba(239, 68, 68, 0.8)' : '1px solid rgba(192, 132, 252, 0.8)',
+                                                        background: isEnemyMonolith ? 'rgba(239, 68, 68, 0.25)' : 'rgba(147, 51, 234, 0.25)',
+                                                        color: isEnemyMonolith ? '#fecaca' : '#e9d5ff',
                                                         fontFamily: "'Cinzel', serif",
                                                         fontSize: '13px',
                                                         fontWeight: '500',
                                                         letterSpacing: '2px',
                                                         textTransform: 'uppercase',
                                                         cursor: 'pointer',
-                                                        boxShadow: 'inset 0 0 15px rgba(179, 136, 255, 0.15), 0 0 12px rgba(179, 136, 255, 0.25)',
-                                                        textShadow: '0 0 8px rgba(179, 136, 255, 0.6)',
+                                                        boxShadow: isEnemyMonolith ? 'inset 0 0 15px rgba(239, 68, 68, 0.15), 0 0 12px rgba(239, 68, 68, 0.25)' : 'inset 0 0 15px rgba(179, 136, 255, 0.15), 0 0 12px rgba(179, 136, 255, 0.25)',
+                                                        textShadow: isEnemyMonolith ? '0 0 8px rgba(239, 68, 68, 0.6)' : '0 0 8px rgba(179, 136, 255, 0.6)',
                                                         transition: 'all 0.25s ease'
                                                     }}
                                                 >
-                                                    ACTIVATE MONOLITH
+                                                    {isEnemyMonolith ? 'CLAIM ENEMY MONOLITH (5 FREE WILL)' : 'ACTIVATE MONOLITH'}
                                                 </button>
                                             );
                                         }
@@ -25759,30 +28137,55 @@ globalY={tile.globalY}
                                         );
                                     }
 
+                                    const isInPocket = !!(this.state.inSuperboard || this.state.isInPocketDimension);
+                                    const isNonDomainPocketGen = isInPocket && def.key !== 'domain_monolith' && def.key !== 'dark_domain_monolith' && def.key !== 'observer_platform' && def.key !== 'observation_platform' && def.key !== 'outpost' && def.key !== 'wall' && def.key !== 'hut';
+                                    const currentInfluence = isNonDomainPocketGen ? this.getTotalPlayerDomainCount() : 0;
+                                    const maxCap = isNonDomainPocketGen ? Math.floor(currentInfluence / 5) : 0;
+                                    const activeGenCount = isNonDomainPocketGen ? this.getPocketActiveResourceGeneratorsCount() : 0;
+                                    const hasCapacity = !isNonDomainPocketGen || (activeGenCount < maxCap);
+
                                     return (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+                                            {isNonDomainPocketGen && (
+                                                <div style={{
+                                                    display: 'flex',
+                                                    justifyContent: 'space-between',
+                                                    alignItems: 'center',
+                                                    fontSize: '12px',
+                                                    padding: '8px 12px',
+                                                    borderRadius: '3px',
+                                                    background: hasCapacity ? 'rgba(56, 189, 248, 0.08)' : 'rgba(239, 68, 68, 0.08)',
+                                                    border: `1px solid ${hasCapacity ? 'rgba(56, 189, 248, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                                                    color: hasCapacity ? '#7dd3fc' : '#fca5a5',
+                                                    fontFamily: "'Inter', sans-serif"
+                                                }}>
+                                                    <span>🔮 Influence Capacity:</span>
+                                                    <span style={{ fontWeight: '700' }}>{activeGenCount} / {maxCap} Active ({currentInfluence} Influence)</span>
+                                                </div>
+                                            )}
                                             <button
                                                 onClick={this.handleActivateGenerator}
+                                                disabled={!hasCapacity}
                                                 style={{
                                                     width: '100%',
                                                     boxSizing: 'border-box',
                                                     padding: '12px 24px',
                                                     borderRadius: '2px',
-                                                    border: '1px solid rgba(74, 222, 128, 0.6)',
-                                                    background: 'rgba(34, 197, 94, 0.12)',
-                                                    color: '#bbf7d0',
+                                                    border: `1px solid ${hasCapacity ? 'rgba(74, 222, 128, 0.6)' : 'rgba(100, 100, 100, 0.3)'}`,
+                                                    background: hasCapacity ? 'rgba(34, 197, 94, 0.12)' : 'rgba(30, 30, 30, 0.4)',
+                                                    color: hasCapacity ? '#bbf7d0' : '#666666',
                                                     fontFamily: "'Cinzel', serif",
                                                     fontSize: '13px',
                                                     fontWeight: '400',
                                                     letterSpacing: '2px',
                                                     textTransform: 'uppercase',
-                                                    cursor: 'pointer',
-                                                    boxShadow: 'inset 0 0 15px rgba(74, 222, 128, 0.08), 0 0 10px rgba(74, 222, 128, 0.15)',
-                                                    textShadow: '0 0 8px rgba(74, 222, 128, 0.5)',
+                                                    cursor: hasCapacity ? 'pointer' : 'not-allowed',
+                                                    boxShadow: hasCapacity ? 'inset 0 0 15px rgba(74, 222, 128, 0.08), 0 0 10px rgba(74, 222, 128, 0.15)' : 'none',
+                                                    textShadow: hasCapacity ? '0 0 8px rgba(74, 222, 128, 0.5)' : 'none',
                                                     transition: 'all 0.25s ease'
                                                 }}
                                             >
-                                                ACTIVATE {def.name.toUpperCase()}
+                                                {hasCapacity ? `ACTIVATE ${def.name.toUpperCase()}` : 'INFLUENCE THRESHOLD NOT REACHED'}
                                             </button>
                                             {deployAutomatonButton}
                                         </div>
@@ -25842,7 +28245,7 @@ globalY={tile.globalY}
                                     padding: '10px 28px',
                                     borderRadius: '10px',
                                     border: `1px solid ${this.state.sabotageResultModal.success ? '#22c55e' : '#ef4444'}`,
-                                    background: this.state.sabotageResultModal.success ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.4) 0%, rgba(74, 222, 128, 0.7) 100%)' : 'linear-gradient(135deg, rgba(220, 38, 38, 0.4) 0%, rgba(239, 68, 68, 0.7) 100%)',
+                                    background: 'transparent',
                                     color: '#ffffff',
                                     fontFamily: "'Cinzel', serif",
                                     fontSize: '14px',
@@ -25905,7 +28308,7 @@ globalY={tile.globalY}
                                     padding: '10px 28px',
                                     borderRadius: '10px',
                                     border: `1px solid ${this.state.monolithActivationResultModal.success ? '#c084fc' : '#ef4444'}`,
-                                    background: this.state.monolithActivationResultModal.success ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.4) 0%, rgba(192, 132, 252, 0.7) 100%)' : 'linear-gradient(135deg, rgba(220, 38, 38, 0.4) 0%, rgba(239, 68, 68, 0.7) 100%)',
+                                    background: 'transparent',
                                     color: '#ffffff',
                                     fontFamily: "'Cinzel', serif",
                                     fontSize: '14px',
@@ -26847,6 +29250,9 @@ globalY={tile.globalY}
                         </CModal>
                     );
                 })()}
+
+                {/* Pocket Dimension Victory Modal */}
+                {this.renderPocketVictoryModal()}
 
                 {/* Card duel fullscreen overlay - Rendered at root for clean stacking context */}
                 {this.state.showCardDuelModal && (

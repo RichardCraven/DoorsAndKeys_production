@@ -805,6 +805,40 @@ class DungeonView extends React.Component {
                                             </option>
                                         ))}
                                     </select>
+                                    <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#a4b0be', marginLeft: '6px' }}>Reward:</span>
+                                    <select
+                                        value={(() => {
+                                            const r = this.props.loadedDungeon?.superboards?.[currentZoomKey]?.victoryReward || { gold: 1000, dust: 100 };
+                                            return JSON.stringify(r);
+                                        })()}
+                                        onChange={(e) => {
+                                            try {
+                                                const r = JSON.parse(e.target.value);
+                                                if (this.props.handleSuperboardVictoryRewardChange) {
+                                                    this.props.handleSuperboardVictoryRewardChange(currentZoomKey, r);
+                                                }
+                                            } catch (err) {}
+                                        }}
+                                        style={{
+                                            background: '#1c1c1e',
+                                            color: '#f9b115',
+                                            border: '1px solid rgba(249, 177, 21, 0.4)',
+                                            borderRadius: '4px',
+                                            padding: '2px 6px',
+                                            fontSize: '11px',
+                                            outline: 'none',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        <option value={JSON.stringify({ gold: 1000, dust: 100 })}>+1000 Gold, +100 Dust (Default)</option>
+                                        <option value={JSON.stringify({ gold: 500, dust: 50 })}>+500 Gold, +50 Dust</option>
+                                        <option value={JSON.stringify({ gold: 2500, dust: 250 })}>+2500 Gold, +250 Dust</option>
+                                        <option value={JSON.stringify({ gold: 5000, dust: 500 })}>+5000 Gold, +500 Dust</option>
+                                        <option value={JSON.stringify({ gold: 10000, dust: 1000 })}>+10,000 Gold, +1000 Dust</option>
+                                        <option value={JSON.stringify({ gold: 2000, dust: 200, wood: 50, stone: 50 })}>+2000g, +200d, +50w, +50s</option>
+                                        <option value={JSON.stringify({ gold: 0, dust: 500 })}>+500 Pure Dust</option>
+                                        <option value={JSON.stringify({ gold: 5000, dust: 0 })}>+5000 Pure Gold</option>
+                                    </select>
                                     <button
                                         type="button" 
                                         onClick={(e) => {

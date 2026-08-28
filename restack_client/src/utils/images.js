@@ -1436,6 +1436,8 @@ const outpost = buildable_outpost;
 const war_camp = buildable_war_camp;
 const war_fort = buildable_war_fort;
 const dream_den = moon_castle;
+const terrain_naked_trees = pine_tree_medium;
+const naked_trees = pine_tree_medium;
 
 const tattoo_placeholder = tattoo_ink; // placeholder until real tattoo art is added
 const _terrainBase = [terrain_1, terrain_2, terrain_3, terrain_4, terrain_5, terrain_6, terrain_7, terrain_8, terrain_9, terrain_10, terrain_11, terrain_12, terrain_13, terrain_14, terrain_15, terrain_16];
@@ -1623,6 +1625,8 @@ export {
     supreme_health_potion,
     lantern,
     automaton,
+    terrain_naked_trees,
+    naked_trees,
     terrain_tree_1,
     terrain_tree_1_0,
     terrain_tree_1_1,
