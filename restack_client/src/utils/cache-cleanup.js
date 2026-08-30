@@ -401,15 +401,24 @@ export function superboardCleanup(dungeon) {
                 const cSub = cObj ? cObj.subtype : null;
                 const structKey = String(cSub || cType || tile.building || cObj?.building || '').toLowerCase();
 
-                const isPlayerConstructed = (tile.placedBy === 'player' || cObj?.placedBy === 'player' || !!cObj?.ownerId || tile.isPlayerBuilt || cObj?.isPlayerBuilt) ||
+                // Never remove world resource generators, monoliths, shrines, farms, portals, or narrative tiles!
+                const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
+
+                const isPlayerConstructed = !isWorldStructure && (
+                    tile.isPlayerBuilt || cObj?.isPlayerBuilt ||
                     structKey.includes('_under_construction') ||
                     (cObj?.constructionStartTime !== undefined) ||
-                    (['observer_platform', 'observation_platform', 'outpost', 'war_camp', 'war_fort', 'hut', 'wall', 'archway'].includes(structKey) && (cObj?.placedBy === 'player' || cObj?.ownerId || tile.placedBy === 'player' || tile.isPlayerBuilt || cObj?.isPlayerBuilt || (cObj?.vendorGroupId && String(cObj.vendorGroupId).startsWith('building_'))));
+                    (['observer_platform', 'observation_platform', 'outpost', 'war_camp', 'war_fort', 'hut', 'wall', 'archway'].includes(structKey) && (tile.placedBy === 'player' || cObj?.placedBy === 'player' || (cObj?.vendorGroupId && String(cObj.vendorGroupId).startsWith('building_'))))
+                );
+
+                const isAutomatonConstructed = !isWorldStructure && (
+                    tile.isAutomatonBuilt || cObj?.isAutomatonBuilt || tile.placedBy === 'automaton' || cObj?.placedBy === 'automaton'
+                );
 
                 const isGeneratedUnit = (cObj && (cObj.isPocketPygmy || cObj.subtype === 'pocket_pygmy' || cObj.homeStructureKey || cObj.isAutomaton || cObj.subtype === 'automaton')) ||
                     cType === 'pygmies' || cSub === 'pocket_pygmy';
 
-                if (isPlayerConstructed || isGeneratedUnit) {
+                if (isPlayerConstructed || isAutomatonConstructed || isGeneratedUnit) {
                     if (tile.isEnemySpawn || cObj?.isEnemySpawn || cObj?.originalMarker === 'narrative' || tile.originalMarker === 'narrative') {
                         tile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
                         tile.image = 'narrative';
@@ -421,6 +430,8 @@ export function superboardCleanup(dungeon) {
                         tile.image = null;
                     }
                     delete tile.placedBy;
+                    delete tile.isPlayerBuilt;
+                    delete tile.isAutomatonBuilt;
                     cleanedCount++;
                 }
 
@@ -430,12 +441,13 @@ export function superboardCleanup(dungeon) {
                 delete tile.newlyClaimed;
                 delete tile.growthCycles;
                 delete tile.lastGrowthTime;
-                delete tile.affiliation;
-                delete tile.generatorData;
-                delete tile.activated;
                 delete tile.isHostile;
                 delete tile.isPlayerBuilt;
+                delete tile.isAutomatonBuilt;
                 delete tile.placedBy;
+                delete tile.generatorData;
+                delete tile.activated;
+                delete tile.affiliation;
 
                 if (tile.contains && typeof tile.contains === 'object') {
                     delete tile.contains.territory;
@@ -444,24 +456,18 @@ export function superboardCleanup(dungeon) {
                     delete tile.contains.newlyClaimed;
                     delete tile.contains.growthCycles;
                     delete tile.contains.lastGrowthTime;
+                    delete tile.contains.isHostile;
+                    delete tile.contains.isPlayerBuilt;
+                    delete tile.contains.isAutomatonBuilt;
                     delete tile.contains.affiliation;
                     delete tile.contains.generatorData;
                     delete tile.contains.activated;
                     delete tile.contains.ownerId;
                     delete tile.contains.placedBy;
-                    delete tile.contains.isHostile;
-                    delete tile.contains.isPlayerBuilt;
                     delete tile.contains.faction;
                     const sKey = String(tile.contains.subtype || tile.contains.key || tile.contains.building || tile.building || tile.contains.type || '').toLowerCase();
-                    const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
-                    if (isDomainMonolith) {
-                        tile.contains.activated = false;
-                        if (sKey.includes('dark_domain_monolith')) {
-                            tile.contains.affiliation = 'hostile';
-                        } else {
-                            delete tile.contains.affiliation;
-                        }
-                        tile.contains.growthCycles = 0;
+                    if (sKey.includes('dark_domain_monolith')) {
+                        tile.contains.affiliation = 'hostile';
                     }
                 }
             });

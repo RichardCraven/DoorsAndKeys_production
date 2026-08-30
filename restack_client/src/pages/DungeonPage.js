@@ -5222,14 +5222,6 @@ class DungeonPage extends React.Component {
             }
 
             let meta = getMeta() || {};
-            if (meta.activatedGenerators) {
-                Object.keys(meta.activatedGenerators).forEach(k => {
-                    if (k.startsWith('superboard_')) {
-                        delete meta.activatedGenerators[k];
-                    }
-                });
-                storeMeta(meta);
-            }
 
             const sanitizeSuperboardTiles = (sb) => {
                 if (!sb || !Array.isArray(sb.miniboards)) return sb;
@@ -5242,16 +5234,25 @@ class DungeonPage extends React.Component {
                         const cSub = cObj ? cObj.subtype : null;
                         const structKey = String(cSub || cType || t.building || cObj?.building || '').toLowerCase();
 
-                        const isPlayerConstructed = (t.placedBy === 'player' || cObj?.placedBy === 'player' || !!cObj?.ownerId || t.isPlayerBuilt || cObj?.isPlayerBuilt) ||
+                        // Never remove world resource generators, monoliths, shrines, farms, portals, or narrative tiles!
+                        const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
+
+                        const isPlayerConstructed = !isWorldStructure && (
+                            t.isPlayerBuilt || cObj?.isPlayerBuilt ||
                             structKey.includes('_under_construction') ||
                             (cObj?.constructionStartTime !== undefined) ||
-                            (['observer_platform', 'observation_platform', 'outpost', 'war_camp', 'war_fort', 'hut', 'wall', 'archway'].includes(structKey) && (cObj?.placedBy === 'player' || cObj?.ownerId || t.placedBy === 'player' || t.isPlayerBuilt || cObj?.isPlayerBuilt || (cObj?.vendorGroupId && String(cObj.vendorGroupId).startsWith('building_'))));
+                            (['observer_platform', 'observation_platform', 'outpost', 'war_camp', 'war_fort', 'hut', 'wall', 'archway'].includes(structKey) && (t.placedBy === 'player' || cObj?.placedBy === 'player' || (cObj?.vendorGroupId && String(cObj.vendorGroupId).startsWith('building_'))))
+                        );
+
+                        const isAutomatonConstructed = !isWorldStructure && (
+                            t.isAutomatonBuilt || cObj?.isAutomatonBuilt || t.placedBy === 'automaton' || cObj?.placedBy === 'automaton'
+                        );
 
                         const isGeneratedUnit = (cObj && (cObj.isPocketPygmy || cObj.subtype === 'pocket_pygmy' || cObj.homeStructureKey || cObj.isAutomaton || cObj.subtype === 'automaton')) ||
                             cType === 'pygmies' || cSub === 'pocket_pygmy';
 
-                        if (isPlayerConstructed || isGeneratedUnit) {
-                            if (t.isEnemySpawn || t.originalMarker === 'narrative') {
+                        if (isPlayerConstructed || isAutomatonConstructed || isGeneratedUnit) {
+                            if (t.isEnemySpawn || t.originalMarker === 'narrative' || cObj?.originalMarker === 'narrative') {
                                 t.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
                                 t.image = 'narrative';
                                 t.isEnemySpawn = true;
@@ -5260,10 +5261,10 @@ class DungeonPage extends React.Component {
                                 t.contains = { type: 'empty_space', subtype: null };
                                 t.building = null;
                                 t.image = null;
-                                t.isEnemySpawn = false;
-                                t.originalMarker = null;
                             }
                             delete t.placedBy;
+                            delete t.isPlayerBuilt;
+                            delete t.isAutomatonBuilt;
                         }
 
                         delete t.territory;
@@ -5272,12 +5273,13 @@ class DungeonPage extends React.Component {
                         delete t.newlyClaimed;
                         delete t.growthCycles;
                         delete t.lastGrowthTime;
-                        delete t.affiliation;
-                        delete t.generatorData;
-                        delete t.activated;
                         delete t.isHostile;
                         delete t.isPlayerBuilt;
+                        delete t.isAutomatonBuilt;
                         delete t.placedBy;
+                        delete t.generatorData;
+                        delete t.activated;
+                        delete t.affiliation;
 
                         if (t.contains && typeof t.contains === 'object') {
                             delete t.contains.territory;
@@ -5286,24 +5288,17 @@ class DungeonPage extends React.Component {
                             delete t.contains.newlyClaimed;
                             delete t.contains.growthCycles;
                             delete t.contains.lastGrowthTime;
+                            delete t.contains.isHostile;
+                            delete t.contains.isPlayerBuilt;
+                            delete t.contains.isAutomatonBuilt;
                             delete t.contains.affiliation;
                             delete t.contains.generatorData;
                             delete t.contains.activated;
                             delete t.contains.ownerId;
                             delete t.contains.placedBy;
-                            delete t.contains.isHostile;
-                            delete t.contains.isPlayerBuilt;
                             delete t.contains.faction;
-                            const sKey = String(t.contains.subtype || t.contains.key || t.contains.building || t.building || t.contains.type || '').toLowerCase();
-                            const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
-                            if (isDomainMonolith) {
-                                t.contains.activated = false;
-                                if (sKey.includes('dark_domain_monolith')) {
-                                    t.contains.affiliation = 'hostile';
-                                } else {
-                                    delete t.contains.affiliation;
-                                }
-                                t.contains.growthCycles = 0;
+                            if (structKey.includes('dark_domain_monolith')) {
+                                t.contains.affiliation = 'hostile';
                             }
                         }
                     });
@@ -5356,19 +5351,24 @@ class DungeonPage extends React.Component {
                     if (mb) bm.normalizeBoardTiles(mb);
                 });
             }
+
+            // Clean any stale activated generator cache for this pocket dimension
+            const currentMeta = getMeta() || meta || {};
+            if (currentMeta.activatedGenerators) {
+                Object.keys(currentMeta.activatedGenerators).forEach(k => {
+                    if (k.startsWith(`pocket_${type}_`) || k.startsWith(`superboard_${type}_`)) {
+                        delete currentMeta.activatedGenerators[k];
+                    }
+                });
+                storeMeta(currentMeta);
+            }
+
             if (bm) bm.dungeon = dungeon;
 
             const loc = bm?.playerTile?.location;
             meta = getMeta() || meta;
             if (meta) {
                 delete meta.pocketPlayerBuildings;
-                if (meta.activatedGenerators) {
-                    Object.keys(meta.activatedGenerators).forEach(k => {
-                        if (k.startsWith('pocket_') || k.includes('superboard') || k.includes('monolith') || k.includes('generator')) {
-                            delete meta.activatedGenerators[k];
-                        }
-                    });
-                }
                 storeMeta(meta);
             }
 
@@ -5443,6 +5443,7 @@ class DungeonPage extends React.Component {
             }
 
             // Find Enemy Spawn Point (narrative marker tile) and spawn Automaton unit
+            this._automatonRespawnTime = null;
             let foundEnemySpawn = false;
             for (let mbIdx = 0; mbIdx < superboard.miniboards.length; mbIdx++) {
                 const mb = superboard.miniboards[mbIdx];
@@ -5462,8 +5463,8 @@ class DungeonPage extends React.Component {
                                 subtype: 'automaton',
                                 isAutomaton: true,
                                 faction: 'enemy',
-                                hp: 1000,
-                                maxHp: 1000,
+                                hp: 30,
+                                maxHp: 30,
                                 id: `automaton_enemy_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
                             };
                             t.contains = newAutomaton;
@@ -5498,8 +5499,8 @@ class DungeonPage extends React.Component {
                                 subtype: 'automaton',
                                 isAutomaton: true,
                                 faction: 'enemy',
-                                hp: 1000,
-                                maxHp: 1000,
+                                hp: 30,
+                                maxHp: 30,
                                 id: `automaton_enemy_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
                             };
                             t.contains = newAutomaton;
@@ -5907,7 +5908,7 @@ class DungeonPage extends React.Component {
                     }, 550);
                 }
 
-                const maxHpVal = targetContains.maxHp || (isAutomatonTarget ? 1000 : (isEnemyBuildingTarget ? (structKey.includes('war_fort') ? 100 : 50) : 10));
+                const maxHpVal = targetContains.maxHp || (isAutomatonTarget ? 30 : (isEnemyBuildingTarget ? (structKey.includes('war_fort') ? 100 : 50) : 10));
                 targetContains.hp = (targetContains.hp || maxHpVal) - dmg;
                 targetContains.lastDamageTime = Date.now();
                 const targetName = isEnemyBuildingTarget ? (structKey.includes('war_fort') ? 'War Fort' : 'War Camp') : (isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy');
@@ -5941,7 +5942,9 @@ class DungeonPage extends React.Component {
                         if (!targetContains.destroyedAt) targetContains.destroyedAt = Date.now();
                         this.displayMessage(`💥 Crew dealt ${dmg} damage and destroyed the ${targetName}!`);
                     } else {
-                        if (targetContains.homeStructureKey) {
+                        if (isAutomatonTarget) {
+                            this._automatonRespawnTime = Date.now() + 10000;
+                        } else if (targetContains.homeStructureKey) {
                             if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
                             this._pocketStructureRespawns.push({
                                 readyTime: Date.now() + 10000,
@@ -5953,7 +5956,7 @@ class DungeonPage extends React.Component {
                         }
                         if (targetTile.isEnemySpawn === true || targetTile.originalMarker === 'narrative') {
                             targetTile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
-                            targetTile.image = 'narrative';
+                            targetTile.image = images.narrative || 'narrative';
                             targetTile.isEnemySpawn = true;
                             targetTile.originalMarker = 'narrative';
                         } else {
@@ -6342,31 +6345,116 @@ class DungeonPage extends React.Component {
         this.setState({ keysLocked: true, portalTransitionClass: "pocket-transition-out" });
 
         this._setTimeout(() => {
+            const cleanConstructedBuildingsAndUnits = (sb) => {
+                if (!sb || !Array.isArray(sb.miniboards)) return;
+                sb.miniboards.forEach(mb => {
+                    if (!mb || !Array.isArray(mb.tiles)) return;
+                    mb.tiles.forEach(t => {
+                        if (!t) return;
+                        const cObj = typeof t.contains === 'object' && t.contains ? t.contains : null;
+                        const cType = cObj ? (cObj.type || cObj.subtype) : t.contains;
+                        const cSub = cObj ? cObj.subtype : null;
+                        const structKey = String(cSub || cType || t.building || cObj?.building || '').toLowerCase();
+
+                        // Never remove world resource generators, monoliths, shrines, farms, portals, or narrative tiles!
+                        const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
+
+                        const isPlayerConstructed = !isWorldStructure && (
+                            t.isPlayerBuilt || cObj?.isPlayerBuilt ||
+                            structKey.includes('_under_construction') ||
+                            (cObj?.constructionStartTime !== undefined) ||
+                            (['observer_platform', 'observation_platform', 'outpost', 'war_camp', 'war_fort', 'hut', 'wall', 'archway'].includes(structKey) && (t.placedBy === 'player' || cObj?.placedBy === 'player' || (cObj?.vendorGroupId && String(cObj.vendorGroupId).startsWith('building_'))))
+                        );
+
+                        const isAutomatonConstructed = !isWorldStructure && (
+                            t.isAutomatonBuilt || cObj?.isAutomatonBuilt || t.placedBy === 'automaton' || cObj?.placedBy === 'automaton'
+                        );
+
+                        const isGeneratedUnit = (cObj && (cObj.isPocketPygmy || cObj.subtype === 'pocket_pygmy' || cObj.homeStructureKey || cObj.isAutomaton || cObj.subtype === 'automaton')) ||
+                            cType === 'pygmies' || cSub === 'pocket_pygmy';
+
+                        if (isPlayerConstructed || isAutomatonConstructed || isGeneratedUnit) {
+                            if (t.isEnemySpawn || t.originalMarker === 'narrative' || cObj?.originalMarker === 'narrative') {
+                                t.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                t.image = 'narrative';
+                                t.isEnemySpawn = true;
+                                t.originalMarker = 'narrative';
+                            } else {
+                                t.contains = { type: 'empty_space', subtype: null };
+                                t.building = null;
+                                t.image = null;
+                            }
+                            delete t.placedBy;
+                            delete t.isPlayerBuilt;
+                            delete t.isAutomatonBuilt;
+                        }
+
+                        delete t.territory;
+                        delete t.territoryAffiliation;
+                        delete t.territoryMonolithId;
+                        delete t.newlyClaimed;
+                        delete t.growthCycles;
+                        delete t.lastGrowthTime;
+                        delete t.isHostile;
+                        delete t.isPlayerBuilt;
+                        delete t.isAutomatonBuilt;
+                        delete t.placedBy;
+                        delete t.generatorData;
+                        delete t.activated;
+                        delete t.affiliation;
+
+                        if (t.contains && typeof t.contains === 'object') {
+                            delete t.contains.territory;
+                            delete t.contains.territoryAffiliation;
+                            delete t.contains.territoryMonolithId;
+                            delete t.contains.newlyClaimed;
+                            delete t.contains.growthCycles;
+                            delete t.contains.lastGrowthTime;
+                            delete t.contains.isHostile;
+                            delete t.contains.isPlayerBuilt;
+                            delete t.contains.isAutomatonBuilt;
+                            delete t.contains.affiliation;
+                            delete t.contains.generatorData;
+                            delete t.contains.activated;
+                            delete t.contains.ownerId;
+                            delete t.contains.placedBy;
+                            delete t.contains.faction;
+                            if (structKey.includes('dark_domain_monolith')) {
+                                t.contains.affiliation = 'hostile';
+                            }
+                        }
+                    });
+                });
+            };
+
             const bm = this.props.boardManager;
             const sbType = this.state.superboardType;
-            if (sbType && this._templateSuperboards && this._templateSuperboards[sbType]) {
-                if (bm && bm.dungeon && bm.dungeon.superboards) {
-                    bm.dungeon.superboards[sbType] = JSON.parse(JSON.stringify(this._templateSuperboards[sbType]));
-                }
-                if (this.state.dungeon && this.state.dungeon.superboards) {
-                    this.state.dungeon.superboards[sbType] = JSON.parse(JSON.stringify(this._templateSuperboards[sbType]));
+            if (sbType) {
+                const sb = (bm && bm.dungeon && bm.dungeon.superboards && bm.dungeon.superboards[sbType]) ||
+                    (this.state.dungeon && this.state.dungeon.superboards && this.state.dungeon.superboards[sbType]);
+                if (sb) {
+                    cleanConstructedBuildingsAndUnits(sb);
                 }
             }
 
+            this._automatonRespawnTime = null;
             const meta = getMeta() || {};
-            if (meta.activatedGenerators) {
-                Object.keys(meta.activatedGenerators).forEach(k => {
-                    if (k.startsWith('superboard_')) {
-                        delete meta.activatedGenerators[k];
-                    }
-                });
-            }
             const origin = this.state.savedDreamDenOrigin || meta.savedPocketOrigin;
             if (meta.savedPocketOrigin) {
                 delete meta.savedPocketOrigin;
             }
             if (meta.pocketResources) {
                 delete meta.pocketResources;
+            }
+            if (meta.pocketPlayerBuildings) {
+                delete meta.pocketPlayerBuildings;
+            }
+            if (meta.activatedGenerators) {
+                Object.keys(meta.activatedGenerators).forEach(k => {
+                    if (k.startsWith('pocket_') || k.startsWith('superboard_')) {
+                        delete meta.activatedGenerators[k];
+                    }
+                });
             }
             storeMeta(meta);
             try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch (e) {}
@@ -6595,9 +6683,12 @@ class DungeonPage extends React.Component {
                 };
                 const sides = sideMap[direction];
 
-                const hasPassageWallBetween = (destIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, destIndex, { ignoreBuilding: true })) ||
+                const isConnectingPathBetween = (bm.isConnectingPathTile && (bm.isConnectingPathTile(playerTileObj) || bm.isConnectingPathTile(destTileObj)));
+                const hasPassageWallBetween = !isConnectingPathBetween && (
+                    (destIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, destIndex, { ignoreBuilding: true })) ||
                     (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
-                    (sides?.opp && bm.hasSolidBorder(destTileObj, sides.opp));
+                    (sides?.opp && bm.hasSolidBorder(destTileObj, sides.opp))
+                );
 
                 const selfInscription = sides?.self && playerTileObj?.inscriptions?.[sides.self];
                 const oppInscription = sides?.opp && destTileObj?.inscriptions?.[sides.opp];
@@ -8511,6 +8602,36 @@ class DungeonPage extends React.Component {
         const maxGy = anchorGy + 1;
         const monolithId = monolith.id || `monolith_${anchorGx}_${anchorGy}`;
 
+        // 0. Fully clear out any territory that this monolith had generated previously across the superboard
+        superboard.miniboards.forEach((mb, mbIdx) => {
+            if (!mb || !mb.tiles) return;
+            const mbX = (mbIdx % 3) * 15;
+            const mbY = Math.floor(mbIdx / 3) * 15;
+            mb.tiles.forEach((t, tIdx) => {
+                if (!t) return;
+                const gx = mbX + (tIdx % 15);
+                const gy = mbY + Math.floor(tIdx / 15);
+
+                let dx = 0;
+                if (gx < minGx) dx = minGx - gx;
+                else if (gx > maxGx) dx = gx - maxGx;
+
+                let dy = 0;
+                if (gy < minGy) dy = minGy - gy;
+                else if (gy > maxGy) dy = gy - maxGy;
+
+                const dist = Math.max(dx, dy);
+
+                // If tile was tagged with this monolith or within its maximum domain territory (dist <= 10)
+                if (t.territoryMonolithId === monolithId || (dist <= 10 && t.territory && t.territory !== affiliation)) {
+                    t.territory = null;
+                    t.territoryAffiliation = null;
+                    t.territoryMonolithId = null;
+                    t.newlyClaimed = false;
+                }
+            });
+        });
+
         // 1. Update all cells of the 2x2 monolith
         superboard.miniboards.forEach((mb, mbIdx) => {
             if (!mb || !mb.tiles) return;
@@ -8979,7 +9100,7 @@ class DungeonPage extends React.Component {
                     }
                     
                     const attackerName = isAlliedPygmy ? 'Allied Pygmy' : (isNeutralPygmy ? 'Neutral Pygmy' : 'Hostile Pygmy');
-                    const maxHpVal = targetUnit.maxHp || (isBuilding ? (String(structKey).includes('war_fort') ? 100 : 50) : 10);
+                    const maxHpVal = targetUnit.maxHp || (targetUnit.isAutomaton || targetUnit.subtype === 'automaton' ? 30 : (isBuilding ? (String(structKey).includes('war_fort') ? 100 : 50) : 10));
                     targetUnit.hp = (targetUnit.hp || maxHpVal) - dmg;
                     targetUnit.lastDamageTime = now;
                     
@@ -9009,7 +9130,9 @@ class DungeonPage extends React.Component {
                                 this.displayMessage(`💥 A ${targetName} was destroyed in combat!`);
                             }
                         } else {
-                            if (targetUnit.homeStructureKey) {
+                            if (targetUnit.isAutomaton || targetUnit.subtype === 'automaton') {
+                                this._automatonRespawnTime = now + 10000;
+                            } else if (targetUnit.homeStructureKey) {
                                 this._pocketStructureRespawns.push({
                                     readyTime: now + 10000,
                                     structureKey: targetUnit.homeStructureKey,
@@ -9022,7 +9145,7 @@ class DungeonPage extends React.Component {
                             }
                             if (targetEnemyUnit.tile.isEnemySpawn === true || targetEnemyUnit.tile.originalMarker === 'narrative') {
                                 targetEnemyUnit.tile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
-                                targetEnemyUnit.tile.image = 'narrative';
+                                targetEnemyUnit.tile.image = images.narrative || 'narrative';
                                 targetEnemyUnit.tile.isEnemySpawn = true;
                                 targetEnemyUnit.tile.originalMarker = 'narrative';
                             } else {
@@ -9141,46 +9264,114 @@ class DungeonPage extends React.Component {
         }
 
         if (automatonsList.length === 0) {
-            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
-                const mb = superboard.miniboards[mbIdx];
-                if (!mb || !Array.isArray(mb.tiles)) continue;
-                const mbX = mbIdx % 3;
-                const mbY = Math.floor(mbIdx / 3);
-                for (let tIdx = 0; tIdx < 225; tIdx++) {
-                    const tile = mb.tiles[tIdx];
-                    if (!tile) continue;
-                    const cType = typeof tile.contains === 'object' && tile.contains ? (tile.contains.type || tile.contains.subtype) : tile.contains;
-                    const cSubtype = typeof tile.contains === 'object' && tile.contains ? tile.contains.subtype : null;
-                    const img = String(tile.image || '').toLowerCase();
-                    const opt = String(tile.optionType || '').toLowerCase();
-                    if (tile.isEnemySpawn || tile.originalMarker === 'narrative' || cType === 'narrative' || cSubtype === 'narrative' || img === 'narrative' || opt === 'narrative') {
-                        tile.isEnemySpawn = true;
-                        tile.originalMarker = 'narrative';
-                        const newAutomaton = {
-                            type: 'monsters',
-                            subtype: 'automaton',
-                            isAutomaton: true,
-                            faction: 'enemy',
-                            hp: 1000,
-                            maxHp: 1000,
-                            id: `automaton_enemy_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
-                        };
-                        tile.contains = newAutomaton;
-                        tile.image = images.automaton || 'automaton';
-                        const lX = tIdx % 15;
-                        const lY = Math.floor(tIdx / 15);
-                        automatonsList.push({
-                            gx: mbX * 15 + lX,
-                            gy: mbY * 15 + lY,
-                            mbIdx,
-                            tIdx,
-                            tile,
-                            automaton: newAutomaton
-                        });
-                        break;
+            if (!this._automatonRespawnTime) {
+                this._automatonRespawnTime = now + 10000;
+            }
+
+            if (now >= this._automatonRespawnTime) {
+                let respawned = false;
+                for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                    const mb = superboard.miniboards[mbIdx];
+                    if (!mb || !Array.isArray(mb.tiles)) continue;
+                    const mbX = mbIdx % 3;
+                    const mbY = Math.floor(mbIdx / 3);
+                    for (let tIdx = 0; tIdx < 225; tIdx++) {
+                        const tile = mb.tiles[tIdx];
+                        if (!tile) continue;
+                        const cType = typeof tile.contains === 'object' && tile.contains ? (tile.contains.type || tile.contains.subtype) : tile.contains;
+                        const cSubtype = typeof tile.contains === 'object' && tile.contains ? tile.contains.subtype : null;
+                        const img = String(tile.image || '').toLowerCase();
+                        const opt = String(tile.optionType || '').toLowerCase();
+                        if (tile.isEnemySpawn || tile.originalMarker === 'narrative' || cType === 'narrative' || cSubtype === 'narrative' || img === 'narrative' || opt === 'narrative') {
+                            const lX = tIdx % 15;
+                            const lY = Math.floor(tIdx / 15);
+                            const gx = mbX * 15 + lX;
+                            const gy = mbY * 15 + lY;
+
+                            const isPlayerHere = superboardPlayerPos && superboardPlayerPos.gx === gx && superboardPlayerPos.gy === gy;
+                            const hasOtherLivingUnit = tile.contains && (tile.contains.hp || 0) > 0 && !tile.contains.isAutomaton;
+                            if (isPlayerHere || hasOtherLivingUnit) {
+                                continue;
+                            }
+
+                            tile.isEnemySpawn = true;
+                            tile.originalMarker = 'narrative';
+                            const newAutomaton = {
+                                type: 'monsters',
+                                subtype: 'automaton',
+                                isAutomaton: true,
+                                faction: 'enemy',
+                                hp: 30,
+                                maxHp: 30,
+                                id: `automaton_enemy_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+                            };
+                            tile.contains = newAutomaton;
+                            tile.image = images.automaton || 'automaton';
+                            automatonsList.push({
+                                gx,
+                                gy,
+                                mbIdx,
+                                tIdx,
+                                tile,
+                                automaton: newAutomaton
+                            });
+                            this._automatonRespawnTime = null;
+                            respawned = true;
+                            if (this.isSuperboardCoordVisibleToUser(gx, gy, tile)) {
+                                this.displayMessage('🤖 A new Automaton has respawned at the enemy spawn point!');
+                            }
+                            break;
+                        }
+                    }
+                    if (respawned) break;
+                }
+
+                // Fallback: If no narrative tile marker was found, spawn Automaton on an open non-void tile far from player spawn
+                if (!respawned && automatonsList.length === 0) {
+                    const targetMbIdxs = [4, 8, 0, 2, 6, 1, 3, 5, 7];
+                    for (let mbIdx of targetMbIdxs) {
+                        const mb = superboard.miniboards[mbIdx];
+                        if (!mb || !Array.isArray(mb.tiles)) continue;
+                        const mbX = mbIdx % 3;
+                        const mbY = Math.floor(mbIdx / 3);
+                        for (let tIdx = 0; tIdx < 225; tIdx++) {
+                            const tile = mb.tiles[tIdx];
+                            if (!tile) continue;
+                            const isVoid = tile.isVoid === true || tile.contains === 'void' || tile.contains?.type === 'void' || tile.color === 'black';
+                            const hasBuilding = !!(tile.building || tile.contains?.building || tile.contains?.subtype);
+                            const gx = mbX * 15 + (tIdx % 15);
+                            const gy = mbY * 15 + Math.floor(tIdx / 15);
+                            const distFromPlayer = superboardPlayerPos ? Math.hypot(gx - superboardPlayerPos.gx, gy - superboardPlayerPos.gy) : 10;
+                            if (!isVoid && !hasBuilding && distFromPlayer >= 6) {
+                                const newAutomaton = {
+                                    type: 'monsters',
+                                    subtype: 'automaton',
+                                    isAutomaton: true,
+                                    faction: 'enemy',
+                                    hp: 30,
+                                    maxHp: 30,
+                                    id: `automaton_enemy_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`
+                                };
+                                tile.contains = newAutomaton;
+                                tile.image = images.automaton || 'automaton';
+                                tile.isEnemySpawn = true;
+                                tile.originalMarker = 'narrative';
+                                automatonsList.push({
+                                    gx,
+                                    gy,
+                                    mbIdx,
+                                    tIdx,
+                                    tile,
+                                    automaton: newAutomaton
+                                });
+                                this._automatonRespawnTime = null;
+                                respawned = true;
+                                break;
+                            }
+                        }
+                        if (respawned) break;
                     }
                 }
-                if (automatonsList.length > 0) break;
             }
         }
 
@@ -9253,16 +9444,60 @@ class DungeonPage extends React.Component {
 
                 if (closestMonolith) {
                     if (minMonolithDist === 1) {
-                        // Adjacent: Activate the Domain Monolith for hostile faction!
+                        // Adjacent: Channel / Convert the Domain Monolith over 10 seconds
+                        const now = Date.now();
+                        const existingConverting = cContains.convertingMonolith || auto.automaton.convertingMonolith;
+
+                        if (!existingConverting || existingConverting.targetMonolithId !== closestMonolith.id) {
+                            const newConverting = {
+                                targetMonolithId: closestMonolith.id,
+                                anchorGx: closestMonolith.anchorGx,
+                                anchorGy: closestMonolith.anchorGy,
+                                startTime: now,
+                                duration: 10000
+                            };
+                            cContains.convertingMonolith = newConverting;
+                            auto.automaton.convertingMonolith = newConverting;
+                            if (currentTile) {
+                                currentTile.contains = { ...cContains };
+                            }
+
+                            const isVisible = this.isSuperboardCoordVisibleToUser(closestMonolith.anchorGx, closestMonolith.anchorGy, closestMonolith.tile);
+                            if (isVisible) {
+                                this.displayMessage(`🤖 Hostile Automaton has begun converting a Domain Monolith! (10s remaining)`);
+                            }
+                            this.updateSuperboardViewport();
+                            continue;
+                        }
+
+                        const elapsed = now - existingConverting.startTime;
+                        if (elapsed < 10000) {
+                            // Still converting! Keep progress updated
+                            cContains.convertingMonolith = existingConverting;
+                            auto.automaton.convertingMonolith = existingConverting;
+                            if (currentTile) {
+                                currentTile.contains = { ...cContains };
+                            }
+                            this.updateSuperboardViewport();
+                            continue;
+                        }
+
+                        // 10 seconds completed! Finish conversion
                         const dCol = closestCellCoord.gx - auto.gx;
                         const dRow = closestCellCoord.gy - auto.gy;
                         await this.animatePocketPygmyBump(superboard, auto.mbIdx, auto.tIdx, dCol, dRow);
+
+                        delete cContains.convertingMonolith;
+                        delete auto.automaton.convertingMonolith;
+                        if (currentTile) {
+                            currentTile.contains = { ...cContains };
+                        }
 
                         this.activateSuperboardDomainMonolith(superboard, closestMonolith, 'hostile');
 
                         const isVisible = this.isSuperboardCoordVisibleToUser(closestMonolith.anchorGx, closestMonolith.anchorGy, closestMonolith.tile);
                         if (isVisible) {
-                            this.displayMessage(`🤖 Hostile Automaton has activated a Domain Monolith! Red hostile territory is expanding!`);
+                            this.displayMessage(`🤖 Hostile Automaton has converted a Domain Monolith! Red hostile territory is expanding!`);
                         }
 
                         const monoIdx = targetMonoliths.findIndex(m => m.id === closestMonolith.id);
@@ -9271,6 +9506,13 @@ class DungeonPage extends React.Component {
                         this.updateSuperboardViewport();
                         continue;
                     } else {
+                        // Not adjacent: clear any in-progress converting state
+                        if (cContains.convertingMonolith || auto.automaton.convertingMonolith) {
+                            delete cContains.convertingMonolith;
+                            delete auto.automaton.convertingMonolith;
+                            if (currentTile) currentTile.contains = { ...cContains };
+                        }
+
                         // Navigate towards the monolith
                         const adjEmpty = this.getAdjacentSuperboardTiles(superboard, auto.gx, auto.gy).filter(c => c.isEmpty);
                         if (adjEmpty.length > 0) {
@@ -9921,6 +10163,164 @@ class DungeonPage extends React.Component {
     tickOutpostAttacks = () => {
         try {
             if (this._isMoving) return;
+
+            if (this.state.inSuperboard) {
+                const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
+                if (!superboard || !superboard.miniboards) return;
+
+                const superboardOutposts = [];
+                superboard.miniboards.forEach((mb, mbIdx) => {
+                    if (!mb || !mb.tiles) return;
+                    mb.tiles.forEach((tile, tIdx) => {
+                        if (!tile || !tile.contains) return;
+                        const cSub = typeof tile.contains === 'object' ? (tile.contains.subtype || tile.contains.building) : tile.building;
+                        const img = String(tile.image || '').toLowerCase();
+                        const isOutpost = cSub === 'outpost' || tile.building === 'outpost' || img.includes('outpost') || img.includes('buildable_outpost');
+                        if (!isOutpost) return;
+                        if (cSub === 'outpost_under_construction' || img.includes('under_construction')) return;
+
+                        const gx = (mbIdx % 3) * 15 + (tIdx % 15);
+                        const gy = Math.floor(mbIdx / 3) * 15 + Math.floor(tIdx / 15);
+                        superboardOutposts.push({ tile, mbIdx, tIdx, gx, gy });
+                    });
+                });
+
+                if (superboardOutposts.length === 0) return;
+
+                const now = Date.now();
+                const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+                const { superboardViewMinX = 0, superboardViewMinY = 0, superboardPlayerPos } = this.state;
+
+                superboardOutposts.forEach(outpost => {
+                    const gData = outpost.tile.generatorData || outpost.tile.contains?.generatorData || {};
+                    const cooldown = gData.automated ? 2000 : 4000;
+                    if (now - (outpost.tile._lastFiredAt || 0) < cooldown) return;
+                    if (outpost.tile.disabledUntil && Date.now() < outpost.tile.disabledUntil) return;
+
+                    const containsObj = typeof outpost.tile.contains === 'object' ? outpost.tile.contains : null;
+                    const isFriendly = gData.owned === true || gData.ownerId === currentUserId || outpost.tile.placedBy === 'player' || containsObj?.placedBy === 'player' || containsObj?.isAllied || outpost.tile.affiliation === 'friendly' || containsObj?.affiliation === 'friendly' || outpost.tile.ownedByPlayer === true;
+
+                    if (isFriendly) {
+                        // Friendly Outposts fire on: Automaton, Neutral Pygmies, Hostile Pygmies (NOT Allied Pygmies)
+                        const targetCandidates = [];
+                        superboard.miniboards.forEach((mb, mbIdx) => {
+                            if (!mb || !mb.tiles) return;
+                            mb.tiles.forEach((tile, tIdx) => {
+                                if (!tile || !tile.contains) return;
+                                const c = tile.contains;
+                                if (typeof c !== 'object') return;
+                                if (typeof c.hp === 'number' && c.hp <= 0) return;
+
+                                const isAutomaton = c.isAutomaton || c.subtype === 'automaton';
+                                const isPygmy = c.isPocketPygmy || c.subtype === 'pocket_pygmy' || c.type === 'pygmies';
+                                const isAllied = c.isAllied || c.faction === 'player' || c.placedBy === 'player' || c.affiliation === 'friendly';
+
+                                if ((isAutomaton || isPygmy) && !isAllied) {
+                                    const gx = (mbIdx % 3) * 15 + (tIdx % 15);
+                                    const gy = Math.floor(mbIdx / 3) * 15 + Math.floor(tIdx / 15);
+                                    const dist = Math.abs(outpost.gx - gx) + Math.abs(outpost.gy - gy);
+                                    if (dist <= 6) {
+                                        targetCandidates.push({ tile, mbIdx, tIdx, gx, gy, dist, isAutomaton, isPygmy, contains: c });
+                                    }
+                                }
+                            });
+                        });
+
+                        if (targetCandidates.length > 0) {
+                            targetCandidates.sort((a, b) => a.dist - b.dist);
+                            const target = targetCandidates[0];
+                            outpost.tile._lastFiredAt = now;
+
+                            const outVx = outpost.gx - superboardViewMinX;
+                            const outVy = outpost.gy - superboardViewMinY;
+                            const tgtVx = target.gx - superboardViewMinX;
+                            const tgtVy = target.gy - superboardViewMinY;
+                            const isOutVisible = outVx >= 0 && outVx < 15 && outVy >= 0 && outVy < 15;
+                            const isTgtVisible = tgtVx >= 0 && tgtVx < 15 && tgtVy >= 0 && tgtVy < 15;
+
+                            const onHit = () => {
+                                const dmg = Math.floor(Math.random() * 4) + 5; // 5-8 damage
+                                const maxHpVal = target.contains.maxHp || (target.isAutomaton ? 30 : 10);
+                                target.contains.hp = (target.contains.hp || maxHpVal) - dmg;
+                                target.contains.lastDamageTime = Date.now();
+
+                                const isHostilePygmy = target.contains.isHostile || target.contains.faction === 'hostile' || target.contains.faction === 'enemy';
+                                const targetName = target.isAutomaton ? 'Automaton' : (isHostilePygmy ? 'Hostile Pygmy' : 'Neutral Pygmy');
+
+                                if (target.contains.hp <= 0) {
+                                    target.contains.hp = 0;
+                                    if (target.isAutomaton) {
+                                        this._automatonRespawnTime = Date.now() + 10000;
+                                    } else if (target.contains.homeStructureKey) {
+                                        if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
+                                        this._pocketStructureRespawns.push({
+                                            readyTime: Date.now() + 10000,
+                                            structureKey: target.contains.homeStructureKey,
+                                            mbIdx: target.mbIdx,
+                                            tIdx: target.tIdx,
+                                            superboardType: this.state.superboardType
+                                        });
+                                    }
+                                    if (target.tile.isEnemySpawn === true || target.tile.originalMarker === 'narrative') {
+                                        target.tile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                        target.tile.image = images.narrative || 'narrative';
+                                        target.tile.isEnemySpawn = true;
+                                        target.tile.originalMarker = 'narrative';
+                                    } else {
+                                        target.tile.contains = null;
+                                        target.tile.image = null;
+                                        target.tile.isEnemySpawn = false;
+                                        target.tile.originalMarker = null;
+                                    }
+                                    this.displayMessage(`💥 Your Outpost eliminated a ${targetName}!`);
+                                } else {
+                                    this.displayMessage(`🏹 Your Outpost fired at ${targetName} dealing ${dmg} damage! (HP: ${target.contains.hp}/${maxHpVal})`);
+                                }
+                                this.updateSuperboardViewport();
+                            };
+
+                            if (isOutVisible && isTgtVisible && this.projectileCanvasRef && this.projectileCanvasRef.current) {
+                                const startTileIdx = outVy * 15 + outVx;
+                                const endTileIdx = tgtVy * 15 + tgtVx;
+                                this.projectileCanvasRef.current.fireProjectile(startTileIdx, endTileIdx, onHit);
+                            } else {
+                                onHit();
+                            }
+                        }
+                    } else {
+                        // Hostile / Neutral Outpost in pocket dimension shooting at player
+                        if (superboardPlayerPos) {
+                            const pGx = superboardPlayerPos.gx;
+                            const pGy = superboardPlayerPos.gy;
+                            const dist = Math.abs(outpost.gx - pGx) + Math.abs(outpost.gy - pGy);
+                            if (dist <= 4) {
+                                outpost.tile._lastFiredAt = now;
+                                const outVx = outpost.gx - superboardViewMinX;
+                                const outVy = outpost.gy - superboardViewMinY;
+                                const pVx = pGx - superboardViewMinX;
+                                const pVy = pGy - superboardViewMinY;
+                                const isOutVisible = outVx >= 0 && outVx < 15 && outVy >= 0 && outVy < 15;
+                                const isPVisible = pVx >= 0 && pVx < 15 && pVy >= 0 && pVy < 15;
+
+                                const onHitPlayer = () => {
+                                    this.damagePlayerCrew(Math.floor(Math.random() * 3) + 2);
+                                    this.displayMessage('⚠️ An enemy Outpost fired at your crew!');
+                                };
+
+                                if (isOutVisible && isPVisible && this.projectileCanvasRef && this.projectileCanvasRef.current) {
+                                    const startTileIdx = outVy * 15 + outVx;
+                                    const endTileIdx = pVy * 15 + pVx;
+                                    this.projectileCanvasRef.current.fireProjectile(startTileIdx, endTileIdx, onHitPlayer);
+                                } else {
+                                    onHitPlayer();
+                                }
+                            }
+                        }
+                    }
+                });
+                return;
+            }
+
             const bm = this.props.boardManager;
             if (!bm || !bm.tiles || !bm.playerTile || !bm.playerTile.location) return;
 
@@ -15924,9 +16324,12 @@ class DungeonPage extends React.Component {
             };
             const sides = sideMap[`${dx},${dy}`];
 
-            const isWallBlocked = (tileIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, tileIndex, { ignoreBuilding: true })) ||
+            const isConnectingPathBetween = (bm.isConnectingPathTile && (bm.isConnectingPathTile(playerTileObj) || bm.isConnectingPathTile(actualTile)));
+            const isWallBlocked = !isConnectingPathBetween && (
+                (tileIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, tileIndex, { ignoreBuilding: true })) ||
                 (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
-                (sides?.opp && bm.hasSolidBorder(actualTile, sides.opp));
+                (sides?.opp && bm.hasSolidBorder(actualTile, sides.opp))
+            );
 
             if (isVoid || isWallBlocked) {
                 const selfInscription = sides?.self && playerTileObj?.inscriptions?.[sides.self];
@@ -21801,8 +22204,7 @@ class DungeonPage extends React.Component {
                                     ...existingC,
                                     generatorData: { ...genData },
                                     affiliation: 'friendly',
-                                    faction: 'player',
-                                    placedBy: 'player'
+                                    faction: 'player'
                                 };
                                 t.affiliation = 'friendly';
                             }

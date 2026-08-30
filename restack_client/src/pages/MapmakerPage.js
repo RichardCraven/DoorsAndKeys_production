@@ -1342,6 +1342,9 @@ class MapMakerPage extends React.Component {
     } else if (pinnedOption.type === 'generator-tile') {
       const generatorOption = this.props.mapMaker?.generatorOptions?.[pinnedOption.id];
       if (generatorOption && (generatorOption.isLarge || generatorOption.isMultiTile)) return '2x2';
+    } else if (pinnedOption.type === 'terrain-tile') {
+      const terrainOption = this.props.mapMaker?.terrainOptions?.[pinnedOption.id];
+      if (terrainOption && (terrainOption.isLarge || terrainOption.isMultiTile)) return '2x2';
     }
 
     if (keyToCheck) {
@@ -1366,6 +1369,11 @@ class MapMakerPage extends React.Component {
       const buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
       if (buildingOption && (buildingOption.isLarge || buildingOption.isMultiTile)) return '2x2';
     }
+    if (pinnedOption.type === 'terrain-tile') {
+      const terrainOption = this.props.mapMaker?.terrainOptions?.[pinnedOption.id];
+      if (terrainOption && (terrainOption.isLarge || terrainOption.isMultiTile)) return '2x2';
+    }
+    return null;
     return null;
   }
 
@@ -1384,7 +1392,7 @@ class MapMakerPage extends React.Component {
       const tile = tiles[tileId];
       if (!tile) return false;
       const type = this.getContainsType(tile.contains);
-      return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage' || type === 'vendor' || type === 'building';
+      return !type || type === 'empty_space' || type === 'obscured_space' || type === 'passage' || type === 'vendor' || type === 'building' || type === 'terrain';
     });
   }
 
@@ -1709,9 +1717,17 @@ class MapMakerPage extends React.Component {
       arr[tileId].image = images[dungeonLitterOption.image] || dungeonLitterOption.image;
       arr[tileId].color = null;
     } else if (terrainOption) {
-      arr[tileId].contains = { type: 'terrain', subtype: terrainOption.key };
-      arr[tileId].image = images[terrainOption.image] || terrainOption.image;
-      arr[tileId].color = null;
+      if (terrainOption.isLarge || terrainOption.isMultiTile) {
+        if (!this.canPlaceVendorFootprint(arr, tileId)) {
+          this.toast(`${terrainOption.name} requires a 2x2 empty space.`);
+          return null;
+        }
+        arr = this.placeVendorFootprint(arr, tileId, terrainOption.key, 'terrain', images[terrainOption.image] || terrainOption.image);
+      } else {
+        arr[tileId].contains = { type: 'terrain', subtype: terrainOption.key };
+        arr[tileId].image = images[terrainOption.image] || terrainOption.image;
+        arr[tileId].color = null;
+      }
     } else if (pinned.optionType === 'passage') {
       let prevTileIdx = this.state.hoveredTileIdx;
       let connectedTop = false, connectedBot = false, connectedLeft = false, connectedRight = false;
@@ -2997,7 +3013,8 @@ class MapMakerPage extends React.Component {
       selectedView: state,
       dungeonOverlayOn: currentOverlayOn,
       overlayData,
-      selectedThingTitle: title
+      selectedThingTitle: title,
+      superboardZoom: null
     })
 
     if (state === 'dungeon' && this.state.loadedDungeon?.name) {
@@ -6035,7 +6052,8 @@ class MapMakerPage extends React.Component {
 
     this.setState({
       loadedDungeon: dungeon,
-      selectedThingTitle: this.state.selectedView === 'dungeon' ? `Dungeon: ${dungeon.name}` : this.state.selectedThingTitle
+      selectedThingTitle: this.state.selectedView === 'dungeon' ? `Dungeon: ${dungeon.name}` : this.state.selectedThingTitle,
+      superboardZoom: null
     }, () => {
       this.addDungeonPlanesAndBoardsToState(dungeon);
     })

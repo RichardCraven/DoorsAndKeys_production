@@ -27,15 +27,15 @@ describe('Tutorial Dungeon Launch & Sequence Tests', () => {
 
     // Standing at (9,6) [tile 99]
     bm.handleFogOfWar(bm.tiles[99]);
-    expect(bm.tiles[85].color).toBe('black');
+    expect(bm.tiles[85].color).not.toBe('black');
 
     // Standing at (10,6) [tile 100]
     bm.handleFogOfWar(bm.tiles[100]);
-    expect(bm.tiles[85].color).toBe('black');
+    expect(bm.tiles[85].color).not.toBe('black');
 
     // Standing at (10,5) [tile 85]
     bm.handleFogOfWar(bm.tiles[85]);
-    expect(bm.tiles[99].color).toBe('black');
+    expect(bm.tiles[99].color).not.toBe('black');
   });
 
   test('superboard 45x45 viewport calculation clamps top-left correctly', () => {

@@ -286,7 +286,7 @@ export function BoardManager(){
         const isMatch = (str) => {
             if (!str || typeof str !== 'string') return false;
             const norm = str.toLowerCase().replace(/\s+/g, '_');
-            return norm === 'connecting_path' || norm === 'passage' || norm === 'connecting_path_tile' || norm === 'connecting' || norm === 'path' || norm === 'connecting_path_space';
+            return norm === 'connecting_path' || norm === 'passage' || norm === 'connecting_path_tile' || norm === 'connecting' || norm === 'path' || norm === 'connecting_path_space' || norm.startsWith('connecting_path');
         };
 
         const checkTile = (t) => {
@@ -301,8 +301,9 @@ export function BoardManager(){
             const img = t.image;
             const orig = t.original;
             const tp = t.type;
+            const locCode = t.locationCode;
 
-            if (isMatch(cType) || isMatch(cSubtype) || isMatch(bldg) || isMatch(opt) || isMatch(img) || isMatch(orig) || isMatch(tp)) return true;
+            if (isMatch(cType) || isMatch(cSubtype) || isMatch(bldg) || isMatch(opt) || isMatch(img) || isMatch(orig) || isMatch(tp) || isMatch(locCode)) return true;
             return false;
         };
 
@@ -604,13 +605,7 @@ export function BoardManager(){
     this.hasSolidBorder = (tileData, side) => {
         if (!tileData || !tileData.borders) return false;
         if (this.isConnectingPathTile(tileData)) {
-            const loc = tileData.coordinates || (tileData.location ? [tileData.location[0], tileData.location[1]] : [tileData.id % 15, Math.floor(tileData.id / 15)]);
-            const col = loc[0] % 15;
-            const row = loc[1] % 15;
-            if (side === 'top' && (row === 0 || tileData.location?.[0] === 15)) return false;
-            if (side === 'bottom' && (row === 14 || tileData.location?.[0] === 29)) return false;
-            if (side === 'left' && (col === 0 || tileData.location?.[1] === 15)) return false;
-            if (side === 'right' && (col === 14 || tileData.location?.[1] === 29)) return false;
+            return false;
         }
         const borderValue = tileData.borders[side];
         if (!borderValue || String(borderValue).includes('transparent') || String(borderValue) === 'none') return false;
@@ -653,6 +648,11 @@ export function BoardManager(){
             const boardTiles = (this.currentBoard && this.currentBoard.tiles) ? this.currentBoard.tiles : null;
             const fromTile = (boardTiles && boardTiles[fromIdx]) ? boardTiles[fromIdx] : this.tiles[fromIdx];
             const toTile = (boardTiles && boardTiles[toIdx]) ? boardTiles[toIdx] : this.tiles[toIdx];
+
+            // If either tile is a connecting path, the passage between them is open and never blocked!
+            if (this.isConnectingPathTile(fromTile) || this.isConnectingPathTile(toTile)) {
+                return false;
+            }
 
             // If destination is an impassable building (outpost, observer platform, etc. except hut), block movement onto it
             if (!options.ignoreBuilding && this.isImpassableBuildingTile(toTile)) return true;
@@ -843,7 +843,7 @@ export function BoardManager(){
             const bldg = t.building || (typeof t.contains === 'object' ? t.contains.building : '') || '';
             const rawKey = String(cSub || bldg || cType).toLowerCase();
 
-            const is2x2Structure = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith' || rawKey === 'war_camp' || rawKey === 'war_fort' || rawKey === 'earthen_fort' || rawKey === 'alchemist' || rawKey === 'merchant' || rawKey === 'cultivation_vat' || rawKey === 'dust_collector' || rawKey === 'larder' || rawKey === 'sawmill' || rawKey === 'lumber_mill' || rawKey === 'ore_mine' || rawKey === 'slate_mine' || rawKey === 'fungal_nursery' || (rawKey.includes('monolith') && !rawKey.includes('shrine')) || rawKey.includes('generator');
+            const is2x2Structure = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith' || rawKey === 'war_camp' || rawKey === 'war_fort' || rawKey === 'earthen_fort' || rawKey === 'alchemist' || rawKey === 'merchant' || rawKey === 'cultivation_vat' || rawKey === 'dust_collector' || rawKey === 'larder' || rawKey === 'sawmill' || rawKey === 'lumber_mill' || rawKey === 'ore_mine' || rawKey === 'slate_mine' || rawKey === 'fungal_nursery' || (rawKey.includes('monolith') && !rawKey.includes('shrine')) || rawKey.includes('generator') || rawKey.includes('naked_trees_3');
             if (is2x2Structure) {
                 const cObj = typeof t.contains === 'object' ? t.contains : { type: 'building', subtype: rawKey };
                 if (!cObj.vendorGroupId && (!cObj.vendorCell || cObj.vendorCell === 'anchor')) {
@@ -2839,13 +2839,14 @@ export function BoardManager(){
                     this._activeEdgeIndicators.push(idx);
                 } catch (e) {}
             }
+            const currentTileIdx = this.getIndexFromCoordinates(pCoords);
+            const currentTile = this.tiles[currentTileIdx];
+            const localRow = pCoords[0] % 15;
+            const localCol = pCoords[1] % 15;
 
             // Helper to check if movement to an adjacent board is valid
             const canTransitionBoard = (direction) => {
-                const currentTileIdx = this.getIndexFromCoordinates(pCoords);
-                const currentTile = this.tiles[currentTileIdx];
                 if (!currentTile) return false;
-
                 if (!this.isConnectingPathTile(currentTile)) return false;
 
                 let plane = this.currentOrientation === 'F' ? this.currentLevel?.front : this.currentLevel?.back;
@@ -2854,47 +2855,43 @@ export function BoardManager(){
 
                 const bIdx = this.playerTile.boardIndex;
                 if (direction === 'up') {
-                    if (this.hasSolidBorder(currentTile, 'top') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
                     return (bIdx >= 3) && !!plane.miniboards[bIdx - 3];
                 } else if (direction === 'down') {
-                    if (this.hasSolidBorder(currentTile, 'bottom') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
                     return (bIdx <= 5) && !!plane.miniboards[bIdx + 3];
                 } else if (direction === 'left') {
-                    if (this.hasSolidBorder(currentTile, 'left') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
                     return (bIdx % 3 !== 0) && !!plane.miniboards[bIdx - 1];
                 } else if (direction === 'right') {
-                    if (this.hasSolidBorder(currentTile, 'right') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
                     return (bIdx % 3 !== 2) && !!plane.miniboards[bIdx + 1];
                 }
                 return false;
             };
 
             // Left edge
-            if (py <= 2 && canTransitionBoard('left')) {
+            if (localCol <= 2 && canTransitionBoard('left')) {
                 for (let d = -1; d <= 1; d++) {
-                    const nx = px + d;
-                    if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MIN], 'left');
+                    const nr = localRow + d;
+                    if (nr >= 0 && nr <= 14) markOverlayAt([nr + 15, 15], 'left');
                 }
             }
             // Right edge
-            if (py >= 12 && canTransitionBoard('right')) {
+            if (localCol >= 12 && canTransitionBoard('right')) {
                 for (let d = -1; d <= 1; d++) {
-                    const nx = px + d;
-                    if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MAX], 'right');
+                    const nr = localRow + d;
+                    if (nr >= 0 && nr <= 14) markOverlayAt([nr + 15, 29], 'right');
                 }
             }
             // Top edge
-            if (px <= 2 && canTransitionBoard('up')) {
+            if (localRow <= 2 && canTransitionBoard('up')) {
                 for (let d = -1; d <= 1; d++) {
-                    const ny = py + d;
-                    if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MIN, ny], 'top');
+                    const nc = localCol + d;
+                    if (nc >= 0 && nc <= 14) markOverlayAt([15, nc + 15], 'top');
                 }
             }
             // Bottom edge
-            if (px >= 12 && canTransitionBoard('down')) {
+            if (localRow >= 12 && canTransitionBoard('down')) {
                 for (let d = -1; d <= 1; d++) {
-                    const ny = py + d;
-                    if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MAX, ny], 'bottom');
+                    const nc = localCol + d;
+                    if (nc >= 0 && nc <= 14) markOverlayAt([29, nc + 15], 'bottom');
                 }
             }
         } catch (e) {}
@@ -2959,7 +2956,7 @@ export function BoardManager(){
             if (this.isPeerTileOccupied(destinationCoords)) return true;
             
             // Check for void wall
-            if (type === 'void') return true;
+            if (type === 'void' && !this.isConnectingPathTile(destTile)) return true;
             
             // Check for large monster blocking
             if (destTile.blockedByLargeMonster) return true;
@@ -3007,7 +3004,7 @@ export function BoardManager(){
                                ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'].includes(destinationTile.building) ||
                                !!destinationTile.generatorData;
 
-        if (destType === 'void') {
+        if (destType === 'void' && !this.isConnectingPathTile(destinationTile)) {
             const anyDestInscription = destinationTile.inscriptions && Object.values(destinationTile.inscriptions).find(v => !!v);
             if (destTileInscription) {
                 this.handleInscriptionRead(destTileInscription);

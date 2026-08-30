@@ -364,6 +364,51 @@ function ActiveGeneratorBadge({ resource, rate, cycleIntervalSec, lastTickTime, 
     );
 }
 
+function AutomatonConversionProgressBar({ converting }) {
+    const [now, setNow] = React.useState(Date.now());
+
+    React.useEffect(() => {
+        const intervalId = setInterval(() => {
+            setNow(Date.now());
+        }, 100);
+        return () => clearInterval(intervalId);
+    }, []);
+
+    if (!converting || !converting.startTime || !converting.duration) return null;
+
+    const elapsed = Math.max(0, now - converting.startTime);
+    const progress = Math.min(1, Math.max(0, elapsed / converting.duration));
+
+    return (
+        <div style={{
+            position: 'absolute',
+            top: '-8px',
+            left: '2px',
+            right: '2px',
+            height: '7px',
+            backgroundColor: 'rgba(10, 10, 15, 0.95)',
+            border: '1px solid #ef4444',
+            borderRadius: '3px',
+            overflow: 'hidden',
+            zIndex: 35,
+            boxShadow: '0 0 10px rgba(239, 68, 68, 0.8), 0 2px 6px rgba(0,0,0,0.9)',
+            pointerEvents: 'none',
+            padding: '1px',
+            boxSizing: 'border-box'
+        }}>
+            <div style={{
+                width: `${progress * 100}%`,
+                height: '100%',
+                backgroundColor: '#ef4444',
+                backgroundImage: 'linear-gradient(90deg, #dc2626, #f87171)',
+                borderRadius: '2px',
+                transition: 'width 0.1s linear',
+                boxShadow: '0 0 6px rgba(248, 113, 113, 0.9)'
+            }} />
+        </div>
+    );
+}
+
 function Tile(props) {
     const colorVal = (props.color === 'null' || props.color === 'undefined') ? null : props.color;
     const isShrine = (props.contains && props.contains.type === 'shrine') || props.optionType === 'shrine' || props.isShrine;
@@ -537,7 +582,8 @@ function Tile(props) {
             'cultivation_vat', 'dust_collector', 'larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'fungal_nursery', 'vat',
             'domain_monolith', 'dark_domain_monolith', 'monolith',
             'generator',
-            'summoning_temple', 'rift', 'rift_2'
+            'summoning_temple', 'rift', 'rift_2',
+            'naked_trees_3', 'terrain_naked_trees_3'
         ];
         if (multiKeys.includes(s)) return true;
         return multiKeys.some(k => s.includes(k));
@@ -566,7 +612,7 @@ function Tile(props) {
                     const aContains = typeof aTile.contains === 'object' && aTile.contains ? aTile.contains : { type: aTile.contains };
                     const aKey = String(aContains.subtype || aContains.building || aContains.type || aTile.building || aTile.image || '').toLowerCase();
                     if (aKey.includes('observer') || aKey.includes('outpost') || aKey.includes('earthen_fort') || aKey.includes('hut')) continue;
-                    const is2x2 = (aKey.includes('domain_monolith') || aKey.includes('dark_domain_monolith') || (aKey.includes('monolith') && !aKey.includes('shrine')));
+                    const is2x2 = (aKey.includes('domain_monolith') || aKey.includes('dark_domain_monolith') || (aKey.includes('monolith') && !aKey.includes('shrine')) || isVendorType(aKey));
                     if (is2x2) {
                         const aRole = aContains.vendorCell || aTile.vendorCell;
                         if (!aRole || aRole === 'anchor' || aContains.vendorAnchorId === aIdx) {
@@ -1120,7 +1166,7 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: isPaletteTile ? 'hidden' : ((isStructureTile || isIlluminatedGlow || isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden'),
+            overflow: isPaletteTile ? 'hidden' : ((isStructureTile || isIlluminatedGlow || isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || !!(props.contains && props.contains.convertingMonolith)) ? 'visible' : 'hidden'),
             zIndex: isBumpingAttack ? 100 : (isGliding ? 90 : (isRevealedBySpiritSight ? 15 : (isStructureTile ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 14 : 8) : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : ((((isEnlargeableStructure && isOccupied) || isUnderConstruction) ? 5 : undefined))))))),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
@@ -1321,7 +1367,7 @@ function Tile(props) {
                     labelTitle = 'Hostile Structure';
                 }
 
-                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine');
+                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('naked_trees_3');
                 const isSingleTileStructure = sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer');
                 const isMulti = !isSingleTileStructure && (isVendorCell || vRole === 'anchor' || is2x2Structure || is3x3Structure);
                 return (
@@ -1440,7 +1486,7 @@ function Tile(props) {
                     else if (sKey.includes('cultivation_vat') || sKey.includes('chemical') || sKey.includes('vat')) resource = 'chemicals';
                 }
 
-                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine');
+                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('naked_trees_3');
                 const is2x2 = isVendorCell || is2x2Structure;
 
                 return (
@@ -2084,6 +2130,19 @@ function Tile(props) {
                         }} />
                     </div>
                 );
+            })()}
+
+            {/* Automaton Monolith Conversion Progress Bar Overlay */}
+            {(() => {
+                const activeUnit = (currentTile && typeof currentTile.contains !== 'undefined')
+                    ? (typeof currentTile.contains === 'object' ? currentTile.contains : null)
+                    : (typeof props.contains === 'object' ? props.contains : null);
+
+                if (!activeUnit || activeUnit.dead || activeUnit.destroyedAt) return null;
+                const isAutomaton = activeUnit.isAutomaton || activeUnit.subtype === 'automaton';
+                if (!isAutomaton || !activeUnit.convertingMonolith) return null;
+
+                return <AutomatonConversionProgressBar converting={activeUnit.convertingMonolith} />;
             })()}
 
            {/* Obscured space texture overlay */}

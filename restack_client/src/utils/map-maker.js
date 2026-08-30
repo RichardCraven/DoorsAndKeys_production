@@ -178,7 +178,6 @@ export function MapMaker(props){
         { key: 'domain_monolith', name: 'Domain Monolith', image: 'domain_monolith', isMultiTile: true, isLarge: true },
         { key: 'dark_domain_monolith', name: 'Dark Domain Monolith', image: 'dark_domain_monolith', isMultiTile: true, isLarge: true },
         { key: 'lumber_mill', name: 'Lumber Mill', image: 'lumber_mill', isMultiTile: true, isLarge: true },
-        { key: 'sawmill', name: 'Sawmill', image: 'lumber_mill', isMultiTile: true, isLarge: true },
         { key: 'ore_mine', name: 'Ore Mine', image: 'ore_mine', isMultiTile: true, isLarge: true },
         { key: 'slate_mine', name: 'Slate Mine', image: 'slate_mine', isMultiTile: true, isLarge: true },
         { key: 'fungal_nursery', name: 'Fungal Nursery', image: 'fungal_nursery', isMultiTile: true, isLarge: true },
@@ -198,6 +197,8 @@ export function MapMaker(props){
     this.terrainOptions = [
         { key: 'terrain_tree_1', name: 'Pine Trees', image: 'terrain_tree_1' },
         { key: 'terrain_naked_trees', name: 'Naked Trees', image: 'pine_tree_medium' },
+        { key: 'terrain_naked_trees_2', name: 'Naked Trees 2', image: 'naked_trees_2' },
+        { key: 'terrain_naked_trees_3', name: 'Naked Trees 3', image: 'naked_trees_3', isMultiTile: true, isLarge: true },
         { key: 'terrain_tree_2', name: 'Oak Trees', image: 'terrain_tree_2' },
         { key: 'terrain_tree_3', name: 'Ancient Grove', image: 'terrain_tree_3' },
         { key: 'terrain_mountain_1', name: 'Mountain Peak', image: 'terrain_mountain_1' },
