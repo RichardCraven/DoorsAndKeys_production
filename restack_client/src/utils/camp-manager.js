@@ -150,6 +150,12 @@ export async function setUpCamp(component, maybeDuration) {
         }
         // --- End food cost ---
 
+        // Calculate expected resolve gain for incremental application during camp ticks
+        const resolveCalc = calculateCampResolveGain(component);
+        meta.initialCampResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+        meta.targetCampResolveGain = resolveCalc.totalGain;
+        meta.isPlayerInHutCamp = resolveCalc.isPlayerInHut;
+
         const now = new Date();
         meta.camping = true;
         meta.campingStart = now.toISOString();
@@ -209,6 +215,89 @@ export async function setUpCamp(component, maybeDuration) {
     } catch (err) { console.warn('setUpCamp error', err); }
 }
 
+export function calculateCampResolveGain(component) {
+    let awakeRefreshedBonus = 0;
+    let fortifyLevel = 0;
+    const crew = (component.props && component.props.crewManager && component.props.crewManager.crew) || [];
+    const campLeader = crew.find(mb => mb && mb.isLeader);
+    const leaderAliveAtCampEnd = campLeader && !campLeader.dead;
+    let leaderFortifyBonus = 0;
+
+    crew.forEach(member => {
+        if (!member || !member.globalSkills) return;
+        const arSkill = member.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === 'awake_refreshed');
+        if (arSkill) {
+            const lvl = typeof arSkill === 'string' ? 1 : (arSkill.level || 1);
+            if (lvl === 1) awakeRefreshedBonus += 10;
+            else if (lvl === 2) awakeRefreshedBonus += 20;
+            else if (lvl === 3) awakeRefreshedBonus += 40;
+        }
+        if (!member.dead) {
+            const fSkill = member.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === 'fortify');
+            if (fSkill) {
+                const lvl = typeof fSkill === 'string' ? 1 : (fSkill.level || 1);
+                if (lvl > fortifyLevel) {
+                    fortifyLevel = lvl;
+                }
+            }
+            if (member.isLeader) {
+                const leaderFortify = member.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === 'fortify');
+                if (leaderFortify) leaderFortifyBonus = 5;
+            }
+        }
+    });
+
+    let fortifyBonus = 0;
+    if (fortifyLevel === 2) {
+        if (Math.random() < 0.35) {
+            fortifyBonus = 10;
+        }
+    } else if (fortifyLevel === 3) {
+        if (Math.random() < 0.50) {
+            fortifyBonus = 20;
+        }
+    }
+
+    const restlessPenalty = leaderAliveAtCampEnd ? 0 : 5;
+
+    let isPlayerInHut = false;
+    try {
+        const bm = component.props && component.props.boardManager;
+        if (bm && bm.playerTile) {
+            const pTile = bm.playerTile;
+            isPlayerInHut = !!(pTile && (
+                pTile.building === 'hut' ||
+                (pTile.contains && (pTile.contains.subtype === 'hut' || pTile.contains.building === 'hut' || pTile.contains.type === 'hut'))
+            ));
+        }
+        if (!isPlayerInHut && component.state && component.state.inSuperboard && component.state.superboardPlayerPos) {
+            const { gx, gy } = component.state.superboardPlayerPos;
+            const sbKey = component.state.superboardType || (getMeta() || {}).pocketDimension;
+            const dungeonObj = component.state.dungeon || (bm && bm.dungeon);
+            const sb = dungeonObj?.superboards?.[sbKey];
+            if (sb && sb.miniboards) {
+                const mbX = Math.floor(gx / 15);
+                const mbY = Math.floor(gy / 15);
+                const mbIdx = mbY * 3 + mbX;
+                const tileIdx = (gy % 15) * 15 + (gx % 15);
+                const tile = sb.miniboards[mbIdx]?.tiles?.[tileIdx];
+                if (tile) {
+                    isPlayerInHut = !!(
+                        tile.building === 'hut' ||
+                        (tile.contains && (tile.contains.subtype === 'hut' || tile.contains.building === 'hut' || tile.contains.type === 'hut'))
+                    );
+                }
+            }
+        }
+    } catch (e) {
+        console.warn('Error checking hut tile for camp resolve replenishment:', e);
+    }
+
+    const baseResolveGain = isPlayerInHut ? 30 : 15;
+    const totalGain = baseResolveGain - restlessPenalty + awakeRefreshedBonus + fortifyBonus + leaderFortifyBonus;
+    return { totalGain, isPlayerInHut, leaderAliveAtCampEnd, campLeader };
+}
+
 export function startCampInterval(component) {
     try {
         if (component.campInterval) {
@@ -237,7 +326,7 @@ export function startCampInterval(component) {
             return;
         }
 
-        // Only tick up HP if this is a new second tick
+        // Only tick up HP & Resolve if this is a new second tick
         if (elapsed > (meta.campElapsedSeconds || 0)) {
             const secondsToTick = elapsed - (meta.campElapsedSeconds || 0);
             
@@ -256,6 +345,13 @@ export function startCampInterval(component) {
                 }
             });
 
+            // Incrementally increase resolve as recuperation elapses
+            const startResolve = typeof meta.initialCampResolve === 'number' ? meta.initialCampResolve : (typeof meta.resolve === 'number' ? meta.resolve : 100);
+            const targetGain = typeof meta.targetCampResolveGain === 'number' ? meta.targetCampResolveGain : calculateCampResolveGain(component).totalGain;
+            const progressFraction = Math.min(1.0, elapsed / Math.max(1, totalDuration));
+            const newResolve = Math.min(100, Math.max(0, Math.round(startResolve + targetGain * progressFraction)));
+
+            meta.resolve = newResolve;
             meta.crew = updatedCrew;
             if (component.props.crewManager) component.props.crewManager.crew = updatedCrew;
             meta.campElapsedSeconds = elapsed;
@@ -288,61 +384,29 @@ export async function endCamp(component) {
         try { if (component.campInterval) { try { clearInterval(component.campInterval); } catch(e){} component.campInterval = null; } } catch(e){}
         let m = getMeta() || {};
         m.camping = false;
+        
+        const startResolve = typeof m.initialCampResolve === 'number' ? m.initialCampResolve : (typeof m.resolve === 'number' ? m.resolve : 100);
+        const { totalGain, isPlayerInHut, leaderAliveAtCampEnd, campLeader } = calculateCampResolveGain(component);
+        const targetGain = typeof m.targetCampResolveGain === 'number' ? m.targetCampResolveGain : totalGain;
+
         delete m.campingStart;
         delete m.campingEnd;
         delete m.campElapsedSeconds;
         delete m.campTotalSeconds;
         delete m.isEndureCamp;
-        const currentResolve = typeof m.resolve === 'number' ? m.resolve : 100;
-        let awakeRefreshedBonus = 0;
-        let fortifyLevel = 0;
-        const crew = (component.props.crewManager && component.props.crewManager.crew) || [];
-        // Leader's Watch: check if leader is alive or dead at end of camp
-        const campLeader = crew.find(mb => mb && mb.isLeader);
-        const leaderAliveAtCampEnd = campLeader && !campLeader.dead;
-        let leaderFortifyBonus = 0;
-        crew.forEach(member => {
-            if (!member || !member.globalSkills) return;
-            const arSkill = member.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === 'awake_refreshed');
-            if (arSkill) {
-                const lvl = typeof arSkill === 'string' ? 1 : (arSkill.level || 1);
-                if (lvl === 1) awakeRefreshedBonus += 10;
-                else if (lvl === 2) awakeRefreshedBonus += 20;
-                else if (lvl === 3) awakeRefreshedBonus += 40;
-            }
-            if (!member.dead) {
-                const fSkill = member.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === 'fortify');
-                if (fSkill) {
-                    const lvl = typeof fSkill === 'string' ? 1 : (fSkill.level || 1);
-                    if (lvl > fortifyLevel) {
-                        fortifyLevel = lvl;
-                    }
-                }
-                // Leader with Fortify adds extra resolve recovery through disciplined watch rotations
-                if (member.isLeader) {
-                    const leaderFortify = member.globalSkills.find(s => (typeof s === 'string' ? s : s.key) === 'fortify');
-                    if (leaderFortify) leaderFortifyBonus = 5;
-                }
-            }
-        });
+        delete m.initialCampResolve;
+        delete m.targetCampResolveGain;
+        delete m.isPlayerInHutCamp;
 
-        let fortifyBonus = 0;
-        if (fortifyLevel === 2) {
-            if (Math.random() < 0.35) {
-                fortifyBonus = 10;
-            }
-        } else if (fortifyLevel === 3) {
-            if (Math.random() < 0.50) {
-                fortifyBonus = 20;
-            }
-        }
-
-        // Restless Camp: if the leader is dead, the crew rests uneasily (-5 resolve from recovery)
-        const restlessPenalty = leaderAliveAtCampEnd ? 0 : 5;
-
-        m.resolve = Math.min(100, currentResolve + 15 - restlessPenalty + awakeRefreshedBonus + fortifyBonus + leaderFortifyBonus);
-        // Notify about restless camp if the leader fell
-        if (!leaderAliveAtCampEnd && campLeader) {
+        m.resolve = Math.min(100, Math.max(0, Math.round(startResolve + targetGain)));
+        
+        if (isPlayerInHut) {
+            try {
+                component.setState({ campWarningMessage: `⛺ Recuperating in your Hut doubled your Resolve replenishment (+30 Resolve)!` });
+                const setTimeoutFn = (component._setTimeout && typeof component._setTimeout === 'function') ? component._setTimeout : setTimeout;
+                setTimeoutFn(() => { try { component.setState({ campWarningMessage: null }); } catch(e){} }, 5000);
+            } catch(e) {}
+        } else if (!leaderAliveAtCampEnd && campLeader) {
             try {
                 component.setState({ campWarningMessage: `The crew rests uneasily without ${campLeader.name || 'the leader'}. Resolve recovery reduced.` });
                 const setTimeoutFn = (component._setTimeout && typeof component._setTimeout === 'function') ? component._setTimeout : setTimeout;

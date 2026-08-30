@@ -286,30 +286,29 @@ export function BoardManager(){
         const isMatch = (str) => {
             if (!str || typeof str !== 'string') return false;
             const norm = str.toLowerCase().replace(/\s+/g, '_');
-            return norm === 'connecting_path' || norm === 'passage' || norm === 'connecting_path_tile';
+            return norm === 'connecting_path' || norm === 'passage' || norm === 'connecting_path_tile' || norm === 'connecting' || norm === 'path' || norm === 'connecting_path_space' || norm.startsWith('connecting_path');
         };
 
-        // Check runtime tile
-        const contains = tile.contains;
-        let cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
-        let cSubtype = contains && typeof contains === 'object' ? contains.subtype : null;
-        const bldg = tile.building || (contains && contains.building);
-        const opt = tile.optionType;
+        const checkTile = (t) => {
+            if (!t) return false;
+            if (t.isConnectingPath || t.isPassage || t.isConnectingPathTile) return true;
+            
+            const contains = t.contains;
+            let cType = typeof contains === 'string' ? contains : (contains ? contains.type : null);
+            let cSubtype = contains && typeof contains === 'object' ? contains.subtype : null;
+            const bldg = t.building || (contains && contains.building);
+            const opt = t.optionType;
+            const img = t.image;
+            const orig = t.original;
+            const tp = t.type;
+            const locCode = t.locationCode;
 
-        if (isMatch(cType) || isMatch(cSubtype) || isMatch(bldg) || isMatch(opt)) return true;
-        if (tile.isConnectingPath || tile.isPassage || tile.type === 'connecting_path') return true;
+            if (isMatch(cType) || isMatch(cSubtype) || isMatch(bldg) || isMatch(opt) || isMatch(img) || isMatch(orig) || isMatch(tp) || isMatch(locCode)) return true;
+            return false;
+        };
 
-        // Check persistent boardTile
-        if (boardTile && boardTile !== tile) {
-            const bContains = boardTile.contains;
-            let bcType = typeof bContains === 'string' ? bContains : (bContains ? bContains.type : null);
-            let bcSubtype = bContains && typeof bContains === 'object' ? bContains.subtype : null;
-            const bbldg = boardTile.building || (bContains && bContains.building);
-            const bopt = boardTile.optionType;
-
-            if (isMatch(bcType) || isMatch(bcSubtype) || isMatch(bbldg) || isMatch(bopt)) return true;
-            if (boardTile.isConnectingPath || boardTile.isPassage || boardTile.type === 'path' || boardTile.type === 'connecting_path') return true;
-        }
+        if (checkTile(tile)) return true;
+        if (boardTile && boardTile !== tile && checkTile(boardTile)) return true;
 
         return false;
     };
@@ -399,6 +398,7 @@ export function BoardManager(){
             'builders_house', 'buildable_builders_house',
             'captains_tower', 'buildable_captains_tower',
             'house', 'buildable_house',
+            'farm', 'buildable_farm', 'pocket_farm',
             'stone_tower', 'buildable_stone_tower',
             'storage', 'buildable_storage',
             'temple', 'buildable_temple',
@@ -605,13 +605,7 @@ export function BoardManager(){
     this.hasSolidBorder = (tileData, side) => {
         if (!tileData || !tileData.borders) return false;
         if (this.isConnectingPathTile(tileData)) {
-            const loc = tileData.coordinates || (tileData.location ? [tileData.location[0], tileData.location[1]] : [tileData.id % 15, Math.floor(tileData.id / 15)]);
-            const col = loc[0] % 15;
-            const row = loc[1] % 15;
-            if (side === 'top' && (row === 0 || tileData.location?.[0] === 15)) return false;
-            if (side === 'bottom' && (row === 14 || tileData.location?.[0] === 29)) return false;
-            if (side === 'left' && (col === 0 || tileData.location?.[1] === 15)) return false;
-            if (side === 'right' && (col === 14 || tileData.location?.[1] === 29)) return false;
+            return false;
         }
         const borderValue = tileData.borders[side];
         if (!borderValue || String(borderValue).includes('transparent') || String(borderValue) === 'none') return false;
@@ -654,6 +648,11 @@ export function BoardManager(){
             const boardTiles = (this.currentBoard && this.currentBoard.tiles) ? this.currentBoard.tiles : null;
             const fromTile = (boardTiles && boardTiles[fromIdx]) ? boardTiles[fromIdx] : this.tiles[fromIdx];
             const toTile = (boardTiles && boardTiles[toIdx]) ? boardTiles[toIdx] : this.tiles[toIdx];
+
+            // If either tile is a connecting path, the passage between them is open and never blocked!
+            if (this.isConnectingPathTile(fromTile) || this.isConnectingPathTile(toTile)) {
+                return false;
+            }
 
             // If destination is an impassable building (outpost, observer platform, etc. except hut), block movement onto it
             if (!options.ignoreBuilding && this.isImpassableBuildingTile(toTile)) return true;
@@ -729,17 +728,13 @@ export function BoardManager(){
                 const tile = this.tiles[nextIdx] || (boardTiles && boardTiles[nextIdx]);
                 if (!tile) return;
 
-                const hasInscriptions = tile.inscriptions && Object.values(tile.inscriptions).some(v => !!v);
                 const isTargetVoid = this.isVoidTile(tile);
 
                 if (this.isPassageWallBlockingBetween(idx, nextIdx, { ignoreBuilding: true })) {
-                    // If blocked by a void tile boundary, only allow through if we're revealing an inscribed void tile directly.
-                    if (!(isTargetVoid && hasInscriptions)) {
-                        return;
-                    }
+                    return;
                 }
 
-                if (isTargetVoid && !hasInscriptions) return;
+                if (isTargetVoid) return;
 
                 visited.set(nextIdx, steps + 1);
 
@@ -748,9 +743,6 @@ export function BoardManager(){
 
                 // Locked gates are visible but block propagation past themselves.
                 if (this.isLockedGateTile(tile)) return;
-                
-                // Inscribed void tiles are visible but block propagation past themselves.
-                if (this.isVoidTile(tile)) return;
 
                 queue.push({ idx: nextIdx, steps: steps + 1 });
             });
@@ -851,7 +843,7 @@ export function BoardManager(){
             const bldg = t.building || (typeof t.contains === 'object' ? t.contains.building : '') || '';
             const rawKey = String(cSub || bldg || cType).toLowerCase();
 
-            const is2x2Structure = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith' || rawKey === 'war_camp' || rawKey === 'war_fort' || rawKey === 'earthen_fort' || rawKey === 'alchemist' || rawKey === 'merchant' || (rawKey.includes('monolith') && !rawKey.includes('shrine'));
+            const is2x2Structure = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith' || rawKey === 'war_camp' || rawKey === 'war_fort' || rawKey === 'earthen_fort' || rawKey === 'alchemist' || rawKey === 'merchant' || rawKey === 'cultivation_vat' || rawKey === 'dust_collector' || rawKey === 'larder' || rawKey === 'sawmill' || rawKey === 'lumber_mill' || rawKey === 'ore_mine' || rawKey === 'slate_mine' || rawKey === 'fungal_nursery' || (rawKey.includes('monolith') && !rawKey.includes('shrine')) || rawKey.includes('generator') || rawKey.includes('naked_trees_3');
             if (is2x2Structure) {
                 const cObj = typeof t.contains === 'object' ? t.contains : { type: 'building', subtype: rawKey };
                 if (!cObj.vendorGroupId && (!cObj.vendorCell || cObj.vendorCell === 'anchor')) {
@@ -2001,7 +1993,11 @@ export function BoardManager(){
                 generatorData: generatorData,
                 inscriptions: tile.inscriptions || null,
                 territory: tile.territory || null,
-                borders: null,
+                optionType: tile.optionType || null,
+                isConnectingPath: !!(tile.isConnectingPath || tile.isPassage || (tileContains && (tileContains.type === 'connecting_path' || tileContains.type === 'connecting path'))),
+                isPassage: !!(tile.isPassage || tile.isConnectingPath),
+                original: tile.original || null,
+                borders: tile.borders || null,
                 hasTrap: hasTrapFlag,
                 trapRevealed: trapRevealedFlag
             })
@@ -2028,6 +2024,40 @@ export function BoardManager(){
                 this.tiles[p+(15*j)].coordinates = [(j+1*15), p+1*15]
             }
         }
+        // Cleanly migrate any inscriptions on void tiles to adjacent non-void floor tiles
+        try {
+            const oppMap = {
+                top: { opp: 'bottom', offset: -15 },
+                bottom: { opp: 'top', offset: 15 },
+                left: { opp: 'right', offset: -1 },
+                right: { opp: 'left', offset: 1 }
+            };
+            for (let tId = 0; tId < this.tiles.length; tId++) {
+                const t = this.tiles[tId];
+                if (t && this.isVoidTile(t) && t.inscriptions) {
+                    Object.keys(t.inscriptions).forEach(side => {
+                        const insText = t.inscriptions[side];
+                        if (insText && oppMap[side]) {
+                            const nIdx = tId + oppMap[side].offset;
+                            const neighbor = this.tiles[nIdx];
+                            if (neighbor && !this.isVoidTile(neighbor)) {
+                                neighbor.inscriptions = {
+                                    ...(neighbor.inscriptions || {}),
+                                    [oppMap[side].opp]: insText
+                                };
+                                if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[nIdx]) {
+                                    this.currentBoard.tiles[nIdx].inscriptions = neighbor.inscriptions;
+                                }
+                            }
+                        }
+                    });
+                    t.inscriptions = null;
+                    if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tId]) {
+                        this.currentBoard.tiles[tId].inscriptions = null;
+                    }
+                }
+            }
+        } catch (e) {}
         this.placePlayer(this.playerTile.location)
         this.handleFogOfWar(this.tiles[this.getIndexFromCoordinates(this.playerTile.location)])
         // Ensure adjacency/overlay indicators are computed immediately after initializing a new board
@@ -2809,13 +2839,14 @@ export function BoardManager(){
                     this._activeEdgeIndicators.push(idx);
                 } catch (e) {}
             }
+            const currentTileIdx = this.getIndexFromCoordinates(pCoords);
+            const currentTile = this.tiles[currentTileIdx];
+            const localRow = pCoords[0] % 15;
+            const localCol = pCoords[1] % 15;
 
             // Helper to check if movement to an adjacent board is valid
             const canTransitionBoard = (direction) => {
-                const currentTileIdx = this.getIndexFromCoordinates(pCoords);
-                const currentTile = this.tiles[currentTileIdx];
                 if (!currentTile) return false;
-
                 if (!this.isConnectingPathTile(currentTile)) return false;
 
                 let plane = this.currentOrientation === 'F' ? this.currentLevel?.front : this.currentLevel?.back;
@@ -2824,47 +2855,43 @@ export function BoardManager(){
 
                 const bIdx = this.playerTile.boardIndex;
                 if (direction === 'up') {
-                    if (this.hasSolidBorder(currentTile, 'top') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
                     return (bIdx >= 3) && !!plane.miniboards[bIdx - 3];
                 } else if (direction === 'down') {
-                    if (this.hasSolidBorder(currentTile, 'bottom') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
                     return (bIdx <= 5) && !!plane.miniboards[bIdx + 3];
                 } else if (direction === 'left') {
-                    if (this.hasSolidBorder(currentTile, 'left') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
                     return (bIdx % 3 !== 0) && !!plane.miniboards[bIdx - 1];
                 } else if (direction === 'right') {
-                    if (this.hasSolidBorder(currentTile, 'right') || (this.isVoidTile && this.isVoidTile(currentTile))) return false;
                     return (bIdx % 3 !== 2) && !!plane.miniboards[bIdx + 1];
                 }
                 return false;
             };
 
             // Left edge
-            if (py <= 2 && canTransitionBoard('left')) {
+            if (localCol <= 2 && canTransitionBoard('left')) {
                 for (let d = -1; d <= 1; d++) {
-                    const nx = px + d;
-                    if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MIN], 'left');
+                    const nr = localRow + d;
+                    if (nr >= 0 && nr <= 14) markOverlayAt([nr + 15, 15], 'left');
                 }
             }
             // Right edge
-            if (py >= 12 && canTransitionBoard('right')) {
+            if (localCol >= 12 && canTransitionBoard('right')) {
                 for (let d = -1; d <= 1; d++) {
-                    const nx = px + d;
-                    if (nx >= EDGE_MIN && nx <= EDGE_MAX) markOverlayAt([nx, EDGE_MAX], 'right');
+                    const nr = localRow + d;
+                    if (nr >= 0 && nr <= 14) markOverlayAt([nr + 15, 29], 'right');
                 }
             }
             // Top edge
-            if (px <= 2 && canTransitionBoard('up')) {
+            if (localRow <= 2 && canTransitionBoard('up')) {
                 for (let d = -1; d <= 1; d++) {
-                    const ny = py + d;
-                    if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MIN, ny], 'top');
+                    const nc = localCol + d;
+                    if (nc >= 0 && nc <= 14) markOverlayAt([15, nc + 15], 'top');
                 }
             }
             // Bottom edge
-            if (px >= 12 && canTransitionBoard('down')) {
+            if (localRow >= 12 && canTransitionBoard('down')) {
                 for (let d = -1; d <= 1; d++) {
-                    const ny = py + d;
-                    if (ny >= EDGE_MIN && ny <= EDGE_MAX) markOverlayAt([EDGE_MAX, ny], 'bottom');
+                    const nc = localCol + d;
+                    if (nc >= 0 && nc <= 14) markOverlayAt([29, nc + 15], 'bottom');
                 }
             }
         } catch (e) {}
@@ -2929,7 +2956,7 @@ export function BoardManager(){
             if (this.isPeerTileOccupied(destinationCoords)) return true;
             
             // Check for void wall
-            if (type === 'void') return true;
+            if (type === 'void' && !this.isConnectingPathTile(destTile)) return true;
             
             // Check for large monster blocking
             if (destTile.blockedByLargeMonster) return true;
@@ -2977,7 +3004,7 @@ export function BoardManager(){
                                ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction'].includes(destinationTile.building) ||
                                !!destinationTile.generatorData;
 
-        if (destType === 'void') {
+        if (destType === 'void' && !this.isConnectingPathTile(destinationTile)) {
             const anyDestInscription = destinationTile.inscriptions && Object.values(destinationTile.inscriptions).find(v => !!v);
             if (destTileInscription) {
                 this.handleInscriptionRead(destTileInscription);
@@ -3138,80 +3165,136 @@ export function BoardManager(){
         }
     }
     this.moveUp = () => {
-        if(this.playerTile.location[0] === 15){
+        if (this.playerTile.location[0] === 15) {
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
-            const currentTile = this.tiles[currentTileIdx];
-            if (!this.isConnectingPathTile(currentTile)) {
+            const currentTile = this.tiles[currentTileIdx] || (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[currentTileIdx]);
+            
+            if (currentTile && currentTile.inscriptions && currentTile.inscriptions.top) {
+                this.handleInscriptionRead(currentTile.inscriptions.top);
+                return;
+            }
+
+            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
-            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            if (!plane || !plane.miniboards || !plane.miniboards[this.playerTile.boardIndex - 3]) {
+
+            const currentBoardIndex = this.playerTile.boardIndex;
+            if (currentBoardIndex < 3) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
-            this.moveBoardUp()
-            return
+
+            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
+            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+            if (!plane || !plane.miniboards || !plane.miniboards[currentBoardIndex - 3]) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+            this.moveBoardUp();
+            return;
         }
-        const destinationCoords = [(this.playerTile.location[0]- 1),this.playerTile.location[1]];
+        const destinationCoords = [(this.playerTile.location[0] - 1), this.playerTile.location[1]];
         this.move(destinationCoords, 'up');
     }
     this.moveDown = () => {
-        if(this.playerTile.location[0] === 29){
+        if (this.playerTile.location[0] === 29) {
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
-            const currentTile = this.tiles[currentTileIdx];
-            if (!this.isConnectingPathTile(currentTile)) {
+            const currentTile = this.tiles[currentTileIdx] || (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[currentTileIdx]);
+            
+            if (currentTile && currentTile.inscriptions && currentTile.inscriptions.bottom) {
+                this.handleInscriptionRead(currentTile.inscriptions.bottom);
+                return;
+            }
+
+            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
-            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            if (!plane || !plane.miniboards || !plane.miniboards[this.playerTile.boardIndex + 3]) {
+
+            const currentBoardIndex = this.playerTile.boardIndex;
+            if (currentBoardIndex >= 6) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
-            this.moveBoardDown()
-            return
+
+            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
+            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+            if (!plane || !plane.miniboards || !plane.miniboards[currentBoardIndex + 3]) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+            this.moveBoardDown();
+            return;
         }
-        const destinationCoords = [(this.playerTile.location[0]+ 1),this.playerTile.location[1]];
-        this.move(destinationCoords, 'down')
+        const destinationCoords = [(this.playerTile.location[0] + 1), this.playerTile.location[1]];
+        this.move(destinationCoords, 'down');
     }
     this.moveLeft = () => {
-        if(this.playerTile.location[1] === 15){
+        if (this.playerTile.location[1] === 15) {
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
-            const currentTile = this.tiles[currentTileIdx];
-            if (!this.isConnectingPathTile(currentTile)) {
+            const currentTile = this.tiles[currentTileIdx] || (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[currentTileIdx]);
+            
+            if (currentTile && currentTile.inscriptions && currentTile.inscriptions.left) {
+                this.handleInscriptionRead(currentTile.inscriptions.left);
+                return;
+            }
+
+            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
-            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            if (!plane || !plane.miniboards || !plane.miniboards[this.playerTile.boardIndex - 1]) {
+
+            const currentBoardIndex = this.playerTile.boardIndex;
+            if (currentBoardIndex % 3 === 0) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
-            this.moveBoardLeft()
-            return
+
+            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
+            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+            if (!plane || !plane.miniboards || !plane.miniboards[currentBoardIndex - 1]) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+            this.moveBoardLeft();
+            return;
         }
-        const destinationCoords = [this.playerTile.location[0],(this.playerTile.location[1]- 1)];
-        this.move(destinationCoords, 'left')
+        const destinationCoords = [this.playerTile.location[0], (this.playerTile.location[1] - 1)];
+        this.move(destinationCoords, 'left');
     }
     this.moveRight = () => {
-        if(this.playerTile.location[1] === 29){
+        if (this.playerTile.location[1] === 29) {
             const currentTileIdx = this.getIndexFromCoordinates(this.playerTile.location);
-            const currentTile = this.tiles[currentTileIdx];
-            if (!this.isConnectingPathTile(currentTile)) {
+            const currentTile = this.tiles[currentTileIdx] || (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[currentTileIdx]);
+            
+            if (currentTile && currentTile.inscriptions && currentTile.inscriptions.right) {
+                this.handleInscriptionRead(currentTile.inscriptions.right);
+                return;
+            }
+
+            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
-            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
-            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            if (!plane || !plane.miniboards || !plane.miniboards[this.playerTile.boardIndex + 1]) {
+
+            const currentBoardIndex = this.playerTile.boardIndex;
+            if (currentBoardIndex % 3 === 2) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
-            this.moveBoardRight()
-            return
+
+            let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
+            if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
+            if (!plane || !plane.miniboards || !plane.miniboards[currentBoardIndex + 1]) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+            this.moveBoardRight();
+            return;
         }
-        const destinationCoords = [this.playerTile.location[0],(this.playerTile.location[1]+ 1)];
-        this.move(destinationCoords, 'right')
+        const destinationCoords = [this.playerTile.location[0], (this.playerTile.location[1] + 1)];
+        this.move(destinationCoords, 'right');
     }
     this.moveBoardLeft = () => {
         this.boardTransition('left')
@@ -3538,17 +3621,16 @@ export function BoardManager(){
                 });
 
                 const isVoid = this.isVoidTile(e);
-                const hasInscriptions = e.inscriptions && Object.values(e.inscriptions).some(v => !!v);
                 const isRevealed = inLanternTerritory || inObsPlatformVision || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
 
-                if (isRevealed && (!isVoid || hasInscriptions)) {
+                if (isRevealed && !isVoid) {
 
                     const persistedColor = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].color);
                     const persistedBorders = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id] && this.currentBoard.tiles[e.id].borders);
                     const runtimeColor = (e.color && e.color !== 'black' && e.color !== 'white' && e.color !== 'null') ? e.color : null;
                     let boardColor = (persistedColor && persistedColor !== 'black' && persistedColor !== 'white' && persistedColor !== 'null') ? persistedColor : (runtimeColor || null);
                     
-                    if (!isVoid && (boardColor === '#111012' || boardColor === '#0e0e0e')) {
+                    if (boardColor === '#111012' || boardColor === '#0e0e0e') {
                         boardColor = '#6b6057';
                         if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[e.id]) {
                             this.currentBoard.tiles[e.id].color = '#6b6057';
@@ -3565,20 +3647,13 @@ export function BoardManager(){
                         }
                     }
 
-                    e.color = (!isVoid ? (boardColor || '#6b6057') : (boardColor || '#0e0e0e'));
+                    e.color = (boardColor || '#6b6057');
                     e.image = this.getImageForContains(e.contains, e);
                     e.borders = this.normalizeFogBorders(persistedBorders);
 
                     if (inBreadcrumbPassiveReveal && !(revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)))) {
                         e.partialObscured = true;
                     }
-                } else if (!isRevealed && hasInscriptions && manhattan === 1) {
-                    // Special case: Tile is a wall directly adjacent to the player, and we inscribed the wall border!
-                    // Show it as a dark wall so the inscription is visible on the adjacent wall.
-                    e.color = '#0e0e0e';
-                    e.image = null;
-                    e.borders = null;
-                    e.partialObscured = false;
                 }
             } catch (err) {}
         });

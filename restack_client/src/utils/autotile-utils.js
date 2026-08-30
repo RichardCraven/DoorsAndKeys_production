@@ -16,7 +16,7 @@ export function getBaseTerrainKey(tile) {
 
     if (!key) return null;
     const str = String(key).trim().toLowerCase();
-    for (const prefix of ['terrain_tree_1', 'terrain_naked_trees', 'terrain_tree_2', 'terrain_tree_3', 'terrain_mountain_1', 'terrain_mountain_2', 'terrain_mountain_3']) {
+    for (const prefix of ['terrain_tree_1', 'terrain_naked_trees_3', 'terrain_naked_trees_2', 'terrain_naked_trees', 'terrain_tree_2', 'terrain_tree_3', 'terrain_mountain_1', 'terrain_mountain_2', 'terrain_mountain_3']) {
         if (str.startsWith(prefix)) return prefix;
     }
     return null;
@@ -80,7 +80,8 @@ export function updateTerrainAutotiles(tiles, targetIndex) {
             if (baseKey) {
                 const mask = getTerrainAutotileMask(tiles, idx);
                 const variantKey = `${baseKey}_${mask}`;
-                const resolvedImage = images[variantKey] || variantKey;
+                const hasVariantImage = Boolean(images[variantKey]);
+                const resolvedImage = hasVariantImage ? images[variantKey] : (images[baseKey] || tiles[idx].image || images.pine_tree_medium || baseKey);
                 const seed = (typeof tiles[idx].variantSeed === 'number')
                     ? tiles[idx].variantSeed
                     : ((typeof tiles[idx].contains === 'object' && typeof tiles[idx].contains?.variantSeed === 'number')

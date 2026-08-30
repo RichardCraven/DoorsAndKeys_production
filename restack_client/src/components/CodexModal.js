@@ -303,10 +303,247 @@ const CLASS_LORE = [
     { id: 'engineer', emoji: '⚙️', name: 'Engineer', role: 'Utility / Control', color: '#7a9ab0', desc: 'A battlefield machinist who controls spacing and tactical pressure. Force Back pushes enemies into unfavorable positions. Combines weapon mastery with mechanical gadgetry for unique hybrid play.' },
 ];
 
+// ── Special Actions catalogue ────────────────────────────────────────────────
+export const SPECIAL_ACTIONS = [
+    // ── Soldier Actions ──
+    {
+        id: 'tactics',
+        name: 'Battle Tactics',
+        category: 'soldier',
+        icon: images.battle_tactics,
+        desc: 'Command strategies devised by the Soldier to rally the crew, enhance experience gains, or harden defensive formations during combat.',
+        tags: ['soldier', 'combat', 'buff', 'xp'],
+        details: 'Prepares team-wide tactical maneuvers before battle. Preparing a tactic takes 1 minute.',
+        subEntries: [
+            { id: 'vanguard_formation', name: 'Vanguard Formation', desc: 'Aggressive assault posture. Boosts damage and ATK for all front-line combatants.', details: 'Duration: 3 combats. +20% ATK for front row.' },
+            { id: 'iron_discipline', name: 'Iron Discipline', desc: 'Defensive command posture. Reduces incoming physical and elemental damage.', details: 'Duration: 3 combats. +15% DEF & Armor for crew.' },
+            { id: 'blitz_protocol', name: 'Blitz Protocol', desc: 'High-speed tactical maneuver. Boosts Speed and XP gains for fast tactical victories.', details: 'Duration: 3 combats. +25% XP multiplier, +2 Speed.' },
+        ]
+    },
+    {
+        id: 'vanguard_formation',
+        name: 'Vanguard Formation',
+        category: 'soldier',
+        icon: images.battle_tactics,
+        desc: 'An aggressive battle tactic focused on raw offensive momentum and front-line pressure.',
+        tags: ['soldier', 'tactics', 'buff'],
+        details: '⏱ 1 min prep · ⚔ 3 combats · ✦ +20% Frontline ATK'
+    },
+    {
+        id: 'iron_discipline',
+        name: 'Iron Discipline',
+        category: 'soldier',
+        icon: images.battle_tactics,
+        desc: 'A defensive battle tactic where the Soldier enforces unbroken unit coherence.',
+        tags: ['soldier', 'tactics', 'buff'],
+        details: '⏱ 1 min prep · ⚔ 3 combats · 🛡 +15% Crew DEF'
+    },
+    {
+        id: 'blitz_protocol',
+        name: 'Blitz Protocol',
+        category: 'soldier',
+        icon: images.battle_tactics,
+        desc: 'A rapid tactical maneuver designed for overwhelming speed and accelerated combat experience.',
+        tags: ['soldier', 'tactics', 'xp', 'speed'],
+        details: '⏱ 1 min prep · ⚔ 3 combats · ✦ +50% XP · ⚡ +2 Speed'
+    },
+    {
+        id: 'sharpen_blades',
+        name: 'Sharpen Blades',
+        category: 'soldier',
+        icon: images.shortsword,
+        desc: 'The Soldier spends quiet moments whetting the edges of all crew melee weapons to increase weapon damage.',
+        tags: ['soldier', 'buff', 'weapon', 'damage'],
+        details: '⏱ 2 min prep · Boosts base physical damage for all blade and piercing weapons.'
+    },
+
+    // ── Wizard Actions ──
+    {
+        id: 'glyph',
+        name: 'Etch Glyph',
+        category: 'wizard',
+        icon: images.glyph_inverted,
+        desc: 'Inscribes magical spell matrices onto ethereal parchment glyphs. When combat starts, prepared glyphs cast their contained spells automatically without energy cost.',
+        tags: ['wizard', 'spell', 'auto-cast', 'glyph'],
+        details: 'Minor Glyphs hold Tier 1 spells; Major Glyphs hold Tier 2 spells; Supreme Glyphs hold Tier 3 spells.'
+    },
+    {
+        id: 'minor_glyph',
+        name: 'Minor Glyph',
+        category: 'wizard',
+        icon: images.minor_glyph,
+        desc: 'A basic spell glyph used to auto-trigger Tier 1 Wizard spells upon entering combat.',
+        tags: ['wizard', 'glyph', 'tier1'],
+        details: 'Holds 1 spell slot. Automatically triggers at the start of battle.'
+    },
+    {
+        id: 'major_glyph',
+        name: 'Major Glyph',
+        category: 'wizard',
+        icon: images.major_glyph,
+        desc: 'A potent arcane matrix holding up to Tier 2 Wizard spells.',
+        tags: ['wizard', 'glyph', 'tier2'],
+        details: 'Holds 2 spell slots. Automatically unleashes combined spell power on round 1.'
+    },
+    {
+        id: 'supreme_glyph',
+        name: 'Supreme Glyph',
+        category: 'wizard',
+        icon: images.supreme_glyph,
+        desc: 'The ultimate spell matrix capable of holding Tier 3 spells or devastating spell combinations.',
+        tags: ['wizard', 'glyph', 'tier3'],
+        details: 'Holds 3 spell slots. Releases catastrophic magic instantly when combat begins.'
+    },
+    {
+        id: 'ritual',
+        name: 'Prepare Ritual',
+        category: 'wizard',
+        icon: images.magic_moon_1,
+        desc: 'Channels deep arcane focus to prepare ancient floor-wide rituals such as Unlock, Purify, Ward, or Revive.',
+        tags: ['wizard', 'sage', 'ritual', 'arcane'],
+        details: 'Requires known ritual scrolls. Up to 3 prepared rituals can be stored simultaneously.'
+    },
+    {
+        id: 'scry',
+        name: 'Scry',
+        category: 'wizard',
+        icon: images.eye_inverted,
+        desc: 'Projects the Wizard\'s sight across the dungeon plane to reveal hidden rooms, shrines, portals, and monster movements.',
+        tags: ['wizard', 'scry', 'vision', 'map'],
+        details: 'Optionally targets specific anomalies like shrines, portals, or boss sightings.'
+    },
+
+    // ── Sage Actions ──
+    {
+        id: 'compound',
+        name: 'Mix Potions',
+        category: 'sage',
+        icon: images.potion,
+        desc: 'The Sage combines raw herbs, minerals, and monster components to synthesize healing salves and enhancement elixirs.',
+        tags: ['sage', 'alchemy', 'potions', 'healing'],
+        details: 'Converts ingredients stored in shared inventory into usable combat potions.'
+    },
+
+    // ── Barbarian Actions ──
+    {
+        id: 'brew',
+        name: 'Brew',
+        category: 'barbarian',
+        icon: images.brew_beer,
+        desc: 'Ferments strong mountain ales and grog. Restores crew resolve and fuels berserker vigor during exploration.',
+        tags: ['barbarian', 'brew', 'resolve', 'stamina'],
+        details: 'Produces grog rations that can be consumed in camp or before battle.'
+    },
+    {
+        id: 'imprint_tattoo',
+        name: 'Tattoos',
+        category: 'barbarian',
+        icon: images.tattoo_ink,
+        desc: 'Inscribes ancient ancestral tribal ink onto body slots, granting permanent stat increases and damage resistances.',
+        tags: ['barbarian', 'tattoo', 'stats', 'permanent'],
+        details: 'Up to 8 tattoo slots per barbarian. Imprinting takes 5 minutes per tattoo.'
+    },
+
+    // ── Monk Actions ──
+    {
+        id: 'inner_discipline',
+        name: 'Discipline',
+        category: 'monk',
+        icon: images.monk_meditate,
+        desc: 'Monastic mental disciplines encompassing Chi Focus, Martial Stances, and Spirit Walking.',
+        tags: ['monk', 'chi', 'stance', 'spirit'],
+        details: 'Includes Chi Focus (restores Chi energy), Combat Stances (Iron Turtle, Flame Palm), and Spirit Walk.'
+    },
+    {
+        id: 'chi_focus',
+        name: 'Chi Focus',
+        category: 'monk',
+        icon: images.monk_meditate,
+        desc: 'Meditative focus that generates Chi charges used to unleash specialized Monk combat arts.',
+        tags: ['monk', 'chi', 'buff'],
+        details: '⏱ 1 min prep · Generates 1 Chi charge (max 3).'
+    },
+    {
+        id: 'iron_turtle',
+        name: 'Iron Turtle Stance',
+        category: 'monk',
+        icon: images.monk_inner_fire,
+        desc: 'A heavy defensive stance that increases armor and physical damage absorption.',
+        tags: ['monk', 'stance', 'defense'],
+        details: '⏱ 1 min prep · ⚔ 3 combats · Boosts Defense & Guard.'
+    },
+    {
+        id: 'flame_palm',
+        name: 'Flame Palm Stance',
+        category: 'monk',
+        icon: images.monk_inner_fire,
+        desc: 'An aggressive martial stance imbuing unarmed strikes with searing fire damage.',
+        tags: ['monk', 'stance', 'offense'],
+        details: '⏱ 1 min prep · ⚔ 3 combats · Adds fire damage to physical hits.'
+    },
+    {
+        id: 'spirit_walk',
+        name: 'Spirit Walk',
+        category: 'monk',
+        icon: images.monk_third_eye,
+        desc: 'Projects the Monk\'s spiritual consciousness into the ethereal plane to sense unseen dangers.',
+        tags: ['monk', 'spirit', 'vision'],
+        details: '⏱ 2 min prep · Reveals hidden traps and ethereal entities on current board.'
+    },
+
+    // ── Ranger Actions ──
+    {
+        id: 'prepare_poison',
+        name: 'Prepare Poison',
+        category: 'ranger',
+        icon: images.ranger_acid_bomb,
+        desc: 'Distills virulent flora and monster venom into throwable Acid Bombs or Poison Arrow coatings.',
+        tags: ['ranger', 'poison', 'acid', 'debuff'],
+        details: 'Produces Acid Bombs to shred enemy armor and deal damage-over-time.'
+    },
+    {
+        id: 'acid_bomb',
+        name: 'Acid Bomb',
+        category: 'ranger',
+        icon: images.ranger_acid_bomb,
+        desc: 'A volatile glass flask filled with corrosive acid that melts enemy armor.',
+        tags: ['ranger', 'acid', 'bomb'],
+        details: '⏱ 2 min prep · Max 2 ready bombs. Deals splash acid damage and reduces armor.'
+    },
+    {
+        id: 'deploy_animal',
+        name: 'Deploy Animal',
+        category: 'ranger',
+        icon: images.scrounging_rat,
+        desc: 'Dispatches trained animal agents like the Scrounging Rat or Scout Crow on scouting and scavenging missions.',
+        tags: ['ranger', 'scout', 'rat', 'crow', 'scavenge'],
+        details: 'Animals search adjacent boards for loot, seeds, or hidden pathways.'
+    },
+    {
+        id: 'scrounging_rat',
+        name: 'Scrounging Rat',
+        category: 'ranger',
+        icon: images.scrounging_rat,
+        desc: 'Sends a clever rodent companion to scrounge through nearby rooms for food, keys, and scrap.',
+        tags: ['ranger', 'rat', 'scavenge'],
+        details: 'Returns after 3 minutes with recovered resources.'
+    },
+    {
+        id: 'scout_crow',
+        name: 'Scout Crow',
+        category: 'ranger',
+        icon: images.fastidious_crow,
+        desc: 'Releases a trained crow to fly above the dungeon plane and map out unexplored territory.',
+        tags: ['ranger', 'crow', 'scout'],
+        details: 'Returns after 2 minutes revealing fog of war on adjacent miniboards.'
+    }
+];
+
 // ── Tab definitions ───────────────────────────────────────────────────────────
 
 const TABS = [
     { id: 'skills', label: 'Skills', emoji: '⚡' },
+    { id: 'actions', label: 'Actions', emoji: '⚔️' },
     { id: 'monsters', label: 'Monsters', emoji: '👹' },
     { id: 'classes', label: 'Classes', emoji: '🧑\u200d🤝\u200d🧑' },
     { id: 'interactables', label: 'World', emoji: '🗺️' },
@@ -372,9 +609,21 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
         // Clear search so the entry is visible in the full list
         setSearch('');
         if (initialEntryId) {
-            // Interactable entry by id
+            const rawId = String(initialEntryId).toLowerCase().replace(/\s+/g, '_');
+            const foundAction = SPECIAL_ACTIONS.find(a =>
+                a.id === rawId ||
+                a.name.toLowerCase().replace(/\s+/g, '_') === rawId ||
+                a.id === initialEntryId ||
+                (a.tags && a.tags.includes(rawId))
+            );
+            if (foundAction) { setSelectedEntry(foundAction); return; }
             const found = INTERACTABLES.find(i => i.id === initialEntryId);
             if (found) { setSelectedEntry(found); return; }
+        }
+        if (initialTab === 'actions' && initialSearch) {
+            const qRaw = initialSearch.trim().toLowerCase().replace(/\s+/g, '_');
+            const match = SPECIAL_ACTIONS.find(a => a.id === qRaw || a.name.toLowerCase().includes(initialSearch.trim().toLowerCase()));
+            if (match) { setSelectedEntry(match); return; }
         }
         if (initialTab === 'monsters' && initialSearch && monsterManager) {
             // Auto-select the first monster whose type matches the search term
@@ -429,6 +678,13 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
     const filteredSkills = allSkills.filter(s => {
         const matchQ = !q || s.name.toLowerCase().includes(q) || (s.desc || '').toLowerCase().includes(q) || (s.class || '').toLowerCase().includes(q);
         const matchClass = skillClassFilter === 'all' || (s.class || '').toLowerCase() === skillClassFilter;
+        return matchQ && matchClass;
+    });
+
+    // ── Special Actions data
+    const filteredActions = SPECIAL_ACTIONS.filter(a => {
+        const matchQ = !q || a.name.toLowerCase().includes(q) || (a.desc || '').toLowerCase().includes(q) || (a.category || '').toLowerCase().includes(q) || (a.tags || []).some(t => t.includes(q));
+        const matchClass = skillClassFilter === 'all' || (a.category || '').toLowerCase() === skillClassFilter;
         return matchQ && matchClass;
     });
 
@@ -538,6 +794,47 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
                                     <SkillDetail skill={selectedEntry} />
                                 ) : (
                                     <CodexDetailPlaceholder tab="skills" />
+                                )}
+                            </div>
+                        </>
+                    )}
+
+                    {/* ── ACTIONS tab ──────────────────────────────── */}
+                    {activeTab === 'actions' && (
+                        <>
+                            <div className="codex-list">
+                                {filteredActions.length === 0 && <div className="codex-empty">No special actions match your search.</div>}
+                                {filteredActions.map((action, idx) => {
+                                    const iconSrc = resolveImg(action.icon);
+                                    const selected = selectedEntry && (selectedEntry.id === action.id || selectedEntry.name === action.name);
+                                    return (
+                                        <div
+                                            key={`${action.id}_${idx}`}
+                                            ref={el => { if (selected) selectedRowRef.current = el; }}
+                                            className={`codex-list-row${selected ? ' selected' : ''}`}
+                                            onClick={() => setSelectedEntry(action)}
+                                        >
+                                            {iconSrc ? (
+                                                <img src={iconSrc} alt="" className="codex-row-icon" />
+                                            ) : (
+                                                <div className="codex-row-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>⚔️</div>
+                                            )}
+                                            <div className="codex-row-content">
+                                                <div className="codex-row-name">{action.name}</div>
+                                                <div className="codex-row-meta">
+                                                    <span style={{ color: classColor(action.category) }}>{(action.category || '').toUpperCase()}</span>
+                                                    <span style={{ color: '#888' }}> · Special Action</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="codex-detail">
+                                {selectedEntry && (selectedEntry.category || selectedEntry.subEntries) ? (
+                                    <SpecialActionDetail action={selectedEntry} />
+                                ) : (
+                                    <CodexDetailPlaceholder tab="actions" />
                                 )}
                             </div>
                         </>
@@ -668,6 +965,58 @@ export default function CodexModal({ visible, onClose, monsterManager, initialTa
 }
 
 // ── Sub-detail components ─────────────────────────────────────────────────────
+
+function SpecialActionDetail({ action }) {
+    const iconSrc = resolveImg(action.icon);
+
+    return (
+        <div className="codex-detail-inner">
+            <div className="codex-detail-header">
+                {iconSrc ? (
+                    <img src={iconSrc} alt="" className="codex-detail-icon" />
+                ) : (
+                    <div className="codex-detail-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px' }}>⚔️</div>
+                )}
+                <div>
+                    <div className="codex-detail-name">{action.name}</div>
+                    <div className="codex-detail-sub" style={{ color: classColor(action.category) }}>
+                        {(action.category || '').toUpperCase()} — Special Action
+                    </div>
+                </div>
+            </div>
+            <div className="codex-detail-desc">{action.desc || 'No description available.'}</div>
+            {action.details && (
+                <div className="codex-detail-stats">
+                    <CodexStat label="Details" value={action.details} color="#eba636" />
+                </div>
+            )}
+            {action.subEntries && action.subEntries.length > 0 && (
+                <div className="codex-detail-effects" style={{ marginTop: '16px' }}>
+                    <div className="codex-effects-label">Options & Formations</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '6px' }}>
+                        {action.subEntries.map((sub, i) => (
+                            <div key={i} style={{ background: 'rgba(255, 255, 255, 0.04)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '6px', padding: '8px 12px' }}>
+                                <div style={{ fontWeight: 600, color: '#f9b115', fontSize: '13px' }}>{sub.name}</div>
+                                <div style={{ fontSize: '12px', color: '#ccc', marginTop: '2px' }}>{sub.desc}</div>
+                                {sub.details && <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>{sub.details}</div>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+            {action.tags && action.tags.length > 0 && (
+                <div className="codex-detail-effects" style={{ marginTop: '16px' }}>
+                    <div className="codex-effects-label">Tags</div>
+                    <div className="codex-effects-list" style={{ marginTop: '6px' }}>
+                        {action.tags.map((t, i) => (
+                            <span key={i} className="codex-effect-pill">{t}</span>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 function SkillDetail({ skill }) {
     const iconSrc = resolveImg(skill.icon);

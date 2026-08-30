@@ -673,3 +673,43 @@
   color: #d4c8b4;
   text-align: right;
 }
+
+/* Hidden '?' Codex help button on action items and sub-items */
+.action-codex-btn {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease-out, background 0.12s ease-out, color 0.12s ease-out, transform 0.12s ease-out;
+  margin-left: auto;
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.action-hover-wrapper:hover .action-codex-btn,
+.action-subtype:hover .action-codex-btn,
+.discipline-child:hover .action-codex-btn,
+.action-wrapper:hover .action-codex-btn {
+  opacity: 0.85;
+  pointer-events: auto;
+}
+
+.action-codex-btn:hover {
+  opacity: 1 !important;
+  background: rgba(249, 177, 21, 0.3) !important;
+  border-color: #f9b115 !important;
+  color: #ffd700 !important;
+  transform: scale(1.18);
+  box-shadow: 0 0 8px rgba(249, 177, 21, 0.5);
+}

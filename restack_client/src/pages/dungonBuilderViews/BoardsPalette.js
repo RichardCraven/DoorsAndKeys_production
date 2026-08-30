@@ -50,6 +50,9 @@ class BoardsPalette extends React.Component {
                 }}
             >
                 {this.props.mapMaker.paletteTiles && this.props.mapMaker.paletteTiles.map((tile, i) => {
+                    if (tile.optionType === 'pocket buildings' && !this.props.superboardZoom) {
+                        return null;
+                    }
                     return (
                     <div key={i} className={`palette-options-pane${this.props.optionClickedIdx === i ? ' expanded-pane' : ''}`}>
                         <div className="palette-option-container"

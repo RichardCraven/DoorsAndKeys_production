@@ -1260,6 +1260,8 @@ import grass_rocks_base_3 from '../assets/icons/terrain/grass_rocks_base_3.png';
 import pine_tree_tall from '../assets/icons/terrain/pine_trees/pine_tree_tall.png';
 import pine_tree_medium from '../assets/icons/terrain/pine_trees/pine_tree_medium.png';
 import pine_tree_small from '../assets/icons/terrain/pine_trees/pine_tree_small.png';
+import naked_trees_2_img from '../assets/icons/terrain/pine_trees/naked_trees_2.png';
+import naked_trees_3_img from '../assets/icons/terrain/pine_trees/naked_trees_3.png';
 import terrain_tree_1 from "../assets/icons/terrain/terrain_tree_1.png";
 import terrain_tree_1_0 from "../assets/icons/terrain/terrain_tree_1_0.png";
 import terrain_tree_1_1 from "../assets/icons/terrain/terrain_tree_1_1.png";
@@ -1436,6 +1438,12 @@ const outpost = buildable_outpost;
 const war_camp = buildable_war_camp;
 const war_fort = buildable_war_fort;
 const dream_den = moon_castle;
+const terrain_naked_trees = pine_tree_medium;
+const naked_trees = pine_tree_medium;
+const terrain_naked_trees_2 = naked_trees_2_img;
+const naked_trees_2 = naked_trees_2_img;
+const terrain_naked_trees_3 = naked_trees_3_img;
+const naked_trees_3 = naked_trees_3_img;
 
 const tattoo_placeholder = tattoo_ink; // placeholder until real tattoo art is added
 const _terrainBase = [terrain_1, terrain_2, terrain_3, terrain_4, terrain_5, terrain_6, terrain_7, terrain_8, terrain_9, terrain_10, terrain_11, terrain_12, terrain_13, terrain_14, terrain_15, terrain_16];
@@ -1623,6 +1631,14 @@ export {
     supreme_health_potion,
     lantern,
     automaton,
+    terrain_naked_trees,
+    naked_trees,
+    terrain_naked_trees_2,
+    naked_trees_2,
+    naked_trees_2_img,
+    terrain_naked_trees_3,
+    naked_trees_3,
+    naked_trees_3_img,
     terrain_tree_1,
     terrain_tree_1_0,
     terrain_tree_1_1,

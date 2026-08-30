@@ -256,11 +256,132 @@ const CLASS_SPECIALTIES = {
   ]
 };
 
+const SPECIALIZATION_PERK_DESCRIPTIONS = {
+  // Ranger
+  '+1 Exploration Reveal Radius': 'Expands the scouting vision and fog-of-war reveal radius around the party by +1 tile while exploring the dungeon.',
+  'Ambush Detection Passive': 'Detects lurking monsters and enemy ambush triggers before stepping onto their tile, preventing surprise attacks.',
+  'Trap Sight Passive': 'Automatically reveals hidden floor traps, pitfalls, and tripwires within vision range without requiring manual inspection.',
+  '+25% Critical Strike Chance': 'Increases the chance to land a Critical Strike by +25% on all ranged and melee attacks.',
+  'Headshot Passive': 'Critical hits apply a 1-turn daze to the target and deal +50% bonus critical strike damage.',
+  'Beast Ally Passive': 'Grants a passive bond with wild animals and dungeon beasts, causing neutral creatures to become friendly allies.',
+  '+10% Nature Resistance': 'Reduces incoming poison, acid, and nature-elemental damage by 10%.',
+  'Creature Affinity Bonus': 'Deals 20% bonus damage against beast and monster type enemies encountered in combat.',
+  '+2 Trap Placements': 'Increases the maximum number of active traps and snares the Ranger can deploy simultaneously by +2.',
+  'Ensnare Duration +50%': 'Extends the duration of movement slowdowns and root effects from deployed traps by 50%.',
+  'Pre-Combat Lay Passive': 'Automatically lays a hidden snare trap on the battlefield at the start of combat encounters.',
+
+  // Sage
+  '+20% Food Restoration': 'Increases health and stamina restored when consuming rations or prepared food by 20%.',
+  '+15% Potion Potency': 'Increases the healing magnitude and buff effects of all consumed potions by 15%.',
+  'Herb Forage Chance': 'Provides a chance to gather restorative herbs when moving onto woodland or overgrown tiles.',
+  '+1 Heal Range': 'Extends the target casting range of all healing spells and restorative arts by +1 tile.',
+  'Instant Ward Cast': 'Allows protective ward spells to be cast instantly without consuming action points.',
+  '-20% Healing Cooldown': 'Reduces the cooldown recovery time on all healing abilities by 20%.',
+  'Codex Bonus Reveals': 'Unlocks additional lore details, hidden path hints, and codex entries when examining dungeon relics.',
+  '+10% Arcane Skill Power': 'Increases the damage and efficacy of all arcane school spells by 10%.',
+  '+40% Ward Duration': 'Extends the active duration of defensive wards and magical barriers by 40%.',
+  'Shared Protection Aura': 'Projects a protective aura that grants adjacent allies 25% of active ward shield values.',
+  '-1 Ward AP Cost': 'Reduces the Action Point cost of casting defensive ward spells by 1 AP.',
+
+  // Soldier
+  '+3 Armor Rating': 'Grants +3 flat physical armor, mitigating incoming physical hit damage.',
+  '+25% Taunt Effectiveness': 'Increases the duration and threat generation of taunts and challenges by 25%.',
+  'Immovable Stance Passive': 'Grants immunity to forced displacement, knockbacks, and enemy push effects.',
+  'Adjacent Ally Block +15%': 'Grants a 15% bonus block chance to adjacent crew members standing next to the Soldier.',
+  'Counter-Flank Riposte': 'Automatically triggers a counter-attack against enemies attempting to flank or attack from behind.',
+  '+10% Fortitude': 'Increases maximum Health and status effect resistance by 10%.',
+  '+30% Damage vs Low HP': 'Deals 30% bonus damage against targets with less than 30% health remaining.',
+  'Execute Threshold: 15%': 'Immediately slays non-boss targets hit while below 15% health.',
+  '+10% Resource Conservation': 'Reduces party supply consumption and item degradation during dungeon exploration by 10%.',
+  'Supply Cache Passive': 'Uncovers extra emergency rations or repair kits when entering new dungeon chambers.',
+  'Reduced Ration Use': 'Reduces total ration consumption by 25% during camp and rest phases.',
+
+  // Monk
+  '+25% Strike Damage': 'Increases damage dealt by unarmed strikes, martial hits, and palm strikes by 25%.',
+  'Combo Multiplier +1': 'Adds +1 to the combo counter on consecutive martial strikes, accelerating finisher power.',
+  '+3 Physical Resistance': 'Reduces incoming physical damage from all attacks by 3 points.',
+  '+15% Elemental Mitigation': 'Reduces incoming fire, frost, and shock damage by 15%.',
+  'Injury Recovery Bonus': 'Accelerates recovery time from physical injuries and debuffs when resting.',
+  '+2 Movement Range': 'Increases movement allowance by +2 tiles during combat and exploration.',
+  '+20% Dodge Rating': 'Increases the chance to completely dodge incoming physical attacks by 20%.',
+  'Repositioning Step Passive': 'Allows a free zero-cost step reposition after successfully dodging an attack.',
+  '+15% Meditation Restore': 'Increases Ki energy and health restored during meditation by 15%.',
+  'Disrupt Focus Ability': 'Delivers a precision strike that interrupts enemy spell channels and locks out casting for 1 turn.',
+
+  // Barbarian
+  'Rage Scales with Damage': 'Generates bonus Rage whenever taking damage, scaling directly with the hit magnitude.',
+  '+40% Low-HP Attack Speed': 'Increases attack execution speed by 40% when health drops below 35%.',
+  'Pain Threshold Passive': 'Converts a portion of lethal damage into a slow bleed instead of instant defeat.',
+  '+3 Magic Resistance': 'Reduces incoming magical damage by 3 points.',
+  'Rune Strike Ability': 'Infuses weapon attacks with elemental rune energy, sundering target armor.',
+  'Ancestral Ward Passive': 'Calls upon ancestral spirits to absorb up to 20% of incoming elemental damage.',
+  'Unstoppable Charge': 'Charges through enemy lines, knocking back and stunning targets in the path.',
+  'Knockback Immunity': 'Grants total immunity to knockback, pull, and displacement effects.',
+  'Demoralize Aura': 'Emits a frightening aura that lowers attack power of nearby enemies by 15%.',
+  'Ally Morale Boost': 'Rallies allies with a war shout, removing fear and granting +10% damage for 2 turns.',
+  '-15% Enemy Defense': 'Weakens enemy armor and defense ratings by 15% within close proximity.',
+
+  // Engineer
+  '+35% Trap Damage': 'Increases damage dealt by all deployed mechanical traps and ordnance by 35%.',
+  'Chain Trigger Passive': 'Triggering one trap automatically primes adjacent deployed traps to detonate sequentially.',
+  '+1 Trap Placement Range': 'Extends the placement and throw distance of traps by +1 tile.',
+  '-20% Turret Deploy Time': 'Reduces the Action Point and turn cost of deploying automated turrets by 20%.',
+  '+2 Turret HP': 'Increases the maximum health and durability of deployed turrets by +2 HP.',
+  'Overcharge Shot Passive': 'Turrets fire a high-powered armor-piercing shot every 3rd attack.',
+  'AOE Blast +25%': 'Expands the explosion radius and splash damage of bombs and ordnance by 25%.',
+  'Explosive Chain Passive': 'Enemies killed by explosions detonate in a secondary blast dealing 50% damage.',
+  'Smoke Cover Ability': 'Deploys a dense smoke canister that obscures line-of-sight and grants 40% evasion.',
+  'Emergency Stabilize Ability': 'Instantly repairs damaged mechanical constructs or stabilizes a dying ally.',
+  '+10% Camp Heal Bonus': 'Enhances health and armor repair output when camping by 10%.',
+  'Auto-Patch Passive': 'Automatically restores 5% construct and turret HP per turn during combat.',
+
+  // Wizard
+  '+30% Elemental Spell Power': 'Amplifies Fire, Frost, and Lightning spell damage output by 30%.',
+  'Dual Element Cast': 'Allows weaving two different elemental spells together in a single turn without penalty.',
+  '-25% Mana Cost': 'Reduces the mana cost of casting all wizard spells by 25%.',
+  '+20% Spell Duration': 'Extends the active duration of persistent spell hazards and area effects by 20%.',
+  'Arcane Reserve Passive': 'Automatically restores 10% of maximum mana upon entering a new dungeon room.',
+  'Arcane Barrier Ability': 'Erects a shimmering magical shield that absorbs incoming spell and physical damage.',
+  '+15% Construct HP': 'Increases maximum health of magical barriers and arcane constructs by 15%.',
+  'Containment Field Passive': 'Traps target enemy inside an arcane cage for 1 turn, preventing movement and casting.',
+  'Dimensional Shift Ability': 'Teleports the wizard or an ally to a target visible empty tile within 5 range.',
+  'Enemy Displacement': 'Forces a target enemy to swap positions with another tile or object.',
+
+  // Summoner
+  '+30% Undead HP': 'Increases maximum health of summoned skeletons and undead minions by 30%.',
+  'Revive Fallen Minion': 'Instantly reanimates a destroyed skeleton or undead minion at 50% health.',
+  '+2 Max Skeleton Cap': 'Increases the total number of simultaneous skeletons that can be controlled by +2.',
+  '-20% Summon Cost': 'Reduces the resource and mana cost of summoning minions by 20%.',
+  '+1 Active Summon Slot': 'Allows maintaining +1 additional active minion on the field.',
+  'Rift Stability Passive': 'Prevents rifts from collapsing prematurely, extending minion duration.',
+  'Specter Persistence +60%': 'Increases duration of spectral and ethereal summons by 60%.',
+  'Ethereal Shield Ability': 'Grants minion a temporary phase shield that absorbs 100% of the next attack.',
+  '+25% Minion Damage': 'Boosts physical and magical damage dealt by all active minions by 25%.',
+  'Void Surge Passive': 'Minions release an explosive pulse of void energy upon death, damaging nearby foes.',
+  'Entropy Aura Ability': 'Emits an aura around minions that degrades enemy armor and magic resistance by 2 per turn.',
+
+  // Attribute ratings
+  '+2 DEX Rating': 'Permanently increases Dexterity rating by +2, improving accuracy, dodge chance, and critical hit rate.',
+  '+2 INT Rating': 'Permanently increases Intelligence rating by +2, improving spell power and maximum mana pool.',
+  '+2 STR Rating': 'Permanently increases Strength rating by +2, improving physical attack damage.',
+  '+4 FORT Rating': 'Permanently increases Fortitude rating by +4, improving maximum health and physical defense.'
+};
+
+function getSpecializationPerkDescription(perkName) {
+  if (SPECIALIZATION_PERK_DESCRIPTIONS[perkName]) {
+    return SPECIALIZATION_PERK_DESCRIPTIONS[perkName];
+  }
+  if (perkName && (perkName.includes('Rating') || perkName.includes('+'))) {
+    return `Passive stat enhancement: ${perkName}.`;
+  }
+  return `Specialization perk bonus provided by this path: ${perkName}.`;
+}
 
 export default function LandingPage(props) {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showIOSPrompt, setShowIOSPrompt] = useState(false);
   const [showInfirmary, setShowInfirmary] = useState(false);
+  const [selectedPerkInfo, setSelectedPerkInfo] = useState(null);
 
   useEffect(() => {
     // Check if iOS and not standalone
@@ -836,7 +957,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.5.12 BETA</span>
+          <span className="logo-subtitle">v 0.5.13 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
 
@@ -2087,7 +2208,22 @@ export default function LandingPage(props) {
                               <p className="specialty-card-desc">{spec.description}</p>
                               <div className="specialty-bonus-tags">
                                 {spec.bonuses.map((bonus, bi) => (
-                                  <span key={bi} className="specialty-bonus-tag">{bonus}</span>
+                                  <span
+                                    key={bi}
+                                    className="specialty-bonus-tag"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedPerkInfo({
+                                        perkName: bonus,
+                                        specialtyName: spec.name,
+                                        description: getSpecializationPerkDescription(bonus),
+                                        className: showcaseUnit?.class || showcaseUnit?.type || ''
+                                      });
+                                    }}
+                                    title={`Click to view details for ${bonus}`}
+                                  >
+                                    {bonus}
+                                  </span>
                                 ))}
                               </div>
                             </div>
@@ -2103,6 +2239,75 @@ export default function LandingPage(props) {
           </div>
         );
       })()}
+
+      {/* Specialization Perk Detail Modal Popup */}
+      {selectedPerkInfo && (
+        <div
+          className="crew-showcase-overlay perk-detail-overlay"
+          style={{ zIndex: 10005, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setSelectedPerkInfo(null)}
+        >
+          <div
+            className="crew-showcase-modal perk-detail-modal"
+            style={{
+              maxWidth: '440px',
+              padding: '24px',
+              backgroundColor: '#171412',
+              border: '1px solid rgba(229, 181, 79, 0.45)',
+              borderRadius: '12px',
+              boxShadow: '0 16px 40px rgba(0,0,0,0.9), 0 0 25px rgba(229, 181, 79, 0.25)',
+              position: 'relative'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="crew-showcase-close-btn"
+              onClick={() => setSelectedPerkInfo(null)}
+              aria-label="Close perk details"
+            >
+              &times;
+            </button>
+
+            <div className="perk-modal-header" style={{ marginBottom: '14px', borderBottom: '1px solid rgba(229, 181, 79, 0.2)', paddingBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className="specialty-title-diamond" aria-hidden="true" style={{ width: '8px', height: '8px' }}></span>
+                <h3 style={{ margin: 0, color: '#ffd700', fontFamily: "'Cinzel', serif", fontSize: '1.2rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {selectedPerkInfo.perkName}
+                </h3>
+              </div>
+              <div style={{ marginTop: '4px', fontSize: '0.72rem', color: '#e5b54f', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: '600', fontFamily: "'Outfit', sans-serif" }}>
+                {selectedPerkInfo.specialtyName} {selectedPerkInfo.className ? `— ${selectedPerkInfo.className.toUpperCase()}` : ''}
+              </div>
+            </div>
+
+            <div className="perk-modal-body" style={{ background: 'rgba(212, 168, 68, 0.06)', border: '1px solid rgba(212, 168, 68, 0.18)', borderRadius: '8px', padding: '14px' }}>
+              <p style={{ margin: 0, color: '#e5d8b8', fontFamily: "'Outfit', sans-serif", fontSize: '0.88rem', lineHeight: '1.5', textAlign: 'left' }}>
+                {selectedPerkInfo.description}
+              </p>
+            </div>
+
+            <div style={{ marginTop: '16px', textAlign: 'right' }}>
+              <button
+                className="btn-modal-close"
+                onClick={() => setSelectedPerkInfo(null)}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(212, 168, 68, 0.25), rgba(180, 130, 20, 0.4))',
+                  border: '1px solid rgba(255, 215, 0, 0.5)',
+                  color: '#ffd700',
+                  padding: '6px 18px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontFamily: "'Outfit', sans-serif",
+                  fontWeight: '600',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

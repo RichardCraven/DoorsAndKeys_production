@@ -53,12 +53,6 @@ export const updateInfirmary = () => {
         });
     }
     
-    // Auto return sage if no patients remain in infirmary
-    if (infirmary.sageCommitted && infirmary.patients.length === 0) {
-        infirmary.sageCommitted = false;
-        updated = true;
-    }
-    
     if (updated || hoursElapsed > 0.01) {
         infirmary.lastUpdateTs = now;
         meta.infirmary = infirmary;
@@ -115,26 +109,25 @@ export const dischargeFromInfirmary = (memberId) => {
     }
 
     infirmary.patients = infirmary.patients.filter(p => p.id !== memberId);
-    
-    if (infirmary.sageCommitted && infirmary.patients.length === 0) {
-        infirmary.sageCommitted = false;
-    }
 
     infirmary.lastUpdateTs = Date.now();
     meta.infirmary = infirmary;
     storeMeta(meta);
 }
 
-export const commitSageToInfirmary = () => {
+export const commitSageToInfirmary = (sageMember = null) => {
     let meta = getMeta();
     if (!meta) return;
     let infirmary = meta.infirmary || { patients: [], sageCommitted: false, lastUpdateTs: Date.now() };
     
     infirmary.sageCommitted = true;
+    if (sageMember) {
+        infirmary.assignedSage = JSON.parse(JSON.stringify(sageMember));
+    }
     
     // Remove any sage from active crew
     if (meta.crew) {
-        meta.crew = meta.crew.filter(c => c.type !== 'sage');
+        meta.crew = meta.crew.filter(c => c.type !== 'sage' && c.id !== sageMember?.id);
     }
     
     infirmary.lastUpdateTs = Date.now();
@@ -148,6 +141,7 @@ export const returnSageFromInfirmary = () => {
     let infirmary = meta.infirmary || { patients: [], sageCommitted: false, lastUpdateTs: Date.now() };
     
     infirmary.sageCommitted = false;
+    infirmary.assignedSage = null;
     
     infirmary.lastUpdateTs = Date.now();
     meta.infirmary = infirmary;

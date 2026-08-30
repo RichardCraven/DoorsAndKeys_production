@@ -377,3 +377,106 @@ export function resolveMonsterPools(dungeon, monsters) {
 
     return resolvedCount;
 }
+
+/**
+ * Cleans up player-constructed structures, territory artifacts, and active state from superboards
+ * so that pocket dimensions always load fresh from their original map layout.
+ *
+ * @param {Object} dungeon
+ * @returns {number} Number of player-built or temporary tiles cleaned
+ */
+export function superboardCleanup(dungeon) {
+    if (!dungeon || !dungeon.superboards) return 0;
+    let cleanedCount = 0;
+
+    Object.values(dungeon.superboards).forEach(sb => {
+        if (!sb || !Array.isArray(sb.miniboards)) return;
+        sb.miniboards.forEach(miniboard => {
+            if (!miniboard || !Array.isArray(miniboard.tiles)) return;
+            miniboard.tiles.forEach(tile => {
+                if (!tile) return;
+
+                const cObj = typeof tile.contains === 'object' && tile.contains ? tile.contains : null;
+                const cType = cObj ? (cObj.type || cObj.subtype) : tile.contains;
+                const cSub = cObj ? cObj.subtype : null;
+                const structKey = String(cSub || cType || tile.building || cObj?.building || '').toLowerCase();
+
+                // Never remove world resource generators, monoliths, shrines, farms, portals, or narrative tiles!
+                const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
+
+                const isPlayerConstructed = !isWorldStructure && (
+                    tile.isPlayerBuilt || cObj?.isPlayerBuilt ||
+                    structKey.includes('_under_construction') ||
+                    (cObj?.constructionStartTime !== undefined) ||
+                    (['observer_platform', 'observation_platform', 'outpost', 'war_camp', 'war_fort', 'hut', 'wall', 'archway'].includes(structKey) && (tile.placedBy === 'player' || cObj?.placedBy === 'player' || (cObj?.vendorGroupId && String(cObj.vendorGroupId).startsWith('building_'))))
+                );
+
+                const isAutomatonConstructed = !isWorldStructure && (
+                    tile.isAutomatonBuilt || cObj?.isAutomatonBuilt || tile.placedBy === 'automaton' || cObj?.placedBy === 'automaton'
+                );
+
+                const isGeneratedUnit = (cObj && (cObj.isPocketPygmy || cObj.subtype === 'pocket_pygmy' || cObj.homeStructureKey || cObj.isAutomaton || cObj.subtype === 'automaton')) ||
+                    cType === 'pygmies' || cSub === 'pocket_pygmy';
+
+                if (isPlayerConstructed || isAutomatonConstructed || isGeneratedUnit) {
+                    if (tile.isEnemySpawn || cObj?.isEnemySpawn || cObj?.originalMarker === 'narrative' || tile.originalMarker === 'narrative') {
+                        tile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                        tile.image = 'narrative';
+                        tile.isEnemySpawn = true;
+                        tile.originalMarker = 'narrative';
+                    } else {
+                        tile.contains = { type: 'empty_space', subtype: null };
+                        tile.building = null;
+                        tile.image = null;
+                    }
+                    delete tile.placedBy;
+                    delete tile.isPlayerBuilt;
+                    delete tile.isAutomatonBuilt;
+                    cleanedCount++;
+                }
+
+                delete tile.territory;
+                delete tile.territoryAffiliation;
+                delete tile.territoryMonolithId;
+                delete tile.newlyClaimed;
+                delete tile.growthCycles;
+                delete tile.lastGrowthTime;
+                delete tile.isHostile;
+                delete tile.isPlayerBuilt;
+                delete tile.isAutomatonBuilt;
+                delete tile.placedBy;
+                delete tile.generatorData;
+                delete tile.activated;
+                delete tile.affiliation;
+
+                if (tile.contains && typeof tile.contains === 'object') {
+                    delete tile.contains.territory;
+                    delete tile.contains.territoryAffiliation;
+                    delete tile.contains.territoryMonolithId;
+                    delete tile.contains.newlyClaimed;
+                    delete tile.contains.growthCycles;
+                    delete tile.contains.lastGrowthTime;
+                    delete tile.contains.isHostile;
+                    delete tile.contains.isPlayerBuilt;
+                    delete tile.contains.isAutomatonBuilt;
+                    delete tile.contains.affiliation;
+                    delete tile.contains.generatorData;
+                    delete tile.contains.activated;
+                    delete tile.contains.ownerId;
+                    delete tile.contains.placedBy;
+                    delete tile.contains.faction;
+                    const sKey = String(tile.contains.subtype || tile.contains.key || tile.contains.building || tile.building || tile.contains.type || '').toLowerCase();
+                    if (sKey.includes('dark_domain_monolith')) {
+                        tile.contains.affiliation = 'hostile';
+                    }
+                }
+            });
+        });
+    });
+
+    if (cleanedCount > 0) {
+        console.log(`cache-cleanup.superboardCleanup: cleaned ${cleanedCount} player-built structure tile(s) from pocket dimensions`);
+    }
+
+    return cleanedCount;
+}
