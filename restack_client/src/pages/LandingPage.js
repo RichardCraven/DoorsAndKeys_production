@@ -378,6 +378,7 @@ function getSpecializationPerkDescription(perkName) {
 }
 
 export default function LandingPage(props) {
+  const username = localStorage.getItem('userName') || localStorage.getItem('username') || 'Adventurer';
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showIOSPrompt, setShowIOSPrompt] = useState(false);
   const [showInfirmary, setShowInfirmary] = useState(false);
@@ -1075,8 +1076,6 @@ export default function LandingPage(props) {
     window.location.reload();
   };
 
-  const username = localStorage.getItem('userName') || localStorage.getItem('username') || 'Adventurer';
-
   return (
     <div className="redux-landing-container">
       <style dangerouslySetInnerHTML={{ __html: LANDING_REDUX_CSS }} />
@@ -1705,7 +1704,8 @@ export default function LandingPage(props) {
               fontFamily: "'Inter', 'Outfit', sans-serif",
               lineHeight: '1.7',
               fontSize: '0.95rem',
-              color: '#d6d3d1'
+              color: '#d6d3d1',
+              textAlign: 'left'
             }}>
 
               {/* Note banner */}
@@ -1716,7 +1716,8 @@ export default function LandingPage(props) {
                 borderRadius: '0 6px 6px 0',
                 fontSize: '0.85rem',
                 color: '#e5b54f',
-                fontStyle: 'italic'
+                fontStyle: 'italic',
+                textAlign: 'left'
               }}>
                 <strong>LORE:</strong> The following is the lore of the game, after the alpha release, this will be largely kept in secret, revealed to the user in pieces.
               </div>
@@ -1729,7 +1730,8 @@ export default function LandingPage(props) {
                 padding: '20px 24px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px'
+                gap: '12px',
+                textAlign: 'left'
               }}>
                 <h3 style={{
                   margin: 0,
@@ -1738,14 +1740,15 @@ export default function LandingPage(props) {
                   fontSize: '1.15rem',
                   letterSpacing: '1px',
                   borderBottom: '1px solid rgba(212, 168, 68, 0.2)',
-                  paddingBottom: '8px'
+                  paddingBottom: '8px',
+                  textAlign: 'left'
                 }}>
                   The Monad & Hikaron
                 </h3>
-                <p style={{ margin: 0 }}>
+                <p style={{ margin: 0, textAlign: 'left' }}>
                   The tower is actually a fabrication of an omnipresent omni-temporal being called <strong>The Monad</strong>. It sends its influence out into the world (unnamed world) and draws ‘adventurers’ and fortune seekers to its manifested ‘tower’.
                 </p>
-                <p style={{ margin: 0 }}>
+                <p style={{ margin: 0, textAlign: 'left' }}>
                   Long ago it lured a mad wizard named <strong>Hikaron</strong> into its tower and Hikaron got lost in his own machinations and is embedded in the substrate of the tower. Hikaron then sends out his own influence to try luring would-be liberators into the tower, which is where your story starts.
                 </p>
               </div>
@@ -1758,7 +1761,8 @@ export default function LandingPage(props) {
                 padding: '20px 24px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '14px'
+                gap: '14px',
+                textAlign: 'left'
               }}>
                 <h3 style={{
                   margin: 0,
@@ -1767,33 +1771,34 @@ export default function LandingPage(props) {
                   fontSize: '1.15rem',
                   letterSpacing: '1px',
                   borderBottom: '1px solid rgba(212, 168, 68, 0.2)',
-                  paddingBottom: '8px'
+                  paddingBottom: '8px',
+                  textAlign: 'left'
                 }}>
                   The Tower Hierarchy <span style={{ fontSize: '0.8rem', color: '#a8a29e', fontWeight: 'normal' }}>(Top to Bottom)</span>
                 </h3>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #e5b54f' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', textAlign: 'left' }}>
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #e5b54f', textAlign: 'left' }}>
                     <strong style={{ color: '#ffd700', fontSize: '1rem' }}>The Monad</strong>
                     <span style={{ color: '#a8a29e' }}> — Creator and invisible ultra-powerful entity.</span>
                   </div>
 
-                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #c084fc' }}>
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #c084fc', textAlign: 'left' }}>
                     <strong style={{ color: '#c084fc', fontSize: '1rem' }}>Eshu</strong>
                     <span style={{ color: '#d6d3d1' }}> — The Monad’s masked agent, moves about the dungeon, usually invisible, and monitors the comings and goings, sometimes intervening.</span>
                   </div>
 
-                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #f87171' }}>
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #f87171', textAlign: 'left' }}>
                     <strong style={{ color: '#f87171', fontSize: '1rem' }}>Hashmalim</strong>
                     <span style={{ color: '#d6d3d1' }}> — A major entity who was one of the first to be lured to the tower. Once it was the appointed custodian of the tower, but became insane after numerous paradoxical contradictions tore its mind apart.</span>
                   </div>
 
-                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #38bdf8' }}>
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #38bdf8', textAlign: 'left' }}>
                     <strong style={{ color: '#38bdf8', fontSize: '1rem' }}>The Principalities</strong>
                     <span style={{ color: '#d6d3d1' }}> — Agents of Eshu. These three lesser entities most often appear as disembodied spirits.</span>
                   </div>
 
-                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #4ade80' }}>
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #4ade80', textAlign: 'left' }}>
                     <strong style={{ color: '#4ade80', fontSize: '1rem' }}>The Pygmies</strong>
                     <span style={{ color: '#d6d3d1' }}> — Worker class for the tower, repair and construct things like traps and doors. Very territorial and will fight other pygmies who are not in the same clan. Servants of the principalities.</span>
                   </div>
@@ -1801,7 +1806,7 @@ export default function LandingPage(props) {
               </div>
 
               {/* Other Factions Section */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', textAlign: 'left' }}>
                 <div style={{
                   background: 'rgba(255, 255, 255, 0.02)',
                   border: '1px solid rgba(212, 168, 68, 0.15)',
@@ -1809,12 +1814,13 @@ export default function LandingPage(props) {
                   padding: '18px 20px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '8px'
+                  gap: '8px',
+                  textAlign: 'left'
                 }}>
-                  <h4 style={{ margin: 0, color: '#fbbf24', fontFamily: "'Cinzel', serif", fontSize: '1rem' }}>
+                  <h4 style={{ margin: 0, color: '#fbbf24', fontFamily: "'Cinzel', serif", fontSize: '1rem', textAlign: 'left' }}>
                     The Djinn
                   </h4>
-                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#d6d3d1' }}>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#d6d3d1', textAlign: 'left' }}>
                     A sparse race of entities that were attracted to the tower but seem to be able to come and go at will, Eshu dislikes them because he cannot control them.
                   </p>
                 </div>
@@ -1826,12 +1832,13 @@ export default function LandingPage(props) {
                   padding: '18px 20px',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '8px'
+                  gap: '8px',
+                  textAlign: 'left'
                 }}>
-                  <h4 style={{ margin: 0, color: '#f43f5e', fontFamily: "'Cinzel', serif", fontSize: '1rem' }}>
+                  <h4 style={{ margin: 0, color: '#f43f5e', fontFamily: "'Cinzel', serif", fontSize: '1rem', textAlign: 'left' }}>
                     The Cult of Whispers
                   </h4>
-                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#d6d3d1' }}>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#d6d3d1', textAlign: 'left' }}>
                     An alliance of humans and abominations dedicated to generating paradoxes. They believe they can bring about the end of reality if they create enough contradiction.
                   </p>
                 </div>

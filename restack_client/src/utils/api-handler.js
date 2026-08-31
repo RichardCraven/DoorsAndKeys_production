@@ -279,6 +279,20 @@ const sendDungeonEntryNotification = (username, dungeonName) => {
     });
 }
 
+const sendFeedbackNotification = (username, feedback, subject = 'feedback') => {
+  return axios.post(API_BASE + "/api/notifications/feedback", { username, feedback, subject }, { timeout: 15000 })
+    .then(res => {
+      if (res.status === 200 || res.status === 201) {
+        return res;
+      }
+      return { status: res.status, data: null };
+    })
+    .catch(err => {
+      console.log(err);
+      return { status: 500, data: null, error: err };
+    });
+}
+
 // Dungeon APIs --------------------------------------------------------
 
 const addDungeonRequest = (dungeonObj) => {
@@ -430,6 +444,7 @@ export {
   loadAllPlanesRequest,
   loadPlaneRequest,
   sendDungeonEntryNotification,
+  sendFeedbackNotification,
   generateBotRequest,
   getBotReplaysRequest,
   deleteAllBotReplaysRequest,

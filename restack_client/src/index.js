@@ -2,17 +2,38 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import './index.css';
 import App from './App';
-
-import { MapMaker } from './utils/map-maker'
+import { MapMaker } from './utils/map-maker';
 import { BrowserRouter } from "react-router-dom";
-import { BoardManager } from './utils/board-manager'
-import { InventoryManager } from './utils/inventory-manager'
-import { CrewManager } from './utils/crew-manager'
-import { MonsterManager } from './utils/monster-manager'
-import { CombatManagerRedux as CombatManager } from './utils/combat-manager-redux'
-import { AnimationManagerRedux as AnimationManager } from './utils/animation-manager-redux'
+import { BoardManager } from './utils/board-manager';
+import { InventoryManager } from './utils/inventory-manager';
+import { CrewManager } from './utils/crew-manager';
+import { MonsterManager } from './utils/monster-manager';
+import { CombatManagerRedux as CombatManager } from './utils/combat-manager-redux';
+import { AnimationManagerRedux as AnimationManager } from './utils/animation-manager-redux';
 import { OverlayManager } from './utils/overlay-manager';
 import { QuestManager } from './utils/quest-manager';
+
+// Suppress browser extension (e.g. Chrome Extension) communication errors from triggering the CRA error overlay
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event?.reason;
+    const msg = String(reason?.message || reason || '');
+    const stack = String(reason?.stack || '');
+    if (msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist') || stack.includes('chrome-extension://')) {
+      event.stopImmediatePropagation();
+      event.preventDefault();
+    }
+  });
+
+  window.addEventListener('error', (event) => {
+    const msg = String(event?.message || '');
+    const filename = String(event?.filename || '');
+    if (msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist') || filename.includes('chrome-extension://')) {
+      event.stopImmediatePropagation();
+      event.preventDefault();
+    }
+  }, true);
+}
 
 // Quiet noisy console.log/debug output across the app while developing.
 // This intentionally preserves console.warn/error while silencing verbose logs.

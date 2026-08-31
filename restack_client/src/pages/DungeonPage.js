@@ -6565,9 +6565,9 @@ class DungeonPage extends React.Component {
         if (!this.state.inSuperboard || this.state.pocketDimensionWon) return;
         const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
 
-        // 1. Victory path: 150+ Domain controlled
+        // 1. Victory path: 200+ Domain controlled
         const domain = this.getTotalPlayerDomainCount();
-        if (domain >= 150) {
+        if (domain >= 200) {
             this.setState({
                 pocketDimensionWon: true,
                 showPocketVictoryModal: true
@@ -6656,7 +6656,7 @@ class DungeonPage extends React.Component {
                 </CModalHeader>
                 <CModalBody style={{ backgroundColor: '#0b1120', color: '#ffffff', padding: '28px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
                     <div style={{ fontSize: '16px', color: '#cbd5e1', lineHeight: '1.6', maxWidth: '520px', fontFamily: "'Outfit', 'Inter', sans-serif" }}>
-                        {domainCount >= 150 ? (
+                        {domainCount >= 200 ? (
                             <>You have claimed <strong style={{ color: '#38bdf8', fontSize: '18px', fontWeight: 'bold', padding: '2px 8px', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.35)', borderRadius: '4px', margin: '0 4px', display: 'inline-block' }}>{domainCount}</strong> territory tiles and established supreme domain over this pocket dimension!</>
                         ) : (
                             <>You have snuffed out all enemy spawn points and destroyed the hostile automaton, liberating this pocket dimension!</>
@@ -16882,7 +16882,7 @@ class DungeonPage extends React.Component {
                         }
 
                         if (isAdjacent) {
-                            const targetTile = targetTileObj || actualTile;
+                            const targetTile = targetTileObj || tile;
                             this.illuminateBuildingTile(targetTile);
                             this.triggerVendorEncounter('dream_den', targetTile);
                             return;
