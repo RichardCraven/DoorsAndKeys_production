@@ -200,6 +200,7 @@ export function MapMaker(props){
         { key: 'terrain_naked_trees', name: 'Naked Trees', image: 'pine_tree_medium' },
         { key: 'terrain_naked_trees_2', name: 'Naked Trees 2', image: 'naked_trees_2' },
         { key: 'terrain_naked_trees_3', name: 'Naked Trees 3', image: 'naked_trees_3', isMultiTile: true, isLarge: true },
+        { key: 'terrain_naked_trees_4', name: 'Naked Trees 4', image: 'naked_trees_4', isMultiTile: true, isLarge: true },
         { key: 'terrain_tree_2', name: 'Oak Trees', image: 'terrain_tree_2' },
         { key: 'terrain_tree_3', name: 'Ancient Grove', image: 'terrain_tree_3' },
         { key: 'terrain_mountain_1', name: 'Mountain Peak', image: 'terrain_mountain_1' },

@@ -2,7 +2,8 @@ import axios from 'axios';
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:5001";
 
-const getAllUsersRequest = () => {
+const getAllUsersRequest = async () => {
+  await ensureServerWarm();
   return axios.get(API_BASE + "/api/users")
       .then(res=>{
         if(res.status === 200){
@@ -92,7 +93,8 @@ const deleteUserRequest = (userId) => {
     })
 }
 
-const updateUserRequest = (userId, metadata, username, isAdmin) => {
+const updateUserRequest = async (userId, metadata, username, isAdmin) => {
+  await ensureServerWarm();
   const payload = {};
   if (metadata !== undefined) {
     payload.metadata = JSON.stringify(metadata);
@@ -321,7 +323,8 @@ const updateDungeonRequest = (id, dungeonObj) => {
       return { status: 500, data: null, error: err };
     })
 }
-const loadAllDungeonsRequest = (id) => {
+const loadAllDungeonsRequest = async (id) => {
+  await ensureServerWarm();
   return axios.get(API_BASE + "/api/dungeons", { timeout: 15000 })
     .then(res=>{
       if(res.status === 200){
@@ -334,7 +337,8 @@ const loadAllDungeonsRequest = (id) => {
       return { status: 500, data: [], error: err };
     })
 }
-const getActivePresenceRequest = () => {
+const getActivePresenceRequest = async () => {
+  await ensureServerWarm();
   return axios.get(API_BASE + "/api/dungeons/active-presence", { timeout: 10000 })
     .then(res => {
       if (res.status === 200) {
@@ -347,7 +351,8 @@ const getActivePresenceRequest = () => {
       return { status: 500, data: {}, error: err };
     });
 }
-const loadDungeonRequest = (id) => {
+const loadDungeonRequest = async (id) => {
+  await ensureServerWarm();
   return axios.get(API_BASE + "/api/dungeons/"+id, { timeout: 15000 })
     .then(res=>{
       if(res.status === 200){
@@ -420,6 +425,50 @@ const restoreDungeonBackupRequest = (identifier) => {
     });
 };
 
+// Server Warmup & Health Gate ---------------------------------------
+
+let _serverWarmPromise = null;
+let _isServerWarm = false;
+
+const checkServerHealthRequest = () => {
+  return axios.get(API_BASE + "/api/health", { timeout: 45000 })
+    .then(res => {
+      if (res.status === 200 || res.status === 201) {
+        _isServerWarm = true;
+        return res;
+      }
+      return { status: res.status, data: null };
+    })
+    .catch(err => {
+      return { status: 500, data: null, error: err };
+    });
+};
+
+const ensureServerWarm = async () => {
+  if (_isServerWarm) return true;
+  if (!_serverWarmPromise) {
+    _serverWarmPromise = (async () => {
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await checkServerHealthRequest();
+          if (res && (res.status === 200 || res.status === 201)) {
+            _isServerWarm = true;
+            return true;
+          }
+        } catch (e) {}
+        // Short pause between retry probes if cold
+        await new Promise(r => setTimeout(r, 1500));
+      }
+      // Mark warm after attempts to allow pending requests to proceed
+      _isServerWarm = true;
+      return true;
+    })();
+  }
+  return _serverWarmPromise;
+};
+
+const isServerWarm = () => _isServerWarm;
+
 export {
   registerRequest,
   loginRequest, 
@@ -450,5 +499,8 @@ export {
   deleteAllBotReplaysRequest,
   checkDungeonBackupRequest,
   restoreDungeonBackupRequest,
-  getActivePresenceRequest
+  getActivePresenceRequest,
+  checkServerHealthRequest,
+  ensureServerWarm,
+  isServerWarm
 };

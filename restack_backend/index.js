@@ -93,6 +93,10 @@ app.get('/', (req, res) => {
     res.send("doors and keys server running")
 });
 
+app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', time: Date.now(), uptime: process.uptime() });
+});
+
 
 const port = process.env.PORT || 5001;
 const server = http.createServer(app);
