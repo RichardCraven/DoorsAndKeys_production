@@ -10464,6 +10464,13 @@ class DungeonPage extends React.Component {
                             cContains.convertingTarget = newConverting;
                             auto.automaton.convertingTarget = newConverting;
                             if (currentTile) currentTile.contains = { ...cContains };
+                            if (closestTarget.cObj) closestTarget.cObj.convertingTarget = newConverting;
+                            if (closestTarget.tile) {
+                                closestTarget.tile.convertingTarget = newConverting;
+                                if (typeof closestTarget.tile.contains === 'object' && closestTarget.tile.contains) {
+                                    closestTarget.tile.contains.convertingTarget = newConverting;
+                                }
+                            }
 
                             const isVisible = this.isSuperboardCoordVisibleToUser(closestTarget.anchorGx, closestTarget.anchorGy, closestTarget.tile);
                             if (isVisible) {
@@ -10478,6 +10485,13 @@ class DungeonPage extends React.Component {
                             cContains.convertingTarget = existingConverting;
                             auto.automaton.convertingTarget = existingConverting;
                             if (currentTile) currentTile.contains = { ...cContains };
+                            if (closestTarget.cObj) closestTarget.cObj.convertingTarget = existingConverting;
+                            if (closestTarget.tile) {
+                                closestTarget.tile.convertingTarget = existingConverting;
+                                if (typeof closestTarget.tile.contains === 'object' && closestTarget.tile.contains) {
+                                    closestTarget.tile.contains.convertingTarget = existingConverting;
+                                }
+                            }
                             this.updateSuperboardViewport();
                             continue;
                         }
@@ -10490,6 +10504,13 @@ class DungeonPage extends React.Component {
                         delete cContains.convertingTarget;
                         delete auto.automaton.convertingTarget;
                         if (currentTile) currentTile.contains = { ...cContains };
+                        if (closestTarget.cObj) delete closestTarget.cObj.convertingTarget;
+                        if (closestTarget.tile) {
+                            delete closestTarget.tile.convertingTarget;
+                            if (typeof closestTarget.tile.contains === 'object' && closestTarget.tile.contains) {
+                                delete closestTarget.tile.contains.convertingTarget;
+                            }
+                        }
 
                         if (closestTarget.isDomainMonolith) {
                             this.activateSuperboardDomainMonolith(superboard, closestTarget, 'hostile');
@@ -17494,12 +17515,12 @@ class DungeonPage extends React.Component {
             };
             const sides = sideMap[`${dx},${dy}`];
 
-            const isConnectingPathBetween = (bm.isConnectingPathTile && (bm.isConnectingPathTile(playerTileObj) || bm.isConnectingPathTile(actualTile)));
-            const isWallBlocked = !isConnectingPathBetween && (
-                (tileIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, tileIndex, { ignoreBuilding: true })) ||
-                (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
-                (sides?.opp && bm.hasSolidBorder(actualTile, sides.opp))
-            );
+            const isConnectingPathBetween = (bm.isConnectingPathTile && bm.isConnectingPathTile(playerTileObj) && bm.isConnectingPathTile(actualTile));
+            const isWallBlocked = (tileIndex !== null && bm.isPassageWallBlockingBetween(playerIdx, tileIndex, { ignoreBuilding: true })) ||
+                (!isConnectingPathBetween && (
+                    (sides?.self && bm.hasSolidBorder(playerTileObj, sides.self)) ||
+                    (sides?.opp && bm.hasSolidBorder(actualTile, sides.opp))
+                ));
 
             if (isVoid || isWallBlocked) {
                 const selfInscription = sides?.self && playerTileObj?.inscriptions?.[sides.self];
@@ -22411,9 +22432,30 @@ class DungeonPage extends React.Component {
         const bm = this.props.boardManager;
         const playerLoc = bm?.playerTile?.location;
 
+        const isInPocket = !!(this.state.inSuperboard || this.state.isInPocketDimension);
+        if (isInPocket) {
+            const def = this.getGeneratorDef(tile);
+            const cAff = tile.affiliation || tile.contains?.affiliation || (tile.generatorData && tile.generatorData.affiliation);
+            const isEnemyMonolith = cAff === 'hostile' || tile.isHostile || tile.contains?.isHostile || def?.key === 'dark_domain_monolith';
+
+            if (isEnemyMonolith) {
+                const currentFreeWill = typeof this.state.pocketFreeWill === 'number' ? this.state.pocketFreeWill : 50;
+                const newFreeWill = currentFreeWill - 5;
+                if (newFreeWill <= 0) {
+                    this.setState({ pocketFreeWill: 0 });
+                    this.exitSuperboardPocketDimension('💀 Free Will reduced to 0! You succumbed to the pocket dimension and were expelled!');
+                    return;
+                }
+                this.setState({ pocketFreeWill: newFreeWill });
+            }
+        }
+
         this.setState({
+            activeGeneratorTile: tile,
             monolithActivationState: {
                 tileId: tile.id,
+                globalX: tile.globalX,
+                globalY: tile.globalY,
                 startPlayerLocation: playerLoc ? [...playerLoc] : [0, 0],
                 startTime: Date.now(),
                 duration: 10000,
@@ -22453,8 +22495,8 @@ class DungeonPage extends React.Component {
             if (this._monolithTimer) { clearInterval(this._monolithTimer); this._monolithTimer = null; }
 
             const tileId = monolithActivationState.tileId;
-            const targetTile = (bm.tiles && bm.tiles[tileId]) || (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]);
-            const tileKey = `${bm?.currentLevel?.id || 1}_${bm.playerTile?.boardIndex || 0}_${tileId}`;
+            const targetTile = (bm?.tiles && bm.tiles[tileId]) || (bm?.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) || this.state.activeGeneratorTile;
+            const tileKey = `${bm?.currentLevel?.id || 1}_${bm?.playerTile?.boardIndex || 0}_${tileId}`;
 
             let count = 0;
             try {
@@ -22470,7 +22512,7 @@ class DungeonPage extends React.Component {
 
             const meta = getMeta() || {};
             let success = false;
-            if (meta.activateNextMonolith || this.state.activateNextMonolith) {
+            if (this.state.inSuperboard || this.state.isInPocketDimension || meta.activateNextMonolith || this.state.activateNextMonolith) {
                 success = true;
                 meta.activateNextMonolith = false;
                 try { storeMeta(meta); } catch (e) { }
@@ -28121,7 +28163,9 @@ globalY={tile.globalY}
                                     playerImgKey = 'avatar';
                                 }
 
-                                const isVoidTile = tile.isVoid === true || (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void'));
+                                const isVoidTile = (bm && typeof bm.isVoidTile === 'function')
+                                    ? bm.isVoidTile(tile)
+                                    : (tile.isVoid === true || (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')));
                                 const defaultEmptyColor = (this.state.inSuperboard && !isVoidTile) ? '#6b6057' : 'black';
                                 const rawColor = isVoidTile 
                                     ? 'black' 
@@ -28150,10 +28194,26 @@ globalY={tile.globalY}
                                     isDisabledOutpost={!!(tile.disabledUntil && Date.now() < tile.disabledUntil)}
                                     disabledUntil={tile.disabledUntil}
                                     sabotageProgress={this.state.sabotageState && this.state.sabotageState.tileId === tile.id ? this.state.sabotageState.progress : null}
-                                    monolithActivationProgress={
-                                        (this.state.monolithActivationState && this.state.monolithActivationState.tileId === tile.id ? this.state.monolithActivationState.progress : null) || 
-                                        (this.state.domainOvertakeState && this.state.domainOvertakeState.tileId === tile.id ? this.state.domainOvertakeState.progress : null)
-                                    }
+                                    monolithActivationProgress={(() => {
+                                        const actState = this.state.monolithActivationState;
+                                        if (actState) {
+                                            if (actState.tileId === tile.id || (typeof tile.globalX === 'number' && typeof tile.globalY === 'number' && actState.globalX === tile.globalX && actState.globalY === tile.globalY)) {
+                                                return actState.progress;
+                                            }
+                                        }
+                                        const overtState = this.state.domainOvertakeState;
+                                        if (overtState) {
+                                            if (overtState.tileId === tile.id || (typeof tile.globalX === 'number' && typeof tile.globalY === 'number' && overtState.globalX === tile.globalX && overtState.globalY === tile.globalY)) {
+                                                return overtState.progress;
+                                            }
+                                        }
+                                        const convTarget = tile.convertingTarget || (typeof tile.contains === 'object' && tile.contains?.convertingTarget);
+                                        if (convTarget && convTarget.startTime && convTarget.duration) {
+                                            const elapsed = Date.now() - convTarget.startTime;
+                                            return Math.min(1, Math.max(0, elapsed / convTarget.duration));
+                                        }
+                                        return null;
+                                    })()}
                                     hasLivingSummoner={hasLivingSummoner}
                                     playerImgKey={playerImgKey}
                                     cursor={this.state.minimapPlaceMapMarkerStarted ? 'crosshair' : 'default'}
@@ -28902,7 +28962,7 @@ globalY={tile.globalY}
                             <div style={{
                                 position: 'absolute',
                                 top: '16px',
-                                right: '16px',
+                                left: '16px',
                                 zIndex: 400,
                                 width: '310px',
                                 backgroundColor: 'rgba(15, 12, 25, 0.94)',
@@ -29828,7 +29888,7 @@ globalY={tile.globalY}
                                             const isEnemyMonolith = cAff === 'hostile' || tile.isHostile || tile.contains?.isHostile || def.key === 'dark_domain_monolith';
                                             return (
                                                 <button
-                                                    onClick={this.handleActivateGenerator}
+                                                    onClick={() => this.startMonolithActivation(tile)}
                                                     style={{
                                                         width: '100%',
                                                         boxSizing: 'border-box',
