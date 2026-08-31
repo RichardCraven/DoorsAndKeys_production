@@ -136,6 +136,25 @@ class SocketHandler {
     }
   }
 
+  sendInstanceChatMessage(text, senderName, senderUserId, instanceKey) {
+    const dId = instanceKey || this.currentDungeonId;
+    const payload = {
+      dungeonId: this.currentDungeonId,
+      instanceId: dId,
+      instanceKey: dId,
+      text,
+      senderName: senderName || 'Explorer',
+      senderUserId: senderUserId || null,
+      timestamp: new Date().toISOString(),
+      isInstanceChat: true
+    };
+    if (this.socket) {
+      this.emit('dungeon:chat_message', payload);
+      this.emit('chat:message_send', payload);
+    }
+    return payload;
+  }
+
   sendPvPChallenge(targetSocketId, targetUserId, challengerCrew = []) {
     if (this.socket) {
       this.emit('pvp:challenge_send', {

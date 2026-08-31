@@ -1262,6 +1262,8 @@ import pine_tree_medium from '../assets/icons/terrain/pine_trees/pine_tree_mediu
 import pine_tree_small from '../assets/icons/terrain/pine_trees/pine_tree_small.png';
 import naked_trees_2_img from '../assets/icons/terrain/pine_trees/naked_trees_2.png';
 import naked_trees_3_img from '../assets/icons/terrain/pine_trees/naked_trees_3.png';
+import naked_mountains_img from '../assets/icons/terrain/naked_mountains.png';
+import naked_mountains_2_img from '../assets/icons/terrain/naked_mountains_2.png';
 import terrain_tree_1 from "../assets/icons/terrain/terrain_tree_1.png";
 import terrain_tree_1_0 from "../assets/icons/terrain/terrain_tree_1_0.png";
 import terrain_tree_1_1 from "../assets/icons/terrain/terrain_tree_1_1.png";
@@ -1444,6 +1446,10 @@ const terrain_naked_trees_2 = naked_trees_2_img;
 const naked_trees_2 = naked_trees_2_img;
 const terrain_naked_trees_3 = naked_trees_3_img;
 const naked_trees_3 = naked_trees_3_img;
+const terrain_naked_mountains = naked_mountains_img;
+const naked_mountains = naked_mountains_img;
+const terrain_naked_mountains_2 = naked_mountains_2_img;
+const naked_mountains_2 = naked_mountains_2_img;
 
 const tattoo_placeholder = tattoo_ink; // placeholder until real tattoo art is added
 const _terrainBase = [terrain_1, terrain_2, terrain_3, terrain_4, terrain_5, terrain_6, terrain_7, terrain_8, terrain_9, terrain_10, terrain_11, terrain_12, terrain_13, terrain_14, terrain_15, terrain_16];
@@ -1639,6 +1645,12 @@ export {
     terrain_naked_trees_3,
     naked_trees_3,
     naked_trees_3_img,
+    terrain_naked_mountains,
+    naked_mountains,
+    naked_mountains_img,
+    terrain_naked_mountains_2,
+    naked_mountains_2,
+    naked_mountains_2_img,
     terrain_tree_1,
     terrain_tree_1_0,
     terrain_tree_1_1,

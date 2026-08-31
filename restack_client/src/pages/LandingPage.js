@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
-import { getMeta, storeMeta, getUserId } from '../utils/session-handler';
+import { getMeta, storeMeta, getUserId, getUserName } from '../utils/session-handler';
 import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest, getActivePresenceRequest } from '../utils/api-handler';
 
 
@@ -458,6 +458,172 @@ export default function LandingPage(props) {
   const [editNameVal, setEditNameVal] = useState('');
   const [, setForceUpdateToggle] = useState(0);
 
+  // Mailbox State
+  const [showMailboxModal, setShowMailboxModal] = useState(false);
+  const [showLoreModal, setShowLoreModal] = useState(false);
+  const [mailboxTab, setMailboxTab] = useState('inbox');
+  const [selectedMail, setSelectedMail] = useState(null);
+  const [composeTo, setComposeTo] = useState('');
+  const [composeSubject, setComposeSubject] = useState('');
+  const [composeContent, setComposeContent] = useState('');
+  const [isSendingMail, setIsSendingMail] = useState(false);
+  const [mailFeedbackMsg, setMailFeedbackMsg] = useState(null);
+  const [, setMailboxToggle] = useState(0);
+
+  // Record dungeon visit history
+  const recordDungeonVisit = (dungeonName, dungeonId) => {
+    try {
+      const meta = getMeta() || {};
+      meta.dungeonHistory = Array.isArray(meta.dungeonHistory) ? meta.dungeonHistory : [];
+      const newEntry = {
+        dungeonId: dungeonId || null,
+        dungeonName: dungeonName || 'Dungeon',
+        timestamp: Date.now(),
+        entryTimeStr: new Date().toLocaleString()
+      };
+      const lastEntry = meta.dungeonHistory[0];
+      if (!lastEntry || lastEntry.dungeonId !== newEntry.dungeonId || (Date.now() - lastEntry.timestamp) > 5000) {
+        meta.dungeonHistory.unshift(newEntry);
+        meta.dungeonHistory = meta.dungeonHistory.slice(0, 10);
+        storeMeta(meta);
+        if (typeof updateUserRequest === 'function' && typeof getUserId === 'function' && getUserId()) {
+          updateUserRequest(getUserId(), meta).catch(() => {});
+        }
+      }
+    } catch (e) {
+      console.error('Failed to record dungeon visit:', e);
+    }
+  };
+
+  // Welcome mail 3-second timer for new users
+  useEffect(() => {
+    const meta = getMeta() || {};
+    const uId = getUserId();
+    if (uId && !meta.welcomeMailSent) {
+      const timer = setTimeout(() => {
+        const currentMeta = getMeta(true) || {};
+        if (!currentMeta.welcomeMailSent) {
+          const welcomeMessage = {
+            id: `mail_welcome_${Date.now()}`,
+            from: 'system',
+            to: getUserName() || username || 'Wanderer',
+            subject: 'Welcome to Dream Tower!',
+            content: 'welcome wanderer! this game is in its infancy, so any feedback is welcome. Tutorials are still under construction. Eventually there will be instructional videos posted somewhere as well. Enjoy!',
+            timestamp: Date.now(),
+            read: false
+          };
+          currentMeta.mailbox = Array.isArray(currentMeta.mailbox) ? currentMeta.mailbox : [];
+          currentMeta.mailbox.unshift(welcomeMessage);
+          currentMeta.welcomeMailSent = true;
+          storeMeta(currentMeta);
+          if (getUserId()) {
+            updateUserRequest(getUserId(), currentMeta).catch(() => {});
+          }
+          setMailboxToggle(prev => prev + 1);
+        }
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [username]);
+
+  const handleOpenMail = (mail) => {
+    setSelectedMail(mail);
+    if (mail && !mail.read) {
+      mail.read = true;
+      const meta = getMeta(true) || {};
+      if (Array.isArray(meta.mailbox)) {
+        const found = meta.mailbox.find(m => m.id === mail.id);
+        if (found) found.read = true;
+        storeMeta(meta);
+        if (getUserId()) {
+          updateUserRequest(getUserId(), meta).catch(() => {});
+        }
+        setMailboxToggle(prev => prev + 1);
+      }
+    }
+  };
+
+  const handleReplyMail = (mail) => {
+    if (!mail) return;
+    setComposeTo(mail.from === 'system' ? '' : mail.from);
+    setComposeSubject(mail.subject && mail.subject.toLowerCase().startsWith('re:') ? mail.subject : `Re: ${mail.subject || ''}`);
+    setComposeContent('');
+    setSelectedMail(null);
+    setMailboxTab('compose');
+    setMailFeedbackMsg(null);
+  };
+
+  const handleSendMail = async (e) => {
+    if (e) e.preventDefault();
+    const toName = composeTo.trim();
+    const sub = composeSubject.trim() || 'No Subject';
+    const body = composeContent.trim();
+
+    if (!toName) {
+      setMailFeedbackMsg('Please enter a recipient username.');
+      return;
+    }
+    if (!body) {
+      setMailFeedbackMsg('Please enter a message.');
+      return;
+    }
+
+    setIsSendingMail(true);
+    setMailFeedbackMsg(null);
+    try {
+      const usersRes = await getAllUsersRequest();
+      const allUsers = Array.isArray(usersRes?.data) ? usersRes.data : [];
+      const targetUser = allUsers.find(u => String(u.username || '').trim().toLowerCase() === toName.toLowerCase());
+
+      if (!targetUser) {
+        setMailFeedbackMsg(`Recipient user "${toName}" not found.`);
+        setIsSendingMail(false);
+        return;
+      }
+
+      let targetMeta = {};
+      try {
+        targetMeta = typeof targetUser.metadata === 'string' ? JSON.parse(targetUser.metadata || '{}') : (targetUser.metadata || {});
+      } catch (err) {
+        targetMeta = {};
+      }
+
+      const mailItem = {
+        id: `mail_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        from: getUserName() || username || 'Player',
+        to: targetUser.username,
+        subject: sub,
+        content: body,
+        timestamp: Date.now(),
+        read: false
+      };
+
+      targetMeta.mailbox = Array.isArray(targetMeta.mailbox) ? targetMeta.mailbox : [];
+      targetMeta.mailbox.unshift(mailItem);
+
+      await updateUserRequest(targetUser._id || targetUser.id, targetMeta);
+
+      const currentMeta = getMeta(true) || {};
+      currentMeta.sentMailbox = Array.isArray(currentMeta.sentMailbox) ? currentMeta.sentMailbox : [];
+      currentMeta.sentMailbox.unshift(mailItem);
+      storeMeta(currentMeta);
+      if (getUserId()) {
+        updateUserRequest(getUserId(), currentMeta).catch(() => {});
+      }
+
+      setComposeTo('');
+      setComposeSubject('');
+      setComposeContent('');
+      setMailFeedbackMsg(`Message successfully sent to ${targetUser.username}! 📬`);
+      setMailboxToggle(prev => prev + 1);
+    } catch (err) {
+      console.error('Failed to send mail message:', err);
+      setMailFeedbackMsg('Failed to send message. Please try again.');
+    } finally {
+      setIsSendingMail(false);
+    }
+  };
+
   const fetchInstances = async () => {
     setIsLoadingInstances(true);
     try {
@@ -797,6 +963,10 @@ export default function LandingPage(props) {
       delete nextMeta.selectedDungeonTemplateId;
       delete nextMeta.selectedDungeonTemplateName;
     }
+    const targetDungeonObj = validDungeons.find((d) => d.id === selectedDungeonTemplateId);
+    const targetDungeonName = getMeta()?.selectedDungeonTemplateName || targetDungeonObj?.name || 'Dungeon';
+    recordDungeonVisit(targetDungeonName, selectedDungeonTemplateId || getMeta()?.dungeonId);
+
     storeMeta(nextMeta);
 
     if (skipIntro) {
@@ -960,6 +1130,72 @@ export default function LandingPage(props) {
           <span className="logo-subtitle">v 0.5.13 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+          {(() => {
+            const meta = getMeta() || {};
+            const currentMailbox = meta.mailbox || [];
+            const unreadCount = Array.isArray(currentMailbox) ? currentMailbox.filter(m => m && !m.read).length : 0;
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  className="btn-mailbox"
+                  onClick={() => setShowLoreModal(true)}
+                  style={{
+                    position: 'relative',
+                    background: 'rgba(212, 168, 68, 0.12)',
+                    border: '1px solid rgba(212, 168, 68, 0.4)',
+                    color: '#e5b54f',
+                    borderRadius: '6px',
+                    padding: '6px 14px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <span>📜 Lore</span>
+                </button>
+                <button
+                  className="btn-mailbox"
+                  onClick={() => { setShowMailboxModal(true); setMailFeedbackMsg(null); }}
+                  style={{
+                    position: 'relative',
+                    background: unreadCount > 0 ? 'rgba(212, 168, 68, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+                    border: unreadCount > 0 ? '1px solid #e5b54f' : '1px solid rgba(255, 255, 255, 0.2)',
+                    color: unreadCount > 0 ? '#e5b54f' : '#d6d3d1',
+                    borderRadius: '6px',
+                    padding: '6px 14px',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    fontSize: '0.85rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s ease',
+                    boxShadow: unreadCount > 0 ? '0 0 12px rgba(229, 181, 79, 0.4)' : 'none'
+                  }}
+                >
+                  <span>📬 Mailbox</span>
+                  {unreadCount > 0 && (
+                    <span style={{
+                      background: '#ef4444',
+                      color: '#fff',
+                      borderRadius: '10px',
+                      padding: '2px 7px',
+                      fontSize: '0.7rem',
+                      fontWeight: 'bold',
+                      lineHeight: 1,
+                      boxShadow: '0 0 6px rgba(239, 68, 68, 0.8)'
+                    }}>
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })()}
 
           <div className="user-info" style={{ cursor: 'pointer' }} onClick={() => setNavUserProfile(true)} title="View User Profile">
             Welcome <span>{username}</span>
@@ -970,7 +1206,667 @@ export default function LandingPage(props) {
         </div>
       </header>
 
+      {/* User Mailbox Modal */}
+      {showMailboxModal && (() => {
+        const meta = getMeta() || {};
+        const inboxList = Array.isArray(meta.mailbox) ? meta.mailbox : [];
+        const sentList = Array.isArray(meta.sentMailbox) ? meta.sentMailbox : [];
+        const unreadCountInModal = inboxList.filter(m => m && !m.read).length;
+
+        return (
+          <div style={{
+            position: 'fixed',
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.88)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px'
+          }} onClick={() => { setShowMailboxModal(false); setSelectedMail(null); }}>
+            <div style={{
+              width: '100%',
+              maxWidth: '680px',
+              maxHeight: '85vh',
+              backgroundColor: '#161311',
+              border: '2px solid rgba(212, 168, 68, 0.5)',
+              borderRadius: '10px',
+              boxShadow: '0 20px 60px rgba(0,0,0,0.95), 0 0 30px rgba(212, 168, 68, 0.2)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              color: '#f5f5f7'
+            }} onClick={e => e.stopPropagation()}>
+
+              {/* Modal Header */}
+              <div style={{
+                padding: '18px 24px',
+                borderBottom: '1px solid rgba(212, 168, 68, 0.25)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                background: 'rgba(12, 10, 9, 0.8)'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontSize: '1.6rem' }}>📬</span>
+                  <div>
+                    <h2 style={{
+                      margin: 0,
+                      fontFamily: "'Cinzel Decorative', 'Cinzel', serif",
+                      color: '#e5b54f',
+                      fontSize: '1.35rem',
+                      letterSpacing: '1px'
+                    }}>
+                      Dream Tower Mailbox
+                    </h2>
+                    <span style={{ fontSize: '0.8rem', color: '#a8a29e' }}>
+                      Asynchronous user messages & announcements
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => { setShowMailboxModal(false); setSelectedMail(null); }}
+                  style={{
+                    background: 'none', border: 'none', color: '#a8a29e',
+                    fontSize: '1.6rem', cursor: 'pointer', padding: '4px 8px'
+                  }}
+                  onMouseEnter={e => e.target.style.color = '#e5b54f'}
+                  onMouseLeave={e => e.target.style.color = '#a8a29e'}
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Tabs Bar */}
+              <div style={{
+                display: 'flex',
+                background: 'rgba(0, 0, 0, 0.4)',
+                borderBottom: '1px solid rgba(212, 168, 68, 0.15)',
+                padding: '0 24px'
+              }}>
+                <button
+                  onClick={() => { setMailboxTab('inbox'); setSelectedMail(null); setMailFeedbackMsg(null); }}
+                  style={{
+                    padding: '12px 20px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: mailboxTab === 'inbox' ? '2px solid #e5b54f' : '2px solid transparent',
+                    color: mailboxTab === 'inbox' ? '#e5b54f' : '#a8a29e',
+                    fontWeight: mailboxTab === 'inbox' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  Inbox {unreadCountInModal > 0 && <span style={{ background: '#ef4444', color: '#fff', padding: '1px 6px', borderRadius: '10px', fontSize: '0.7rem' }}>{unreadCountInModal}</span>}
+                </button>
+                <button
+                  onClick={() => { setMailboxTab('sent'); setSelectedMail(null); setMailFeedbackMsg(null); }}
+                  style={{
+                    padding: '12px 20px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: mailboxTab === 'sent' ? '2px solid #e5b54f' : '2px solid transparent',
+                    color: mailboxTab === 'sent' ? '#e5b54f' : '#a8a29e',
+                    fontWeight: mailboxTab === 'sent' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  Sent ({sentList.length})
+                </button>
+                <button
+                  onClick={() => { setMailboxTab('compose'); setSelectedMail(null); setMailFeedbackMsg(null); }}
+                  style={{
+                    padding: '12px 20px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: mailboxTab === 'compose' ? '2px solid #e5b54f' : '2px solid transparent',
+                    color: mailboxTab === 'compose' ? '#e5b54f' : '#a8a29e',
+                    fontWeight: mailboxTab === 'compose' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  ✏️ Compose
+                </button>
+              </div>
+
+              {/* Feedback Msg */}
+              {mailFeedbackMsg && (
+                <div style={{
+                  background: mailFeedbackMsg.includes('sent') ? 'rgba(46, 204, 113, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                  borderBottom: `1px solid ${mailFeedbackMsg.includes('sent') ? 'rgba(46, 204, 113, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+                  color: mailFeedbackMsg.includes('sent') ? '#2ecc71' : '#ef4444',
+                  padding: '10px 18px',
+                  fontSize: '0.85rem',
+                  textAlign: 'center',
+                  fontWeight: '600'
+                }}>
+                  {mailFeedbackMsg}
+                </div>
+              )}
+
+              {/* Modal Body */}
+              <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column' }}>
+
+                {/* INBOX TAB */}
+                {mailboxTab === 'inbox' && (
+                  selectedMail ? (
+                    /* Detailed Mail View */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <button
+                        onClick={() => setSelectedMail(null)}
+                        style={{
+                          background: 'none', border: 'none', color: '#e5b54f',
+                          cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold',
+                          display: 'flex', alignItems: 'center', gap: '6px', alignSelf: 'flex-start'
+                        }}
+                      >
+                        ← Back to Inbox
+                      </button>
+
+                      <div style={{
+                        background: 'rgba(12, 10, 9, 0.8)',
+                        border: '1px solid rgba(212, 168, 68, 0.3)',
+                        borderRadius: '8px',
+                        padding: '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '14px'
+                      }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(212, 168, 68, 0.15)', paddingBottom: '12px' }}>
+                          <div>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#ffffff', fontFamily: "'Cinzel', serif" }}>
+                              {selectedMail.subject || 'No Subject'}
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: '#e5b54f', marginTop: '4px' }}>
+                              From: <strong style={{ color: selectedMail.from === 'system' ? '#38bdf8' : '#e5b54f' }}>{selectedMail.from}</strong>
+                            </div>
+                          </div>
+                          <span style={{ fontSize: '0.75rem', color: '#78716c' }}>
+                            {new Date(selectedMail.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div style={{
+                          fontSize: '0.95rem',
+                          color: '#d6d3d1',
+                          lineHeight: '1.6',
+                          whiteSpace: 'pre-wrap',
+                          fontFamily: "'Inter', sans-serif",
+                          padding: '10px 0'
+                        }}>
+                          {selectedMail.content}
+                        </div>
+
+                        {selectedMail.from !== 'system' && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: '10px' }}>
+                            <button
+                              onClick={() => handleReplyMail(selectedMail)}
+                              style={{
+                                background: 'rgba(212, 168, 68, 0.2)',
+                                border: '1px solid #e5b54f',
+                                color: '#e5b54f',
+                                padding: '8px 16px',
+                                borderRadius: '4px',
+                                fontWeight: 'bold',
+                                cursor: 'pointer',
+                                fontSize: '0.85rem'
+                              }}
+                            >
+                              Reply ↩️
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Inbox List */
+                    inboxList.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: '40px', color: '#78716c', fontStyle: 'italic' }}>
+                        Your inbox is currently empty.
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        {inboxList.map((mail, idx) => (
+                          <div
+                            key={mail.id || idx}
+                            onClick={() => handleOpenMail(mail)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              background: mail.read ? 'rgba(12, 10, 9, 0.4)' : 'rgba(212, 168, 68, 0.08)',
+                              border: mail.read ? '1px solid rgba(120, 113, 108, 0.2)' : '1px solid rgba(212, 168, 68, 0.4)',
+                              borderRadius: '6px',
+                              padding: '12px 16px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.borderColor = '#e5b54f'}
+                            onMouseLeave={e => e.currentTarget.style.borderColor = mail.read ? 'rgba(120, 113, 108, 0.2)' : 'rgba(212, 168, 68, 0.4)'}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, overflow: 'hidden' }}>
+                              {!mail.read && (
+                                <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#e5b54f', boxShadow: '0 0 8px #e5b54f', flexShrink: 0 }} />
+                              )}
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: mail.from === 'system' ? '#38bdf8' : '#e5b54f' }}>
+                                    {mail.from === 'system' ? '🛡️ SYSTEM' : mail.from}
+                                  </span>
+                                  <span style={{ fontSize: '0.9rem', color: '#ffffff', fontWeight: mail.read ? 'normal' : 'bold', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {mail.subject || 'No Subject'}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: '0.78rem', color: '#a8a29e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {mail.content}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span style={{ fontSize: '0.72rem', color: '#78716c', marginLeft: '16px', flexShrink: 0 }}>
+                              {new Date(mail.timestamp).toLocaleDateString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )
+                )}
+
+                {/* SENT TAB */}
+                {mailboxTab === 'sent' && (
+                  sentList.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '40px', color: '#78716c', fontStyle: 'italic' }}>
+                      No sent messages.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {sentList.map((mail, idx) => (
+                        <div
+                          key={mail.id || idx}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            background: 'rgba(12, 10, 9, 0.4)',
+                            border: '1px solid rgba(120, 113, 108, 0.2)',
+                            borderRadius: '6px',
+                            padding: '12px 16px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', overflow: 'hidden' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: '#a8a29e' }}>
+                                To: <strong style={{ color: '#e5b54f' }}>{mail.to}</strong>
+                              </span>
+                              <span style={{ fontSize: '0.9rem', color: '#ffffff' }}>
+                                {mail.subject || 'No Subject'}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '0.78rem', color: '#a8a29e', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {mail.content}
+                            </span>
+                          </div>
+
+                          <span style={{ fontSize: '0.72rem', color: '#78716c', marginLeft: '16px', flexShrink: 0 }}>
+                            {new Date(mail.timestamp).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                )}
+
+                {/* COMPOSE TAB */}
+                {mailboxTab === 'compose' && (
+                  <form onSubmit={handleSendMail} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#e5b54f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        To (Recipient Username):
+                      </label>
+                      <input
+                        type="text"
+                        value={composeTo}
+                        onChange={e => setComposeTo(e.target.value)}
+                        placeholder="Enter player username..."
+                        style={{
+                          padding: '10px 14px',
+                          background: 'rgba(0, 0, 0, 0.5)',
+                          border: '1px solid rgba(212, 168, 68, 0.4)',
+                          borderRadius: '6px',
+                          color: '#ffffff',
+                          fontSize: '0.9rem',
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#e5b54f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Subject:
+                      </label>
+                      <input
+                        type="text"
+                        value={composeSubject}
+                        onChange={e => setComposeSubject(e.target.value)}
+                        placeholder="Enter subject..."
+                        style={{
+                          padding: '10px 14px',
+                          background: 'rgba(0, 0, 0, 0.5)',
+                          border: '1px solid rgba(212, 168, 68, 0.4)',
+                          borderRadius: '6px',
+                          color: '#ffffff',
+                          fontSize: '0.9rem',
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#e5b54f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        Message:
+                      </label>
+                      <textarea
+                        rows={5}
+                        value={composeContent}
+                        onChange={e => setComposeContent(e.target.value)}
+                        placeholder="Write your message..."
+                        style={{
+                          padding: '10px 14px',
+                          background: 'rgba(0, 0, 0, 0.5)',
+                          border: '1px solid rgba(212, 168, 68, 0.4)',
+                          borderRadius: '6px',
+                          color: '#ffffff',
+                          fontSize: '0.9rem',
+                          outline: 'none',
+                          resize: 'vertical',
+                          fontFamily: "'Inter', sans-serif"
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '10px' }}>
+                      <button
+                        type="submit"
+                        disabled={isSendingMail}
+                        style={{
+                          padding: '10px 24px',
+                          background: 'rgba(212, 168, 68, 0.2)',
+                          border: '1px solid #e5b54f',
+                          color: '#e5b54f',
+                          borderRadius: '6px',
+                          fontWeight: 'bold',
+                          cursor: isSendingMail ? 'not-allowed' : 'pointer',
+                          fontSize: '0.9rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
+                        }}
+                      >
+                        {isSendingMail ? 'Sending...' : 'Send Mail ✉️'}
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {showInfirmary && <InfirmaryModal onClose={() => setShowInfirmary(false)} crewManager={props.crewManager} />}
+
+      {/* Tower Lore Modal */}
+      {showLoreModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.88)',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+          zIndex: 99999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px'
+        }} onClick={() => setShowLoreModal(false)}>
+          <div style={{
+            width: '100%',
+            maxWidth: '780px',
+            maxHeight: '88vh',
+            backgroundColor: '#130f1a',
+            border: '2px solid rgba(212, 168, 68, 0.6)',
+            borderRadius: '12px',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.95), 0 0 35px rgba(212, 168, 68, 0.25)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            color: '#f5f5f7'
+          }} onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={{
+              padding: '20px 28px',
+              borderBottom: '1px solid rgba(212, 168, 68, 0.3)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(135deg, rgba(26, 19, 36, 0.9), rgba(12, 10, 9, 0.9))'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <span style={{ fontSize: '2rem' }}>📜</span>
+                <div>
+                  <h2 style={{
+                    margin: 0,
+                    fontFamily: "'Cinzel Decorative', 'Cinzel', serif",
+                    color: '#e5b54f',
+                    fontSize: '1.5rem',
+                    letterSpacing: '1.5px',
+                    textShadow: '0 2px 8px rgba(229, 181, 79, 0.4)'
+                  }}>
+                    The Lore of Dream Tower
+                  </h2>
+                  <span style={{ fontSize: '0.8rem', color: '#a8a29e', fontStyle: 'italic' }}>
+                    Archives & Ancient Chronicles
+                  </span>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowLoreModal(false)}
+                style={{
+                  background: 'none', border: 'none', color: '#a8a29e',
+                  fontSize: '1.8rem', cursor: 'pointer', padding: '4px 8px', lineHeight: 1
+                }}
+                onMouseEnter={e => e.target.style.color = '#e5b54f'}
+                onMouseLeave={e => e.target.style.color = '#a8a29e'}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Lore Body */}
+            <div style={{
+              padding: '28px 32px',
+              overflowY: 'auto',
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '24px',
+              fontFamily: "'Inter', 'Outfit', sans-serif",
+              lineHeight: '1.7',
+              fontSize: '0.95rem',
+              color: '#d6d3d1'
+            }}>
+
+              {/* Note banner */}
+              <div style={{
+                background: 'rgba(212, 168, 68, 0.08)',
+                borderLeft: '4px solid #e5b54f',
+                padding: '12px 18px',
+                borderRadius: '0 6px 6px 0',
+                fontSize: '0.85rem',
+                color: '#e5b54f',
+                fontStyle: 'italic'
+              }}>
+                <strong>LORE:</strong> The following is the lore of the game, after the alpha release, this will be largely kept in secret, revealed to the user in pieces.
+              </div>
+
+              {/* Origin Story Section */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(212, 168, 68, 0.15)',
+                borderRadius: '8px',
+                padding: '20px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
+              }}>
+                <h3 style={{
+                  margin: 0,
+                  fontFamily: "'Cinzel', serif",
+                  color: '#e5b54f',
+                  fontSize: '1.15rem',
+                  letterSpacing: '1px',
+                  borderBottom: '1px solid rgba(212, 168, 68, 0.2)',
+                  paddingBottom: '8px'
+                }}>
+                  The Monad & Hikaron
+                </h3>
+                <p style={{ margin: 0 }}>
+                  The tower is actually a fabrication of an omnipresent omni-temporal being called <strong>The Monad</strong>. It sends its influence out into the world (unnamed world) and draws ‘adventurers’ and fortune seekers to its manifested ‘tower’.
+                </p>
+                <p style={{ margin: 0 }}>
+                  Long ago it lured a mad wizard named <strong>Hikaron</strong> into its tower and Hikaron got lost in his own machinations and is embedded in the substrate of the tower. Hikaron then sends out his own influence to try luring would-be liberators into the tower, which is where your story starts.
+                </p>
+              </div>
+
+              {/* Hierarchy Section */}
+              <div style={{
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: '1px solid rgba(212, 168, 68, 0.15)',
+                borderRadius: '8px',
+                padding: '20px 24px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px'
+              }}>
+                <h3 style={{
+                  margin: 0,
+                  fontFamily: "'Cinzel', serif",
+                  color: '#e5b54f',
+                  fontSize: '1.15rem',
+                  letterSpacing: '1px',
+                  borderBottom: '1px solid rgba(212, 168, 68, 0.2)',
+                  paddingBottom: '8px'
+                }}>
+                  The Tower Hierarchy <span style={{ fontSize: '0.8rem', color: '#a8a29e', fontWeight: 'normal' }}>(Top to Bottom)</span>
+                </h3>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #e5b54f' }}>
+                    <strong style={{ color: '#ffd700', fontSize: '1rem' }}>The Monad</strong>
+                    <span style={{ color: '#a8a29e' }}> — Creator and invisible ultra-powerful entity.</span>
+                  </div>
+
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #c084fc' }}>
+                    <strong style={{ color: '#c084fc', fontSize: '1rem' }}>Eshu</strong>
+                    <span style={{ color: '#d6d3d1' }}> — The Monad’s masked agent, moves about the dungeon, usually invisible, and monitors the comings and goings, sometimes intervening.</span>
+                  </div>
+
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #f87171' }}>
+                    <strong style={{ color: '#f87171', fontSize: '1rem' }}>Hashmalim</strong>
+                    <span style={{ color: '#d6d3d1' }}> — A major entity who was one of the first to be lured to the tower. Once it was the appointed custodian of the tower, but became insane after numerous paradoxical contradictions tore its mind apart.</span>
+                  </div>
+
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #38bdf8' }}>
+                    <strong style={{ color: '#38bdf8', fontSize: '1rem' }}>The Principalities</strong>
+                    <span style={{ color: '#d6d3d1' }}> — Agents of Eshu. These three lesser entities most often appear as disembodied spirits.</span>
+                  </div>
+
+                  <div style={{ paddingLeft: '12px', borderLeft: '2px solid #4ade80' }}>
+                    <strong style={{ color: '#4ade80', fontSize: '1rem' }}>The Pygmies</strong>
+                    <span style={{ color: '#d6d3d1' }}> — Worker class for the tower, repair and construct things like traps and doors. Very territorial and will fight other pygmies who are not in the same clan. Servants of the principalities.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Other Factions Section */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(212, 168, 68, 0.15)',
+                  borderRadius: '8px',
+                  padding: '18px 20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <h4 style={{ margin: 0, color: '#fbbf24', fontFamily: "'Cinzel', serif", fontSize: '1rem' }}>
+                    The Djinn
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#d6d3d1' }}>
+                    A sparse race of entities that were attracted to the tower but seem to be able to come and go at will, Eshu dislikes them because he cannot control them.
+                  </p>
+                </div>
+
+                <div style={{
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  border: '1px solid rgba(212, 168, 68, 0.15)',
+                  borderRadius: '8px',
+                  padding: '18px 20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <h4 style={{ margin: 0, color: '#f43f5e', fontFamily: "'Cinzel', serif", fontSize: '1rem' }}>
+                    The Cult of Whispers
+                  </h4>
+                  <p style={{ margin: 0, fontSize: '0.9rem', color: '#d6d3d1' }}>
+                    An alliance of humans and abominations dedicated to generating paradoxes. They believe they can bring about the end of reality if they create enough contradiction.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer */}
+            <div style={{
+              padding: '16px 28px',
+              borderTop: '1px solid rgba(212, 168, 68, 0.2)',
+              background: 'rgba(12, 10, 9, 0.6)',
+              display: 'flex',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={() => setShowLoreModal(false)}
+                style={{
+                  padding: '8px 22px',
+                  backgroundColor: 'rgba(212, 168, 68, 0.2)',
+                  border: '1px solid #e5b54f',
+                  color: '#e5b54f',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '600',
+                  fontSize: '0.85rem'
+                }}
+              >
+                Close Lore
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       <main className="landing-main-grid">
         {/* Dungeon Change Warning Modal */}
@@ -1474,6 +2370,15 @@ export default function LandingPage(props) {
                 <span className="card-desc">Master the mechanics of exploration, combat, card dueling, and unlock new secrets.</span>
               </div>
               <span className="card-arrow">Learn →</span>
+            </div>
+
+            {/* Lore Card */}
+            <div className="menu-card" onClick={() => setShowLoreModal(true)}>
+              <div className="card-top">
+                <span className="card-title">Lore</span>
+                <span className="card-desc">Uncover the origins of The Monad, the mad wizard Hikaron, and the ancient hierarchy of Dream Tower.</span>
+              </div>
+              <span className="card-arrow">Read →</span>
             </div>
 
             {/* Admin Cards */}

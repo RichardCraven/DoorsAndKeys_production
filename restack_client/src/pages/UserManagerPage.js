@@ -18,9 +18,78 @@ class UserManagerPage extends React.Component {
       preferredDungeon: 'random',
       botPlaystyle: 'default',
       availableDungeons: [],
-      isLoadingDungeons: false
+      isLoadingDungeons: false,
+      selectedUserDetail: null,
+      showComposeModal: false,
+      composeTargetUser: null,
+      composeSubject: '',
+      composeContent: '',
+      isSendingMail: false,
+      mailFeedbackMsg: null
     };
   }
+
+  openUserDetailModal = (user) => {
+    this.setState({ selectedUserDetail: user });
+  };
+
+  openComposeModal = (user) => {
+    this.setState({
+      showComposeModal: true,
+      composeTargetUser: user,
+      composeSubject: '',
+      composeContent: '',
+      mailFeedbackMsg: null
+    });
+  };
+
+  handleSendAdminMail = async (e) => {
+    if (e) e.preventDefault();
+    const { composeTargetUser, composeSubject, composeContent } = this.state;
+    if (!composeTargetUser) return;
+    if (!composeContent.trim()) {
+      this.setState({ mailFeedbackMsg: 'Please enter a message content.' });
+      return;
+    }
+    this.setState({ isSendingMail: true, mailFeedbackMsg: null });
+    try {
+      let targetMeta = {};
+      try {
+        targetMeta = typeof composeTargetUser.metadata === 'string'
+          ? JSON.parse(composeTargetUser.metadata || '{}')
+          : (composeTargetUser.metadata || {});
+      } catch (err) {
+        targetMeta = {};
+      }
+
+      const mailItem = {
+        id: `mail_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        from: 'Admin',
+        to: composeTargetUser.username,
+        subject: composeSubject.trim() || 'Notice from Admin',
+        content: composeContent.trim(),
+        timestamp: Date.now(),
+        read: false
+      };
+
+      targetMeta.mailbox = Array.isArray(targetMeta.mailbox) ? targetMeta.mailbox : [];
+      targetMeta.mailbox.unshift(mailItem);
+
+      await updateUserRequest(composeTargetUser._id || composeTargetUser.id, targetMeta);
+      const res = await loadAllUsersRequest();
+      this.setState({
+        users: Array.isArray(res?.data) ? res.data : [],
+        mailFeedbackMsg: `Message successfully sent to ${composeTargetUser.username}! 📬`,
+        composeSubject: '',
+        composeContent: ''
+      });
+    } catch (err) {
+      console.error('Failed to send admin mail:', err);
+      this.setState({ mailFeedbackMsg: 'Failed to send message.' });
+    } finally {
+      this.setState({ isSendingMail: false });
+    }
+  };
 
   async componentDidMount(){
     const response = await loadAllUsersRequest()
@@ -704,6 +773,255 @@ class UserManagerPage extends React.Component {
     );
   };
 
+  renderUserDetailModal = () => {
+    const { selectedUserDetail } = this.state;
+    if (!selectedUserDetail) return null;
+
+    let userMeta = {};
+    try {
+      userMeta = typeof selectedUserDetail.metadata === 'string'
+        ? JSON.parse(selectedUserDetail.metadata || '{}')
+        : (selectedUserDetail.metadata || {});
+    } catch (e) {
+      userMeta = {};
+    }
+
+    const crewList = Array.isArray(userMeta.crew) ? userMeta.crew : [];
+    const dungeonHistory = Array.isArray(userMeta.dungeonHistory) ? userMeta.dungeonHistory : [];
+
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)', zIndex: 9999,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backdropFilter: 'blur(4px)'
+      }} onClick={() => this.setState({ selectedUserDetail: null })}>
+        <div style={{
+          background: '#15101a', border: '1.5px solid #e5b54f', borderRadius: '12px',
+          padding: '24px', width: '640px', maxWidth: '92%', maxHeight: '85vh',
+          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.9), 0 0 20px rgba(229, 181, 79, 0.2)',
+          display: 'flex', flexDirection: 'column', color: '#fff', overflowY: 'auto', gap: '20px'
+        }} onClick={e => e.stopPropagation()}>
+
+          {/* Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(229, 181, 79, 0.25)', paddingBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <h3 style={{ margin: 0, fontSize: '20px', textTransform: 'uppercase', letterSpacing: '1px', color: '#e5b54f', fontFamily: "'Cinzel', serif" }}>
+                User Profile: {selectedUserDetail.username}
+              </h3>
+              <span className={`role-badge ${selectedUserDetail.isAdmin ? 'admin' : 'player'}`}>
+                {selectedUserDetail.isAdmin ? 'Admin' : 'Player'}
+              </span>
+            </div>
+            <button
+              onClick={() => this.setState({ selectedUserDetail: null })}
+              style={{ background: 'transparent', color: '#e5b54f', border: 'none', cursor: 'pointer', fontSize: '20px' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* User Account Info */}
+          <div style={{ background: 'rgba(255,255,255,0.03)', padding: '14px 18px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', justifyContent: 'space-around', fontSize: '13px' }}>
+            <div><span style={{ color: '#888' }}>User ID:</span> <strong>{selectedUserDetail._id || selectedUserDetail.id || 'N/A'}</strong></div>
+            <div><span style={{ color: '#888' }}>Status:</span> <strong style={{ color: '#2ecc71' }}>Active</strong></div>
+            <div><span style={{ color: '#888' }}>Mailbox Messages:</span> <strong>{(userMeta.mailbox || []).length}</strong></div>
+          </div>
+
+          {/* Active Heroes / Crew Section */}
+          <div>
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#e5b54f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              ⚔️ Active Crew ({crewList.length})
+            </h4>
+            {crewList.length === 0 ? (
+              <div style={{ color: '#777', fontStyle: 'italic', fontSize: '13px' }}>No crew members recruited.</div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '10px' }}>
+                {crewList.map((member, i) => (
+                  <div key={i} style={{ background: 'rgba(0,0,0,0.5)', border: member.isLeader ? '1px solid #e5b54f' : '1px solid rgba(255,255,255,0.1)', borderRadius: '6px', padding: '10px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ color: '#fff', fontSize: '13px' }}>{member.name}</strong>
+                      {member.isLeader && <span style={{ background: '#e5b54f', color: '#000', fontSize: '9px', fontWeight: 'bold', padding: '1px 4px', borderRadius: '3px' }}>LEADER</span>}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#e5b54f' }}>
+                      LVL {member.level || 1} {member.type ? member.type.toUpperCase() : ''}
+                    </div>
+                    {member.stats && (
+                      <div style={{ fontSize: '10px', color: '#aaa', marginTop: '4px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px' }}>
+                        <span>STR: {member.stats.str}</span>
+                        <span>INT: {member.stats.int}</span>
+                        <span>DEX: {member.stats.dex}</span>
+                        <span>HP: {member.hp || member.stats.baseHp || 10}</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Last 10 Dungeon Visits Section */}
+          <div>
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', color: '#e5b54f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🏰 Dungeon Visit History (Last 10 Visits)
+            </h4>
+            {dungeonHistory.length === 0 ? (
+              <div style={{ color: '#777', fontStyle: 'italic', fontSize: '13px' }}>No dungeon visit records available.</div>
+            ) : (
+              <div style={{ background: 'rgba(0,0,0,0.4)', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                  <thead>
+                    <tr style={{ background: 'rgba(255,255,255,0.05)', color: '#e5b54f', textAlign: 'left', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
+                      <th style={{ padding: '8px 12px' }}>#</th>
+                      <th style={{ padding: '8px 12px' }}>Dungeon</th>
+                      <th style={{ padding: '8px 12px' }}>Visit Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dungeonHistory.map((visit, idx) => (
+                      <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', color: '#ccc' }}>
+                        <td style={{ padding: '8px 12px', color: '#777' }}>{idx + 1}</td>
+                        <td style={{ padding: '8px 12px', fontWeight: 'bold', color: '#fff' }}>{visit.dungeonName || 'Dungeon'}</td>
+                        <td style={{ padding: '8px 12px', color: '#aaa' }}>{visit.entryTimeStr || (visit.timestamp ? new Date(visit.timestamp).toLocaleString() : 'N/A')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Footer Actions */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
+            <button
+              onClick={() => {
+                const target = selectedUserDetail;
+                this.setState({ selectedUserDetail: null }, () => this.openComposeModal(target));
+              }}
+              style={{
+                padding: '8px 18px', background: 'rgba(229, 181, 79, 0.2)',
+                color: '#e5b54f', border: '1px solid #e5b54f', borderRadius: '4px',
+                cursor: 'pointer', fontSize: '13px', fontWeight: 'bold'
+              }}
+            >
+              Send Message ✉️
+            </button>
+            <button
+              onClick={() => this.setState({ selectedUserDetail: null })}
+              style={{
+                padding: '8px 16px', background: 'transparent',
+                color: '#aaa', border: '1px solid #555', borderRadius: '4px',
+                cursor: 'pointer', fontSize: '13px', fontWeight: 'bold'
+              }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  renderComposeModal = () => {
+    const { showComposeModal, composeTargetUser, composeSubject, composeContent, isSendingMail, mailFeedbackMsg } = this.state;
+    if (!showComposeModal || !composeTargetUser) return null;
+
+    return (
+      <div style={{
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+        backgroundColor: 'rgba(0, 0, 0, 0.85)', zIndex: 10000,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backdropFilter: 'blur(4px)'
+      }} onClick={() => this.setState({ showComposeModal: false })}>
+        <div style={{
+          background: '#15101a', border: '1.5px solid #e5b54f', borderRadius: '12px',
+          padding: '24px', width: '480px', maxWidth: '90%',
+          boxShadow: '0 10px 40px rgba(0, 0, 0, 0.9), 0 0 20px rgba(229, 181, 79, 0.2)',
+          display: 'flex', flexDirection: 'column', gap: '14px', color: '#fff'
+        }} onClick={e => e.stopPropagation()}>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, fontSize: '18px', textTransform: 'uppercase', letterSpacing: '1px', color: '#e5b54f' }}>
+              Compose Mail to {composeTargetUser.username}
+            </h3>
+            <button
+              onClick={() => this.setState({ showComposeModal: false })}
+              style={{ background: 'transparent', color: '#e5b54f', border: 'none', cursor: 'pointer', fontSize: '18px' }}
+            >
+              ✕
+            </button>
+          </div>
+
+          {mailFeedbackMsg && (
+            <div style={{
+              background: mailFeedbackMsg.includes('sent') ? 'rgba(46, 204, 113, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              border: `1px solid ${mailFeedbackMsg.includes('sent') ? 'rgba(46, 204, 113, 0.4)' : 'rgba(239, 68, 68, 0.4)'}`,
+              color: mailFeedbackMsg.includes('sent') ? '#2ecc71' : '#ef4444',
+              padding: '8px 12px', borderRadius: '4px', fontSize: '13px', textAlign: 'center', fontWeight: 'bold'
+            }}>
+              {mailFeedbackMsg}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#ccc', textTransform: 'uppercase' }}>
+              To:
+            </label>
+            <input
+              type="text"
+              value={composeTargetUser.username}
+              disabled
+              style={{ padding: '8px 12px', background: '#0a080d', color: '#aaa', border: '1px solid #444', borderRadius: '4px', fontSize: '14px' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#ccc', textTransform: 'uppercase' }}>
+              Subject:
+            </label>
+            <input
+              type="text"
+              value={composeSubject}
+              onChange={e => this.setState({ composeSubject: e.target.value })}
+              placeholder="Enter subject..."
+              style={{ padding: '8px 12px', background: '#0a080d', color: '#fff', border: '1px solid #555', borderRadius: '4px', fontSize: '14px', outline: 'none' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <label style={{ fontSize: '12px', fontWeight: 'bold', color: '#ccc', textTransform: 'uppercase' }}>
+              Message:
+            </label>
+            <textarea
+              rows={5}
+              value={composeContent}
+              onChange={e => this.setState({ composeContent: e.target.value })}
+              placeholder="Type message content..."
+              style={{ padding: '8px 12px', background: '#0a080d', color: '#fff', border: '1px solid #555', borderRadius: '4px', fontSize: '14px', outline: 'none', resize: 'vertical' }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '6px' }}>
+            <button
+              onClick={() => this.setState({ showComposeModal: false })}
+              style={{ padding: '8px 16px', background: 'transparent', color: '#aaa', border: '1px solid #555', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={this.handleSendAdminMail}
+              disabled={isSendingMail}
+              style={{ padding: '8px 20px', background: 'rgba(229, 181, 79, 0.15)', color: '#e5b54f', border: '1px solid #e5b54f', borderRadius: '4px', cursor: isSendingMail ? 'not-allowed' : 'pointer', fontSize: '13px', fontWeight: 'bold' }}
+            >
+              {isSendingMail ? 'Sending...' : 'Send ✉️'}
+            </button>
+          </div>
+
+        </div>
+      </div>
+    );
+  };
+
   render() {
     return (
       <div className="user-manager-page">
@@ -712,6 +1030,8 @@ class UserManagerPage extends React.Component {
         {this.renderLogsModal()}
         {this.renderReplayPlayback()}
         {this.renderBotConfigModal()}
+        {this.renderUserDetailModal()}
+        {this.renderComposeModal()}
         <div className="user-manager-card">
           <div className="user-manager-header">
             <h2>User Manager</h2>
@@ -786,7 +1106,14 @@ class UserManagerPage extends React.Component {
                 {this.state.users && this.state.users.length > 0 ? (
                   this.state.users.map((user, i) => (
                     <tr key={i}>
-                      <td className="username-cell">{user.username}</td>
+                      <td
+                        className="username-cell"
+                        style={{ cursor: 'pointer', color: '#e5b54f', textDecoration: 'underline' }}
+                        onClick={() => this.openUserDetailModal(user)}
+                        title="Click to view detailed stats, crew & dungeon visit history"
+                      >
+                        {user.username}
+                      </td>
                       <td>
                         <span className={`role-badge ${user.isAdmin ? 'admin' : 'player'}`}>
                           {user.isAdmin ? 'Admin' : 'Player'}
@@ -795,6 +1122,24 @@ class UserManagerPage extends React.Component {
                       <td className="meta-cell">{user.metadata ? 'Active' : 'N/A'}</td>
                       <td className="meta-cell">{user.metadata ? 'Active' : 'N/A'}</td>
                       <td className="actions-cell">
+                        <button
+                          className="send-msg-btn"
+                          style={{
+                            padding: '4px 10px',
+                            background: 'rgba(212, 168, 68, 0.15)',
+                            color: '#e5b54f',
+                            border: '1px solid #e5b54f',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '0.78rem',
+                            fontWeight: 'bold',
+                            marginRight: '6px'
+                          }}
+                          onClick={() => this.openComposeModal(user)}
+                          title="Send mail message to user"
+                        >
+                          Send Message ✉️
+                        </button>
                         <button 
                           className={`toggle-admin-btn ${user.isAdmin ? 'revoke-admin' : 'make-admin'}`}
                           onClick={() => this.toggleAdmin(user)}

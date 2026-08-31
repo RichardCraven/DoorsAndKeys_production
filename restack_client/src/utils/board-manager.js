@@ -843,7 +843,7 @@ export function BoardManager(){
             const bldg = t.building || (typeof t.contains === 'object' ? t.contains.building : '') || '';
             const rawKey = String(cSub || bldg || cType).toLowerCase();
 
-            const is2x2Structure = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith' || rawKey === 'war_camp' || rawKey === 'war_fort' || rawKey === 'earthen_fort' || rawKey === 'alchemist' || rawKey === 'merchant' || rawKey === 'cultivation_vat' || rawKey === 'dust_collector' || rawKey === 'larder' || rawKey === 'sawmill' || rawKey === 'lumber_mill' || rawKey === 'ore_mine' || rawKey === 'slate_mine' || rawKey === 'fungal_nursery' || (rawKey.includes('monolith') && !rawKey.includes('shrine')) || rawKey.includes('generator') || rawKey.includes('naked_trees_3');
+            const is2x2Structure = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith' || rawKey === 'war_camp' || rawKey === 'war_fort' || rawKey === 'earthen_fort' || rawKey === 'alchemist' || rawKey === 'merchant' || rawKey === 'cultivation_vat' || rawKey === 'dust_collector' || rawKey === 'larder' || rawKey === 'sawmill' || rawKey === 'lumber_mill' || rawKey === 'ore_mine' || rawKey === 'slate_mine' || rawKey === 'fungal_nursery' || (rawKey.includes('monolith') && !rawKey.includes('shrine')) || rawKey.includes('generator') || rawKey.includes('naked_trees_3') || rawKey.includes('naked_mountains_2');
             if (is2x2Structure) {
                 const cObj = typeof t.contains === 'object' ? t.contains : { type: 'building', subtype: rawKey };
                 if (!cObj.vendorGroupId && (!cObj.vendorCell || cObj.vendorCell === 'anchor')) {

@@ -54,6 +54,7 @@ export function MapMaker(props){
         { key: 'tier_1_armor',   name: 'Tier 1 Armor',   image: 'tier_1_armor' },
         { key: 'tier_2_armor',   name: 'Tier 2 Armor',   image: 'tier_2_armor' },
         { key: 'tier_3_armor',   name: 'Tier 3 Armor',   image: 'tier_3_armor' },
+        { key: 'chemical_lantern', name: 'Chemical Lantern', image: 'chemical_lantern' },
     ];
 
     this.jewelOptions = [
@@ -202,6 +203,8 @@ export function MapMaker(props){
         { key: 'terrain_tree_2', name: 'Oak Trees', image: 'terrain_tree_2' },
         { key: 'terrain_tree_3', name: 'Ancient Grove', image: 'terrain_tree_3' },
         { key: 'terrain_mountain_1', name: 'Mountain Peak', image: 'terrain_mountain_1' },
+        { key: 'terrain_naked_mountains', name: 'Naked Mountains', image: 'naked_mountains' },
+        { key: 'terrain_naked_mountains_2', name: 'Naked Mountains 2', image: 'naked_mountains_2', isMultiTile: true, isLarge: true },
         { key: 'terrain_mountain_2', name: 'Twin Mountains', image: 'terrain_mountain_2' },
         { key: 'terrain_mountain_3', name: 'Grassy Mountain', image: 'terrain_mountain_3' },
     ];

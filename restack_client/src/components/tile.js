@@ -583,7 +583,8 @@ function Tile(props) {
             'domain_monolith', 'dark_domain_monolith', 'monolith',
             'generator',
             'summoning_temple', 'rift', 'rift_2',
-            'naked_trees_3', 'terrain_naked_trees_3'
+            'naked_trees_3', 'terrain_naked_trees_3',
+            'naked_mountains_2', 'terrain_naked_mountains_2'
         ];
         if (multiKeys.includes(s)) return true;
         return multiKeys.some(k => s.includes(k));
@@ -1367,7 +1368,7 @@ function Tile(props) {
                     labelTitle = 'Hostile Structure';
                 }
 
-                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('naked_trees_3');
+                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('naked_trees_3') || sKey.includes('naked_mountains_2');
                 const isSingleTileStructure = sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer');
                 const isMulti = !isSingleTileStructure && (isVendorCell || vRole === 'anchor' || is2x2Structure || is3x3Structure);
                 return (
@@ -1486,7 +1487,7 @@ function Tile(props) {
                     else if (sKey.includes('cultivation_vat') || sKey.includes('chemical') || sKey.includes('vat')) resource = 'chemicals';
                 }
 
-                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('naked_trees_3');
+                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('naked_trees_3') || sKey.includes('naked_mountains_2');
                 const is2x2 = isVendorCell || is2x2Structure;
 
                 return (
