@@ -487,7 +487,7 @@ export default function LandingPage(props) {
         meta.dungeonHistory = meta.dungeonHistory.slice(0, 10);
         storeMeta(meta);
         if (typeof updateUserRequest === 'function' && typeof getUserId === 'function' && getUserId()) {
-          updateUserRequest(getUserId(), meta).catch(() => {});
+          updateUserRequest(getUserId(), meta).catch(() => { });
         }
       }
     } catch (e) {
@@ -517,7 +517,7 @@ export default function LandingPage(props) {
           currentMeta.welcomeMailSent = true;
           storeMeta(currentMeta);
           if (getUserId()) {
-            updateUserRequest(getUserId(), currentMeta).catch(() => {});
+            updateUserRequest(getUserId(), currentMeta).catch(() => { });
           }
           setMailboxToggle(prev => prev + 1);
         }
@@ -536,7 +536,7 @@ export default function LandingPage(props) {
         if (found) found.read = true;
         storeMeta(meta);
         if (getUserId()) {
-          updateUserRequest(getUserId(), meta).catch(() => {});
+          updateUserRequest(getUserId(), meta).catch(() => { });
         }
         setMailboxToggle(prev => prev + 1);
       }
@@ -608,7 +608,7 @@ export default function LandingPage(props) {
       currentMeta.sentMailbox.unshift(mailItem);
       storeMeta(currentMeta);
       if (getUserId()) {
-        updateUserRequest(getUserId(), currentMeta).catch(() => {});
+        updateUserRequest(getUserId(), currentMeta).catch(() => { });
       }
 
       setComposeTo('');
@@ -1127,7 +1127,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo">
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.5.13 BETA</span>
+          <span className="logo-subtitle">v 0.6.0 BETA</span>
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           {(() => {
