@@ -2606,6 +2606,7 @@ class DungeonPage extends React.Component {
             currentBoard: '',
             leftPanelExpanded: false,
             rightPanelExpanded: false,
+            rightPanelMode: 'normal',
             poiPanelExpanded: !((getMeta() || {}).camping),
 
             inventoryHoverMatrix: {},
@@ -3073,8 +3074,8 @@ class DungeonPage extends React.Component {
             return {
                 tileSize,
                 boardSize,
-                leftPanelExpanded: (!meta || !meta.dungeonId) ? false : meta?.leftExpanded,
-                rightPanelExpanded: (!meta || !meta.dungeonId) ? false : meta?.rightExpanded,
+                leftPanelExpanded: (!meta || !meta.dungeonId || !meta.hasEnteredFirstDungeon) ? false : !!meta?.leftExpanded,
+                rightPanelExpanded: (!meta || !meta.dungeonId || !meta.hasEnteredFirstDungeon) ? false : !!meta?.rightExpanded,
                 // persist/rehydrate crew actions tray expanded state
                 crewActionsTrayExpanded: meta?.crewActionsTrayExpanded || false,
                 crewSize: meta.crew.length,
@@ -6109,7 +6110,11 @@ class DungeonPage extends React.Component {
                 return; // Block movement into impassable buildings
             }
 
-            if (cType === 'vendor' || cType === 'shrine' || cType === 'narrative' || cType === 'dream den' || cType === 'dream_den') {
+            if (cType === 'vendor' || cType === 'shrine' || cType === 'narrative' || cType === 'narrative_visited' || cType === 'dream den' || cType === 'dream_den' || targetTile?.isEnemySpawn || targetTile?.originalMarker === 'narrative' || targetTile?.originalMarker === 'narrative_visited') {
+                if (cType === 'narrative' || cType === 'narrative_visited' || targetTile?.isEnemySpawn || targetTile?.originalMarker === 'narrative' || targetTile?.originalMarker === 'narrative_visited') {
+                    this.openEnemySpawnModal(targetTile);
+                    return;
+                }
                 bm.handleInteraction(mockTile);
                 return; // Block movement onto interactables
             }
@@ -6201,7 +6206,9 @@ class DungeonPage extends React.Component {
                         this.displayMessage(`💥 Crew dealt ${dmg} damage and destroyed the ${targetName}!`);
                     } else {
                         if (isAutomatonTarget) {
-                            this._automatonRespawnTime = Date.now() + 10000;
+                            if (!targetTile.isSnuffedOut && targetTile.originalMarker !== 'narrative_visited') {
+                                this._automatonRespawnTime = Date.now() + 10000;
+                            }
                         } else if (targetContains.homeStructureKey) {
                             if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
                             this._pocketStructureRespawns.push({
@@ -6212,7 +6219,12 @@ class DungeonPage extends React.Component {
                                 superboardType
                             });
                         }
-                        if (targetTile.isEnemySpawn === true || targetTile.originalMarker === 'narrative') {
+                        if (targetTile.isSnuffedOut || targetTile.originalMarker === 'narrative_visited' || targetTile.contains?.type === 'narrative_visited') {
+                            targetTile.contains = { type: 'narrative_visited', subtype: null, isEnemySpawn: false, isSnuffedOut: true };
+                            targetTile.image = images.narrative_visited || 'narrative_visited';
+                            targetTile.isEnemySpawn = false;
+                            targetTile.originalMarker = 'narrative_visited';
+                        } else if (targetTile.isEnemySpawn === true || targetTile.originalMarker === 'narrative') {
                             targetTile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
                             targetTile.image = images.narrative || 'narrative';
                             targetTile.isEnemySpawn = true;
@@ -6228,6 +6240,9 @@ class DungeonPage extends React.Component {
                         } else {
                             this.displayMessage(`💥 Crew dealt ${dmg} damage and destroyed the ${targetName}!`);
                         }
+
+                        // Check victory condition when Automaton is destroyed
+                        this.checkPocketDimensionVictory();
                     }
                 } else {
                     if (unitCounterDmg > 0) {
@@ -6326,10 +6341,264 @@ class DungeonPage extends React.Component {
         return count;
     };
 
+    openEnemySpawnModal = (tile) => {
+        if (!tile) return;
+        this.setState({
+            showEnemySpawnModal: true,
+            activeEnemySpawnTile: tile
+        });
+    };
+
+    handleSnuffOutEnemySpawnFlames = (tile) => {
+        const domainCount = this.getTotalPlayerDomainCount();
+        const currentInfluence = domainCount > 0 ? domainCount : (typeof this.state.pocketInfluence === 'number' ? this.state.pocketInfluence : 0);
+        const currentFreeWill = typeof this.state.pocketFreeWill === 'number' ? this.state.pocketFreeWill : (getMeta()?.freeWill || 0);
+
+        if (currentInfluence < 100 || currentFreeWill < 100) {
+            this.displayMessage('❌ Cannot snuff out flames: Requires at least 100 Domain and 100 Free Will!');
+            return;
+        }
+
+        const newInfluence = Math.max(0, currentInfluence - 100);
+        const newFreeWill = Math.max(0, currentFreeWill - 100);
+
+        this.setState({
+            pocketInfluence: newInfluence,
+            pocketFreeWill: newFreeWill
+        });
+
+        const meta = getMeta() || {};
+        meta.freeWill = newFreeWill;
+        storeMeta(meta);
+        try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch (e) {}
+
+        const targetTile = tile || this.state.activeEnemySpawnTile;
+        if (targetTile) {
+            targetTile.isEnemySpawn = false;
+            targetTile.isSnuffedOut = true;
+            targetTile.contains = { type: 'narrative_visited', subtype: null, isEnemySpawn: false, isSnuffedOut: true };
+            targetTile.image = 'narrative_visited';
+            targetTile.originalMarker = 'narrative_visited';
+        }
+
+        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
+        if (superboard && Array.isArray(superboard.miniboards)) {
+            superboard.miniboards.forEach(mb => {
+                if (!mb || !Array.isArray(mb.tiles)) return;
+                mb.tiles.forEach(t => {
+                    if (t && (t.isEnemySpawn || t.originalMarker === 'narrative' || t.contains?.type === 'narrative')) {
+                        t.isEnemySpawn = false;
+                        t.isSnuffedOut = true;
+                        t.contains = { type: 'narrative_visited', subtype: null, isEnemySpawn: false, isSnuffedOut: true };
+                        t.image = 'narrative_visited';
+                        t.originalMarker = 'narrative_visited';
+                    }
+                });
+            });
+        }
+
+        this._automatonRespawnTime = null;
+
+        this.displayMessage('🔥 You snuffed out the flames! The enemy spawn point has been deactivated.');
+        this.setState({ showEnemySpawnModal: false, activeEnemySpawnTile: null }, () => {
+            this.checkPocketDimensionVictory();
+        });
+    };
+
+    renderEnemySpawnModal = () => {
+        if (!this.state.showEnemySpawnModal || !this.state.activeEnemySpawnTile) return null;
+        const tile = this.state.activeEnemySpawnTile;
+        const isSnuffedOut = tile.isSnuffedOut || tile.contains?.type === 'narrative_visited' || tile.image === 'narrative_visited' || tile.originalMarker === 'narrative_visited';
+        const domainCount = this.getTotalPlayerDomainCount();
+        const currentInfluence = domainCount > 0 ? domainCount : (typeof this.state.pocketInfluence === 'number' ? this.state.pocketInfluence : 0);
+        const currentFreeWill = typeof this.state.pocketFreeWill === 'number' ? this.state.pocketFreeWill : (getMeta()?.freeWill || 0);
+
+        const reqInfluence = 100;
+        const reqFreeWill = 100;
+        const canSnuffOut = currentInfluence >= reqInfluence && currentFreeWill >= reqFreeWill;
+
+        return (
+            <div
+                style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                    backdropFilter: 'blur(6px)',
+                    WebkitBackdropFilter: 'blur(6px)',
+                    zIndex: 10000,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontFamily: "'Cinzel', serif"
+                }}
+                onClick={() => this.setState({ showEnemySpawnModal: false, activeEnemySpawnTile: null })}
+            >
+                <div
+                    style={{
+                        position: 'relative',
+                        width: '92%',
+                        maxWidth: '460px',
+                        backgroundColor: '#0d1117',
+                        border: '2px solid #ef4444',
+                        borderRadius: '12px',
+                        boxShadow: '0 0 30px rgba(239, 68, 68, 0.4)',
+                        padding: '28px 24px 24px 24px',
+                        color: '#f3f4f6',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '18px'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        onClick={() => this.setState({ showEnemySpawnModal: false, activeEnemySpawnTile: null })}
+                        style={{
+                            position: 'absolute',
+                            top: '12px',
+                            right: '14px',
+                            background: 'none',
+                            border: 'none',
+                            color: '#9ca3af',
+                            fontSize: '20px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        ✕
+                    </button>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                            border: '2px solid #ef4444',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '32px'
+                        }}>
+                            {isSnuffedOut ? '🪨' : '🔥'}
+                        </div>
+                        <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: isSnuffedOut ? '#9ca3af' : '#f87171', letterSpacing: '1.5px', textTransform: 'uppercase' }}>
+                            {isSnuffedOut ? 'Extinguished Bier' : 'Flaming Bier'}
+                        </div>
+                    </div>
+
+                    <div style={{
+                        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        borderRadius: '8px',
+                        padding: '16px 18px',
+                        fontSize: '0.95rem',
+                        lineHeight: '1.6',
+                        color: '#e2e8f0',
+                        textAlign: 'center',
+                        fontStyle: 'italic',
+                        fontFamily: "'Outfit', 'Inter', sans-serif"
+                    }}>
+                        {isSnuffedOut
+                            ? "The flames have been snuffed out. The ethereal beacon is dark and quiet."
+                            : "The billowing flames serve as a beacon to the blind forces of the ethereal currents."
+                        }
+                    </div>
+
+                    {!isSnuffedOut && (
+                        <div style={{ display: 'flex', gap: '16px', fontSize: '0.88rem', color: '#cbd5e1', fontFamily: "'Outfit', sans-serif" }}>
+                            <div style={{ color: currentInfluence >= reqInfluence ? '#4ade80' : '#f87171', fontWeight: 'bold' }}>
+                                🔮 Domain: {currentInfluence}/{reqInfluence}
+                            </div>
+                            <div style={{ color: currentFreeWill >= reqFreeWill ? '#4ade80' : '#f87171', fontWeight: 'bold' }}>
+                                🕊️ Free Will: {currentFreeWill}/{reqFreeWill}
+                            </div>
+                        </div>
+                    )}
+
+                    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '4px' }}>
+                        {!isSnuffedOut ? (
+                            <button
+                                disabled={!canSnuffOut}
+                                onClick={() => this.handleSnuffOutEnemySpawnFlames(tile)}
+                                style={{
+                                    width: '100%',
+                                    padding: '14px 16px',
+                                    backgroundColor: canSnuffOut ? 'rgba(239, 68, 68, 0.25)' : 'rgba(75, 85, 99, 0.2)',
+                                    border: canSnuffOut ? '2px solid #ef4444' : '1px solid #4b5563',
+                                    borderRadius: '8px',
+                                    color: canSnuffOut ? '#f87171' : '#6b7280',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.9rem',
+                                    cursor: canSnuffOut ? 'pointer' : 'not-allowed',
+                                    transition: 'all 0.2s ease',
+                                    textTransform: 'lowercase',
+                                    letterSpacing: '0.5px'
+                                }}
+                            >
+                                snuff out the flames (100 influence, 100 free will)
+                            </button>
+                        ) : (
+                            <button
+                                onClick={() => this.setState({ showEnemySpawnModal: false, activeEnemySpawnTile: null })}
+                                style={{
+                                    width: '100%',
+                                    padding: '12px 16px',
+                                    backgroundColor: 'rgba(55, 65, 81, 0.5)',
+                                    border: '1px solid #4b5563',
+                                    borderRadius: '8px',
+                                    color: '#d1d5db',
+                                    fontWeight: 'bold',
+                                    fontSize: '0.9rem',
+                                    cursor: 'pointer'
+                                }}
+                            >
+                                Close
+                            </button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     checkPocketDimensionVictory = () => {
         if (!this.state.inSuperboard || this.state.pocketDimensionWon) return;
+        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
+
+        // 1. Victory path: 150+ Domain controlled
         const domain = this.getTotalPlayerDomainCount();
         if (domain >= 150) {
+            this.setState({
+                pocketDimensionWon: true,
+                showPocketVictoryModal: true
+            });
+            return;
+        }
+
+        // 2. Victory path: Enemy spawn point snuffed out (deactivated) AND Automaton destroyed
+        let isEnemySpawnDeactivated = true;
+        if (superboard && Array.isArray(superboard.miniboards)) {
+            for (let mb of superboard.miniboards) {
+                if (!mb || !Array.isArray(mb.tiles)) continue;
+                for (let t of mb.tiles) {
+                    if (!t) continue;
+                    const cType = typeof t.contains === 'object' && t.contains ? (t.contains.type || t.contains.subtype) : t.contains;
+                    const img = String(t.image || '').toLowerCase();
+                    const isSpawnMarker = t.isEnemySpawn || t.originalMarker === 'narrative' || cType === 'narrative' || img === 'narrative';
+                    const isVisitedMarker = t.isSnuffedOut || cType === 'narrative_visited' || img === 'narrative_visited';
+                    if (isSpawnMarker && !isVisitedMarker) {
+                        isEnemySpawnDeactivated = false;
+                        break;
+                    }
+                }
+                if (!isEnemySpawnDeactivated) break;
+            }
+        }
+
+        const autoPos = this.getSuperboardAutomatonPos(superboard);
+        const isAutomatonDestroyed = !autoPos;
+
+        if (isEnemySpawnDeactivated && isAutomatonDestroyed) {
             this.setState({
                 pocketDimensionWon: true,
                 showPocketVictoryModal: true
@@ -6387,7 +6656,11 @@ class DungeonPage extends React.Component {
                 </CModalHeader>
                 <CModalBody style={{ backgroundColor: '#0b1120', color: '#ffffff', padding: '28px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
                     <div style={{ fontSize: '16px', color: '#cbd5e1', lineHeight: '1.6', maxWidth: '520px', fontFamily: "'Outfit', 'Inter', sans-serif" }}>
-                        You have claimed <strong style={{ color: '#38bdf8', fontSize: '18px', fontWeight: 'bold', padding: '2px 8px', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.35)', borderRadius: '4px', margin: '0 4px', display: 'inline-block' }}>{domainCount}</strong> territory tiles and established supreme domain over this pocket dimension!
+                        {domainCount >= 150 ? (
+                            <>You have claimed <strong style={{ color: '#38bdf8', fontSize: '18px', fontWeight: 'bold', padding: '2px 8px', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.35)', borderRadius: '4px', margin: '0 4px', display: 'inline-block' }}>{domainCount}</strong> territory tiles and established supreme domain over this pocket dimension!</>
+                        ) : (
+                            <>You have snuffed out all enemy spawn points and destroyed the hostile automaton, liberating this pocket dimension!</>
+                        )}
                     </div>
                     <div style={{
                         width: '100%',
@@ -13188,6 +13461,32 @@ class DungeonPage extends React.Component {
                     <div className="instance-chat-dungeon-title">
                         {dungeonName}
                     </div>
+                    <button
+                        onClick={() => this.setState({ rightPanelMode: 'normal' })}
+                        style={{
+                            width: '100%',
+                            marginTop: '6px',
+                            marginBottom: '10px',
+                            background: 'rgba(212, 168, 68, 0.15)',
+                            border: '1px solid #e5b54f',
+                            color: '#e5b54f',
+                            borderRadius: '6px',
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem',
+                            fontWeight: 'bold',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px',
+                            transition: 'all 0.2s ease',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                            boxSizing: 'border-box'
+                        }}
+                        title="Switch back to regular game panel"
+                    >
+                        📋 Back to Game Panel
+                    </button>
                     <div className="instance-chat-header-row">
                         <div className="instance-chat-title">
                             💬 Instance Chat
@@ -16619,6 +16918,23 @@ class DungeonPage extends React.Component {
                             return;
                         }
                     }
+
+                    const isEnemySpawnTile = targetTileObj && (
+                        targetTileObj.isEnemySpawn ||
+                        targetTileObj.isSnuffedOut ||
+                        targetTileObj.originalMarker === 'narrative' ||
+                        targetTileObj.originalMarker === 'narrative_visited' ||
+                        cType === 'narrative' ||
+                        cType === 'narrative_visited' ||
+                        String(targetTileObj.image || '').includes('narrative')
+                    );
+                    if (isEnemySpawnTile) {
+                        const dist = Math.hypot(superboardPlayerPos.gx - clickedGx, superboardPlayerPos.gy - clickedGy);
+                        if (dist <= 2) {
+                            this.openEnemySpawnModal(targetTileObj);
+                            return;
+                        }
+                    }
                 }
 
                 const dx = tile.coordinates[0] - localX;
@@ -17894,8 +18210,8 @@ class DungeonPage extends React.Component {
                         orientation,
                         indicators: newIndicators
                     },
-                    leftPanelExpanded: false,
-                    rightPanelExpanded: false
+                    leftPanelExpanded: (!meta?.hasEnteredFirstDungeon) ? false : !!meta?.leftExpanded,
+                    rightPanelExpanded: (!meta?.hasEnteredFirstDungeon) ? false : !!meta?.rightExpanded
                 }
             }, () => {
                 // Match loadExistingDungeon behavior: position floating avatar after
@@ -17907,11 +18223,8 @@ class DungeonPage extends React.Component {
                 }
             })
             const firstCrewMember = this.props.crewManager.crew[0];
-            this.handleMemberClick({ data: firstCrewMember }, false)
-            this._setTimeout(() => {
-                this.toggleLeftSidePanel({ expanded: true });
-                this.toggleRightSidePanel({ expanded: true });
-            }, 1000)
+            this.handleMemberClick({ data: firstCrewMember }, false);
+            this.triggerFirstTimeSidePanelsDelay();
         } else {
             // no valid dungeon
             // alert('no valid dungeon!')
@@ -18855,6 +19168,8 @@ class DungeonPage extends React.Component {
                 brewBuilderOpen: expanded.includes('brew'),
                 tacticsBuilderOpen: expanded.includes('tactics'),
                 innerDisciplineBuilderOpen: expanded.includes('inner_discipline'),
+                leftPanelExpanded: (!meta?.hasEnteredFirstDungeon) ? false : !!meta?.leftExpanded,
+                rightPanelExpanded: (!meta?.hasEnteredFirstDungeon) ? false : !!meta?.rightExpanded,
             }
         }, () => {
             // After board loads, position floating player at its location
@@ -18863,7 +19178,27 @@ class DungeonPage extends React.Component {
             } catch (e) {
                 console.warn('Failed to position floating player on load', e);
             }
+            this.triggerFirstTimeSidePanelsDelay();
         })
+    }
+    triggerFirstTimeSidePanelsDelay = () => {
+        if (this.state.isTutorialMode || this._isTutorialSession) return;
+        const meta = getMeta() || {};
+        const isFirstTime = !meta.hasEnteredFirstDungeon && !meta.hasSeenSidePanelsDelay;
+        if (isFirstTime) {
+            meta.hasEnteredFirstDungeon = true;
+            meta.hasSeenSidePanelsDelay = true;
+            meta.leftExpanded = true;
+            meta.rightExpanded = true;
+            storeMeta(meta);
+            try { updateUserRequest(getUserId(), meta).catch(() => {}); } catch (e) {}
+
+            this._setTimeout(() => {
+                if (this.state.isTutorialMode || this._isTutorialSession) return;
+                this.toggleLeftSidePanel({ expanded: true });
+                this.toggleRightSidePanel({ expanded: true });
+            }, 1000);
+        }
     }
     toggleLeftSidePanel = async (val = null) => {
         if (this.state.isTutorialMode) return;
@@ -27126,7 +27461,47 @@ class DungeonPage extends React.Component {
                 )}
                 {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
                     <div className={`right-side-panel ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`}>
-                        {this.renderRightPanelChatWindow()}
+                        {this.state.rightPanelMode === 'chat' ? (
+                            this.renderRightPanelChatWindow()
+                        ) : (
+                            <>
+                                {this.state.peerPlayersMap && this.state.peerPlayersMap.size > 0 && (
+                                    <div style={{
+                                        padding: '8px 12px 4px 12px',
+                                        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        width: '100%',
+                                        boxSizing: 'border-box'
+                                    }}>
+                                        <button
+                                            onClick={() => this.setState({ rightPanelMode: 'chat' })}
+                                            style={{
+                                                background: 'rgba(212, 168, 68, 0.15)',
+                                                border: '1px solid #e5b54f',
+                                                color: '#e5b54f',
+                                                borderRadius: '6px',
+                                                padding: '6px 14px',
+                                                cursor: 'pointer',
+                                                fontWeight: 'bold',
+                                                fontSize: '0.85rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                gap: '6px',
+                                                width: '100%',
+                                                transition: 'all 0.2s ease',
+                                                boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                                            }}
+                                            title="Switch to Instance Chat view"
+                                        >
+                                            💬 Instance Chat
+                                        </button>
+                                    </div>
+                                )}
+                                {this.renderPanelSections('right')}
+                            </>
+                        )}
                         <div className="expand-collapse-button icon-container" onClick={this.toggleRightSidePanel}>
                             <CIcon icon={cilCaretLeft} className={`expand-icon ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`} size="sm" />
                         </div>
@@ -29031,6 +29406,9 @@ globalY={tile.globalY}
                         </div>
                     );
                 })()}
+
+                {/* Enemy Spawn Point / Flaming Bier Interaction Modal */}
+                {this.renderEnemySpawnModal()}
 
                 {/* Sabotage Result Notification Modal */}
                 {this.state.sabotageResultModal && (
