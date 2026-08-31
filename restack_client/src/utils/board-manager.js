@@ -329,11 +329,10 @@ export function BoardManager(){
         // If explicitly marked as NOT void
         if (tile.isVoid === false || tile.type === 'empty_space' || tile.type === 'path' || tile.type === 'connecting_path' || tile.type === 'inscription') return false;
 
-        // 'empty' usually means Mapmaker void, UNLESS it has a painted terrain
+        // Mapmaker empty tiles (unpainted void space in Dungeon Builder)
         if (cType === 'empty') {
             if (tile.terrain && tile.terrain !== 'void') return false;
-            if (tile.terrain === 'void' || tile.type === 'void' || tile.isVoid || tile.original === 'void') return true;
-            return false;
+            return true;
         }
 
         // 'void' explicitly in contains
@@ -356,8 +355,8 @@ export function BoardManager(){
             }
         }
 
-        // If explicitly set to isVoid = true
-        if (tile.isVoid === true) return true;
+        // If explicitly set to isVoid = true or color is black
+        if (tile.isVoid === true || tile.color === 'black' || tile.color === '#000000' || tile.color === '#000') return true;
 
         // Fallback: tile.type === 'void' without any non-void overrides
         if (tile.type === 'void') return true;
@@ -649,18 +648,18 @@ export function BoardManager(){
             const fromTile = (boardTiles && boardTiles[fromIdx]) ? boardTiles[fromIdx] : this.tiles[fromIdx];
             const toTile = (boardTiles && boardTiles[toIdx]) ? boardTiles[toIdx] : this.tiles[toIdx];
 
-            // If either tile is a connecting path, the passage between them is open and never blocked!
+            // If either tile is a void tile, movement between them is ALWAYS blocked!
+            const fromIsVoid = this.isVoidTile(fromTile);
+            const toIsVoid = this.isVoidTile(toTile);
+            if (fromIsVoid || toIsVoid) return true;
+
+            // If both tiles are non-void and either is a connecting path, the passage between them is open and never blocked by wall borders
             if (this.isConnectingPathTile(fromTile) || this.isConnectingPathTile(toTile)) {
                 return false;
             }
 
             // If destination is an impassable building (outpost, observer platform, etc. except hut), block movement onto it
             if (!options.ignoreBuilding && this.isImpassableBuildingTile(toTile)) return true;
-
-            // If one tile is void and the other is non-void, there is a solid wall between them
-            const fromIsVoid = this.isVoidTile(fromTile);
-            const toIsVoid = this.isVoidTile(toTile);
-            if (fromIsVoid !== toIsVoid) return true;
 
             return this.hasSolidBorder(fromTile, fromSide) || this.hasSolidBorder(toTile, toSide);
         } catch (e) {
