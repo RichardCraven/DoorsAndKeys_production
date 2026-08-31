@@ -19572,6 +19572,7 @@ class DungeonPage extends React.Component {
             inMonsterBattle: false,
             showUserLevelUpModal: getPendingUserPerkLevels() > 0
         }, () => {
+            this.checkPocketDimensionVictory();
             try {
                 const bm = this.props.boardManager;
                 if (bm && bm.playerTile && bm.playerTile.location) {
