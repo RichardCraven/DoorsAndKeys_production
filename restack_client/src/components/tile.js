@@ -382,16 +382,16 @@ function AutomatonConversionProgressBar({ converting }) {
     return (
         <div style={{
             position: 'absolute',
-            top: '-8px',
-            left: '2px',
-            right: '2px',
-            height: '7px',
+            top: '-10px',
+            left: '1px',
+            right: '1px',
+            height: '8px',
             backgroundColor: 'rgba(10, 10, 15, 0.95)',
             border: '1px solid #ef4444',
-            borderRadius: '3px',
+            borderRadius: '4px',
             overflow: 'hidden',
-            zIndex: 35,
-            boxShadow: '0 0 10px rgba(239, 68, 68, 0.8), 0 2px 6px rgba(0,0,0,0.9)',
+            zIndex: 100,
+            boxShadow: '0 0 10px rgba(239, 68, 68, 0.9), 0 2px 6px rgba(0,0,0,0.9)',
             pointerEvents: 'none',
             padding: '1px',
             boxSizing: 'border-box'
@@ -400,10 +400,10 @@ function AutomatonConversionProgressBar({ converting }) {
                 width: `${progress * 100}%`,
                 height: '100%',
                 backgroundColor: '#ef4444',
-                backgroundImage: 'linear-gradient(90deg, #dc2626, #f87171)',
+                backgroundImage: 'linear-gradient(90deg, #dc2626, #f87171, #ef4444)',
                 borderRadius: '2px',
                 transition: 'width 0.1s linear',
-                boxShadow: '0 0 6px rgba(248, 113, 113, 0.9)'
+                boxShadow: '0 0 8px rgba(248, 113, 113, 0.9)'
             }} />
         </div>
     );
@@ -445,6 +445,13 @@ function Tile(props) {
         : (props.contains || containsObj || topCurrentContains);
     const currentContainsHp = (containsObjForHp && typeof containsObjForHp.hp === 'number' && containsObjForHp.hp > 0 && !containsObjForHp.dead && !containsObjForHp.destroyedAt) ? containsObjForHp.hp : undefined;
     const containsId = containsObjForHp && containsObjForHp.id;
+
+    const hasConvertingMonolith = !!(
+        (props.contains && props.contains.convertingMonolith) ||
+        (containsObj && containsObj.convertingMonolith) ||
+        (containsObjForHp && containsObjForHp.convertingMonolith) ||
+        (currentTileForContains && currentTileForContains.contains && currentTileForContains.contains.convertingMonolith)
+    );
 
     const [hpBarVisible, setHpBarVisible] = React.useState(false);
     const hpBarTimerRef = React.useRef(null);
@@ -1167,8 +1174,8 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: isPaletteTile ? 'hidden' : ((isStructureTile || isIlluminatedGlow || isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || !!(props.contains && props.contains.convertingMonolith)) ? 'visible' : 'hidden'),
-            zIndex: isBumpingAttack ? 100 : (isGliding ? 90 : (isRevealedBySpiritSight ? 15 : (isStructureTile ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 14 : 8) : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : ((((isEnlargeableStructure && isOccupied) || isUnderConstruction) ? 5 : undefined))))))),
+            overflow: isPaletteTile ? 'hidden' : ((isStructureTile || hasConvertingMonolith || isIlluminatedGlow || isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined)) ? 'visible' : 'hidden'),
+            zIndex: hasConvertingMonolith ? 40 : (isBumpingAttack ? 100 : (isGliding ? 90 : (isRevealedBySpiritSight ? 15 : (isStructureTile ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 14 : 8) : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : (((isEnlargeableStructure && isOccupied) || isUnderConstruction) ? 5 : undefined))))))),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
@@ -2135,15 +2142,16 @@ function Tile(props) {
 
             {/* Automaton Monolith Conversion Progress Bar Overlay */}
             {(() => {
-                const activeUnit = (currentTile && typeof currentTile.contains !== 'undefined')
-                    ? (typeof currentTile.contains === 'object' ? currentTile.contains : null)
-                    : (typeof props.contains === 'object' ? props.contains : null);
+                const activeUnit = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined' && currentTileForContains.contains)
+                    ? (typeof currentTileForContains.contains === 'object' ? currentTileForContains.contains : null)
+                    : ((typeof props.contains === 'object' ? props.contains : null) || containsObj || containsObjForHp);
 
                 if (!activeUnit || activeUnit.dead || activeUnit.destroyedAt) return null;
                 const isAutomaton = activeUnit.isAutomaton || activeUnit.subtype === 'automaton';
-                if (!isAutomaton || !activeUnit.convertingMonolith) return null;
+                const converting = activeUnit.convertingMonolith || (props.contains && props.contains.convertingMonolith) || (currentTileForContains && currentTileForContains.contains && currentTileForContains.contains.convertingMonolith);
+                if (!isAutomaton || !converting) return null;
 
-                return <AutomatonConversionProgressBar converting={activeUnit.convertingMonolith} />;
+                return <AutomatonConversionProgressBar converting={converting} />;
             })()}
 
            {/* Obscured space texture overlay */}
