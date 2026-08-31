@@ -2631,6 +2631,10 @@ class DungeonPage extends React.Component {
             minimapPlaceMapMarkerStarted: false,
             minimapIndicators: [],
             superboardFogVisibility: null,
+            automatonVision: false,
+            pocketLanternActive: false,
+            pocketLanternFuel: 0,
+            pocketLanternFlickering: false,
             overlayHoveredTileId: null,
             mapMarkerInput: React.createRef(),
             markerSelectVal: React.createRef(),
@@ -2706,6 +2710,8 @@ class DungeonPage extends React.Component {
             , devConsoleOpen: false
             , devConsoleInput: ''
             , devConsoleOutput: []
+            , instanceChatMap: {}
+            , chatInputValue: ''
             , debugMode: (typeof localStorage !== 'undefined' && localStorage.getItem('debugMode') === 'true')
             , showTeleportPopup: false
             , activeChestLoot: []
@@ -3539,6 +3545,7 @@ class DungeonPage extends React.Component {
             socketHandler.on('chat:invite_accepted', this.handleChatInviteAccepted);
             socketHandler.on('chat:invite_declined', this.handleChatInviteDeclined);
             socketHandler.on('chat:message_received', this.handleChatMessageReceived);
+            socketHandler.on('dungeon:chat_message', this.handleInstanceChatMessageReceived);
 
             socketHandler.off('dungeon:presence_snapshot', this.handlePresenceSnapshot);
             socketHandler.off('dungeon:player_joined', this.handlePeerPlayerJoined);
@@ -3572,6 +3579,7 @@ class DungeonPage extends React.Component {
             socketHandler.off('chat:invite_accepted', this.handleChatInviteAccepted);
             socketHandler.off('chat:invite_declined', this.handleChatInviteDeclined);
             socketHandler.off('chat:message_received', this.handleChatMessageReceived);
+            socketHandler.off('dungeon:chat_message', this.handleInstanceChatMessageReceived);
             socketHandler.off('dungeon:presence_snapshot', this.handlePresenceSnapshot);
             socketHandler.off('dungeon:player_joined', this.handlePeerPlayerJoined);
             socketHandler.off('dungeon:player_left', this.handlePeerPlayerLeft);
@@ -3790,8 +3798,100 @@ class DungeonPage extends React.Component {
         this.displayMessage(`💬 ${name} declined your chat invitation.`);
     };
 
+    getCurrentInstanceKey = () => {
+        if (this.state && this.state.inSuperboard) {
+            return `pocket_${this.state.superboardType || 'dimension'}`;
+        }
+        const dungeonId = this.props.boardManager?.dungeon?.id || this.state.dungeon?.id || (getMeta() || {}).dungeonId || 'default_dungeon';
+        return `dungeon_${dungeonId}`;
+    };
+
+    scrollChatToBottom = () => {
+        try {
+            if (this._instanceChatEndRef) {
+                this._instanceChatEndRef.scrollIntoView({ behavior: 'smooth' });
+            }
+        } catch (e) { }
+    };
+
+    handleInstanceChatMessageReceived = (payload) => {
+        if (!payload || !payload.text) return;
+        const currentInstance = this.getCurrentInstanceKey();
+        const msgInstance = payload.instanceKey || payload.instanceId || (payload.dungeonId ? `dungeon_${payload.dungeonId}` : currentInstance);
+
+        const currentUserId = getUserId();
+        const mySocketId = socketHandler.socket?.id;
+        const isSelf = (payload.senderUserId && currentUserId && String(payload.senderUserId) === String(currentUserId)) ||
+                       (mySocketId && payload.senderSocketId === mySocketId);
+
+        const newMsg = {
+            id: payload.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            senderName: payload.senderName || (isSelf ? 'You' : 'Explorer'),
+            senderUserId: payload.senderUserId,
+            text: payload.text,
+            timestamp: payload.timestamp || new Date().toISOString(),
+            isSelf: !!isSelf,
+            instanceKey: msgInstance
+        };
+
+        this.setState(prevState => {
+            const instanceChatMap = { ...(prevState.instanceChatMap || {}) };
+            const key = msgInstance;
+            const currentList = instanceChatMap[key] || [];
+            const exists = currentList.some(m => m.id === newMsg.id || (m.isSelf && isSelf && m.text === newMsg.text && Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp)) < 2000));
+            if (exists) return null;
+
+            instanceChatMap[key] = [...currentList, newMsg];
+            return { instanceChatMap };
+        }, () => {
+            this.scrollChatToBottom();
+            if (!this.state.rightPanelExpanded && !isSelf) {
+                this.displayMessage(`💬 [${payload.senderName || 'Explorer'}]: ${payload.text}`);
+            }
+        });
+    };
+
+    sendInstanceChatMessage = (text) => {
+        if (!text || !text.trim()) return;
+        const trimmed = text.trim();
+        const currentInstance = this.getCurrentInstanceKey();
+        const username = (typeof getUserName === 'function' ? getUserName() : null) || 'Explorer';
+        const userId = typeof getUserId === 'function' ? getUserId() : null;
+
+        const optimisticMsg = {
+            id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            senderName: username,
+            senderUserId: userId,
+            text: trimmed,
+            timestamp: new Date().toISOString(),
+            isSelf: true,
+            instanceKey: currentInstance
+        };
+
+        this.setState(prevState => {
+            const instanceChatMap = { ...(prevState.instanceChatMap || {}) };
+            const currentList = instanceChatMap[currentInstance] || [];
+            instanceChatMap[currentInstance] = [...currentList, optimisticMsg];
+            return {
+                instanceChatMap,
+                rightPanelExpanded: true,
+                chatInputValue: ''
+            };
+        }, () => {
+            this.scrollChatToBottom();
+        });
+
+        if (typeof socketHandler !== 'undefined' && socketHandler && typeof socketHandler.sendInstanceChatMessage === 'function') {
+            socketHandler.sendInstanceChatMessage(trimmed, username, userId, currentInstance);
+        }
+    };
+
     handleChatMessageReceived = (payload) => {
         if (!payload) return;
+        if (payload.isInstanceChat || !payload.senderSocketId) {
+            this.handleInstanceChatMessageReceived(payload);
+            return;
+        }
         this.setState(prevState => {
             const map = { ...(prevState.chatMessagesMap || {}) };
             const arr = map[payload.senderSocketId] || [];
@@ -5037,6 +5137,17 @@ class DungeonPage extends React.Component {
             if (!coords) return null;
             const bm = this.props.boardManager;
             if (!bm) return null;
+            if (this.state.inSuperboard && Array.isArray(coords)) {
+                const row = coords[0];
+                const col = coords[1];
+                if (row < 0 || row >= 15 || col < 0 || col >= 15) {
+                    return {
+                        display: 'none',
+                        opacity: 0,
+                        pointerEvents: 'none'
+                    };
+                }
+            }
             const index = bm.getIndexFromCoordinates(coords);
             const pixel = this.getPixelForIndex(index);
 
@@ -5530,6 +5641,10 @@ class DungeonPage extends React.Component {
                 justSpawnedInSuperboard: true,
                 pocketInfluence: 0,
                 pocketFreeWill: 50,
+                automatonVision: false,
+                pocketLanternActive: false,
+                pocketLanternFuel: 0,
+                pocketLanternFlickering: false,
                 pocketResources: {
                     food: 0,
                     slate: 0,
@@ -5551,31 +5666,98 @@ class DungeonPage extends React.Component {
         }, 600);
     };
 
+    getSuperboardAutomatonPos = (superboard) => {
+        if (!superboard || !Array.isArray(superboard.miniboards)) return null;
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (tile && tile.contains && (tile.contains.isAutomaton || tile.contains.subtype === 'automaton') && (tile.contains.hp || 0) > 0) {
+                    const lX = tIdx % 15;
+                    const lY = Math.floor(tIdx / 15);
+                    const gx = mbX * 15 + lX;
+                    const gy = mbY * 15 + lY;
+                    return { gx, gy, mbIdx, tIdx, tile, automaton: tile.contains };
+                }
+            }
+        }
+        return null;
+    };
+
+    getSuperboardEnemySpawnPos = (superboard) => {
+        if (!superboard || !Array.isArray(superboard.miniboards)) return null;
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (!tile) continue;
+                const cType = typeof tile.contains === 'object' && tile.contains ? (tile.contains.type || tile.contains.subtype) : tile.contains;
+                const cSubtype = typeof tile.contains === 'object' && tile.contains ? tile.contains.subtype : null;
+                const img = String(tile.image || '').toLowerCase();
+                const opt = String(tile.optionType || '').toLowerCase();
+                if (tile.isEnemySpawn || tile.originalMarker === 'narrative' || cType === 'narrative' || cSubtype === 'narrative' || img === 'narrative' || opt === 'narrative') {
+                    const lX = tIdx % 15;
+                    const lY = Math.floor(tIdx / 15);
+                    return { gx: mbX * 15 + lX, gy: mbY * 15 + lY, mbIdx, tIdx, tile };
+                }
+            }
+        }
+        return null;
+    };
 
     updateSuperboardViewport = (forceRecenter = false) => {
-        const { superboardType, superboardPlayerPos, superboardViewportOrigin } = this.state;
+        const { superboardType, superboardPlayerPos, superboardViewportOrigin, automatonVision } = this.state;
         const dungeon = this.props.boardManager?.dungeon || this.state.dungeon;
         if (!superboardType || !superboardPlayerPos || !dungeon || !dungeon.superboards?.[superboardType]) return;
 
         const superboard = dungeon.superboards[superboardType];
-        const { gx, gy } = superboardPlayerPos;
+        const { gx: playerGx, gy: playerGy } = superboardPlayerPos;
 
-        // Base fog radius around player (default 2, 3 with soldier/rally or chem lantern)
+        let focusGx = playerGx;
+        let focusGy = playerGy;
+
+        if (automatonVision) {
+            const autoUnit = this.getSuperboardAutomatonPos(superboard);
+            if (autoUnit) {
+                focusGx = autoUnit.gx;
+                focusGy = autoUnit.gy;
+            } else {
+                const enemySpawn = this.getSuperboardEnemySpawnPos(superboard);
+                if (enemySpawn) {
+                    focusGx = enemySpawn.gx;
+                    focusGy = enemySpawn.gy;
+                }
+            }
+        }
+
+        const gx = focusGx;
+        const gy = focusGy;
+
+        // Base fog radius around focus unit (default 2, 3 with soldier/rally or chem lantern)
         let fogRadius = 2;
-        try {
-            const meta = getMeta() || {};
-            const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : (meta.crew || []);
-            const leader = crew.find(m => m && m.isLeader && !m.dead);
-            if (leader) {
-                const isLeaderSoldier = (leader.type || leader.image || '').toLowerCase() === 'soldier';
-                const hasRally = leader.globalSkills && leader.globalSkills.some(s => (typeof s === 'string' ? s : s.key) === 'rally');
-                if (isLeaderSoldier || hasRally) fogRadius = 3;
+        if (!automatonVision) {
+            try {
+                const meta = getMeta() || {};
+                const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) ? this.props.crewManager.crew : (meta.crew || []);
+                const leader = crew.find(m => m && m.isLeader && !m.dead);
+                if (leader) {
+                    const isLeaderSoldier = (leader.type || leader.image || '').toLowerCase() === 'soldier';
+                    const hasRally = leader.globalSkills && leader.globalSkills.some(s => (typeof s === 'string' ? s : s.key) === 'rally');
+                    if (isLeaderSoldier || hasRally) fogRadius = 3;
+                }
+            } catch (e) {}
+
+            // Pocket Dimension Chemical Lantern boost: +2 tiles vision radius
+            if (this.state.pocketLanternActive && (this.state.pocketLanternFuel > 0 || this.state.pocketLanternFlickering)) {
+                fogRadius += 2;
             }
-            const inv = (typeof this.props.getCurrentInventory === 'function' && this.props.getCurrentInventory()) || meta.inventory || [];
-            if (inv.some(i => i && (i.name === 'chemical lantern' || i._im_key === 'chemical_lantern') && i.active)) {
-                fogRadius += 1;
-            }
-        } catch (e) {}
+        }
 
         // Find all Observation Platforms built in the superboard
         const observerPlatforms = [];
@@ -5610,7 +5792,7 @@ class DungeonPage extends React.Component {
             let curVx = superboardViewportOrigin.vx;
             let curVy = superboardViewportOrigin.vy;
 
-            // Shift board viewport window only if avatar is within 4 tiles of the edge
+            // Shift board viewport window only if focus unit is within 4 tiles of the edge
             if (gx - curVx < 4) {
                 curVx = Math.max(0, Math.min(30, gx - 4));
             } else if ((curVx + 14) - gx < 4) {
@@ -5632,8 +5814,8 @@ class DungeonPage extends React.Component {
         }
 
         // Player position within the 15x15 viewport
-        const localPlayerX = gx - viewMinX;
-        const localPlayerY = gy - viewMinY;
+        const localPlayerX = playerGx - viewMinX;
+        const localPlayerY = playerGy - viewMinY;
 
         // Build the 15x15 viewport tile array (225 tiles) and fog visibility
         const viewportTiles = [];
@@ -5655,11 +5837,11 @@ class DungeonPage extends React.Component {
                 const mbTile = superboard.miniboards[mbIdx]?.tiles?.[tileIdx];
 
                 // Fog of War vision check:
-                // 1. Within player vision (smooth circular radius)
+                // 1. Within focus unit vision (smooth circular radius around Automaton or Player)
                 // 2. Within circular 10-tile radius of any Observation Platform / Outpost
-                const dPlayerX = Math.abs(globalX - gx);
-                const dPlayerY = Math.abs(globalY - gy);
-                const inPlayerVision = (dPlayerX * dPlayerX + dPlayerY * dPlayerY) <= (fogRadius * fogRadius + fogRadius);
+                const dUnitX = Math.abs(globalX - gx);
+                const dUnitY = Math.abs(globalY - gy);
+                const inUnitVision = (dUnitX * dUnitX + dUnitY * dUnitY) <= (fogRadius * fogRadius + fogRadius);
 
                 const inObsPlatformVision = observerPlatforms.some(op => {
                     const dOpX = Math.abs(globalX - op.gx);
@@ -5694,7 +5876,7 @@ class DungeonPage extends React.Component {
                     domainTiles.push({ vx, vy });
                 }
 
-                const isRevealed = inPlayerVision || inObsPlatformVision || inAnimVision || inFriendlyDomain;
+                const isRevealed = inUnitVision || inObsPlatformVision || inAnimVision || inFriendlyDomain;
                 fogVisibility[vTileIdx] = !!isRevealed;
 
                 const storedColor = mbTile?.color && mbTile.color !== 'null' && mbTile.color !== 'undefined' ? mbTile.color : null;
@@ -5779,6 +5961,82 @@ class DungeonPage extends React.Component {
         if (imgStr.includes('tree') || imgStr.includes('grove') || imgStr.includes('forest') || imgStr.includes('pine') || imgStr.includes('oak')) return true;
 
         return false;
+    };
+
+    activatePocketChemicalLantern = () => {
+        // User starts with 50 chemicals in reserve (or adds 50 if already active)
+        const currentFuel = (this.state && typeof this.state.pocketLanternFuel === 'number') ? this.state.pocketLanternFuel : 0;
+        const newFuel = currentFuel > 0 ? (currentFuel + 50) : 50;
+
+        if (this._pocketLanternTimer) {
+            clearInterval(this._pocketLanternTimer);
+            this._pocketLanternTimer = null;
+        }
+
+        this.setState({
+            pocketLanternActive: true,
+            pocketLanternFuel: newFuel,
+            pocketLanternFlickering: false
+        }, () => {
+            this.updateSuperboardViewport();
+            this.displayMessage(`🏮 Chemical Lantern activated! Vision radius expanded (+2 tiles). Reserve: ${newFuel} chemicals.`);
+
+            this._pocketLanternTimer = setInterval(() => {
+                if (!this.state || !this.state.inSuperboard || !this.state.pocketLanternActive) {
+                    if (this._pocketLanternTimer) {
+                        clearInterval(this._pocketLanternTimer);
+                        this._pocketLanternTimer = null;
+                    }
+                    return;
+                }
+
+                const fuel = this.state.pocketLanternFuel;
+                if (fuel > 1) {
+                    this.setState({ pocketLanternFuel: fuel - 1 });
+                } else if (fuel === 1) {
+                    // Last unit of chemical burned!
+                    if (this._pocketLanternTimer) {
+                        clearInterval(this._pocketLanternTimer);
+                        this._pocketLanternTimer = null;
+                    }
+                    this.triggerPocketLanternFlicker();
+                } else {
+                    if (this._pocketLanternTimer) {
+                        clearInterval(this._pocketLanternTimer);
+                        this._pocketLanternTimer = null;
+                    }
+                    this.setState({
+                        pocketLanternActive: false,
+                        pocketLanternFuel: 0,
+                        pocketLanternFlickering: false
+                    }, () => {
+                        this.updateSuperboardViewport();
+                    });
+                }
+            }, 1000);
+        });
+    };
+
+    triggerPocketLanternFlicker = () => {
+        this.setState({
+            pocketLanternFuel: 0,
+            pocketLanternFlickering: true
+        }, () => {
+            this.updateSuperboardViewport();
+            this.displayMessage('🏮 The Chemical Lantern flickers as its last chemical burns away...');
+
+            // Flicker for 1000ms then extinguish and revert back to normal vision radius
+            setTimeout(() => {
+                this.setState({
+                    pocketLanternActive: false,
+                    pocketLanternFlickering: false,
+                    pocketLanternFuel: 0
+                }, () => {
+                    this.updateSuperboardViewport();
+                    this.displayMessage('🏮 The Chemical Lantern extinguished.');
+                });
+            }, 1000);
+        });
     };
 
     movePlayerInSuperboard = (dx, dy) => {
@@ -5983,16 +6241,22 @@ class DungeonPage extends React.Component {
                 return; // Block movement onto unit tile while attacking
             }
 
-            const isItemKind = cType === 'item' || cType === 'key' || cType === 'rune' || cType === 'jewel' || cType === 'shard' || cType === 'consumable' || targetTile.isLoot || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(cSubtype) || (cType && typeof cType === 'string' && cType.startsWith('chest_'));
+            const isItemKind = cType === 'item' || cType === 'key' || cType === 'rune' || cType === 'jewel' || cType === 'shard' || cType === 'consumable' || targetTile.isLoot || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(cSubtype) || (cType && typeof cType === 'string' && cType.startsWith('chest_')) || cType === 'chemical_lantern' || cSubtype === 'chemical_lantern';
             
             if (isItemKind) {
                 // In pocket dimension: purely a visual event, do not add to inventory and do not save dungeon
                 const rawKey = cSubtype || cType || targetTile.image || 'treasure';
                 const cleanKey = String(rawKey).trim().replace(/\s+/g, '_');
+                const isChemLantern = cleanKey === 'chemical_lantern' || cleanKey === 'chemical lantern' || cSubtype === 'chemical_lantern' || cType === 'chemical_lantern';
+
+                if (isChemLantern) {
+                    this.activatePocketChemicalLantern();
+                }
+
                 const itemDef = this.props.inventoryManager?.allItems?.[cleanKey];
                 const iconKey = itemDef?.icon || cleanKey;
                 const resolvedIcon = images[iconKey] || images[cleanKey] || images['treasure'] || null;
-                const itemDisplayName = itemDef?.name || cleanKey.replace(/_/g, ' ');
+                const itemDisplayName = isChemLantern ? 'Chemical Lantern' : (itemDef?.name || cleanKey.replace(/_/g, ' '));
 
                 this.triggerLootRadialArc({
                     type: 'item',
@@ -6463,8 +6727,17 @@ class DungeonPage extends React.Component {
                 active: origin ? idx === (origin.boardIndex ?? 4) : e.active
             }));
 
+            if (this._pocketLanternTimer) {
+                clearInterval(this._pocketLanternTimer);
+                this._pocketLanternTimer = null;
+            }
+
             this.setState({
                 inSuperboard: false,
+                automatonVision: false,
+                pocketLanternActive: false,
+                pocketLanternFuel: 0,
+                pocketLanternFlickering: false,
                 portalTransitionClass: "pocket-transition-in",
                 superboardType: null,
                 savedDreamDenOrigin: null,
@@ -7588,6 +7861,7 @@ class DungeonPage extends React.Component {
         try { if (this.realTimeSpecialActionCheckInterval) { clearInterval(this.realTimeSpecialActionCheckInterval); } } catch (e) { }
         try { if (this.pygmiesInterval) { clearInterval(this.pygmiesInterval); this.pygmiesInterval = null; } } catch (e) { }
         try { if (this.outpostAttackInterval) { clearInterval(this.outpostAttackInterval); this.outpostAttackInterval = null; } } catch (e) { }
+        try { if (this._pocketLanternTimer) { clearInterval(this._pocketLanternTimer); this._pocketLanternTimer = null; } } catch (e) { }
         try { if (this.avatarDamageTimeout) { clearTimeout(this.avatarDamageTimeout); this.avatarDamageTimeout = null; } } catch (e) { }
         try { if (this.hpBarTimer1) { clearTimeout(this.hpBarTimer1); this.hpBarTimer1 = null; } } catch (e) { }
         try { if (this.hpBarTimer2) { clearTimeout(this.hpBarTimer2); this.hpBarTimer2 = null; } } catch (e) { }
@@ -8125,11 +8399,18 @@ class DungeonPage extends React.Component {
         toTile.isGliding = true;
         toTile.glideVector = { dRow, dCol };
 
+        if (isAutomaton && this.state.automatonVision) {
+            this.updateSuperboardViewport();
+        }
+
         setTimeout(() => {
             if (toTile) {
                 toTile.isGliding = false;
                 toTile.glideVector = null;
                 if (typeof this.props.boardManager?.refreshTiles === 'function') this.props.boardManager.refreshTiles();
+                if (isAutomaton && this.state.automatonVision) {
+                    this.updateSuperboardViewport();
+                }
                 if (this && this._isMounted && typeof this.forceUpdate === 'function') this.forceUpdate();
             }
         }, 400);
@@ -12890,6 +13171,92 @@ class DungeonPage extends React.Component {
         }
     };
 
+    renderRightPanelChatWindow = () => {
+        const dungeon = this.props.boardManager?.dungeon || this.state.dungeon;
+        const dungeonName = this.state.inSuperboard
+            ? `${(this.state.superboardType || 'POCKET').toUpperCase()} POCKET DIMENSION`
+            : (dungeon?.name ? dungeon.name.replace(/_/g, ' ') : 'DUNGEON');
+
+        const instanceKey = this.getCurrentInstanceKey();
+        const messages = (this.state.instanceChatMap || {})[instanceKey] || [];
+        const peerCount = this.state.peerPlayersMap ? this.state.peerPlayersMap.size : 0;
+        const totalOnline = peerCount + 1;
+
+        return (
+            <div className="instance-chat-container">
+                <div className="instance-chat-header">
+                    <div className="instance-chat-dungeon-title">
+                        {dungeonName}
+                    </div>
+                    <div className="instance-chat-header-row">
+                        <div className="instance-chat-title">
+                            💬 Instance Chat
+                        </div>
+                        <div className="instance-chat-online-badge" title="Players in this instance">
+                            <span className="online-dot"></span>
+                            <span>{totalOnline} online</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="instance-chat-messages">
+                    {messages.length === 0 ? (
+                        <div className="instance-chat-empty">
+                            <div className="chat-empty-icon">💬</div>
+                            <div className="chat-empty-title">Instance Chat</div>
+                            <div className="chat-empty-desc">
+                                Messages sent here are shared with everyone in this instance.
+                            </div>
+                            <div className="chat-empty-hint">
+                                Press <strong>Shift+Enter</strong> to open the console and chat, or type below!
+                            </div>
+                        </div>
+                    ) : (
+                        messages.map((msg, idx) => {
+                            const timeStr = msg.timestamp
+                                ? new Date(msg.timestamp).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+                                : '';
+                            return (
+                                <div key={msg.id || idx} className={`instance-chat-msg ${msg.isSelf ? 'msg-self' : 'msg-peer'}`}>
+                                    <div className="chat-msg-header">
+                                        <span className="chat-sender-name">{msg.senderName}</span>
+                                        <span className="chat-timestamp">{timeStr}</span>
+                                    </div>
+                                    <div className="chat-msg-text">{msg.text}</div>
+                                </div>
+                            );
+                        })
+                    )}
+                    <div ref={el => { this._instanceChatEndRef = el; }} />
+                </div>
+
+                <div className="instance-chat-input-container">
+                    <input
+                        type="text"
+                        className="instance-chat-input"
+                        placeholder="Type a message..."
+                        value={this.state.chatInputValue || ''}
+                        onChange={e => this.setState({ chatInputValue: e.target.value })}
+                        onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                this.sendInstanceChatMessage(this.state.chatInputValue);
+                            }
+                        }}
+                    />
+                    <button
+                        type="button"
+                        className="instance-chat-send-btn"
+                        onClick={() => this.sendInstanceChatMessage(this.state.chatInputValue)}
+                        title="Send Message"
+                    >
+                        Send
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
     renderPanelSections = (panelKey) => {
         const meta = getMeta() || {};
         const panelConfig = meta.panelConfig || {
@@ -13044,6 +13411,30 @@ class DungeonPage extends React.Component {
                     devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Activate monolith flag: ${nextState ? 'ENABLED (Next domain monolith activation or overtaking success check will automatically succeed)' : 'DISABLED'}`],
                     devConsoleInput: ''
                 }));
+                try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
+                e.preventDefault();
+                return;
+            }
+
+            if (cmd === 'automaton vision' || cmd === 'automatonvision' || cmd === 'a vision' || cmd === 'avision' || cmd === 'autovision' || cmd === 'auto vision') {
+                if (!this.state.inSuperboard) {
+                    this.setState(prev => ({
+                        devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error: 'automaton vision' command is only available in a pocket dimension.`],
+                        devConsoleInput: ''
+                    }));
+                    try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
+                    e.preventDefault();
+                    return;
+                }
+
+                const nextState = !this.state.automatonVision;
+                this.setState(prev => ({
+                    automatonVision: nextState,
+                    devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Automaton vision: ${nextState ? 'ENABLED (Vision centralized on Automaton)' : 'DISABLED (Vision restored to player avatar)'}`],
+                    devConsoleInput: ''
+                }), () => {
+                    this.updateSuperboardViewport(true);
+                });
                 try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
                 e.preventDefault();
                 return;
@@ -13366,6 +13757,7 @@ class DungeonPage extends React.Component {
                 if (cmd === 'list' || cmd === 'help') {
                     const commands = [
                         'activate / monolithactivate — toggle auto-success for next domain monolith activation or overtake',
+                        'automaton vision / a vision — toggle vision centralization on the automaton in pocket dimension',
                         'instakill / instantkill / ik — toggle instakill mode (next encountered monster is slain instantly)',
                         'monster-spawn / monsterspawn / mspawn',
                         'd / debug / debugmode — toggle debug mode on or off',
@@ -13720,8 +14112,12 @@ class DungeonPage extends React.Component {
                     e.preventDefault();
                     return;
                 }
-                // unknown command: echo
-                this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Unknown command: ${raw}`], devConsoleInput: '' }));
+                // Not a valid console command: send to instance chat window!
+                this.sendInstanceChatMessage(raw);
+                this.setState(prev => ({
+                    devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `💬 Chat message sent to instance`],
+                    devConsoleInput: ''
+                }));
             }
             // keep focus
             try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
@@ -15567,8 +15963,17 @@ class DungeonPage extends React.Component {
             return;
         }
 
-        // Toggle dev console with Shift+Space OR Recenter Pocket Dimension with Space
+        // Toggle dev console with Shift+Enter or Shift+Space OR Recenter Pocket Dimension with Space
         try {
+            if ((event.code === 'Enter' || event.key === 'Enter' || event.key === 'Return') && event.shiftKey) {
+                event.preventDefault();
+                this.setState(prev => ({ devConsoleOpen: !prev.devConsoleOpen }), () => {
+                    if (this.state.devConsoleOpen) {
+                        try { setTimeout(() => { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); }, 0); } catch (e) { }
+                    }
+                });
+                return;
+            }
             if (event.code === 'Space' || event.key === ' ' || event.key === 'Spacebar') {
                 if (event.shiftKey) {
                     event.preventDefault();
@@ -26721,21 +27126,7 @@ class DungeonPage extends React.Component {
                 )}
                 {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
                     <div className={`right-side-panel ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`}>
-                        {this.props.boardManager && this.props.boardManager.dungeon && this.props.boardManager.dungeon.name && (
-                            <div style={{
-                                color: 'white',
-                                fontSize: '13px',
-                                fontWeight: '700',
-                                textAlign: 'center',
-                                padding: '12px 10px 4px 10px',
-                                textTransform: 'uppercase',
-                                letterSpacing: '1px',
-                                textShadow: '0 2px 4px rgba(0,0,0,0.8)'
-                            }}>
-                                {this.props.boardManager.dungeon.name.replace(/_/g, ' ')}
-                            </div>
-                        )}
-                        {this.renderPanelSections('right')}
+                        {this.renderRightPanelChatWindow()}
                         <div className="expand-collapse-button icon-container" onClick={this.toggleRightSidePanel}>
                             <CIcon icon={cilCaretLeft} className={`expand-icon ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`} size="sm" />
                         </div>
@@ -26772,6 +27163,29 @@ class DungeonPage extends React.Component {
                                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffffff', boxShadow: '0 0 6px rgba(255, 255, 255, 0.7)' }}></div>
                                 <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.relockTimeToRespawn || 'Active'}</div>
                             </div>
+                            {this.state.inSuperboard && this.state.pocketLanternActive && (
+                                <div
+                                    className="hud-timer-item lantern-fuel-item"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        background: 'rgba(30, 20, 10, 0.85)',
+                                        border: '1px solid #f59e0b',
+                                        borderRadius: '12px',
+                                        padding: '2px 8px',
+                                        cursor: 'help',
+                                        pointerEvents: 'auto',
+                                        boxShadow: this.state.pocketLanternFlickering ? '0 0 10px #f59e0b, inset 0 0 6px #ef4444' : '0 0 8px rgba(245, 158, 11, 0.4)'
+                                    }}
+                                    title="Chemical Lantern Active — Extends pocket dimension vision radius by 2 tiles. Consumes 1 chemical per second."
+                                >
+                                    <span style={{ fontSize: 13, filter: 'drop-shadow(0 0 3px #f59e0b)' }}>🏮</span>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: this.state.pocketLanternFlickering ? '#ef4444' : '#fef08a' }}>
+                                        {this.state.pocketLanternFlickering ? 'Flickering...' : `${this.state.pocketLanternFuel}s`}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="message-container" style={{ opacity: this.state.showMessage ? 1 : 0, transition: 'opacity 0.5s' }}>
                             {this.state.messageToDisplay}
@@ -27026,16 +27440,36 @@ globalY={tile.globalY}
                         {this.state.inSuperboard && (() => {
                             const tileSize = this.state.tileSize || 48;
                             const boardSize = this.state.boardSize || (tileSize * 15);
-                            const { superboardPlayerPos, superboardViewMinX = 0, superboardViewMinY = 0, superboardFogRadius = 2 } = this.state;
-                            const playerLocalX = superboardPlayerPos ? (superboardPlayerPos.gx - superboardViewMinX) : 7;
-                            const playerLocalY = superboardPlayerPos ? (superboardPlayerPos.gy - superboardViewMinY) : 7;
-                            const playerCx = (playerLocalX + 0.5) * tileSize;
-                            const playerCy = (playerLocalY + 0.5) * tileSize;
-                            const playerR = (superboardFogRadius + 0.5) * tileSize;
+                            const { superboardPlayerPos, superboardViewMinX = 0, superboardViewMinY = 0, superboardFogRadius = 2, automatonVision } = this.state;
+                            const dungeon = this.props.boardManager?.dungeon || this.state.dungeon;
+                            const superboard = dungeon?.superboards?.[this.state.superboardType];
+
+                            let focusGx = superboardPlayerPos ? superboardPlayerPos.gx : 7;
+                            let focusGy = superboardPlayerPos ? superboardPlayerPos.gy : 7;
+
+                            if (automatonVision && superboard) {
+                                const autoUnit = this.getSuperboardAutomatonPos(superboard);
+                                if (autoUnit) {
+                                    focusGx = autoUnit.gx;
+                                    focusGy = autoUnit.gy;
+                                } else {
+                                    const enemySpawn = this.getSuperboardEnemySpawnPos(superboard);
+                                    if (enemySpawn) {
+                                        focusGx = enemySpawn.gx;
+                                        focusGy = enemySpawn.gy;
+                                    }
+                                }
+                            }
+
+                            const focusLocalX = focusGx - superboardViewMinX;
+                            const focusLocalY = focusGy - superboardViewMinY;
+                            const focusCx = (focusLocalX + 0.5) * tileSize;
+                            const focusCy = (focusLocalY + 0.5) * tileSize;
+                            const focusR = (superboardFogRadius + 0.5) * tileSize;
 
                             return (
                                 <svg
-                                    className="pocket-fog-overlay"
+                                    className={`pocket-fog-overlay ${this.state.pocketLanternFlickering ? 'lantern-flickering' : ''}`}
                                     style={{
                                         position: 'absolute',
                                         top: 0,
@@ -27057,11 +27491,11 @@ globalY={tile.globalY}
 
                                             {/* Vision cutouts with slight feather blur for smooth edges */}
                                             <g filter="url(#pocket-fog-feather)">
-                                                {/* 1. Player circular spotlight */}
+                                                {/* 1. Focus unit circular spotlight (Player or Automaton) */}
                                                 <circle
-                                                    cx={playerCx}
-                                                    cy={playerCy}
-                                                    r={playerR}
+                                                    cx={focusCx}
+                                                    cy={focusCy}
+                                                    r={focusR}
                                                     fill="black"
                                                 />
 

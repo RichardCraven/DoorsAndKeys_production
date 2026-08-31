@@ -16,6 +16,7 @@ export default function LoginPage(props) {
   const [loginName, setLogName] = useState('')
   const [loginPass, setLogPass] = useState('')
   const [invalidCredentials, setInvalid] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [loginInputPropsName, setLname] = useSpring(() => ({ x: '-200px', opacity: 0, config: { mass: 5, tension: 350, friction: 40 } }))
   const [loginInputPropsPass, setLpass] = useSpring(() => ({ x: '-200px', opacity: 0, config: { mass: 5, tension: 350, friction: 40 } }))
@@ -112,46 +113,56 @@ export default function LoginPage(props) {
           }, 90)
           setPane('register')
         } else {
+          if (isSubmitting) return;
+          const trimmedName = registerName.trim();
+          if (!trimmedName) {
+            setInvalid('Username cannot be empty.');
+            return;
+          }
           if(registerPass1 !== registerPass2){
             setInvalid('Passwords must match.');
           } else if(registerPass1.length > 0){
+            setIsSubmitting(true);
             try {
               const usersRes = await getAllUsersRequest();
               const allUsers = Array.isArray(usersRes?.data) ? usersRes.data : [];
               if (allUsers.length >= 50) {
                 setInvalid('Maximum user limit reached (50 users). Registration is currently disabled.');
+                setIsSubmitting(false);
                 return;
               }
-              const userExists = allUsers.some(u => u.username?.toLowerCase() === registerName.toLowerCase());
+              const userExists = allUsers.some(u => String(u.username || '').trim().toLowerCase() === trimmedName.toLowerCase());
               if (userExists) {
                 setInvalid('Username already exists.');
+                setIsSubmitting(false);
                 return;
               }
-            } catch (err) {
-              console.error('Failed to verify user limit & username availability', err);
-            }
-            const metadata = {
-              dungeonId: null,
-              boardIndex: null,
-              tileIndex: null,
-              crew: null,
-              inventory: null
-            }
-            const registerResponse = await registerRequest({username: registerName, password: registerPass1, isAdmin: registerName === 'zzz', metadata: JSON.stringify(metadata)})
-            if(registerResponse.status === 200){
-              const registerRes = {
-                _id: registerResponse.data._id,
-                // token: registerResponse.data.token,
-                isAdmin: registerResponse.data.isAdmin,
-                metadata: registerResponse.data.metadata,
-                username: registerName,
-                password: registerPass1
+              const metadata = {
+                dungeonId: null,
+                boardIndex: null,
+                tileIndex: null,
+                crew: null,
+                inventory: null
               }
-              showRegistrationConfirmation(registerRes)
-
-            } else {
-              console.log('something failed', registerResponse)
-              // alert('something failed', registerResponse)
+              const registerResponse = await registerRequest({username: trimmedName, password: registerPass1, isAdmin: trimmedName === 'zzz', metadata: JSON.stringify(metadata)})
+              if(registerResponse.status === 200){
+                const registerRes = {
+                  _id: registerResponse.data._id,
+                  isAdmin: registerResponse.data.isAdmin,
+                  metadata: registerResponse.data.metadata,
+                  username: trimmedName,
+                  password: registerPass1
+                }
+                showRegistrationConfirmation(registerRes)
+              } else {
+                console.log('something failed', registerResponse)
+                setInvalid('Registration failed. Please try again.');
+              }
+            } catch (err) {
+              console.error('Registration error:', err);
+              setInvalid('Registration failed due to network error.');
+            } finally {
+              setIsSubmitting(false);
             }
           }
         }
@@ -309,7 +320,9 @@ export default function LoginPage(props) {
                 />
               </div>
             </div>
-            <button className="btn-submit" type="submit">Register Account</button>
+            <button className="btn-submit" type="submit" disabled={isSubmitting}>
+              {isSubmitting ? 'Registering...' : 'Register Account'}
+            </button>
           </form>
         )}
 

@@ -348,7 +348,7 @@ class MapMakerPage extends React.Component {
     } else if (pinnedOption.type === 'tier-tile') {
       const tierOption = this.props.mapMaker?.tierOptions?.[pinnedOption.id];
       if (tierOption) {
-        containsObj = { type: tierOption.key, subtype: null };
+        containsObj = { type: tierOption.key === 'chemical_lantern' ? 'item' : tierOption.key, subtype: tierOption.key === 'chemical_lantern' ? 'chemical_lantern' : null };
         tileImage = tierOption.image;
       }
     } else if (pinnedOption.type === 'jewel-tile') {
@@ -541,6 +541,13 @@ class MapMakerPage extends React.Component {
                     const pinnedPaletteTile = this.props.mapMaker?.paletteTiles?.[this.state.pinnedOption.id];
                     if (pinnedPaletteTile && (pinnedPaletteTile.optionType === 'dream den' || pinnedPaletteTile.optionType === 'dream_den')) {
                          vendorKey = 'dream_den';
+                    }
+                } else if (this.state.pinnedOption.type === 'terrain-tile') {
+                    baseType = 'terrain';
+                    const terrainOption = this.props.mapMaker?.terrainOptions?.[this.state.pinnedOption.id];
+                    if (terrainOption) {
+                        vendorKey = terrainOption.key;
+                        image = images[terrainOption.image] || terrainOption.image;
                     }
                 }
                 board.tiles = this.placeVendorFootprint([...board.tiles], tileIdx, vendorKey, baseType, image, footprintType);
@@ -1620,7 +1627,7 @@ class MapMakerPage extends React.Component {
       arr[tileId].image = images[key.key];
       arr[tileId].color = null;
     } else if (tierOption) {
-      arr[tileId].contains = { type: tierOption.key, subtype: null };
+      arr[tileId].contains = { type: tierOption.key === 'chemical_lantern' ? 'item' : tierOption.key, subtype: tierOption.key === 'chemical_lantern' ? 'chemical_lantern' : null };
       arr[tileId].image = images[tierOption.image];
       arr[tileId].color = null;
     } else if (jewelOption) {
