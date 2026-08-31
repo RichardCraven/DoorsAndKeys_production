@@ -12235,7 +12235,7 @@ class DungeonPage extends React.Component {
             { key: 'food', label: 'Food', val: pRes.food || 0, iconBg: null, emoji: '🍖', color: '#f87171' },
             { key: 'slate', label: 'Slate', val: pRes.slate || 0, iconBg: images.slate, emoji: '🧱', color: '#94a3b8' },
             { key: 'ore', label: 'Ore', val: pRes.ore || 0, iconBg: images.stone, emoji: '⛏️', color: '#cbd5e1' },
-            { key: 'wood', label: 'Wood', val: pRes.wood || 0, iconBg: images.wood, emoji: '🪵', color: '#b45309' },
+            { key: 'wood', label: 'Wood', val: pRes.wood || 0, iconBg: images.wood, emoji: '🪵', color: '#e0a96d' },
             { key: 'dust', label: 'Shimmering Dust', val: pRes.dust || 0, iconBg: images.shimmering_dust, emoji: '✨', color: '#c084fc' },
             { key: 'mushrooms', label: 'Mushrooms', val: pRes.mushrooms || 0, iconBg: images.mushroom1, emoji: '🍄', color: '#e879f9' },
             { key: 'chemicals', label: 'Chemicals', val: pRes.chemicals || 0, iconBg: images.chemical_lantern, emoji: '🧪', color: '#4ade80' }
@@ -12488,7 +12488,7 @@ class DungeonPage extends React.Component {
                                 height: '13px',
                                 verticalAlign: 'middle'
                             }} />
-                            <span className="res-val" style={{ color: '#a0522d' }}>
+                            <span className="res-val" style={{ color: '#e0a96d' }}>
                                 {incomeRates.wood > 0 && <span className="res-income">+{incomeRates.wood}</span>}
                                 {wood}
                             </span>
@@ -12700,7 +12700,7 @@ class DungeonPage extends React.Component {
                                                 verticalAlign: 'middle',
                                                 marginRight: '4px'
                                             }} /> Wood</span>
-                                            <span className="ql-value" style={{ color: '#a0522d' }}>
+                                            <span className="ql-value" style={{ color: '#e0a96d' }}>
                                                 {incomeRates.wood > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.wood}</span>}
                                                 {wood}
                                             </span>
