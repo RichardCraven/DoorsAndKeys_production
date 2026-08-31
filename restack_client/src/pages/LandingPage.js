@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
 import { getMeta, storeMeta, getUserId, getUserName } from '../utils/session-handler';
-import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest, getActivePresenceRequest } from '../utils/api-handler';
+import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest, getActivePresenceRequest, sendFeedbackNotification } from '../utils/api-handler';
 
 
 import skillsMatrix from '../utils/skills-matrix';
@@ -572,6 +572,39 @@ export default function LandingPage(props) {
     setIsSendingMail(true);
     setMailFeedbackMsg(null);
     try {
+      if (toName.toLowerCase() === 'system') {
+        const mailItem = {
+          id: `mail_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          from: getUserName() || username || 'Player',
+          to: 'system',
+          subject: sub,
+          content: body,
+          timestamp: Date.now(),
+          read: false
+        };
+
+        // Send email notification to admin
+        sendFeedbackNotification(getUserName() || username || 'Player', body, sub).catch(err => {
+          console.error('Failed to send feedback notification email:', err);
+        });
+
+        const currentMeta = getMeta(true) || {};
+        currentMeta.sentMailbox = Array.isArray(currentMeta.sentMailbox) ? currentMeta.sentMailbox : [];
+        currentMeta.sentMailbox.unshift(mailItem);
+        storeMeta(currentMeta);
+        if (getUserId()) {
+          updateUserRequest(getUserId(), currentMeta).catch(() => { });
+        }
+
+        setComposeTo(mailboxTab === 'feedback' ? 'system' : '');
+        setComposeSubject(mailboxTab === 'feedback' ? 'feedback' : '');
+        setComposeContent('');
+        setMailFeedbackMsg('Feedback successfully sent! Thank you! 📬');
+        setMailboxToggle(prev => prev + 1);
+        setIsSendingMail(false);
+        return;
+      }
+
       const usersRes = await getAllUsersRequest();
       const allUsers = Array.isArray(usersRes?.data) ? usersRes.data : [];
       const targetUser = allUsers.find(u => String(u.username || '').trim().toLowerCase() === toName.toLowerCase());
@@ -1320,7 +1353,14 @@ export default function LandingPage(props) {
                   Sent ({sentList.length})
                 </button>
                 <button
-                  onClick={() => { setMailboxTab('compose'); setSelectedMail(null); setMailFeedbackMsg(null); }}
+                  onClick={() => {
+                    setMailboxTab('compose');
+                    setSelectedMail(null);
+                    setMailFeedbackMsg(null);
+                    setComposeTo('');
+                    setComposeSubject('');
+                    setComposeContent('');
+                  }}
                   style={{
                     padding: '12px 20px',
                     background: 'none',
@@ -1333,6 +1373,28 @@ export default function LandingPage(props) {
                   }}
                 >
                   ✏️ Compose
+                </button>
+                <button
+                  onClick={() => {
+                    setMailboxTab('feedback');
+                    setSelectedMail(null);
+                    setMailFeedbackMsg(null);
+                    setComposeTo('system');
+                    setComposeSubject('feedback');
+                    setComposeContent('');
+                  }}
+                  style={{
+                    padding: '12px 20px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: mailboxTab === 'feedback' ? '2px solid #e5b54f' : '2px solid transparent',
+                    color: mailboxTab === 'feedback' ? '#e5b54f' : '#a8a29e',
+                    fontWeight: mailboxTab === 'feedback' ? 'bold' : 'normal',
+                    cursor: 'pointer',
+                    fontSize: '0.9rem'
+                  }}
+                >
+                  💬 Feedback
                 </button>
               </div>
 
@@ -1524,8 +1586,8 @@ export default function LandingPage(props) {
                   )
                 )}
 
-                {/* COMPOSE TAB */}
-                {mailboxTab === 'compose' && (
+                {/* COMPOSE & FEEDBACK TAB */}
+                {(mailboxTab === 'compose' || mailboxTab === 'feedback') && (
                   <form onSubmit={handleSendMail} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#e5b54f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
@@ -1536,12 +1598,14 @@ export default function LandingPage(props) {
                         value={composeTo}
                         onChange={e => setComposeTo(e.target.value)}
                         placeholder="Enter player username..."
+                        readOnly={mailboxTab === 'feedback'}
                         style={{
                           padding: '10px 14px',
-                          background: 'rgba(0, 0, 0, 0.5)',
+                          background: mailboxTab === 'feedback' ? 'rgba(212, 168, 68, 0.1)' : 'rgba(0, 0, 0, 0.5)',
                           border: '1px solid rgba(212, 168, 68, 0.4)',
                           borderRadius: '6px',
-                          color: '#ffffff',
+                          color: mailboxTab === 'feedback' ? '#e5b54f' : '#ffffff',
+                          fontWeight: mailboxTab === 'feedback' ? '600' : 'normal',
                           fontSize: '0.9rem',
                           outline: 'none'
                         }}
@@ -1577,7 +1641,7 @@ export default function LandingPage(props) {
                         rows={5}
                         value={composeContent}
                         onChange={e => setComposeContent(e.target.value)}
-                        placeholder="Write your message..."
+                        placeholder={mailboxTab === 'feedback' ? "Write your feedback, suggestions, or bug reports..." : "Write your message..."}
                         style={{
                           padding: '10px 14px',
                           background: 'rgba(0, 0, 0, 0.5)',
@@ -1610,7 +1674,7 @@ export default function LandingPage(props) {
                           gap: '8px'
                         }}
                       >
-                        {isSendingMail ? 'Sending...' : 'Send Mail ✉️'}
+                        {isSendingMail ? 'Sending...' : (mailboxTab === 'feedback' ? 'Send Feedback ✉️' : 'Send Mail ✉️')}
                       </button>
                     </div>
                   </form>
