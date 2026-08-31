@@ -5650,10 +5650,10 @@ class DungeonPage extends React.Component {
                     food: 0,
                     slate: 0,
                     ore: 0,
-                    wood: 0,
+                    wood: 20,
                     dust: 0,
                     mushrooms: 0,
-                    chemicals: 0
+                    chemicals: 25
                 },
                 dungeon: dungeon,
                 minimap
@@ -5710,6 +5710,43 @@ class DungeonPage extends React.Component {
             }
         }
         return null;
+    };
+
+    getSuperboardExistingBuildingCoords = (superboard) => {
+        if (!superboard || !Array.isArray(superboard.miniboards)) return [];
+        const coords = [];
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (!tile) continue;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
+                const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
+                const isBuilding = !!(tile.building || cObj?.building || (cObj && (cObj.type === 'building' || cObj.isDomainMonolith || sKey.includes('monolith') || sKey.includes('outpost') || sKey.includes('fort') || sKey.includes('camp') || sKey.includes('sawmill') || sKey.includes('mine') || sKey.includes('larder') || sKey.includes('generator') || sKey.includes('observer_platform'))));
+                const isEnemySpawn = tile.isEnemySpawn || tile.originalMarker === 'narrative';
+                if (isBuilding || isEnemySpawn) {
+                    const gx = mbX * 15 + (tIdx % 15);
+                    const gy = mbY * 15 + Math.floor(tIdx / 15);
+                    coords.push({ gx, gy, mbIdx, tIdx, sKey });
+                }
+            }
+        }
+        return coords;
+    };
+
+    isSuperboardLocationSpacedOut = (existingCoords, gx, gy, minDistance = 5) => {
+        if (!Array.isArray(existingCoords)) return true;
+        for (const b of existingCoords) {
+            const dist = Math.hypot(gx - b.gx, gy - b.gy);
+            if (dist < minDistance) {
+                return false;
+            }
+        }
+        return true;
     };
 
     updateSuperboardViewport = (forceRecenter = false) => {
@@ -5965,9 +6002,21 @@ class DungeonPage extends React.Component {
     };
 
     activatePocketChemicalLantern = () => {
-        // User starts with 50 chemicals in reserve (or adds 50 if already active)
+        const pRes = this.getPocketResources();
+        const availableChem = typeof pRes.chemicals === 'number' ? pRes.chemicals : 25;
         const currentFuel = (this.state && typeof this.state.pocketLanternFuel === 'number') ? this.state.pocketLanternFuel : 0;
-        const newFuel = currentFuel > 0 ? (currentFuel + 50) : 50;
+        const fuelToAdd = availableChem > 0 ? availableChem : 25;
+        const newFuel = currentFuel + fuelToAdd;
+
+        if (availableChem > 0) {
+            const updated = { ...pRes, chemicals: 0 };
+            this.setState({ pocketResources: updated });
+            try {
+                const meta = getMeta() || {};
+                meta.pocketResources = updated;
+                storeMeta(meta);
+            } catch (e) {}
+        }
 
         if (this._pocketLanternTimer) {
             clearInterval(this._pocketLanternTimer);
@@ -6565,9 +6614,9 @@ class DungeonPage extends React.Component {
         if (!this.state.inSuperboard || this.state.pocketDimensionWon) return;
         const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
 
-        // 1. Victory path: 200+ Domain controlled
+        // 1. Victory path: 500+ Domain controlled
         const domain = this.getTotalPlayerDomainCount();
-        if (domain >= 200) {
+        if (domain >= 500) {
             this.setState({
                 pocketDimensionWon: true,
                 showPocketVictoryModal: true
@@ -6656,7 +6705,7 @@ class DungeonPage extends React.Component {
                 </CModalHeader>
                 <CModalBody style={{ backgroundColor: '#0b1120', color: '#ffffff', padding: '28px 32px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', width: '100%', boxSizing: 'border-box' }}>
                     <div style={{ fontSize: '16px', color: '#cbd5e1', lineHeight: '1.6', maxWidth: '520px', fontFamily: "'Outfit', 'Inter', sans-serif" }}>
-                        {domainCount >= 200 ? (
+                        {domainCount >= 500 ? (
                             <>You have claimed <strong style={{ color: '#38bdf8', fontSize: '18px', fontWeight: 'bold', padding: '2px 8px', background: 'rgba(56, 189, 248, 0.12)', border: '1px solid rgba(56, 189, 248, 0.35)', borderRadius: '4px', margin: '0 4px', display: 'inline-block' }}>{domainCount}</strong> territory tiles and established supreme domain over this pocket dimension!</>
                         ) : (
                             <>You have snuffed out all enemy spawn points and destroyed the hostile automaton, liberating this pocket dimension!</>
@@ -8778,10 +8827,10 @@ class DungeonPage extends React.Component {
             food: 0,
             slate: 0,
             ore: 0,
-            wood: 0,
+            wood: 20,
             dust: 0,
             mushrooms: 0,
-            chemicals: 0
+            chemicals: 25
         };
     };
 
@@ -9157,6 +9206,14 @@ class DungeonPage extends React.Component {
         const monolithId = monolith.id || `monolith_${anchorGx}_${anchorGy}`;
 
         // 0. Fully clear out any territory that this monolith had generated previously across the superboard
+        const possibleIds = new Set([
+            monolithId,
+            monolith.id,
+            `monolith_${anchorGx}_${anchorGy}`,
+            monolith.cObj?.id,
+            monolith.tile?.id ? `monolith_${monolith.tile.id}` : null
+        ].filter(Boolean));
+
         superboard.miniboards.forEach((mb, mbIdx) => {
             if (!mb || !mb.tiles) return;
             const mbX = (mbIdx % 3) * 15;
@@ -9176,12 +9233,35 @@ class DungeonPage extends React.Component {
 
                 const dist = Math.max(dx, dy);
 
-                // If tile was tagged with this monolith or within its maximum domain territory (dist <= 10)
-                if (t.territoryMonolithId === monolithId || (dist <= 10 && t.territory && t.territory !== affiliation)) {
-                    t.territory = null;
-                    t.territoryAffiliation = null;
-                    t.territoryMonolithId = null;
-                    t.newlyClaimed = false;
+                const isTaggedWithMonolith = possibleIds.has(t.territoryMonolithId) ||
+                    (t.contains && typeof t.contains === 'object' && possibleIds.has(t.contains.territoryMonolithId));
+                const isOldTerritory = t.territory && t.territory !== affiliation;
+                const isOldTerritoryInRadius = dist <= 12 && isOldTerritory;
+
+                if (isTaggedWithMonolith || isOldTerritoryInRadius) {
+                    delete t.territory;
+                    delete t.territoryAffiliation;
+                    delete t.territoryMonolithId;
+                    delete t.growthCycles;
+                    delete t.lastGrowthTime;
+                    delete t.newlyClaimed;
+                    delete t.isHostile;
+                    const isMonolithFootprint = (gx >= minGx && gx <= maxGx && gy >= minGy && gy <= maxGy);
+                    if (!isMonolithFootprint && (t.affiliation === 'hostile' || t.affiliation === 'player')) {
+                        delete t.affiliation;
+                    }
+
+                    if (t.contains && typeof t.contains === 'object') {
+                        delete t.contains.territory;
+                        delete t.contains.territoryAffiliation;
+                        delete t.contains.territoryMonolithId;
+                        delete t.contains.growthCycles;
+                        delete t.contains.lastGrowthTime;
+                        delete t.contains.isHostile;
+                        if (!isMonolithFootprint && t.contains.type !== 'building' && t.contains.subtype !== 'outpost') {
+                            delete t.contains.affiliation;
+                        }
+                    }
                 }
             });
         });
@@ -9929,8 +10009,59 @@ class DungeonPage extends React.Component {
             }
         }
 
-        // Collect all unactivated or non-hostile Domain Monoliths on the superboard
-        const targetMonoliths = [];
+        // ── Automaton Resource Accumulation & Stockpile ───────────────────────────
+        if (!this._automatonResources) {
+            this._automatonResources = { wood: 20, slate: 20, ore: 20, food: 20, dust: 20 };
+        }
+
+        // Base passive income per tick
+        this._automatonResources.wood += 1;
+        this._automatonResources.slate += 1;
+        this._automatonResources.ore += 1;
+        this._automatonResources.food += 1;
+        this._automatonResources.dust += 1;
+
+        // Bonus income from hostile converted structures
+        let hostileSawmills = 0;
+        let hostileSlateMines = 0;
+        let hostileOreMines = 0;
+        let hostileLarders = 0;
+        let hostileDustCollectors = 0;
+        let hostileMonoliths = 0;
+
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (!tile || !tile.contains) continue;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const aff = cObj?.affiliation || tile.affiliation;
+                if (aff !== 'hostile') continue;
+                if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') continue;
+
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
+                const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
+
+                if (sKey.includes('sawmill') || sKey.includes('lumber_mill')) hostileSawmills++;
+                else if (sKey.includes('slate_mine')) hostileSlateMines++;
+                else if (sKey.includes('ore_mine')) hostileOreMines++;
+                else if (sKey.includes('larder') || sKey.includes('fungal_nursery')) hostileLarders++;
+                else if (sKey.includes('dust_collector') || sKey.includes('cultivation_vat')) hostileDustCollectors++;
+                else if (sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'))) hostileMonoliths++;
+            }
+        }
+
+        this._automatonResources.wood += (hostileSawmills * 2) + hostileMonoliths;
+        this._automatonResources.slate += (hostileSlateMines * 2) + hostileMonoliths;
+        this._automatonResources.ore += (hostileOreMines * 2) + hostileMonoliths;
+        this._automatonResources.food += (hostileLarders * 2) + hostileMonoliths;
+        this._automatonResources.dust += (hostileDustCollectors * 2) + hostileMonoliths;
+
+        // Collect all unactivated or non-hostile targets (Domain Monoliths AND Resource Generators) on superboard
+        const allTargets = [];
+        let spawnMbIdx = 0;
+
         for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
             const mb = superboard.miniboards[mbIdx];
             if (!mb || !Array.isArray(mb.tiles)) continue;
@@ -9938,30 +10069,53 @@ class DungeonPage extends React.Component {
             const mbY = Math.floor(mbIdx / 3);
             for (let tIdx = 0; tIdx < 225; tIdx++) {
                 const tile = mb.tiles[tIdx];
-                if (!tile || !tile.contains) continue;
+                if (!tile) continue;
+
+                if (tile.isEnemySpawn || tile.originalMarker === 'narrative' || tile.contains?.subtype === 'narrative') {
+                    spawnMbIdx = mbIdx;
+                }
+
+                if (!tile.contains) continue;
                 const cObj = typeof tile.contains === 'object' ? tile.contains : null;
                 const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
                 const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
                 const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
-                if (!isDomainMonolith) continue;
+                const isResourceGenerator = sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('larder') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine');
+
+                if (!isDomainMonolith && !isResourceGenerator) continue;
                 if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') continue;
 
                 const aff = cObj?.affiliation || tile.affiliation;
                 if (aff !== 'hostile') {
                     const anchorGx = mbX * 15 + (tIdx % 15);
                     const anchorGy = mbY * 15 + Math.floor(tIdx / 15);
-                    targetMonoliths.push({
+                    let targetName = 'Structure';
+                    if (isDomainMonolith) targetName = 'Domain Monolith';
+                    else if (sKey.includes('sawmill') || sKey.includes('lumber_mill')) targetName = 'Sawmill';
+                    else if (sKey.includes('slate_mine')) targetName = 'Slate Mine';
+                    else if (sKey.includes('ore_mine')) targetName = 'Ore Mine';
+                    else if (sKey.includes('larder')) targetName = 'Larder';
+                    else if (sKey.includes('fungal_nursery')) targetName = 'Fungal Nursery';
+                    else if (sKey.includes('dust_collector')) targetName = 'Dust Collector';
+                    else if (sKey.includes('cultivation_vat')) targetName = 'Cultivation Vat';
+
+                    allTargets.push({
                         anchorGx,
                         anchorGy,
                         mbIdx,
                         tIdx,
                         tile,
                         cObj,
-                        id: cObj?.id || `monolith_${anchorGx}_${anchorGy}`
+                        isDomainMonolith,
+                        isResourceGenerator,
+                        targetName,
+                        id: cObj?.id || `target_${anchorGx}_${anchorGy}`
                     });
                 }
             }
         }
+
+        this._automatonSpawnMbIdx = spawnMbIdx;
 
         for (const auto of automatonsList) {
             const currentTile = superboard.miniboards[auto.mbIdx]?.tiles?.[auto.tIdx];
@@ -9971,54 +10125,349 @@ class DungeonPage extends React.Component {
             if ((cContains.hp || 0) <= 0) continue;
 
             const isAlliedAutomaton = !!(auto.automaton.isAllied || auto.automaton.faction === 'player' || auto.automaton.placedBy === 'player' || auto.automaton.affiliation === 'friendly');
+            if (isAlliedAutomaton) continue;
 
-            // ── Priority 1: Domain Monolith targeting & activation (for hostile Automatons) ──
-            if (!isAlliedAutomaton && targetMonoliths.length > 0) {
-                let closestMonolith = null;
-                let minMonolithDist = 999;
+            // ── Strategic Building Construction ──
+            // Automaton must physically travel to and be present on the tile to construct a structure.
+            // Structures must be spaced out (minimum 5 tiles from any other building/spawn point).
+            const existingBuildingCoords = this.getSuperboardExistingBuildingCoords(superboard);
+            const activeBuildPlan = cContains.buildPlan || auto.automaton.buildPlan;
+            const now = Date.now();
+            const buildCooldownPassed = !this._automatonLastBuildTime || (now - this._automatonLastBuildTime >= 15000);
+
+            // 1. If currently executing a build plan:
+            if (activeBuildPlan) {
+                const targetTile = superboard.miniboards[activeBuildPlan.mbIdx]?.tiles?.[activeBuildPlan.tIdx];
+                const isTargetValid = targetTile && !targetTile.isVoid && targetTile.color !== 'black' && !targetTile.building && (!targetTile.contains || targetTile.contains.isAutomaton);
+
+                if (!isTargetValid) {
+                    // Site became invalid or obstructed; abort plan
+                    delete cContains.buildPlan;
+                    delete auto.automaton.buildPlan;
+                    if (currentTile) currentTile.contains = { ...cContains };
+                } else if (auto.gx === activeBuildPlan.gx && auto.gy === activeBuildPlan.gy) {
+                    // Automaton has physically arrived at the specific tile!
+                    const adjEmpty = this.getAdjacentSuperboardTiles(superboard, auto.gx, auto.gy).filter(c => c.isEmpty);
+
+                    if (activeBuildPlan.type === 'outpost' && this._automatonResources.wood >= 30 && this._automatonResources.slate >= 30) {
+                        this._automatonResources.wood -= 30;
+                        this._automatonResources.slate -= 30;
+                        this._automatonLastBuildTime = now;
+                        this._automatonOutpostsBuilt = (this._automatonOutpostsBuilt || 0) + 1;
+
+                        const newOutpost = {
+                            type: 'building',
+                            subtype: 'outpost',
+                            building: 'outpost',
+                            affiliation: 'hostile',
+                            placedBy: 'automaton',
+                            hp: 50,
+                            maxHp: 50,
+                            id: `automaton_outpost_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`
+                        };
+
+                        delete cContains.buildPlan;
+                        delete auto.automaton.buildPlan;
+
+                        if (adjEmpty.length > 0) {
+                            const stepTile = adjEmpty[0];
+                            currentTile.building = 'outpost';
+                            currentTile.contains = newOutpost;
+                            currentTile.image = images.outpost || 'outpost';
+                            currentTile.affiliation = 'hostile';
+                            this.movePocketPygmyUnit(superboard, auto.mbIdx, auto.tIdx, stepTile.mbIdx, stepTile.tIdx, auto.gx, auto.gy, stepTile.gx, stepTile.gy);
+                        } else {
+                            currentTile.building = 'outpost';
+                            currentTile.affiliation = 'hostile';
+                        }
+
+                        if (this.isSuperboardCoordVisibleToUser(auto.gx, auto.gy, targetTile)) {
+                            this.displayMessage(`🤖 Hostile Automaton constructed an Outpost Tower at (${auto.gx}, ${auto.gy})!`);
+                        }
+                        this.updateSuperboardViewport();
+                        continue;
+                    } else if (activeBuildPlan.type === 'war_camp' && this._automatonResources.wood >= 60 && this._automatonResources.slate >= 60 && this._automatonResources.ore >= 40) {
+                        const mb = superboard.miniboards[activeBuildPlan.mbIdx];
+                        const row = Math.floor(activeBuildPlan.tIdx / 15);
+                        const col = activeBuildPlan.tIdx % 15;
+                        const idx0 = row * 15 + col;
+                        const idx1 = row * 15 + (col + 1);
+                        const idx2 = (row + 1) * 15 + col;
+                        const idx3 = (row + 1) * 15 + (col + 1);
+
+                        const t0 = mb?.tiles?.[idx0];
+                        const t1 = mb?.tiles?.[idx1];
+                        const t2 = mb?.tiles?.[idx2];
+                        const t3 = mb?.tiles?.[idx3];
+
+                        const canBuildOn = (t) => t && !t.isVoid && t.color !== 'black' && !t.building && (!t.contains || t.contains.isAutomaton);
+
+                        if (col < 14 && row < 14 && canBuildOn(t0) && canBuildOn(t1) && canBuildOn(t2) && canBuildOn(t3)) {
+                            this._automatonResources.wood -= 60;
+                            this._automatonResources.slate -= 60;
+                            this._automatonResources.ore -= 40;
+                            this._automatonLastBuildTime = now;
+                            this._automatonWarCampsBuilt = (this._automatonWarCampsBuilt || 0) + 1;
+
+                            const groupId = `building_war_camp_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+                            const warCampObj = {
+                                type: 'building',
+                                subtype: 'war_camp',
+                                building: 'war_camp',
+                                affiliation: 'hostile',
+                                placedBy: 'automaton',
+                                vendorGroupId: groupId,
+                                vendorAnchorId: idx0,
+                                hp: 100,
+                                maxHp: 100,
+                                id: groupId
+                            };
+
+                            delete cContains.buildPlan;
+                            delete auto.automaton.buildPlan;
+
+                            t0.contains = { ...warCampObj, vendorCell: 'anchor' };
+                            t0.building = 'war_camp';
+                            t0.image = images.war_camp || 'war_camp';
+                            t0.affiliation = 'hostile';
+
+                            t1.contains = { ...warCampObj, vendorCell: 'top_right' };
+                            t1.building = 'war_camp';
+                            t1.image = images.war_camp || 'war_camp';
+                            t1.affiliation = 'hostile';
+
+                            t2.contains = { ...warCampObj, vendorCell: 'bottom_left' };
+                            t2.building = 'war_camp';
+                            t2.image = images.war_camp || 'war_camp';
+                            t2.affiliation = 'hostile';
+
+                            t3.contains = { ...warCampObj, vendorCell: 'bottom_right' };
+                            t3.building = 'war_camp';
+                            t3.image = images.war_camp || 'war_camp';
+                            t3.affiliation = 'hostile';
+
+                            const outsideAdj = this.getAdjacentSuperboardTiles(superboard, auto.gx, auto.gy).filter(c => 
+                                c.isEmpty && !(c.gx >= auto.gx && c.gx <= auto.gx + 1 && c.gy >= auto.gy && c.gy <= auto.gy + 1)
+                            );
+                            if (outsideAdj.length > 0) {
+                                const stepTile = outsideAdj[0];
+                                this.movePocketPygmyUnit(superboard, auto.mbIdx, auto.tIdx, stepTile.mbIdx, stepTile.tIdx, auto.gx, auto.gy, stepTile.gx, stepTile.gy);
+                            }
+
+                            if (this.isSuperboardCoordVisibleToUser(auto.gx, auto.gy, t0)) {
+                                this.displayMessage(`🤖 Hostile Automaton constructed a War Camp at (${auto.gx}, ${auto.gy})!`);
+                            }
+                            this.updateSuperboardViewport();
+                            continue;
+                        }
+                    }
+                } else {
+                    // Move towards the build site
+                    this._automatonCurrentObjective = `Moving to construct ${activeBuildPlan.type === 'war_camp' ? 'War Camp' : 'Outpost'} in Subsection ${activeBuildPlan.mbIdx}`;
+                    const adjEmpty = this.getAdjacentSuperboardTiles(superboard, auto.gx, auto.gy).filter(c => c.isEmpty);
+                    if (adjEmpty.length > 0) {
+                        adjEmpty.sort((a, b) => {
+                            const distA = Math.hypot(a.gx - activeBuildPlan.gx, a.gy - activeBuildPlan.gy);
+                            const distB = Math.hypot(b.gx - activeBuildPlan.gx, b.gy - activeBuildPlan.gy);
+                            return distA - distB;
+                        });
+                        const chosen = adjEmpty[0];
+                        if (chosen) {
+                            this.movePocketPygmyUnit(superboard, auto.mbIdx, auto.tIdx, chosen.mbIdx, chosen.tIdx, auto.gx, auto.gy, chosen.gx, chosen.gy);
+                            continue;
+                        }
+                    }
+                }
+            }
+
+            // 2. If no active build plan and not actively converting, check if Automaton should initiate a new building plan:
+            const hostileOutpostCount = existingBuildingCoords.filter(b => b.sKey.includes('outpost')).length;
+            const hostileWarCampCount = existingBuildingCoords.filter(b => b.sKey.includes('war_camp')).length;
+
+            if (buildCooldownPassed && !cContains.convertingTarget && !auto.automaton.convertingTarget) {
+                // Check War Camp first if affordable and none exists
+                if (hostileWarCampCount === 0 && this._automatonResources.wood >= 60 && this._automatonResources.slate >= 60 && this._automatonResources.ore >= 40) {
+                    let bestSite = null;
+                    let bestDist = 999;
+                    for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                        const mb = superboard.miniboards[mbIdx];
+                        if (!mb || !Array.isArray(mb.tiles)) continue;
+                        const mbX = mbIdx % 3;
+                        const mbY = Math.floor(mbIdx / 3);
+
+                        for (let row = 0; row < 14; row += 2) {
+                            for (let col = 0; col < 14; col += 2) {
+                                const candGx = mbX * 15 + col;
+                                const candGy = mbY * 15 + row;
+                                if (!this.isSuperboardLocationSpacedOut(existingBuildingCoords, candGx, candGy, 6)) continue;
+
+                                const idx0 = row * 15 + col;
+                                const idx1 = row * 15 + (col + 1);
+                                const idx2 = (row + 1) * 15 + col;
+                                const idx3 = (row + 1) * 15 + (col + 1);
+
+                                const t0 = mb.tiles[idx0];
+                                const t1 = mb.tiles[idx1];
+                                const t2 = mb.tiles[idx2];
+                                const t3 = mb.tiles[idx3];
+
+                                const canBuildOn = (t) => t && !t.isVoid && t.color !== 'black' && !t.building && !t.contains?.building && !t.contains?.isPocketPygmy;
+                                if (canBuildOn(t0) && canBuildOn(t1) && canBuildOn(t2) && canBuildOn(t3)) {
+                                    const d = Math.hypot(auto.gx - candGx, auto.gy - candGy);
+                                    if (d < bestDist) {
+                                        bestDist = d;
+                                        bestSite = { type: 'war_camp', gx: candGx, gy: candGy, mbIdx, tIdx: idx0 };
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (bestSite) {
+                        const newPlan = { ...bestSite };
+                        cContains.buildPlan = newPlan;
+                        auto.automaton.buildPlan = newPlan;
+                        if (currentTile) currentTile.contains = { ...cContains };
+                    }
+                } else if (hostileOutpostCount < 3 && this._automatonResources.wood >= 30 && this._automatonResources.slate >= 30) {
+                    const isCurrentSpaced = this.isSuperboardLocationSpacedOut(existingBuildingCoords, auto.gx, auto.gy, 5);
+                    const outpostsInCurrentMb = existingBuildingCoords.filter(b => b.mbIdx === auto.mbIdx && b.sKey.includes('outpost')).length;
+
+                    if (isCurrentSpaced && outpostsInCurrentMb === 0 && (!currentTile.building || currentTile.building === 'null')) {
+                        // Automaton is ALREADY AT a spaced-out site: set build plan right here!
+                        const newPlan = { type: 'outpost', gx: auto.gx, gy: auto.gy, mbIdx: auto.mbIdx, tIdx: auto.tIdx };
+                        cContains.buildPlan = newPlan;
+                        auto.automaton.buildPlan = newPlan;
+                        if (currentTile) currentTile.contains = { ...cContains };
+                    } else {
+                        // Find nearest spaced-out site in spawn subsection or nearby
+                        const targetMbIdx = spawnMbIdx;
+                        const targetMb = superboard.miniboards[targetMbIdx];
+                        const outpostsInSpawnMb = existingBuildingCoords.filter(b => b.mbIdx === targetMbIdx && b.sKey.includes('outpost')).length;
+
+                        if (outpostsInSpawnMb === 0 && targetMb && Array.isArray(targetMb.tiles)) {
+                            const mbX = targetMbIdx % 3;
+                            const mbY = Math.floor(targetMbIdx / 3);
+                            let bestSite = null;
+                            let bestDist = 999;
+
+                            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                                const tile = targetMb.tiles[tIdx];
+                                if (!tile || tile.isVoid || tile.color === 'black' || tile.building || tile.contains?.building || tile.contains?.isPocketPygmy) continue;
+                                const candGx = mbX * 15 + (tIdx % 15);
+                                const candGy = mbY * 15 + Math.floor(tIdx / 15);
+                                if (!this.isSuperboardLocationSpacedOut(existingBuildingCoords, candGx, candGy, 5)) continue;
+
+                                const d = Math.hypot(auto.gx - candGx, auto.gy - candGy);
+                                if (d < bestDist) {
+                                    bestDist = d;
+                                    bestSite = { type: 'outpost', gx: candGx, gy: candGy, mbIdx: targetMbIdx, tIdx };
+                                }
+                            }
+
+                            if (bestSite) {
+                                const newPlan = { ...bestSite };
+                                cContains.buildPlan = newPlan;
+                                auto.automaton.buildPlan = newPlan;
+                                if (currentTile) currentTile.contains = { ...cContains };
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ── Subsection Prioritization & Targeting ──
+            if (allTargets.length > 0) {
+                // Group targets by subsection miniboard index (0..8)
+                const targetsByMb = {};
+                for (const t of allTargets) {
+                    if (!targetsByMb[t.mbIdx]) targetsByMb[t.mbIdx] = [];
+                    targetsByMb[t.mbIdx].push(t);
+                }
+
+                // Determine current target subsection
+                let activeMbIdx = this._automatonTargetMbIdx;
+                if (activeMbIdx === undefined || activeMbIdx === null || !targetsByMb[activeMbIdx] || targetsByMb[activeMbIdx].length === 0) {
+                    // Current subsection cleared! Find nearest subsection with unconverted targets
+                    const currentMbX = auto.mbIdx % 3;
+                    const currentMbY = Math.floor(auto.mbIdx / 3);
+
+                    let bestMbIdx = -1;
+                    let minMbDist = 999;
+
+                    for (let mIdx = 0; mIdx < 9; mIdx++) {
+                        if (targetsByMb[mIdx] && targetsByMb[mIdx].length > 0) {
+                            const mX = mIdx % 3;
+                            const mY = Math.floor(mIdx / 3);
+                            const dist = Math.hypot(mX - currentMbX, mY - currentMbY);
+                            if (dist < minMbDist) {
+                                minMbDist = dist;
+                                bestMbIdx = mIdx;
+                            }
+                        }
+                    }
+                    activeMbIdx = (bestMbIdx !== -1) ? bestMbIdx : auto.mbIdx;
+                    this._automatonTargetMbIdx = activeMbIdx;
+                }
+
+                const subsectionTargets = targetsByMb[activeMbIdx] || allTargets;
+
+                // Priority A: Domain Monolith in current subsection
+                // Priority B: Resource Generators in current subsection
+                let targetPool = subsectionTargets.filter(t => t.isDomainMonolith);
+                if (targetPool.length === 0) {
+                    targetPool = subsectionTargets.filter(t => t.isResourceGenerator);
+                }
+                if (targetPool.length === 0) {
+                    targetPool = allTargets;
+                }
+
+                let closestTarget = null;
+                let minTargetDist = 999;
                 let closestCellCoord = null;
 
-                for (const mono of targetMonoliths) {
-                    const monoCoords = [
-                        { gx: mono.anchorGx, gy: mono.anchorGy },
-                        { gx: mono.anchorGx + 1, gy: mono.anchorGy },
-                        { gx: mono.anchorGx, gy: mono.anchorGy + 1 },
-                        { gx: mono.anchorGx + 1, gy: mono.anchorGy + 1 }
-                    ];
+                for (const tgt of targetPool) {
+                    const cellCoords = tgt.cObj?.isMultiTile ? [
+                        { gx: tgt.anchorGx, gy: tgt.anchorGy },
+                        { gx: tgt.anchorGx + 1, gy: tgt.anchorGy },
+                        { gx: tgt.anchorGx, gy: tgt.anchorGy + 1 },
+                        { gx: tgt.anchorGx + 1, gy: tgt.anchorGy + 1 }
+                    ] : [{ gx: tgt.anchorGx, gy: tgt.anchorGy }];
 
-                    for (const mc of monoCoords) {
+                    for (const mc of cellCoords) {
                         const d = Math.max(Math.abs(auto.gx - mc.gx), Math.abs(auto.gy - mc.gy));
-                        if (d < minMonolithDist) {
-                            minMonolithDist = d;
-                            closestMonolith = mono;
+                        if (d < minTargetDist) {
+                            minTargetDist = d;
+                            closestTarget = tgt;
                             closestCellCoord = mc;
                         }
                     }
                 }
 
-                if (closestMonolith) {
-                    if (minMonolithDist === 1) {
-                        // Adjacent: Channel / Convert the Domain Monolith over 10 seconds
-                        const now = Date.now();
-                        const existingConverting = cContains.convertingMonolith || auto.automaton.convertingMonolith;
+                if (closestTarget) {
+                    const subNames = ['Top-Left', 'Top-Center', 'Top-Right', 'Mid-Left', 'Center', 'Mid-Right', 'Bottom-Left', 'Bottom-Center', 'Bottom-Right'];
+                    this._automatonCurrentObjective = `Converting ${closestTarget.targetName} in Subsection ${closestTarget.mbIdx} (${subNames[closestTarget.mbIdx] || 'Region'})`;
 
-                        if (!existingConverting || existingConverting.targetMonolithId !== closestMonolith.id) {
+                    if (minTargetDist === 1) {
+                        // Adjacent: Channel / Convert target structure over 10 seconds
+                        const now = Date.now();
+                        const existingConverting = cContains.convertingTarget || auto.automaton.convertingTarget;
+
+                        if (!existingConverting || existingConverting.targetId !== closestTarget.id) {
                             const newConverting = {
-                                targetMonolithId: closestMonolith.id,
-                                anchorGx: closestMonolith.anchorGx,
-                                anchorGy: closestMonolith.anchorGy,
+                                targetId: closestTarget.id,
+                                anchorGx: closestTarget.anchorGx,
+                                anchorGy: closestTarget.anchorGy,
                                 startTime: now,
                                 duration: 10000
                             };
-                            cContains.convertingMonolith = newConverting;
-                            auto.automaton.convertingMonolith = newConverting;
-                            if (currentTile) {
-                                currentTile.contains = { ...cContains };
-                            }
+                            cContains.convertingTarget = newConverting;
+                            auto.automaton.convertingTarget = newConverting;
+                            if (currentTile) currentTile.contains = { ...cContains };
 
-                            const isVisible = this.isSuperboardCoordVisibleToUser(closestMonolith.anchorGx, closestMonolith.anchorGy, closestMonolith.tile);
+                            const isVisible = this.isSuperboardCoordVisibleToUser(closestTarget.anchorGx, closestTarget.anchorGy, closestTarget.tile);
                             if (isVisible) {
-                                this.displayMessage(`🤖 Hostile Automaton has begun converting a Domain Monolith! (10s remaining)`);
+                                this.displayMessage(`🤖 Hostile Automaton has begun converting ${closestTarget.targetName}! (10s remaining)`);
                             }
                             this.updateSuperboardViewport();
                             continue;
@@ -10026,12 +10475,9 @@ class DungeonPage extends React.Component {
 
                         const elapsed = now - existingConverting.startTime;
                         if (elapsed < 10000) {
-                            // Still converting! Keep progress updated
-                            cContains.convertingMonolith = existingConverting;
-                            auto.automaton.convertingMonolith = existingConverting;
-                            if (currentTile) {
-                                currentTile.contains = { ...cContains };
-                            }
+                            cContains.convertingTarget = existingConverting;
+                            auto.automaton.convertingTarget = existingConverting;
+                            if (currentTile) currentTile.contains = { ...cContains };
                             this.updateSuperboardViewport();
                             continue;
                         }
@@ -10041,33 +10487,35 @@ class DungeonPage extends React.Component {
                         const dRow = closestCellCoord.gy - auto.gy;
                         await this.animatePocketPygmyBump(superboard, auto.mbIdx, auto.tIdx, dCol, dRow);
 
-                        delete cContains.convertingMonolith;
-                        delete auto.automaton.convertingMonolith;
-                        if (currentTile) {
-                            currentTile.contains = { ...cContains };
+                        delete cContains.convertingTarget;
+                        delete auto.automaton.convertingTarget;
+                        if (currentTile) currentTile.contains = { ...cContains };
+
+                        if (closestTarget.isDomainMonolith) {
+                            this.activateSuperboardDomainMonolith(superboard, closestTarget, 'hostile');
+                        } else {
+                            if (closestTarget.cObj) closestTarget.cObj.affiliation = 'hostile';
+                            if (closestTarget.tile) closestTarget.tile.affiliation = 'hostile';
                         }
 
-                        this.activateSuperboardDomainMonolith(superboard, closestMonolith, 'hostile');
-
-                        const isVisible = this.isSuperboardCoordVisibleToUser(closestMonolith.anchorGx, closestMonolith.anchorGy, closestMonolith.tile);
+                        const isVisible = this.isSuperboardCoordVisibleToUser(closestTarget.anchorGx, closestTarget.anchorGy, closestTarget.tile);
                         if (isVisible) {
-                            this.displayMessage(`🤖 Hostile Automaton has converted a Domain Monolith! Red hostile territory is expanding!`);
+                            this.displayMessage(`🤖 Hostile Automaton has converted a ${closestTarget.targetName} to hostile control!`);
                         }
 
-                        const monoIdx = targetMonoliths.findIndex(m => m.id === closestMonolith.id);
-                        if (monoIdx !== -1) targetMonoliths.splice(monoIdx, 1);
+                        const tIdxInList = allTargets.findIndex(m => m.id === closestTarget.id);
+                        if (tIdxInList !== -1) allTargets.splice(tIdxInList, 1);
 
                         this.updateSuperboardViewport();
                         continue;
                     } else {
-                        // Not adjacent: clear any in-progress converting state
-                        if (cContains.convertingMonolith || auto.automaton.convertingMonolith) {
-                            delete cContains.convertingMonolith;
-                            delete auto.automaton.convertingMonolith;
+                        // Not adjacent: clear converting state and navigate towards closest target cell
+                        if (cContains.convertingTarget || auto.automaton.convertingTarget) {
+                            delete cContains.convertingTarget;
+                            delete auto.automaton.convertingTarget;
                             if (currentTile) currentTile.contains = { ...cContains };
                         }
 
-                        // Navigate towards the monolith
                         const adjEmpty = this.getAdjacentSuperboardTiles(superboard, auto.gx, auto.gy).filter(c => c.isEmpty);
                         if (adjEmpty.length > 0) {
                             adjEmpty.sort((a, b) => {
@@ -10085,7 +10533,8 @@ class DungeonPage extends React.Component {
                 }
             }
 
-            // ── Priority 2: Roaming ──
+            // ── Priority 3: Patrol / Roam ──
+            this._automatonCurrentObjective = 'Patrolling Pocket Dimension';
             const adjEmpty = this.getAdjacentSuperboardTiles(superboard, auto.gx, auto.gy).filter(c => c.isEmpty);
             if (adjEmpty.length > 0) {
                 const chosen = adjEmpty[Math.floor(Math.random() * adjEmpty.length)];
@@ -22780,76 +23229,9 @@ class DungeonPage extends React.Component {
                 const now = Date.now();
                 const monolithId = (anchorGx !== null && anchorGy !== null) ? `monolith_${anchorGx}_${anchorGy}` : `monolith_${tile.id}`;
 
-                // If this was an enemy monolith, reset all previous hostile domain tiles belonging to this monolith
-                if (isEnemyMonolith && superboardsToUpdate.length > 0) {
-                    superboardsToUpdate.forEach(superboard => {
-                        if (!superboard || !superboard.miniboards) return;
-                        superboard.miniboards.forEach(mb => {
-                            if (!mb || !mb.tiles) return;
-                            mb.tiles.forEach(t => {
-                                if (!t) return;
-                                const isThisMonolithTerritory = t.territoryMonolithId === monolithId || (t.contains && typeof t.contains === 'object' && t.contains.territoryMonolithId === monolithId);
-                                if (isThisMonolithTerritory) {
-                                    delete t.territory;
-                                    delete t.territoryAffiliation;
-                                    delete t.territoryMonolithId;
-                                    delete t.growthCycles;
-                                    delete t.lastGrowthTime;
-                                    if (t.affiliation === 'hostile') delete t.affiliation;
-                                    if (t.contains && typeof t.contains === 'object') {
-                                        delete t.contains.territory;
-                                        delete t.contains.territoryAffiliation;
-                                        delete t.contains.territoryMonolithId;
-                                        delete t.contains.growthCycles;
-                                        delete t.contains.lastGrowthTime;
-                                        if (t.contains.affiliation === 'hostile') delete t.contains.affiliation;
-                                    }
-                                }
-                            });
-                        });
-                    });
-                }
-
                 if (anchorGx !== null && anchorGy !== null && superboardsToUpdate.length > 0) {
                     superboardsToUpdate.forEach(superboard => {
-                        if (superboard && superboard.miniboards) {
-                            superboard.miniboards.forEach((mb, mbIdx) => {
-                                if (!mb || !mb.tiles) return;
-                                const mbX = (mbIdx % 3) * 15;
-                                const mbY = Math.floor(mbIdx / 3) * 15;
-                                mb.tiles.forEach((t, tIdx) => {
-                                    if (!t) return;
-                                    const tgx = mbX + (tIdx % 15);
-                                    const tgy = mbY + Math.floor(tIdx / 15);
-                                    if (tgx >= anchorGx && tgx <= anchorGx + 1 && tgy >= anchorGy && tgy <= anchorGy + 1) {
-                                        t.generatorData = genData;
-                                        const existingC = typeof t.contains === 'object' ? t.contains : {};
-                                        t.contains = {
-                                            ...existingC,
-                                            affiliation: 'player',
-                                            isHostile: false,
-                                            faction: 'player',
-                                            growthCycles: 1,
-                                            maxGrowthCycles: 5,
-                                            lastGrowthTime: now,
-                                            level: existingC.level || 1,
-                                            id: monolithId,
-                                            activated: true,
-                                            generatorData: genData
-                                        };
-                                        t.affiliation = 'player';
-                                        t.isHostile = false;
-                                        t.growthCycles = 1;
-                                        t.maxGrowthCycles = 5;
-                                        t.lastGrowthTime = now;
-                                        t.activated = true;
-                                        t.territory = 'player';
-                                        t.territoryAffiliation = 'player';
-                                        t.territoryMonolithId = monolithId;
-                                    }
-                                });
-                            });
-                        }
+                        this.activateSuperboardDomainMonolith(superboard, { anchorGx, anchorGy, id: monolithId, cObj: tile.contains, tile }, 'player');
                     });
                 } else {
                     const existingC = typeof tile.contains === 'object' ? tile.contains : {};
@@ -23554,12 +23936,12 @@ class DungeonPage extends React.Component {
     getBuildingDefinitions = () => {
         return {
             hut: { key: 'hut', name: 'Hut', category: 'earthly', imageKey: 'buildable_hut', fallbackImageKey: 'hut', costs: { wood: 0, stone: 0, slate: 0, resolve: 5 }, buildTime: 20, tag: 'FUNCTIONAL' },
-            outpost: { key: 'outpost', name: 'Outpost', category: 'earthly', imageKey: 'buildable_outpost', fallbackImageKey: 'outpost', costs: { wood: 50, stone: 50, slate: 10 }, buildTime: 7200, tag: 'STRUCTURE' },
-            observer_platform: { key: 'observer_platform', name: 'Observation Platform', category: 'earthly', imageKey: 'buildable_observer_platform', fallbackImageKey: 'observer_platform', costs: { wood: 8, stone: 2, slate: 0 }, buildTime: 50, tag: 'STRUCTURE' },
-            observation_platform: { key: 'observer_platform', name: 'Observation Platform', category: 'earthly', imageKey: 'buildable_observer_platform', fallbackImageKey: 'observer_platform', costs: { wood: 8, stone: 2, slate: 0 }, buildTime: 50, tag: 'STRUCTURE' },
-            earthen_fort: { key: 'earthen_fort', name: 'Earthen Fort', category: 'earthly', imageKey: 'buildable_earthen_fort', fallbackImageKey: 'earthen_fort', costs: { wood: 10, stone: 8, slate: 2 }, buildTime: 75, tag: 'FORTIFICATION' },
-            war_camp: { key: 'war_camp', name: 'War Camp', category: 'earthly', imageKey: 'buildable_war_camp', fallbackImageKey: 'war_camp', costs: { wood: 15, stone: 12, slate: 4 }, buildTime: 105, tag: 'FORTIFICATION' },
-            war_fort: { key: 'war_fort', name: 'War Fort', category: 'earthly', imageKey: 'buildable_war_fort', fallbackImageKey: 'war_fort', costs: { wood: 20, stone: 20, slate: 8 }, buildTime: 150, tag: 'STRONGHOLD' },
+            outpost: { key: 'outpost', name: 'Outpost', category: 'earthly', imageKey: 'buildable_outpost', fallbackImageKey: 'outpost', costs: { wood: 20, stone: 20, ore: 20, slate: 10 }, buildTime: 7200, tag: 'STRUCTURE' },
+            observer_platform: { key: 'observer_platform', name: 'Observation Platform', category: 'earthly', imageKey: 'buildable_observer_platform', fallbackImageKey: 'observer_platform', costs: { wood: 10, stone: 0, ore: 0, slate: 0 }, buildTime: 50, tag: 'STRUCTURE' },
+            observation_platform: { key: 'observer_platform', name: 'Observation Platform', category: 'earthly', imageKey: 'buildable_observer_platform', fallbackImageKey: 'observer_platform', costs: { wood: 10, stone: 0, ore: 0, slate: 0 }, buildTime: 50, tag: 'STRUCTURE' },
+            earthen_fort: { key: 'earthen_fort', name: 'Earthen Fort', category: 'earthly', imageKey: 'buildable_earthen_fort', fallbackImageKey: 'earthen_fort', costs: { wood: 10, stone: 5, ore: 5, slate: 0 }, buildTime: 75, tag: 'FORTIFICATION' },
+            war_camp: { key: 'war_camp', name: 'War Camp', category: 'earthly', imageKey: 'buildable_war_camp', fallbackImageKey: 'war_camp', costs: { wood: 40, stone: 30, ore: 30, slate: 0 }, buildTime: 105, tag: 'FORTIFICATION' },
+            war_fort: { key: 'war_fort', name: 'War Fort', category: 'earthly', imageKey: 'buildable_war_fort', fallbackImageKey: 'war_fort', costs: { wood: 40, stone: 25, ore: 25, slate: 20 }, buildTime: 150, tag: 'STRONGHOLD' },
             wall: { key: 'wall', name: 'Wall', category: 'advanced', imageKey: 'wall', fallbackImageKey: 'wall', costs: { wood: 25, stone: 20, slate: 0 }, buildTime: 60, tag: 'STRUCTURE' },
             frozen_locus: { key: 'frozen_locus', name: 'Frozen Locus', category: 'arcane', imageKey: 'frozen_locus', fallbackImageKey: 'frozen_locus', costs: { stone: 10, slate: 5, dust: 2 }, buildTime: 60, tag: 'ARCANE' },
             emerald_locus: { key: 'emerald_locus', name: 'Emerald Locus', category: 'arcane', imageKey: 'emerald_locus', fallbackImageKey: 'emerald_locus', costs: { stone: 12, slate: 8, dust: 4 }, buildTime: 85, tag: 'ARCANE' },
@@ -23824,26 +24206,48 @@ class DungeonPage extends React.Component {
         }
 
         if (isInPocketDimension) {
-            if (buildingDef.key === 'outpost') {
-                const pRes = { ...this.getPocketResources() };
-                const neededWood = 20;
-                const neededOre = 20;
-                if ((pRes.wood || 0) < neededWood || (pRes.ore || 0) < neededOre) {
-                    if (typeof bm?.messaging === 'function') {
-                        bm.messaging(`❌ Cannot build Outpost: Requires ${neededWood} Wood and ${neededOre} Ore! (You have ${pRes.wood || 0} Wood, ${pRes.ore || 0} Ore)`);
-                    }
-                    return;
-                }
-                pRes.wood = Math.max(0, (pRes.wood || 0) - neededWood);
-                pRes.ore = Math.max(0, (pRes.ore || 0) - neededOre);
-                this.setState({ pocketResources: pRes });
-                try {
-                    const m = getMeta() || {};
-                    m.pocketResources = pRes;
-                    storeMeta(m);
-                    try { updateUserRequest(getUserId(), m).catch(() => {}); } catch(e) {}
-                } catch (e) { }
+            const pRes = { ...this.getPocketResources() };
+            let costs = buildingDef.costs || {};
+            if (buildingDef.key === 'observer_platform' || buildingDef.key === 'observation_platform') {
+                costs = { wood: 10, ore: 0, slate: 0 };
+            } else if (buildingDef.key === 'earthen_fort') {
+                costs = { wood: 10, ore: 5, slate: 0 };
+            } else if (buildingDef.key === 'war_camp') {
+                costs = { wood: 40, ore: 30, slate: 0 };
+            } else if (buildingDef.key === 'war_fort') {
+                costs = { wood: 40, ore: 25, slate: 20 };
+            } else if (buildingDef.key === 'outpost') {
+                costs = { wood: 20, ore: 20, slate: 0 };
             }
+
+            const neededWood = costs.wood || 0;
+            const neededOre = costs.ore || costs.stone || 0;
+            const neededSlate = costs.slate || 0;
+            const neededDust = costs.dust || 0;
+
+            if ((pRes.wood || 0) < neededWood || (pRes.ore || 0) < neededOre || (pRes.slate || 0) < neededSlate || (pRes.dust || 0) < neededDust) {
+                if (typeof bm?.messaging === 'function') {
+                    const reqParts = [];
+                    if (neededWood > 0) reqParts.push(`${neededWood} Wood`);
+                    if (neededOre > 0) reqParts.push(`${neededOre} Ore`);
+                    if (neededSlate > 0) reqParts.push(`${neededSlate} Slate`);
+                    if (neededDust > 0) reqParts.push(`${neededDust} Dust`);
+                    bm.messaging(`❌ Cannot build ${buildingDef.name}: Requires ${reqParts.join(', ')}! (Available: ${pRes.wood || 0} Wood, ${pRes.ore || 0} Ore, ${pRes.slate || 0} Slate)`);
+                }
+                return;
+            }
+
+            pRes.wood = Math.max(0, (pRes.wood || 0) - neededWood);
+            pRes.ore = Math.max(0, (pRes.ore || 0) - neededOre);
+            pRes.slate = Math.max(0, (pRes.slate || 0) - neededSlate);
+            pRes.dust = Math.max(0, (pRes.dust || 0) - neededDust);
+            this.setState({ pocketResources: pRes });
+            try {
+                const m = getMeta() || {};
+                m.pocketResources = pRes;
+                storeMeta(m);
+                try { updateUserRequest(getUserId(), m).catch(() => {}); } catch(e) {}
+            } catch (e) { }
         } else {
             const invManager = this.props.inventoryManager;
             const inv = (invManager && invManager.inventory) || [];
@@ -27466,6 +27870,27 @@ class DungeonPage extends React.Component {
                             this.renderRightPanelChatWindow()
                         ) : (
                             <>
+                                {(() => {
+                                    const dungeon = this.props.boardManager?.dungeon || this.state.dungeon;
+                                    const dungeonName = this.state.inSuperboard
+                                        ? `${(this.state.superboardType || 'POCKET').toUpperCase()} POCKET DIMENSION`
+                                        : (dungeon?.name ? dungeon.name.replace(/_/g, ' ') : null);
+                                    if (!dungeonName) return null;
+                                    return (
+                                        <div className="dungeon-instance-label" style={{
+                                            color: 'white',
+                                            fontSize: '13px',
+                                            fontWeight: '700',
+                                            textAlign: 'center',
+                                            padding: '12px 10px 4px 10px',
+                                            textTransform: 'uppercase',
+                                            letterSpacing: '1px',
+                                            textShadow: '0 2px 4px rgba(0,0,0,0.8)'
+                                        }}>
+                                            {dungeonName}
+                                        </div>
+                                    );
+                                })()}
                                 {this.state.peerPlayersMap && this.state.peerPlayersMap.size > 0 && (
                                     <div style={{
                                         padding: '8px 12px 4px 12px',
@@ -28471,6 +28896,116 @@ globalY={tile.globalY}
                                 ? this.props.boardManager.getIndexFromCoordinates(this.props.boardManager.playerTile.location)
                                 : null}
                         />
+
+                        {/* Automaton Vision Command & Stockpile HUD Overlay */}
+                        {this.state.inSuperboard && this.state.automatonVision && (
+                            <div style={{
+                                position: 'absolute',
+                                top: '16px',
+                                right: '16px',
+                                zIndex: 400,
+                                width: '310px',
+                                backgroundColor: 'rgba(15, 12, 25, 0.94)',
+                                backdropFilter: 'blur(10px)',
+                                WebkitBackdropFilter: 'blur(10px)',
+                                border: '1.5px solid #ef4444',
+                                borderRadius: '10px',
+                                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.9), 0 0 20px rgba(239, 68, 68, 0.4)',
+                                padding: '14px',
+                                color: '#f3f4f6',
+                                fontFamily: "'Inter', sans-serif",
+                                pointerEvents: 'auto',
+                                userSelect: 'none'
+                            }}>
+                                <div style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    borderBottom: '1px solid rgba(239, 68, 68, 0.4)',
+                                    paddingBottom: '8px',
+                                    marginBottom: '10px'
+                                }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold', fontSize: '0.85rem', color: '#f87171', letterSpacing: '0.5px' }}>
+                                        <span style={{ fontSize: '1.1rem' }}>🤖</span> AUTOMATON VISION NETWORK
+                                    </div>
+                                    <button
+                                        onClick={() => this.setState({ automatonVision: false }, () => this.updateSuperboardViewport(true))}
+                                        style={{
+                                            background: 'rgba(239, 68, 68, 0.2)',
+                                            border: '1px solid #ef4444',
+                                            color: '#f87171',
+                                            borderRadius: '4px',
+                                            fontSize: '0.75rem',
+                                            padding: '2px 6px',
+                                            cursor: 'pointer',
+                                            fontWeight: 'bold'
+                                        }}
+                                        title="Return Vision to Player Avatar"
+                                    >
+                                        Exit ✕
+                                    </button>
+                                </div>
+
+                                {/* Automaton Stockpile Grid */}
+                                <div style={{ fontSize: '0.75rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '6px', fontWeight: 'bold' }}>
+                                    Automaton Stockpile
+                                </div>
+                                <div style={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'repeat(3, 1fr)',
+                                    gap: '6px',
+                                    marginBottom: '12px'
+                                }}>
+                                    <div style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(224, 169, 109, 0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.7rem', color: '#e0a96d', fontWeight: 'bold' }}>🪵 Wood</div>
+                                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#ffffff' }}>{this._automatonResources?.wood || 0}</div>
+                                    </div>
+                                    <div style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(148, 163, 184, 0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 'bold' }}>🧱 Slate</div>
+                                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#ffffff' }}>{this._automatonResources?.slate || 0}</div>
+                                    </div>
+                                    <div style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(251, 146, 60, 0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.7rem', color: '#fb923c', fontWeight: 'bold' }}>⛏️ Ore</div>
+                                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#ffffff' }}>{this._automatonResources?.ore || 0}</div>
+                                    </div>
+                                    <div style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.7rem', color: '#ef4444', fontWeight: 'bold' }}>🍖 Food</div>
+                                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#ffffff' }}>{this._automatonResources?.food || 0}</div>
+                                    </div>
+                                    <div style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(168, 85, 247, 0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.7rem', color: '#c084fc', fontWeight: 'bold' }}>✨ Dust</div>
+                                        <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#ffffff' }}>{this._automatonResources?.dust || 0}</div>
+                                    </div>
+                                    <div style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '6px', padding: '6px', textAlign: 'center' }}>
+                                        <div style={{ fontSize: '0.7rem', color: '#10b981', fontWeight: 'bold' }}>📍 Region</div>
+                                        <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#ffffff' }}>Sub {(this._automatonTargetMbIdx !== undefined && this._automatonTargetMbIdx !== null) ? this._automatonTargetMbIdx : 0}</div>
+                                    </div>
+                                </div>
+
+                                {/* Current Objective */}
+                                <div style={{ fontSize: '0.75rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '4px', fontWeight: 'bold' }}>
+                                    Current Tactical Objective
+                                </div>
+                                <div style={{
+                                    fontSize: '0.8rem',
+                                    color: '#fef08a',
+                                    background: 'rgba(234, 179, 8, 0.12)',
+                                    border: '1px solid rgba(234, 179, 8, 0.3)',
+                                    borderRadius: '6px',
+                                    padding: '8px 10px',
+                                    marginBottom: '10px',
+                                    lineHeight: '1.3'
+                                }}>
+                                    {this._automatonCurrentObjective || 'Scanning superboard for strategic targets...'}
+                                </div>
+
+                                {/* Structures Built Summary */}
+                                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#cbd5e1', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '8px' }}>
+                                    <span>Outposts: <strong style={{ color: '#ef4444' }}>{this._automatonOutpostsBuilt || 0}</strong></span>
+                                    <span>War Camps: <strong style={{ color: '#ef4444' }}>{this._automatonWarCampsBuilt || 0}</strong></span>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>}
 

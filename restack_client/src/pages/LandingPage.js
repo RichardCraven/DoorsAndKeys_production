@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
 import { getMeta, storeMeta, getUserId, getUserName } from '../utils/session-handler';
-import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest, getActivePresenceRequest, sendFeedbackNotification } from '../utils/api-handler';
+import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest, getActivePresenceRequest, sendFeedbackNotification, ensureServerWarm, isServerWarm } from '../utils/api-handler';
 
 
 import skillsMatrix from '../utils/skills-matrix';
@@ -383,6 +383,7 @@ export default function LandingPage(props) {
   const [showIOSPrompt, setShowIOSPrompt] = useState(false);
   const [showInfirmary, setShowInfirmary] = useState(false);
   const [selectedPerkInfo, setSelectedPerkInfo] = useState(null);
+  const [serverWarming, setServerWarming] = useState(!isServerWarm());
 
   useEffect(() => {
     // Check if iOS and not standalone
@@ -943,11 +944,26 @@ export default function LandingPage(props) {
   };
 
   useEffect(() => {
-    refreshValidDungeons();
+    let isMounted = true;
+    const init = async () => {
+      if (!isServerWarm()) {
+        setServerWarming(true);
+        await ensureServerWarm();
+        if (isMounted) setServerWarming(false);
+      }
+      if (isMounted) refreshValidDungeons();
+    };
+    init();
+
     const interval = setInterval(() => {
-      refreshValidDungeons();
+      if (isServerWarm()) {
+        refreshValidDungeons();
+      }
     }, 10000);
-    return () => clearInterval(interval);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1157,9 +1173,26 @@ export default function LandingPage(props) {
       {navToTutorials && <Redirect to='/tutorials' />}
 
       <header className="landing-header">
-        <div className="header-logo">
+        <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.6.0 BETA</span>
+          <span className="logo-subtitle">v 0.6.1 BETA</span>
+          {serverWarming && (
+            <span style={{
+              marginLeft: '8px',
+              fontSize: '0.72rem',
+              color: '#e5b54f',
+              background: 'rgba(212, 168, 68, 0.15)',
+              border: '1px solid rgba(212, 168, 68, 0.35)',
+              borderRadius: '12px',
+              padding: '2px 8px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}>
+              <span style={{ display: 'inline-block', width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#e5b54f' }} />
+              Connecting to Realm...
+            </span>
+          )}
         </div>
         <div className="header-user" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           {(() => {

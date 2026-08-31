@@ -16,7 +16,7 @@ export function getBaseTerrainKey(tile) {
 
     if (!key) return null;
     const str = String(key).trim().toLowerCase();
-    for (const prefix of ['terrain_tree_1', 'terrain_naked_trees_3', 'terrain_naked_trees_2', 'terrain_naked_trees', 'terrain_naked_mountains_2', 'terrain_naked_mountains', 'terrain_tree_2', 'terrain_tree_3', 'terrain_mountain_1', 'terrain_mountain_2', 'terrain_mountain_3']) {
+    for (const prefix of ['terrain_tree_1', 'terrain_naked_trees_4', 'terrain_naked_trees_3', 'terrain_naked_trees_2', 'terrain_naked_trees', 'terrain_naked_mountains_2', 'terrain_naked_mountains', 'terrain_tree_2', 'terrain_tree_3', 'terrain_mountain_1', 'terrain_mountain_2', 'terrain_mountain_3']) {
         if (str.startsWith(prefix)) return prefix;
     }
     return null;

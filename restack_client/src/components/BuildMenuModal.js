@@ -38,7 +38,7 @@ export const BUILDINGS = [
         category: 'earthly',
         imageKey: 'buildable_observer_platform',
         fallbackImageKey: 'observer_platform',
-        costs: { wood: 8, stone: 2, slate: 0 },
+        costs: { wood: 10, stone: 0, slate: 0 },
         buildTime: 50,
         tag: 'STRUCTURE',
         description: 'An elevated wooden watchtower with a wide vantage point.',
@@ -49,7 +49,7 @@ export const BUILDINGS = [
         category: 'earthly',
         imageKey: 'buildable_earthen_fort',
         fallbackImageKey: 'earthen_fort',
-        costs: { wood: 10, stone: 8, slate: 2 },
+        costs: { wood: 10, stone: 5, ore: 5, slate: 0 },
         buildTime: 75,
         tag: 'FORTIFICATION',
         description: 'A reinforced earthen mound with defensive palisades.',
@@ -60,7 +60,7 @@ export const BUILDINGS = [
         category: 'earthly',
         imageKey: 'buildable_war_camp',
         fallbackImageKey: 'war_camp',
-        costs: { wood: 15, stone: 12, slate: 4 },
+        costs: { wood: 40, stone: 30, ore: 30, slate: 0 },
         buildTime: 105,
         tag: 'FORTIFICATION',
         description: 'A sprawling military encampment for housing crew and forces.',
@@ -71,7 +71,7 @@ export const BUILDINGS = [
         category: 'earthly',
         imageKey: 'buildable_war_fort',
         fallbackImageKey: 'war_fort',
-        costs: { wood: 20, stone: 20, slate: 8 },
+        costs: { wood: 40, stone: 25, ore: 25, slate: 20 },
         buildTime: 150,
         tag: 'STRONGHOLD',
         description: 'An impenetrable stone-and-slate stronghold capable of enduring sieges.',
@@ -225,10 +225,22 @@ class BuildMenuModal extends Component {
     getBuildingCosts = (building) => {
         if (!building) return {};
         if (this.props.inSuperboard) {
-            if (building.key === 'outpost') {
-                return { wood: 20, stone: 20, ore: 20 };
+            if (building.key === 'observer_platform' || building.key === 'observation_platform') {
+                return { wood: 10, stone: 0, ore: 0, slate: 0, dust: 0 };
             }
-            return { wood: 0, stone: 0, slate: 0, dust: 0, resolve: building.costs?.resolve || 0 };
+            if (building.key === 'earthen_fort') {
+                return { wood: 10, stone: 5, ore: 5, slate: 0, dust: 0 };
+            }
+            if (building.key === 'war_camp') {
+                return { wood: 40, stone: 30, ore: 30, slate: 0, dust: 0 };
+            }
+            if (building.key === 'war_fort') {
+                return { wood: 40, stone: 25, ore: 25, slate: 20, dust: 0 };
+            }
+            if (building.key === 'outpost') {
+                return { wood: 20, stone: 20, ore: 20, slate: 0, dust: 0 };
+            }
+            return building.costs || {};
         }
         return building.costs || {};
     };

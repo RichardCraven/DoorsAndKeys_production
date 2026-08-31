@@ -217,7 +217,7 @@ export const LANDING_REDUX_CSS = `
   overflow: hidden;
   overscroll-behavior: none;
   box-sizing: border-box;
-  padding: 40px;
+  padding: 16px 24px;
 }
 
 .redux-landing-container .landing-header {
@@ -226,9 +226,9 @@ export const LANDING_REDUX_CSS = `
   align-items: center;
   width: 100%;
   max-width: 1200px;
-  margin: 30px auto 30px auto;
+  margin: 0 auto 12px auto;
   border-bottom: 1px solid rgba(212, 168, 68, 0.15);
-  padding-bottom: 20px;
+  padding-bottom: 10px;
 }
 
 .redux-landing-container .landing-header .header-logo {
@@ -293,7 +293,7 @@ export const LANDING_REDUX_CSS = `
 .redux-landing-container .landing-main-grid {
   display: grid;
   grid-template-columns: 1.2fr 1fr;
-  gap: 30px;
+  gap: 20px;
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
@@ -302,8 +302,8 @@ export const LANDING_REDUX_CSS = `
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 @media (max-width: 900px) {
@@ -315,15 +315,15 @@ export const LANDING_REDUX_CSS = `
 .redux-landing-container .landing-main-grid .hero-column {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
 .redux-landing-container .landing-main-grid .menu-column {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-auto-rows: minmax(140px, auto);
+  grid-auto-rows: minmax(110px, auto);
   align-content: start;
-  gap: 20px;
+  gap: 16px;
 }
 
 .redux-landing-container .landing-main-grid .menu-column .menu-cards-grid {
@@ -344,7 +344,7 @@ export const LANDING_REDUX_CSS = `
   background: rgba(22, 19, 17, 0.75);
   border: 2px solid rgba(212, 168, 68, 0.2);
   border-radius: 8px;
-  padding: 35px;
+  padding: 18px 22px;
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(10px);
   display: flex;
@@ -353,7 +353,7 @@ export const LANDING_REDUX_CSS = `
   box-sizing: border-box;
   height: 100%;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
 }
 
 .redux-landing-container .hero-card .hero-card-header {
@@ -420,11 +420,11 @@ export const LANDING_REDUX_CSS = `
 .redux-landing-container .hero-card .btn-play {
   font-family: 'Cinzel', serif;
   width: 100%;
-  padding: 16px 0 !important;
+  padding: 12px 0 !important;
   background: rgba(22, 19, 17, 0.45);
   color: #e5b54f;
   font-weight: 700;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   letter-spacing: 2px;
   text-transform: uppercase;
   border: 1px solid rgba(229, 181, 79, 0.4);
@@ -557,7 +557,7 @@ export const LANDING_REDUX_CSS = `
   background: rgba(22, 19, 17, 0.55);
   border: 1px solid rgba(120, 113, 108, 0.2);
   border-radius: 6px;
-  padding: 24px;
+  padding: 16px 18px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -581,19 +581,19 @@ export const LANDING_REDUX_CSS = `
 .redux-landing-container .menu-card .card-top {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .redux-landing-container .menu-card .card-top .card-icon {
-  font-size: 1.8rem;
-  height: 36px;
+  font-size: 1.6rem;
+  height: 30px;
   display: flex;
   align-items: center;
 }
 
 .redux-landing-container .menu-card .card-top .card-title {
   font-family: 'Cinzel', serif;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: #ffffff;
   letter-spacing: 0.5px;
@@ -624,7 +624,7 @@ export const LANDING_REDUX_CSS = `
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  margin: 15px 0;
+  margin: 6px 0;
   width: 100%;
 }
 
@@ -646,28 +646,28 @@ export const LANDING_REDUX_CSS = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 10px;
   width: 100%;
   background: rgba(12, 10, 9, 0.5);
   border: 1px solid rgba(212, 168, 68, 0.2);
   border-radius: 8px;
-  padding: 28px 20px;
+  padding: 12px 14px;
   box-sizing: border-box;
 }
 
 .redux-landing-container .hero-card .selected-crew-title {
   font-family: 'Cinzel', serif;
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   color: #e5b54f;
   text-transform: uppercase;
-  letter-spacing: 3px;
+  letter-spacing: 2.5px;
   font-weight: 700;
   text-shadow: 0 0 10px rgba(229, 181, 79, 0.3);
 }
 
 .redux-landing-container .hero-card .selected-crew-list {
   display: flex;
-  gap: 32px;
+  gap: 20px;
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
@@ -679,20 +679,20 @@ export const LANDING_REDUX_CSS = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  width: 150px;
+  gap: 4px;
+  width: 105px;
 }
 
 .redux-landing-container .hero-card .selected-crew-avatar-wrapper {
-  width: 130px;
-  height: 130px;
+  width: 80px;
+  height: 80px;
   border-radius: 50%;
   position: relative;
   overflow: visible;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid rgba(212, 168, 68, 0.65);
+  border: 2px solid rgba(212, 168, 68, 0.65);
   box-shadow: 0 8px 24px rgba(0,0,0,0.8), 0 0 15px rgba(212, 168, 68, 0.15);
   transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
@@ -734,7 +734,7 @@ export const LANDING_REDUX_CSS = `
 }
 
 .redux-landing-container .hero-card .selected-crew-name {
-  font-size: 1.1rem;
+  font-size: 0.95rem;
   color: #f5f5f7;
   font-weight: 700;
   text-align: center;
@@ -746,7 +746,7 @@ export const LANDING_REDUX_CSS = `
 }
 
 .redux-landing-container .hero-card .selected-crew-level {
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   color: #a8a29e;
   font-weight: 600;
   text-align: center;
@@ -757,7 +757,7 @@ export const LANDING_REDUX_CSS = `
 }
 
 .redux-landing-container .hero-card .selected-crew-type {
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   color: #e5b54f;
   text-transform: uppercase;
   letter-spacing: 1px;
