@@ -402,7 +402,7 @@ export function superboardCleanup(dungeon) {
                 const structKey = String(cSub || cType || tile.building || cObj?.building || '').toLowerCase();
 
                 // Never remove world resource generators, monoliths, shrines, farms, portals, or narrative tiles!
-                const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
+                const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
 
                 const isPlayerConstructed = !isWorldStructure && (
                     tile.isPlayerBuilt || cObj?.isPlayerBuilt ||

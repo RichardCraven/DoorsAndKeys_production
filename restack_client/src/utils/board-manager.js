@@ -371,9 +371,14 @@ export function BoardManager(){
         const containsSubtype = this.getContainsSubtype(tile.contains) || tile.contains?.subtype;
         const bldg = tile.building || tile.contains?.building;
         const img = tile.image || tile.contains?.image;
+        const sKey = String(containsSubtype || bldg || img || containsType || (tile.contains && typeof tile.contains === 'object' ? (tile.contains.key || tile.contains.name || tile.contains.type) : '') || '').toLowerCase();
+
+        if (!tile.contains || containsType === 'empty' || containsType === 'empty_space' || containsType === 'empty space' || containsSubtype === 'empty' || containsSubtype === 'empty_space' || containsSubtype === 'empty space' || containsType === 'void' || containsSubtype === 'void') {
+            return false;
+        }
 
         // 'hut' and 'buildable_hut' are EXPLICITLY passable
-        if (containsSubtype === 'hut' || containsSubtype === 'hut_under_construction' || containsSubtype === 'buildable_hut' || bldg === 'hut' || bldg === 'hut_under_construction' || img === 'hut' || img === 'buildable_hut') {
+        if (sKey.includes('hut')) {
             return false;
         }
 
@@ -837,6 +842,71 @@ export function BoardManager(){
             }
         }
 
+        // Clean up any malformed vendor cells on single-tile structures (e.g. domain_node, dark_domain_node, earthen_fort, outpost, hut, etc.)
+        for (let i = 0; i < board.tiles.length; i++) {
+            const t = board.tiles[i];
+            if (!t) continue;
+            const cObj = typeof t.contains === 'object' ? t.contains : null;
+            const cType = cObj ? (cObj.type || '') : String(t.contains || '');
+            const cSub = cObj?.subtype || '';
+            const bldg = t.building || cObj?.building || '';
+            const sKey = String(cSub || bldg || (cType !== 'generator' && cType !== 'building' ? cType : '')).toLowerCase();
+            const isSingle = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('hut') || sKey.includes('farm') || sKey.includes('house');
+
+            if (isSingle) {
+                if (cObj) {
+                    delete cObj.vendorCell;
+                    delete cObj.vendorGroupId;
+                    delete cObj.vendorAnchorId;
+                }
+                delete t.vendorCell;
+                delete t.vendorGroupId;
+                delete t.vendorAnchorId;
+
+                // Clean up any neighbor tiles (+1, +15, +16) that were mistakenly converted to vendor cells
+                const col = i % 15;
+                const row = Math.floor(i / 15);
+                const neighborOffsets = [];
+                if (col < 14) neighborOffsets.push(i + 1);
+                if (row < 14) neighborOffsets.push(i + 15);
+                if (col < 14 && row < 14) neighborOffsets.push(i + 16);
+
+                neighborOffsets.forEach(nIdx => {
+                    const nTile = board.tiles[nIdx];
+                    if (nTile) {
+                        const nCObj = typeof nTile.contains === 'object' ? nTile.contains : null;
+                        const nSub = String(nCObj?.subtype || nTile.building || nCObj?.building || '').toLowerCase();
+                        if (nTile.vendorAnchorId === i || nCObj?.vendorAnchorId === i || nSub.includes('domain_node') || nSub.includes('dark_domain_node')) {
+                            if (nTile.vendorAnchorId === i || nCObj?.vendorAnchorId === i || nCObj?.vendorCell || nTile.vendorCell) {
+                                nTile.contains = { type: 'empty_space', subtype: null };
+                                nTile.building = null;
+                                nTile.image = null;
+                                delete nTile.vendorCell;
+                                delete nTile.vendorGroupId;
+                                delete nTile.vendorAnchorId;
+                                delete nTile.generatorData;
+                                if (nCObj) {
+                                    delete nCObj.vendorCell;
+                                    delete nCObj.vendorGroupId;
+                                    delete nCObj.vendorAnchorId;
+                                    delete nCObj.generatorData;
+                                }
+                            }
+                        }
+                    }
+                });
+            } else if (cType === 'empty_space' || cType === 'empty space' || cType === 'empty' || !t.contains) {
+                if (t.building && (t.building.includes('domain_node') || t.building.includes('dark_domain_node') || t.building === 'empty_space')) {
+                    t.building = null;
+                    t.image = null;
+                    delete t.vendorCell;
+                    delete t.vendorGroupId;
+                    delete t.vendorAnchorId;
+                    delete t.generatorData;
+                }
+            }
+        }
+
         // Normalize 2x2 multi-tile structures (domain_monolith, dark_domain_monolith)
         for (let i = 0; i < board.tiles.length; i++) {
             const t = board.tiles[i];
@@ -844,18 +914,25 @@ export function BoardManager(){
             const cType = typeof t.contains === 'object' ? (t.contains.type || '') : String(t.contains);
             const cSub = typeof t.contains === 'object' ? (t.contains.subtype || '') : '';
             const bldg = t.building || (typeof t.contains === 'object' ? t.contains.building : '') || '';
-            const rawKey = String(cSub || bldg || cType).toLowerCase();
+            const sKey = String(cSub || bldg || (cType !== 'generator' && cType !== 'building' ? cType : '')).toLowerCase();
 
-            const is2x2Structure = rawKey === 'domain_monolith' || rawKey === 'dark_domain_monolith' || rawKey === 'war_camp' || rawKey === 'war_fort' || rawKey === 'earthen_fort' || rawKey === 'alchemist' || rawKey === 'merchant' || rawKey === 'cultivation_vat' || rawKey === 'dust_collector' || rawKey === 'larder' || rawKey === 'sawmill' || rawKey === 'lumber_mill' || rawKey === 'ore_mine' || rawKey === 'slate_mine' || rawKey === 'fungal_nursery' || (rawKey.includes('monolith') && !rawKey.includes('shrine')) || rawKey.includes('generator') || rawKey.includes('naked_trees_3') || rawKey.includes('naked_trees_4') || rawKey.includes('naked_mountains_2');
+            const isSingleTile = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('hut') || sKey.includes('farm') || sKey.includes('house');
+            const is2x2Structure = !isSingleTile && (
+                sKey === 'domain_monolith' || sKey === 'dark_domain_monolith' || sKey === 'war_camp' || sKey === 'war_fort' ||
+                sKey === 'alchemist' || sKey === 'merchant' || sKey === 'cultivation_vat' || sKey === 'dust_collector' ||
+                sKey === 'larder' || sKey === 'sawmill' || sKey === 'lumber_mill' || sKey === 'ore_mine' || sKey === 'slate_mine' ||
+                sKey === 'fungal_nursery' || (sKey.includes('monolith') && !sKey.includes('shrine')) ||
+                sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2')
+            );
             if (is2x2Structure) {
-                const cObj = typeof t.contains === 'object' ? t.contains : { type: 'building', subtype: rawKey };
+                const cObj = typeof t.contains === 'object' ? t.contains : { type: 'building', subtype: sKey };
                 if (!cObj.vendorGroupId && (!cObj.vendorCell || cObj.vendorCell === 'anchor')) {
                     const col = i % 15;
                     const row = Math.floor(i / 15);
                     if (col < 14 && row < 14) {
-                        const vendorGroupId = `building_${rawKey}_${i}`;
-                        const vendorKey = rawKey;
-                        const imageKey = rawKey;
+                        const vendorGroupId = `building_${sKey}_${i}`;
+                        const vendorKey = sKey;
+                        const imageKey = sKey;
                         const cellOffsets = [
                             { idx: i, role: 'anchor' },
                             { idx: i + 1, role: 'top_right' },
