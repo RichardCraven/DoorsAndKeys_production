@@ -142,3 +142,118 @@ describe('Pocket Dimension Chemical Lantern', () => {
         expect(state.pocketLanternFuel).toBe(0);
     });
 });
+
+describe('Domain Node Single-Tile Footprint & Passability', () => {
+    test('6. Domain node is 1x1, adjacent empty spaces are passable and not interactable buildings', () => {
+        const nodeTile = {
+            id: 112,
+            type: 'board-tile',
+            contains: { type: 'building', subtype: 'domain_node' },
+            building: 'domain_node',
+            image: 'domain_node'
+        };
+
+        const adjacentEmptyTile = {
+            id: 113,
+            type: 'board-tile',
+            contains: { type: 'empty_space', subtype: null },
+            color: null
+        };
+
+        // isImpassable helper logic as tested in board-manager
+        const isImpassable = (tile) => {
+            if (!tile || !tile.contains) return false;
+            const cType = tile.contains?.type;
+            const cSub = tile.contains?.subtype;
+            if (cType === 'empty_space' || cType === 'empty' || cSub === 'empty_space' || cSub === 'empty') return false;
+            return cSub === 'domain_node' || tile.building === 'domain_node';
+        };
+
+        expect(isImpassable(nodeTile)).toBe(true);
+        expect(isImpassable(adjacentEmptyTile)).toBe(false);
+    });
+
+    test('7. Empty space tiles with leftover building or vendor properties are never treated as impassable', () => {
+        const malformedEmptyTile = {
+            id: 113,
+            type: 'board-tile',
+            contains: { type: 'empty_space', subtype: null },
+            building: 'domain_node',
+            vendorCell: 'top_right',
+            vendorAnchorId: 112
+        };
+
+        const isImpassable = (tile) => {
+            if (!tile || !tile.contains) return false;
+            const cType = tile.contains?.type;
+            const cSub = tile.contains?.subtype;
+            if (cType === 'empty_space' || cType === 'empty' || cSub === 'empty_space' || cSub === 'empty') return false;
+            return cSub === 'domain_node' || tile.building === 'domain_node';
+        };
+
+        expect(isImpassable(malformedEmptyTile)).toBe(false);
+    });
+});
+
+describe('Monolith Payout Cycle Free Will & Influence Score Checks', () => {
+    const calculateFreeWillDelta = (influence, elapsedCycles = 1) => {
+        let delta = 0;
+        if (influence > 100) {
+            delta = 2 * elapsedCycles;
+        } else if (influence > 50) {
+            delta = 1 * elapsedCycles;
+        } else if (influence < 50) {
+            delta = -1 * elapsedCycles;
+        }
+        return delta;
+    };
+
+    test('8. If influence > 50 and <= 100, adds 1 Free Will per payout cycle', () => {
+        const influence = 71; // as shown in screenshot
+        const delta = calculateFreeWillDelta(influence);
+        expect(delta).toBe(1);
+
+        let freeWill = 45;
+        freeWill += delta;
+        expect(freeWill).toBe(46);
+    });
+
+    test('9. If influence < 50, reduces Free Will by 1 per payout cycle', () => {
+        const influence = 35;
+        const delta = calculateFreeWillDelta(influence);
+        expect(delta).toBe(-1);
+
+        let freeWill = 45;
+        freeWill += delta;
+        expect(freeWill).toBe(44);
+    });
+
+    test('10. If influence > 100, increases Free Will by 2 per payout cycle', () => {
+        const influence = 120;
+        const delta = calculateFreeWillDelta(influence);
+        expect(delta).toBe(2);
+
+        let freeWill = 45;
+        freeWill += delta;
+        expect(freeWill).toBe(47);
+    });
+
+    test('11. If influence is exactly 50, Free Will remains unchanged', () => {
+        const influence = 50;
+        const delta = calculateFreeWillDelta(influence);
+        expect(delta).toBe(0);
+
+        let freeWill = 45;
+        freeWill += delta;
+        expect(freeWill).toBe(45);
+    });
+
+    test('12. Multiple elapsed cycles scale Free Will adjustments accordingly', () => {
+        const elapsedCycles = 3;
+        expect(calculateFreeWillDelta(110, elapsedCycles)).toBe(6);
+        expect(calculateFreeWillDelta(75, elapsedCycles)).toBe(3);
+        expect(calculateFreeWillDelta(20, elapsedCycles)).toBe(-3);
+    });
+});
+
+

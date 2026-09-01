@@ -454,6 +454,11 @@ class MapMakerPage extends React.Component {
     }
 
     const copy = { ...tile };
+    delete copy.vendorCell;
+    delete copy.vendorAnchorId;
+    delete copy.vendorGroupId;
+    delete copy.building;
+
     if (pinned && (pinned.optionType === 'empty space' || pinned.optionType === 'delete' || pinned.optionType === 'void')) {
       delete copy.territory;
       delete copy.affiliation;
@@ -462,14 +467,10 @@ class MapMakerPage extends React.Component {
       delete copy.isPlayerBuilt;
       delete copy.placedBy;
       delete copy.ownerId;
-      delete copy.building;
       delete copy.containsBuilding;
       delete copy.inscriptions;
       delete copy.wallInscription;
       delete copy.inscriptionMarker;
-      delete copy.vendorCell;
-      delete copy.vendorAnchorId;
-      delete copy.vendorGroupId;
       delete copy.newlyClaimed;
       delete copy.borders;
       delete copy.forestDensityTier;
@@ -1784,6 +1785,10 @@ class MapMakerPage extends React.Component {
         }
         arr = this.placeVendorFootprint(arr, tileId, generatorOption.key, 'building', images[generatorOption.image] || generatorOption.image);
       } else {
+        delete arr[tileId].vendorCell;
+        delete arr[tileId].vendorGroupId;
+        delete arr[tileId].vendorAnchorId;
+        delete arr[tileId].building;
         arr[tileId].contains = { type: 'building', subtype: generatorOption.key };
         arr[tileId].image = images[generatorOption.image] || generatorOption.image;
         arr[tileId].color = null;

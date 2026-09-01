@@ -264,7 +264,13 @@ function ActiveGeneratorBadge({ resource, rate, cycleIntervalSec, lastTickTime, 
     const resourceIcons = {
         food: '🍖',
         meat: '🍖',
+        farm: '🍖',
+        windmill: '🍖',
         larder: '🍖',
+        influence: '🔮',
+        house: '🔮',
+        manor: '🔮',
+        estate: '🔮',
         ore: '⛏️',
         stone: '⛏️',
         mine: '⛏️',
@@ -359,6 +365,42 @@ function ActiveGeneratorBadge({ resource, rate, cycleIntervalSec, lastTickTime, 
                 >
                     <span style={{ fontSize: '15px' }}>{icon}</span>
                     <span style={{ fontSize: '12px', fontWeight: '800', marginLeft: '1px' }}>+{rate || 5}</span>
+                </div>
+            ))}
+        </div>
+    );
+}
+
+function EarthenFortSpawnParticleBadge({ lastPygmySpawnTime, foodCost }) {
+    const [particles, setParticles] = React.useState([]);
+    const prevTimeRef = React.useRef(lastPygmySpawnTime);
+
+    React.useEffect(() => {
+        if (lastPygmySpawnTime && lastPygmySpawnTime !== prevTimeRef.current) {
+            const id = Date.now() + Math.random();
+            setParticles(prev => [...prev.slice(-2), { id, cost: foodCost || 10 }]);
+            setTimeout(() => {
+                setParticles(prev => prev.filter(p => p.id !== id));
+            }, 1500);
+        }
+        prevTimeRef.current = lastPygmySpawnTime;
+    }, [lastPygmySpawnTime, foodCost]);
+
+    if (particles.length === 0) return null;
+
+    return (
+        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 36 }}>
+            {particles.map(p => (
+                <div
+                    key={p.id}
+                    className="generator-payout-particle"
+                    style={{
+                        color: '#f87171',
+                        textShadow: '0 0 8px rgba(239, 68, 68, 0.8), 0 2px 4px rgba(0,0,0,0.9)'
+                    }}
+                >
+                    <span style={{ fontSize: '15px' }}>🍖</span>
+                    <span style={{ fontSize: '12px', fontWeight: '800', marginLeft: '1px' }}>-{p.cost}</span>
                 </div>
             ))}
         </div>
@@ -572,14 +614,17 @@ function Tile(props) {
     const isPaletteTile = !!(props.isPaletteTile || props.type === 'palette-tile' || props.isPaletteItem);
     const isVendorType = (val) => {
         if (!val) return false;
-        if (typeof val === 'object') {
-            const sKey = String(val.subtype || val.building || val.type || val.key || val.name || '').toLowerCase();
-            if (sKey.includes('observer') || sKey.includes('outpost') || sKey.includes('earthen_fort') || sKey.includes('hut')) {
+        if (typeof val === 'object' && val !== null) {
+            const sub = String(val.subtype || val.building || val.key || val.name || val.type || '').toLowerCase();
+            if (sub.includes('domain_node') || sub.includes('dark_domain_node') || sub.includes('node') || sub.includes('earthen_fort') || sub.includes('outpost') || sub.includes('observer') || sub.includes('hut') || sub.includes('farm') || sub.includes('house')) {
                 return false;
             }
             return !!val.isMultiTile || !!val.isLarge || !!val.vendorCell || (val.vendorAnchorId !== undefined && val.vendorAnchorId !== null) || isVendorType(val.type) || isVendorType(val.subtype) || isVendorType(val.building) || isVendorType(val.key) || isVendorType(val.name);
         }
         const s = String(val).toLowerCase();
+        if (s.includes('domain_node') || s.includes('dark_domain_node') || s.includes('node') || s.includes('earthen_fort') || s.includes('outpost') || s.includes('observer') || s.includes('hut') || s.includes('farm') || s.includes('house')) {
+            return false;
+        }
         const multiKeys = [
             'vendor', 'alchemist', 'merchant',
             'war_camp', 'war_fort',
@@ -621,7 +666,7 @@ function Tile(props) {
                 if (aTile && aTile.color !== 'black' && (aTile.contains || aTile.building || aTile.image)) {
                     const aContains = typeof aTile.contains === 'object' && aTile.contains ? aTile.contains : { type: aTile.contains };
                     const aKey = String(aContains.subtype || aContains.building || aContains.type || aTile.building || aTile.image || '').toLowerCase();
-                    if (aKey.includes('observer') || aKey.includes('outpost') || aKey.includes('earthen_fort') || aKey.includes('hut') || aKey.includes('node')) continue;
+                    if (aKey.includes('observer') || aKey.includes('outpost') || aKey.includes('earthen_fort') || aKey.includes('hut') || aKey.includes('domain_node') || aKey.includes('dark_domain_node') || aKey.includes('node') || aKey.includes('farm') || aKey.includes('house')) continue;
                     const is2x2 = (aKey.includes('domain_monolith') || aKey.includes('dark_domain_monolith') || (aKey.includes('monolith') && !aKey.includes('shrine')) || isVendorType(aKey));
                     if (is2x2) {
                         const aRole = aContains.vendorCell || aTile.vendorCell;
@@ -638,10 +683,20 @@ function Tile(props) {
 
     const isSingleTile = (() => {
         const s = String(containsObj?.subtype || containsObj?.building || containsObj?.type || props.building || props.image || props.optionType || '').toLowerCase();
-        return s.includes('observer') || s.includes('outpost') || s.includes('earthen_fort') || s.includes('hut') || s.includes('farm') || s.includes('house');
+        return s.includes('observer') || s.includes('outpost') || s.includes('earthen_fort') || s.includes('hut') || s.includes('farm') || s.includes('house') || s.includes('domain_node') || s.includes('dark_domain_node') || s.includes('node');
     })();
 
-    const isVendorCell = !isPaletteTile && !isSingleTile && (
+    const anchorId = containsObj?.vendorAnchorId ?? props.vendorAnchorId;
+    const isAnchorSingle = (() => {
+        if (anchorId !== undefined && anchorId !== null && boardTilesForContains && boardTilesForContains[anchorId]) {
+            const aTile = boardTilesForContains[anchorId];
+            const aKey = String(aTile?.contains?.subtype || aTile?.contains?.type || aTile?.building || aTile?.image || '').toLowerCase();
+            return aKey.includes('observer') || aKey.includes('outpost') || aKey.includes('earthen_fort') || aKey.includes('hut') || aKey.includes('farm') || aKey.includes('house') || aKey.includes('domain_node') || aKey.includes('dark_domain_node') || aKey.includes('node');
+        }
+        return false;
+    })();
+
+    const isVendorCell = !isPaletteTile && !isSingleTile && !isAnchorSingle && (
         isVendorType(props.contains) ||
         isVendorType(containsObj?.type) ||
         isVendorType(containsObj?.subtype) ||
@@ -1365,20 +1420,29 @@ function Tile(props) {
                 const gData = props.generatorData || containsObj?.generatorData;
                 const isGeneratorActive = isGenerator && !!(gData?.activated || props.activated || containsObj?.activated);
 
-                const containsAffiliation = containsObj?.affiliation || props.affiliation;
+                const boardTiles = Array.isArray(props.boardTiles) ? props.boardTiles : null;
+                const currentIdx = props.id !== undefined ? props.id : props.index;
+                const currentTileObj = (currentIdx !== null && currentIdx !== undefined && boardTiles) ? boardTiles[currentIdx] : null;
+                const rawTerr = getTileTerritoryAffiliationHelper(currentTileObj, props);
 
-                const isPlayerBuilt = containsAffiliation === 'friendly' || isGeneratorActive || !!(
+                const containsAffiliation = containsObj?.affiliation || props.affiliation || currentTileObj?.affiliation;
+                const affStr = String(containsAffiliation || rawTerr || '').toLowerCase();
+
+                const isPlayerAffiliated = affStr.includes('friendly') || affStr.includes('player') || affStr.includes('crew');
+                const isHostileAffiliated = affStr.includes('hostile') || affStr.includes('enemy') || affStr.includes('automaton');
+
+                const isPlayerBuilt = isPlayerAffiliated || isGeneratorActive || !!(
                     (containsObj && (containsObj.placedBy === 'player' || containsObj.ownerId === 'player' || containsObj.faction === 'player' || containsObj.isAllied)) ||
                     props.placedBy === 'player' ||
                     props.isPlayerBuilt
                 );
 
-                const isHostile = containsAffiliation === 'hostile' || (!isPlayerBuilt && !!(
+                const isHostile = isHostileAffiliated || (!isPlayerBuilt && !!(
                     (containsObj && (containsObj.faction === 'hostile' || containsObj.isHostile || containsObj.faction === 'enemy')) ||
                     props.isHostile
                 ));
 
-                const isNeutral = containsAffiliation === 'neutral' || containsObj?.faction === 'neutral' || containsObj?.faction === 'wild' || (!isPlayerBuilt && !isHostile);
+                const isNeutral = !isPlayerBuilt && !isHostile;
 
                 // By default, neutral structures in Dungeon Builder show NO colored ring
                 if (isBuilderTile && isNeutral) return null;
@@ -1400,8 +1464,8 @@ function Tile(props) {
                     labelTitle = 'Hostile Structure';
                 }
 
-                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2');
-                const isSingleTileStructure = sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node');
+                const isSingleTileStructure = sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('farm') || sKey.includes('house');
+                const is2x2Structure = !isSingleTileStructure && (sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('mine') || sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2'));
                 const isMulti = !isSingleTileStructure && (isVendorCell || vRole === 'anchor' || is2x2Structure || is3x3Structure);
                 return (
                     <div
@@ -1489,7 +1553,7 @@ function Tile(props) {
                 const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 if (isDomainMonolith) return null;
 
-                const isGenerator = sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine');
+                const isGenerator = sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('farm') || sKey.includes('windmill') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate');
                 if (!isGenerator) return null;
 
                 const isVendorCell = !isPaletteTile && !isSingleTile && (
@@ -1500,36 +1564,53 @@ function Tile(props) {
                 if (isVendorCell && vRole && vRole !== 'anchor') return null;
 
                 const gData = props.generatorData || cObj?.generatorData;
-                const isActivated = !!(gData?.activated || props.activated || cObj?.activated);
+                const boardTiles = Array.isArray(props.boardTiles) ? props.boardTiles : null;
+                const currentIdx = props.id !== undefined ? props.id : props.index;
+                const currentTileObj = (currentIdx !== null && currentIdx !== undefined && boardTiles) ? boardTiles[currentIdx] : null;
+                const rawTerr = getTileTerritoryAffiliationHelper(currentTileObj, props);
+                const containsAffiliation = cObj?.affiliation || props.affiliation || currentTileObj?.affiliation;
+                const affStr = String(containsAffiliation || rawTerr || '').toLowerCase();
+
+                const isPlayerAffiliated = affStr.includes('friendly') || affStr.includes('player') || affStr.includes('crew');
+                const isHostileAffiliated = affStr.includes('hostile') || affStr.includes('enemy') || affStr.includes('automaton');
+
+                const isClaimableBuilding = sKey.includes('farm') || sKey.includes('windmill') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate');
+                const isActivated = !!(gData?.activated || props.activated || cObj?.activated || (isClaimableBuilding && (isPlayerAffiliated || isHostileAffiliated)));
                 if (!isActivated) return null;
 
-                const containsAffiliation = cObj?.affiliation || props.affiliation;
-                const isHostile = containsAffiliation === 'hostile' || cObj?.isHostile || props.isHostile;
+                const isHostile = isHostileAffiliated || containsAffiliation === 'hostile' || cObj?.isHostile || props.isHostile;
                 const strokeColor = isHostile ? '#f87171' : '#38bdf8';
                 const badgeGlow = isHostile ? 'rgba(239, 68, 68, 0.6)' : 'rgba(56, 189, 248, 0.6)';
 
                 let resource = gData?.resource;
                 if (!resource || String(resource).toLowerCase() === 'stone') {
-                    if (sKey.includes('ore_mine') || sKey.includes('stone') || sKey.includes('ore') || sKey.includes('mine')) resource = 'ore';
+                    if (sKey.includes('farm') || sKey.includes('windmill') || sKey.includes('larder') || sKey.includes('food')) resource = 'food';
+                    else if (sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('influence')) resource = 'influence';
+                    else if (sKey.includes('ore_mine') || sKey.includes('stone') || sKey.includes('ore') || sKey.includes('mine')) resource = 'ore';
                     else if (sKey.includes('slate_mine') || sKey.includes('slate')) resource = 'slate';
                     else if (sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('wood')) resource = 'wood';
-                    else if (sKey.includes('larder') || sKey.includes('food')) resource = 'food';
                     else if (sKey.includes('dust_collector') || sKey.includes('dust')) resource = 'dust';
                     else if (sKey.includes('fungal_nursery') || sKey.includes('mushroom')) resource = 'mushrooms';
                     else if (sKey.includes('cultivation_vat') || sKey.includes('chemical') || sKey.includes('vat')) resource = 'chemicals';
                 }
 
-                const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2');
-                const is2x2 = isVendorCell || is2x2Structure;
+                const isSingleTileStructure = sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('farm') || sKey.includes('house');
+                const is2x2Structure = !isSingleTileStructure && (sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('mine') || sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2'));
+                const is2x2 = !isSingleTileStructure && (isVendorCell || is2x2Structure);
+
+                const baseRate = sKey.includes('windmill') ? 10 : (sKey.includes('farm') ? 5 : (sKey.includes('house') ? 1 : (sKey.includes('manor') ? 2 : 3)));
+                const effectiveRate = gData?.rate || gData?.cycleAmount || baseRate;
+                const effectiveInterval = gData?.cycleIntervalSec || 15;
+                const effectiveLastTick = gData?.lastTickTime || cObj?.lastClaimTickTime || props.lastClaimTickTime || currentTileObj?.lastClaimTickTime;
 
                 return (
                     <ActiveGeneratorBadge
-                        key={`gen_badge_${props.id ?? props.index}_${gData?.activatedAt || 0}`}
+                        key={`gen_badge_${props.id ?? props.index}_${gData?.activatedAt || effectiveLastTick || 0}`}
                         resource={resource}
-                        rate={gData?.rate || gData?.cycleAmount || 5}
-                        cycleIntervalSec={gData?.cycleIntervalSec || 10}
-                        lastTickTime={gData?.lastTickTime}
-                        activatedAt={gData?.activatedAt}
+                        rate={effectiveRate}
+                        cycleIntervalSec={effectiveInterval}
+                        lastTickTime={effectiveLastTick}
+                        activatedAt={gData?.activatedAt || effectiveLastTick}
                         is2x2={is2x2}
                         strokeColor={strokeColor}
                         badgeGlow={badgeGlow}
@@ -2838,6 +2919,14 @@ function Tile(props) {
                     );
                 }
                 return null;
+            })()}
+
+            {/* Earthen Fort Pygmy Spawn Food Deduction Particle */}
+            {(() => {
+                const spawnTime = containsObj?.lastPygmySpawnTime || props.lastPygmySpawnTime || (currentTileForContains?.contains && currentTileForContains.contains.lastPygmySpawnTime);
+                const foodCost = containsObj?.lastPygmyFoodCost || props.lastPygmyFoodCost || (currentTileForContains?.contains && currentTileForContains.contains.lastPygmyFoodCost);
+                if (!spawnTime) return null;
+                return <EarthenFortSpawnParticleBadge lastPygmySpawnTime={spawnTime} foodCost={foodCost} />;
             })()}
         </div>
     )
