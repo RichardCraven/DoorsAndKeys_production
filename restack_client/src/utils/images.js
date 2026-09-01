@@ -1260,6 +1260,7 @@ import grass_rocks_base_3 from '../assets/icons/terrain/grass_rocks_base_3.png';
 import pine_tree_tall from '../assets/icons/terrain/pine_trees/pine_tree_tall.png';
 import pine_tree_medium from '../assets/icons/terrain/pine_trees/pine_tree_medium.png';
 import pine_tree_small from '../assets/icons/terrain/pine_trees/pine_tree_small.png';
+import pine_tree_single from '../assets/icons/terrain/pine_trees/pine_tree_single.png';
 import naked_trees_2_img from '../assets/icons/terrain/pine_trees/naked_trees_2.png';
 import naked_trees_3_img from '../assets/icons/terrain/pine_trees/naked_trees_3.png';
 import naked_trees_4_img from '../assets/icons/terrain/pine_trees/naked_trees_4.png';
@@ -1374,6 +1375,8 @@ import larder from '../assets/icons/buildings/larder.png';
 import dust_collector from '../assets/icons/buildings/dust collector.png';
 import domain_monolith from '../assets/icons/buildings/domain monolith.png';
 import dark_domain_monolith from '../assets/icons/buildings/dark domain monolith.png';
+import domain_node from '../assets/icons/buildings/domain node.png';
+import dark_domain_node from '../assets/icons/buildings/dark domain node.png';
 import lumber_mill from '../assets/icons/buildings/lumber mill.png';
 import ore_mine from '../assets/icons/buildings/ore mine.png';
 import slate_mine from '../assets/icons/buildings/slate mine.png';
@@ -1485,7 +1488,8 @@ export {
     grass_rocks_base_3,
     pine_tree_tall,
     pine_tree_medium,
-            pine_tree_small,
+    pine_tree_small,
+    pine_tree_single,
     hand_1,
     hand_2,
     hand_3,
@@ -1520,6 +1524,8 @@ export {
     dust_collector,
     domain_monolith,
     dark_domain_monolith,
+    domain_node,
+    dark_domain_node,
     lumber_mill,
     ore_mine,
     slate_mine,

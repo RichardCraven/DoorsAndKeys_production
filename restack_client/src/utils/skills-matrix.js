@@ -1161,6 +1161,7 @@ const skillsMatrix = {
         treePath: 'combat_a',
         id: 'monk_twin_finger_authority',
         tier: 3,
+        knownByDefault: true,
         name: 'Twin Finger Authority',
         desc: 'Strike critical chakra points, stunning and weakening the target\'s resolve.',
         icon: images['monk_twin_finger_authority'],

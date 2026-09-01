@@ -49,7 +49,7 @@ export const BUILDINGS = [
         category: 'earthly',
         imageKey: 'buildable_earthen_fort',
         fallbackImageKey: 'earthen_fort',
-        costs: { wood: 10, stone: 5, ore: 5, slate: 0 },
+        costs: { wood: 10, ore: 5, slate: 0 },
         buildTime: 75,
         tag: 'FORTIFICATION',
         description: 'A reinforced earthen mound with defensive palisades.',
@@ -60,7 +60,7 @@ export const BUILDINGS = [
         category: 'earthly',
         imageKey: 'buildable_war_camp',
         fallbackImageKey: 'war_camp',
-        costs: { wood: 40, stone: 30, ore: 30, slate: 0 },
+        costs: { wood: 40, ore: 30, slate: 0 },
         buildTime: 105,
         tag: 'FORTIFICATION',
         description: 'A sprawling military encampment for housing crew and forces.',
@@ -71,7 +71,7 @@ export const BUILDINGS = [
         category: 'earthly',
         imageKey: 'buildable_war_fort',
         fallbackImageKey: 'war_fort',
-        costs: { wood: 40, stone: 25, ore: 25, slate: 20 },
+        costs: { wood: 40, ore: 25, slate: 20 },
         buildTime: 150,
         tag: 'STRONGHOLD',
         description: 'An impenetrable stone-and-slate stronghold capable of enduring sieges.',
@@ -193,6 +193,7 @@ class BuildMenuModal extends Component {
         if (inSuperboard && pocketResources) {
             return {
                 wood: pocketResources.wood || 0,
+                ore: pocketResources.ore || 0,
                 stone: pocketResources.ore || 0,
                 slate: pocketResources.slate || 0,
                 dust: pocketResources.dust || 0,
@@ -201,7 +202,8 @@ class BuildMenuModal extends Component {
         }
         const counts = { 
             wood: inventoryManager?.wood || 0, 
-            stone: inventoryManager?.stone || 0, 
+            ore: inventoryManager?.ore || inventoryManager?.stone || 0,
+            stone: inventoryManager?.stone || inventoryManager?.ore || 0, 
             slate: inventoryManager?.slate || 0, 
             dust: inventoryManager?.shimmering_dust || 0,
             resolve: typeof meta.resolve === 'number' ? meta.resolve : 100
@@ -214,7 +216,10 @@ class BuildMenuModal extends Component {
                 const key = (item.key || item.id || item._im_key || item.name || '').toLowerCase();
                 if (key.includes('wood')) counts.wood += (item.amount || 1);
                 else if (key.includes('slate')) counts.slate += (item.amount || 1);
-                else if (key.includes('stone')) counts.stone += (item.amount || 1);
+                else if (key.includes('ore') || key.includes('stone')) {
+                    counts.ore += (item.amount || 1);
+                    counts.stone += (item.amount || 1);
+                }
                 else if (key.includes('dust')) counts.dust += (item.amount || 1);
             });
         }
@@ -226,19 +231,19 @@ class BuildMenuModal extends Component {
         if (!building) return {};
         if (this.props.inSuperboard) {
             if (building.key === 'observer_platform' || building.key === 'observation_platform') {
-                return { wood: 10, stone: 0, ore: 0, slate: 0, dust: 0 };
+                return { wood: 10, ore: 0, slate: 0, dust: 0 };
             }
             if (building.key === 'earthen_fort') {
-                return { wood: 10, stone: 5, ore: 5, slate: 0, dust: 0 };
+                return { wood: 10, ore: 5, slate: 0, dust: 0 };
             }
             if (building.key === 'war_camp') {
-                return { wood: 40, stone: 30, ore: 30, slate: 0, dust: 0 };
+                return { wood: 40, ore: 30, slate: 0, dust: 0 };
             }
             if (building.key === 'war_fort') {
-                return { wood: 40, stone: 25, ore: 25, slate: 20, dust: 0 };
+                return { wood: 40, ore: 25, slate: 20, dust: 0 };
             }
             if (building.key === 'outpost') {
-                return { wood: 20, stone: 20, ore: 20, slate: 0, dust: 0 };
+                return { wood: 20, ore: 20, slate: 0, dust: 0 };
             }
             return building.costs || {};
         }
@@ -248,12 +253,13 @@ class BuildMenuModal extends Component {
     canAfford = (costs, available) => {
         if (costs.resolve && available.resolve < costs.resolve) return false;
         const woodCost = costs.wood || 0;
-        const stoneCost = costs.stone || costs.ore || 0;
+        const oreCost = costs.ore !== undefined ? costs.ore : (costs.stone || 0);
         const slateCost = costs.slate || 0;
         const dustCost = costs.dust || 0;
+        const availableOre = available.ore !== undefined ? available.ore : (available.stone || 0);
         return (
             (available.wood || 0) >= woodCost &&
-            (available.stone || 0) >= stoneCost &&
+            availableOre >= oreCost &&
             (available.slate || 0) >= slateCost &&
             (available.dust || 0) >= dustCost
         );
@@ -588,8 +594,8 @@ class BuildMenuModal extends Component {
                                                             </span>
                                                         )}
                                                         {(costs.stone > 0 || costs.ore > 0) && (
-                                                            <span style={{ color: available.stone >= (costs.stone || costs.ore) ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
-                                                                <img src={images.stone} alt={this.props.inSuperboard ? "Ore" : "Stone"} style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.stone || costs.ore}
+                                                            <span style={{ color: (available.ore !== undefined ? available.ore : available.stone) >= (costs.ore !== undefined ? costs.ore : costs.stone) ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                                <img src={images.stone} alt={this.props.inSuperboard ? "Ore" : "Stone"} style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.ore !== undefined ? costs.ore : costs.stone}
                                                             </span>
                                                         )}
                                                         {costs.slate > 0 && (

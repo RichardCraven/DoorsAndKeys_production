@@ -1175,7 +1175,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.6.2 BETA</span>
+          <span className="logo-subtitle">v 0.6.3 BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',

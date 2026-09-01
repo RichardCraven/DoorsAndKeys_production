@@ -143,11 +143,16 @@ class BoardView extends React.Component {
         
         const pinnedOption = this.props.pinnedOption;
         const pinned = pinnedOption && this.props.mapMaker?.paletteTiles?.[pinnedOption.id];
-        
-        if (pinnedOption && pinned && pinned.optionType !== 'inscription') {
+        if (pinnedOption && (pinned || pinnedOption.type === 'forest-stamp-tile' || pinnedOption.type === 'mountain-stamp-tile') && (!pinned || pinned.optionType !== 'inscription')) {
             hasPreview = true;
             let monster, gate, key, tierOption, jewelOption, runeOption, treasureOption, vendorOption;
-            if (pinnedOption.type === 'monster-tile') {
+            if (pinnedOption.type === 'forest-stamp-tile') {
+                previewContains = { type: 'terrain', subtype: pinnedOption.treeType || 'terrain_naked_trees' };
+                previewImage = images[pinnedOption.treeType || 'terrain_naked_trees'] || (pinnedOption.treeType || 'terrain_naked_trees');
+            } else if (pinnedOption.type === 'mountain-stamp-tile') {
+                previewContains = { type: 'terrain', subtype: pinnedOption.mountainType || 'terrain_mountain_1' };
+                previewImage = images[pinnedOption.mountainType || 'terrain_mountain_1'] || (pinnedOption.mountainType || 'terrain_mountain_1');
+            } else if (pinnedOption.type === 'monster-tile') {
                 const paletteMonsters = typeof this.props.monsterManager?.getPaletteMonsters === 'function'
                     ? this.props.monsterManager.getPaletteMonsters()
                     : Object.values(this.props.monsterManager?.monsters || {});
@@ -416,6 +421,10 @@ class BoardView extends React.Component {
                                 index={tile.id}
                                 tileSize={this.props.tileSize}
                                 contains={tileContains}
+                                forestDensityTier={tile.forestDensityTier ?? (typeof tile.contains === 'object' ? tile.contains?.forestDensityTier : null)}
+                                mountainDensityTier={tile.mountainDensityTier ?? (typeof tile.contains === 'object' ? tile.contains?.mountainDensityTier : null)}
+                                variantSeed={tile.variantSeed ?? (typeof tile.contains === 'object' ? tile.contains?.variantSeed : null)}
+                                autotileMask={tile.autotileMask ?? (typeof tile.contains === 'object' ? tile.contains?.autotileMask : null)}
                                 territory={tileTerritory}
                                 boardTiles={this.props.tiles}
                                 image={tileImage ? tileImage : null}

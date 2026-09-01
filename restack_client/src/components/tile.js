@@ -1,5 +1,6 @@
 import React from 'react';
 import * as images from '../utils/images'
+import { getTreeLayersForDensity, getMountainLayersForDensity } from '../utils/autotile-utils';
 
 
 const getTileTerritoryAffiliationHelper = (tObj, fallbackProps) => {
@@ -438,7 +439,7 @@ function Tile(props) {
     const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
     const sKey = (props.building || containsObj?.subtype || containsObj?.building || containsObj?.type || containsObj?.key || containsObj?.name || props.contains || props.image || '').toString().toLowerCase();
     const is3x3Structure = sKey.includes('keep') || sKey.includes('fortress');
-    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || is3x3Structure;
+    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || is3x3Structure;
 
     const containsObjForHp = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined')
         ? (typeof currentTileForContains.contains === 'object' ? currentTileForContains.contains : null)
@@ -620,7 +621,7 @@ function Tile(props) {
                 if (aTile && aTile.color !== 'black' && (aTile.contains || aTile.building || aTile.image)) {
                     const aContains = typeof aTile.contains === 'object' && aTile.contains ? aTile.contains : { type: aTile.contains };
                     const aKey = String(aContains.subtype || aContains.building || aContains.type || aTile.building || aTile.image || '').toLowerCase();
-                    if (aKey.includes('observer') || aKey.includes('outpost') || aKey.includes('earthen_fort') || aKey.includes('hut')) continue;
+                    if (aKey.includes('observer') || aKey.includes('outpost') || aKey.includes('earthen_fort') || aKey.includes('hut') || aKey.includes('node')) continue;
                     const is2x2 = (aKey.includes('domain_monolith') || aKey.includes('dark_domain_monolith') || (aKey.includes('monolith') && !aKey.includes('shrine')) || isVendorType(aKey));
                     if (is2x2) {
                         const aRole = aContains.vendorCell || aTile.vendorCell;
@@ -1147,7 +1148,30 @@ function Tile(props) {
         )
     );
 
+    const densityTier = (typeof props.forestDensityTier === 'number')
+        ? props.forestDensityTier
+        : ((typeof containsObj === 'object' && typeof containsObj?.forestDensityTier === 'number')
+            ? containsObj.forestDensityTier
+            : ((typeof currentContains === 'object' && typeof currentContains?.forestDensityTier === 'number')
+                ? currentContains.forestDensityTier
+                : null));
 
+    const mountainDensityTier = (typeof props.mountainDensityTier === 'number')
+        ? props.mountainDensityTier
+        : ((typeof containsObj === 'object' && typeof containsObj?.mountainDensityTier === 'number')
+            ? containsObj.mountainDensityTier
+            : ((typeof currentContains === 'object' && typeof currentContains?.mountainDensityTier === 'number')
+                ? currentContains.mountainDensityTier
+                : null));
+
+    const isTerrainType = (containsObj && (containsObj.type === 'terrain' || containsObj.terrainSet)) ||
+        (currentContains && (currentContains.type === 'terrain' || currentContains.terrainSet)) ||
+        (props.contains && typeof props.contains === 'object' && (props.contains.type === 'terrain' || props.contains.terrainSet)) ||
+        (typeof props.contains === 'string' && props.contains.startsWith('terrain')) ||
+        (props.optionType === 'terrain');
+
+    const isLayeredForestTile = isTerrainType && densityTier !== null && densityTier !== undefined && densityTier <= 4 && densityTier > 0 && props.type !== 'palette-tile' && props.optionType !== 'delete' && props.optionType !== 'voidfill';
+    const isLayeredMountainTile = isTerrainType && mountainDensityTier !== null && mountainDensityTier !== undefined && mountainDensityTier <= 4 && mountainDensityTier > 0 && props.type !== 'palette-tile' && props.optionType !== 'delete' && props.optionType !== 'voidfill';
 
     return (
         <div 
@@ -1333,7 +1357,7 @@ function Tile(props) {
 
                 const containsSubtype = containsObj?.subtype || containsObj?.key || containsObj?.building || (typeof props.contains === 'string' ? props.contains : null);
                 const sKey = String(containsSubtype || props.building || containsObj?.type || props.image || '').toLowerCase();
-                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 const isDomainActive = isDomainMonolith && (!!containsObj?.activated || !!props.activated || (containsObj?.growthCycles > 0) || (props.growthCycles > 0) || !!containsObj?.territory || !!props.territory || !!containsObj?.territoryAffiliation || !!props.territoryAffiliation);
                 if (isDomainActive) return null;
 
@@ -1377,7 +1401,7 @@ function Tile(props) {
                 }
 
                 const is2x2Structure = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('dream_den') || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine') || sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2');
-                const isSingleTileStructure = sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer');
+                const isSingleTileStructure = sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node');
                 const isMulti = !isSingleTileStructure && (isVendorCell || vRole === 'anchor' || is2x2Structure || is3x3Structure);
                 return (
                     <div
@@ -1411,7 +1435,7 @@ function Tile(props) {
                 const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof props.contains === 'string' ? props.contains : null);
                 const sKey = String(containsSubtype || props.building || cObj?.type || props.image || '').toLowerCase();
 
-                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 if (!isDomainMonolith) return null;
 
                 const isVendorCell = !isPaletteTile && !isSingleTile && (
@@ -1422,7 +1446,7 @@ function Tile(props) {
                 // Only render once on the anchor tile of the monolith (or single tile if not multi)
                 if (isVendorCell && vRole && vRole !== 'anchor') return null;
 
-                const isHostileMonolith = sKey.includes('dark_domain_monolith') || props.isHostile || cObj?.isHostile || cObj?.faction === 'hostile';
+                const isHostileMonolith = sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node') || props.isHostile || cObj?.isHostile || cObj?.faction === 'hostile';
                 const rawAff = cObj?.affiliation || props.affiliation || props.territoryAffiliation || cObj?.territoryAffiliation || props.territory || cObj?.territory;
                 const isActivated = !!(cObj?.activated || props.activated || (cObj?.growthCycles > 0) || (props.growthCycles > 0) || isHostileMonolith || (rawAff && rawAff !== 'none'));
                 if (!isActivated) return null;
@@ -1434,7 +1458,7 @@ function Tile(props) {
                 const lastGrowthTime = cObj?.lastGrowthTime || props.lastGrowthTime || Date.now();
 
                 const isMax = growthCycles >= maxGrowthCycles;
-                const is2x2 = isVendorCell || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine');
+                const is2x2 = !sKey.includes('node') && (isVendorCell || sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine')) || sKey.includes('cultivation_vat') || sKey.includes('dust_collector') || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('fungal_nursery') || sKey.includes('generator') || sKey.includes('mine'));
 
                 const isPlayer = !isHostileMonolith && (String(affiliation).toLowerCase().includes('player') || String(affiliation).toLowerCase().includes('friendly') || String(affiliation).toLowerCase().includes('crew'));
                 const badgeGlow = isPlayer ? 'rgba(56, 189, 248, 0.6)' : 'rgba(239, 68, 68, 0.6)';
@@ -1462,7 +1486,7 @@ function Tile(props) {
                 const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof props.contains === 'string' ? props.contains : null);
                 const sKey = String(containsSubtype || props.building || cObj?.type || props.image || '').toLowerCase();
 
-                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 if (isDomainMonolith) return null;
 
                 const isGenerator = sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine');
@@ -1567,12 +1591,12 @@ function Tile(props) {
                             const c = typeof t.contains === 'object' ? t.contains : null;
                             const monoSubtype = c?.subtype || c?.key || c?.building || t.building || c?.type || '';
                             const monoKey = String(monoSubtype).toLowerCase();
-                            const isMono = monoKey.includes('domain_monolith') || monoKey.includes('dark_domain_monolith') || (monoKey.includes('monolith') && !monoKey.includes('shrine'));
+                            const isMono = monoKey.includes('domain_monolith') || monoKey.includes('dark_domain_monolith') || monoKey.includes('domain_node') || monoKey.includes('dark_domain_node') || (monoKey.includes('monolith') && !monoKey.includes('shrine'));
                             if (!isMono) continue;
                             const vRole = c?.vendorCell || t.vendorCell;
                             if (vRole && vRole !== 'anchor') continue;
 
-                            const isHostile = monoKey.includes('dark_domain_monolith') || t.isHostile || c?.isHostile || c?.faction === 'hostile';
+                            const isHostile = monoKey.includes('dark_domain_monolith') || monoKey.includes('dark_domain_node') || t.isHostile || c?.isHostile || c?.faction === 'hostile';
                             const rawAff = c?.affiliation || t.affiliation || t.territoryAffiliation || c?.territoryAffiliation || t.territory || c?.territory;
                             const isMonoActive = !!(c?.activated || t.activated || (c?.growthCycles > 0) || (t.growthCycles > 0) || isHostile || (rawAff && rawAff !== 'none'));
                             if (!isMonoActive) continue;
@@ -1601,12 +1625,12 @@ function Tile(props) {
                         const c = t.contains && typeof t.contains === 'object' ? t.contains : null;
                         const monoSubtype = c?.subtype || c?.key || c?.building || t.building || c?.type || '';
                         const monoKey = String(monoSubtype).toLowerCase();
-                        const isMono = monoKey.includes('domain_monolith') || monoKey.includes('dark_domain_monolith') || (monoKey.includes('monolith') && !monoKey.includes('shrine'));
+                        const isMono = monoKey.includes('domain_monolith') || monoKey.includes('dark_domain_monolith') || monoKey.includes('domain_node') || monoKey.includes('dark_domain_node') || (monoKey.includes('monolith') && !monoKey.includes('shrine'));
                         if (!isMono) continue;
                         const vRole = c?.vendorCell || t.vendorCell;
                         if (vRole && vRole !== 'anchor') continue;
 
-                        const isHostile = monoKey.includes('dark_domain_monolith') || t.isHostile || c?.isHostile || c?.faction === 'hostile';
+                        const isHostile = monoKey.includes('dark_domain_monolith') || monoKey.includes('dark_domain_node') || t.isHostile || c?.isHostile || c?.faction === 'hostile';
                         const rawAff = c?.affiliation || t.affiliation || t.territoryAffiliation || c?.territoryAffiliation || t.territory || c?.territory;
                         const isMonoActive = !!(c?.activated || t.activated || (c?.growthCycles > 0) || (t.growthCycles > 0) || isHostile || (rawAff && rawAff !== 'none'));
                         if (!isMonoActive) continue;
@@ -1856,9 +1880,11 @@ function Tile(props) {
                              borderColor = 'transparent';
                          }
                          const isFriendly = clan.includes('player') || clan.includes('crew') || clan.includes('friendly');
+                         const isNewlyClaimed = props.newlyClaimed || (props.contains && props.contains.newlyClaimed);
+                         const claimDelayMs = (props.claimDelayMs ?? (props.contains && props.contains.claimDelayMs)) || 0;
                          return (
                              <div 
-                                 className={`territory-bg ${props.newlyClaimed ? 'newly-claimed' : ''}`} 
+                                 className={`territory-bg ${isNewlyClaimed ? 'newly-claimed' : ''}`} 
                                  style={{
                                      position: 'absolute', 
                                      top: 0, left: 0, right: 0, bottom: 0, 
@@ -1869,7 +1895,7 @@ function Tile(props) {
                                      pointerEvents: 'none', 
                                      opacity: ((isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') && !props.inSuperboard) ? 0 : 1, 
                                      transition: 'opacity 0.35s ease-in-out',
-                                     animation: props.newlyClaimed ? 'territoryFadeIn 1.5s ease-in-out forwards' : 'none'
+                                     animation: isNewlyClaimed ? `territoryFadeIn 1.5s ease-in-out ${claimDelayMs}ms forwards` : 'none'
                                  }} 
                              />
                          );
@@ -1941,15 +1967,59 @@ function Tile(props) {
                       )}
 
 
+           {/* Layered Forest Density Falloff Overlay (for stamped forest) */}
+           {isLayeredForestTile && color !== 'black' && !isDarkColor && (() => {
+                const vSeed = props.variantSeed ?? containsObj?.variantSeed ?? currentContains?.variantSeed ?? 0;
+                const aMask = props.autotileMask ?? containsObj?.autotileMask ?? currentContains?.autotileMask ?? 0;
+                const sType = containsObj?.subtype || currentContains?.subtype || 'terrain_naked_trees';
+                const layers = getTreeLayersForDensity(densityTier, vSeed, aMask, sType);
+
+                return (
+                    <div className="layered-forest-tile" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: portraitZIndex, pointerEvents: 'none' }}>
+                        {layers.map(layer => (
+                            <img
+                                key={layer.id}
+                                src={layer.src}
+                                alt=""
+                                style={layer.style}
+                            />
+                        ))}
+                    </div>
+                );
+           })()}
+
+           {/* Layered Mountain Density Falloff Overlay (for stamped mountains) */}
+           {isLayeredMountainTile && color !== 'black' && !isDarkColor && (() => {
+                const vSeed = props.variantSeed ?? containsObj?.variantSeed ?? currentContains?.variantSeed ?? 0;
+                const aMask = props.autotileMask ?? containsObj?.autotileMask ?? currentContains?.autotileMask ?? 0;
+                const sType = containsObj?.subtype || currentContains?.subtype || 'terrain_mountain_1';
+                const layers = getMountainLayersForDensity(mountainDensityTier, vSeed, aMask, sType);
+
+                return (
+                    <div className="layered-mountain-tile" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: portraitZIndex, pointerEvents: 'none' }}>
+                        {layers.map(layer => (
+                            <img
+                                key={layer.id}
+                                src={layer.src}
+                                alt=""
+                                style={layer.style}
+                            />
+                        ))}
+                    </div>
+                );
+           })()}
+
            {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
-           {resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (() => {
+           {!isLayeredForestTile && !isLayeredMountainTile && resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (() => {
                 const isAvatarPortrait = !!(props.contains && (props.contains.type === 'avatar' || props.contains.type === 'camp'));
                 const isFlippedLeft = isAvatarPortrait && (props.playerFacing === 'left' || props.playerFacingDirection === 'left');
                 const flipTransform = isFlippedLeft ? 'scaleX(-1)' : '';
                 
                 const isObsPlatform = sKey.includes('observer') || sKey.includes('observation') || (containsObj && (containsObj.type === 'observer_platform' || containsObj.subtype === 'observer_platform' || containsObj.building === 'observer_platform'));
+                const isClaimableBuilding = sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate');
                 const rawTerritory = props.territory || props.territoryAffiliation || containsObj?.territory || containsObj?.territoryAffiliation || containsObj?.affiliation || props.affiliation || currentContains?.territory || currentContains?.territoryAffiliation || currentContains?.affiliation || (props.boardTiles && (props.boardTiles[props.index]?.territory || props.boardTiles[props.id]?.territory));
-                const isEncompassedByFriendlyDomain = isObsPlatform && (rawTerritory === 'player' || rawTerritory === 'friendly' || rawTerritory === 'crew');
+                const isEncompassedByFriendlyDomain = (isObsPlatform && (rawTerritory === 'player' || rawTerritory === 'friendly' || rawTerritory === 'crew')) ||
+                    (isClaimableBuilding && (!!rawTerritory || !!containsObj?.affiliation || !!props.affiliation || !!currentContains?.affiliation));
                 const obsScale = isEncompassedByFriendlyDomain ? 1.5 : 1.0;
 
                 const baseTransform = isPaletteTile ? 'none' : (isUnderConstruction 

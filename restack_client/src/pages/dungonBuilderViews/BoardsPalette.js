@@ -14,7 +14,13 @@ class BoardsPalette extends React.Component {
     constructor(props){
         super(props)
         this.state = {
-            hoveredSubItem: null  // { type: 'monster'|'gate', id: i }
+            hoveredSubItem: null,  // { type: 'monster'|'gate', id: i }
+            forestStampSize: 'M',
+            forestStampShape: 'rect',
+            forestStampTreeType: 'terrain_naked_trees',
+            mountainStampSize: 'M',
+            mountainStampShape: 'rect',
+            mountainStampType: 'terrain_mountain_1'
         }
     }
 
@@ -701,6 +707,292 @@ class BoardsPalette extends React.Component {
                             })}
                         </div>}
                         {tile.optionType === 'terrain' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
+                            {/* Forest Stamp Controls */}
+                            {(() => {
+                                const isForestStampSelected = this.props.pinnedOption?.type === 'forest-stamp-tile';
+                                return (
+                                    <div style={{
+                                        margin: '4px 2px 8px 2px',
+                                        padding: '8px 6px',
+                                        background: isForestStampSelected ? 'linear-gradient(135deg, rgba(6, 78, 59, 0.95) 0%, rgba(4, 47, 46, 0.95) 100%)' : 'linear-gradient(135deg, rgba(20, 35, 25, 0.85) 0%, rgba(12, 20, 15, 0.9) 100%)',
+                                        border: isForestStampSelected ? '1.5px solid #10b981' : '1px solid rgba(16, 185, 129, 0.35)',
+                                        boxShadow: isForestStampSelected ? '0 0 10px rgba(16, 185, 129, 0.45)' : '0 2px 6px rgba(0, 0, 0, 0.6)',
+                                        borderRadius: '6px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '6px'
+                                    }}>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                cursor: 'pointer'
+                                            }}
+                                            onClick={() => {
+                                                this.props.handleClick({
+                                                    type: 'forest-stamp-tile',
+                                                    size: this.state.forestStampSize,
+                                                    shape: this.state.forestStampShape,
+                                                    treeType: this.state.forestStampTreeType
+                                                });
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <span style={{ fontSize: '13px' }}>🌲</span>
+                                                <span style={{
+                                                    fontSize: '11px',
+                                                    fontWeight: '700',
+                                                    color: isForestStampSelected ? '#34d399' : '#e2e8f0',
+                                                    letterSpacing: '0.4px',
+                                                    textTransform: 'uppercase'
+                                                }}>
+                                                    Forest Stamp
+                                                </span>
+                                            </div>
+                                            <span style={{
+                                                fontSize: '8.5px',
+                                                padding: '2px 5px',
+                                                borderRadius: '3px',
+                                                background: isForestStampSelected ? '#059669' : 'rgba(255,255,255,0.12)',
+                                                color: '#ffffff',
+                                                fontWeight: 'bold',
+                                                letterSpacing: '0.3px'
+                                            }}>
+                                                {isForestStampSelected ? 'ACTIVE' : 'SELECT'}
+                                            </span>
+                                        </div>
+
+                                        {/* Shape toggle: Rect vs Oval */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1px' }}>
+                                            <span style={{ fontSize: '9.5px', color: '#94a3b8', fontWeight: 'bold' }}>Shape:</span>
+                                            <div style={{ display: 'flex', gap: '3px' }}>
+                                                {['rect', 'oval'].map(shape => {
+                                                    const active = this.state.forestStampShape === shape;
+                                                    return (
+                                                        <button
+                                                            key={shape}
+                                                            type="button"
+                                                            style={{
+                                                                fontSize: '9px',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '3px',
+                                                                border: active ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.15)',
+                                                                background: active ? '#10b981' : 'rgba(0,0,0,0.5)',
+                                                                color: active ? '#0f172a' : '#cbd5e1',
+                                                                fontWeight: active ? '700' : 'normal',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                this.setState({ forestStampShape: shape }, () => {
+                                                                    this.props.handleClick({
+                                                                        type: 'forest-stamp-tile',
+                                                                        size: this.state.forestStampSize,
+                                                                        shape: shape,
+                                                                        treeType: this.state.forestStampTreeType
+                                                                    });
+                                                                });
+                                                            }}
+                                                        >
+                                                            {shape === 'rect' ? 'Rect' : 'Oval'}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Size selector: S / M / L */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <span style={{ fontSize: '9.5px', color: '#94a3b8', fontWeight: 'bold' }}>Size:</span>
+                                            <div style={{ display: 'flex', gap: '3px' }}>
+                                                {[
+                                                    { key: 'S', label: 'S (3×3)' },
+                                                    { key: 'M', label: 'M (5×5)' },
+                                                    { key: 'L', label: 'L (7×7)' }
+                                                ].map(sz => {
+                                                    const active = this.state.forestStampSize === sz.key;
+                                                    return (
+                                                        <button
+                                                            key={sz.key}
+                                                            type="button"
+                                                            style={{
+                                                                fontSize: '9px',
+                                                                padding: '2px 5px',
+                                                                borderRadius: '3px',
+                                                                border: active ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.15)',
+                                                                background: active ? '#10b981' : 'rgba(0,0,0,0.5)',
+                                                                color: active ? '#0f172a' : '#cbd5e1',
+                                                                fontWeight: active ? '700' : 'normal',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                this.setState({ forestStampSize: sz.key }, () => {
+                                                                    this.props.handleClick({
+                                                                        type: 'forest-stamp-tile',
+                                                                        size: sz.key,
+                                                                        shape: this.state.forestStampShape,
+                                                                        treeType: this.state.forestStampTreeType
+                                                                    });
+                                                                });
+                                                            }}
+                                                        >
+                                                            {sz.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            {/* Mountain Stamp Controls */}
+                            {(() => {
+                                const isMountainStampSelected = this.props.pinnedOption?.type === 'mountain-stamp-tile';
+                                return (
+                                    <div style={{
+                                        margin: '4px 2px 8px 2px',
+                                        padding: '8px 6px',
+                                        background: isMountainStampSelected ? 'linear-gradient(135deg, rgba(30, 58, 95, 0.95) 0%, rgba(15, 30, 50, 0.95) 100%)' : 'linear-gradient(135deg, rgba(30, 35, 45, 0.85) 0%, rgba(18, 22, 28, 0.9) 100%)',
+                                        border: isMountainStampSelected ? '1.5px solid #38bdf8' : '1px solid rgba(56, 189, 248, 0.35)',
+                                        boxShadow: isMountainStampSelected ? '0 0 10px rgba(56, 189, 248, 0.45)' : '0 2px 6px rgba(0, 0, 0, 0.6)',
+                                        borderRadius: '6px',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: '6px'
+                                    }}>
+                                        <div
+                                            style={{
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'space-between',
+                                                cursor: 'pointer'
+                                            }}
+                                            onClick={() => {
+                                                this.props.handleClick({
+                                                    type: 'mountain-stamp-tile',
+                                                    size: this.state.mountainStampSize,
+                                                    shape: this.state.mountainStampShape,
+                                                    mountainType: this.state.mountainStampType
+                                                });
+                                            }}
+                                        >
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                                                <span style={{ fontSize: '13px' }}>🏔️</span>
+                                                <span style={{
+                                                    fontSize: '11px',
+                                                    fontWeight: '700',
+                                                    color: isMountainStampSelected ? '#7dd3fc' : '#e2e8f0',
+                                                    letterSpacing: '0.4px',
+                                                    textTransform: 'uppercase'
+                                                }}>
+                                                    Mountain Stamp
+                                                </span>
+                                            </div>
+                                            <span style={{
+                                                fontSize: '8.5px',
+                                                padding: '2px 5px',
+                                                borderRadius: '3px',
+                                                background: isMountainStampSelected ? '#0284c7' : 'rgba(255,255,255,0.12)',
+                                                color: '#ffffff',
+                                                fontWeight: 'bold',
+                                                letterSpacing: '0.3px'
+                                            }}>
+                                                {isMountainStampSelected ? 'ACTIVE' : 'SELECT'}
+                                            </span>
+                                        </div>
+
+                                        {/* Shape toggle: Rect vs Oval */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '1px' }}>
+                                            <span style={{ fontSize: '9.5px', color: '#94a3b8', fontWeight: 'bold' }}>Shape:</span>
+                                            <div style={{ display: 'flex', gap: '3px' }}>
+                                                {['rect', 'oval'].map(shape => {
+                                                    const active = this.state.mountainStampShape === shape;
+                                                    return (
+                                                        <button
+                                                            key={shape}
+                                                            type="button"
+                                                            style={{
+                                                                fontSize: '9px',
+                                                                padding: '2px 6px',
+                                                                borderRadius: '3px',
+                                                                border: active ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.15)',
+                                                                background: active ? '#38bdf8' : 'rgba(0,0,0,0.5)',
+                                                                color: active ? '#0f172a' : '#cbd5e1',
+                                                                fontWeight: active ? '700' : 'normal',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                this.setState({ mountainStampShape: shape }, () => {
+                                                                    this.props.handleClick({
+                                                                        type: 'mountain-stamp-tile',
+                                                                        size: this.state.mountainStampSize,
+                                                                        shape: shape,
+                                                                        mountainType: this.state.mountainStampType
+                                                                    });
+                                                                });
+                                                            }}
+                                                        >
+                                                            {shape === 'rect' ? 'Rect' : 'Oval'}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
+                                        {/* Size selector: S / M / L */}
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <span style={{ fontSize: '9.5px', color: '#94a3b8', fontWeight: 'bold' }}>Size:</span>
+                                            <div style={{ display: 'flex', gap: '3px' }}>
+                                                {[
+                                                    { key: 'S', label: 'S (3×3)' },
+                                                    { key: 'M', label: 'M (5×5)' },
+                                                    { key: 'L', label: 'L (7×7)' }
+                                                ].map(sz => {
+                                                    const active = this.state.mountainStampSize === sz.key;
+                                                    return (
+                                                        <button
+                                                            key={sz.key}
+                                                            type="button"
+                                                            style={{
+                                                                fontSize: '9px',
+                                                                padding: '2px 5px',
+                                                                borderRadius: '3px',
+                                                                border: active ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.15)',
+                                                                background: active ? '#38bdf8' : 'rgba(0,0,0,0.5)',
+                                                                color: active ? '#0f172a' : '#cbd5e1',
+                                                                fontWeight: active ? '700' : 'normal',
+                                                                cursor: 'pointer'
+                                                            }}
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                this.setState({ mountainStampSize: sz.key }, () => {
+                                                                    this.props.handleClick({
+                                                                        type: 'mountain-stamp-tile',
+                                                                        size: sz.key,
+                                                                        shape: this.state.mountainStampShape,
+                                                                        mountainType: this.state.mountainStampType
+                                                                    });
+                                                                });
+                                                            }}
+                                                        >
+                                                            {sz.label}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            <div style={{ fontSize: '9.5px', color: '#64748b', margin: '4px 4px 2px 4px', fontWeight: 'bold', textTransform: 'uppercase' }}>
+                                Single Tiles:
+                            </div>
+
                             {(this.props.mapMaker.terrainOptions || []).map((tItem, ti) => {
                                 const isHovered = this.state.hoveredSubItem?.type === 'terrain' && this.state.hoveredSubItem?.id === ti;
                                 const isSelected = this.props.pinnedOption?.type === 'terrain-tile' && this.props.pinnedOption?.id === ti;

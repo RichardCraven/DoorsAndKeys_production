@@ -5346,8 +5346,8 @@ class DungeonPage extends React.Component {
                         const cSub = cObj ? cObj.subtype : null;
                         const structKey = String(cSub || cType || t.building || cObj?.building || '').toLowerCase();
 
-                        // Never remove world resource generators, monoliths, shrines, farms, portals, or narrative tiles!
-                        const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
+                        // Never remove world resource generators, monoliths, nodes, shrines, farms, portals, or narrative tiles!
+                        const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
 
                         const isPlayerConstructed = !isWorldStructure && (
                             t.isPlayerBuilt || cObj?.isPlayerBuilt ||
@@ -5409,7 +5409,7 @@ class DungeonPage extends React.Component {
                             delete t.contains.ownerId;
                             delete t.contains.placedBy;
                             delete t.contains.faction;
-                            if (structKey.includes('dark_domain_monolith')) {
+                            if (structKey.includes('dark_domain_monolith') || structKey.includes('dark_domain_node')) {
                                 t.contains.affiliation = 'hostile';
                             }
                         }
@@ -6776,11 +6776,19 @@ class DungeonPage extends React.Component {
 
     isSuperboardDomainPerfectSquare = (superboard, anchorGx, anchorGy, growthCycles, expectedAff) => {
         if (!superboard || !Array.isArray(superboard.miniboards)) return false;
+        const mbIdx = Math.floor(anchorGy / 15) * 3 + Math.floor(anchorGx / 15);
+        const tIdx = (anchorGy % 15) * 15 + (anchorGx % 15);
+        const anchorTile = superboard.miniboards[mbIdx]?.tiles?.[tIdx];
+        const cObj = anchorTile && typeof anchorTile.contains === 'object' ? anchorTile.contains : null;
+        const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof anchorTile?.contains === 'string' ? anchorTile.contains : null);
+        const sKey = String(containsSubtype || anchorTile?.building || cObj?.type || '').toLowerCase();
+        const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
+
         const C = Math.max(1, growthCycles || 1);
         const minGx = anchorGx - C;
-        const maxGx = anchorGx + 1 + C;
+        const maxGx = anchorGx + (isNode ? 0 : 1) + C;
         const minGy = anchorGy - C;
-        const maxGy = anchorGy + 1 + C;
+        const maxGy = anchorGy + (isNode ? 0 : 1) + C;
 
         if (minGx < 0 || maxGx >= 45 || minGy < 0 || maxGy >= 45) return false;
 
@@ -6790,7 +6798,7 @@ class DungeonPage extends React.Component {
 
         for (let gy = minGy; gy <= maxGy; gy++) {
             for (let gx = minGx; gx <= maxGx; gx++) {
-                if (gx >= anchorGx && gx <= anchorGx + 1 && gy >= anchorGy && gy <= anchorGy + 1) {
+                if (gx >= anchorGx && gx <= anchorGx + (isNode ? 0 : 1) && gy >= anchorGy && gy <= anchorGy + (isNode ? 0 : 1)) {
                     continue;
                 }
 
@@ -6841,12 +6849,12 @@ class DungeonPage extends React.Component {
                 const cObj = typeof tile.contains === 'object' ? tile.contains : null;
                 const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
                 const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
-                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 if (!isDomainMonolith) continue;
                 if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') continue;
 
                 const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
-                const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
+                const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
                 if (!isExplicitlyActive) continue;
 
                 const anchorGx = mbX * 15 + (tIdx % 15);
@@ -6856,7 +6864,7 @@ class DungeonPage extends React.Component {
                 seenMonoliths.add(mKey);
 
                 let affiliation = cObj?.affiliation || tile.affiliation || (isGeneratorActive ? 'player' : null);
-                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith')) {
+                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node')) {
                     affiliation = 'hostile';
                 }
                 if (!affiliation || affiliation === 'none') continue;
@@ -6865,19 +6873,21 @@ class DungeonPage extends React.Component {
                 const isSquare = this.isSuperboardDomainPerfectSquare(superboard, anchorGx, anchorGy, growthCycles, affiliation);
                 if (!isSquare) continue;
 
+                const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
+                const anchorWidth = isNode ? 1 : 2;
                 const relAnchorX = anchorGx - viewMinX;
                 const relAnchorY = anchorGy - viewMinY;
                 const minRelX = relAnchorX - growthCycles;
-                const maxRelX = relAnchorX + 1 + growthCycles;
+                const maxRelX = relAnchorX + (isNode ? 0 : 1) + growthCycles;
                 const minRelY = relAnchorY - growthCycles;
-                const maxRelY = relAnchorY + 1 + growthCycles;
+                const maxRelY = relAnchorY + (isNode ? 0 : 1) + growthCycles;
 
                 // Only render if within or intersecting the 15x15 viewport
                 if (maxRelX < 0 || minRelX > 14 || maxRelY < 0 || minRelY > 14) continue;
 
                 const leftPct = (minRelX / 15) * 100;
                 const topPct = (minRelY / 15) * 100;
-                const sizePct = ((2 + 2 * growthCycles) / 15) * 100;
+                const sizePct = ((anchorWidth + 2 * growthCycles) / 15) * 100;
 
                 const affStr = String(affiliation).toLowerCase();
                 const isFriendly = affStr.includes('friendly') || affStr.includes('player') || affStr.includes('crew');
@@ -6885,9 +6895,56 @@ class DungeonPage extends React.Component {
                 const affBorderColor = isFriendly ? 'rgba(56, 189, 248, 0.95)' : (isHostile ? 'rgba(239, 68, 68, 0.95)' : 'rgba(255, 255, 255, 0.95)');
                 const affGlowColor = isFriendly ? 'rgba(56, 189, 248, 0.7)' : (isHostile ? 'rgba(239, 68, 68, 0.7)' : 'rgba(255, 255, 255, 0.7)');
 
+                const centerRelX = relAnchorX + (isNode ? 0.5 : 1.0);
+                const centerRelY = relAnchorY + (isNode ? 0.5 : 1.0);
+                const centerLeftPct = (centerRelX / 15) * 100;
+                const centerTopPct = (centerRelY / 15) * 100;
+
+                // 1. Monolith Beacon Flare at Center
                 rotatingSquares.push(
                     <div
-                        key={`superboard-domain-square-${anchorGx}-${anchorGy}-${growthCycles}`}
+                        key={`superboard-domain-beacon-${anchorGx}-${anchorGy}-${growthCycles}`}
+                        className="domain-beacon-flare"
+                        style={{
+                            position: 'absolute',
+                            top: `${centerTopPct}%`,
+                            left: `${centerLeftPct}%`,
+                            width: '80px',
+                            height: '80px',
+                            borderRadius: '50%',
+                            background: `radial-gradient(circle, ${isFriendly ? '#38bdf8' : '#ef4444'} 0%, ${isFriendly ? 'rgba(56, 189, 248, 0.45)' : 'rgba(239, 68, 68, 0.45)'} 40%, transparent 70%)`,
+                            pointerEvents: 'none',
+                            zIndex: 23,
+                            animation: 'monolithBeaconPulse 1.8s ease-out forwards'
+                        }}
+                    />
+                );
+
+                // 2. Domain Expansion Shockwave Energy Ring
+                rotatingSquares.push(
+                    <div
+                        key={`superboard-domain-shockwave-${anchorGx}-${anchorGy}-${growthCycles}`}
+                        className="domain-expansion-shockwave"
+                        style={{
+                            position: 'absolute',
+                            top: `${centerTopPct}%`,
+                            left: `${centerLeftPct}%`,
+                            width: `${sizePct}%`,
+                            height: `${sizePct}%`,
+                            borderRadius: '50%',
+                            border: `2px solid ${affBorderColor}`,
+                            background: `radial-gradient(circle, ${isFriendly ? 'rgba(56, 189, 248, 0.35)' : 'rgba(239, 68, 68, 0.35)'} 0%, transparent 70%)`,
+                            pointerEvents: 'none',
+                            zIndex: 21,
+                            animation: `${isFriendly ? 'domainShockwaveExpand' : 'domainHostileShockwaveExpand'} 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards`
+                        }}
+                    />
+                );
+
+                // 3. Smooth Elastic Rotating Domain Square
+                rotatingSquares.push(
+                    <div
+                        key={`superboard-domain-square-${anchorGx}-${anchorGy}`}
                         className="domain-rotating-square"
                         style={{
                             position: 'absolute',
@@ -6896,12 +6953,13 @@ class DungeonPage extends React.Component {
                             width: `${sizePct}%`,
                             height: `${sizePct}%`,
                             border: `2px solid ${affBorderColor}`,
-                            boxShadow: `0 0 14px ${affGlowColor}, inset 0 0 10px ${affGlowColor}`,
+                            boxShadow: `0 0 16px ${affGlowColor}, inset 0 0 12px ${affGlowColor}`,
                             background: 'transparent',
                             pointerEvents: 'none',
                             zIndex: 22,
                             transformOrigin: 'center center',
-                            animation: 'domainSquareRotate 60s linear infinite'
+                            transition: 'left 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), top 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), height 0.8s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.4s ease, box-shadow 0.4s ease',
+                            animation: 'domainSquareRotate 60s linear infinite, domainSquarePulseGrow 3s ease-in-out infinite'
                         }}
                     />
                 );
@@ -6942,8 +7000,8 @@ class DungeonPage extends React.Component {
                         const cSub = cObj ? cObj.subtype : null;
                         const structKey = String(cSub || cType || t.building || cObj?.building || '').toLowerCase();
 
-                        // Never remove world resource generators, monoliths, shrines, farms, portals, or narrative tiles!
-                        const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
+                        // Never remove world resource generators, monoliths, nodes, shrines, farms, portals, or narrative tiles!
+                        const isWorldStructure = ['mine', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'larder', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'shrine', 'farm', 'house', 'portal', 'narrative'].some(k => structKey.includes(k));
 
                         const isPlayerConstructed = !isWorldStructure && (
                             t.isPlayerBuilt || cObj?.isPlayerBuilt ||
@@ -7005,7 +7063,7 @@ class DungeonPage extends React.Component {
                             delete t.contains.ownerId;
                             delete t.contains.placedBy;
                             delete t.contains.faction;
-                            if (structKey.includes('dark_domain_monolith')) {
+                            if (structKey.includes('dark_domain_monolith') || structKey.includes('dark_domain_node')) {
                                 t.contains.affiliation = 'hostile';
                             }
                         }
@@ -8450,14 +8508,14 @@ class DungeonPage extends React.Component {
                 const cObj = typeof tile.contains === 'object' ? tile.contains : null;
                 const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
                 const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
-                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 if (!isDomainMonolith) continue;
                 if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') continue;
 
                 const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
-                let isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
+                let isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
                 let affiliation = cObj?.affiliation || tile.affiliation || (isGeneratorActive ? 'player' : null);
-                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith')) {
+                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node')) {
                     affiliation = 'hostile';
                     isExplicitlyActive = true;
                 }
@@ -8468,10 +8526,11 @@ class DungeonPage extends React.Component {
                     const monolithId = cObj?.id || tile.id || `monolith_${anchorGx}_${anchorGy}`;
                     const currentCycles = Math.max(1, cObj?.growthCycles ?? tile.growthCycles ?? 1);
 
+                    const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
                     const minGx = anchorGx;
-                    const maxGx = anchorGx + 1;
+                    const maxGx = anchorGx + (isNode ? 0 : 1);
                     const minGy = anchorGy;
-                    const maxGy = anchorGy + 1;
+                    const maxGy = anchorGy + (isNode ? 0 : 1);
 
                     superboard.miniboards.forEach((tMb, tMbIdx) => {
                         if (!tMb || !tMb.tiles) return;
@@ -8875,7 +8934,7 @@ class DungeonPage extends React.Component {
                 const t = mb.tiles[tIdx];
                 if (!t) continue;
                 const def = this.getGeneratorDef(t);
-                if (!def || def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'observer_platform' || def.key === 'observation_platform' || def.key === 'outpost' || def.key === 'wall' || def.key === 'hut') {
+                if (!def || def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'domain_node' || def.key === 'dark_domain_node' || def.key === 'observer_platform' || def.key === 'observation_platform' || def.key === 'outpost' || def.key === 'wall' || def.key === 'hut') {
                     continue;
                 }
 
@@ -8910,7 +8969,7 @@ class DungeonPage extends React.Component {
             mb.tiles.forEach(tile => {
                 if (!tile) return;
                 const def = this.getGeneratorDef(tile);
-                if (!def || def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.rate === 0) return;
+                if (!def || def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'domain_node' || def.key === 'dark_domain_node' || def.rate === 0) return;
                 const cObj = typeof tile.contains === 'object' ? tile.contains : null;
                 if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') return;
 
@@ -8962,6 +9021,79 @@ class DungeonPage extends React.Component {
                                 }
                             }
                         });
+                    }
+                }
+            });
+        });
+    };
+
+    tickClaimableBuildings = (superboard) => {
+        if (!superboard || !superboard.miniboards) return;
+        const now = Date.now();
+        const cycleMs = 15000;
+
+        superboard.miniboards.forEach(mb => {
+            if (!mb || !mb.tiles) return;
+            mb.tiles.forEach(tile => {
+                if (!tile) return;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
+                const sKey = String(containsSubtype || tile.building || cObj?.type || tile.image || '').toLowerCase();
+
+                const isWindmill = sKey.includes('windmill');
+                const isFarm = sKey.includes('farm') && !sKey.includes('monolith');
+                const isHouse = sKey.includes('house') && !sKey.includes('warehouse') && !sKey.includes('builders');
+                const isManor = sKey.includes('manor');
+                const isEstate = sKey.includes('estate');
+
+                if (!isWindmill && !isFarm && !isHouse && !isManor && !isEstate) return;
+
+                const terr = tile.territory || tile.territoryAffiliation || cObj?.territory || cObj?.territoryAffiliation || cObj?.affiliation || tile.affiliation;
+                if (!terr || terr === 'none') return;
+
+                const isPlayerClaimed = (terr === 'player' || terr === 'friendly' || terr === 'crew');
+                const isHostileClaimed = (terr === 'hostile' || terr === 'automaton');
+                if (!isPlayerClaimed && !isHostileClaimed) return;
+
+                tile.affiliation = isPlayerClaimed ? 'player' : 'hostile';
+                if (cObj) cObj.affiliation = tile.affiliation;
+
+                const lastTick = cObj?.lastClaimTickTime || tile.lastClaimTickTime || now;
+                if (now - lastTick >= cycleMs) {
+                    const elapsedCycles = Math.floor((now - lastTick) / cycleMs);
+                    if (elapsedCycles > 0) {
+                        let foodAmt = 0;
+                        let influenceAmt = 0;
+                        if (isWindmill) foodAmt = 10 * elapsedCycles;
+                        else if (isFarm) foodAmt = 5 * elapsedCycles;
+                        else if (isHouse) influenceAmt = 1 * elapsedCycles;
+                        else if (isManor) influenceAmt = 2 * elapsedCycles;
+                        else if (isEstate) influenceAmt = 3 * elapsedCycles;
+
+                        if (isPlayerClaimed) {
+                            if (foodAmt > 0) {
+                                this.addPocketResource('food', foodAmt);
+                                const meta = getMeta() || {};
+                                meta.food = (typeof meta.food === 'number' ? meta.food : 0) + foodAmt;
+                                storeMeta(meta);
+                                this.displayMessage(`🌾 Claimed ${isWindmill ? 'Windmill' : 'Farm'} produced +${foodAmt} Food!`);
+                            }
+                            if (influenceAmt > 0) {
+                                this.addPocketResource('influence', influenceAmt);
+                                const bName = isHouse ? 'House' : (isManor ? 'Manor' : 'Estate');
+                                this.setState(prev => ({
+                                    pocketInfluence: (prev.pocketInfluence || 0) + influenceAmt
+                                }));
+                                const meta = getMeta() || {};
+                                meta.pocketInfluence = (meta.pocketInfluence || 0) + influenceAmt;
+                                storeMeta(meta);
+                                this.displayMessage(`🏰 Claimed ${bName} produced +${influenceAmt} Influence!`);
+                            }
+                        }
+
+                        const nextTickTime = lastTick + (elapsedCycles * cycleMs);
+                        tile.lastClaimTickTime = nextTickTime;
+                        if (cObj) cObj.lastClaimTickTime = nextTickTime;
                     }
                 }
             });
@@ -9071,16 +9203,16 @@ class DungeonPage extends React.Component {
                 const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
                 const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
 
-                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 if (!isDomainMonolith) return;
                 if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') return;
 
                 const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
-                const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
+                const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
                 if (!isExplicitlyActive) return;
 
                 let affiliation = cObj?.affiliation || tile.affiliation || (isGeneratorActive ? 'player' : null);
-                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith')) {
+                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node')) {
                     affiliation = 'hostile';
                 }
                 if (!affiliation || affiliation === 'none') return;
@@ -9135,6 +9267,7 @@ class DungeonPage extends React.Component {
                                 targetTile.territoryMonolithId = monolithId;
                                 if (!wasClaimed) {
                                     targetTile.newlyClaimed = true;
+                                    targetTile.claimDelayMs = Math.max(0, dist - 1) * 150;
                                 }
                             }
                         });
@@ -9199,10 +9332,12 @@ class DungeonPage extends React.Component {
         if (!superboard || !monolith) return;
         const now = Date.now();
         const { anchorGx, anchorGy } = monolith;
+        const sKey = String(monolith.key || monolith.subtype || monolith.type || monolith.containsSubtype || monolith.tile?.contains?.subtype || '').toLowerCase();
+        const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
         const minGx = anchorGx;
-        const maxGx = anchorGx + 1;
+        const maxGx = anchorGx + (isNode ? 0 : 1);
         const minGy = anchorGy;
-        const maxGy = anchorGy + 1;
+        const maxGy = anchorGy + (isNode ? 0 : 1);
         const monolithId = monolith.id || `monolith_${anchorGx}_${anchorGy}`;
 
         // 0. Fully clear out any territory that this monolith had generated previously across the superboard
@@ -9321,6 +9456,7 @@ class DungeonPage extends React.Component {
                     t.territoryAffiliation = affiliation;
                     t.territoryMonolithId = monolithId;
                     t.newlyClaimed = true;
+                    t.claimDelayMs = dist * 150;
                 }
             });
         });
@@ -10048,7 +10184,7 @@ class DungeonPage extends React.Component {
                 else if (sKey.includes('ore_mine')) hostileOreMines++;
                 else if (sKey.includes('larder') || sKey.includes('fungal_nursery')) hostileLarders++;
                 else if (sKey.includes('dust_collector') || sKey.includes('cultivation_vat')) hostileDustCollectors++;
-                else if (sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'))) hostileMonoliths++;
+                else if (sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'))) hostileMonoliths++;
             }
         }
 
@@ -10079,7 +10215,7 @@ class DungeonPage extends React.Component {
                 const cObj = typeof tile.contains === 'object' ? tile.contains : null;
                 const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
                 const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
-                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
                 const isResourceGenerator = sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('larder') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine');
 
                 if (!isDomainMonolith && !isResourceGenerator) continue;
@@ -12371,7 +12507,7 @@ class DungeonPage extends React.Component {
                                                                         // Legacy: Check if the actual tile on this plane looks like a generator
                                                                         const t = boardTiles.find(bt => Number(bt.id) === tId);
                                                                         const isTerr = t && (t.territory || t.contains?.territory || t.contains?.type === 'territory' || t.contains?.subtype === 'territory');
-                                                                        if (t && !isTerr && (t.generatorData || t.building || (t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'generator' || (t.contains.type === 'building' && t.contains.subtype !== 'territory'))))) {
+                                                                        if (t && !isTerr && (t.generatorData || t.building || (t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'domain_node' || t.contains.subtype === 'domain_node' || t.contains.type === 'generator' || (t.contains.type === 'building' && t.contains.subtype !== 'territory'))))) {
                                                                             isOnCurrentPlane = true;
                                                                         } else {
                                                                             // Check opposite plane to see if it definitively belongs there
@@ -12379,7 +12515,7 @@ class DungeonPage extends React.Component {
                                                                             const oppBoard = oppositePlane && oppositePlane.miniboards && oppositePlane.miniboards[i];
                                                                             const oppTile = oppBoard && oppBoard.tiles && oppBoard.tiles.find(bt => Number(bt.id) === tId);
                                                                             const isOppTerr = oppTile && (oppTile.territory || oppTile.contains?.territory || oppTile.contains?.type === 'territory' || oppTile.contains?.subtype === 'territory');
-                                                                            if (oppTile && !isOppTerr && (oppTile.generatorData || oppTile.building || (oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'generator' || (oppTile.contains.type === 'building' && oppTile.contains.subtype !== 'territory'))))) {
+                                                                            if (oppTile && !isOppTerr && (oppTile.generatorData || oppTile.building || (oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'domain_node' || oppTile.contains.subtype === 'domain_node' || oppTile.contains.type === 'generator' || (oppTile.contains.type === 'building' && oppTile.contains.subtype !== 'territory'))))) {
                                                                                 isOnCurrentPlane = false; // It definitively belongs to the other plane
                                                                             }
                                                                         }
@@ -12461,7 +12597,7 @@ class DungeonPage extends React.Component {
                                                         );
 
                                                         const isMonolith = keysToCheck.some(k => 
-                                                            k === 'domain_monolith' || k === 'dark_domain_monolith' || (k.includes('monolith') && !k.includes('shrine'))
+                                                            k === 'domain_monolith' || k === 'dark_domain_monolith' || k === 'domain_node' || k === 'dark_domain_node' || (k.includes('monolith') && !k.includes('shrine'))
                                                         );
 
                                                         const vCell = (typeof contains === 'object' && contains?.vendorCell) || tile.vendorCell;
@@ -12507,7 +12643,7 @@ class DungeonPage extends React.Component {
                                                             if (isMonolith) {
                                                                 const containsObj = typeof contains === 'object' ? contains : null;
                                                                 const affiliation = tile.affiliation || containsObj?.affiliation || tile.territory || containsObj?.territory;
-                                                                const isHostile = tile.isHostile || containsObj?.isHostile || containsObj?.faction === 'hostile' || containsObj?.faction === 'enemy' || keysToCheck.some(k => k.includes('dark_domain_monolith')) || affiliation === 'hostile' || affiliation === 'enemy';
+                                                                const isHostile = tile.isHostile || containsObj?.isHostile || containsObj?.faction === 'hostile' || containsObj?.faction === 'enemy' || keysToCheck.some(k => k.includes('dark_domain_monolith') || k.includes('dark_domain_node')) || affiliation === 'hostile' || affiliation === 'enemy';
                                                                 const isPlayerBuilt = (containsObj && (containsObj.placedBy === 'player' || containsObj.ownerId)) || tile.placedBy === 'player' || affiliation === 'player' || affiliation === 'friendly' || affiliation === 'crew';
                                                                 
                                                                 let indicatorType = 'neutral-monolith';
@@ -18427,7 +18563,7 @@ class DungeonPage extends React.Component {
         tiles.forEach(t => {
             if (!t) return;
             const def = this.getGeneratorDef(t);
-            if (def && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith')) {
+            if (def && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'domain_node' || def.key === 'dark_domain_node')) {
                 const gData = t.generatorData || (t.contains && t.contains.generatorData);
                 if (gData && gData.activated) {
                     activeMonoliths.push({ tile: t, data: gData });
@@ -21687,7 +21823,7 @@ class DungeonPage extends React.Component {
             return false;
         }
 
-        const generatorKeys = ['larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith'];
+        const generatorKeys = ['larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine', 'dust_collector', 'fungal_nursery', 'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node'];
         const buildingKeys = ['outpost', 'outpost_under_construction', 'observer_platform', 'observer_platform_under_construction', 'earthen_fort', 'earthen_fort_under_construction', 'war_camp', 'war_camp_under_construction', 'war_fort', 'war_fort_under_construction', 'wall', 'wall_under_construction'];
 
         const hasGenerator = generatorKeys.includes(containsType) || generatorKeys.includes(containsSubtype) || generatorKeys.includes(bldg) || generatorKeys.includes(img) || generatorKeys.some(k => img === 'buildable_' + k);
@@ -21849,6 +21985,32 @@ class DungeonPage extends React.Component {
                 iconEmoji: '🔮',
                 description: 'An ominous shadow pillar that generates territory for your crew. Initially claims a 1-tile radius. Every 12 hours, the territory expands by 1 tile. Monolith territory is permanently revealed through the fog of war. If monolith is overtaken, all progress is lost.'
             },
+            domain_node: {
+                key: 'domain_node',
+                name: 'Domain Node',
+                resource: 'Territory',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                isLarge: false,
+                isMultiTile: false,
+                imageKey: 'domain_node',
+                iconEmoji: '🔷',
+                description: 'A compact domain generator radiating territory for your crew. Claims a local domain boundary through the fog of war.'
+            },
+            dark_domain_node: {
+                key: 'dark_domain_node',
+                name: 'Dark Domain Node',
+                resource: 'Territory',
+                currencyType: null,
+                rate: 0,
+                cap: 0,
+                isLarge: false,
+                isMultiTile: false,
+                imageKey: 'dark_domain_node',
+                iconEmoji: '🔮',
+                description: 'An ominous shadow node radiating hostile territory and claiming domain power.'
+            },
             hut: {
                 key: 'hut',
                 name: 'Hut',
@@ -21896,8 +22058,8 @@ class DungeonPage extends React.Component {
             earthen_fort: {
                 key: 'earthen_fort',
                 name: 'Earthen Fort',
-                resource: 'Stone',
-                currencyType: 'stone',
+                resource: 'Ore',
+                currencyType: 'ore',
                 rate: 0,
                 cap: 0,
                 imageKey: 'buildable_earthen_fort',
@@ -22017,7 +22179,7 @@ class DungeonPage extends React.Component {
                     board.tiles.forEach(t => {
                         if (!t) return;
                         const def = this.getGeneratorDef(t);
-                        if (def && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith')) {
+                        if (def && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'domain_node' || def.key === 'dark_domain_node')) {
                             const tileKey = `${level.id}_${board.id}_${t.id}`;
                             const gData = (meta.activatedGenerators && meta.activatedGenerators[tileKey]) || t.generatorData || (t.contains && t.contains.generatorData);
                             if (gData && gData.activated && gData.owned !== false && (!gData.ownerId || gData.ownerId === currentUserId)) {
@@ -22188,6 +22350,31 @@ class DungeonPage extends React.Component {
                     if (match) tile.generatorData = { ...match };
                 }
             } catch (e) { }
+        }
+        if (!tile.generatorData) {
+            const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+            const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
+            const isPlacedByPlayer = tile.placedBy === 'player' || tile.contains?.placedBy === 'player' || (tile.contains && typeof tile.contains === 'object' && tile.contains.ownerId && tile.contains.ownerId === currentUserId);
+            if (isPlacedByPlayer) {
+                const def = this.getGeneratorDef(tile);
+                tile.generatorData = {
+                    activated: true,
+                    level: 1,
+                    owned: true,
+                    ownerId: currentUserId,
+                    ownerSocketId: mySocketId,
+                    ownerName: getUserName() || 'Explorer',
+                    activatedAt: Date.now(),
+                    lastCollectedAt: Date.now(),
+                    accumulated: 0,
+                    key: def.key,
+                    resource: def.resource,
+                    currencyType: def.currencyType,
+                    rate: def.rate,
+                    orientation: bm ? bm.currentOrientation : 'F',
+                    placedBy: 'player'
+                };
+            }
         }
         try {
             const tileKey = this.getGeneratorKey(tile);
@@ -22405,11 +22592,17 @@ class DungeonPage extends React.Component {
         }
     };
 
+    startMonolithActivation = (tile) => {
+        this.attemptMonolithActivation(tile);
+    };
+
     attemptMonolithActivation = (tile) => {
         if (!tile) return;
         const isInPocketDimension = !!(this.state.inSuperboard || this.state.isInPocketDimension);
         if (isInPocketDimension) {
-            this.handleActivateGenerator();
+            this.setState({ activeGeneratorTile: tile }, () => {
+                this.handleActivateGenerator();
+            });
             return;
         }
         const meta = getMeta() || {};
@@ -22436,7 +22629,7 @@ class DungeonPage extends React.Component {
         if (isInPocket) {
             const def = this.getGeneratorDef(tile);
             const cAff = tile.affiliation || tile.contains?.affiliation || (tile.generatorData && tile.generatorData.affiliation);
-            const isEnemyMonolith = cAff === 'hostile' || tile.isHostile || tile.contains?.isHostile || def?.key === 'dark_domain_monolith';
+            const isEnemyMonolith = cAff === 'hostile' || tile.isHostile || tile.contains?.isHostile || def?.key === 'dark_domain_monolith' || def?.key === 'dark_domain_node';
 
             if (isEnemyMonolith) {
                 const currentFreeWill = typeof this.state.pocketFreeWill === 'number' ? this.state.pocketFreeWill : 50;
@@ -22604,7 +22797,7 @@ class DungeonPage extends React.Component {
         const def = this.getGeneratorDef(tile) || { name: 'Generator', key: 'generic' };
         
         let RESOLVE_COST = 80;
-        if (def.key !== 'domain_monolith' && def.key !== 'dark_domain_monolith') {
+        if (def.key !== 'domain_monolith' && def.key !== 'dark_domain_monolith' && def.key !== 'domain_node' && def.key !== 'dark_domain_node') {
             const tileKey = this.props.boardManager?.currentLevel && this.props.boardManager?.currentBoard ? `${this.props.boardManager.currentLevel.id}_${this.props.boardManager.currentBoard.id}_${tile.id}` : null;
             const gData = tile.generatorData || (tile.contains && tile.contains.generatorData) || (tileKey && meta.activatedGenerators && meta.activatedGenerators[tileKey]) || {};
             const stats = this.getEffectiveGeneratorStats(gData, def);
@@ -22628,7 +22821,7 @@ class DungeonPage extends React.Component {
         const bm = this.props.boardManager;
         const playerLoc = bm && bm.playerTile && bm.playerTile.location ? bm.playerTile.location : null;
 
-        const level = (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith') ? this.getDomainLevelForMonolith(tile.id) : 1;
+        const level = (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'domain_node' || def.key === 'dark_domain_node') ? this.getDomainLevelForMonolith(tile.id) : 1;
         const duration = level * 60 * 1000;
 
         this.setState({
@@ -22739,7 +22932,7 @@ class DungeonPage extends React.Component {
                                 b.tiles.forEach(t => {
                                     if (!t) return;
                                     const gDef = this.getGeneratorDef(t);
-                                    if (gDef && (gDef.key === 'domain_monolith' || gDef.key === 'dark_domain_monolith')) {
+                                    if (gDef && (gDef.key === 'domain_monolith' || gDef.key === 'dark_domain_monolith' || gDef.key === 'domain_node' || gDef.key === 'dark_domain_node')) {
                                         const tKey = `${bm.currentLevel.id}_${b.id}_${t.id}`;
                                         const gData = (meta.activatedGenerators && meta.activatedGenerators[tKey]) || t.generatorData || (t.contains && t.contains.generatorData);
                                         if (gData && gData.activated && gData.owned !== false && gData.ownerId === enemyOwnerId) {
@@ -23496,22 +23689,44 @@ class DungeonPage extends React.Component {
         const def = this.getGeneratorDef(tile);
         if (!def || !def.currencyType) return; // Cannot upgrade if it doesn't have a currency type
         
-        const currentLevel = tile.generatorData.level || 1;
+        const gData = tile.generatorData || (tile.contains && tile.contains.generatorData) || {};
+        const currentLevel = gData.level || 1;
         const costResource = 20 * currentLevel;
         const costResolve = 10;
         
+        const isInPocketDimension = !!(this.state.inSuperboard || this.state.isInPocketDimension);
         const isFood = def.currencyType === 'food';
         const invKey = def.currencyType === 'dust' ? 'shimmering_dust' : def.currencyType;
-        const currentResource = isFood ? (typeof meta.food === 'number' ? meta.food : 0) : (this.props.inventoryManager ? (this.props.inventoryManager[invKey] || 0) : 0);
+        let currentResource = 0;
+        if (isInPocketDimension) {
+            const pRes = this.getPocketResources();
+            const resKey = (def.currencyType === 'stone' || def.currencyType === 'ore') ? 'ore' : def.currencyType;
+            currentResource = typeof pRes[resKey] === 'number' ? pRes[resKey] : 0;
+        } else {
+            currentResource = isFood ? (typeof meta.food === 'number' ? meta.food : 0) : (this.props.inventoryManager ? (this.props.inventoryManager[invKey] || 0) : 0);
+        }
         const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
         
+        const resLabel = isInPocketDimension && (def.currencyType === 'stone' || def.currencyType === 'ore') ? 'Ore' : def.resource;
         if (currentResource < costResource || currentResolve < costResolve) {
-            this.displayMessage(`❌ Insufficient resources! Need ${costResource} ${def.resource} and ${costResolve} Resolve to upgrade.`);
+            this.displayMessage(`❌ Insufficient resources! Need ${costResource} ${resLabel} and ${costResolve} Resolve to upgrade.`);
             return;
         }
 
         // Deduct costs
-        if (isFood) {
+        if (isInPocketDimension) {
+            const pRes = { ...this.getPocketResources() };
+            const resKey = (def.currencyType === 'stone' || def.currencyType === 'ore') ? 'ore' : def.currencyType;
+            pRes[resKey] = Math.max(0, (pRes[resKey] || 0) - costResource);
+            this.setState({ pocketResources: pRes });
+            try {
+                meta.pocketResources = pRes;
+                storeMeta(meta);
+                if (typeof updateUserRequest === 'function' && typeof getUserId === 'function') {
+                    updateUserRequest(getUserId(), meta).catch(() => {});
+                }
+            } catch (e) {}
+        } else if (isFood) {
             meta.food = currentResource - costResource;
         } else if (this.props.inventoryManager) {
             this.props.inventoryManager[invKey] = currentResource - costResource;
@@ -23519,8 +23734,21 @@ class DungeonPage extends React.Component {
         meta.resolve = currentResolve - costResolve;
         
         // Update generator state
+        if (!tile.generatorData) {
+            tile.generatorData = {
+                activated: true,
+                level: currentLevel,
+                owned: true,
+                key: def.key,
+                resource: def.resource,
+                currencyType: def.currencyType,
+                rate: def.rate
+            };
+        }
         tile.generatorData.isUpgrading = true;
-        tile.generatorData.upgradeEndTime = Date.now() + (15 * 60 * 1000); // 15 minutes
+        const upgradeTimeMs = isInPocketDimension ? (45 * 1000) : (15 * 60 * 1000);
+        tile.generatorData.upgradeEndTime = Date.now() + upgradeTimeMs;
+        tile.generatorData.targetLevel = currentLevel + 1;
 
         const bm = this.props.boardManager;
         if (this.state.inSuperboard) {
@@ -23762,13 +23990,36 @@ class DungeonPage extends React.Component {
             this.removeExistingHuts();
         }
 
+        const def = this.getGeneratorDef({ building: buildingDef.key, contains: { subtype: buildingDef.key } });
+        const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+        const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
+        
+        const initialGeneratorData = {
+            activated: true,
+            level: 1,
+            owned: true,
+            ownerId: currentUserId,
+            ownerSocketId: mySocketId,
+            ownerName: getUserName() || 'Explorer',
+            activatedAt: Date.now(),
+            lastCollectedAt: Date.now(),
+            accumulated: 0,
+            key: def.key,
+            resource: def.resource,
+            currencyType: def.currencyType,
+            rate: def.rate,
+            orientation: bm ? bm.currentOrientation : 'F',
+            placedBy: 'player'
+        };
+
         const buildingObj = {
             type: 'building',
             subtype: buildingDef.key,
             building: buildingDef.key,
             name: buildingDef.name,
             placedBy: 'player',
-            ownerId: typeof getUserId === 'function' ? getUserId() : null
+            ownerId: currentUserId,
+            generatorData: initialGeneratorData
         };
 
         if (this.state.inSuperboard) {
@@ -23808,7 +24059,7 @@ class DungeonPage extends React.Component {
 
                             const mb = sb.miniboards[targetMbIdx];
                             if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
-                                const tileObj = { ...buildingObj };
+                                const tileObj = { ...buildingObj, generatorData: { ...initialGeneratorData } };
                                 if (isLarge || isHuge) {
                                     tileObj.vendorGroupId = vendorGroupId;
                                     tileObj.vendorAnchorId = anchorTileIdx;
@@ -23816,6 +24067,7 @@ class DungeonPage extends React.Component {
                                 }
                                 mb.tiles[targetTileIdx].contains = tileObj;
                                 mb.tiles[targetTileIdx].building = buildingDef.key;
+                                mb.tiles[targetTileIdx].generatorData = { ...initialGeneratorData };
                             }
                         });
                     }
@@ -23826,7 +24078,7 @@ class DungeonPage extends React.Component {
             }
         } else if (bm) {
             footprint.forEach((tId, idx) => {
-                const tileObj = { ...buildingObj };
+                const tileObj = { ...buildingObj, generatorData: { ...initialGeneratorData } };
                 if (isLarge) {
                     tileObj.vendorGroupId = vendorGroupId;
                     tileObj.vendorAnchorId = targetTileIdx;
@@ -23835,10 +24087,12 @@ class DungeonPage extends React.Component {
                 if (bm.tiles && bm.tiles[tId]) {
                     bm.tiles[tId].contains = tileObj;
                     bm.tiles[tId].building = buildingDef.key;
+                    bm.tiles[tId].generatorData = { ...initialGeneratorData };
                 }
                 if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tId]) {
                     bm.currentBoard.tiles[tId].contains = tileObj;
                     bm.currentBoard.tiles[tId].building = buildingDef.key;
+                    bm.currentBoard.tiles[tId].generatorData = { ...initialGeneratorData };
                 }
             });
 
@@ -23981,9 +24235,9 @@ class DungeonPage extends React.Component {
             outpost: { key: 'outpost', name: 'Outpost', category: 'earthly', imageKey: 'buildable_outpost', fallbackImageKey: 'outpost', costs: { wood: 20, stone: 20, ore: 20, slate: 10 }, buildTime: 7200, tag: 'STRUCTURE' },
             observer_platform: { key: 'observer_platform', name: 'Observation Platform', category: 'earthly', imageKey: 'buildable_observer_platform', fallbackImageKey: 'observer_platform', costs: { wood: 10, stone: 0, ore: 0, slate: 0 }, buildTime: 50, tag: 'STRUCTURE' },
             observation_platform: { key: 'observer_platform', name: 'Observation Platform', category: 'earthly', imageKey: 'buildable_observer_platform', fallbackImageKey: 'observer_platform', costs: { wood: 10, stone: 0, ore: 0, slate: 0 }, buildTime: 50, tag: 'STRUCTURE' },
-            earthen_fort: { key: 'earthen_fort', name: 'Earthen Fort', category: 'earthly', imageKey: 'buildable_earthen_fort', fallbackImageKey: 'earthen_fort', costs: { wood: 10, stone: 5, ore: 5, slate: 0 }, buildTime: 75, tag: 'FORTIFICATION' },
-            war_camp: { key: 'war_camp', name: 'War Camp', category: 'earthly', imageKey: 'buildable_war_camp', fallbackImageKey: 'war_camp', costs: { wood: 40, stone: 30, ore: 30, slate: 0 }, buildTime: 105, tag: 'FORTIFICATION' },
-            war_fort: { key: 'war_fort', name: 'War Fort', category: 'earthly', imageKey: 'buildable_war_fort', fallbackImageKey: 'war_fort', costs: { wood: 40, stone: 25, ore: 25, slate: 20 }, buildTime: 150, tag: 'STRONGHOLD' },
+            earthen_fort: { key: 'earthen_fort', name: 'Earthen Fort', category: 'earthly', imageKey: 'buildable_earthen_fort', fallbackImageKey: 'earthen_fort', costs: { wood: 10, ore: 5, slate: 0 }, buildTime: 75, tag: 'FORTIFICATION' },
+            war_camp: { key: 'war_camp', name: 'War Camp', category: 'earthly', imageKey: 'buildable_war_camp', fallbackImageKey: 'war_camp', costs: { wood: 40, ore: 30, slate: 0 }, buildTime: 105, tag: 'FORTIFICATION' },
+            war_fort: { key: 'war_fort', name: 'War Fort', category: 'earthly', imageKey: 'buildable_war_fort', fallbackImageKey: 'war_fort', costs: { wood: 40, ore: 25, slate: 20 }, buildTime: 150, tag: 'STRONGHOLD' },
             wall: { key: 'wall', name: 'Wall', category: 'advanced', imageKey: 'wall', fallbackImageKey: 'wall', costs: { wood: 25, stone: 20, slate: 0 }, buildTime: 60, tag: 'STRUCTURE' },
             frozen_locus: { key: 'frozen_locus', name: 'Frozen Locus', category: 'arcane', imageKey: 'frozen_locus', fallbackImageKey: 'frozen_locus', costs: { stone: 10, slate: 5, dust: 2 }, buildTime: 60, tag: 'ARCANE' },
             emerald_locus: { key: 'emerald_locus', name: 'Emerald Locus', category: 'arcane', imageKey: 'emerald_locus', fallbackImageKey: 'emerald_locus', costs: { stone: 12, slate: 8, dust: 4 }, buildTime: 85, tag: 'ARCANE' },
@@ -28227,6 +28481,8 @@ globalY={tile.globalY}
                                     territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                                     affiliation={tile.affiliation || (tile.contains && typeof tile.contains === 'object' ? tile.contains.affiliation : null)}
                                     territoryAffiliation={tile.territoryAffiliation || (tile.contains && typeof tile.contains === 'object' ? tile.contains.territoryAffiliation : null)}
+                                    newlyClaimed={tile.newlyClaimed ?? (tile.contains && typeof tile.contains === 'object' ? tile.contains.newlyClaimed : null)}
+                                    claimDelayMs={tile.claimDelayMs ?? (tile.contains && typeof tile.contains === 'object' ? tile.contains.claimDelayMs : null)}
                                     growthCycles={tile.growthCycles ?? (tile.contains && typeof tile.contains === 'object' ? tile.contains.growthCycles : null)}
                                     lastGrowthTime={tile.lastGrowthTime ?? (tile.contains && typeof tile.contains === 'object' ? tile.contains.lastGrowthTime : null)}
                                     activated={tile.activated ?? (tile.contains && typeof tile.contains === 'object' ? tile.contains.activated : null)}
@@ -29341,12 +29597,14 @@ globalY={tile.globalY}
                         (bm && bm.tiles && bm.tiles[tile.id] && (bm.tiles[tile.id].generatorData || bm.tiles[tile.id].contains?.generatorData)) ||
                         (tileKey && meta.activatedGenerators && meta.activatedGenerators[tileKey]) ||
                         { activated: false, owned: false };
-                    const isActivated = !!gData.activated;
+                    const isPlacedByPlayer = tile.placedBy === 'player' || tile.contains?.placedBy === 'player' || gData.placedBy === 'player' || gData.ownedByPlayer;
+                    const isActivated = !!gData.activated || isPlacedByPlayer;
                     const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
                     const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
 
                     const isInPocket = !!(this.state.inSuperboard || this.state.isInPocketDimension);
                     let isOwner = (() => {
+                        if (isPlacedByPlayer) return true;
                         if (isInPocket) {
                             const cAff = tile.affiliation || tile.contains?.affiliation || gData.affiliation;
                             if (cAff === 'hostile' || tile.isHostile || tile.contains?.isHostile || gData.isHostile) return false;
@@ -29564,12 +29822,21 @@ globalY={tile.globalY}
                                         const costResolve = 10;
                                         const isFood = def.currencyType === 'food';
                                         const invKey = def.currencyType === 'dust' ? 'shimmering_dust' : def.currencyType;
-                                        const currentResource = isFood ? (typeof meta.food === 'number' ? meta.food : 0) : (this.props.inventoryManager ? (this.props.inventoryManager[invKey] || 0) : 0);
+                                        let currentResource = 0;
+                                        if (isInPocketDimension) {
+                                            const pRes = this.getPocketResources();
+                                            const resKey = (def.currencyType === 'stone' || def.currencyType === 'ore') ? 'ore' : def.currencyType;
+                                            currentResource = typeof pRes[resKey] === 'number' ? pRes[resKey] : 0;
+                                        } else {
+                                            currentResource = isFood ? (typeof meta.food === 'number' ? meta.food : 0) : (this.props.inventoryManager ? (this.props.inventoryManager[invKey] || 0) : 0);
+                                        }
                                         const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
                                         const canAfford = currentResource >= costResource && currentResolve >= costResolve;
                                         
                                         const isUpgrading = !!gData.isUpgrading;
-                                        let btnText = `UPGRADE GENERATOR (${costResource} ${def.resource}, ${costResolve} Resolve)`;
+                                        const resLabel = isInPocketDimension && (def.currencyType === 'stone' || def.currencyType === 'ore') ? 'Ore' : def.resource;
+                                        const structLabel = def.key === 'earthen_fort' ? 'FORT' : 'GENERATOR';
+                                        let btnText = `UPGRADE ${structLabel} (${costResource} ${resLabel.toUpperCase()}, ${costResolve} RESOLVE)`;
                                         let btnDisabled = !canAfford || isUpgrading;
                                         
                                         if (isUpgrading) {
@@ -29670,7 +29937,7 @@ globalY={tile.globalY}
                                     }
 
                                     if (isEnemyGenerator) {
-                                        if (isInPocketDimension && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith')) {
+                                        if (isInPocketDimension && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'domain_node' || def.key === 'dark_domain_node')) {
                                             return (
                                                 <button
                                                     onClick={this.handleActivateGenerator}
@@ -29699,7 +29966,7 @@ globalY={tile.globalY}
                                         }
 
                                         const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
-                                        const overtakeCost = (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith') ? 80 : (20 * stats.level);
+                                        const overtakeCost = (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'domain_node' || def.key === 'dark_domain_node') ? 80 : (20 * stats.level);
                                         const canAfford = currentResolve >= overtakeCost;
                                         return (
                                             <button
@@ -29788,7 +30055,7 @@ globalY={tile.globalY}
                                     if (isActivated) {
                                         if (isOwner) {
                                             if (def.cap === 0) {
-                                                const isMonolith = def.key === 'domain_monolith' || def.key === 'dark_domain_monolith';
+                                                const isMonolith = def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'domain_node' || def.key === 'dark_domain_node';
                                                 const isObs = def.key === 'observer_platform' || def.key === 'observation_platform';
                                                 let isActiveMsg = 'ACTIVE';
                                                 if (isMonolith) {
@@ -29881,11 +30148,11 @@ globalY={tile.globalY}
                                         }
                                     }
 
-                                    if (!isOwner && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith')) {
+                                    if (!isOwner && (def.key === 'domain_monolith' || def.key === 'dark_domain_monolith' || def.key === 'domain_node' || def.key === 'dark_domain_node')) {
                                         const isInPocketDimension = !!(this.state.inSuperboard || this.state.isInPocketDimension);
                                         if (isInPocketDimension) {
                                             const cAff = tile.affiliation || tile.contains?.affiliation || (tile.generatorData && tile.generatorData.affiliation);
-                                            const isEnemyMonolith = cAff === 'hostile' || tile.isHostile || tile.contains?.isHostile || def.key === 'dark_domain_monolith';
+                                            const isEnemyMonolith = cAff === 'hostile' || tile.isHostile || tile.contains?.isHostile || def.key === 'dark_domain_monolith' || def.key === 'dark_domain_node';
                                             return (
                                                 <button
                                                     onClick={() => this.startMonolithActivation(tile)}
@@ -29945,7 +30212,7 @@ globalY={tile.globalY}
                                     }
 
                                     const isInPocket = !!(this.state.inSuperboard || this.state.isInPocketDimension);
-                                    const isNonDomainPocketGen = isInPocket && def.key !== 'domain_monolith' && def.key !== 'dark_domain_monolith' && def.key !== 'observer_platform' && def.key !== 'observation_platform' && def.key !== 'outpost' && def.key !== 'wall' && def.key !== 'hut';
+                                    const isNonDomainPocketGen = isInPocket && def.key !== 'domain_monolith' && def.key !== 'dark_domain_monolith' && def.key !== 'domain_node' && def.key !== 'dark_domain_node' && def.key !== 'observer_platform' && def.key !== 'observation_platform' && def.key !== 'outpost' && def.key !== 'wall' && def.key !== 'hut';
                                     const currentInfluence = isNonDomainPocketGen ? this.getTotalPlayerDomainCount() : 0;
                                     const maxCap = isNonDomainPocketGen ? Math.floor(currentInfluence / 5) : 0;
                                     const activeGenCount = isNonDomainPocketGen ? this.getPocketActiveResourceGeneratorsCount() : 0;
@@ -31390,6 +31657,145 @@ globalY={tile.globalY}
                 @keyframes save-spin {
                     0% { transform: rotate(0deg); }
                     100% { transform: rotate(360deg); }
+                }
+                @keyframes domainSquareRotate {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+                @keyframes domainSquarePulseGrow {
+                    0% {
+                        box-shadow: 0 0 14px rgba(56, 189, 248, 0.7), inset 0 0 10px rgba(56, 189, 248, 0.7);
+                    }
+                    50% {
+                        box-shadow: 0 0 38px rgba(56, 189, 248, 1), inset 0 0 25px rgba(56, 189, 248, 0.9), 0 0 60px rgba(56, 189, 248, 0.6);
+                    }
+                    100% {
+                        box-shadow: 0 0 14px rgba(56, 189, 248, 0.7), inset 0 0 10px rgba(56, 189, 248, 0.7);
+                    }
+                }
+                @keyframes domainShockwaveExpand {
+                    0% {
+                        transform: translate(-50%, -50%) scale(0.05);
+                        opacity: 1;
+                        border-width: 5px;
+                        box-shadow: 0 0 35px rgba(56, 189, 248, 1), inset 0 0 25px rgba(56, 189, 248, 0.8);
+                    }
+                    60% {
+                        opacity: 0.9;
+                        border-width: 3px;
+                        box-shadow: 0 0 50px rgba(56, 189, 248, 0.9), inset 0 0 35px rgba(56, 189, 248, 0.6);
+                    }
+                    100% {
+                        transform: translate(-50%, -50%) scale(1);
+                        opacity: 0;
+                        border-width: 1px;
+                        box-shadow: 0 0 10px rgba(56, 189, 248, 0), inset 0 0 5px rgba(56, 189, 248, 0);
+                    }
+                }
+                @keyframes domainHostileShockwaveExpand {
+                    0% {
+                        transform: translate(-50%, -50%) scale(0.05);
+                        opacity: 1;
+                        border-width: 5px;
+                        box-shadow: 0 0 35px rgba(239, 68, 68, 1), inset 0 0 25px rgba(239, 68, 68, 0.8);
+                    }
+                    60% {
+                        opacity: 0.9;
+                        border-width: 3px;
+                        box-shadow: 0 0 50px rgba(239, 68, 68, 0.9), inset 0 0 35px rgba(239, 68, 68, 0.6);
+                    }
+                    100% {
+                        transform: translate(-50%, -50%) scale(1);
+                        opacity: 0;
+                        border-width: 1px;
+                        box-shadow: 0 0 10px rgba(239, 68, 68, 0), inset 0 0 5px rgba(239, 68, 68, 0);
+                    }
+                }
+                @keyframes territoryFadeIn {
+                    0% {
+                        opacity: 0;
+                        transform: scale(0.3);
+                        box-shadow: inset 0 0 30px rgba(56, 189, 248, 1), 0 0 20px rgba(56, 189, 248, 0.9);
+                        filter: brightness(2.2);
+                    }
+                    45% {
+                        opacity: 0.95;
+                        transform: scale(1.06);
+                        box-shadow: inset 0 0 25px rgba(56, 189, 248, 0.8), 0 0 15px rgba(56, 189, 248, 0.7);
+                        filter: brightness(1.6);
+                    }
+                    100% {
+                        opacity: 1;
+                        transform: scale(1);
+                        box-shadow: none;
+                        filter: brightness(1);
+                    }
+                }
+                @keyframes domainHostileTileExpandFill {
+                    0% {
+                        opacity: 0;
+                        transform: scale(0.3);
+                        box-shadow: inset 0 0 30px rgba(239, 68, 68, 1), 0 0 20px rgba(239, 68, 68, 0.9);
+                        filter: brightness(2.2);
+                    }
+                    45% {
+                        opacity: 0.95;
+                        transform: scale(1.06);
+                        box-shadow: inset 0 0 25px rgba(239, 68, 68, 0.8), 0 0 15px rgba(239, 68, 68, 0.7);
+                        filter: brightness(1.6);
+                    }
+                    100% {
+                        opacity: 1;
+                        transform: scale(1);
+                        box-shadow: none;
+                        filter: brightness(1);
+                    }
+                }
+                @keyframes territoryTileRipple {
+                    0% {
+                        opacity: 1;
+                        transform: scale(0.2);
+                    }
+                    50% {
+                        opacity: 0.85;
+                        transform: scale(1.15);
+                    }
+                    100% {
+                        opacity: 0;
+                        transform: scale(1);
+                    }
+                }
+                @keyframes territoryBoundaryPulse {
+                    0% {
+                        opacity: 0.3;
+                        transform: scale(0.95);
+                    }
+                    50% {
+                        opacity: 1;
+                        transform: scale(1.05);
+                        box-shadow: 0 0 18px currentColor, 0 0 25px currentColor;
+                    }
+                    100% {
+                        opacity: 0.85;
+                        transform: scale(1);
+                    }
+                }
+                @keyframes monolithBeaconPulse {
+                    0% {
+                        transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
+                        opacity: 0.95;
+                        filter: brightness(2.5) drop-shadow(0 0 25px rgba(56, 189, 248, 1));
+                    }
+                    50% {
+                        transform: translate(-50%, -50%) scale(1.6) rotate(180deg);
+                        opacity: 0.8;
+                        filter: brightness(2) drop-shadow(0 0 35px rgba(56, 189, 248, 0.9));
+                    }
+                    100% {
+                        transform: translate(-50%, -50%) scale(2.2) rotate(360deg);
+                        opacity: 0;
+                        filter: brightness(1);
+                    }
                 }
             `}</style>
                 <div
