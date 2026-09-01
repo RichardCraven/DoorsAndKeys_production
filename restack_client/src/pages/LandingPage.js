@@ -1175,7 +1175,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.6.2 BETA</span>
+          <span className="logo-subtitle">v 0.6.3 BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',
@@ -1843,10 +1843,10 @@ export default function LandingPage(props) {
                   The Monad & Hikaron
                 </h3>
                 <p style={{ margin: 0, textAlign: 'left' }}>
-                  The tower is actually a fabrication of an omnipresent omni-temporal being called <strong>The Monad</strong>. It sends its influence out into the world (unnamed world) and draws ‘adventurers’ and fortune seekers to its manifested ‘tower’.
+                  The tower is actually a fabrication of an omnipresent omni-temporal being called <strong>The Monad</strong>. It sends its influence out into the world and draws ‘adventurers’ and fortune seekers to its manifested ‘tower’.
                 </p>
                 <p style={{ margin: 0, textAlign: 'left' }}>
-                  Long ago it lured a mad wizard named <strong>Hikaron</strong> into its tower and Hikaron got lost in his own machinations and is embedded in the substrate of the tower. Hikaron then sends out his own influence to try luring would-be liberators into the tower, which is where your story starts.
+                  Long ago it lured a mad wizard named <strong>Hikaron</strong> into its tower and he got lost in his own machinations and is embedded in the substrate of the tower. Hikaron then sends out his own influence to try luring would-be liberators into the tower, which is where your story starts.
                 </p>
               </div>
 

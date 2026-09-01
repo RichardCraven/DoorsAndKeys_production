@@ -396,14 +396,18 @@ export function BoardManager(){
             'blacksmith_camp', 'buildable_blacksmith_camp',
             'builders_house', 'buildable_builders_house',
             'captains_tower', 'buildable_captains_tower',
-            'house', 'buildable_house',
+            'house', 'buildable_house', 'pocket_house',
             'farm', 'buildable_farm', 'pocket_farm',
+            'windmill', 'buildable_windmill', 'pocket_windmill',
+            'manor', 'buildable_manor', 'pocket_manor',
+            'estate', 'buildable_estate', 'pocket_estate',
+            'tower', 'pocket_tower', 'tower_2', 'pocket_tower_2', 'tower_3', 'pocket_tower_3', 'tower_4', 'pocket_tower_4', 'tower_5', 'pocket_tower_5',
             'stone_tower', 'buildable_stone_tower',
             'storage', 'buildable_storage',
             'temple', 'buildable_temple',
             'larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine',
             'dust_collector', 'fungal_nursery', 'cultivation_vat',
-            'domain_monolith', 'dark_domain_monolith',
+            'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node',
             'infernal_tower', 'infernal_pit', 'frozen_locus', 'emerald_locus', 'cosmic_locus'
         ];
 

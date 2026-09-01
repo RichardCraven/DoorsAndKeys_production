@@ -1,4 +1,4 @@
-// import * as images from "./images";
+import { getForestDensityTier, getMountainDensityTier, updateTerrainAutotiles, applyForestStamp, applyMountainStamp } from './autotile-utils';
 
 export function MapMaker(props){
     this.tiles = [];
@@ -178,6 +178,8 @@ export function MapMaker(props){
         { key: 'dust_collector', name: 'Dust Collector', image: 'dust_collector', isMultiTile: true, isLarge: true },
         { key: 'domain_monolith', name: 'Domain Monolith', image: 'domain_monolith', isMultiTile: true, isLarge: true },
         { key: 'dark_domain_monolith', name: 'Dark Domain Monolith', image: 'dark_domain_monolith', isMultiTile: true, isLarge: true },
+        { key: 'domain_node', name: 'Domain Node', image: 'domain_node' },
+        { key: 'dark_domain_node', name: 'Dark Domain Node', image: 'dark_domain_node' },
         { key: 'lumber_mill', name: 'Lumber Mill', image: 'lumber_mill', isMultiTile: true, isLarge: true },
         { key: 'ore_mine', name: 'Ore Mine', image: 'ore_mine', isMultiTile: true, isLarge: true },
         { key: 'slate_mine', name: 'Slate Mine', image: 'slate_mine', isMultiTile: true, isLarge: true },
@@ -958,5 +960,13 @@ export function MapMaker(props){
         return portals;
     }
 
+    this.applyForestStamp = (tiles, centerIdx, options = {}) => applyForestStamp(tiles, centerIdx, options);
+    this.applyMountainStamp = (tiles, centerIdx, options = {}) => applyMountainStamp(tiles, centerIdx, options);
+
     this.initializeTiles();
 }
+
+MapMaker.prototype.applyForestStamp = applyForestStamp;
+MapMaker.prototype.applyMountainStamp = applyMountainStamp;
+
+export { applyForestStamp, applyMountainStamp };

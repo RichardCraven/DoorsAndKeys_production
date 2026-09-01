@@ -41,7 +41,7 @@ import * as images from '../utils/images'
 import BoardsPalette from './dungonBuilderViews/BoardsPalette'
 import { generateRandomDungeon } from '../utils/dungeon-generator'
 import { getRandomInscription } from '../utils/inscriptions-manager'
-import { updateTerrainAutotiles } from '../utils/autotile-utils'
+import { updateTerrainAutotiles, applyForestStamp, applyMountainStamp } from '../utils/autotile-utils'
 import { superboardCleanup } from '../utils/cache-cleanup'
 
 const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__';
@@ -411,6 +411,12 @@ class MapMakerPage extends React.Component {
         containsObj = { type: 'terrain', subtype: terrainOption.key };
         tileImage = terrainOption.image;
       }
+    } else if (pinnedOption.type === 'forest-stamp-tile') {
+      containsObj = { type: 'terrain', subtype: pinnedOption.treeType || 'terrain_naked_trees' };
+      tileImage = pinnedOption.treeType || 'terrain_naked_trees';
+    } else if (pinnedOption.type === 'mountain-stamp-tile') {
+      containsObj = { type: 'terrain', subtype: pinnedOption.mountainType || 'terrain_mountain_1' };
+      tileImage = pinnedOption.mountainType || 'terrain_mountain_1';
     } else if (pinnedOption.type === 'territory-tile') {
       const territoryOption = this.props.mapMaker?.territoryOptions?.[pinnedOption.id];
       if (territoryOption) {
@@ -466,6 +472,10 @@ class MapMakerPage extends React.Component {
       delete copy.vendorGroupId;
       delete copy.newlyClaimed;
       delete copy.borders;
+      delete copy.forestDensityTier;
+      delete copy.mountainDensityTier;
+      delete copy.autotileMask;
+      delete copy.variantSeed;
     }
 
     return {
@@ -485,11 +495,25 @@ class MapMakerPage extends React.Component {
     const board = dungeon.superboards[superboardKey].miniboards[mbIndex];
     if (!board || !board.tiles) return;
 
-    // Check if 3x3 brush mode is active for empty/void
     const pinnedTile = this.state.pinnedOption && this.state.pinnedOption.type === 'palette-tile' ? this.props.mapMaker.paletteTiles[this.state.pinnedOption.id] : null;
     const isBrushEligible = pinnedTile && (pinnedTile.optionType === 'empty space' || pinnedTile.optionType === 'void');
 
-    if (this.state.superboardBrush3x3 && isBrushEligible) {
+    // Check if forest stamp or 3x3 brush mode is active for empty/void
+    if (this.state.pinnedOption?.type === 'forest-stamp-tile') {
+        const stampFn = this.props.mapMaker?.applyForestStamp || applyForestStamp;
+        board.tiles = stampFn([...board.tiles], tileIdx, {
+            size: this.state.pinnedOption.size,
+            shape: this.state.pinnedOption.shape,
+            treeType: this.state.pinnedOption.treeType || 'terrain_naked_trees'
+        });
+    } else if (this.state.pinnedOption?.type === 'mountain-stamp-tile') {
+        const stampFn = this.props.mapMaker?.applyMountainStamp || applyMountainStamp;
+        board.tiles = stampFn([...board.tiles], tileIdx, {
+            size: this.state.pinnedOption.size,
+            shape: this.state.pinnedOption.shape,
+            mountainType: this.state.pinnedOption.mountainType || 'terrain_mountain_1'
+        });
+    } else if (this.state.superboardBrush3x3 && isBrushEligible) {
         const cx = tileIdx % 15;
         const cy = Math.floor(tileIdx / 15);
         for (let dy = -1; dy <= 1; dy++) {
@@ -564,7 +588,7 @@ class MapMakerPage extends React.Component {
         const containsType = this.getContainsType(contains);
         const containsSubtype = typeof contains === 'object' ? (contains.subtype || contains.key || contains.building) : (typeof contains === 'string' ? contains : null);
         const sKey = (tile.building || containsSubtype || containsType || (typeof contains === 'object' ? contains.building || contains.key || contains.name : contains) || '').toString().toLowerCase();
-        const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'generator', 'cultivation_vat'];
+        const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'generator', 'cultivation_vat'];
         const isMilitaryBuilding = militaryKeys.some(k => sKey.includes(k));
 
         if (isMilitaryBuilding) {
@@ -613,10 +637,15 @@ class MapMakerPage extends React.Component {
       deleteGroupFootprint = this.getVendorGroupTileIds(boardTiles, tileIdx);
     }
 
+    let stampFootprint = null;
+    if (pinnedOption?.type === 'forest-stamp-tile' || pinnedOption?.type === 'mountain-stamp-tile') {
+      stampFootprint = this.getForestStampFootprintTileIds(tileIdx, pinnedOption.size, pinnedOption.shape);
+    }
+
     const footprintType = this.getFootprintTypeForPinnedOption(this.state.pinnedOption);
-    const multiTileFootprint = (deleteGroupFootprint && deleteGroupFootprint.length > 0)
+    const multiTileFootprint = stampFootprint || ((deleteGroupFootprint && deleteGroupFootprint.length > 0)
       ? deleteGroupFootprint
-      : (footprintType ? this.getVendorFootprintTileIds(tileIdx, footprintType) : null);
+      : (footprintType ? this.getVendorFootprintTileIds(tileIdx, footprintType) : null));
 
     this.setState({
       hoveredTileIdx: tileIdx,
@@ -1263,6 +1292,10 @@ class MapMakerPage extends React.Component {
     delete copy.vendorAnchorId;
     delete copy.vendorGroupId;
     delete copy.newlyClaimed;
+    delete copy.forestDensityTier;
+    delete copy.mountainDensityTier;
+    delete copy.autotileMask;
+    delete copy.variantSeed;
 
     if (tile?.contains?.type === 'item' && hasPassageBorders) {
       return {
@@ -1337,6 +1370,33 @@ class MapMakerPage extends React.Component {
     return [anchorTileId, anchorTileId + 1, anchorTileId + 15, anchorTileId + 16];
   }
 
+  getForestStampFootprintTileIds = (centerTileId, size = 'M', shape = 'rect') => {
+    if (centerTileId === null || centerTileId === undefined || centerTileId < 0) return null;
+    const gridWidth = 15;
+    let r = 2;
+    if (size === 'S') r = 1;
+    else if (size === 'L') r = 3;
+
+    const cx = centerTileId % gridWidth;
+    const cy = Math.floor(centerTileId / gridWidth);
+    const footprint = [];
+
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const tx = cx + dx;
+        const ty = cy + dy;
+        if (tx < 0 || tx >= gridWidth || ty < 0 || ty >= gridWidth) continue;
+        if (shape === 'oval' && r > 0) {
+          const normX = dx / r;
+          const normY = dy / r;
+          if (normX * normX + normY * normY > 1.25) continue;
+        }
+        footprint.push(ty * gridWidth + tx);
+      }
+    }
+    return footprint;
+  }
+
   getFootprintTypeForPinnedOption = (pinnedOption) => {
     if (!pinnedOption) return null;
     let keyToCheck = null;
@@ -1380,7 +1440,6 @@ class MapMakerPage extends React.Component {
       const terrainOption = this.props.mapMaker?.terrainOptions?.[pinnedOption.id];
       if (terrainOption && (terrainOption.isLarge || terrainOption.isMultiTile)) return '2x2';
     }
-    return null;
     return null;
   }
 
@@ -1554,6 +1613,22 @@ class MapMakerPage extends React.Component {
   placeTileAtId = (tileId, pinnedOption, pinned) => {
     if (!pinnedOption) return null;
 
+    if (pinnedOption.type === 'forest-stamp-tile') {
+      const stampFn = this.props.mapMaker?.applyForestStamp || applyForestStamp;
+      return stampFn([...this.state.tiles], tileId, {
+        size: pinnedOption.size,
+        shape: pinnedOption.shape,
+        treeType: pinnedOption.treeType || 'terrain_naked_trees'
+      });
+    } else if (pinnedOption.type === 'mountain-stamp-tile') {
+      const stampFn = this.props.mapMaker?.applyMountainStamp || applyMountainStamp;
+      return stampFn([...this.state.tiles], tileId, {
+        size: pinnedOption.size,
+        shape: pinnedOption.shape,
+        mountainType: pinnedOption.mountainType || 'terrain_mountain_1'
+      });
+    }
+
     let monster, gate, key, tierOption, jewelOption, runeOption, treasureOption, vendorOption;
     if (pinnedOption.type === 'monster-tile') {
       const paletteMonsters = typeof this.props.monsterManager?.getPaletteMonsters === 'function'
@@ -1685,11 +1760,6 @@ class MapMakerPage extends React.Component {
         arr[tileId].color = null;
       }
     } else if (pocketBuildingOption) {
-      const isPocketDimensionBoard = this.state.selectedView === 'dungeon' || this.state.isSuperboard || (this.state.loadedBoard && (this.state.loadedBoard.isPocketDimension || String(this.state.loadedBoard.folderPath || '').toLowerCase().includes('pocket')));
-      if (!isPocketDimensionBoard) {
-        this.toast('❌ Pocket buildings can only exist in a pocket dimension!');
-        return null;
-      }
       const isLargePocketBuilding = pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key);
       if (isLargePocketBuilding) {
         let footprintType = '2x2';
@@ -1784,12 +1854,20 @@ class MapMakerPage extends React.Component {
       arr[tileId].color = null;
       arr[tileId].contains = { type: 'empty_space', subtype: null };
       arr[tileId].borders = null;
+      delete arr[tileId].forestDensityTier;
+      delete arr[tileId].mountainDensityTier;
+      delete arr[tileId].autotileMask;
+      delete arr[tileId].variantSeed;
     } else if (pinned.optionType === 'obscured space') {
       const preservedBorders = arr[tileId].borders ? { ...arr[tileId].borders } : null;
       arr[tileId].image = null;
       arr[tileId].color = '#111012';
       arr[tileId].contains = { type: 'obscured_space', subtype: null };
       arr[tileId].borders = preservedBorders;
+      delete arr[tileId].forestDensityTier;
+      delete arr[tileId].mountainDensityTier;
+      delete arr[tileId].autotileMask;
+      delete arr[tileId].variantSeed;
     } else if (pinned.optionType === 'inscription') {
       // Inscription tool: do not alter tile contains/type (inscriptions are managed via wall picker modal)
       return arr;
@@ -1811,6 +1889,8 @@ class MapMakerPage extends React.Component {
       arr[tileId].contains = containsObj;
       arr[tileId].image = pinned.image;
       arr[tileId].color = pinned.color || null;
+      delete arr[tileId].forestDensityTier;
+      delete arr[tileId].mountainDensityTier;
     }
     return updateTerrainAutotiles(arr, tileId);
   };
@@ -1824,7 +1904,7 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile', 'terrain-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile', 'terrain-tile', 'forest-stamp-tile', 'mountain-stamp-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
@@ -1883,10 +1963,15 @@ class MapMakerPage extends React.Component {
           deleteGroupFootprint = this.getVendorGroupTileIds(this.state.tiles, id);
         }
 
+        let stampFootprint = null;
+        if (pinnedOption?.type === 'forest-stamp-tile' || pinnedOption?.type === 'mountain-stamp-tile') {
+          stampFootprint = this.getForestStampFootprintTileIds(id, pinnedOption.size, pinnedOption.shape);
+        }
+
         const footprintType = this.getFootprintTypeForPinnedOption(this.state.pinnedOption);
-        const multiTileFootprint = (deleteGroupFootprint && deleteGroupFootprint.length > 0)
+        const multiTileFootprint = stampFootprint || ((deleteGroupFootprint && deleteGroupFootprint.length > 0)
           ? deleteGroupFootprint
-          : (footprintType ? this.getVendorFootprintTileIds(id, footprintType) : null);
+          : (footprintType ? this.getVendorFootprintTileIds(id, footprintType) : null));
 
         this.setState({
           hoveredTileIdx: id,
@@ -2671,7 +2756,7 @@ class MapMakerPage extends React.Component {
       const containsSubtype = typeof contains === 'object' ? (contains.subtype || contains.key || contains.building) : (typeof contains === 'string' ? contains : null);
       const sKey = (currentTile.building || containsSubtype || containsType || (typeof contains === 'object' ? contains.building || contains.key || contains.name : contains) || '').toString().toLowerCase();
 
-      const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'monolith', 'generator', 'cultivation_vat'];
+      const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'generator', 'cultivation_vat'];
       const isMilitaryBuilding = militaryKeys.some(k => sKey.includes(k));
 
       if (isMilitaryBuilding) {
@@ -2788,7 +2873,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile' || tile.type === 'terrain-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile' || tile.type === 'terrain-tile' || tile.type === 'forest-stamp-tile' || tile.type === 'mountain-stamp-tile') {
       this.setState({
         pinnedOption: tile
       })

@@ -646,13 +646,14 @@ export const LANDING_REDUX_CSS = `
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
   background: rgba(12, 10, 9, 0.5);
   border: 1px solid rgba(212, 168, 68, 0.2);
   border-radius: 8px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   box-sizing: border-box;
+  min-height: 0;
 }
 
 .redux-landing-container .hero-card .selected-crew-title {
@@ -663,11 +664,12 @@ export const LANDING_REDUX_CSS = `
   letter-spacing: 2.5px;
   font-weight: 700;
   text-shadow: 0 0 10px rgba(229, 181, 79, 0.3);
+  margin: 0;
 }
 
 .redux-landing-container .hero-card .selected-crew-list {
   display: flex;
-  gap: 20px;
+  gap: 18px;
   justify-content: center;
   align-items: center;
   flex-wrap: wrap;
@@ -679,20 +681,20 @@ export const LANDING_REDUX_CSS = `
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  width: 105px;
+  gap: 3px;
+  width: 130px;
 }
 
 .redux-landing-container .hero-card .selected-crew-avatar-wrapper {
-  width: 80px;
-  height: 80px;
+  width: 125px;
+  height: 125px;
   border-radius: 50%;
   position: relative;
   overflow: visible;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid rgba(212, 168, 68, 0.65);
+  border: 2.5px solid rgba(212, 168, 68, 0.65);
   box-shadow: 0 8px 24px rgba(0,0,0,0.8), 0 0 15px rgba(212, 168, 68, 0.15);
   transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
@@ -734,7 +736,7 @@ export const LANDING_REDUX_CSS = `
 }
 
 .redux-landing-container .hero-card .selected-crew-name {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   color: #f5f5f7;
   font-weight: 700;
   text-align: center;
@@ -746,7 +748,7 @@ export const LANDING_REDUX_CSS = `
 }
 
 .redux-landing-container .hero-card .selected-crew-level {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
   color: #a8a29e;
   font-weight: 600;
   text-align: center;
@@ -757,7 +759,7 @@ export const LANDING_REDUX_CSS = `
 }
 
 .redux-landing-container .hero-card .selected-crew-type {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   color: #e5b54f;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -807,14 +809,15 @@ export const LANDING_REDUX_CSS = `
   .redux-landing-container .hero-card .dungeon-selector-group .custom-select-trigger { padding: 8px 12px !important; font-size: 0.9rem !important; }
   
   .redux-landing-container .hero-card .dungeon-preview-space { flex-grow: 1 !important; margin: 6px 0 !important; display: flex !important; flex-direction: column !important; justify-content: center !important; width: 100% !important; }
-  .redux-landing-container .hero-card .selected-crew-preview-card { flex-grow: 1 !important; display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; padding: 10px 12px !important; gap: 8px !important; width: 100% !important; }
-  .redux-landing-container .hero-card .selected-crew-title { font-size: 0.9rem !important; margin: 0 !important; }
-  .redux-landing-container .hero-card .selected-crew-list { width: 100% !important; display: flex !important; justify-content: space-evenly !important; align-items: center !important; gap: 12px !important; flex-grow: 1 !important; }
-  .redux-landing-container .hero-card .selected-crew-member-item { width: 100px !important; gap: 4px !important; }
-  .redux-landing-container .hero-card .selected-crew-avatar-wrapper { width: 76px !important; height: 76px !important; border-width: 2px !important; }
-  .redux-landing-container .hero-card .selected-crew-badge { font-size: 10px !important; bottom: -2px !important; right: -4px !important; padding: 2px 6px !important; }
-  .redux-landing-container .hero-card .selected-crew-level { font-size: 0.75rem !important; }
-  .redux-landing-container .hero-card .selected-crew-type { font-size: 0.7rem !important; letter-spacing: 0.5px !important; overflow: visible !important; text-overflow: clip !important; }
+  .redux-landing-container .hero-card .selected-crew-preview-card { flex-grow: 1 !important; display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; padding: 10px 14px !important; gap: 8px !important; width: 100% !important; }
+  .redux-landing-container .hero-card .selected-crew-title { font-size: 0.95rem !important; margin: 0 !important; }
+  .redux-landing-container .hero-card .selected-crew-list { width: 100% !important; display: flex !important; justify-content: space-evenly !important; align-items: center !important; gap: 14px !important; flex-grow: 1 !important; }
+  .redux-landing-container .hero-card .selected-crew-member-item { width: 128px !important; gap: 4px !important; }
+  .redux-landing-container .hero-card .selected-crew-avatar-wrapper { width: 120px !important; height: 120px !important; border-width: 2.5px !important; }
+  .redux-landing-container .hero-card .selected-crew-badge { font-size: 11px !important; bottom: -2px !important; right: -4px !important; padding: 2px 6px !important; }
+  .redux-landing-container .hero-card .selected-crew-name { font-size: 1rem !important; }
+  .redux-landing-container .hero-card .selected-crew-level { font-size: 0.78rem !important; }
+  .redux-landing-container .hero-card .selected-crew-type { font-size: 0.75rem !important; letter-spacing: 0.5px !important; overflow: visible !important; text-overflow: clip !important; }
   
   .redux-landing-container .hero-card .skip-intro-label { margin-top: 4px !important; margin-bottom: 4px !important; padding: 0 !important; font-size: 0.85rem !important; gap: 8px !important; }
   .redux-landing-container .hero-card .skip-intro-label input { width: 16px !important; height: 16px !important; }
@@ -865,32 +868,42 @@ export const LANDING_REDUX_CSS = `
   }
   
   .redux-landing-container .hero-card .dungeon-preview-space {
-    margin: 12px 0 !important;
+    margin: 6px 0 !important;
     flex-grow: 1 !important;
   }
   
   .redux-landing-container .hero-card .selected-crew-preview-card {
-    padding: 16px !important;
-    gap: 12px !important;
+    padding: 10px 14px !important;
+    gap: 8px !important;
     flex-grow: 1 !important;
   }
   
   .redux-landing-container .hero-card .selected-crew-list {
-    gap: 16px !important;
+    gap: 14px !important;
     flex-grow: 1 !important;
   }
   
+  .redux-landing-container .hero-card .selected-crew-member-item {
+    width: 126px !important;
+    gap: 4px !important;
+  }
+
   .redux-landing-container .hero-card .selected-crew-avatar-wrapper {
-    width: 80px !important;
-    height: 80px !important;
+    width: 118px !important;
+    height: 118px !important;
+    border-width: 2.5px !important;
   }
   
   .redux-landing-container .hero-card .selected-crew-name {
-    font-size: 0.95rem !important;
+    font-size: 0.98rem !important;
   }
   
+  .redux-landing-container .hero-card .selected-crew-level {
+    font-size: 0.76rem !important;
+  }
+
   .redux-landing-container .hero-card .selected-crew-type {
-    font-size: 0.7rem !important;
+    font-size: 0.74rem !important;
   }
   
   .redux-landing-container .hero-card .dungeon-selector-group {

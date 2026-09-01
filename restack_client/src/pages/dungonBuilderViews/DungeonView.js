@@ -24,10 +24,14 @@ class DungeonView extends React.Component {
         isFlipped: false,
         superboardContextMenu: { visible: false, x: 0, y: 0, superboardKey: 'light' },
         hoveredSuperboardTileIdx: null,
-        superboardVisualZoomLevel: 1
+        superboardVisualZoomLevel: 1,
+        isShiftPressed: false,
+        hoveredSubSection: null, // { superboardKey: 'light'|'dark', mbIdx: number } | null
+        lastMouseShift: false
       }
       this.clickTimer = null;
       this.lastClickInfo = null;
+      this.superboardScrollContainerRef = React.createRef();
     }
 
     componentDidMount() {
@@ -37,17 +41,67 @@ class DungeonView extends React.Component {
             }
         };
         window.addEventListener('click', this.closeSuperboardMenu);
+
+        this.handleKeyDown = (e) => {
+            if (e.key === 'Shift') {
+                this.setState({ isShiftPressed: true });
+            }
+        };
+        this.handleKeyUp = (e) => {
+            if (e.key === 'Shift') {
+                this.setState({ isShiftPressed: false });
+            }
+        };
+        window.addEventListener('keydown', this.handleKeyDown);
+        window.addEventListener('keyup', this.handleKeyUp);
     }
 
     componentWillUnmount() {
         if (this.closeSuperboardMenu) {
             window.removeEventListener('click', this.closeSuperboardMenu);
         }
-      if (this.clickTimer) {
-        clearTimeout(this.clickTimer);
-        this.clickTimer = null;
-      }
+        if (this.handleKeyDown) {
+            window.removeEventListener('keydown', this.handleKeyDown);
+        }
+        if (this.handleKeyUp) {
+            window.removeEventListener('keyup', this.handleKeyUp);
+        }
+        if (this.clickTimer) {
+            clearTimeout(this.clickTimer);
+            this.clickTimer = null;
+        }
     }
+
+    zoomAndCenterSubsection = (superboardKey, mbIdx) => {
+        if (this.props.setSuperboardZoom && this.props.superboardZoom !== superboardKey) {
+            this.props.setSuperboardZoom(superboardKey);
+        }
+
+        const maxZoom = 4;
+        this.setState({ superboardVisualZoomLevel: maxZoom }, () => {
+            setTimeout(() => {
+                const container = this.superboardScrollContainerRef.current;
+                if (!container) return;
+
+                const boardPixelSize = 720 * maxZoom; // 2880px
+                const col = mbIdx % 3;
+                const row = Math.floor(mbIdx / 3);
+
+                const subSectionSize = boardPixelSize / 3; // 960px
+                const centerX = (col + 0.5) * subSectionSize;
+                const centerY = (row + 0.5) * subSectionSize;
+
+                const targetScrollLeft = centerX - (container.clientWidth / 2);
+                const targetScrollTop = centerY - (container.clientHeight / 2);
+
+                container.scrollTo({
+                    left: Math.max(0, targetScrollLeft),
+                    top: Math.max(0, targetScrollTop),
+                    behavior: 'smooth'
+                });
+            }, 60);
+        });
+    };
 
     getTeleporters = () => {
         if (!this.props.loadedDungeon || !Array.isArray(this.props.loadedDungeon.levels)) return [];
@@ -142,6 +196,9 @@ class DungeonView extends React.Component {
             nextState.superboardContextMenu !== this.state.superboardContextMenu ||
             nextState.hoveredSuperboardTileIdx !== this.state.hoveredSuperboardTileIdx ||
             nextState.superboardVisualZoomLevel !== this.state.superboardVisualZoomLevel ||
+            nextState.isShiftPressed !== this.state.isShiftPressed ||
+            nextState.hoveredSubSection !== this.state.hoveredSubSection ||
+            nextState.lastMouseShift !== this.state.lastMouseShift ||
             nextProps.superboardZoom !== this.props.superboardZoom ||
             nextProps.pinnedOption !== this.props.pinnedOption ||
             nextProps.loadedDungeon !== this.props.loadedDungeon ||
@@ -917,50 +974,108 @@ class DungeonView extends React.Component {
                                         padding: '2px',
                                         position: 'relative',
                                         overflow: 'hidden',
-                                        pointerEvents: 'none'
+                                        pointerEvents: 'auto'
                                     }}
                                 >
-                                    {lightMiniboards.map((mb, mbIdx) => (
-                                        <div
-                                            key={mbIdx}
-                                            style={{
-                                                width: '100%',
-                                                height: '100%',
-                                                boxSizing: 'border-box',
-                                                display: 'grid',
-                                                gridTemplateColumns: 'repeat(15, 1fr)',
-                                                gridTemplateRows: 'repeat(15, 1fr)',
-                                                background: '#0d0d12'
-                                            }}
-                                        >
-                                            {mb.tiles && mb.tiles.map((tile, tileIdx) => {
-                                                const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
-                                                const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
-                                                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
-                                                const tileColor = isVoid ? 'black' : (storedColor || '#6b6057');
+                                    {lightMiniboards.map((mb, mbIdx) => {
+                                        const isShiftHovered = (this.state.isShiftPressed || this.state.lastMouseShift) &&
+                                            this.state.hoveredSubSection?.superboardKey === 'light' &&
+                                            this.state.hoveredSubSection?.mbIdx === mbIdx;
 
-                                                return <Tile
-                                                    key={tileIdx}
-                                                    id={tile.id}
-                                                    tileSize="100%"
-                                                    contains={tile.contains}
-                                                    boardTiles={mb.tiles}
-                                                    color={tileColor}
-                                                    image={tile.image}
-                                                    imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                                    coordinates={tile.coordinates}
-                                                    index={tile.id}
-                                                    showCoordinates={false}
-                                                    editMode={true}
-                                                    isBuilder={true}
-                                                    handleHover={null}
-                                                    handleClick={null}
-                                                    type={tile.type}
-                                                    hovered={false}
-                                                />;
-                                            })}
-                                        </div>
-                                    ))}
+                                        return (
+                                            <div
+                                                key={mbIdx}
+                                                onMouseEnter={(e) => {
+                                                    this.setState({
+                                                        hoveredSubSection: { superboardKey: 'light', mbIdx },
+                                                        lastMouseShift: !!e.shiftKey
+                                                    });
+                                                }}
+                                                onMouseMove={(e) => {
+                                                    if (!!e.shiftKey !== this.state.lastMouseShift) {
+                                                        this.setState({ lastMouseShift: !!e.shiftKey });
+                                                    }
+                                                }}
+                                                onMouseLeave={() => {
+                                                    if (this.state.hoveredSubSection?.superboardKey === 'light' && this.state.hoveredSubSection?.mbIdx === mbIdx) {
+                                                        this.setState({ hoveredSubSection: null });
+                                                    }
+                                                }}
+                                                onClick={(e) => {
+                                                    if (e.shiftKey || this.state.isShiftPressed) {
+                                                        e.stopPropagation();
+                                                        e.preventDefault();
+                                                        this.zoomAndCenterSubsection('light', mbIdx);
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    boxSizing: 'border-box',
+                                                    display: 'grid',
+                                                    gridTemplateColumns: 'repeat(15, 1fr)',
+                                                    gridTemplateRows: 'repeat(15, 1fr)',
+                                                    background: '#0d0d12',
+                                                    position: 'relative',
+                                                    border: isShiftHovered ? '2.5px solid #ffd700' : '1px solid rgba(251, 191, 36, 0.25)',
+                                                    boxShadow: isShiftHovered ? '0 0 18px #ffd700, inset 0 0 20px rgba(255, 215, 0, 0.4)' : 'none',
+                                                    zIndex: isShiftHovered ? 20 : 1,
+                                                    cursor: isShiftHovered ? 'zoom-in' : 'pointer',
+                                                    transition: 'border 0.15s ease-in-out, box-shadow 0.15s ease-in-out'
+                                                }}
+                                            >
+                                                {isShiftHovered && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '3px',
+                                                        right: '3px',
+                                                        background: 'linear-gradient(135deg, #ffd700 0%, #b45309 100%)',
+                                                        color: '#000000',
+                                                        fontWeight: '800',
+                                                        fontSize: '8px',
+                                                        padding: '2px 4px',
+                                                        borderRadius: '3px',
+                                                        boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+                                                        pointerEvents: 'none',
+                                                        zIndex: 30,
+                                                        letterSpacing: '0.5px'
+                                                    }}>
+                                                        🔍 ZOOM
+                                                    </div>
+                                                )}
+                                                {mb.tiles && mb.tiles.map((tile, tileIdx) => {
+                                                    const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                                                    const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                                                   (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                                                    const tileColor = isVoid ? 'black' : (storedColor || '#6b6057');
+
+                                                    return <Tile
+                                                        key={tileIdx}
+                                                        id={tile.id}
+                                                        tileSize="100%"
+                                                        contains={tile.contains}
+                                                        boardTiles={mb.tiles}
+                                                        color={tileColor}
+                                                        image={tile.image}
+                                                        imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
+                                                        coordinates={tile.coordinates}
+                                                        index={tile.id}
+                                                        showCoordinates={false}
+                                                        editMode={true}
+                                                        isBuilder={true}
+                                                        handleHover={null}
+                                                        handleClick={(e) => {
+                                                            if (this.state.isShiftPressed || this.state.lastMouseShift || (e && e.shiftKey)) {
+                                                                this.zoomAndCenterSubsection('light', mbIdx);
+                                                            }
+                                                        }}
+                                                        type={tile.type}
+                                                        hovered={false}
+                                                    />;
+                                                })}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
@@ -968,9 +1083,6 @@ class DungeonView extends React.Component {
                             <div
                                 className="superboard-container dark-superboard"
                                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer' }}
-                                onClick={() => this.props.setSuperboardZoom && this.props.setSuperboardZoom('dark')}
-                                onDoubleClick={() => this.props.setSuperboardZoom && this.props.setSuperboardZoom('dark')}
-                                title="Click or double-click to zoom into Dark Superboard"
                             >
                                 <div className="superboard-title" style={{ color: '#c084fc', fontSize: '13px', fontWeight: '600', marginBottom: '10px', letterSpacing: '0.5px', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                     <span>Dark Superboard</span>
@@ -1010,50 +1122,108 @@ class DungeonView extends React.Component {
                                         padding: '2px',
                                         position: 'relative',
                                         overflow: 'hidden',
-                                        pointerEvents: 'none'
+                                        pointerEvents: 'auto'
                                     }}
                                 >
-                                    {darkMiniboards.map((mb, mbIdx) => (
-                                        <div
-                                            key={mbIdx}
-                                            style={{
-                                                width: '100%',
-                                                height: '100%',
-                                                boxSizing: 'border-box',
-                                                display: 'grid',
-                                                gridTemplateColumns: 'repeat(15, 1fr)',
-                                                gridTemplateRows: 'repeat(15, 1fr)',
-                                                background: '#07050e'
-                                            }}
-                                        >
-                                            {mb.tiles && mb.tiles.map((tile, tileIdx) => {
-                                                const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
-                                                const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
-                                                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
-                                                const tileColor = isVoid ? 'black' : (storedColor || 'rgba(25, 20, 45, 0.95)');
+                                    {darkMiniboards.map((mb, mbIdx) => {
+                                        const isShiftHovered = (this.state.isShiftPressed || this.state.lastMouseShift) &&
+                                            this.state.hoveredSubSection?.superboardKey === 'dark' &&
+                                            this.state.hoveredSubSection?.mbIdx === mbIdx;
 
-                                                return <Tile
-                                                    key={tileIdx}
-                                                    id={tile.id}
-                                                    tileSize="100%"
-                                                    contains={tile.contains}
-                                                    boardTiles={mb.tiles}
-                                                    color={tileColor}
-                                                    image={tile.image}
-                                                    imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
-                                                    coordinates={tile.coordinates}
-                                                    index={tile.id}
-                                                    showCoordinates={false}
-                                                    editMode={true}
-                                                    isBuilder={true}
-                                                    handleHover={null}
-                                                    handleClick={null}
-                                                    type={tile.type}
-                                                    hovered={false}
-                                                />;
-                                            })}
-                                        </div>
-                                    ))}
+                                        return (
+                                            <div
+                                                key={mbIdx}
+                                                onMouseEnter={(e) => {
+                                                    this.setState({
+                                                        hoveredSubSection: { superboardKey: 'dark', mbIdx },
+                                                        lastMouseShift: !!e.shiftKey
+                                                    });
+                                                }}
+                                                onMouseMove={(e) => {
+                                                    if (!!e.shiftKey !== this.state.lastMouseShift) {
+                                                        this.setState({ lastMouseShift: !!e.shiftKey });
+                                                    }
+                                                }}
+                                                onMouseLeave={() => {
+                                                    if (this.state.hoveredSubSection?.superboardKey === 'dark' && this.state.hoveredSubSection?.mbIdx === mbIdx) {
+                                                        this.setState({ hoveredSubSection: null });
+                                                    }
+                                                }}
+                                                onClick={(e) => {
+                                                    if (e.shiftKey || this.state.isShiftPressed) {
+                                                        e.stopPropagation();
+                                                        e.preventDefault();
+                                                        this.zoomAndCenterSubsection('dark', mbIdx);
+                                                    }
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                    boxSizing: 'border-box',
+                                                    display: 'grid',
+                                                    gridTemplateColumns: 'repeat(15, 1fr)',
+                                                    gridTemplateRows: 'repeat(15, 1fr)',
+                                                    background: '#07050e',
+                                                    position: 'relative',
+                                                    border: isShiftHovered ? '2.5px solid #ffd700' : '1px solid rgba(168, 85, 247, 0.25)',
+                                                    boxShadow: isShiftHovered ? '0 0 18px #ffd700, inset 0 0 20px rgba(255, 215, 0, 0.4)' : 'none',
+                                                    zIndex: isShiftHovered ? 20 : 1,
+                                                    cursor: isShiftHovered ? 'zoom-in' : 'pointer',
+                                                    transition: 'border 0.15s ease-in-out, box-shadow 0.15s ease-in-out'
+                                                }}
+                                            >
+                                                {isShiftHovered && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '3px',
+                                                        right: '3px',
+                                                        background: 'linear-gradient(135deg, #ffd700 0%, #b45309 100%)',
+                                                        color: '#000000',
+                                                        fontWeight: '800',
+                                                        fontSize: '8px',
+                                                        padding: '2px 4px',
+                                                        borderRadius: '3px',
+                                                        boxShadow: '0 2px 6px rgba(0,0,0,0.6)',
+                                                        pointerEvents: 'none',
+                                                        zIndex: 30,
+                                                        letterSpacing: '0.5px'
+                                                    }}>
+                                                        🔍 ZOOM
+                                                    </div>
+                                                )}
+                                                {mb.tiles && mb.tiles.map((tile, tileIdx) => {
+                                                    const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                                                    const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                                                   (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                                                    const tileColor = isVoid ? 'black' : (storedColor || 'rgba(25, 20, 45, 0.95)');
+
+                                                    return <Tile
+                                                        key={tileIdx}
+                                                        id={tile.id}
+                                                        tileSize="100%"
+                                                        contains={tile.contains}
+                                                        boardTiles={mb.tiles}
+                                                        color={tileColor}
+                                                        image={tile.image}
+                                                        imageOverride={tile.image && tile.image.includes('/') ? tile.image : null}
+                                                        coordinates={tile.coordinates}
+                                                        index={tile.id}
+                                                        showCoordinates={false}
+                                                        editMode={true}
+                                                        isBuilder={true}
+                                                        handleHover={null}
+                                                        handleClick={(e) => {
+                                                            if (this.state.isShiftPressed || this.state.lastMouseShift || (e && e.shiftKey)) {
+                                                                this.zoomAndCenterSubsection('dark', mbIdx);
+                                                            }
+                                                        }}
+                                                        type={tile.type}
+                                                        hovered={false}
+                                                    />;
+                                                })}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </div>
@@ -1068,15 +1238,18 @@ class DungeonView extends React.Component {
                             const bgSize = 240 * visualZoomLevel;
 
                             return (
-                                <div style={{ 
-                                    width: '100%', 
-                                    maxWidth: '90vw', 
-                                    maxHeight: '75vh', 
-                                    overflow: 'auto', 
-                                    display: 'flex', 
-                                    justifyContent: visualZoomLevel > 1 ? 'flex-start' : 'center', 
-                                    alignItems: visualZoomLevel > 1 ? 'flex-start' : 'center' 
-                                }}>
+                                <div
+                                    ref={this.superboardScrollContainerRef}
+                                    style={{ 
+                                        width: '100%', 
+                                        maxWidth: '90vw', 
+                                        maxHeight: '75vh', 
+                                        overflow: 'auto', 
+                                        display: 'flex', 
+                                        justifyContent: visualZoomLevel > 1 ? 'flex-start' : 'center', 
+                                        alignItems: visualZoomLevel > 1 ? 'flex-start' : 'center' 
+                                    }}
+                                >
                                     <div
                                         className="superboard-zoomed-board"
                                         onContextMenu={(e) => this.handleSuperboardContextMenu(e, currentZoomKey)}
@@ -1097,89 +1270,151 @@ class DungeonView extends React.Component {
                                             display: 'grid',
                                             gridTemplateColumns: 'repeat(3, 1fr)',
                                             gridTemplateRows: 'repeat(3, 1fr)',
-                                        gap: '2px',
-                                        padding: '2px',
-                                        boxSizing: 'border-box'
-                                    }}
-                                >
-                                    {activeMiniboards.map((mb, mbIdx) => (
-                                        <div
-                                            key={mbIdx}
-                                            style={{
-                                                width: '100%',
-                                                height: '100%',
-                                                display: 'grid',
-                                                gridTemplateColumns: 'repeat(15, 1fr)',
-                                                gridTemplateRows: 'repeat(15, 1fr)',
-                                                background: superboardTexture ? 'transparent' : (isDark ? '#07050e' : '#0d0d12')
-                                            }}
-                                        >
-                                            {mb.tiles && mb.tiles.map((tile, tileIdx) => {
-                                                const globalIdx = mbIdx * 225 + tileIdx;
-                                                const hoveredMbIdx = Math.floor((this.state.hoveredSuperboardTileIdx !== null && this.state.hoveredSuperboardTileIdx !== undefined ? this.state.hoveredSuperboardTileIdx : -1) / 225);
-                                                const hoveredTileFootprint = Array.isArray(this.props.hoveredTileFootprint) ? this.props.hoveredTileFootprint : [];
-                                                const isHovered = (this.state.hoveredSuperboardTileIdx === globalIdx) || (hoveredMbIdx === mbIdx && hoveredTileFootprint.includes(tile.id));
+                                            gap: '2px',
+                                            padding: '2px',
+                                            boxSizing: 'border-box'
+                                        }}
+                                    >
+                                        {activeMiniboards.map((mb, mbIdx) => {
+                                            const isShiftHovered = (this.state.isShiftPressed || this.state.lastMouseShift) &&
+                                                this.state.hoveredSubSection?.superboardKey === currentZoomKey &&
+                                                this.state.hoveredSubSection?.mbIdx === mbIdx;
 
-                                                const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
-                                                const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
-                                                               (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
-                                                const defaultEmptyColor = isDark ? 'rgba(25, 20, 45, 0.95)' : '#6b6057';
-                                                const tileColor = isVoid ? 'black' : (storedColor || (superboardTexture ? 'rgba(15, 15, 20, 0.55)' : defaultEmptyColor));
-
-                                                let displayImage = tile.image;
-                                                let displayColor = tileColor;
-                                                let displayContains = tile.contains;
-
-                                                if (isHovered && this.props.pinnedOption) {
-                                                    const previewTile = this.props.applyPinnedOptionToTile ? this.props.applyPinnedOptionToTile(tile) : tile;
-                                                    const tileMatchesPreview = previewTile.contains != null &&
-                                                        tile.contains?.type === previewTile.contains?.type &&
-                                                        (previewTile.contains?.subtype == null || tile.contains?.subtype === previewTile.contains?.subtype);
-                                                    
-                                                    if (!tileMatchesPreview) {
-                                                        displayImage = previewTile.image || tile.image;
-                                                        if (previewTile.color !== null && previewTile.color !== undefined) {
-                                                            displayColor = previewTile.color;
+                                            return (
+                                                <div
+                                                    key={mbIdx}
+                                                    onMouseEnter={(e) => {
+                                                        this.setState({
+                                                            hoveredSubSection: { superboardKey: currentZoomKey, mbIdx },
+                                                            lastMouseShift: !!e.shiftKey
+                                                        });
+                                                    }}
+                                                    onMouseMove={(e) => {
+                                                        if (!!e.shiftKey !== this.state.lastMouseShift) {
+                                                            this.setState({ lastMouseShift: !!e.shiftKey });
                                                         }
-                                                        displayContains = previewTile.contains || tile.contains;
-                                                    }
-                                                }
+                                                    }}
+                                                    onMouseLeave={() => {
+                                                        if (this.state.hoveredSubSection?.superboardKey === currentZoomKey && this.state.hoveredSubSection?.mbIdx === mbIdx) {
+                                                            this.setState({ hoveredSubSection: null });
+                                                        }
+                                                    }}
+                                                    onClick={(e) => {
+                                                        if (e.shiftKey || this.state.isShiftPressed) {
+                                                            e.stopPropagation();
+                                                            e.preventDefault();
+                                                            this.zoomAndCenterSubsection(currentZoomKey, mbIdx);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        width: '100%',
+                                                        height: '100%',
+                                                        display: 'grid',
+                                                        gridTemplateColumns: 'repeat(15, 1fr)',
+                                                        gridTemplateRows: 'repeat(15, 1fr)',
+                                                        background: superboardTexture ? 'transparent' : (isDark ? '#07050e' : '#0d0d12'),
+                                                        position: 'relative',
+                                                        border: isShiftHovered ? '3px solid #ffd700' : (isDark ? '1px dashed rgba(192, 132, 252, 0.25)' : '1px dashed rgba(251, 191, 36, 0.25)'),
+                                                        boxShadow: isShiftHovered ? '0 0 25px #ffd700, inset 0 0 30px rgba(255, 215, 0, 0.45)' : 'none',
+                                                        zIndex: isShiftHovered ? 50 : 1,
+                                                        cursor: isShiftHovered ? 'zoom-in' : 'default',
+                                                        transition: 'border 0.15s ease-in-out, box-shadow 0.15s ease-in-out'
+                                                    }}
+                                                >
+                                                    {isShiftHovered && (
+                                                        <div style={{
+                                                            position: 'absolute',
+                                                            top: '6px',
+                                                            right: '6px',
+                                                            background: 'linear-gradient(135deg, #ffd700 0%, #b45309 100%)',
+                                                            color: '#000000',
+                                                            fontWeight: '800',
+                                                            fontSize: '11px',
+                                                            padding: '3px 8px',
+                                                            borderRadius: '4px',
+                                                            boxShadow: '0 2px 8px rgba(0,0,0,0.6), 0 0 10px rgba(255, 215, 0, 0.8)',
+                                                            pointerEvents: 'none',
+                                                            zIndex: 60,
+                                                            letterSpacing: '0.5px'
+                                                        }}>
+                                                            🔍 CLICK TO ZOOM
+                                                        </div>
+                                                    )}
+                                                    {mb.tiles && mb.tiles.map((tile, tileIdx) => {
+                                                        const globalIdx = mbIdx * 225 + tileIdx;
+                                                        const hoveredMbIdx = Math.floor((this.state.hoveredSuperboardTileIdx !== null && this.state.hoveredSuperboardTileIdx !== undefined ? this.state.hoveredSuperboardTileIdx : -1) / 225);
+                                                        const hoveredTileFootprint = Array.isArray(this.props.hoveredTileFootprint) ? this.props.hoveredTileFootprint : [];
+                                                        const isHovered = (this.state.hoveredSuperboardTileIdx === globalIdx) || (hoveredMbIdx === mbIdx && hoveredTileFootprint.includes(tile.id));
 
-                                                return (
-                                                    <Tile
-                                                        key={tileIdx}
-                                                        id={tile.id}
-                                                        tileSize="100%"
-                                                        contains={displayContains}
-                                                        boardTiles={mb.tiles}
-                                                        color={displayColor}
-                                                        image={displayImage}
-                                                        imageOverride={displayImage && displayImage.includes('/') ? displayImage : null}
-                                                        coordinates={tile.coordinates}
-                                                        index={tile.id}
-                                                        hoveredTileFootprint={this.props.hoveredTileFootprint}
-                                                        showCoordinates={false}
-                                                        editMode={true}
-                                                        isBuilder={true}
-                                                        handleHover={() => {
-                                                            this.setState({ hoveredSuperboardTileIdx: globalIdx });
-                                                            if (this.props.handleSuperboardTileHover) {
-                                                                this.props.handleSuperboardTileHover(currentZoomKey, mbIdx, tileIdx);
+                                                        const storedColor = tile.color && tile.color !== 'null' && tile.color !== 'undefined' ? tile.color : null;
+                                                        const isVoid = (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')) ||
+                                                                       (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+                                                        const defaultEmptyColor = isDark ? 'rgba(25, 20, 45, 0.95)' : '#6b6057';
+                                                        const tileColor = isVoid ? 'black' : (storedColor || (superboardTexture ? 'rgba(15, 15, 20, 0.55)' : defaultEmptyColor));
+
+                                                        let displayImage = tile.image;
+                                                        let displayColor = tileColor;
+                                                        let displayContains = tile.contains;
+
+                                                        if (isHovered && this.props.pinnedOption && !isShiftHovered) {
+                                                            const previewTile = this.props.applyPinnedOptionToTile ? this.props.applyPinnedOptionToTile(tile) : tile;
+                                                            const tileMatchesPreview = previewTile.contains != null &&
+                                                                tile.contains?.type === previewTile.contains?.type &&
+                                                                (previewTile.contains?.subtype == null || tile.contains?.subtype === previewTile.contains?.subtype);
+                                                            
+                                                            if (!tileMatchesPreview) {
+                                                                displayImage = previewTile.image || tile.image;
+                                                                if (previewTile.color !== null && previewTile.color !== undefined) {
+                                                                    displayColor = previewTile.color;
+                                                                }
+                                                                displayContains = previewTile.contains || tile.contains;
                                                             }
-                                                        }}
-                                                        handleClick={() => {
-                                                            if (this.props.handleSuperboardTileClick) {
-                                                                this.props.handleSuperboardTileClick(currentZoomKey, mbIdx, tileIdx);
-                                                            }
-                                                        }}
-                                                        type={tile.type}
-                                                        hovered={isHovered}
-                                                    />
-                                                );
-                                            })}
-                                        </div>
-                                    ))}
-                                </div>
+                                                        }
+
+                                                        return (
+                                                            <Tile
+                                                                key={tileIdx}
+                                                                id={tile.id}
+                                                                tileSize="100%"
+                                                                contains={displayContains}
+                                                                forestDensityTier={tile.forestDensityTier ?? (typeof tile.contains === 'object' ? tile.contains?.forestDensityTier : null)}
+                                                                mountainDensityTier={tile.mountainDensityTier ?? (typeof tile.contains === 'object' ? tile.contains?.mountainDensityTier : null)}
+                                                                variantSeed={tile.variantSeed ?? (typeof tile.contains === 'object' ? tile.contains?.variantSeed : null)}
+                                                                autotileMask={tile.autotileMask ?? (typeof tile.contains === 'object' ? tile.contains?.autotileMask : null)}
+                                                                boardTiles={mb.tiles}
+                                                                color={displayColor}
+                                                                image={displayImage}
+                                                                imageOverride={displayImage && displayImage.includes('/') ? displayImage : null}
+                                                                coordinates={tile.coordinates}
+                                                                index={tile.id}
+                                                                hoveredTileFootprint={this.props.hoveredTileFootprint}
+                                                                showCoordinates={false}
+                                                                editMode={true}
+                                                                isBuilder={true}
+                                                                handleHover={() => {
+                                                                    this.setState({ hoveredSuperboardTileIdx: globalIdx });
+                                                                    if (this.props.handleSuperboardTileHover) {
+                                                                        this.props.handleSuperboardTileHover(currentZoomKey, mbIdx, tileIdx);
+                                                                    }
+                                                                }}
+                                                                handleClick={(e) => {
+                                                                    if (this.state.isShiftPressed || this.state.lastMouseShift || (e && e.shiftKey)) {
+                                                                        this.zoomAndCenterSubsection(currentZoomKey, mbIdx);
+                                                                        return;
+                                                                    }
+                                                                    if (this.props.handleSuperboardTileClick) {
+                                                                        this.props.handleSuperboardTileClick(currentZoomKey, mbIdx, tileIdx);
+                                                                    }
+                                                                }}
+                                                                type={tile.type}
+                                                                hovered={isHovered && !isShiftHovered}
+                                                            />
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
                             );
                         })()
@@ -1452,6 +1687,10 @@ class DungeonView extends React.Component {
                                                                  delayedHoverLabel={isPortal ? (tile.contains.targetPortalId ? `Linked Portal (Target: ${tile.contains.targetCoordinates})` : 'Unlinked Portal') : null}
                                                                  tileSize={((this.props.tileSize*6)/3-2)/15}
                                                                  contains={tile.contains}
+                                                                 forestDensityTier={tile.forestDensityTier ?? (typeof tile.contains === 'object' ? tile.contains?.forestDensityTier : null)}
+                                                                 mountainDensityTier={tile.mountainDensityTier ?? (typeof tile.contains === 'object' ? tile.contains?.mountainDensityTier : null)}
+                                                                 variantSeed={tile.variantSeed ?? (typeof tile.contains === 'object' ? tile.contains?.variantSeed : null)}
+                                                                 autotileMask={tile.autotileMask ?? (typeof tile.contains === 'object' ? tile.contains?.autotileMask : null)}
                                                                  territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                                                                  boardTiles={board.tiles}
                                                                  image={tile.image ? tile.image : null}
@@ -1558,6 +1797,10 @@ class DungeonView extends React.Component {
                                                                 delayedHoverLabel={isPortal ? (tile.contains.targetPortalId ? `Linked Portal (Target: ${tile.contains.targetCoordinates})` : 'Unlinked Portal') : null}
                                                                 tileSize={((this.props.tileSize*6)/3-2)/15}
                                                                 contains={tile.contains}
+                                                                forestDensityTier={tile.forestDensityTier ?? (typeof tile.contains === 'object' ? tile.contains?.forestDensityTier : null)}
+                                                                mountainDensityTier={tile.mountainDensityTier ?? (typeof tile.contains === 'object' ? tile.contains?.mountainDensityTier : null)}
+                                                                variantSeed={tile.variantSeed ?? (typeof tile.contains === 'object' ? tile.contains?.variantSeed : null)}
+                                                                autotileMask={tile.autotileMask ?? (typeof tile.contains === 'object' ? tile.contains?.autotileMask : null)}
                                                                 territory={tile.territory || (typeof tile.contains === 'object' ? tile.contains?.territory : null)}
                                                                 boardTiles={board.tiles}
                                                                 image={tile.image ? tile.image : null}
