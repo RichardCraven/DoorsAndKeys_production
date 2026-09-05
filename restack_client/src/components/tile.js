@@ -2377,7 +2377,7 @@ function Tile(props) {
            )}
 
            {/* Trap indicator (Keen Eye reveal) */}
-           { props.trapRevealed && (
+           { ((props.trapVisionEnabled && props.trapRevealed) || props.debugMode) && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 9, pointerEvents: 'none',
@@ -2388,8 +2388,8 @@ function Tile(props) {
                 </div>
            )}
 
-           {/* Trap highlight overlay (always on for now) */}
-           { color !== 'black' && props.hasTrap && (
+           {/* Trap highlight overlay */}
+           { color !== 'black' && props.hasTrap && ((props.trapVisionEnabled && props.trapRevealed) || props.debugMode) && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     border: '2px solid rgba(255, 0, 0, 0.5)',
@@ -2938,7 +2938,7 @@ export function propsAreEqual(prevProps, nextProps) {
     const keysToCompare = [
         'id', 'index', 'type', 'color', 'tileSize', 'hovered', 'selected',
         'isPreview', 'passThrough', 'backgroundColor', 'terrain', 'territory', 'territoryAffiliation',
-        'isShrine', 'isLoreTablet', 'trapRevealed', 'hasTrap', 'connectedEdge',
+        'isShrine', 'isLoreTablet', 'trapRevealed', 'trapVisionEnabled', 'hasTrap', 'connectedEdge',
         'partialObscured', 'showCoordinates', 'image', 'imageOverride',
         'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
         'isPlayerOnTile', 'className', 'illuminated', 'sabotageProgress', 'monolithActivationProgress',

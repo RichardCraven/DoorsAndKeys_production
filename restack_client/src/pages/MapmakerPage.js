@@ -589,7 +589,7 @@ class MapMakerPage extends React.Component {
         const containsType = this.getContainsType(contains);
         const containsSubtype = typeof contains === 'object' ? (contains.subtype || contains.key || contains.building) : (typeof contains === 'string' ? contains : null);
         const sKey = (tile.building || containsSubtype || containsType || (typeof contains === 'object' ? contains.building || contains.key || contains.name : contains) || '').toString().toLowerCase();
-        const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'generator', 'cultivation_vat'];
+        const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'generator', 'cultivation_vat', 'observer_platform', 'observation_platform', 'observer', 'buildable_observer_platform', 'watchtower'];
         const isMilitaryBuilding = militaryKeys.some(k => sKey.includes(k));
 
         if (isMilitaryBuilding) {
@@ -2761,7 +2761,7 @@ class MapMakerPage extends React.Component {
       const containsSubtype = typeof contains === 'object' ? (contains.subtype || contains.key || contains.building) : (typeof contains === 'string' ? contains : null);
       const sKey = (currentTile.building || containsSubtype || containsType || (typeof contains === 'object' ? contains.building || contains.key || contains.name : contains) || '').toString().toLowerCase();
 
-      const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'generator', 'cultivation_vat'];
+      const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'generator', 'cultivation_vat', 'observer_platform', 'observation_platform', 'observer', 'buildable_observer_platform', 'watchtower'];
       const isMilitaryBuilding = militaryKeys.some(k => sKey.includes(k));
 
       if (isMilitaryBuilding) {
@@ -2893,8 +2893,22 @@ class MapMakerPage extends React.Component {
       // depending on how they were initialized. All specific non-board types (palette-tile,
       // monster-tile, passage-tool-tile, etc.) are already handled in the branches above.
 
-      const actualContains = this.state.tiles[tile.id]?.contains ?? tile.contains;
+      const actualTile = this.state.tiles[tile.id] || tile;
+      const actualContains = actualTile.contains;
       const containsType = this.getContainsType(actualContains);
+      const containsSubtype = typeof actualContains === 'object' ? (actualContains?.subtype || actualContains?.key || actualContains?.building) : (typeof actualContains === 'string' ? actualContains : null);
+      const sKey = (actualTile.building || containsSubtype || containsType || (typeof actualContains === 'object' ? actualContains?.building || actualContains?.key || actualContains?.name : actualContains) || '').toString().toLowerCase();
+      const militaryKeys = ['war_camp', 'war_fort', 'earthen_fort', 'outpost', 'fortress', 'keep', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'monolith', 'generator', 'cultivation_vat', 'observer_platform', 'observation_platform', 'observer', 'buildable_observer_platform', 'watchtower'];
+      const isMilitaryBuilding = militaryKeys.some(k => sKey.includes(k));
+
+      if (isMilitaryBuilding && !this.state.pinnedOption) {
+        this.setState({
+          showMilitaryAffiliationModal: true,
+          militaryModalTile: actualTile,
+          militaryModalTileId: tile.id
+        });
+        return;
+      }
 
       if (containsType === 'dungeon_portal' || containsType === 'dungeon portal') {
         const pinnedOption = this.state.pinnedOption;
@@ -3735,6 +3749,21 @@ class MapMakerPage extends React.Component {
     this.toast(`Stored coordinates under storedCoordinates`);
     this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
   }
+
+  handleOpenAffiliationModalFromContextMenu = () => {
+    const tileId = this.state.contextMenu?.tileId;
+    this.setState({ contextMenu: { ...this.state.contextMenu, visible: false } });
+    if (tileId !== null && tileId !== undefined) {
+      const currentTile = this.state.tiles && this.state.tiles[tileId];
+      if (currentTile) {
+        this.setState({
+          showMilitaryAffiliationModal: true,
+          militaryModalTile: currentTile,
+          militaryModalTileId: tileId
+        });
+      }
+    }
+  };
   // zoomInToBoard = (board) => {
   //   console.log('LOADING BOARD!')
   //   if(this.state.selectedView === 'plane'){
@@ -8067,6 +8096,25 @@ class MapMakerPage extends React.Component {
                 onClick={this.handleGetCoordinates}
               >
                 Get Coordinates
+              </button>
+              <button
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#ffffff',
+                  padding: '10px 16px',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  transition: 'background-color 0.2s',
+                  outline: 'none',
+                  fontFamily: 'inherit'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+                onClick={this.handleOpenAffiliationModalFromContextMenu}
+              >
+                Assign Affiliation
               </button>
               <button
                 style={{

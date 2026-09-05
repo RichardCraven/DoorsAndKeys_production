@@ -20,7 +20,7 @@ describe('CardDuel Discard and Deck Reshuffle Mechanics', () => {
             owner: 'player',
             cost: 2,
             atk: 2,
-            hp: 0,
+            hp: 1,
             maxHp: 3,
             width: 1,
             height: 1,
@@ -35,9 +35,9 @@ describe('CardDuel Discard and Deck Reshuffle Mechanics', () => {
             type: 'pygmy',
             owner: 'reaper',
             cost: 1,
-            atk: 1,
-            hp: 0,
-            maxHp: 1,
+            atk: 3,
+            hp: 2,
+            maxHp: 2,
             width: 1,
             height: 1,
             anchorRow: 1,
@@ -55,18 +55,12 @@ describe('CardDuel Discard and Deck Reshuffle Mechanics', () => {
             log: []
         };
 
-        jest.useFakeTimers();
-        instance.stepCombatInColumn(2, [pUnit], [rUnit], instance.state.grid);
-        jest.advanceTimersByTime(800);
-        jest.useRealTimers();
-
-        expect(instance.state.playerDiscard.length).toBe(1);
-        expect(instance.state.playerDiscard[0].id).toBe('test_unit_1');
-        expect(instance.state.playerDiscard[0].hp).toBe(3); // HP restored
+        // Player unit deals 2 damage to Reaper unit (killing Reaper unit).
+        instance.executeTacticalAttack(pUnit, rUnit);
 
         expect(instance.state.reaperDiscard.length).toBe(1);
         expect(instance.state.reaperDiscard[0].id).toBe('test_reaper_1');
-        expect(instance.state.reaperDiscard[0].hp).toBe(1); // HP restored
+        expect(instance.state.reaperDiscard[0].hp).toBe(2); // HP restored
     });
 
     test('Action card goes to discard pile when played', () => {

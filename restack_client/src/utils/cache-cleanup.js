@@ -466,9 +466,64 @@ export function superboardCleanup(dungeon) {
                     delete tile.contains.placedBy;
                     delete tile.contains.faction;
                     const sKey = String(tile.contains.subtype || tile.contains.key || tile.contains.building || tile.building || tile.contains.type || '').toLowerCase();
-                    if (sKey.includes('dark_domain_monolith')) {
+                    if (sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node')) {
                         tile.contains.affiliation = 'hostile';
                     }
+                }
+
+                const sKey = String(cSub || cType || tile.building || cObj?.building || '').toLowerCase();
+                const isSingle = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('hut') || sKey.includes('farm') || sKey.includes('house');
+                if (isSingle) {
+                    delete tile.vendorCell;
+                    delete tile.vendorGroupId;
+                    delete tile.vendorAnchorId;
+                    if (cObj) {
+                        delete cObj.vendorCell;
+                        delete cObj.vendorGroupId;
+                        delete cObj.vendorAnchorId;
+                    }
+                }
+            });
+
+            // Clean duplicate neighbor footprint tiles
+            miniboard.tiles.forEach((tile, i) => {
+                if (!tile) return;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const cSub = cObj?.subtype || '';
+                const bldg = tile.building || cObj?.building || '';
+                const sKey = String(cSub || bldg || (cObj?.type !== 'generator' && cObj?.type !== 'building' ? (cObj?.type || '') : '')).toLowerCase();
+                const isSingle = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('hut') || sKey.includes('farm') || sKey.includes('house');
+
+                if (isSingle) {
+                    const col = i % 15;
+                    const row = Math.floor(i / 15);
+                    const neighborOffsets = [];
+                    if (col < 14) neighborOffsets.push(i + 1);
+                    if (row < 14) neighborOffsets.push(i + 15);
+                    if (col < 14 && row < 14) neighborOffsets.push(i + 16);
+
+                    neighborOffsets.forEach(nIdx => {
+                        const nTile = miniboard.tiles[nIdx];
+                        if (nTile) {
+                            const nCObj = typeof nTile.contains === 'object' ? nTile.contains : null;
+                            const nSub = String(nCObj?.subtype || nTile.building || nCObj?.building || nTile.image || '').toLowerCase();
+                            if (nTile.vendorAnchorId === i || nCObj?.vendorAnchorId === i || nCObj?.vendorCell || nTile.vendorCell || nSub.includes('domain_node') || nSub.includes('dark_domain_node') || (sKey && nSub === sKey)) {
+                                nTile.contains = { type: 'empty_space', subtype: null };
+                                nTile.building = null;
+                                nTile.image = null;
+                                delete nTile.vendorCell;
+                                delete nTile.vendorGroupId;
+                                delete nTile.vendorAnchorId;
+                                delete nTile.generatorData;
+                                if (nCObj) {
+                                    delete nCObj.vendorCell;
+                                    delete nCObj.vendorGroupId;
+                                    delete nCObj.vendorAnchorId;
+                                    delete nCObj.generatorData;
+                                }
+                            }
+                        }
+                    });
                 }
             });
         });
