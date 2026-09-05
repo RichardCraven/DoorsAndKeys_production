@@ -875,22 +875,20 @@ export function BoardManager(){
                     const nTile = board.tiles[nIdx];
                     if (nTile) {
                         const nCObj = typeof nTile.contains === 'object' ? nTile.contains : null;
-                        const nSub = String(nCObj?.subtype || nTile.building || nCObj?.building || '').toLowerCase();
-                        if (nTile.vendorAnchorId === i || nCObj?.vendorAnchorId === i || nSub.includes('domain_node') || nSub.includes('dark_domain_node')) {
-                            if (nTile.vendorAnchorId === i || nCObj?.vendorAnchorId === i || nCObj?.vendorCell || nTile.vendorCell) {
-                                nTile.contains = { type: 'empty_space', subtype: null };
-                                nTile.building = null;
-                                nTile.image = null;
-                                delete nTile.vendorCell;
-                                delete nTile.vendorGroupId;
-                                delete nTile.vendorAnchorId;
-                                delete nTile.generatorData;
-                                if (nCObj) {
-                                    delete nCObj.vendorCell;
-                                    delete nCObj.vendorGroupId;
-                                    delete nCObj.vendorAnchorId;
-                                    delete nCObj.generatorData;
-                                }
+                        const nSub = String(nCObj?.subtype || nTile.building || nCObj?.building || nTile.image || '').toLowerCase();
+                        if (nTile.vendorAnchorId === i || nCObj?.vendorAnchorId === i || nCObj?.vendorCell || nTile.vendorCell || nSub.includes('domain_node') || nSub.includes('dark_domain_node') || (sKey && nSub === sKey)) {
+                            nTile.contains = { type: 'empty_space', subtype: null };
+                            nTile.building = null;
+                            nTile.image = null;
+                            delete nTile.vendorCell;
+                            delete nTile.vendorGroupId;
+                            delete nTile.vendorAnchorId;
+                            delete nTile.generatorData;
+                            if (nCObj) {
+                                delete nCObj.vendorCell;
+                                delete nCObj.vendorGroupId;
+                                delete nCObj.vendorAnchorId;
+                                delete nCObj.generatorData;
                             }
                         }
                     }
@@ -3550,8 +3548,18 @@ export function BoardManager(){
                     const ct = typeof t.contains === 'string' ? t.contains : (t.contains && t.contains.type);
                     const k = (gData && gData.key) || t.key || t.type || t.subtype || (t.contains && t.contains.subtype) || ct || t.building || (t.contains && t.contains.building);
                     if (['observer_platform', 'observation_platform', 'observer_platform_under_construction'].includes(k)) {
+                        const rawAff = t.affiliation || (t.contains && t.contains.affiliation) || (t.contains && t.contains.faction) || (t.placedBy === 'player' ? 'friendly' : 'neutral');
+                        const aff = String(rawAff || 'neutral').toLowerCase();
+                        const isFriendly = aff === 'friendly' || aff === 'player' || aff === 'crew';
+                        const isHostile = aff === 'hostile' || aff === 'enemy' || aff === 'wild' || aff === 'automaton';
+                        const isNeutral = !isFriendly && !isHostile;
+
                         let isOwner = false;
-                        if (gData) {
+                        if (isHostile) {
+                            isOwner = false;
+                        } else if (isFriendly || isNeutral) {
+                            isOwner = true;
+                        } else if (gData) {
                             if (gData.ownerId && gData.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest' && gData.ownerId === currentUserId) isOwner = true;
                             else if (gData.ownedByPlayer !== undefined) isOwner = !!gData.ownedByPlayer;
                             else if (!gData.ownerId) isOwner = gData.owned !== false;
@@ -3757,6 +3765,12 @@ export function BoardManager(){
                     if (!tile || tile.color === 'black') return; // not visible
                     if (tile.hasTrap) {
                         tile.trapRevealed = true;
+                    }
+                });
+            } else if (this.tiles) {
+                this.tiles.forEach((tile) => {
+                    if (tile && tile.trapRevealed) {
+                        tile.trapRevealed = false;
                     }
                 });
             }

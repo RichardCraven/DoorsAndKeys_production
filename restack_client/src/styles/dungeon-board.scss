@@ -5294,6 +5294,17 @@
 }
 
 /* ── Pocket Dimension Lightweight Fog of War Overlay ────────────────────────── */
+.pocket-fog-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 150;
+    user-select: none;
+    -webkit-user-select: none;
+    will-change: opacity;
+}
+
 .pocket-fog-overlay {
     position: absolute;
     top: 0;
@@ -5305,6 +5316,7 @@
     grid-template-rows: repeat(15, 1fr);
     user-select: none;
     -webkit-user-select: none;
+    will-change: opacity;
 }
 
 .pocket-fog-cell {
@@ -5316,15 +5328,16 @@
 }
 
 @keyframes lanternFlicker {
-    0% { opacity: 1; filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.9)); }
-    15% { opacity: 0.35; filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.2)); }
-    30% { opacity: 0.85; filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.7)); }
-    50% { opacity: 0.2; filter: drop-shadow(0 0 1px rgba(245, 158, 11, 0.1)); }
-    70% { opacity: 0.75; filter: drop-shadow(0 0 7px rgba(245, 158, 11, 0.6)); }
-    85% { opacity: 0.1; filter: none; }
-    100% { opacity: 0.9; filter: drop-shadow(0 0 9px rgba(245, 158, 11, 0.8)); }
+    0% { opacity: 1; }
+    15% { opacity: 0.4; }
+    30% { opacity: 0.85; }
+    50% { opacity: 0.25; }
+    70% { opacity: 0.8; }
+    85% { opacity: 0.2; }
+    100% { opacity: 0.95; }
 }
 
+.pocket-fog-canvas.lantern-flickering,
 .pocket-fog-overlay.lantern-flickering {
     animation: lanternFlicker 0.3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

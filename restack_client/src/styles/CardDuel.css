@@ -757,53 +757,51 @@
 }
 
 .pe-unit--ready {
-  box-shadow: 0 0 10px rgba(201, 168, 76, 0.5);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.7), inset 0 0 6px rgba(56, 189, 248, 0.4);
+  border-color: #38bdf8 !important;
+}
+
+.pe-unit--selected {
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.9), inset 0 0 8px rgba(245, 158, 11, 0.5);
+  border-color: #f59e0b !important;
+  transform: scale(1.05);
 }
 
 .pe-unit--exhausted {
-  opacity: 0.75;
-  filter: grayscale(0.2);
+  opacity: 0.65;
+  filter: grayscale(0.4);
 }
 
-.pe-unit-portrait {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.5) center/cover no-repeat;
-  border: 1.5px solid rgba(255, 255, 255, 0.4);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
-  flex-shrink: 0;
-}
-
-.pe-unit-name {
-  font-family: 'Cinzel', serif;
-  font-size: 8.5px;
-  font-weight: 700;
-  color: var(--pe-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 95%;
-  text-align: center;
-}
-
-.pe-unit-stats {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  font-size: 9px;
-  font-weight: bold;
-}
-
-.pe-unit-atk { color: #ff6666; }
-.pe-unit-hp  { color: #66ff99; }
-
-.pe-unit-sickness-badge {
+.pe-unit-zzz-badge {
   position: absolute;
-  top: 1px;
-  right: 1px;
-  font-size: 9px;
+  top: 2px;
+  right: 3px;
+  font-size: 11px;
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
+  z-index: 32;
+}
+
+.pe-unit-stat-sep {
+  color: #94a3b8;
+  font-size: 8px;
+  margin: 0 1px;
+}
+
+.pe-orb--direct-attackable {
+  animation: pe-orb-attack-pulse 1.2s infinite alternate ease-in-out;
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.9), inset 0 0 10px rgba(239, 68, 68, 0.6);
+  border-radius: 12px;
+}
+
+.pe-orb--direct-attackable .pe-orb-header-label {
+  color: #ef4444 !important;
+  font-weight: 900;
+  text-shadow: 0 0 8px rgba(239, 68, 68, 0.9);
+}
+
+@keyframes pe-orb-attack-pulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  100% { transform: scale(1.08); filter: brightness(1.3); }
 }
 
 /* Player Fanned Hand (Bottom) */

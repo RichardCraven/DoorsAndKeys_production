@@ -1657,19 +1657,56 @@ function Tile(props) {
                 if (!currentRawTerr) return null;
 
                 // Check if this tile is covered by an active domain monolith whose domain is a perfect rotating square
-                const sb = props.superboard;
-                if (sb && Array.isArray(sb.miniboards) && typeof props.globalX === 'number' && typeof props.globalY === 'number') {
-                    let insidePerfectSquareDomain = false;
-                    for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
-                        const mb = sb.miniboards[mbIdx];
-                        if (!mb || !Array.isArray(mb.tiles)) continue;
-                        const mbX = mbIdx % 3;
-                        const mbY = Math.floor(mbIdx / 3);
+                if (props.insidePerfectSquareDomain !== undefined) {
+                    if (props.insidePerfectSquareDomain) return null;
+                } else {
+                    const sb = props.superboard;
+                    if (sb && Array.isArray(sb.miniboards) && typeof props.globalX === 'number' && typeof props.globalY === 'number') {
+                        let insidePerfectSquareDomain = false;
+                        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                            const mb = sb.miniboards[mbIdx];
+                            if (!mb || !Array.isArray(mb.tiles)) continue;
+                            const mbX = mbIdx % 3;
+                            const mbY = Math.floor(mbIdx / 3);
 
-                        for (let tIdx = 0; tIdx < 225; tIdx++) {
-                            const t = mb.tiles[tIdx];
-                            if (!t || !t.contains) continue;
-                            const c = typeof t.contains === 'object' ? t.contains : null;
+                            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                                const t = mb.tiles[tIdx];
+                                if (!t || !t.contains) continue;
+                                const c = typeof t.contains === 'object' ? t.contains : null;
+                                const monoSubtype = c?.subtype || c?.key || c?.building || t.building || c?.type || '';
+                                const monoKey = String(monoSubtype).toLowerCase();
+                                const isMono = monoKey.includes('domain_monolith') || monoKey.includes('dark_domain_monolith') || monoKey.includes('domain_node') || monoKey.includes('dark_domain_node') || (monoKey.includes('monolith') && !monoKey.includes('shrine'));
+                                if (!isMono) continue;
+                                const vRole = c?.vendorCell || t.vendorCell;
+                                if (vRole && vRole !== 'anchor') continue;
+
+                                const isHostile = monoKey.includes('dark_domain_monolith') || monoKey.includes('dark_domain_node') || t.isHostile || c?.isHostile || c?.faction === 'hostile';
+                                const rawAff = c?.affiliation || t.affiliation || t.territoryAffiliation || c?.territoryAffiliation || t.territory || c?.territory;
+                                const isMonoActive = !!(c?.activated || t.activated || (c?.growthCycles > 0) || (t.growthCycles > 0) || isHostile || (rawAff && rawAff !== 'none'));
+                                if (!isMonoActive) continue;
+
+                                const monoCycles = Math.max(1, c?.growthCycles ?? t.growthCycles ?? 1);
+                                const monoAff = isHostile ? 'hostile' : (rawAff && rawAff !== 'none' ? rawAff : 'friendly');
+                                const aGx = mbX * 15 + (tIdx % 15);
+                                const aGy = mbY * 15 + Math.floor(tIdx / 15);
+
+                                if (props.globalX >= aGx - monoCycles && props.globalX <= aGx + 1 + monoCycles &&
+                                    props.globalY >= aGy - monoCycles && props.globalY <= aGy + 1 + monoCycles) {
+                                    if (checkIsDomainSuperboardPerfectSquare(sb, aGx, aGy, monoCycles, monoAff)) {
+                                        insidePerfectSquareDomain = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (insidePerfectSquareDomain) break;
+                        }
+                        if (insidePerfectSquareDomain) return null;
+                    } else if (boardTiles && currentIdx !== null && currentIdx !== undefined) {
+                        let insidePerfectSquareDomain = false;
+                        for (let idx = 0; idx < boardTiles.length; idx++) {
+                            const t = boardTiles[idx];
+                            if (!t) continue;
+                            const c = t.contains && typeof t.contains === 'object' ? t.contains : null;
                             const monoSubtype = c?.subtype || c?.key || c?.building || t.building || c?.type || '';
                             const monoKey = String(monoSubtype).toLowerCase();
                             const isMono = monoKey.includes('domain_monolith') || monoKey.includes('dark_domain_monolith') || monoKey.includes('domain_node') || monoKey.includes('dark_domain_node') || (monoKey.includes('monolith') && !monoKey.includes('shrine'));
@@ -1684,54 +1721,21 @@ function Tile(props) {
 
                             const monoCycles = Math.max(1, c?.growthCycles ?? t.growthCycles ?? 1);
                             const monoAff = isHostile ? 'hostile' : (rawAff && rawAff !== 'none' ? rawAff : 'friendly');
-                            const aGx = mbX * 15 + (tIdx % 15);
-                            const aGy = mbY * 15 + Math.floor(tIdx / 15);
 
-                            if (props.globalX >= aGx - monoCycles && props.globalX <= aGx + 1 + monoCycles &&
-                                props.globalY >= aGy - monoCycles && props.globalY <= aGy + 1 + monoCycles) {
-                                if (checkIsDomainSuperboardPerfectSquare(sb, aGx, aGy, monoCycles, monoAff)) {
+                            if (checkIsDomainPerfectSquare(idx, boardTiles, monoCycles, monoAff)) {
+                                const aCol = idx % 15;
+                                const aRow = Math.floor(idx / 15);
+                                const curCol = currentIdx % 15;
+                                const curRow = Math.floor(currentIdx / 15);
+                                if (curCol >= aCol - monoCycles && curCol <= aCol + 1 + monoCycles &&
+                                    curRow >= aRow - monoCycles && curRow <= aRow + 1 + monoCycles) {
                                     insidePerfectSquareDomain = true;
                                     break;
                                 }
                             }
                         }
-                        if (insidePerfectSquareDomain) break;
+                        if (insidePerfectSquareDomain) return null;
                     }
-                    if (insidePerfectSquareDomain) return null;
-                } else if (boardTiles && currentIdx !== null && currentIdx !== undefined) {
-                    let insidePerfectSquareDomain = false;
-                    for (let idx = 0; idx < boardTiles.length; idx++) {
-                        const t = boardTiles[idx];
-                        if (!t) continue;
-                        const c = t.contains && typeof t.contains === 'object' ? t.contains : null;
-                        const monoSubtype = c?.subtype || c?.key || c?.building || t.building || c?.type || '';
-                        const monoKey = String(monoSubtype).toLowerCase();
-                        const isMono = monoKey.includes('domain_monolith') || monoKey.includes('dark_domain_monolith') || monoKey.includes('domain_node') || monoKey.includes('dark_domain_node') || (monoKey.includes('monolith') && !monoKey.includes('shrine'));
-                        if (!isMono) continue;
-                        const vRole = c?.vendorCell || t.vendorCell;
-                        if (vRole && vRole !== 'anchor') continue;
-
-                        const isHostile = monoKey.includes('dark_domain_monolith') || monoKey.includes('dark_domain_node') || t.isHostile || c?.isHostile || c?.faction === 'hostile';
-                        const rawAff = c?.affiliation || t.affiliation || t.territoryAffiliation || c?.territoryAffiliation || t.territory || c?.territory;
-                        const isMonoActive = !!(c?.activated || t.activated || (c?.growthCycles > 0) || (t.growthCycles > 0) || isHostile || (rawAff && rawAff !== 'none'));
-                        if (!isMonoActive) continue;
-
-                        const monoCycles = Math.max(1, c?.growthCycles ?? t.growthCycles ?? 1);
-                        const monoAff = isHostile ? 'hostile' : (rawAff && rawAff !== 'none' ? rawAff : 'friendly');
-
-                        if (checkIsDomainPerfectSquare(idx, boardTiles, monoCycles, monoAff)) {
-                            const aCol = idx % 15;
-                            const aRow = Math.floor(idx / 15);
-                            const curCol = currentIdx % 15;
-                            const curRow = Math.floor(currentIdx / 15);
-                            if (curCol >= aCol - monoCycles && curCol <= aCol + 1 + monoCycles &&
-                                curRow >= aRow - monoCycles && curRow <= aRow + 1 + monoCycles) {
-                                insidePerfectSquareDomain = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (insidePerfectSquareDomain) return null;
                 }
 
                 const currentStr = currentRawTerr.toLowerCase();
@@ -2377,7 +2381,7 @@ function Tile(props) {
            )}
 
            {/* Trap indicator (Keen Eye reveal) */}
-           { props.trapRevealed && (
+           { ((props.trapVisionEnabled && props.trapRevealed) || props.debugMode) && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     zIndex: 9, pointerEvents: 'none',
@@ -2388,8 +2392,8 @@ function Tile(props) {
                 </div>
            )}
 
-           {/* Trap highlight overlay (always on for now) */}
-           { color !== 'black' && props.hasTrap && (
+           {/* Trap highlight overlay */}
+           { color !== 'black' && props.hasTrap && ((props.trapVisionEnabled && props.trapRevealed) || props.debugMode) && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     border: '2px solid rgba(255, 0, 0, 0.5)',
@@ -2938,7 +2942,8 @@ export function propsAreEqual(prevProps, nextProps) {
     const keysToCompare = [
         'id', 'index', 'type', 'color', 'tileSize', 'hovered', 'selected',
         'isPreview', 'passThrough', 'backgroundColor', 'terrain', 'territory', 'territoryAffiliation',
-        'isShrine', 'isLoreTablet', 'trapRevealed', 'hasTrap', 'connectedEdge',
+        'isShrine', 'isLoreTablet', 'trapRevealed', 'trapVisionEnabled', 'hasTrap', 'connectedEdge',
+        'insidePerfectSquareDomain',
         'partialObscured', 'showCoordinates', 'image', 'imageOverride',
         'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
         'isPlayerOnTile', 'className', 'illuminated', 'sabotageProgress', 'monolithActivationProgress',

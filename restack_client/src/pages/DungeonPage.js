@@ -8,6 +8,7 @@ import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../uti
 import '../styles/dungeon-board.scss'
 import Tile from '../components/tile'
 import ProjectileCanvas from '../components/ProjectileCanvas'
+import PocketFogCanvas from '../components/PocketFogCanvas';
 import MonsterBattle from './sub-views/MonsterBattle';
 import ShrineScreen from './sub-views/ShrineScreen';
 import PvPChallengeModal from '../components/PvPChallengeModal';
@@ -5422,10 +5423,47 @@ class DungeonPage extends React.Component {
                 }
             });
 
-            // Second pass on this miniboard: remove any orphaned vendor cells pointing to single-tile nodes
+            // Second pass on this miniboard: remove any duplicate neighbor footprint tiles or orphaned vendor cells
             mb.tiles.forEach((t, i) => {
                 if (!t) return;
                 const cObj = typeof t.contains === 'object' ? t.contains : null;
+                const cSub = cObj?.subtype || '';
+                const bldg = t.building || cObj?.building || '';
+                const sKey = String(cSub || bldg || (cObj?.type !== 'generator' && cObj?.type !== 'building' ? (cObj?.type || '') : '')).toLowerCase();
+                const isSingle = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('hut') || sKey.includes('farm') || sKey.includes('house');
+
+                if (isSingle) {
+                    const col = i % 15;
+                    const row = Math.floor(i / 15);
+                    const neighborOffsets = [];
+                    if (col < 14) neighborOffsets.push(i + 1);
+                    if (row < 14) neighborOffsets.push(i + 15);
+                    if (col < 14 && row < 14) neighborOffsets.push(i + 16);
+
+                    neighborOffsets.forEach(nIdx => {
+                        const nTile = mb.tiles[nIdx];
+                        if (nTile) {
+                            const nCObj = typeof nTile.contains === 'object' ? nTile.contains : null;
+                            const nSub = String(nCObj?.subtype || nTile.building || nCObj?.building || nTile.image || '').toLowerCase();
+                            if (nTile.vendorAnchorId === i || nCObj?.vendorAnchorId === i || nCObj?.vendorCell || nTile.vendorCell || nSub.includes('domain_node') || nSub.includes('dark_domain_node') || (sKey && nSub === sKey)) {
+                                nTile.contains = { type: 'empty_space', subtype: null };
+                                nTile.building = null;
+                                nTile.image = null;
+                                delete nTile.vendorCell;
+                                delete nTile.vendorGroupId;
+                                delete nTile.vendorAnchorId;
+                                delete nTile.generatorData;
+                                if (nCObj) {
+                                    delete nCObj.vendorCell;
+                                    delete nCObj.vendorGroupId;
+                                    delete nCObj.vendorAnchorId;
+                                    delete nCObj.generatorData;
+                                }
+                            }
+                        }
+                    });
+                }
+
                 const aId = t.vendorAnchorId ?? cObj?.vendorAnchorId;
                 if (aId !== undefined && aId !== null && aId !== i) {
                     const aTile = mb.tiles[aId];
@@ -5448,6 +5486,48 @@ class DungeonPage extends React.Component {
                 }
             });
         });
+
+        // 45x45 Superboard grid pass: clean any boundary-spanning neighbor tiles for single-tile structures
+        const getTileAt = (gx, gy) => {
+            if (gx < 0 || gx >= 45 || gy < 0 || gy >= 45) return null;
+            const mbIdx = Math.floor(gy / 15) * 3 + Math.floor(gx / 15);
+            const tIdx = (gy % 15) * 15 + (gx % 15);
+            return sb.miniboards[mbIdx]?.tiles?.[tIdx] || null;
+        };
+
+        for (let gy = 0; gy < 45; gy++) {
+            for (let gx = 0; gx < 45; gx++) {
+                const tile = getTileAt(gx, gy);
+                if (!tile) continue;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const sKey = String(cObj?.subtype || tile.building || cObj?.building || (cObj?.type !== 'generator' && cObj?.type !== 'building' ? (cObj?.type || '') : '')).toLowerCase();
+                const isSingle = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('hut') || sKey.includes('farm') || sKey.includes('house');
+                if (isSingle) {
+                    const neighbors = [getTileAt(gx + 1, gy), getTileAt(gx, gy + 1), getTileAt(gx + 1, gy + 1)];
+                    neighbors.forEach(nTile => {
+                        if (!nTile) return;
+                        const nCObj = typeof nTile.contains === 'object' ? nTile.contains : null;
+                        const nSub = String(nCObj?.subtype || nTile.building || nCObj?.building || nTile.image || '').toLowerCase();
+                        if (nTile.vendorCell || nCObj?.vendorCell || nTile.vendorAnchorId !== undefined || nCObj?.vendorAnchorId !== undefined || nSub.includes('domain_node') || nSub.includes('dark_domain_node') || (sKey && nSub === sKey)) {
+                            nTile.contains = { type: 'empty_space', subtype: null };
+                            nTile.building = null;
+                            nTile.image = null;
+                            delete nTile.vendorCell;
+                            delete nTile.vendorGroupId;
+                            delete nTile.vendorAnchorId;
+                            delete nTile.generatorData;
+                            if (nCObj) {
+                                delete nCObj.vendorCell;
+                                delete nCObj.vendorGroupId;
+                                delete nCObj.vendorAnchorId;
+                                delete nCObj.generatorData;
+                            }
+                        }
+                    });
+                }
+            }
+        }
+
         return sb;
     };
 
@@ -5847,6 +5927,18 @@ class DungeonPage extends React.Component {
             // Pocket Dimension Chemical Lantern boost: +2 tiles vision radius
             if (this.state.pocketLanternActive && (this.state.pocketLanternFuel > 0 || this.state.pocketLanternFlickering)) {
                 fogRadius += 2;
+            } else if (!this.state.pocketLanternActive && !this.state.pocketLanternFlickering && this.isChemicalLanternActive()) {
+                const pRes = this.getPocketResources();
+                const pResChem = (pRes && typeof pRes.chemicals === 'number') ? pRes.chemicals : 0;
+                const invChem = (this.props.inventoryManager?.unstable_chemicals || 0) + (this.props.inventoryManager?.stable_chemicals || 0);
+                if (pResChem > 0 || invChem > 0) {
+                    fogRadius += 2;
+                    setTimeout(() => {
+                        if (this.state && this.state.inSuperboard && !this.state.pocketLanternActive && this.isChemicalLanternActive()) {
+                            this.activatePocketChemicalLantern();
+                        }
+                    }, 0);
+                }
             }
         }
 
@@ -5865,6 +5957,19 @@ class DungeonPage extends React.Component {
                 const bKey = cSub || cType || t.building || t.contains?.building;
                 if (['observer_platform', 'observation_platform', 'observer_platform_under_construction', 'outpost', 'outpost_under_construction'].includes(bKey)) {
                     if (t.contains && typeof t.contains === 'object' && t.contains.vendorCell && t.contains.vendorCell !== 'anchor') continue;
+
+                    // Affiliation check:
+                    // Neutral observation platforms give vision radius to both sides (Player and Automaton).
+                    // Friendly observation platforms give vision only to Player (!this.state.automatonVision).
+                    // Hostile observation platforms give vision only to Automaton (this.state.automatonVision).
+                    const rawAff = t.affiliation || t.contains?.affiliation || t.contains?.faction || (t.placedBy === 'player' ? 'friendly' : 'neutral');
+                    const aff = String(rawAff || 'neutral').toLowerCase();
+                    const isFriendly = aff === 'friendly' || aff === 'player' || aff === 'crew';
+                    const isHostile = aff === 'hostile' || aff === 'enemy' || aff === 'wild' || aff === 'automaton';
+                    const isNeutral = !isFriendly && !isHostile;
+
+                    const grantsVision = this.state.automatonVision ? (isHostile || isNeutral) : (isFriendly || isNeutral);
+                    if (!grantsVision) continue;
 
                     const lX = tIdx % 15;
                     const lY = Math.floor(tIdx / 15);
@@ -5912,11 +6017,16 @@ class DungeonPage extends React.Component {
         const viewportTiles = [];
         const fogVisibility = new Array(225).fill(false);
         const domainTiles = [];
+        const activePerfectSquares = this.getActiveSuperboardPerfectSquares(superboard);
 
         for (let vy = 0; vy < 15; vy++) {
             for (let vx = 0; vx < 15; vx++) {
                 const globalX = viewMinX + vx;
                 const globalY = viewMinY + vy;
+                const insidePerfectSquareDomain = activePerfectSquares.some(sq => (
+                    globalX >= sq.minGx && globalX <= sq.maxGx &&
+                    globalY >= sq.minGy && globalY <= sq.maxGy
+                ));
                 const mbX = Math.floor(globalX / 15);
                 const mbY = Math.floor(globalY / 15);
                 const mbIdx = mbY * 3 + mbX;
@@ -6000,7 +6110,8 @@ class DungeonPage extends React.Component {
                     type: 'board-tile',
                     contains: isVoid ? { type: 'void' } : mbTile?.contains,
                     building: isVoid ? null : (mbTile?.building || (typeof mbTile?.contains === 'object' ? (mbTile.contains?.building || mbTile.contains?.subtype) : null)),
-                    isVoid: isVoid
+                    isVoid: isVoid,
+                    insidePerfectSquareDomain: insidePerfectSquareDomain
                 });
             }
         }
@@ -6054,14 +6165,26 @@ class DungeonPage extends React.Component {
         return false;
     };
 
-    activatePocketChemicalLantern = () => {
-        const pRes = this.getPocketResources();
-        const availableChem = typeof pRes.chemicals === 'number' ? pRes.chemicals : 25;
-        const currentFuel = (this.state && typeof this.state.pocketLanternFuel === 'number') ? this.state.pocketLanternFuel : 0;
-        const fuelToAdd = availableChem > 0 ? availableChem : 25;
-        const newFuel = currentFuel + fuelToAdd;
+    isChemicalLanternActive = () => {
+        const im = this.props.inventoryManager;
+        if (im && Array.isArray(im.inventory)) {
+            const item = im.inventory.find(i => i && (i.name === 'chemical lantern' || i._im_key === 'chemical_lantern'));
+            if (item && item.active) return true;
+        }
+        return false;
+    };
 
-        if (availableChem > 0) {
+    activatePocketChemicalLantern = (forceAmount = null, isPickup = false) => {
+        const pRes = this.getPocketResources();
+        const pResChem = (typeof pRes.chemicals === 'number' && pRes.chemicals > 0) ? pRes.chemicals : 0;
+        const im = this.props.inventoryManager;
+        const invChem = ((im?.unstable_chemicals || 0) + (im?.stable_chemicals || 0));
+
+        let fuelToAdd = 0;
+        if (typeof forceAmount === 'number' && forceAmount > 0) {
+            fuelToAdd = forceAmount;
+        } else if (pResChem > 0) {
+            fuelToAdd = pResChem;
             const updated = { ...pRes, chemicals: 0 };
             this.setState({ pocketResources: updated });
             try {
@@ -6069,11 +6192,52 @@ class DungeonPage extends React.Component {
                 meta.pocketResources = updated;
                 storeMeta(meta);
             } catch (e) {}
+        } else if (invChem > 0) {
+            fuelToAdd = invChem;
+            if (im) {
+                im.unstable_chemicals = 0;
+                im.stable_chemicals = 0;
+                try {
+                    const meta = getMeta() || {};
+                    if (meta.inventory) {
+                        meta.inventory.unstable_chemicals = 0;
+                        meta.inventory.stable_chemicals = 0;
+                        storeMeta(meta);
+                    }
+                } catch (e) {}
+            }
+        } else if (isPickup) {
+            fuelToAdd = 50;
+        }
+
+        const currentFuel = (this.state && typeof this.state.pocketLanternFuel === 'number') ? this.state.pocketLanternFuel : 0;
+        const newFuel = currentFuel + fuelToAdd;
+
+        if (newFuel <= 0) {
+            if (this._pocketLanternTimer) {
+                clearInterval(this._pocketLanternTimer);
+                this._pocketLanternTimer = null;
+            }
+            this.setState({
+                pocketLanternActive: false,
+                pocketLanternFuel: 0,
+                pocketLanternFlickering: false
+            }, () => {
+                this.updateSuperboardViewport();
+            });
+            this.displayMessage('🧪 Not enough chemicals to fuel the Chemical Lantern!');
+            return;
         }
 
         if (this._pocketLanternTimer) {
             clearInterval(this._pocketLanternTimer);
             this._pocketLanternTimer = null;
+        }
+
+        // Mark lantern item in inventory active
+        if (im && Array.isArray(im.inventory)) {
+            const invItem = im.inventory.find(i => i && (i.name === 'chemical lantern' || i._im_key === 'chemical_lantern'));
+            if (invItem) invItem.active = true;
         }
 
         this.setState({
@@ -6142,6 +6306,93 @@ class DungeonPage extends React.Component {
         });
     };
 
+    isSuperboardTilePassable = (superboard, gx, gy) => {
+        if (!superboard || gx < 0 || gx >= 45 || gy < 0 || gy >= 45) return false;
+        const mbX = Math.floor(gx / 15);
+        const mbY = Math.floor(gy / 15);
+        const mbIdx = mbY * 3 + mbX;
+        const lX = gx % 15;
+        const lY = gy % 15;
+        const tIdx = lY * 15 + lX;
+        const t = superboard.miniboards?.[mbIdx]?.tiles?.[tIdx];
+        if (!t) return false;
+
+        const storedColor = t.color && t.color !== 'null' && t.color !== 'undefined' ? t.color : null;
+        const isVoid = (t.contains === 'void' || (t.contains && typeof t.contains === 'object' && t.contains !== null && t.contains.type === 'void')) ||
+                       (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
+        if (isVoid) return false;
+
+        // If contains is explicitly empty_space, the tile is always passable regardless of stale building/image fields
+        const cType = (t.contains && typeof t.contains === 'object' && t.contains !== null) ? t.contains.type : t.contains;
+        const cSub = (t.contains && typeof t.contains === 'object' && t.contains !== null) ? t.contains.subtype : null;
+        if (cType === 'empty_space' || cType === 'empty' || cSub === 'empty_space' || cSub === 'empty') return true;
+
+        if (this.isPocketTileTree(t)) return false;
+
+        const bm = this.props.boardManager;
+        if (bm && bm.isImpassableBuildingTile && bm.isImpassableBuildingTile(t)) {
+            return false;
+        }
+        if (this.isBuildingOrGeneratorTile(t)) {
+            return false;
+        }
+
+        if (cType === 'vendor' || cType === 'shrine' || cType === 'dream den' || cType === 'dream_den' || t.isEnemySpawn || t.originalMarker === 'narrative' || t.originalMarker === 'narrative_visited') {
+            return false;
+        }
+
+        return true;
+    };
+
+    bfsPathfindSuperboard = (superboard, startGx, startGy, targetGoalSet) => {
+        if (!superboard || !targetGoalSet || targetGoalSet.size === 0) return null;
+        if (targetGoalSet.has(`${startGx},${startGy}`)) return [];
+
+        const queue = [[[startGx, startGy], []]];
+        const visited = new Set();
+        visited.add(`${startGx},${startGy}`);
+
+        const neighbors = [
+            [[0, -1], 'up'],
+            [[0, 1], 'down'],
+            [[-1, 0], 'left'],
+            [[1, 0], 'right'],
+            [[-1, -1], 'upleft'],
+            [[1, -1], 'upright'],
+            [[-1, 1], 'downleft'],
+            [[1, 1], 'downright']
+        ];
+
+        while (queue.length > 0) {
+            const [[cgx, cgy], path] = queue.shift();
+            if (targetGoalSet.has(`${cgx},${cgy}`)) {
+                return path;
+            }
+
+            for (const [[ddx, ddy], dir] of neighbors) {
+                const ngx = cgx + ddx;
+                const ngy = cgy + ddy;
+                const key = `${ngx},${ngy}`;
+                if (!visited.has(key)) {
+                    if (ngx < 0 || ngx >= 45 || ngy < 0 || ngy >= 45) continue;
+
+                    if (ddx !== 0 && ddy !== 0) {
+                        const passH = this.isSuperboardTilePassable(superboard, cgx + ddx, cgy);
+                        const passV = this.isSuperboardTilePassable(superboard, cgx, cgy + ddy);
+                        if (!passH && !passV) continue;
+                    }
+
+                    const isGoal = targetGoalSet.has(key);
+                    if (isGoal || this.isSuperboardTilePassable(superboard, ngx, ngy)) {
+                        visited.add(key);
+                        queue.push([[ngx, ngy], [...path, dir]]);
+                    }
+                }
+            }
+        }
+        return null;
+    };
+
     movePlayerInSuperboard = (dx, dy) => {
         const { superboardPlayerPos, superboardSpawnCoords, justSpawnedInSuperboard, dungeon, superboardType } = this.state;
         if (!superboardPlayerPos || !dungeon || !superboardType) return;
@@ -6197,12 +6448,22 @@ class DungeonPage extends React.Component {
             const mockTile = { ...targetTile, id: vTileIdx };
 
             const targetContains = targetTile?.contains;
-            const isTargetAllied = targetContains && (targetContains.isAllied || targetContains.faction === 'player' || targetContains.placedBy === 'player' || targetContains.ownerId) || targetTile?.placedBy === 'player';
+            const targetContainsType = (targetContains && typeof targetContains === 'object' && targetContains !== null) ? targetContains.type : targetContains;
+            const targetContainsSub = (targetContains && typeof targetContains === 'object' && targetContains !== null) ? targetContains.subtype : null;
+            // If the tile is explicitly empty space, skip all impassability checks (stale building fields cannot override this)
+            const isExplicitlyEmpty = targetContainsType === 'empty_space' || targetContainsType === 'empty' || targetContainsSub === 'empty_space' || targetContainsSub === 'empty';
+
+            const isTargetAllied = (targetContains && (targetContains.isAllied || targetContains.faction === 'player' || targetContains.placedBy === 'player' || targetContains.ownerId)) || targetTile?.placedBy === 'player';
             const cSubtypeOrType = targetContains && typeof targetContains === 'object' ? (targetContains.subtype || targetContains.type) : null;
             const structKey = cSubtypeOrType || targetTile?.building || targetContains?.building;
             const isEnemyBuildingTarget = targetContains && ['earthen_fort', 'war_camp', 'war_fort'].includes(structKey) && !isTargetAllied && (typeof targetContains.hp === 'number' && targetContains.hp > 0);
 
-            const isImpassable = (bm.isImpassableBuildingTile && (bm.isImpassableBuildingTile(mockTile) || bm.isImpassableBuildingTile(targetTile))) || this.isBuildingOrGeneratorTile(mockTile) || this.isBuildingOrGeneratorTile(targetTile);
+            const buildingCheckResult = (bm.isImpassableBuildingTile
+                ? (bm.isImpassableBuildingTile(mockTile) || bm.isImpassableBuildingTile(targetTile))
+                : false) ||
+                this.isBuildingOrGeneratorTile(mockTile) ||
+                this.isBuildingOrGeneratorTile(targetTile);
+            const isImpassable = !isExplicitlyEmpty && buildingCheckResult;
 
             if (isImpassable && !isEnemyBuildingTarget) {
                 const targetKey = String(targetTile?.contains?.subtype || targetTile?.contains?.type || targetTile?.building || targetTile?.image || '').toLowerCase();
@@ -6211,6 +6472,7 @@ class DungeonPage extends React.Component {
                 }
                 return; // Block movement into impassable buildings
             }
+
 
             if (cType === 'vendor' || cType === 'shrine' || cType === 'narrative' || cType === 'narrative_visited' || cType === 'dream den' || cType === 'dream_den' || targetTile?.isEnemySpawn || targetTile?.originalMarker === 'narrative' || targetTile?.originalMarker === 'narrative_visited') {
                 if (cType === 'narrative' || cType === 'narrative_visited' || targetTile?.isEnemySpawn || targetTile?.originalMarker === 'narrative' || targetTile?.originalMarker === 'narrative_visited') {
@@ -6884,15 +7146,9 @@ class DungeonPage extends React.Component {
         return true;
     };
 
-    renderSuperboardRotatingDomainSquares = () => {
-        if (!this.state.inSuperboard) return null;
-        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType] || this.props.boardManager?.dungeon?.superboards?.[this.state.superboardType];
-        if (!superboard || !Array.isArray(superboard.miniboards)) return null;
-
-        const viewMinX = typeof this.state.superboardViewMinX === 'number' ? this.state.superboardViewMinX : 0;
-        const viewMinY = typeof this.state.superboardViewMinY === 'number' ? this.state.superboardViewMinY : 0;
-
-        const rotatingSquares = [];
+    getActiveSuperboardPerfectSquares = (superboard) => {
+        if (!superboard || !Array.isArray(superboard.miniboards)) return [];
+        const squares = [];
         const seenMonoliths = new Set();
 
         for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
@@ -6933,19 +7189,10 @@ class DungeonPage extends React.Component {
 
                 const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
                 const anchorWidth = isNode ? 1 : 2;
-                const relAnchorX = anchorGx - viewMinX;
-                const relAnchorY = anchorGy - viewMinY;
-                const minRelX = relAnchorX - growthCycles;
-                const maxRelX = relAnchorX + (isNode ? 0 : 1) + growthCycles;
-                const minRelY = relAnchorY - growthCycles;
-                const maxRelY = relAnchorY + (isNode ? 0 : 1) + growthCycles;
-
-                // Only render if within or intersecting the 15x15 viewport
-                if (maxRelX < 0 || minRelX > 14 || maxRelY < 0 || minRelY > 14) continue;
-
-                const leftPct = (minRelX / 15) * 100;
-                const topPct = (minRelY / 15) * 100;
-                const sizePct = ((anchorWidth + 2 * growthCycles) / 15) * 100;
+                const minGx = anchorGx - growthCycles;
+                const maxGx = anchorGx + (isNode ? 0 : 1) + growthCycles;
+                const minGy = anchorGy - growthCycles;
+                const maxGy = anchorGy + (isNode ? 0 : 1) + growthCycles;
 
                 const affStr = String(affiliation).toLowerCase();
                 const isFriendly = affStr.includes('friendly') || affStr.includes('player') || affStr.includes('crew');
@@ -6953,75 +7200,114 @@ class DungeonPage extends React.Component {
                 const affBorderColor = isFriendly ? 'rgba(56, 189, 248, 0.95)' : (isHostile ? 'rgba(239, 68, 68, 0.95)' : 'rgba(255, 255, 255, 0.95)');
                 const affGlowColor = isFriendly ? 'rgba(56, 189, 248, 0.7)' : (isHostile ? 'rgba(239, 68, 68, 0.7)' : 'rgba(255, 255, 255, 0.7)');
 
-                const centerRelX = relAnchorX + (isNode ? 0.5 : 1.0);
-                const centerRelY = relAnchorY + (isNode ? 0.5 : 1.0);
-                const centerLeftPct = (centerRelX / 15) * 100;
-                const centerTopPct = (centerRelY / 15) * 100;
-
-                // 1. Monolith Beacon Flare at Center
-                rotatingSquares.push(
-                    <div
-                        key={`superboard-domain-beacon-${anchorGx}-${anchorGy}-${growthCycles}`}
-                        className="domain-beacon-flare"
-                        style={{
-                            position: 'absolute',
-                            top: `${centerTopPct}%`,
-                            left: `${centerLeftPct}%`,
-                            width: '80px',
-                            height: '80px',
-                            borderRadius: '50%',
-                            background: `radial-gradient(circle, ${isFriendly ? '#38bdf8' : '#ef4444'} 0%, ${isFriendly ? 'rgba(56, 189, 248, 0.45)' : 'rgba(239, 68, 68, 0.45)'} 40%, transparent 70%)`,
-                            pointerEvents: 'none',
-                            zIndex: 23,
-                            animation: 'monolithBeaconPulse 1.8s ease-out forwards'
-                        }}
-                    />
-                );
-
-                // 2. Domain Expansion Shockwave Energy Ring
-                rotatingSquares.push(
-                    <div
-                        key={`superboard-domain-shockwave-${anchorGx}-${anchorGy}-${growthCycles}`}
-                        className="domain-expansion-shockwave"
-                        style={{
-                            position: 'absolute',
-                            top: `${centerTopPct}%`,
-                            left: `${centerLeftPct}%`,
-                            width: `${sizePct}%`,
-                            height: `${sizePct}%`,
-                            borderRadius: '50%',
-                            border: `2px solid ${affBorderColor}`,
-                            background: `radial-gradient(circle, ${isFriendly ? 'rgba(56, 189, 248, 0.35)' : 'rgba(239, 68, 68, 0.35)'} 0%, transparent 70%)`,
-                            pointerEvents: 'none',
-                            zIndex: 21,
-                            animation: `${isFriendly ? 'domainShockwaveExpand' : 'domainHostileShockwaveExpand'} 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards`
-                        }}
-                    />
-                );
-
-                // 3. Smooth Elastic Rotating Domain Square
-                rotatingSquares.push(
-                    <div
-                        key={`superboard-domain-square-${anchorGx}-${anchorGy}`}
-                        className="domain-rotating-square"
-                        style={{
-                            position: 'absolute',
-                            top: `${topPct}%`,
-                            left: `${leftPct}%`,
-                            width: `${sizePct}%`,
-                            height: `${sizePct}%`,
-                            border: `2px solid ${affBorderColor}`,
-                            boxShadow: `0 0 16px ${affGlowColor}, inset 0 0 12px ${affGlowColor}`,
-                            background: 'transparent',
-                            pointerEvents: 'none',
-                            zIndex: 22,
-                            transformOrigin: 'center center',
-                            transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
-                            animation: 'domainSquareRotate 60s linear infinite, domainSquarePulseGrow 3s ease-in-out infinite'
-                        }}
-                    />
-                );
+                squares.push({
+                    anchorGx, anchorGy, growthCycles, affiliation, isNode, anchorWidth,
+                    minGx, maxGx, minGy, maxGy,
+                    affBorderColor, affGlowColor, isFriendly, isHostile
+                });
             }
+        }
+        return squares;
+    };
+
+    renderSuperboardRotatingDomainSquares = () => {
+        if (!this.state.inSuperboard) return null;
+        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType] || this.props.boardManager?.dungeon?.superboards?.[this.state.superboardType];
+        if (!superboard || !Array.isArray(superboard.miniboards)) return null;
+
+        const viewMinX = typeof this.state.superboardViewMinX === 'number' ? this.state.superboardViewMinX : 0;
+        const viewMinY = typeof this.state.superboardViewMinY === 'number' ? this.state.superboardViewMinY : 0;
+
+        const activeSquares = this.getActiveSuperboardPerfectSquares(superboard);
+        if (!activeSquares || activeSquares.length === 0) return null;
+
+        const rotatingSquares = [];
+
+        for (let i = 0; i < activeSquares.length; i++) {
+            const sq = activeSquares[i];
+            const relAnchorX = sq.anchorGx - viewMinX;
+            const relAnchorY = sq.anchorGy - viewMinY;
+            const minRelX = relAnchorX - sq.growthCycles;
+            const maxRelX = relAnchorX + (sq.isNode ? 0 : 1) + sq.growthCycles;
+            const minRelY = relAnchorY - sq.growthCycles;
+            const maxRelY = relAnchorY + (sq.isNode ? 0 : 1) + sq.growthCycles;
+
+            // Only render if within or intersecting the 15x15 viewport
+            if (maxRelX < 0 || minRelX > 14 || maxRelY < 0 || minRelY > 14) continue;
+
+            const leftPct = (minRelX / 15) * 100;
+            const topPct = (minRelY / 15) * 100;
+            const sizePct = ((sq.anchorWidth + 2 * sq.growthCycles) / 15) * 100;
+
+            const centerRelX = relAnchorX + (sq.isNode ? 0.5 : 1.0);
+            const centerRelY = relAnchorY + (sq.isNode ? 0.5 : 1.0);
+            const centerLeftPct = (centerRelX / 15) * 100;
+            const centerTopPct = (centerRelY / 15) * 100;
+
+            // 1. Monolith Beacon Flare at Center
+            rotatingSquares.push(
+                <div
+                    key={`superboard-domain-beacon-${sq.anchorGx}-${sq.anchorGy}-${sq.growthCycles}`}
+                    className="domain-beacon-flare"
+                    style={{
+                        position: 'absolute',
+                        top: `${centerTopPct}%`,
+                        left: `${centerLeftPct}%`,
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        background: `radial-gradient(circle, ${sq.isFriendly ? '#38bdf8' : '#ef4444'} 0%, ${sq.isFriendly ? 'rgba(56, 189, 248, 0.45)' : 'rgba(239, 68, 68, 0.45)'} 40%, transparent 70%)`,
+                        pointerEvents: 'none',
+                        zIndex: 23,
+                        animation: 'monolithBeaconPulse 1.8s ease-out forwards'
+                    }}
+                />
+            );
+
+            // 2. Domain Expansion Shockwave Energy Ring
+            rotatingSquares.push(
+                <div
+                    key={`superboard-domain-shockwave-${sq.anchorGx}-${sq.anchorGy}-${sq.growthCycles}`}
+                    className="domain-expansion-shockwave"
+                    style={{
+                        position: 'absolute',
+                        top: `${centerTopPct}%`,
+                        left: `${centerLeftPct}%`,
+                        width: `${sizePct}%`,
+                        height: `${sizePct}%`,
+                        borderRadius: '50%',
+                        border: `2px solid ${sq.affBorderColor}`,
+                        background: `radial-gradient(circle, ${sq.isFriendly ? 'rgba(56, 189, 248, 0.35)' : 'rgba(239, 68, 68, 0.35)'} 0%, transparent 70%)`,
+                        pointerEvents: 'none',
+                        zIndex: 21,
+                        animation: `${sq.isFriendly ? 'domainShockwaveExpand' : 'domainHostileShockwaveExpand'} 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards`
+                    }}
+                />
+            );
+
+            // 3. Smooth Elastic Rotating Domain Square with GPU-composited opacity pulse
+            rotatingSquares.push(
+                <div
+                    key={`superboard-domain-square-${sq.anchorGx}-${sq.anchorGy}`}
+                    className="domain-rotating-square"
+                    style={{
+                        position: 'absolute',
+                        top: `${topPct}%`,
+                        left: `${leftPct}%`,
+                        width: `${sizePct}%`,
+                        height: `${sizePct}%`,
+                        border: `2px solid ${sq.affBorderColor}`,
+                        boxShadow: `0 0 18px ${sq.affGlowColor}, inset 0 0 12px ${sq.affGlowColor}`,
+                        background: 'transparent',
+                        pointerEvents: 'none',
+                        zIndex: 22,
+                        transformOrigin: 'center center',
+                        willChange: 'transform, opacity',
+                        transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
+                        animation: 'domainSquareRotate 60s linear infinite, domainSquarePulseGrow 3s ease-in-out infinite'
+                    }}
+                />
+            );
         }
 
         return rotatingSquares.length > 0 ? (
@@ -7303,6 +7589,27 @@ class DungeonPage extends React.Component {
             const delta = dirMap[direction];
             if (delta) {
                 this.movePlayerInSuperboard(delta.dx, delta.dy);
+            }
+            if (fromQueue) {
+                this.resolveQueuedMovement(true);
+                if (this._movementQueue.length === 0 && typeof this._superboardPathfindEndAction === 'function') {
+                    const action = this._superboardPathfindEndAction;
+                    this._superboardPathfindEndAction = null;
+                    setTimeout(() => {
+                        try {
+                            action();
+                        } catch (e) {}
+                    }, 50);
+                }
+            } else {
+                if (this._movementQueue && this._movementQueue.length > 0) {
+                    this._movementQueue = [];
+                }
+                if (this._pathfindStepTimeout) {
+                    clearTimeout(this._pathfindStepTimeout);
+                    this._pathfindStepTimeout = null;
+                }
+                this._superboardPathfindEndAction = null;
             }
             return;
         }
@@ -9002,7 +9309,11 @@ class DungeonPage extends React.Component {
         else return;
 
         current[key] = (current[key] || 0) + amount;
-        this.setState({ pocketResources: current });
+        this.setState({ pocketResources: current }, () => {
+            if (key === 'chemicals' && this.state.inSuperboard && this.isChemicalLanternActive()) {
+                this.activatePocketChemicalLantern();
+            }
+        });
         try {
             const meta = getMeta() || {};
             meta.pocketResources = current;
@@ -11959,10 +12270,25 @@ class DungeonPage extends React.Component {
         meta.trapVisionEnabled = nextMode;
         storeMeta(meta);
         updateUserRequest(getUserId(), meta).catch(err => console.error('Error updating meta for trap vision:', err));
-        if (this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
-            const playerIdx = this.props.boardManager.getIndexFromCoordinates(this.props.boardManager.playerTile.location);
-            if (this.props.boardManager.tiles[playerIdx] && typeof this.props.boardManager.handleFogOfWar === 'function') {
-                this.props.boardManager.handleFogOfWar(this.props.boardManager.tiles[playerIdx]);
+        if (this.props.boardManager) {
+            if (!nextMode && this.props.boardManager.tiles) {
+                this.props.boardManager.tiles.forEach(t => {
+                    if (t) t.trapRevealed = false;
+                });
+            }
+            if (this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
+                const playerIdx = this.props.boardManager.getIndexFromCoordinates(this.props.boardManager.playerTile.location);
+                if (this.props.boardManager.tiles[playerIdx] && typeof this.props.boardManager.handleFogOfWar === 'function') {
+                    this.props.boardManager.handleFogOfWar(this.props.boardManager.tiles[playerIdx]);
+                }
+            }
+        }
+        if (this.state.tiles) {
+            if (!nextMode) {
+                const updatedTiles = this.state.tiles.map(t => (t && t.trapRevealed) ? { ...t, trapRevealed: false } : t);
+                this.setState({ tiles: updatedTiles });
+            } else {
+                this.setState({ tiles: [...this.state.tiles] });
             }
         }
     };
@@ -15567,6 +15893,10 @@ class DungeonPage extends React.Component {
             if (typeof this.props.saveUserData === 'function') this.props.saveUserData();
         } catch (e) { }
 
+        if (this.state && this.state.inSuperboard && (data.type === 'unstable_chemicals' || data.type === 'stable_chemicals' || data.type === 'chemicals') && this.isChemicalLanternActive()) {
+            this.activatePocketChemicalLantern();
+        }
+
         this.forceUpdate();
 
 
@@ -17545,8 +17875,26 @@ class DungeonPage extends React.Component {
                 }
             } catch (e) {}
 
+            if (this.state && this.state.inSuperboard) {
+                if (item.active) {
+                    this.activatePocketChemicalLantern();
+                } else {
+                    if (this._pocketLanternTimer) {
+                        clearInterval(this._pocketLanternTimer);
+                        this._pocketLanternTimer = null;
+                    }
+                    this.setState({
+                        pocketLanternActive: false,
+                        pocketLanternFuel: 0,
+                        pocketLanternFlickering: false
+                    }, () => {
+                        this.updateSuperboardViewport();
+                    });
+                }
+            }
+
             const bm = this.props.boardManager;
-            if (bm) {
+            if (bm && !this.state.inSuperboard) {
                 const playerTile = bm.playerTile && bm.tiles ? bm.tiles[bm.getIndexFromCoordinates(bm.playerTile.location)] : null;
                 if (playerTile && typeof bm.handleFogOfWar === 'function') {
                     bm.handleFogOfWar(playerTile);
@@ -17555,7 +17903,7 @@ class DungeonPage extends React.Component {
                     bm.refreshTiles();
                 }
             }
-            this.displayMessage(item.active ? '🧪 Chemical Lantern activated (+1 Vision Radius)!' : '🧪 Chemical Lantern deactivated.');
+            this.displayMessage(item.active ? '🧪 Chemical Lantern activated (+2 Vision Radius)!' : '🧪 Chemical Lantern deactivated.');
             this.forceUpdate();
         }
     }
@@ -17644,11 +17992,27 @@ class DungeonPage extends React.Component {
         if (this.state.inSuperboard) {
             const { superboardPlayerPos, superboardViewMinX = 0, superboardViewMinY = 0 } = this.state;
             if (superboardPlayerPos) {
-                const localX = superboardPlayerPos.gx - superboardViewMinX;
-                const localY = superboardPlayerPos.gy - superboardViewMinY;
                 const clickedGx = superboardViewMinX + tile.coordinates[0];
                 const clickedGy = superboardViewMinY + tile.coordinates[1];
                 const superboard = this.state.dungeon?.superboards?.[this.state.superboardType];
+
+                if (clickedGx === superboardPlayerPos.gx && clickedGy === superboardPlayerPos.gy) {
+                    this.setState((prev) => ({ showAvatarRadialMenu: !prev.showAvatarRadialMenu }));
+                    return;
+                }
+                if (this.state.showAvatarRadialMenu) {
+                    this.setState({ showAvatarRadialMenu: false });
+                }
+
+                // Clear any previous queued movement
+                if (this._movementQueue && this._movementQueue.length > 0) {
+                    this._movementQueue = [];
+                }
+                if (this._pathfindStepTimeout) {
+                    clearTimeout(this._pathfindStepTimeout);
+                    this._pathfindStepTimeout = null;
+                }
+                this._superboardPathfindEndAction = null;
 
                 if (superboard) {
                     const mbX = Math.floor(clickedGx / 15);
@@ -17659,11 +18023,25 @@ class DungeonPage extends React.Component {
                     const tIdx = lY * 15 + lX;
                     const targetTileObj = superboard.miniboards?.[mbIdx]?.tiles?.[tIdx];
 
-                    const cType = typeof targetTileObj?.contains === 'object' ? targetTileObj.contains.type : targetTileObj?.contains;
-                    const cSub = typeof targetTileObj?.contains === 'object' ? (targetTileObj.contains.subtype || targetTileObj.contains.building || targetTileObj.contains.name) : targetTileObj?.building;
+                    const cType = (targetTileObj && typeof targetTileObj.contains === 'object' && targetTileObj.contains !== null) ? targetTileObj.contains.type : (targetTileObj?.contains || null);
+                    const cSub = (targetTileObj && typeof targetTileObj.contains === 'object' && targetTileObj.contains !== null) ? (targetTileObj.contains.subtype || targetTileObj.contains.building || targetTileObj.contains.name) : (targetTileObj?.building || null);
                     const rawKey = String(cSub || cType || targetTileObj?.image || '').toLowerCase();
-                    if (rawKey.includes('dream_den') || rawKey.includes('dream den')) {
-                        const vAnchor = (typeof targetTileObj?.contains === 'object' && targetTileObj.contains?.vendorAnchorId) ?? targetTileObj?.vendorAnchorId;
+
+                    const isDreamDen = rawKey.includes('dream_den') || rawKey.includes('dream den');
+                    const isBuilding = targetTileObj && this.isBuildingOrGeneratorTile(targetTileObj) && !rawKey.includes('farm') && !rawKey.includes('house') && !rawKey.includes('hut') && !rawKey.includes('windmill') && !rawKey.includes('manor') && !rawKey.includes('estate');
+                    const isEnemySpawn = targetTileObj && (
+                        targetTileObj.isEnemySpawn ||
+                        targetTileObj.isSnuffedOut ||
+                        targetTileObj.originalMarker === 'narrative' ||
+                        targetTileObj.originalMarker === 'narrative_visited' ||
+                        cType === 'narrative' ||
+                        cType === 'narrative_visited' ||
+                        String(targetTileObj.image || '').includes('narrative')
+                    );
+
+                    if (isDreamDen || isBuilding || isEnemySpawn) {
+                        const isSingle = rawKey.includes('domain_node') || rawKey.includes('dark_domain_node') || rawKey.includes('node') || rawKey.includes('earthen_fort') || rawKey.includes('outpost') || rawKey.includes('observer') || rawKey.includes('hut') || rawKey.includes('farm') || rawKey.includes('house') || isEnemySpawn;
+                        const vAnchor = !isSingle ? ((typeof targetTileObj?.contains === 'object' && targetTileObj.contains !== null && targetTileObj.contains?.vendorAnchorId) ?? targetTileObj?.vendorAnchorId) : null;
                         let anchorGx = clickedGx;
                         let anchorGy = clickedGy;
                         if (vAnchor !== undefined && vAnchor !== null) {
@@ -17673,42 +18051,10 @@ class DungeonPage extends React.Component {
                             anchorGy = mbY * 15 + aLy;
                         }
 
-                        let isAdjacent = false;
-                        for (let bx = 0; bx < 2; bx++) {
-                            for (let by = 0; by < 2; by++) {
-                                const bgx = anchorGx + bx;
-                                const bgy = anchorGy + by;
-                                if (Math.abs(superboardPlayerPos.gx - bgx) <= 1 && Math.abs(superboardPlayerPos.gy - bgy) <= 1) {
-                                    isAdjacent = true;
-                                    break;
-                                }
-                            }
-                            if (isAdjacent) break;
-                        }
-
-                        if (isAdjacent) {
-                            const targetTile = targetTileObj || tile;
-                            this.illuminateBuildingTile(targetTile);
-                            this.triggerVendorEncounter('dream_den', targetTile);
-                            return;
-                        }
-                    }
-
-                    if (targetTileObj && this.isBuildingOrGeneratorTile(targetTileObj) && !rawKey.includes('farm') && !rawKey.includes('house') && !rawKey.includes('hut') && !rawKey.includes('windmill') && !rawKey.includes('manor') && !rawKey.includes('estate')) {
-                        const isSingle = rawKey.includes('domain_node') || rawKey.includes('dark_domain_node') || rawKey.includes('node') || rawKey.includes('earthen_fort') || rawKey.includes('outpost') || rawKey.includes('observer');
-                        const vAnchor = !isSingle ? ((typeof targetTileObj.contains === 'object' && targetTileObj.contains?.vendorAnchorId) ?? targetTileObj.vendorAnchorId) : null;
-                        let anchorGx = clickedGx;
-                        let anchorGy = clickedGy;
-                        if (vAnchor !== undefined && vAnchor !== null) {
-                            const aLx = Number(vAnchor) % 15;
-                            const aLy = Math.floor(Number(vAnchor) / 15);
-                            anchorGx = mbX * 15 + aLx;
-                            anchorGy = mbY * 15 + aLy;
-                        }
-
-                        let isAdjacent = false;
                         const boundX = isSingle ? 1 : 2;
                         const boundY = isSingle ? 1 : 2;
+
+                        let isAdjacent = false;
                         for (let bx = 0; bx < boundX; bx++) {
                             for (let by = 0; by < boundY; by++) {
                                 const bgx = anchorGx + bx;
@@ -17721,37 +18067,81 @@ class DungeonPage extends React.Component {
                             if (isAdjacent) break;
                         }
 
+                        const triggerAction = () => {
+                            if (isDreamDen) {
+                                const targetTile = targetTileObj || tile;
+                                this.illuminateBuildingTile(targetTile);
+                                this.triggerVendorEncounter('dream_den', targetTile);
+                            } else if (isEnemySpawn) {
+                                this.openEnemySpawnModal(targetTileObj);
+                            } else if (isBuilding) {
+                                this.openGeneratorModal(targetTileObj);
+                            }
+                        };
+
                         if (isAdjacent) {
-                            this.openGeneratorModal(targetTileObj);
+                            triggerAction();
+                            return;
+                        }
+
+                        // Find all adjacent passable tiles around the structure
+                        const goalTiles = new Set();
+                        for (let bx = 0; bx < boundX; bx++) {
+                            for (let by = 0; by < boundY; by++) {
+                                const bgx = anchorGx + bx;
+                                const bgy = anchorGy + by;
+                                for (let odx = -1; odx <= 1; odx++) {
+                                    for (let ody = -1; ody <= 1; ody++) {
+                                        if (odx === 0 && ody === 0) continue;
+                                        const nx = bgx + odx;
+                                        const ny = bgy + ody;
+                                        if (nx >= anchorGx && nx < anchorGx + boundX && ny >= anchorGy && ny < anchorGy + boundY) continue;
+                                        if (this.isSuperboardTilePassable(superboard, nx, ny)) {
+                                            goalTiles.add(`${nx},${ny}`);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (goalTiles.size > 0) {
+                            const path = this.bfsPathfindSuperboard(superboard, superboardPlayerPos.gx, superboardPlayerPos.gy, goalTiles);
+                            if (path && path.length > 0) {
+                                this._superboardPathfindEndAction = triggerAction;
+                                this._movementQueue = path;
+                                this.processMovementQueue();
+                                return;
+                            }
+                        }
+
+                        this.displayMessage('Cannot find a path to that structure.');
+                        return;
+                    }
+
+                    // Direct move or pathfind to clicked passable tile
+                    const dx = clickedGx - superboardPlayerPos.gx;
+                    const dy = clickedGy - superboardPlayerPos.gy;
+                    if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && (dx !== 0 || dy !== 0)) {
+                        this.movePlayerInSuperboard(dx, dy);
+                        return;
+                    }
+
+                    if (this.isSuperboardTilePassable(superboard, clickedGx, clickedGy)) {
+                        const path = this.bfsPathfindSuperboard(superboard, superboardPlayerPos.gx, superboardPlayerPos.gy, new Set([`${clickedGx},${clickedGy}`]));
+                        if (path && path.length > 0) {
+                            this._superboardPathfindEndAction = null;
+                            this._movementQueue = path;
+                            this.processMovementQueue();
                             return;
                         }
                     }
 
-                    const isEnemySpawnTile = targetTileObj && (
-                        targetTileObj.isEnemySpawn ||
-                        targetTileObj.isSnuffedOut ||
-                        targetTileObj.originalMarker === 'narrative' ||
-                        targetTileObj.originalMarker === 'narrative_visited' ||
-                        cType === 'narrative' ||
-                        cType === 'narrative_visited' ||
-                        String(targetTileObj.image || '').includes('narrative')
-                    );
-                    if (isEnemySpawnTile) {
-                        const dist = Math.hypot(superboardPlayerPos.gx - clickedGx, superboardPlayerPos.gy - clickedGy);
-                        if (dist <= 2) {
-                            this.openEnemySpawnModal(targetTileObj);
-                            return;
-                        }
-                    }
-                }
-
-                const dx = tile.coordinates[0] - localX;
-                const dy = tile.coordinates[1] - localY;
-                if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1 && (dx !== 0 || dy !== 0)) {
-                    this.movePlayerInSuperboard(dx, dy);
+                    this.displayMessage('That location is unreachable.');
                     return;
                 }
+                return;
             }
+            return;
         }
 
         const bm = this.props.boardManager;
@@ -22328,9 +22718,11 @@ class DungeonPage extends React.Component {
     getEffectiveGeneratorStats = (generatorData, baseDef) => {
         let level = generatorData?.level || 1;
         if (generatorData?.isUpgrading && Date.now() >= generatorData.upgradeEndTime) {
-            level = generatorData.targetLevel || 2;
+            level = generatorData.targetLevel || (generatorData.level ? generatorData.level + 1 : 2);
             generatorData.level = level;
             delete generatorData.isUpgrading;
+            delete generatorData.upgradeEndTime;
+            delete generatorData.targetLevel;
         }
         let currencyType = baseDef?.currencyType || 'gold';
         if (baseDef?.key === 'cultivation_vat') {
@@ -22986,6 +23378,10 @@ class DungeonPage extends React.Component {
         if (this._movementRepeatInterval) {
             clearInterval(this._movementRepeatInterval);
             this._movementRepeatInterval = null;
+        }
+        if (this._upgradeTimer) {
+            clearInterval(this._upgradeTimer);
+            this._upgradeTimer = null;
         }
         this.setState({
             showGeneratorModal: false,
@@ -23958,7 +24354,10 @@ class DungeonPage extends React.Component {
             };
         }
         tile.generatorData.isUpgrading = true;
-        const upgradeTimeMs = isInPocketDimension ? (45 * 1000) : (15 * 60 * 1000);
+        const isFort = def.key === 'earthen_fort';
+        const upgradeTimeMs = isInPocketDimension 
+            ? (isFort ? (5 * 1000) : (45 * 1000)) 
+            : (isFort ? (60 * 1000) : (15 * 60 * 1000));
         tile.generatorData.upgradeEndTime = Date.now() + upgradeTimeMs;
         tile.generatorData.targetLevel = currentLevel + 1;
 
@@ -24036,7 +24435,62 @@ class DungeonPage extends React.Component {
             }, 500);
         }
 
-        this.displayMessage('Started upgrading generator to Level 2! It will finish in 15 minutes.');
+        if (this._upgradeTimer) {
+            clearInterval(this._upgradeTimer);
+            this._upgradeTimer = null;
+        }
+        this._upgradeTimer = setInterval(() => {
+            const curTile = this.state.activeGeneratorTile;
+            if (!this.state.showGeneratorModal || !curTile || !curTile.generatorData) {
+                if (this._upgradeTimer) {
+                    clearInterval(this._upgradeTimer);
+                    this._upgradeTimer = null;
+                }
+                return;
+            }
+            if (curTile.generatorData.isUpgrading && Date.now() >= curTile.generatorData.upgradeEndTime) {
+                const newLvl = curTile.generatorData.targetLevel || ((curTile.generatorData.level || 1) + 1);
+                curTile.generatorData.level = newLvl;
+                delete curTile.generatorData.isUpgrading;
+                delete curTile.generatorData.upgradeEndTime;
+                delete curTile.generatorData.targetLevel;
+                if (curTile.contains && typeof curTile.contains === 'object') {
+                    curTile.contains.level = newLvl;
+                    curTile.contains.generatorData = { ...curTile.generatorData };
+                }
+                if (this.state.inSuperboard) {
+                    const sbKey = this.state.superboardType || (getMeta() || {}).pocketDimension;
+                    const dungeonObj = this.state.dungeon || bm?.dungeon;
+                    const sb = dungeonObj?.superboards?.[sbKey];
+                    if (sb && sb.miniboards && typeof curTile.globalX === 'number' && typeof curTile.globalY === 'number') {
+                        const mbX = Math.floor(curTile.globalX / 15);
+                        const mbY = Math.floor(curTile.globalY / 15);
+                        const targetMbIdx = mbY * 3 + mbX;
+                        const targetTileIdx = (curTile.globalY % 15) * 15 + (curTile.globalX % 15);
+                        const mb = sb.miniboards[targetMbIdx];
+                        if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
+                            mb.tiles[targetTileIdx].generatorData = { ...curTile.generatorData };
+                            if (mb.tiles[targetTileIdx].contains && typeof mb.tiles[targetTileIdx].contains === 'object') {
+                                mb.tiles[targetTileIdx].contains.level = newLvl;
+                                mb.tiles[targetTileIdx].contains.generatorData = { ...curTile.generatorData };
+                            }
+                        }
+                    }
+                    this.updateSuperboardViewport(true);
+                }
+                if (this._upgradeTimer) {
+                    clearInterval(this._upgradeTimer);
+                    this._upgradeTimer = null;
+                }
+            }
+            this.forceUpdate();
+        }, 500);
+
+        const durationMsg = upgradeTimeMs < 60000 
+            ? `${Math.round(upgradeTimeMs / 1000)} seconds` 
+            : `${Math.round(upgradeTimeMs / 60000)} minute${Math.round(upgradeTimeMs / 60000) > 1 ? 's' : ''}`;
+        const structName = isFort ? 'Earthen Fort' : (def.name || 'generator');
+        this.displayMessage(`Started upgrading ${structName} to Level ${tile.generatorData.targetLevel}! It will finish in ${durationMsg}.`);
         this.forceUpdate();
     };
 
@@ -28712,7 +29166,9 @@ globalY={tile.globalY}
                                     inscriptions={tile.inscriptions}
                                     partialObscured={!!tile.partialObscured}
                                     trapRevealed={!!tile.trapRevealed}
+                                    trapVisionEnabled={!!this.state.trapVisionEnabled}
                                     hasTrap={!!tile.hasTrap}
+                                    insidePerfectSquareDomain={!!tile.insidePerfectSquareDomain}
                                     illuminated={
                                         this.state.inSuperboard
                                             ? (
@@ -28799,98 +29255,19 @@ globalY={tile.globalY}
                             const focusR = (superboardFogRadius + 0.5) * tileSize;
 
                             return (
-                                <svg
-                                    className={`pocket-fog-overlay ${this.state.pocketLanternFlickering ? 'lantern-flickering' : ''}`}
-                                    style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        width: boardSize + 'px',
-                                        height: boardSize + 'px',
-                                        pointerEvents: 'none',
-                                        zIndex: 150
-                                    }}
-                                    viewBox={`0 0 ${boardSize} ${boardSize}`}
-                                >
-                                    <defs>
-                                        <filter id="pocket-fog-feather">
-                                            <feGaussianBlur stdDeviation="3" />
-                                        </filter>
-                                        <mask id="pocket-fog-mask">
-                                            {/* Base shroud: entire canvas is covered */}
-                                            <rect x="0" y="0" width={boardSize} height={boardSize} fill="white" />
-
-                                            {/* Vision cutouts with slight feather blur for smooth edges */}
-                                            <g filter="url(#pocket-fog-feather)">
-                                                {/* 1. Focus unit circular spotlight (Player or Automaton) */}
-                                                <circle
-                                                    cx={focusCx}
-                                                    cy={focusCy}
-                                                    r={focusR}
-                                                    fill="black"
-                                                />
-
-                                                {/* 2. Observation platforms 10-tile radius circular vision */}
-                                                {(this.state.superboardObserverPlatforms || []).map((op, idx) => {
-                                                    const opLocalX = op.gx - superboardViewMinX;
-                                                    const opLocalY = op.gy - superboardViewMinY;
-                                                    const cx = (opLocalX + 0.5) * tileSize;
-                                                    const cy = (opLocalY + 0.5) * tileSize;
-                                                    const r = 10.5 * tileSize;
-                                                    return (
-                                                        <circle
-                                                            key={`op_mask_${idx}`}
-                                                            cx={cx}
-                                                            cy={cy}
-                                                            r={r}
-                                                            fill="black"
-                                                        />
-                                                    );
-                                                })}
-
-                                                {/* 3. Active vision reveal animation */}
-                                                {this.state.activeVisionRevealAnim && (() => {
-                                                    const anim = this.state.activeVisionRevealAnim;
-                                                    const animLocalX = anim.gx - superboardViewMinX;
-                                                    const animLocalY = anim.gy - superboardViewMinY;
-                                                    const cx = (animLocalX + 0.5) * tileSize;
-                                                    const cy = (animLocalY + 0.5) * tileSize;
-                                                    const r = (anim.radius + 0.5) * tileSize;
-                                                    return (
-                                                        <circle
-                                                            cx={cx}
-                                                            cy={cy}
-                                                            r={r}
-                                                            fill="black"
-                                                        />
-                                                    );
-                                                })()}
-
-                                                {/* 4. Friendly domain territory tiles */}
-                                                {(this.state.superboardDomainTiles || []).map((dt, idx) => (
-                                                    <rect
-                                                        key={`dt_mask_${idx}`}
-                                                        x={dt.vx * tileSize}
-                                                        y={dt.vy * tileSize}
-                                                        width={tileSize}
-                                                        height={tileSize}
-                                                        fill="black"
-                                                    />
-                                                ))}
-                                            </g>
-                                        </mask>
-                                    </defs>
-
-                                    {/* Black shroud rect masked by transparent vision holes */}
-                                    <rect
-                                        x="0"
-                                        y="0"
-                                        width={boardSize}
-                                        height={boardSize}
-                                        fill="#000000"
-                                        mask="url(#pocket-fog-mask)"
-                                    />
-                                </svg>
+                                <PocketFogCanvas
+                                    boardSize={boardSize}
+                                    tileSize={tileSize}
+                                    focusCx={focusCx}
+                                    focusCy={focusCy}
+                                    focusR={focusR}
+                                    observerPlatforms={this.state.superboardObserverPlatforms || []}
+                                    domainTiles={this.state.superboardDomainTiles || []}
+                                    revealAnim={this.state.activeVisionRevealAnim}
+                                    viewMinX={superboardViewMinX}
+                                    viewMinY={superboardViewMinY}
+                                    isFlickering={!!this.state.pocketLanternFlickering}
+                                />
                             );
                         })()}
 
@@ -30055,8 +30432,9 @@ globalY={tile.globalY}
                                         
                                         if (isUpgrading) {
                                             const remainMs = Math.max(0, (gData.upgradeEndTime || 0) - Date.now());
+                                            const remainSecs = Math.ceil(remainMs / 1000);
                                             const remainMins = Math.ceil(remainMs / 60000);
-                                            btnText = `UPGRADING (${remainMins}m remaining)`;
+                                            btnText = remainMs < 60000 ? `UPGRADING (${remainSecs}s remaining)` : `UPGRADING (${remainMins}m remaining)`;
                                         }
 
                                         const upgradeButton = (
@@ -31878,13 +32256,13 @@ globalY={tile.globalY}
                 }
                 @keyframes domainSquarePulseGrow {
                     0% {
-                        box-shadow: 0 0 14px rgba(56, 189, 248, 0.7), inset 0 0 10px rgba(56, 189, 248, 0.7);
+                        opacity: 0.65;
                     }
                     50% {
-                        box-shadow: 0 0 38px rgba(56, 189, 248, 1), inset 0 0 25px rgba(56, 189, 248, 0.9), 0 0 60px rgba(56, 189, 248, 0.6);
+                        opacity: 1;
                     }
                     100% {
-                        box-shadow: 0 0 14px rgba(56, 189, 248, 0.7), inset 0 0 10px rgba(56, 189, 248, 0.7);
+                        opacity: 0.65;
                     }
                 }
                 @keyframes domainShockwaveExpand {
