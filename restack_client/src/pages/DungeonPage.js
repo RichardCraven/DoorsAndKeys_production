@@ -8,6 +8,7 @@ import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../uti
 import '../styles/dungeon-board.scss'
 import Tile from '../components/tile'
 import ProjectileCanvas from '../components/ProjectileCanvas'
+import PocketFogCanvas from '../components/PocketFogCanvas';
 import MonsterBattle from './sub-views/MonsterBattle';
 import ShrineScreen from './sub-views/ShrineScreen';
 import PvPChallengeModal from '../components/PvPChallengeModal';
@@ -6016,11 +6017,16 @@ class DungeonPage extends React.Component {
         const viewportTiles = [];
         const fogVisibility = new Array(225).fill(false);
         const domainTiles = [];
+        const activePerfectSquares = this.getActiveSuperboardPerfectSquares(superboard);
 
         for (let vy = 0; vy < 15; vy++) {
             for (let vx = 0; vx < 15; vx++) {
                 const globalX = viewMinX + vx;
                 const globalY = viewMinY + vy;
+                const insidePerfectSquareDomain = activePerfectSquares.some(sq => (
+                    globalX >= sq.minGx && globalX <= sq.maxGx &&
+                    globalY >= sq.minGy && globalY <= sq.maxGy
+                ));
                 const mbX = Math.floor(globalX / 15);
                 const mbY = Math.floor(globalY / 15);
                 const mbIdx = mbY * 3 + mbX;
@@ -6104,7 +6110,8 @@ class DungeonPage extends React.Component {
                     type: 'board-tile',
                     contains: isVoid ? { type: 'void' } : mbTile?.contains,
                     building: isVoid ? null : (mbTile?.building || (typeof mbTile?.contains === 'object' ? (mbTile.contains?.building || mbTile.contains?.subtype) : null)),
-                    isVoid: isVoid
+                    isVoid: isVoid,
+                    insidePerfectSquareDomain: insidePerfectSquareDomain
                 });
             }
         }
@@ -7139,15 +7146,9 @@ class DungeonPage extends React.Component {
         return true;
     };
 
-    renderSuperboardRotatingDomainSquares = () => {
-        if (!this.state.inSuperboard) return null;
-        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType] || this.props.boardManager?.dungeon?.superboards?.[this.state.superboardType];
-        if (!superboard || !Array.isArray(superboard.miniboards)) return null;
-
-        const viewMinX = typeof this.state.superboardViewMinX === 'number' ? this.state.superboardViewMinX : 0;
-        const viewMinY = typeof this.state.superboardViewMinY === 'number' ? this.state.superboardViewMinY : 0;
-
-        const rotatingSquares = [];
+    getActiveSuperboardPerfectSquares = (superboard) => {
+        if (!superboard || !Array.isArray(superboard.miniboards)) return [];
+        const squares = [];
         const seenMonoliths = new Set();
 
         for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
@@ -7188,19 +7189,10 @@ class DungeonPage extends React.Component {
 
                 const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
                 const anchorWidth = isNode ? 1 : 2;
-                const relAnchorX = anchorGx - viewMinX;
-                const relAnchorY = anchorGy - viewMinY;
-                const minRelX = relAnchorX - growthCycles;
-                const maxRelX = relAnchorX + (isNode ? 0 : 1) + growthCycles;
-                const minRelY = relAnchorY - growthCycles;
-                const maxRelY = relAnchorY + (isNode ? 0 : 1) + growthCycles;
-
-                // Only render if within or intersecting the 15x15 viewport
-                if (maxRelX < 0 || minRelX > 14 || maxRelY < 0 || minRelY > 14) continue;
-
-                const leftPct = (minRelX / 15) * 100;
-                const topPct = (minRelY / 15) * 100;
-                const sizePct = ((anchorWidth + 2 * growthCycles) / 15) * 100;
+                const minGx = anchorGx - growthCycles;
+                const maxGx = anchorGx + (isNode ? 0 : 1) + growthCycles;
+                const minGy = anchorGy - growthCycles;
+                const maxGy = anchorGy + (isNode ? 0 : 1) + growthCycles;
 
                 const affStr = String(affiliation).toLowerCase();
                 const isFriendly = affStr.includes('friendly') || affStr.includes('player') || affStr.includes('crew');
@@ -7208,75 +7200,114 @@ class DungeonPage extends React.Component {
                 const affBorderColor = isFriendly ? 'rgba(56, 189, 248, 0.95)' : (isHostile ? 'rgba(239, 68, 68, 0.95)' : 'rgba(255, 255, 255, 0.95)');
                 const affGlowColor = isFriendly ? 'rgba(56, 189, 248, 0.7)' : (isHostile ? 'rgba(239, 68, 68, 0.7)' : 'rgba(255, 255, 255, 0.7)');
 
-                const centerRelX = relAnchorX + (isNode ? 0.5 : 1.0);
-                const centerRelY = relAnchorY + (isNode ? 0.5 : 1.0);
-                const centerLeftPct = (centerRelX / 15) * 100;
-                const centerTopPct = (centerRelY / 15) * 100;
-
-                // 1. Monolith Beacon Flare at Center
-                rotatingSquares.push(
-                    <div
-                        key={`superboard-domain-beacon-${anchorGx}-${anchorGy}-${growthCycles}`}
-                        className="domain-beacon-flare"
-                        style={{
-                            position: 'absolute',
-                            top: `${centerTopPct}%`,
-                            left: `${centerLeftPct}%`,
-                            width: '80px',
-                            height: '80px',
-                            borderRadius: '50%',
-                            background: `radial-gradient(circle, ${isFriendly ? '#38bdf8' : '#ef4444'} 0%, ${isFriendly ? 'rgba(56, 189, 248, 0.45)' : 'rgba(239, 68, 68, 0.45)'} 40%, transparent 70%)`,
-                            pointerEvents: 'none',
-                            zIndex: 23,
-                            animation: 'monolithBeaconPulse 1.8s ease-out forwards'
-                        }}
-                    />
-                );
-
-                // 2. Domain Expansion Shockwave Energy Ring
-                rotatingSquares.push(
-                    <div
-                        key={`superboard-domain-shockwave-${anchorGx}-${anchorGy}-${growthCycles}`}
-                        className="domain-expansion-shockwave"
-                        style={{
-                            position: 'absolute',
-                            top: `${centerTopPct}%`,
-                            left: `${centerLeftPct}%`,
-                            width: `${sizePct}%`,
-                            height: `${sizePct}%`,
-                            borderRadius: '50%',
-                            border: `2px solid ${affBorderColor}`,
-                            background: `radial-gradient(circle, ${isFriendly ? 'rgba(56, 189, 248, 0.35)' : 'rgba(239, 68, 68, 0.35)'} 0%, transparent 70%)`,
-                            pointerEvents: 'none',
-                            zIndex: 21,
-                            animation: `${isFriendly ? 'domainShockwaveExpand' : 'domainHostileShockwaveExpand'} 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards`
-                        }}
-                    />
-                );
-
-                // 3. Smooth Elastic Rotating Domain Square
-                rotatingSquares.push(
-                    <div
-                        key={`superboard-domain-square-${anchorGx}-${anchorGy}`}
-                        className="domain-rotating-square"
-                        style={{
-                            position: 'absolute',
-                            top: `${topPct}%`,
-                            left: `${leftPct}%`,
-                            width: `${sizePct}%`,
-                            height: `${sizePct}%`,
-                            border: `2px solid ${affBorderColor}`,
-                            boxShadow: `0 0 16px ${affGlowColor}, inset 0 0 12px ${affGlowColor}`,
-                            background: 'transparent',
-                            pointerEvents: 'none',
-                            zIndex: 22,
-                            transformOrigin: 'center center',
-                            transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
-                            animation: 'domainSquareRotate 60s linear infinite, domainSquarePulseGrow 3s ease-in-out infinite'
-                        }}
-                    />
-                );
+                squares.push({
+                    anchorGx, anchorGy, growthCycles, affiliation, isNode, anchorWidth,
+                    minGx, maxGx, minGy, maxGy,
+                    affBorderColor, affGlowColor, isFriendly, isHostile
+                });
             }
+        }
+        return squares;
+    };
+
+    renderSuperboardRotatingDomainSquares = () => {
+        if (!this.state.inSuperboard) return null;
+        const superboard = this.state.dungeon?.superboards?.[this.state.superboardType] || this.props.boardManager?.dungeon?.superboards?.[this.state.superboardType];
+        if (!superboard || !Array.isArray(superboard.miniboards)) return null;
+
+        const viewMinX = typeof this.state.superboardViewMinX === 'number' ? this.state.superboardViewMinX : 0;
+        const viewMinY = typeof this.state.superboardViewMinY === 'number' ? this.state.superboardViewMinY : 0;
+
+        const activeSquares = this.getActiveSuperboardPerfectSquares(superboard);
+        if (!activeSquares || activeSquares.length === 0) return null;
+
+        const rotatingSquares = [];
+
+        for (let i = 0; i < activeSquares.length; i++) {
+            const sq = activeSquares[i];
+            const relAnchorX = sq.anchorGx - viewMinX;
+            const relAnchorY = sq.anchorGy - viewMinY;
+            const minRelX = relAnchorX - sq.growthCycles;
+            const maxRelX = relAnchorX + (sq.isNode ? 0 : 1) + sq.growthCycles;
+            const minRelY = relAnchorY - sq.growthCycles;
+            const maxRelY = relAnchorY + (sq.isNode ? 0 : 1) + sq.growthCycles;
+
+            // Only render if within or intersecting the 15x15 viewport
+            if (maxRelX < 0 || minRelX > 14 || maxRelY < 0 || minRelY > 14) continue;
+
+            const leftPct = (minRelX / 15) * 100;
+            const topPct = (minRelY / 15) * 100;
+            const sizePct = ((sq.anchorWidth + 2 * sq.growthCycles) / 15) * 100;
+
+            const centerRelX = relAnchorX + (sq.isNode ? 0.5 : 1.0);
+            const centerRelY = relAnchorY + (sq.isNode ? 0.5 : 1.0);
+            const centerLeftPct = (centerRelX / 15) * 100;
+            const centerTopPct = (centerRelY / 15) * 100;
+
+            // 1. Monolith Beacon Flare at Center
+            rotatingSquares.push(
+                <div
+                    key={`superboard-domain-beacon-${sq.anchorGx}-${sq.anchorGy}-${sq.growthCycles}`}
+                    className="domain-beacon-flare"
+                    style={{
+                        position: 'absolute',
+                        top: `${centerTopPct}%`,
+                        left: `${centerLeftPct}%`,
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        background: `radial-gradient(circle, ${sq.isFriendly ? '#38bdf8' : '#ef4444'} 0%, ${sq.isFriendly ? 'rgba(56, 189, 248, 0.45)' : 'rgba(239, 68, 68, 0.45)'} 40%, transparent 70%)`,
+                        pointerEvents: 'none',
+                        zIndex: 23,
+                        animation: 'monolithBeaconPulse 1.8s ease-out forwards'
+                    }}
+                />
+            );
+
+            // 2. Domain Expansion Shockwave Energy Ring
+            rotatingSquares.push(
+                <div
+                    key={`superboard-domain-shockwave-${sq.anchorGx}-${sq.anchorGy}-${sq.growthCycles}`}
+                    className="domain-expansion-shockwave"
+                    style={{
+                        position: 'absolute',
+                        top: `${centerTopPct}%`,
+                        left: `${centerLeftPct}%`,
+                        width: `${sizePct}%`,
+                        height: `${sizePct}%`,
+                        borderRadius: '50%',
+                        border: `2px solid ${sq.affBorderColor}`,
+                        background: `radial-gradient(circle, ${sq.isFriendly ? 'rgba(56, 189, 248, 0.35)' : 'rgba(239, 68, 68, 0.35)'} 0%, transparent 70%)`,
+                        pointerEvents: 'none',
+                        zIndex: 21,
+                        animation: `${sq.isFriendly ? 'domainShockwaveExpand' : 'domainHostileShockwaveExpand'} 1.8s cubic-bezier(0.16, 1, 0.3, 1) forwards`
+                    }}
+                />
+            );
+
+            // 3. Smooth Elastic Rotating Domain Square with GPU-composited opacity pulse
+            rotatingSquares.push(
+                <div
+                    key={`superboard-domain-square-${sq.anchorGx}-${sq.anchorGy}`}
+                    className="domain-rotating-square"
+                    style={{
+                        position: 'absolute',
+                        top: `${topPct}%`,
+                        left: `${leftPct}%`,
+                        width: `${sizePct}%`,
+                        height: `${sizePct}%`,
+                        border: `2px solid ${sq.affBorderColor}`,
+                        boxShadow: `0 0 18px ${sq.affGlowColor}, inset 0 0 12px ${sq.affGlowColor}`,
+                        background: 'transparent',
+                        pointerEvents: 'none',
+                        zIndex: 22,
+                        transformOrigin: 'center center',
+                        willChange: 'transform, opacity',
+                        transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
+                        animation: 'domainSquareRotate 60s linear infinite, domainSquarePulseGrow 3s ease-in-out infinite'
+                    }}
+                />
+            );
         }
 
         return rotatingSquares.length > 0 ? (
@@ -29137,6 +29168,7 @@ globalY={tile.globalY}
                                     trapRevealed={!!tile.trapRevealed}
                                     trapVisionEnabled={!!this.state.trapVisionEnabled}
                                     hasTrap={!!tile.hasTrap}
+                                    insidePerfectSquareDomain={!!tile.insidePerfectSquareDomain}
                                     illuminated={
                                         this.state.inSuperboard
                                             ? (
@@ -29223,98 +29255,19 @@ globalY={tile.globalY}
                             const focusR = (superboardFogRadius + 0.5) * tileSize;
 
                             return (
-                                <svg
-                                    className={`pocket-fog-overlay ${this.state.pocketLanternFlickering ? 'lantern-flickering' : ''}`}
-                                    style={{
-                                        position: 'absolute',
-                                        top: 0,
-                                        left: 0,
-                                        width: boardSize + 'px',
-                                        height: boardSize + 'px',
-                                        pointerEvents: 'none',
-                                        zIndex: 150
-                                    }}
-                                    viewBox={`0 0 ${boardSize} ${boardSize}`}
-                                >
-                                    <defs>
-                                        <filter id="pocket-fog-feather">
-                                            <feGaussianBlur stdDeviation="3" />
-                                        </filter>
-                                        <mask id="pocket-fog-mask">
-                                            {/* Base shroud: entire canvas is covered */}
-                                            <rect x="0" y="0" width={boardSize} height={boardSize} fill="white" />
-
-                                            {/* Vision cutouts with slight feather blur for smooth edges */}
-                                            <g filter="url(#pocket-fog-feather)">
-                                                {/* 1. Focus unit circular spotlight (Player or Automaton) */}
-                                                <circle
-                                                    cx={focusCx}
-                                                    cy={focusCy}
-                                                    r={focusR}
-                                                    fill="black"
-                                                />
-
-                                                {/* 2. Observation platforms 10-tile radius circular vision */}
-                                                {(this.state.superboardObserverPlatforms || []).map((op, idx) => {
-                                                    const opLocalX = op.gx - superboardViewMinX;
-                                                    const opLocalY = op.gy - superboardViewMinY;
-                                                    const cx = (opLocalX + 0.5) * tileSize;
-                                                    const cy = (opLocalY + 0.5) * tileSize;
-                                                    const r = 10.5 * tileSize;
-                                                    return (
-                                                        <circle
-                                                            key={`op_mask_${idx}`}
-                                                            cx={cx}
-                                                            cy={cy}
-                                                            r={r}
-                                                            fill="black"
-                                                        />
-                                                    );
-                                                })}
-
-                                                {/* 3. Active vision reveal animation */}
-                                                {this.state.activeVisionRevealAnim && (() => {
-                                                    const anim = this.state.activeVisionRevealAnim;
-                                                    const animLocalX = anim.gx - superboardViewMinX;
-                                                    const animLocalY = anim.gy - superboardViewMinY;
-                                                    const cx = (animLocalX + 0.5) * tileSize;
-                                                    const cy = (animLocalY + 0.5) * tileSize;
-                                                    const r = (anim.radius + 0.5) * tileSize;
-                                                    return (
-                                                        <circle
-                                                            cx={cx}
-                                                            cy={cy}
-                                                            r={r}
-                                                            fill="black"
-                                                        />
-                                                    );
-                                                })()}
-
-                                                {/* 4. Friendly domain territory tiles */}
-                                                {(this.state.superboardDomainTiles || []).map((dt, idx) => (
-                                                    <rect
-                                                        key={`dt_mask_${idx}`}
-                                                        x={dt.vx * tileSize}
-                                                        y={dt.vy * tileSize}
-                                                        width={tileSize}
-                                                        height={tileSize}
-                                                        fill="black"
-                                                    />
-                                                ))}
-                                            </g>
-                                        </mask>
-                                    </defs>
-
-                                    {/* Black shroud rect masked by transparent vision holes */}
-                                    <rect
-                                        x="0"
-                                        y="0"
-                                        width={boardSize}
-                                        height={boardSize}
-                                        fill="#000000"
-                                        mask="url(#pocket-fog-mask)"
-                                    />
-                                </svg>
+                                <PocketFogCanvas
+                                    boardSize={boardSize}
+                                    tileSize={tileSize}
+                                    focusCx={focusCx}
+                                    focusCy={focusCy}
+                                    focusR={focusR}
+                                    observerPlatforms={this.state.superboardObserverPlatforms || []}
+                                    domainTiles={this.state.superboardDomainTiles || []}
+                                    revealAnim={this.state.activeVisionRevealAnim}
+                                    viewMinX={superboardViewMinX}
+                                    viewMinY={superboardViewMinY}
+                                    isFlickering={!!this.state.pocketLanternFlickering}
+                                />
                             );
                         })()}
 
@@ -32303,13 +32256,13 @@ globalY={tile.globalY}
                 }
                 @keyframes domainSquarePulseGrow {
                     0% {
-                        box-shadow: 0 0 14px rgba(56, 189, 248, 0.7), inset 0 0 10px rgba(56, 189, 248, 0.7);
+                        opacity: 0.65;
                     }
                     50% {
-                        box-shadow: 0 0 38px rgba(56, 189, 248, 1), inset 0 0 25px rgba(56, 189, 248, 0.9), 0 0 60px rgba(56, 189, 248, 0.6);
+                        opacity: 1;
                     }
                     100% {
-                        box-shadow: 0 0 14px rgba(56, 189, 248, 0.7), inset 0 0 10px rgba(56, 189, 248, 0.7);
+                        opacity: 0.65;
                     }
                 }
                 @keyframes domainShockwaveExpand {
