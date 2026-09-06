@@ -233,9 +233,13 @@ class DungeonView extends React.Component {
         const matrix = {
             'way_up': '#eb8560',
             'way_down': '#7bb1db',
-            'door': '#c97cdc'
+            'door': '#c97cdc',
+            'emerald_locus': '#10b981',
+            'frozen_locus': '#3b82f6',
+            'cosmic_locus': '#8b5cf6',
+            'locus': '#10b981'
         }
-        const type = (typeof contains === 'object' && contains !== null) ? contains.type : contains;
+        const type = (typeof contains === 'object' && contains !== null) ? (contains.subtype || contains.type) : contains;
         if(matrix[type]) val=matrix[type]
         return val
     }
@@ -325,13 +329,19 @@ class DungeonView extends React.Component {
             : null;
         const imageType = passage?.image;
 
-        const canonical = ['way_up', 'way_down', 'door', 'spawn_point'];
-        if (canonical.includes(containsType)) return containsType;
+        const canonical = ['way_up', 'way_down', 'door', 'spawn_point', 'locus', 'emerald_locus', 'frozen_locus', 'cosmic_locus'];
+        if (canonical.includes(containsType)) {
+            if (containsType === 'locus' && containsSubtype) return containsSubtype;
+            return containsType;
+        }
         if (canonical.includes(containsSubtype)) return containsSubtype;
         if (canonical.includes(imageType)) return imageType;
 
         if (containsType === 'spawn' && (containsSubtype === 'spawn_point' || imageType === 'spawn_point')) {
             return 'spawn_point';
+        }
+        if (containsType === 'locus') {
+            return containsSubtype || 'locus';
         }
         return containsType || containsSubtype || imageType || null;
     }
@@ -421,6 +431,14 @@ class DungeonView extends React.Component {
                 const dy = originY + unit * pCoords[1];
                 const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
                 this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix['spawnPointImg'] : null, dx, dy, size, size);
+
+            } else if (pType === 'locus' || pType === 'emerald_locus' || pType === 'frozen_locus' || pType === 'cosmic_locus' || (typeof pType === 'string' && pType.includes('locus'))) {
+                const dx = originX + unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
+                const dy = originY + unit * pCoords[1];
+                const size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
+                const locusImgKey = pType === 'frozen_locus' ? 'frozenLocusImg' : (pType === 'cosmic_locus' ? 'cosmicLocusImg' : 'emeraldLocusImg');
+                const locusImg = this.props.imagesMatrix ? (this.props.imagesMatrix[locusImgKey] || this.props.imagesMatrix['emeraldLocusImg']) : null;
+                this.safeDrawImage(ctx, locusImg, dx, dy, size, size);
 
             } else {
                 // Generic pulsing dot (door unconnected, or unknown type)
@@ -601,6 +619,13 @@ class DungeonView extends React.Component {
                         let size = 20 + Math.sin(frameCount * 0.04)**2 * 5
                         const imageKey = 'spawnPointImg';
                         this.safeDrawImage(ctx, this.props.imagesMatrix ? this.props.imagesMatrix[imageKey] : null, x, y, size, size);
+                    } else if (pType === 'locus' || pType === 'emerald_locus' || pType === 'frozen_locus' || pType === 'cosmic_locus' || (typeof pType === 'string' && pType.includes('locus'))) {
+                        let x = unit * pCoords[0] - 0.5 * unit - (Math.sin(frameCount * 0.04) ** 2 * 2);
+                        let y = unit * pCoords[1];
+                        let size = 20 + Math.sin(frameCount * 0.04) ** 2 * 5;
+                        const locusImgKey = pType === 'frozen_locus' ? 'frozenLocusImg' : (pType === 'cosmic_locus' ? 'cosmicLocusImg' : 'emeraldLocusImg');
+                        const locusImg = this.props.imagesMatrix ? (this.props.imagesMatrix[locusImgKey] || this.props.imagesMatrix['emeraldLocusImg']) : null;
+                        this.safeDrawImage(ctx, locusImg, x, y, size, size);
                     } else {
                         ctx.beginPath()
                         let minVal = 3.5;
@@ -670,8 +695,11 @@ class DungeonView extends React.Component {
 
                 ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
 
-                levelData.connected.filter(e => e && e.type === 'way_up').forEach((lim) => {
-                    if (!lim) return;
+                const targetOrientation = data.orientation === 'doubletall_F' ? 'front' : 'back';
+
+                levelData.connected.filter(e => e && e.type === 'way_up' && e.orientation === targetOrientation).forEach((lim) => {
+                    if (!lim || !lim.connectedTo) return;
+                    const connectedTo = lim.connectedTo;
 
                     const limCoords = (lim.coordinates && Array.isArray(lim.coordinates) && lim.coordinates.length >= 2 && lim.coordinates[0] !== undefined && lim.coordinates[0] !== null)
                         ? lim.coordinates
@@ -681,11 +709,21 @@ class DungeonView extends React.Component {
                     const limMbCol = limMbIdx % 3;
                     const limMbRow = Math.floor(limMbIdx / 3);
 
-                    const startX = limMbCol * mbSize + limCoords[0] * microUnit + microUnit / 2;
-                    const startY = limMbRow * mbSize + limCoords[1] * microUnit + microUnit / 2;
+                    const targetCoords = (connectedTo.coordinates && Array.isArray(connectedTo.coordinates) && connectedTo.coordinates.length >= 2 && connectedTo.coordinates[0] !== undefined && connectedTo.coordinates[0] !== null)
+                        ? connectedTo.coordinates
+                        : (typeof connectedTo.tileId === 'number' ? [connectedTo.tileId % 15, Math.floor(connectedTo.tileId / 15)] : (typeof connectedTo.id === 'number' ? [connectedTo.id % 15, Math.floor(connectedTo.id / 15)] : limCoords));
 
-                    const endX = startX;
-                    const endY = planeWidth + limMbRow * mbSize + limCoords[1] * microUnit + microUnit / 2;
+                    const targetMbIdx = (connectedTo.miniboardIndex !== undefined && connectedTo.miniboardIndex !== null) ? connectedTo.miniboardIndex : limMbIdx;
+                    const targetMbCol = targetMbIdx % 3;
+                    const targetMbRow = Math.floor(targetMbIdx / 3);
+
+                    // Source (way_up on current level): lower half of doubletall canvas (y from planeWidth to 2*planeWidth)
+                    const startX = limMbCol * mbSize + limCoords[0] * microUnit + microUnit / 2;
+                    const startY = planeWidth + limMbRow * mbSize + limCoords[1] * microUnit + microUnit / 2;
+
+                    // Destination (way_down on level above): upper half of doubletall canvas (y from 0 to planeWidth)
+                    const endX = targetMbCol * mbSize + targetCoords[0] * microUnit + microUnit / 2;
+                    const endY = targetMbRow * mbSize + targetCoords[1] * microUnit + microUnit / 2;
 
                     ctx.lineWidth = 2.5;
                     ctx.strokeStyle = '#4ade80';
@@ -697,8 +735,8 @@ class DungeonView extends React.Component {
                     const bendDirH = startX > (planeWidth / 2) ? -1 : 1;
                     const controlOffsetH = 50 * bendDirH;
 
-                    const c1 = { x: startX + controlOffsetH, y: startY };
-                    const c2 = { x: startX + controlOffsetH, y: endY };
+                    const c1 = { x: startX + controlOffsetH, y: startY - Math.abs(startY - endY) * 0.25 };
+                    const c2 = { x: endX + controlOffsetH, y: endY + Math.abs(startY - endY) * 0.25 };
                     ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, endX, endY);
                     ctx.stroke();
                 });

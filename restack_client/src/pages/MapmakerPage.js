@@ -206,6 +206,7 @@ class MapMakerPage extends React.Component {
       pinnedOption: null,
       mouseDown: false,
       lastWallBreakerTileId: null,
+      passageDragStartId: null,
       superboardBrush3x3: false,
       // Inscription placement state
       inscriptionDragStartId: null,
@@ -307,6 +308,7 @@ class MapMakerPage extends React.Component {
     this.boardViewportRef = React.createRef();
     // Mutable gesture state — stored on instance to avoid render churn
     this._touchState = null;
+    this.passageWallDragged = false;
   }
 
   setSuperboardZoom = (zoom) => {
@@ -380,6 +382,12 @@ class MapMakerPage extends React.Component {
       if (shrineOption) {
         containsObj = { type: 'shrine', subtype: shrineOption.classKey };
         tileColor = shrineOption.color;
+      }
+    } else if (pinnedOption.type === 'locus-tile') {
+      const locusOption = this.props.mapMaker?.locusOptions?.[pinnedOption.id];
+      if (locusOption) {
+        containsObj = { type: 'locus', subtype: locusOption.key, locusType: locusOption.locusType, name: locusOption.name };
+        tileImage = images[locusOption.image] || locusOption.image;
       }
     } else if (pinnedOption.type === 'building-tile') {
       const buildingOption = this.props.mapMaker?.buildingOptions?.[pinnedOption.id];
@@ -722,7 +730,10 @@ class MapMakerPage extends React.Component {
         loadedImages.arrowDownImg &&
         loadedImages.arrowDownImgInvalid &&
         loadedImages.doorImg &&
-        loadedImages.spawnPointImg
+        loadedImages.spawnPointImg &&
+        loadedImages.emeraldLocusImg &&
+        loadedImages.frozenLocusImg &&
+        loadedImages.cosmicLocusImg
       ) {
         that.setState({ imagesMatrix: loadedImages })
       }
@@ -762,6 +773,24 @@ class MapMakerPage extends React.Component {
     spawnPointImg.src = images['spawn_point']
     spawnPointImg.onload = function () {
       loadedImages['spawnPointImg'] = spawnPointImg;
+      checkIfAllImagesHaveLoaded()
+    }
+    let emeraldLocusImg = new Image()
+    emeraldLocusImg.src = images['emerald_locus']
+    emeraldLocusImg.onload = function () {
+      loadedImages['emeraldLocusImg'] = emeraldLocusImg;
+      checkIfAllImagesHaveLoaded()
+    }
+    let frozenLocusImg = new Image()
+    frozenLocusImg.src = images['frozen_locus']
+    frozenLocusImg.onload = function () {
+      loadedImages['frozenLocusImg'] = frozenLocusImg;
+      checkIfAllImagesHaveLoaded()
+    }
+    let cosmicLocusImg = new Image()
+    cosmicLocusImg.src = images['cosmic_locus']
+    cosmicLocusImg.onload = function () {
+      loadedImages['cosmicLocusImg'] = cosmicLocusImg;
       checkIfAllImagesHaveLoaded()
     }
 
@@ -1611,6 +1640,77 @@ class MapMakerPage extends React.Component {
     return modified ? nextTiles : tiles;
   }
 
+  buildPassageWall = (tiles, fromTileId, toTileId) => {
+    if (fromTileId === null || fromTileId === undefined || toTileId === null || toTileId === undefined || fromTileId === toTileId) {
+      return tiles;
+    }
+
+    const delta = toTileId - fromTileId;
+    const fromRow = Math.floor(fromTileId / 15);
+    const toRow = Math.floor(toTileId / 15);
+    const fromCol = fromTileId % 15;
+    const toCol = toTileId % 15;
+
+    let fromSide = null;
+    let toSide = null;
+
+    if (delta === 1 && fromRow === toRow) {
+      fromSide = 'right';
+      toSide = 'left';
+    } else if (delta === -1 && fromRow === toRow) {
+      fromSide = 'left';
+      toSide = 'right';
+    } else if (delta === 15 && fromCol === toCol) {
+      fromSide = 'bottom';
+      toSide = 'top';
+    } else if (delta === -15 && fromCol === toCol) {
+      fromSide = 'top';
+      toSide = 'bottom';
+    } else {
+      return tiles;
+    }
+
+    const nextTiles = [...tiles];
+    const sourceTile = nextTiles[fromTileId];
+    const targetTile = nextTiles[toTileId];
+    let modified = false;
+
+    const sourceContainsType = sourceTile ? this.getContainsType(sourceTile.contains) : null;
+    const targetContainsType = targetTile ? this.getContainsType(targetTile.contains) : null;
+
+    if (sourceTile && sourceContainsType !== 'void' && sourceContainsType !== null) {
+      const currentBorder = sourceTile.borders?.[fromSide];
+      const isGold = currentBorder && (String(currentBorder).includes('#d4a844') || String(currentBorder).includes('gold') || String(currentBorder).includes('e5b54f'));
+      if (!isGold) {
+        nextTiles[fromTileId] = {
+          ...sourceTile,
+          borders: {
+            ...(Array.isArray(sourceTile.borders) ? {} : (sourceTile.borders || {})),
+            [fromSide]: '2px solid black'
+          }
+        };
+        modified = true;
+      }
+    }
+
+    if (targetTile && targetContainsType !== 'void' && targetContainsType !== null) {
+      const currentBorder = targetTile.borders?.[toSide];
+      const isGold = currentBorder && (String(currentBorder).includes('#d4a844') || String(currentBorder).includes('gold') || String(currentBorder).includes('e5b54f'));
+      if (!isGold) {
+        nextTiles[toTileId] = {
+          ...targetTile,
+          borders: {
+            ...(Array.isArray(targetTile.borders) ? {} : (targetTile.borders || {})),
+            [toSide]: '2px solid black'
+          }
+        };
+        modified = true;
+      }
+    }
+
+    return modified ? nextTiles : tiles;
+  }
+
   placeTileAtId = (tileId, pinnedOption, pinned) => {
     if (!pinnedOption) return null;
 
@@ -1684,8 +1784,12 @@ class MapMakerPage extends React.Component {
     if (pinnedOption.type === 'terrain-tile') {
       terrainOption = this.props.mapMaker.terrainOptions[pinnedOption.id];
     }
+    let locusOption = null;
+    if (pinnedOption.type === 'locus-tile') {
+      locusOption = this.props.mapMaker?.locusOptions?.[pinnedOption.id];
+    }
 
-    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption || terrainOption;
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption || terrainOption || locusOption;
     if (!isSpecialOption && !pinned) return null;
 
     let arr = this.state.tiles.map(t => ({ ...t }));
@@ -1805,11 +1909,20 @@ class MapMakerPage extends React.Component {
           return null;
         }
         arr = this.placeVendorFootprint(arr, tileId, terrainOption.key, 'terrain', images[terrainOption.image] || terrainOption.image);
-      } else {
         arr[tileId].contains = { type: 'terrain', subtype: terrainOption.key };
         arr[tileId].image = images[terrainOption.image] || terrainOption.image;
         arr[tileId].color = null;
       }
+    } else if (locusOption) {
+      arr[tileId].contains = {
+        type: 'locus',
+        subtype: locusOption.key,
+        locusType: locusOption.locusType,
+        name: locusOption.name,
+        locusId: `locus_${locusOption.locusType}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+      };
+      arr[tileId].image = images[locusOption.image] || locusOption.image;
+      arr[tileId].color = null;
     } else if (pinned.optionType === 'passage') {
       let prevTileIdx = this.state.hoveredTileIdx;
       let connectedTop = false, connectedBot = false, connectedLeft = false, connectedRight = false;
@@ -1909,17 +2022,19 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile', 'terrain-tile', 'forest-stamp-tile', 'mountain-stamp-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile', 'terrain-tile', 'locus-tile', 'forest-stamp-tile', 'mountain-stamp-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
       let tile = this.state.tiles[id];
       let pinned = pinnedPaletteTile;
-      if (pinnedPassageTool?.key === 'wall_breaker') {
+      if (pinnedPassageTool?.key === 'wall_breaker' || pinnedPassageTool?.key === 'wall_builder') {
         const fromId = (this.state.lastWallBreakerTileId !== null && this.state.lastWallBreakerTileId !== undefined)
           ? this.state.lastWallBreakerTileId
           : this.state.hoveredTileIdx;
-        const arr = this.breakPassageWall([...this.state.tiles], fromId, tile.id);
+        const arr = pinnedPassageTool.key === 'wall_builder'
+          ? this.buildPassageWall([...this.state.tiles], fromId, tile.id)
+          : this.breakPassageWall([...this.state.tiles], fromId, tile.id);
         const updatedLoadedBoard = this.state.loadedBoard ? {
           ...this.state.loadedBoard,
           tiles: arr
@@ -1988,7 +2103,11 @@ class MapMakerPage extends React.Component {
   }
 
   mouseDownHandler = () => {
-    this.setState({ mouseDown: true, inscriptionDragStartId: this.state.hoveredTileIdx });
+    this.setState({
+      mouseDown: true,
+      inscriptionDragStartId: this.state.hoveredTileIdx,
+      lastWallBreakerTileId: this.state.hoveredTileIdx
+    });
   }
   mouseUpHandler = (e) => {
     const prevMouseDown = this.state.mouseDown;
@@ -2878,7 +2997,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile' || tile.type === 'terrain-tile' || tile.type === 'forest-stamp-tile' || tile.type === 'mountain-stamp-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile' || tile.type === 'terrain-tile' || tile.type === 'locus-tile' || tile.type === 'forest-stamp-tile' || tile.type === 'mountain-stamp-tile') {
       this.setState({
         pinnedOption: tile
       })
@@ -2959,10 +3078,12 @@ class MapMakerPage extends React.Component {
         ? this.props.mapMaker.passageOptions?.[this.state.pinnedOption.id]
         : null;
 
-      if (pinnedPassageTool?.key === 'wall_breaker') {
+      if (pinnedPassageTool?.key === 'wall_breaker' || pinnedPassageTool?.key === 'wall_builder') {
         const fromId = this.state.lastWallBreakerTileId;
         if (fromId !== null && fromId !== undefined && fromId !== tile.id) {
-          const arr = this.breakPassageWall([...this.state.tiles], fromId, tile.id);
+          const arr = pinnedPassageTool.key === 'wall_builder'
+            ? this.buildPassageWall([...this.state.tiles], fromId, tile.id)
+            : this.breakPassageWall([...this.state.tiles], fromId, tile.id);
           const updatedLoadedBoard = this.state.loadedBoard ? {
             ...this.state.loadedBoard,
             tiles: arr
@@ -8255,12 +8376,15 @@ class MapMakerPage extends React.Component {
           top = Math.min(Math.max(top, minY), maxY);
 
           const btnStyle = (active) => ({
-            width: '42px', height: '42px',
+            width: '44px', height: '44px',
+            boxSizing: 'border-box',
+            margin: 0,
+            padding: 0,
             background: active ? 'linear-gradient(135deg, rgba(212,168,68,0.95), rgba(249,177,21,0.95))' : 'rgba(30,20,10,0.9)',
             border: active ? '1px solid #ffe082' : '1px solid rgba(229,181,79,0.5)',
-            color: '#fff', fontSize: '16px', fontWeight: 'bold',
+            color: '#fff', fontSize: '18px', fontWeight: 'bold',
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            borderRadius: '6px', transition: 'all 0.15s ease',
+            borderRadius: '8px', transition: 'all 0.15s ease',
             boxShadow: active ? '0 0 10px rgba(249,177,21,0.5)' : 'none'
           });
           const cancelBtnStyle = {
@@ -8268,7 +8392,7 @@ class MapMakerPage extends React.Component {
             background: 'rgba(90, 20, 20, 0.9)',
             borderColor: 'rgba(255, 100, 100, 0.6)',
             color: '#ffaaaa',
-            fontSize: '14px'
+            fontSize: '15px'
           };
           const tile = this.state.tiles[tileId] || {};
           const ins = tile.inscriptions || {};
@@ -8292,40 +8416,33 @@ class MapMakerPage extends React.Component {
                   border: '2px solid #e5b54f',
                   borderRadius: '12px',
                   boxShadow: '0 12px 40px rgba(0,0,0,0.85), 0 0 25px rgba(229, 181, 79, 0.3)',
-                  padding: '12px',
+                  padding: '14px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  gap: '8px',
+                  gap: '10px',
                   zIndex: 10001,
                   animation: 'fadeIn 0.15s ease-out'
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div style={{ fontFamily: "'Cinzel', serif", fontSize: '11px', fontWeight: '700', color: '#f9b115', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: '12px', fontWeight: '700', color: '#f9b115', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                   Select Wall
                 </div>
 
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 42px)',
-                  gridTemplateRows: 'repeat(3, 42px)',
-                  gap: '4px'
+                  gridTemplateColumns: 'repeat(3, 44px)',
+                  gridTemplateRows: 'repeat(3, 44px)',
+                  gap: '6px',
+                  justifyContent: 'center',
+                  alignItems: 'center'
                 }}>
-                  {/* Row 1: empty, Top, empty */}
-                  <div />
-                  <button style={btnStyle(!!ins.top)} onClick={() => this.selectInscriptionSide('top')} title={ins.top ? ins.top : 'Inscribe north wall'}>↑</button>
-                  <div />
-
-                  {/* Row 2: Left, Cancel-X, Right */}
-                  <button style={btnStyle(!!ins.left)} onClick={() => this.selectInscriptionSide('left')} title={ins.left ? ins.left : 'Inscribe west wall'}>←</button>
-                  <button style={cancelBtnStyle} onClick={this.cancelInscription} title="Cancel">✕</button>
-                  <button style={btnStyle(!!ins.right)} onClick={() => this.selectInscriptionSide('right')} title={ins.right ? ins.right : 'Inscribe east wall'}>→</button>
-
-                  {/* Row 3: empty, Bottom, empty */}
-                  <div />
-                  <button style={btnStyle(!!ins.bottom)} onClick={() => this.selectInscriptionSide('bottom')} title={ins.bottom ? ins.bottom : 'Inscribe south wall'}>↓</button>
-                  <div />
+                  <button style={{ ...btnStyle(!!ins.top), gridColumn: '2', gridRow: '1' }} onClick={() => this.selectInscriptionSide('top')} title={ins.top ? ins.top : 'Inscribe north wall'}>↑</button>
+                  <button style={{ ...btnStyle(!!ins.left), gridColumn: '1', gridRow: '2' }} onClick={() => this.selectInscriptionSide('left')} title={ins.left ? ins.left : 'Inscribe west wall'}>←</button>
+                  <button style={{ ...cancelBtnStyle, gridColumn: '2', gridRow: '2' }} onClick={this.cancelInscription} title="Cancel">✕</button>
+                  <button style={{ ...btnStyle(!!ins.right), gridColumn: '3', gridRow: '2' }} onClick={() => this.selectInscriptionSide('right')} title={ins.right ? ins.right : 'Inscribe east wall'}>→</button>
+                  <button style={{ ...btnStyle(!!ins.bottom), gridColumn: '2', gridRow: '3' }} onClick={() => this.selectInscriptionSide('bottom')} title={ins.bottom ? ins.bottom : 'Inscribe south wall'}>↓</button>
                 </div>
 
                 {Object.keys(ins).length > 0 && (
