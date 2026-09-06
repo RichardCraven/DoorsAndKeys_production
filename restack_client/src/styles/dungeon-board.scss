@@ -2437,6 +2437,119 @@
     filter: drop-shadow(0 0 12px rgba(255, 0, 0, 1)) brightness(1.1) sepia(0.2) saturate(2.5);
 }
 
+/* ── Recuperating Campfire Billowing Flames Effect ── */
+.floating-player.recuperating {
+    position: absolute;
+
+    /* Radial warm hearth glow on the ground tile */
+    &::before {
+        content: '';
+        position: absolute;
+        bottom: -8%;
+        left: -15%;
+        right: -15%;
+        height: 55%;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, rgba(255, 140, 20, 0.7) 0%, rgba(245, 90, 0, 0.4) 45%, rgba(200, 40, 0, 0.12) 72%, transparent 88%);
+        pointer-events: none;
+        z-index: -1;
+        animation: campfireGroundGlowPulse 1.8s ease-in-out infinite alternate;
+    }
+
+    /* Floating heat haze / ambient ember radiance overlay */
+    &::after {
+        content: '';
+        position: absolute;
+        top: -32%;
+        left: 5%;
+        right: 5%;
+        height: 65%;
+        background: radial-gradient(ellipse at center bottom, rgba(255, 210, 90, 0.45) 0%, rgba(255, 120, 0, 0.22) 40%, transparent 78%);
+        pointer-events: none;
+        z-index: 2;
+        filter: blur(5px);
+        animation: campfireHeatHazeBillow 2.2s cubic-bezier(0.4, 0, 0.6, 1) infinite alternate;
+    }
+
+    .avatar-image-inner {
+        transform-origin: bottom center !important;
+        animation: campfireBillow 2.4s ease-in-out infinite;
+        filter: drop-shadow(0 -4px 10px rgba(255, 130, 10, 0.9)) drop-shadow(0 -7px 16px rgba(255, 60, 0, 0.55)) brightness(1.15);
+    }
+}
+
+/* Keyframes for natural flame billowing motion & drop-shadow radiance flicker */
+@keyframes campfireBillow {
+    0% {
+        transform: scaleY(1) scaleX(1) translateY(0) rotate(0deg);
+        filter: drop-shadow(0 -4px 9px rgba(255, 140, 20, 0.88)) drop-shadow(0 -7px 15px rgba(240, 70, 0, 0.52)) brightness(1.08);
+    }
+    14% {
+        transform: scaleY(1.07) scaleX(0.95) translateY(-2.5px) rotate(1deg);
+        filter: drop-shadow(0 -6px 14px rgba(255, 185, 45, 0.98)) drop-shadow(0 -9px 20px rgba(255, 95, 0, 0.7)) brightness(1.25);
+    }
+    28% {
+        transform: scaleY(0.96) scaleX(1.04) translateY(0.5px) rotate(-1deg);
+        filter: drop-shadow(0 -3px 8px rgba(255, 120, 10, 0.82)) drop-shadow(0 -6px 13px rgba(230, 50, 0, 0.46)) brightness(1.04);
+    }
+    42% {
+        transform: scaleY(1.09) scaleX(0.93) translateY(-3.5px) rotate(-1.5deg);
+        filter: drop-shadow(0 -7px 16px rgba(255, 195, 55, 1)) drop-shadow(0 -11px 24px rgba(255, 105, 0, 0.75)) brightness(1.32);
+    }
+    57% {
+        transform: scaleY(1.02) scaleX(0.98) translateY(-1px) rotate(1deg);
+        filter: drop-shadow(0 -4px 10px rgba(255, 150, 30, 0.9)) drop-shadow(0 -7px 16px rgba(245, 75, 0, 0.58)) brightness(1.14);
+    }
+    71% {
+        transform: scaleY(1.08) scaleX(0.94) translateY(-3px) rotate(0.5deg);
+        filter: drop-shadow(0 -6px 15px rgba(255, 180, 50, 0.97)) drop-shadow(0 -10px 22px rgba(255, 85, 0, 0.72)) brightness(1.26);
+    }
+    85% {
+        transform: scaleY(0.97) scaleX(1.03) translateY(-0.5px) rotate(-0.5deg);
+        filter: drop-shadow(0 -4px 9px rgba(255, 130, 15, 0.84)) drop-shadow(0 -6px 14px rgba(235, 60, 0, 0.5)) brightness(1.07);
+    }
+    100% {
+        transform: scaleY(1) scaleX(1) translateY(0) rotate(0deg);
+        filter: drop-shadow(0 -4px 9px rgba(255, 140, 20, 0.88)) drop-shadow(0 -7px 15px rgba(240, 70, 0, 0.52)) brightness(1.08);
+    }
+}
+
+@keyframes campfireGroundGlowPulse {
+    0% {
+        opacity: 0.65;
+        transform: scale(0.94);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+    100% {
+        opacity: 0.75;
+        transform: scale(0.97);
+    }
+}
+
+@keyframes campfireHeatHazeBillow {
+    0% {
+        opacity: 0.3;
+        transform: translateY(0) scaleX(0.9);
+    }
+    50% {
+        opacity: 0.75;
+        transform: translateY(-7px) scaleX(1.12);
+    }
+    100% {
+        opacity: 0.4;
+        transform: translateY(-3px) scaleX(0.95);
+    }
+}
+
+/* Standalone billowing campfire icon animation for UI buttons/panels */
+.recuperating-campfire-icon {
+    transform-origin: bottom center !important;
+    animation: campfireBillow 2.4s ease-in-out infinite;
+}
+
 @keyframes avatarShake {
     0% { transform: translate(0, 0) rotate(0deg); }
     10% { transform: translate(-3px, 1px) rotate(-1deg); }
@@ -5588,6 +5701,32 @@
             transform: translateY(-1px);
         }
 
+        &:active {
+            transform: translateY(1px);
+        }
+    }
+}
+
+/* Locus Resonance Network Modal */
+.locus-network-modal {
+    .modal-content {
+        background-color: #0d111a;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(16, 185, 129, 0.15);
+        border-radius: 12px;
+        overflow: hidden;
+    }
+
+    .modal-dialog {
+        max-width: 780px;
+    }
+
+    .locus-transport-btn {
+        transition: all 0.2s ease;
+        &:hover {
+            transform: translateY(-2px) scale(1.02);
+            filter: brightness(1.15);
+        }
         &:active {
             transform: translateY(1px);
         }

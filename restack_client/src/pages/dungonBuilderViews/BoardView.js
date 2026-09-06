@@ -182,9 +182,12 @@ class BoardView extends React.Component {
                 vendorOption = this.props.mapMaker?.vendorOptions?.[pinnedOption.id];
             }
 
-            let shrineOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null, terrainOption = null;
+            let shrineOption = null, locusOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null, terrainOption = null;
             if (pinnedOption.type === 'shrine-tile') {
                 shrineOption = this.props.mapMaker?.shrineOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'locus-tile') {
+                locusOption = this.props.mapMaker?.locusOptions?.[pinnedOption.id];
             }
             if (pinnedOption.type === 'territory-tile') {
                 territoryOption = this.props.mapMaker?.territoryOptions?.[pinnedOption.id];
@@ -232,6 +235,9 @@ class BoardView extends React.Component {
             } else if (shrineOption) {
                 previewContains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
                 previewColor = shrineOption.color;
+            } else if (locusOption) {
+                previewContains = { type: 'locus', subtype: locusOption.key, locusType: locusOption.locusType, name: locusOption.name };
+                previewImage = images[locusOption.image] || locusOption.image;
             } else if (pinned.optionType === 'tablet') {
                 previewContains = { type: 'tablet', subtype: null };
                 previewImage = 'tablet';

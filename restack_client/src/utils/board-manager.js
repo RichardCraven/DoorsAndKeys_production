@@ -436,6 +436,9 @@ export function BoardManager(){
         if (type === 'dungeon_portal' || type === 'dungeon portal' || type === 'portal' || type === 'teleporter' || subtype === 'dungeon_portal' || subtype === 'dungeon portal' || subtype === 'portal' || subtype === 'teleporter') {
             return 'dungeon_portal';
         }
+        if (type === 'locus' || subtype === 'locus' || type === 'locuses' || subtype === 'emerald_locus' || subtype === 'frozen_locus' || subtype === 'cosmic_locus') {
+            return subtype || (type === 'locus' ? 'emerald_locus' : type);
+        }
         if (type === 'vendor') {
             return this.getImage(subtype);
         }
@@ -3423,9 +3426,78 @@ export function BoardManager(){
             case 'dungeon_portal':
             case 'teleporter':
                 return 'dungeon_portal'
+            case 'locus':
+            case 'locuses':
+            case 'emerald locus':
+            case 'emerald_locus':
+                return 'emerald_locus'
+            case 'frozen locus':
+            case 'frozen_locus':
+                return 'frozen_locus'
+            case 'cosmic locus':
+            case 'cosmic_locus':
+                return 'cosmic_locus'
             default:
                 return key
         }
+    }
+
+    this.getAllLociInDungeon = (dungeon, locusType = null) => {
+        const loci = [];
+        const d = dungeon || this.dungeon;
+        if (!d || !Array.isArray(d.levels)) return loci;
+        d.levels.forEach((level) => {
+            ['front', 'back'].forEach((orientation) => {
+                const plane = level[orientation];
+                if (plane && Array.isArray(plane.miniboards)) {
+                    plane.miniboards.forEach((mb, mbIndex) => {
+                        if (mb && Array.isArray(mb.tiles)) {
+                            mb.tiles.forEach((tile) => {
+                                const contains = tile.contains;
+                                const type = contains && (contains.type || contains);
+                                const subtype = contains && (contains.subtype || contains.key);
+                                const isLocus = type === 'locus' || subtype === 'locus' ||
+                                    (typeof type === 'string' && type.includes('locus')) ||
+                                    (typeof subtype === 'string' && subtype.includes('locus')) ||
+                                    (typeof tile.image === 'string' && tile.image.includes('locus'));
+                                if (isLocus) {
+                                    const tileCoords = (tile.coordinates && Array.isArray(tile.coordinates) && tile.coordinates.length >= 2 && tile.coordinates[0] !== undefined && tile.coordinates[0] !== null)
+                                        ? tile.coordinates
+                                        : [(typeof tile.id === 'number' ? tile.id % 15 : 0), (typeof tile.id === 'number' ? Math.floor(tile.id / 15) : 0)];
+
+                                    const thisLocusType = (contains && contains.locusType) ||
+                                        (String(subtype || type || tile.image || '').includes('emerald') ? 'emerald' :
+                                         String(subtype || type || tile.image || '').includes('frozen') ? 'frozen' :
+                                         String(subtype || type || tile.image || '').includes('cosmic') ? 'cosmic' : 'emerald');
+
+                                    if (locusType && thisLocusType !== locusType) {
+                                        return;
+                                    }
+
+                                    const locusId = (contains && contains.locusId) || `locus_${thisLocusType}_lvl_${level.id}_${orientation}_mb_${mbIndex}_tile_${tile.id}`;
+                                    const locusName = (contains && contains.name) ||
+                                        `${thisLocusType.charAt(0).toUpperCase() + thisLocusType.slice(1)} Locus (Lvl ${level.id} ${orientation === 'front' ? 'Front' : 'Back'} Board ${mbIndex + 1})`;
+
+                                    loci.push({
+                                        tileId: tile.id,
+                                        coordinates: tileCoords,
+                                        miniboardIndex: mbIndex,
+                                        orientation: orientation,
+                                        levelId: level.id,
+                                        levelName: level.name || `Level ${level.id}`,
+                                        locusType: thisLocusType,
+                                        locusId: locusId,
+                                        name: locusName,
+                                        image: (contains && contains.subtype) || `${thisLocusType}_locus`,
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        });
+        return loci;
     } 
     this.handleFogOfWar = (destinationTile, options = {}) => {
         if (this.inSuperboard || this.currentBoard?.id === 'superboard') {

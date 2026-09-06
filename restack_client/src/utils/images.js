@@ -1024,6 +1024,10 @@ import litter_edge_rocks from '../assets/gemini_images/litter_edge_rocks.png';
 import litter_edge_wood from '../assets/gemini_images/litter_edge_wood.png';
 import litter_small_barrel from '../assets/gemini_images/litter_small_barrel.png';
 import litter_edge_bones from '../assets/gemini_images/litter_edge_bones.png';
+import litter_broken_crates from '../assets/gemini_images/litter_broken_crates.png';
+import litter_broken_urns from '../assets/gemini_images/litter_broken_urns.png';
+import litter_battle_debris from '../assets/gemini_images/litter_battle_debris.png';
+import litter_iron_chains from '../assets/gemini_images/litter_iron_chains.png';
 import chemical_lantern from '../assets/gemini_images/chemical_lantern.png';
 import territorial_lantern from '../assets/gemini_images/territorial_lantern.png';
 import automaton from '../assets/automatons/automaton.png';
@@ -2828,6 +2832,10 @@ export {
     litter_edge_wood,
     litter_small_barrel,
     litter_edge_bones,
+    litter_broken_crates,
+    litter_broken_urns,
+    litter_battle_debris,
+    litter_iron_chains,
     chemical_lantern,
     territorial_lantern,
 

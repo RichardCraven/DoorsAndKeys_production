@@ -25,6 +25,7 @@ class BoardsPalette extends React.Component {
     }
 
     getOptionLabel = (optionType) => {
+        if (optionType === 'locuses') return 'Locuses';
         if (optionType === 'tablet') return 'Tablet';
         if (optionType === 'jewels') return 'Jewels';
         if (optionType === 'runes') return 'Runes';
@@ -130,7 +131,7 @@ class BoardsPalette extends React.Component {
                                     </button>
                                 </div>
                             )}
-                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'terrain'].includes(tile.optionType) && (() => {
+                            {['monsters', 'passage', 'gate', 'key', 'items', 'treasure', 'jewels', 'runes', 'vendors', 'locuses', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'terrain'].includes(tile.optionType) && (() => {
                                 const isExpanded = this.props.optionClickedIdx === i;
                                 return (
                                     <div style={{ marginRight: '15px', display: 'flex', alignItems: 'center', userSelect: 'none' }}>
@@ -256,7 +257,7 @@ class BoardsPalette extends React.Component {
                                     image={passageItem.image}
                                     imageOverride={passageItem.image && images[passageItem.image] ? images[passageItem.image] : null}
                                     color={null}
-                                    borders={{ top: '2px solid black', left: '2px solid black', right: '2px solid transparent', bottom: '2px solid black' }}
+                                    borders={passageItem.borders || { top: '2px solid black', left: '2px solid black', right: '2px solid transparent', bottom: '2px solid black' }}
                                     handleHover={null}
                                     handleClick={null}
                                     isPaletteTile={true}
@@ -492,6 +493,37 @@ class BoardsPalette extends React.Component {
                                     index={vi}
                                     image={images[vendorItem.image]}
                                     imageOverride={images[vendorItem.image]}
+                                    handleHover={null}
+                                    handleClick={null}
+                                    isPaletteTile={true}
+                                    type={'item'}>
+                                    </Tile>
+                                </div>
+                            })}
+                        </div>}
+                        {tile.optionType === 'locuses' && <div className={`palette-option-expandable-container ${this.props.optionClickedIdx === i ? 'expanded' : ''}`}>
+                            {(this.props.mapMaker.locusOptions || []).map((locusItem, li) => {
+                                const isHovered = this.state.hoveredSubItem?.type === 'locus' && this.state.hoveredSubItem?.id === li;
+                                const isSelected = this.props.pinnedOption?.type === 'locus-tile' && this.props.pinnedOption?.id === li;
+                                return <div
+                                key={`locus-${li}`}
+                                className={`palette-option-subcontainer${isHovered ? ' sub-hovered' : ''}${isSelected ? ' sub-selected' : ''}`}
+                                onMouseEnter={() => this.setState({ hoveredSubItem: { type: 'locus', id: li } })}
+                                onMouseLeave={() => this.setState({ hoveredSubItem: null })}
+                                onClick={() => {
+                                    this.props.handleClick({
+                                        type: 'locus-tile',
+                                        id: li
+                                    })
+                                }}
+                                >
+                                    <div className="text-container">{locusItem.name}</div>
+                                    <Tile
+                                    id={li}
+                                    tileSize={this.props.tileSize}
+                                    index={li}
+                                    image={locusItem.image}
+                                    imageOverride={images[locusItem.image] || locusItem.image}
                                     handleHover={null}
                                     handleClick={null}
                                     isPaletteTile={true}

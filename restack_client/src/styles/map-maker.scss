@@ -3,39 +3,48 @@ $apex-level-zIndex: 5; // interaction layer
 $top-level-zIndex: 4; // 9 panel miniboard overlay
 $mid-level-zIndex: 3; // doublewide canvas container
 $bot-level-zIndex: 2; // doubletall containers
-*{
-    backface-visibility:hidden;
+
+* {
+    backface-visibility: hidden;
     -ms-overflow-style: none;
-    &::-webkit-scrollbar{
+
+    &::-webkit-scrollbar {
         display: none;
     }
+
     box-sizing: content-box;
 }
-.modal-body{
+
+.modal-body {
     justify-content: center;
     align-items: center;
     display: flex;
 }
-.clear-unique-instances-modal{
-    .modal-content{
+
+.clear-unique-instances-modal {
+    .modal-content {
         position: relative;
         width: auto;
         max-width: 90vw;
         min-width: 320px;
     }
-    .modal-body{
+
+    .modal-body {
         padding: 16px;
         display: flex;
         justify-content: center;
     }
-    .clear-unique-instances-modal__header{
+
+    .clear-unique-instances-modal__header {
         position: relative;
         padding-right: 56px;
     }
-    .clear-unique-instances-modal__header .btn-close{
+
+    .clear-unique-instances-modal__header .btn-close {
         display: none;
     }
-    .clear-unique-instances-modal__close{
+
+    .clear-unique-instances-modal__close {
         position: absolute;
         top: 10px;
         right: 12px;
@@ -47,7 +56,8 @@ $bot-level-zIndex: 2; // doubletall containers
         cursor: pointer;
         padding: 0;
     }
-    .clear-unique-instances-modal__body{
+
+    .clear-unique-instances-modal__body {
         display: flex;
         flex-direction: column;
         align-items: stretch;
@@ -55,21 +65,25 @@ $bot-level-zIndex: 2; // doubletall containers
         width: 90%;
         max-width: 100%;
     }
-    .main-content{
+
+    .main-content {
         font-size: 1rem;
         line-height: 1.45;
         color: #1d1d1d;
     }
-    .affected-instances-section{
+
+    .affected-instances-section {
         display: flex;
         flex-direction: column;
         gap: 8px;
     }
-    .affected-instances-title{
+
+    .affected-instances-title {
         font-weight: 700;
         color: #1d1d1d;
     }
-    .affected-instances-list{
+
+    .affected-instances-list {
         max-height: 260px;
         overflow-y: auto;
         overflow-x: hidden;
@@ -81,8 +95,9 @@ $bot-level-zIndex: 2; // doubletall containers
         width: 100%;
         min-width: 0;
     }
+
     .affected-instances-empty,
-    .affected-instance-row{
+    .affected-instance-row {
         padding: 10px 12px;
         border-bottom: 1px solid rgba(0, 0, 0, 0.08);
         color: #1d1d1d;
@@ -90,76 +105,92 @@ $bot-level-zIndex: 2; // doubletall containers
         box-sizing: border-box;
         flex-shrink: 0;
     }
-    .affected-instance-row:last-child{
+
+    .affected-instance-row:last-child {
         border-bottom: none;
     }
-    .affected-instance-name{
+
+    .affected-instance-name {
         font-weight: 500;
         word-break: break-word;
         overflow-wrap: break-word;
         word-wrap: break-word;
     }
-    .clear-unique-instances-actions{
+
+    .clear-unique-instances-actions {
         display: flex;
         justify-content: flex-end;
         padding-top: 4px;
     }
 }
-.form-select{
+
+.form-select {
     width: fit-content;
     cursor: pointer;
-    :focus{
+
+    :focus {
         box-shadow: none;
     }
 }
-.plane-preview{
+
+.plane-preview {
     display: flex;
     flex-flow: row wrap;
     align-content: flex-start;
     justify-content: flex-start;
     position: relative;
-    &:hover{
+
+    &:hover {
         cursor: pointer;
     }
-    .micro-board{
+
+    .micro-board {
         border: 1px solid black;
         position: relative;
         z-index: 1;
     }
+
     background-color: white;
 }
-.left-text-readout{
+
+.left-text-readout {
     text-align: left;
     padding-left: 65px;
     box-sizing: border-box;
 }
-.right-menus{
-}
-.board-view-container{
+
+.right-menus {}
+
+.board-view-container {
     height: 100%;
     display: flex;
     min-height: 858px;
-.plane-action-buttons {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border-bottom: 1px solid rgba(0,0,0,0.15);
-    .icon-container {
-        color: rgba(255,255,255,0.86);
-        cursor: pointer;
+
+    .plane-action-buttons {
         display: flex;
+        flex-direction: row;
         align-items: center;
-        svg {
-            color: inherit;
-        }
-        &:hover {
-            color: rgb(37, 192, 179);
+        gap: 8px;
+        padding: 6px 12px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+
+        .icon-container {
+            color: rgba(255, 255, 255, 0.86);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+
+            svg {
+                color: inherit;
+            }
+
+            &:hover {
+                color: rgb(37, 192, 179);
+            }
         }
     }
 }
-}
+
 .board-nav-dpad {
     position: absolute;
     right: 100%;
@@ -201,40 +232,47 @@ $bot-level-zIndex: 2; // doubletall containers
         }
     }
 }
-.left-palette.boards-palette{
+
+.left-palette.boards-palette {
     background-color: transparent;
     padding-left: 8px;
     border-right: 1px solid black;
     position: relative;
     z-index: 1060;
 }
-.right-palette{
+
+.right-palette {
     border-left: 1px solid black;
 }
-.palette{
-    .previews-container{
+
+.palette {
+    .previews-container {
         background-color: black;
         width: 100%;
         display: flex;
         flex-direction: column;
-        .plane-previews-container{
+
+        .plane-previews-container {
             border: 1px solid rgba(255, 255, 255, 0.05);
             margin: 4px 0;
             background-color: #111;
             transition: border-color 0.2s ease, box-shadow 0.2s ease;
-            &:hover{
+
+            &:hover {
                 border-color: rgba(249, 177, 21, 0.3);
                 box-shadow: 0 4px 10px rgba(249, 177, 21, 0.1);
             }
         }
-        .board-preview-wrapper{
+
+        .board-preview-wrapper {
             position: relative;
             width: max-content;
             margin: 0 auto 15px auto;
             display: flex;
             flex-direction: column;
             align-items: center;
-            .folder-color-line{
+
+            .folder-color-line {
                 position: absolute;
                 left: -2px;
                 height: 100%;
@@ -243,27 +281,30 @@ $bot-level-zIndex: 2; // doubletall containers
                 left: -10px;
                 width: 10px;
             }
-            .map-preview{
+
+            .map-preview {
                 display: grid;
                 grid-template-columns: repeat(15, 1fr);
                 grid-template-rows: repeat(15, 1fr);
                 border: 1px solid rgba(255, 255, 255, 0.05);
                 box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
                 transition: border-color 0.2s ease, box-shadow 0.2s ease;
-                
+
                 .tile {
                     width: 100% !important;
                     height: 100% !important;
                 }
-                
+
                 &:hover {
                     border-color: rgba(249, 177, 21, 0.4);
                     box-shadow: 0 4px 12px rgba(249, 177, 21, 0.15);
                 }
             }
         }
-        .dungeon-preview{}
-        .map-title{
+
+        .dungeon-preview {}
+
+        .map-title {
             width: 100%;
             display: flex;
             align-items: center;
@@ -274,18 +315,20 @@ $bot-level-zIndex: 2; // doubletall containers
             padding: 4px 0;
             border-top: 1px solid rgba(255, 255, 255, 0.05);
             transition: color 0.2s ease, background-color 0.2s ease;
-            
-            &.selected{
+
+            &.selected {
                 background-color: #1a1917;
                 color: #f9b115;
                 font-weight: bold;
                 border-top-color: rgba(249, 177, 21, 0.3);
             }
-            &.hovered{
+
+            &.hovered {
                 background-color: rgba(255, 255, 255, 0.05);
                 color: #f9b115;
             }
-            .validity-indicator{
+
+            .validity-indicator {
                 background-color: red;
                 height: 10px;
                 width: 10px;
@@ -294,39 +337,47 @@ $bot-level-zIndex: 2; // doubletall containers
                 // margin-left: -20px;
                 position: absolute;
                 right: 5%;
-                &.valid{
+
+                &.valid {
                     background-color: green;
                 }
             }
         }
     }
 }
-.mapmaker-container{
-    svg.expand-icon{
+
+.mapmaker-container {
+    svg.expand-icon {
         transition: all 0.3s;
-        &.expanded{
+
+        &.expanded {
             transform: rotate(90deg);
         }
     }
-    .column-wrapper{
+
+    .column-wrapper {
         align-items: center;
         position: relative;
         justify-content: flex-start;
         display: flex;
         height: 100%;
         flex-direction: column;
-        .inputs-container{
+
+        .inputs-container {
             width: 100%;
             display: flex;
             justify-content: space-between;
             padding-bottom: 5px;
             flex-shrink: 0;
             z-index: 10;
-            input{
+
+            input {
                 padding-left: 10px;
                 outline: none;
             }
-            .left-menus,.right-menus{
+
+            .left-menus,
+            .right-menus {
                 width: 200px;
                 // border: 1px solid white;
                 border-radius: 3px;
@@ -336,22 +387,27 @@ $bot-level-zIndex: 2; // doubletall containers
                 // }
                 color: white;
             }
-            .board-options-buttons-container{
+
+            .board-options-buttons-container {
                 position: relative;
                 z-index: 10;
-                .btn-group{
+
+                .btn-group {
                     width: 100%;
                 }
+
                 .dropdown-menu {
                     z-index: 50;
                 }
             }
-            .title{
+
+            .title {
                 color: white;
                 width: 220px;
             }
         }
-        .row-wrapper{
+
+        .row-wrapper {
             position: relative;
             justify-content: center;
             display: flex;
@@ -363,16 +419,19 @@ $bot-level-zIndex: 2; // doubletall containers
         }
     }
 }
-button{
+
+button {
     transition: all 0.35s;
     outline: none;
 }
-ul.dropdown-menu.show{
+
+ul.dropdown-menu.show {
     padding: 0;
+
     // li{
     //     height: 40px;
     // }
-    a{
+    a {
         height: 40px;
         line-height: 40px;
         padding: 0;
@@ -381,23 +440,27 @@ ul.dropdown-menu.show{
         cursor: pointer;
     }
 }
-.dungeon-selector{
-    ul{
+
+.dungeon-selector {
+    ul {
         width: 168px;
     }
 }
-.view-selector{
-    ul{
+
+.view-selector {
+    ul {
         width: 140px;
     }
 }
-.dungeon-actions-selector{
-    ul{
+
+.dungeon-actions-selector {
+    ul {
         width: 164px;
     }
 }
+
 // .btn-grp
-.dropdown-item{
+.dropdown-item {
     // width: 164px;
     height: 40px;
     line-height: 40px;
@@ -407,22 +470,26 @@ ul.dropdown-menu.show{
     justify-content: flex-start;
     padding-left: 13px;
 }
-.palette-options-pane{
+
+.palette-options-pane {
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
     align-items: flex-start;
     overflow: hidden;
+
     // transition: all 2.5s;
-    .palette-option-expandable-container{
+    .palette-option-expandable-container {
         max-height: 0px;
         transition: all 0.5s;
         overflow: scroll;
         width: 100%;
-        &.expanded{
+
+        &.expanded {
             max-height: 500px;
         }
-        .palette-option-subcontainer{
+
+        .palette-option-subcontainer {
             cursor: pointer;
             width: 100%;
             display: flex;
@@ -433,19 +500,21 @@ ul.dropdown-menu.show{
             border-bottom: 1px solid rgba(255, 255, 255, 0.02);
             padding: 4px 15px 4px 0;
             box-sizing: border-box;
-            
-            &.sub-hovered{
+
+            &.sub-hovered {
                 background-color: rgba(255, 255, 255, 0.05);
             }
-            &.sub-selected{
+
+            &.sub-selected {
                 background-color: rgba(249, 177, 21, 0.12);
                 box-shadow: inset 3px 0 0 #f9b115;
             }
-            &.sub-hovered.sub-selected{
+
+            &.sub-hovered.sub-selected {
                 background-color: rgba(249, 177, 21, 0.20);
             }
-            
-            .text-container{
+
+            .text-container {
                 flex: 1;
                 display: flex;
                 align-items: center;
@@ -456,9 +525,11 @@ ul.dropdown-menu.show{
                 text-transform: capitalize;
             }
         }
+
         background-color: #0b0a09;
     }
-    .palette-option-container{
+
+    .palette-option-container {
         cursor: pointer;
         width: 100%;
         display: flex;
@@ -473,7 +544,7 @@ ul.dropdown-menu.show{
             background: linear-gradient(135deg, #262320 0%, #1a1917 100%);
         }
 
-        .text-container{
+        .text-container {
             flex: 1;
             display: flex;
             align-items: center;
@@ -491,11 +562,12 @@ ul.dropdown-menu.show{
         }
     }
 }
-.board-previews-container{
+
+.board-previews-container {
     padding-top: 0px;
     background-color: #0b0a09;
-    
-    .boards-folder-headline{
+
+    .boards-folder-headline {
         height: 38px;
         width: 100%;
         line-height: 38px;
@@ -518,37 +590,37 @@ ul.dropdown-menu.show{
         &:hover {
             background: linear-gradient(135deg, #262320 0%, #1a1917 100%);
             color: #f9b115;
-            
+
             .expand-icon {
                 color: #f9b115;
             }
         }
 
-        &.subfolder-headline{
+        &.subfolder-headline {
             justify-content: flex-start;
             padding-left: 20px;
             background: linear-gradient(135deg, #161513 0%, #0f0e0d 100%);
             border-bottom: 1px solid rgba(249, 177, 21, 0.06);
-            
+
             &:hover {
                 background: linear-gradient(135deg, #1d1b19 0%, #141312 100%);
             }
         }
     }
-    
-    .subfolder-wrapper{
+
+    .subfolder-wrapper {
         position: relative;
         cursor: pointer;
         height: fit-content;
         border-bottom: none;
     }
-    
+
     .deepfolder-wrapper {
         .subfolder-headline {
             padding-left: 30px;
             background: linear-gradient(135deg, #100f0e 0%, #0a0908 100%);
             border-bottom: 1px solid rgba(249, 177, 21, 0.04);
-            
+
             &:hover {
                 background: linear-gradient(135deg, #171514 0%, #0e0d0c 100%);
             }
@@ -558,18 +630,19 @@ ul.dropdown-menu.show{
     .subfolder-contents-wrapper {
         padding-left: 20px;
     }
+
     .deepfolder-wrapper .subfolder-contents-wrapper {
         padding-left: 30px;
     }
-    
-    .folder-color-line{
+
+    .folder-color-line {
         position: absolute;
         height: 100%;
         left: -10px;
         width: 10px;
         background-color: #f9b115 !important;
 
-        &.thin-outside{
+        &.thin-outside {
             left: -10px !important;
             width: 10px !important;
             background-color: #0b0a09 !important;
@@ -577,34 +650,36 @@ ul.dropdown-menu.show{
             border-left: 3px solid #f9b115 !important;
         }
     }
-    
-    .subfolder-wrapper > .boards-folder-headline > .folder-color-line {
+
+    .subfolder-wrapper>.boards-folder-headline>.folder-color-line {
         background-color: #b8860b !important;
     }
-    
-    .deepfolder-wrapper > .boards-folder-headline > .folder-color-line {
+
+    .deepfolder-wrapper>.boards-folder-headline>.folder-color-line {
         background-color: #8c5d3f !important;
     }
-    
-    .board-preview-wrapper > .folder-color-line,
-    .plane-previews-container > .folder-color-line {
+
+    .board-preview-wrapper>.folder-color-line,
+    .plane-previews-container>.folder-color-line {
         background-color: rgba(249, 177, 21, 0.3) !important;
     }
 
-    .icon-container{
+    .icon-container {
         width: 32px;
         height: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
-        
+
         .expand-icon {
             color: #adad93;
             transition: transform 0.2s ease, color 0.2s ease;
         }
     }
-    
-    .folder-headline-text, .subfolder-headline-text, .deepfolder-headline-text{
+
+    .folder-headline-text,
+    .subfolder-headline-text,
+    .deepfolder-headline-text {
         flex: auto;
         white-space: nowrap;
         overflow: hidden;
@@ -613,9 +688,11 @@ ul.dropdown-menu.show{
         padding-left: 4px;
     }
 }
-.mapmaker-container{
+
+.mapmaker-container {
+
     // padding-top: 35px;
-    .view-toggle-button{
+    .view-toggle-button {
         position: absolute;
         right: 0px;
         top: 50px;
@@ -625,39 +702,48 @@ ul.dropdown-menu.show{
         width: 100px;
         outline: none;
         font-size: 11px;
-        &:hover{
+
+        &:hover {
             background-color: lightblue
         }
-        &:active{
+
+        &:active {
             background-color: rgb(138, 209, 233)
         }
-        &.selected{
+
+        &.selected {
             background-color: lightgreen
         }
     }
-    .view-board-button{
+
+    .view-board-button {
         right: 220px;
     }
-    .view-plane-button{
+
+    .view-plane-button {
         right: 110px;
     }
-    .view-dungeon-button{
+
+    .view-dungeon-button {
         right: 0px;
     }
-    .toast-pane{
+
+    .toast-pane {
         background-color: transparent;
         position: absolute;
         height: 100%;
         width: 100%;
         z-index: 1000;
         pointer-events: none;
-        .relative-container{
+
+        .relative-container {
             height: 100%;
             width: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            .toast-message{
+
+            .toast-message {
                 height: 48px;
                 line-height: 48px;
                 background-color: #ffffff;
@@ -675,11 +761,13 @@ ul.dropdown-menu.show{
             }
         }
     }
-    .palette{
+
+    .palette {
         // overflow: scroll;
         overflow: scroll;
         position: relative;
-        .color-line-blocker{
+
+        .color-line-blocker {
             position: absolute;
             left: -2px;
             height: 100%;
@@ -688,7 +776,8 @@ ul.dropdown-menu.show{
             left: -10px;
             width: 10px;
         }
-        .previews-container{
+
+        .previews-container {
             // padding-top: 117px;
             // background-color: white;
             background-color: black;
@@ -700,13 +789,17 @@ ul.dropdown-menu.show{
             // !!!!
             // overflow: scroll;
             // this needs to be dynamic I think
-            
-            backface-visibility:hidden;
-            -webkit-backface-visibility:hidden; /* Chrome and Safari */
-            -moz-backface-visibility:hidden; /* Firefox */
+
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+            /* Chrome and Safari */
+            -moz-backface-visibility: hidden;
+            /* Firefox */
             transition: all 0.75s;
         }
-        .boards-title, .planes-title{
+
+        .boards-title,
+        .planes-title {
             position: sticky;
             height: 40px;
             line-height: 40px;
@@ -722,7 +815,9 @@ ul.dropdown-menu.show{
             text-align: center;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
         }
-        .board-options-buttons-container, .planes-options-buttons-container{
+
+        .board-options-buttons-container,
+        .planes-options-buttons-container {
             position: sticky;
             top: 40px;
             z-index: 200;
@@ -730,19 +825,22 @@ ul.dropdown-menu.show{
             background-color: #111;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 
-            &.disabled{
+            &.disabled {
                 background-color: #222;
                 border-bottom: 1px solid #333;
             }
-            .btn-group{
+
+            .btn-group {
                 width: 100%;
-                .btn.disabled{
+
+                .btn.disabled {
                     background-color: #222;
                     color: #555;
-                    border: 1px solid rgba(255, 255, 255, 0.05);        
+                    border: 1px solid rgba(255, 255, 255, 0.05);
                 }
             }
-            .dropdown-toggle{
+
+            .dropdown-toggle {
                 border-radius: 0px;
                 background-color: #1a1917 !important;
                 color: #e0dcd3 !important;
@@ -752,7 +850,9 @@ ul.dropdown-menu.show{
                 letter-spacing: 0.5px;
                 box-shadow: none !important;
 
-                &:hover, &:focus, &:active {
+                &:hover,
+                &:focus,
+                &:active {
                     background-color: #242220 !important;
                     color: #f9b115 !important;
                     border-color: rgba(249, 177, 21, 0.3) !important;
@@ -760,23 +860,25 @@ ul.dropdown-menu.show{
             }
 
             .dropdown-menu,
-            .dropdown-menu.show{
+            .dropdown-menu.show {
                 z-index: 5000 !important;
                 background-color: #141312 !important;
                 border: 1px solid rgba(249, 177, 21, 0.3) !important;
                 border-radius: 4px;
                 padding: 4px 0;
-                
+
                 .dropdown-item {
                     color: #e0dcd3 !important;
                     font-size: 12px;
                     background-color: transparent !important;
-                    
+
                     &:hover {
                         background-color: rgba(255, 255, 255, 0.07) !important;
                         color: #f9b115 !important;
                     }
-                    &.disabled, &:disabled {
+
+                    &.disabled,
+                    &:disabled {
                         color: #555 !important;
                         background-color: transparent !important;
                     }
@@ -784,38 +886,44 @@ ul.dropdown-menu.show{
             }
         }
 
-        .previews-container .map-preview .tile .portrait{
+        .previews-container .map-preview .tile .portrait {
             z-index: 1 !important;
         }
     }
-    .center-board-container{
+
+    .center-board-container {
         position: relative;
-        
+
     }
 }
-.mini-boards-container{
+
+.mini-boards-container {
     height: 100%;
     width: 100%;
     display: flex;
     flex-flow: row wrap;
     align-content: center;
     justify-content: center;
-    .mini-board{
+
+    .mini-board {
         border: 1px solid black;
         position: relative;
-        
+
         &.selected-board-outline {
             outline: 2px solid rgba(212, 168, 68, 0.7);
             outline-offset: -2px;
             box-shadow: 0 0 8px rgba(212, 168, 68, 0.4);
         }
     }
-    .empty-planes-container, .empty-boards-container{
+
+    .empty-planes-container,
+    .empty-boards-container {
         display: flex;
         align-items: center;
         justify-content: center;
     }
-    .plane-name{
+
+    .plane-name {
         position: absolute;
         top: 0;
         left: 0;
@@ -826,19 +934,21 @@ ul.dropdown-menu.show{
     }
 }
 
-.lightblueOnHover:hover{
+.lightblueOnHover:hover {
     background-color: lightblue !important;
     outline: none;
 }
-.compatibility-matrix-container{
-    .adjacency-filter-header{
+
+.compatibility-matrix-container {
+    .adjacency-filter-header {
         color: black;
         width: 100%;
         display: inline-block;
         border-bottom: 1px solid lightseagreen;
         background-color: paleturquoise;
         cursor: pointer;
-        &:hover{
+
+        &:hover {
             background-color: lightseagreen;
             color: black;
         }
@@ -848,7 +958,7 @@ ul.dropdown-menu.show{
 
 //  DUNGEON VIEW
 
-.dungeon-info{
+.dungeon-info {
     display: flex;
     flex-direction: row;
     align-items: center;
@@ -858,32 +968,38 @@ ul.dropdown-menu.show{
     width: 100%;
     flex: 0 0 40px;
     background-color: #111;
-    .dungeon-name{
+
+    .dungeon-name {
         position: relative;
         height: 100%;
         display: flex;
         align-items: center;
         padding: 0 10px;
         background-color: #111;
-        .dungeon-validity-indicator{
+
+        .dungeon-validity-indicator {
             position: absolute;
             height: 8px;
             width: 8px;
             border-radius: 8px;
             top: calc(50% - 4px);
             left: 18px;
-            &.valid{
+
+            &.valid {
                 background-color: lightgreen;
             }
-            &.invalid{
+
+            &.invalid {
                 background-color: red;
             }
         }
-        select{
+
+        select {
             padding-left: 22px;
         }
     }
-    .level-buttons-container{
+
+    .level-buttons-container {
         display: flex;
         min-width: 300px;
         justify-content: space-around;
@@ -894,37 +1010,43 @@ ul.dropdown-menu.show{
         min-height: 100%;
         align-items: center;
         background-color: #111;
-        border-left: 1px solid rgba(255,255,255,0.12);
-        color: rgba(255,255,255,0.86);
-        .icon-container{
+        border-left: 1px solid rgba(255, 255, 255, 0.12);
+        color: rgba(255, 255, 255, 0.86);
+
+        .icon-container {
             cursor: pointer;
             display: flex;
             align-items: center;
-            &:hover{
+
+            &:hover {
                 color: rgb(37, 192, 179);
             }
-            .add-level-up-icon{
+
+            .add-level-up-icon {
                 margin-left: -4px;
                 margin-top: -2px;
             }
-            .add-level-down-icon{
+
+            .add-level-down-icon {
                 margin-left: -4px;
                 margin-top: -3px;
             }
         }
-        .double-icon-container{
+
+        .double-icon-container {
             display: flex;
         }
     }
 }
 
-.dungeon-map-board{
+.dungeon-map-board {
     display: flex !important;
     flex-direction: column !important;
     flex-wrap: nowrap !important;
     align-content: stretch !important;
 }
-.dungeon-planes-container{
+
+.dungeon-planes-container {
     height: calc(100% - 40px);
     width: 100%;
 
@@ -935,25 +1057,34 @@ ul.dropdown-menu.show{
 
     overflow: scroll;
 
-    .empty-dungeons-container{
+    .empty-dungeons-container {
         display: flex;
         align-items: center;
         justify-content: center;
         width: 100%;
         height: 100%;
     }
-    .generating-dungeon-overlay{
+
+    .generating-dungeon-overlay {
         flex-direction: column;
         background: rgba(30, 25, 15, 0.85);
         border-radius: 8px;
         animation: generatePulse 1.5s ease-in-out infinite;
     }
+
     @keyframes generatePulse {
-        0%, 100% { opacity: 0.85; }
-        50% { opacity: 1; }
+
+        0%,
+        100% {
+            opacity: 0.85;
+        }
+
+        50% {
+            opacity: 1;
+        }
     }
-    
-    .loaded-dungeon-wrapper{
+
+    .loaded-dungeon-wrapper {
         height: 100%;
         display: flex;
         flex: auto;
@@ -968,28 +1099,26 @@ ul.dropdown-menu.show{
             radial-gradient(ellipse at 0% 50%, rgba(30, 20, 5, 0.6) 0%, transparent 50%),
             radial-gradient(ellipse at 100% 50%, rgba(30, 20, 5, 0.6) 0%, transparent 50%),
             radial-gradient(ellipse at 50% 100%, rgba(15, 10, 3, 0.7) 0%, transparent 55%),
-            repeating-linear-gradient(
-                0deg,
+            repeating-linear-gradient(0deg,
                 transparent,
                 transparent 48px,
                 rgba(249, 177, 21, 0.018) 48px,
-                rgba(249, 177, 21, 0.018) 49px
-            ),
-            repeating-linear-gradient(
-                90deg,
+                rgba(249, 177, 21, 0.018) 49px),
+            repeating-linear-gradient(90deg,
                 transparent,
                 transparent 48px,
                 rgba(249, 177, 21, 0.018) 48px,
-                rgba(249, 177, 21, 0.018) 49px
-            );
+                rgba(249, 177, 21, 0.018) 49px);
         overflow: scroll;
-        .level-wrapper{
+
+        .level-wrapper {
             display: flex;
             flex-direction: row;
             justify-content: center;
             align-items: center;
             width: 100%;
-            .level-info{
+
+            .level-info {
                 display: flex;
                 justify-content: space-around;
                 align-items: center;
@@ -999,27 +1128,31 @@ ul.dropdown-menu.show{
                 font-size: 11px;
                 font-weight: 600;
                 letter-spacing: 0.5px;
-                text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+                text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+
                 .icon-container {
                     cursor: pointer;
                     color: rgba(249, 177, 21, 0.5);
                     transition: color 0.2s ease;
+
                     &:hover {
                         color: rgba(249, 177, 21, 1);
                     }
                 }
-                .level-valid-indicator{
+
+                .level-valid-indicator {
                     height: 8px;
                     width: 8px;
                     border-radius: 8px;
                     background-color: grey;
                     position: relative;
                     cursor: pointer;
-                    
-                    &.valid{
+
+                    &.valid {
                         background-color: #0ec30e;
                     }
-                    &.invalid{
+
+                    &.invalid {
                         background-color: red;
                     }
 
@@ -1048,13 +1181,14 @@ ul.dropdown-menu.show{
                             margin: 0;
                             padding-left: 14px;
                             list-style-type: disc;
-                            
+
                             li {
                                 margin-bottom: 4px;
                                 color: #feb2b2; // subtle light red for errors
                                 font-weight: normal;
                                 letter-spacing: 0.2px;
                                 text-shadow: none;
+
                                 &:last-child {
                                     margin-bottom: 0;
                                 }
@@ -1087,21 +1221,26 @@ ul.dropdown-menu.show{
                     }
                 }
             }
-            canvas.doublewide-canvas{
+
+            canvas.doublewide-canvas {
                 position: absolute;
                 z-index: $mid-level-zIndex;
                 pointer-events: none;
             }
-            .plane-board-displays-wrapper{
+
+            .plane-board-displays-wrapper {
                 display: flex;
                 position: relative;
-                .horizontal-connecting-canvas-wrapper{
+                user-select: none;
+
+                .horizontal-connecting-canvas-wrapper {
                     position: absolute;
                     top: 0;
                     z-index: 11;
                     pointer-events: none;
                 }
-                .plane-board-display{
+
+                .plane-board-display {
                     min-height: 250px;
                     min-width: 250px;
                     border: 1px solid rgba(249, 177, 21, 0.12);
@@ -1109,13 +1248,11 @@ ul.dropdown-menu.show{
                     background-color: #0f0d0a;
                     background-image:
                         radial-gradient(ellipse at center, rgba(40, 28, 8, 0.8) 0%, rgba(8, 6, 3, 0.95) 100%),
-                        repeating-linear-gradient(
-                            45deg,
+                        repeating-linear-gradient(45deg,
                             transparent,
                             transparent 6px,
                             rgba(249, 177, 21, 0.015) 6px,
-                            rgba(249, 177, 21, 0.015) 7px
-                        );
+                            rgba(249, 177, 21, 0.015) 7px);
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -1132,62 +1269,69 @@ ul.dropdown-menu.show{
                         background-color: rgba(20, 14, 4, 0.98);
                     }
 
-                    .canvas-overlay-container{
+                    .canvas-overlay-container {
                         position: absolute;
                         top: 0;
                         left: 0;
                         z-index: $top-level-zIndex;
                         display: flex;
                         pointer-events: none;
-                        
+
                         // background-color: red;
-                        canvas{
+                        canvas {
                             pointer-events: none;
                             // border: 1px solid red;
                             // position: absolute;
                             // z-index: 2;
                         }
                     }
-                    .interaction-layer{
+
+                    .interaction-layer {
                         z-index: $apex-level-zIndex;
                         height: 100%;
                         width: 100%;
                         opacity: 0.25;
                         position: absolute;
                         display: flex;
-                            flex-wrap: wrap;
-                        &.active{
+                        flex-wrap: wrap;
+
+                        &.active {
                             background-color: rgba(249, 177, 21, 0.08);
                         }
-                        .interaction-section{
-                            &:hover{
+
+                        .interaction-section {
+                            &:hover {
                                 background-color: rgba(249, 177, 21, 0.15);
                             }
                         }
                     }
                 }
             }
-            
+
         }
     }
 }
-.view-state-radio-group{
-    label{
+
+.view-state-radio-group {
+    label {
         border-width: 2px;
         // color: yellow;
     }
-    label:hover{
+
+    label:hover {
 
         border: 2px solid white !important;
         color: white !important;
     }
-    .btn-check:checked+.btn{
+
+    .btn-check:checked+.btn {
         border-color: #9da5b1 !important;
         color: rgba(44, 56, 74, 0.95) !important;
         background-color: #97b0db;
     }
 }
-.front-upwards-connecting-canvas-wrapper{
+
+.front-upwards-connecting-canvas-wrapper {
     // border: 2px solid blueviolet;
     position: absolute;
     height: 200%;
@@ -1196,7 +1340,8 @@ ul.dropdown-menu.show{
     z-index: 10;
     pointer-events: none;
 }
-.back-upwards-connecting-canvas-wrapper{
+
+.back-upwards-connecting-canvas-wrapper {
     // border: 2px solid blueviolet;
     position: absolute;
     height: 200%;
@@ -1230,7 +1375,7 @@ ul.dropdown-menu.show{
         width: auto !important;
         height: auto !important;
     }
-    
+
     .plane-grid-title {
         font-size: 10px;
         color: #adad93;
@@ -1260,7 +1405,8 @@ ul.dropdown-menu.show{
     cursor: pointer;
     transition: border-color 0.22s ease-out, box-shadow 0.22s ease-out, transform 0.22s cubic-bezier(0.25, 0.8, 0.25, 1);
 
-    &:hover, &.hovered {
+    &:hover,
+    &.hovered {
         border-color: rgba(249, 177, 21, 0.6);
         box-shadow: 0 0 12px rgba(249, 177, 21, 0.22);
         transform: translateY(-2px);
@@ -1269,8 +1415,9 @@ ul.dropdown-menu.show{
     &.selected {
         border: 1px solid #f9b115 !important;
         box-shadow: 0 0 10px rgba(249, 177, 21, 0.4) !important;
-        
-        &:hover, &.hovered {
+
+        &:hover,
+        &.hovered {
             box-shadow: 0 0 14px rgba(249, 177, 21, 0.55), 0 4px 12px rgba(0, 0, 0, 0.2) !important;
         }
     }
@@ -1291,8 +1438,9 @@ ul.dropdown-menu.show{
         background-color: #1a1917;
         border: 1px dashed rgba(255, 255, 255, 0.08);
         color: transparent;
-        
-        &:hover, &.hovered {
+
+        &:hover,
+        &.hovered {
             background-color: rgba(249, 177, 21, 0.15);
             border-color: #f9b115;
             border-style: solid;
@@ -1305,7 +1453,8 @@ ul.dropdown-menu.show{
         color: #f9b115;
         box-shadow: inset 0 0 4px rgba(249, 177, 21, 0.15);
 
-        &:hover, &.hovered {
+        &:hover,
+        &.hovered {
             background: linear-gradient(135deg, #423219 0%, #241a0e 100%);
             border-color: #f9b115;
             color: #fff;
@@ -1326,7 +1475,8 @@ ul.dropdown-menu.show{
         color: rgba(249, 177, 21, 0.5);
         box-shadow: none;
 
-        &:hover, &.hovered {
+        &:hover,
+        &.hovered {
             background-color: rgba(249, 177, 21, 0.15);
             border-color: #f9b115;
             border-style: solid;
@@ -1361,7 +1511,8 @@ ul.dropdown-menu.show{
     position: relative;
 
     .indicator-line {
-        background-color: #f9b115; /* gold color */
+        background-color: #f9b115;
+        /* gold color */
         height: 2px;
         width: 15px;
         border-radius: 1px;
@@ -1380,6 +1531,7 @@ ul.dropdown-menu.show{
     }
 
     &.selected-plane {
+
         .indicator-line.line-3,
         .indicator-line.line-4,
         .indicator-line.line-5 {
@@ -1403,14 +1555,14 @@ ul.dropdown-menu.show{
         background: #1c1c1e;
         border: 1px solid rgba(229, 181, 79, 0.4);
         border-radius: 8px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
         color: #e0dcd3;
     }
-    
+
     .modal-header {
         border-bottom: 1px solid rgba(229, 181, 79, 0.2);
         padding: 16px 20px;
-        
+
         .modal-title {
             font-family: 'Cinzel', serif;
             color: #e5b54f;
@@ -1419,20 +1571,20 @@ ul.dropdown-menu.show{
             letter-spacing: 1px;
             margin: 0;
         }
-        
+
         .btn-close {
             filter: invert(1) grayscale(100%) brightness(200%);
             opacity: 0.5;
-            
+
             &:hover {
                 opacity: 1;
             }
         }
     }
-    
+
     .modal-body {
         padding: 20px;
-        
+
         .dungeonname-input {
             width: 100%;
             background: rgba(12, 10, 9, 0.6);
@@ -1444,38 +1596,38 @@ ul.dropdown-menu.show{
             outline: none;
             transition: all 0.2s ease;
             box-sizing: border-box;
-            
+
             &:focus {
                 border-color: rgba(229, 181, 79, 0.8);
                 box-shadow: 0 0 8px rgba(229, 181, 79, 0.15);
             }
-            
+
             &::placeholder {
                 color: rgba(164, 176, 190, 0.5);
             }
         }
     }
-    
+
     .modal-footer {
         border-top: 1px solid rgba(229, 181, 79, 0.2);
         padding: 12px 20px;
-        
+
         .btn-secondary {
             background: rgba(45, 45, 48, 0.8);
             color: #a4b0be;
             border: 1px solid rgba(164, 176, 190, 0.3);
-            
+
             &:hover {
                 background: rgba(60, 60, 64, 0.9);
                 color: #fff;
             }
         }
-        
+
         .btn-primary {
             background: rgba(229, 181, 79, 0.15);
             color: #e5b54f;
             border: 1px solid rgba(229, 181, 79, 0.5);
-            
+
             &:hover {
                 background: rgba(229, 181, 79, 0.25);
                 box-shadow: 0 0 10px rgba(229, 181, 79, 0.2);
@@ -1487,9 +1639,10 @@ ul.dropdown-menu.show{
 /* --- Drag & Drop Folder Assignment Styles --- */
 .boards-folder-headline {
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    
+
     &.draggable {
         cursor: grab;
+
         &:active {
             cursor: grabbing;
         }
@@ -1501,7 +1654,8 @@ ul.dropdown-menu.show{
         box-shadow: 0 0 12px rgba(249, 177, 21, 0.45);
         color: #fff !important;
 
-        .folder-headline-text, .subfolder-headline-text {
+        .folder-headline-text,
+        .subfolder-headline-text {
             color: #f9b115 !important;
             font-weight: bold;
         }
@@ -1518,7 +1672,7 @@ ul.dropdown-menu.show{
     letter-spacing: -2px;
     user-select: none;
     cursor: grab;
-    
+
     &:hover {
         color: #f9b115;
     }
@@ -1532,57 +1686,55 @@ ul.dropdown-menu.show{
 
 /* --- Connecting Path Shimmer Overlay --- */
 .connecting-path-shimmer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  z-index: 15;
-  
-  &.horizontal {
-    background: linear-gradient(
-      90deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.08) 25%,
-      rgba(255, 255, 255, 0.55) 50%,
-      rgba(255, 255, 255, 0.08) 75%,
-      rgba(255, 255, 255, 0) 100%
-    );
-    background-size: 200% 100%;
-    animation: goldGleamShimmerHorizontal 3s infinite linear;
-  }
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 15;
 
-  &.vertical {
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.08) 25%,
-      rgba(255, 255, 255, 0.55) 50%,
-      rgba(255, 255, 255, 0.08) 75%,
-      rgba(255, 255, 255, 0) 100%
-    );
-    background-size: 100% 200%;
-    animation: goldGleamShimmerVertical 3s infinite linear;
-  }
+    &.horizontal {
+        background: linear-gradient(90deg,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.08) 25%,
+                rgba(255, 255, 255, 0.55) 50%,
+                rgba(255, 255, 255, 0.08) 75%,
+                rgba(255, 255, 255, 0) 100%);
+        background-size: 200% 100%;
+        animation: goldGleamShimmerHorizontal 3s infinite linear;
+    }
+
+    &.vertical {
+        background: linear-gradient(180deg,
+                rgba(255, 255, 255, 0) 0%,
+                rgba(255, 255, 255, 0.08) 25%,
+                rgba(255, 255, 255, 0.55) 50%,
+                rgba(255, 255, 255, 0.08) 75%,
+                rgba(255, 255, 255, 0) 100%);
+        background-size: 100% 200%;
+        animation: goldGleamShimmerVertical 3s infinite linear;
+    }
 }
 
 @keyframes goldGleamShimmerHorizontal {
-  0% {
-    background-position: -200% 0;
-  }
-  100% {
-    background-position: 200% 0;
-  }
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
 }
 
 @keyframes goldGleamShimmerVertical {
-  0% {
-    background-position: 0 -200%;
-  }
-  100% {
-    background-position: 0 200%;
-  }
+    0% {
+        background-position: 0 -200%;
+    }
+
+    100% {
+        background-position: 0 200%;
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1591,104 +1743,104 @@ ul.dropdown-menu.show{
    viewport so all three panels fit comfortably on tablet screens.
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (min-width: 768px) and (max-width: 1200px) {
-  .mapmaker-container {
-    overflow: hidden !important;
-    width: 100vw !important;
-    max-width: 100vw !important;
-    height: 100vh !important;
-  }
-
-  .column-wrapper {
-    width: 100vw !important;
-    max-width: 100vw !important;
-    overflow: hidden !important;
-  }
-
-  .row-wrapper {
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: stretch !important;
-    justify-content: space-between !important;
-    width: 100vw !important;
-    max-width: 100vw !important;
-    overflow: hidden !important;
-    box-sizing: border-box !important;
-  }
-
-  /* Force side panels to 180px fixed width and override inline tileSize*4.5 styles */
-  .left-palette.boards-palette,
-  .right-palette {
-    display: flex !important;
-    flex-direction: column !important;
-    width: 180px !important;
-    min-width: 180px !important;
-    max-width: 180px !important;
-    flex-shrink: 0 !important;
-    z-index: 20;
-    overflow-y: auto !important;
-    overflow-x: hidden !important;
-    box-sizing: border-box !important;
-
-    * {
-      max-width: 100% !important;
-      box-sizing: border-box !important;
+    .mapmaker-container {
+        overflow: hidden !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 100vh !important;
     }
 
-    .board-options-buttons-container,
-    .left-text-readout,
-    .previews-container {
-      width: 100% !important;
+    .column-wrapper {
+        width: 100vw !important;
+        max-width: 100vw !important;
+        overflow: hidden !important;
     }
 
-    .side-by-side-planes-wrapper {
-      flex-direction: column !important;
-      align-items: center !important;
+    .row-wrapper {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: stretch !important;
+        justify-content: space-between !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        overflow: hidden !important;
+        box-sizing: border-box !important;
     }
-  }
 
-  /* Compact the level info column on the left of each level row */
-  .level-wrapper .level-info {
-    min-width: 36px !important;
-    width: 36px !important;
-    padding: 2px !important;
-    font-size: 10px !important;
-    gap: 2px !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    align-items: center !important;
+    /* Force side panels to 180px fixed width and override inline tileSize*4.5 styles */
+    .left-palette.boards-palette,
+    .right-palette {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 180px !important;
+        min-width: 180px !important;
+        max-width: 180px !important;
+        flex-shrink: 0 !important;
+        z-index: 20;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
 
-    .level-readout {
-      font-size: 10px !important;
-      white-space: nowrap !important;
+        * {
+            max-width: 100% !important;
+            box-sizing: border-box !important;
+        }
+
+        .board-options-buttons-container,
+        .left-text-readout,
+        .previews-container {
+            width: 100% !important;
+        }
+
+        .side-by-side-planes-wrapper {
+            flex-direction: column !important;
+            align-items: center !important;
+        }
     }
-  }
 
-  .board-view-container,
-  .plane-view-container,
-  .dungeon-view-container {
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-    max-width: calc(100vw - 360px) !important;
-    overflow: auto !important;
-    display: flex !important;
-    justify-content: center !important;
-    align-items: flex-start !important;
-  }
+    /* Compact the level info column on the left of each level row */
+    .level-wrapper .level-info {
+        min-width: 36px !important;
+        width: 36px !important;
+        padding: 2px !important;
+        font-size: 10px !important;
+        gap: 2px !important;
+        flex-direction: column !important;
+        justify-content: center !important;
+        align-items: center !important;
 
-  /* Scale center canvas/board elements down so they fit cleanly without overflowing side panels */
-  .center-board-container,
-  .loaded-dungeon-wrapper,
-  .dungeon-levels-container {
-    zoom: 0.72;
-    -moz-transform: scale(0.72);
-    -moz-transform-origin: top center;
-    margin: 0 auto !important;
-  }
+        .level-readout {
+            font-size: 10px !important;
+            white-space: nowrap !important;
+        }
+    }
 
-  .mobile-palette-drawer,
-  .mobile-action-strip {
-    display: none !important;
-  }
+    .board-view-container,
+    .plane-view-container,
+    .dungeon-view-container {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        max-width: calc(100vw - 360px) !important;
+        overflow: auto !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: flex-start !important;
+    }
+
+    /* Scale center canvas/board elements down so they fit cleanly without overflowing side panels */
+    .center-board-container,
+    .loaded-dungeon-wrapper,
+    .dungeon-levels-container {
+        zoom: 0.72;
+        -moz-transform: scale(0.72);
+        -moz-transform-origin: top center;
+        margin: 0 auto !important;
+    }
+
+    .mobile-palette-drawer,
+    .mobile-action-strip {
+        display: none !important;
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1698,378 +1850,397 @@ ul.dropdown-menu.show{
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 767px) {
 
-  .mapmaker-container {
-    /* Prevent any page-level horizontal scroll and pin to top */
-    overflow-x: hidden;
-    width: 100vw;
-    max-width: 100vw;
-    height: 100vh;
-    position: absolute;
-    top: 0;
-    left: 0;
-    display: flex;
-    flex-direction: column;
-    padding-top: 30px;
-    box-sizing: border-box;
-  }
-
-  /* ── Hide desktop-only chrome ──────────────────────────────────────── */
-  .left-palette.boards-palette { display: none !important; }
-  .view-indicator-graphic      { display: none !important; }
-  /* BoardsPanel in the row-wrapper uses min-height that blows out mobile */
-  .board-view-container        { min-height: unset !important; }
-
-  /* ── Compact top bar ───────────────────────────────────────────────── */
-  .column-wrapper {
-    flex-direction: column;
-    height: auto;
-  }
-
-  .inputs-container {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 4px;
-    padding: 6px 8px;
-    padding-left: 36px; /* Leave space for the fixed hamburger menu button */
-    background: #111;
-    border-bottom: 1px solid rgba(249, 177, 21, 0.15);
-    min-height: 44px;
-    align-items: center;
-
-    .left-text-readout {
-      font-size: 11px;
-      max-width: 110px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      color: #ccc;
-    }
-
-    /* Compact view selector radio group */
-    .view-state-radio-group {
-      label { font-size: 11px; padding: 3px 8px; }
-    }
-
-    /* Right controls (floor selector, dpad) */
-    .right-menus {
-      width: auto !important;
-      gap: 4px;
-      font-size: 11px;
-    }
-  }
-
-  /* ── Row wrapper stacks vertically ────────────────────────────────── */
-  .row-wrapper {
-    flex-direction: column !important;
-    min-height: unset !important;
-    height: auto;
-    flex: 1 1 auto;
-    position: relative;
-    display: flex;
-  }
-
-  /* ── Mobile board viewport (pinch/zoom/pan container) ─────────────── */
-  .mobile-board-viewport {
-    width:  100vw;
-    flex: 1 1 auto;
-    height: auto;
-    min-height: 200px;
-    overflow: hidden;
-    position: relative;
-    /* Suppress default browser pan/zoom so our JS handlers own the gestures */
-    touch-action: none;
-    background: #0b0a08;
-  }
-
-  /* The inner wrapper that receives CSS transform for zoom+pan */
-  .mobile-board-transform {
-    /* No layout constraints — let the board be natural size, transforms handle the rest */
-    display: inline-block;
-  }
-
-  /* ── Floating zoom-reset button ────────────────────────────────────── */
-  .mobile-zoom-reset {
-    position: absolute;
-    bottom: 12px;
-    right: 12px;
-    z-index: 100;
-    background: rgba(249, 177, 21, 0.15);
-    border: 1px solid rgba(249, 177, 21, 0.45);
-    border-radius: 50%;
-    width:  44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #f9b115;
-    font-size: 20px;
-    cursor: pointer;
-    transition: background 0.15s ease, transform 0.15s ease;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-
-    &:active {
-      background: rgba(249, 177, 21, 0.35);
-      transform: scale(0.92);
-    }
-  }
-
-  /* ── Mobile action strip ────────────────────────────────────────────── */
-  .mobile-action-strip {
-    position: fixed;
-    bottom: 48px; /* sits just above the palette handle */
-    left: 0;
-    right: 0;
-    z-index: 150;
-    height: 60px;
-    background: #111;
-    border-top: 1px solid rgba(249, 177, 21, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: space-around;
-    padding: 0 4px;
-
-    button {
-      background: none;
-      border: none;
-      color: rgba(255, 255, 255, 0.75);
-      font-size: 20px;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 2px;
-      padding: 4px 6px;
-      border-radius: 8px;
-      transition: color 0.15s ease, background 0.15s ease;
-      outline: none;
-      -webkit-tap-highlight-color: transparent;
-
-      span:last-child {
-        font-size: 9px;
-        color: #888;
-        letter-spacing: 0.2px;
-        line-height: 1;
-      }
-
-      &:active {
-        color: #f9b115;
-        background: rgba(249, 177, 21, 0.1);
-      }
-    }
-  }
-
-  /* ── Bottom-sheet palette drawer ────────────────────────────────────── */
-  .mobile-palette-drawer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 200;
-    background: #0b0a09;
-    border-top: 2px solid #f9b115;
-    border-radius: 16px 16px 0 0;
-    /* Collapsed: only the handle is visible */
-    transform: translateY(calc(100% - 48px));
-    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.6);
-
-    &.open {
-      transform: translateY(0);
-    }
-  }
-
-  .palette-handle {
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    cursor: pointer;
-    color: #f9b115;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    user-select: none;
-    -webkit-tap-highlight-color: transparent;
-
-    &::before {
-      content: '';
-      display: block;
-      width: 40px;
-      height: 4px;
-      background: #f9b115;
-      border-radius: 2px;
-      opacity: 0.55;
-      flex-shrink: 0;
-    }
-  }
-
-  .palette-drawer-content {
-    max-height: 52vh;
-    overflow-y: auto;
-    overflow-x: hidden;
-    padding: 12px 16px 40px;
-
-    /* Turn parent palette container into a horizontal wrapping flex container */
-    .palette.right-palette {
-      width: 100% !important;
-      max-width: 100% !important;
-      height: auto !important;
-      margin-left: 0 !important;
-      background-color: transparent !important;
-      border: none !important;
-      overflow: visible !important;
-      display: flex !important;
-      flex-direction: row !important;
-      flex-wrap: wrap !important;
-      gap: 10px !important;
-      justify-content: flex-start !important;
-      align-items: flex-start !important;
-    }
-
-    /* Redesign option container into vertical grid cells */
-    .palette-options-pane {
-      width: calc(20% - 8px) !important; /* 5 columns grid layout by default */
-      min-width: 90px !important;
-      flex: 0 1 auto !important;
-      border: 1px solid rgba(255, 255, 255, 0.12) !important;
-      border-radius: 8px !important;
-      background: #131211 !important;
-      overflow: visible !important;
-      display: flex !important;
-      flex-direction: column !important;
-      transition: width 0.2s ease, flex-basis 0.2s ease;
-
-      /* When expanded, let it take up the full row width inline */
-      &.expanded-pane {
-        width: 100% !important;
-        flex: 1 1 100% !important;
-      }
-    }
-
-    .palette-option-container {
-      border: none !important;
-      border-radius: 8px !important;
-      height: auto !important;
-      min-height: 80px !important; /* taller height to house vertical layouts */
-      background: linear-gradient(135deg, #1d1c1a 0%, #131211 100%) !important;
-      width: 100% !important;
-      display: flex !important;
-      flex-direction: column !important; /* stack elements vertically */
-      align-items: center !important;
-      justify-content: center !important;
-      padding: 8px 4px !important;
-      box-sizing: border-box;
-      position: relative !important;
-
-      /* Make tile icons bigger inside the container */
-      .tile {
-        width: 40px !important;
-        height: 40px !important;
-        margin-bottom: 6px !important;
-        border-radius: 6px !important;
-      }
-
-      /* Center labels underneath the icon */
-      .text-container {
-        font-size: 10px !important;
-        padding-left: 0 !important;
-        text-align: center !important;
-        white-space: normal !important; /* wrap if label is long */
-        word-break: break-word !important;
-        line-height: 1.2 !important;
-        flex: none !important;
-        color: #ccc;
-      }
-
-      /* Float the dropdown navigation arrows in top-right of mobile cards */
-      > div:not(.tile):not(.text-container) {
-        position: absolute !important;
-        top: 6px !important;
-        right: 6px !important;
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-    }
-
-    /* Keep expanded options confined within columns */
-    .palette-option-expandable-container {
-      display: none !important;
-      width: 100% !important;
-      background-color: #0b0a09 !important;
-      border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-      border-radius: 0 0 8px 8px !important;
-      box-sizing: border-box;
-
-      /* Expand horizontally when open */
-      &.expanded {
-        display: flex !important;
-        flex-direction: row !important;
-        overflow-x: auto !important;
-        overflow-y: hidden !important;
-        padding: 10px !important;
-        gap: 10px !important;
-        -webkit-overflow-scrolling: touch;
-      }
-
-      /* Style sub-items inside scrollable submenu row as horizontal pills */
-      .palette-option-subcontainer {
-        display: flex !important;
-        flex-direction: row !important;
-        align-items: center !important;
-        background: #1d1c1a !important;
-        border: 1px solid rgba(255, 255, 255, 0.08) !important;
-        border-radius: 6px !important;
-        padding: 4px 10px !important;
-        white-space: nowrap !important;
-        flex-shrink: 0 !important;
-        width: auto !important;
+    .mapmaker-container {
+        /* Prevent any page-level horizontal scroll and pin to top */
+        overflow-x: hidden;
+        width: 100vw;
+        max-width: 100vw;
+        height: 100vh;
+        position: absolute;
+        top: 0;
+        left: 0;
+        display: flex;
+        flex-direction: column;
+        padding-top: 30px;
         box-sizing: border-box;
-
-        .tile {
-          width: 28px !important;
-          height: 28px !important;
-          flex-shrink: 0 !important;
-          margin-bottom: 0 !important;
-        }
-
-        .text-container {
-          padding-left: 8px !important;
-          flex: none !important;
-          text-align: left !important;
-
-          span {
-            font-size: 10px !important;
-            font-weight: 500 !important;
-          }
-        }
-      }
     }
-  }
 
-  /* ── Misc desktop rules that break mobile ──────────────────────────── */
-  /* The board-nav dpad sits to the left of the board on desktop; hide on mobile */
-  .board-nav-dpad {
-    display: none !important;
-  }
+    /* ── Hide desktop-only chrome ──────────────────────────────────────── */
+    .left-palette.boards-palette {
+        display: none !important;
+    }
 
-  /* Keep the right-menus floor selector accessible on small screens */
-  .right-menus select {
-    font-size: 11px;
-  }
+    .view-indicator-graphic {
+        display: none !important;
+    }
+
+    /* BoardsPanel in the row-wrapper uses min-height that blows out mobile */
+    .board-view-container {
+        min-height: unset !important;
+    }
+
+    /* ── Compact top bar ───────────────────────────────────────────────── */
+    .column-wrapper {
+        flex-direction: column;
+        height: auto;
+    }
+
+    .inputs-container {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 6px 8px;
+        padding-left: 36px;
+        /* Leave space for the fixed hamburger menu button */
+        background: #111;
+        border-bottom: 1px solid rgba(249, 177, 21, 0.15);
+        min-height: 44px;
+        align-items: center;
+
+        .left-text-readout {
+            font-size: 11px;
+            max-width: 110px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #ccc;
+        }
+
+        /* Compact view selector radio group */
+        .view-state-radio-group {
+            label {
+                font-size: 11px;
+                padding: 3px 8px;
+            }
+        }
+
+        /* Right controls (floor selector, dpad) */
+        .right-menus {
+            width: auto !important;
+            gap: 4px;
+            font-size: 11px;
+        }
+    }
+
+    /* ── Row wrapper stacks vertically ────────────────────────────────── */
+    .row-wrapper {
+        flex-direction: column !important;
+        min-height: unset !important;
+        height: auto;
+        flex: 1 1 auto;
+        position: relative;
+        display: flex;
+    }
+
+    /* ── Mobile board viewport (pinch/zoom/pan container) ─────────────── */
+    .mobile-board-viewport {
+        width: 100vw;
+        flex: 1 1 auto;
+        height: auto;
+        min-height: 200px;
+        overflow: hidden;
+        position: relative;
+        /* Suppress default browser pan/zoom so our JS handlers own the gestures */
+        touch-action: none;
+        background: #0b0a08;
+    }
+
+    /* The inner wrapper that receives CSS transform for zoom+pan */
+    .mobile-board-transform {
+        /* No layout constraints — let the board be natural size, transforms handle the rest */
+        display: inline-block;
+    }
+
+    /* ── Floating zoom-reset button ────────────────────────────────────── */
+    .mobile-zoom-reset {
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        z-index: 100;
+        background: rgba(249, 177, 21, 0.15);
+        border: 1px solid rgba(249, 177, 21, 0.45);
+        border-radius: 50%;
+        width: 44px;
+        height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #f9b115;
+        font-size: 20px;
+        cursor: pointer;
+        transition: background 0.15s ease, transform 0.15s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+
+        &:active {
+            background: rgba(249, 177, 21, 0.35);
+            transform: scale(0.92);
+        }
+    }
+
+    /* ── Mobile action strip ────────────────────────────────────────────── */
+    .mobile-action-strip {
+        position: fixed;
+        bottom: 48px;
+        /* sits just above the palette handle */
+        left: 0;
+        right: 0;
+        z-index: 150;
+        height: 60px;
+        background: #111;
+        border-top: 1px solid rgba(249, 177, 21, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        padding: 0 4px;
+
+        button {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            padding: 4px 6px;
+            border-radius: 8px;
+            transition: color 0.15s ease, background 0.15s ease;
+            outline: none;
+            -webkit-tap-highlight-color: transparent;
+
+            span:last-child {
+                font-size: 9px;
+                color: #888;
+                letter-spacing: 0.2px;
+                line-height: 1;
+            }
+
+            &:active {
+                color: #f9b115;
+                background: rgba(249, 177, 21, 0.1);
+            }
+        }
+    }
+
+    /* ── Bottom-sheet palette drawer ────────────────────────────────────── */
+    .mobile-palette-drawer {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 200;
+        background: #0b0a09;
+        border-top: 2px solid #f9b115;
+        border-radius: 16px 16px 0 0;
+        /* Collapsed: only the handle is visible */
+        transform: translateY(calc(100% - 48px));
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.6);
+
+        &.open {
+            transform: translateY(0);
+        }
+    }
+
+    .palette-handle {
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        cursor: pointer;
+        color: #f9b115;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+
+        &::before {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 4px;
+            background: #f9b115;
+            border-radius: 2px;
+            opacity: 0.55;
+            flex-shrink: 0;
+        }
+    }
+
+    .palette-drawer-content {
+        max-height: 52vh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 12px 16px 40px;
+
+        /* Turn parent palette container into a horizontal wrapping flex container */
+        .palette.right-palette {
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            margin-left: 0 !important;
+            background-color: transparent !important;
+            border: none !important;
+            overflow: visible !important;
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+            justify-content: flex-start !important;
+            align-items: flex-start !important;
+        }
+
+        /* Redesign option container into vertical grid cells */
+        .palette-options-pane {
+            width: calc(20% - 8px) !important;
+            /* 5 columns grid layout by default */
+            min-width: 90px !important;
+            flex: 0 1 auto !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            border-radius: 8px !important;
+            background: #131211 !important;
+            overflow: visible !important;
+            display: flex !important;
+            flex-direction: column !important;
+            transition: width 0.2s ease, flex-basis 0.2s ease;
+
+            /* When expanded, let it take up the full row width inline */
+            &.expanded-pane {
+                width: 100% !important;
+                flex: 1 1 100% !important;
+            }
+        }
+
+        .palette-option-container {
+            border: none !important;
+            border-radius: 8px !important;
+            height: auto !important;
+            min-height: 80px !important;
+            /* taller height to house vertical layouts */
+            background: linear-gradient(135deg, #1d1c1a 0%, #131211 100%) !important;
+            width: 100% !important;
+            display: flex !important;
+            flex-direction: column !important;
+            /* stack elements vertically */
+            align-items: center !important;
+            justify-content: center !important;
+            padding: 8px 4px !important;
+            box-sizing: border-box;
+            position: relative !important;
+
+            /* Make tile icons bigger inside the container */
+            .tile {
+                width: 40px !important;
+                height: 40px !important;
+                margin-bottom: 6px !important;
+                border-radius: 6px !important;
+            }
+
+            /* Center labels underneath the icon */
+            .text-container {
+                font-size: 10px !important;
+                padding-left: 0 !important;
+                text-align: center !important;
+                white-space: normal !important;
+                /* wrap if label is long */
+                word-break: break-word !important;
+                line-height: 1.2 !important;
+                flex: none !important;
+                color: #ccc;
+            }
+
+            /* Float the dropdown navigation arrows in top-right of mobile cards */
+            >div:not(.tile):not(.text-container) {
+                position: absolute !important;
+                top: 6px !important;
+                right: 6px !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+        }
+
+        /* Keep expanded options confined within columns */
+        .palette-option-expandable-container {
+            display: none !important;
+            width: 100% !important;
+            background-color: #0b0a09 !important;
+            border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 0 0 8px 8px !important;
+            box-sizing: border-box;
+
+            /* Expand horizontally when open */
+            &.expanded {
+                display: flex !important;
+                flex-direction: row !important;
+                overflow-x: auto !important;
+                overflow-y: hidden !important;
+                padding: 10px !important;
+                gap: 10px !important;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Style sub-items inside scrollable submenu row as horizontal pills */
+            .palette-option-subcontainer {
+                display: flex !important;
+                flex-direction: row !important;
+                align-items: center !important;
+                background: #1d1c1a !important;
+                border: 1px solid rgba(255, 255, 255, 0.08) !important;
+                border-radius: 6px !important;
+                padding: 4px 10px !important;
+                white-space: nowrap !important;
+                flex-shrink: 0 !important;
+                width: auto !important;
+                box-sizing: border-box;
+
+                .tile {
+                    width: 28px !important;
+                    height: 28px !important;
+                    flex-shrink: 0 !important;
+                    margin-bottom: 0 !important;
+                }
+
+                .text-container {
+                    padding-left: 8px !important;
+                    flex: none !important;
+                    text-align: left !important;
+
+                    span {
+                        font-size: 10px !important;
+                        font-weight: 500 !important;
+                    }
+                }
+            }
+        }
+    }
+
+    /* ── Misc desktop rules that break mobile ──────────────────────────── */
+    /* The board-nav dpad sits to the left of the board on desktop; hide on mobile */
+    .board-nav-dpad {
+        display: none !important;
+    }
+
+    /* Keep the right-menus floor selector accessible on small screens */
+    .right-menus select {
+        font-size: 11px;
+    }
 }
 
 /* Tablet view top padding adjustment for status bar safety */
 @media (max-width: 1366px) {
-  .right-palette:not(.palette-drawer-content .right-palette) {
-    padding-top: 30px !important;
-  }
+    .right-palette:not(.palette-drawer-content .right-palette) {
+        padding-top: 30px !important;
+    }
 }
+
 .trash-icon-hover {
-  opacity: 0.5;
-  transition: opacity 0.2s ease;
-  &:hover {
-    opacity: 1;
-  }
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+
+    &:hover {
+        opacity: 1;
+    }
 }

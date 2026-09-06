@@ -35,6 +35,7 @@ export function MapMaker(props){
         'food',
         'dream den',
         'dungeon portal',
+        'locuses',
         'inscription',
         'shrine',
         'tablet'
@@ -118,7 +119,14 @@ export function MapMaker(props){
     ];
 
     this.passageOptions = [
-        { key: 'wall_breaker', name: 'Wall breaker', image: null }
+        { key: 'wall_breaker', name: 'Wall breaker', image: null, borders: { top: '2px solid black', left: '2px solid black', right: '2px solid transparent', bottom: '2px solid black' } },
+        { key: 'wall_builder', name: 'Wall builder', image: null, borders: { top: '2px solid black', left: '2px solid black', right: '2px solid black', bottom: '2px solid black' } }
+    ];
+
+    this.locusOptions = [
+        { key: 'emerald_locus', name: 'Emerald Locus', locusType: 'emerald', image: 'emerald_locus', color: '#10b981' },
+        { key: 'frozen_locus',  name: 'Frozen Locus',  locusType: 'frozen',  image: 'frozen_locus',  color: '#38bdf8' },
+        { key: 'cosmic_locus',  name: 'Cosmic Locus',  locusType: 'cosmic',  image: 'cosmic_locus',  color: '#c084fc' }
     ];
 
     this.shrineOptions = [
@@ -195,6 +203,10 @@ export function MapMaker(props){
         { key: 'litter_edge_wood', name: 'Edge Wood', image: 'litter_edge_wood' },
         { key: 'litter_small_barrel', name: 'Small Barrel', image: 'litter_small_barrel' },
         { key: 'litter_edge_bones', name: 'Edge Bones & Rubble', image: 'litter_edge_bones' },
+        { key: 'litter_broken_crates', name: 'Broken Crates', image: 'litter_broken_crates' },
+        { key: 'litter_broken_urns', name: 'Broken Urns', image: 'litter_broken_urns' },
+        { key: 'litter_battle_debris', name: 'Battle Debris', image: 'litter_battle_debris' },
+        { key: 'litter_iron_chains', name: 'Iron Chains', image: 'litter_iron_chains' },
     ];
 
     this.terrainOptions = [
@@ -231,14 +243,20 @@ export function MapMaker(props){
         const containsSubtype = (typeof contains === 'object' && contains !== null) ? contains.subtype : null;
         const imageType = tile?.image;
 
-        const canonical = ['way_up', 'way_down', 'door', 'spawn_point'];
+        const canonical = ['way_up', 'way_down', 'door', 'spawn_point', 'locus', 'emerald_locus', 'frozen_locus', 'cosmic_locus'];
 
-        if (canonical.includes(containsType)) return containsType;
+        if (canonical.includes(containsType)) {
+            if (containsType === 'locus' && containsSubtype) return containsSubtype;
+            return containsType;
+        }
         if (canonical.includes(containsSubtype)) return containsSubtype;
         if (canonical.includes(imageType)) return imageType;
 
         if (containsType === 'spawn' && (containsSubtype === 'spawn_point' || imageType === 'spawn_point')) {
             return 'spawn_point';
+        }
+        if (containsType === 'locus') {
+            return containsSubtype || 'locus';
         }
 
         return containsType || containsSubtype || imageType || null;
@@ -260,8 +278,9 @@ export function MapMaker(props){
                 if (!board || !board.tiles) return [];
                 return board.tiles.filter((tile) => {
                     const type = this.getTilePassageType(tile);
+                    const isLocus = type === 'locus' || (typeof type === 'string' && type.includes('locus')) || tile?.contains?.type === 'locus';
                     return includeSpawnPoint
-                        ? (type === 'way_up' || type === 'way_down' || type === 'door' || type === 'spawn_point')
+                        ? (type === 'way_up' || type === 'way_down' || type === 'door' || type === 'spawn_point' || isLocus)
                         : (type === 'way_up' || type === 'way_down' || type === 'door');
                 });
             });
@@ -467,6 +486,15 @@ export function MapMaker(props){
                     optionType: 'obscured space',
                     image: null,
                     color: '#111012',
+                    id: i
+                })
+            } else if(key === 'locuses'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'locuses',
+                    image: 'emerald_locus',
+                    color: null,
+                    isLocus: true,
                     id: i
                 })
             } else if(key === 'inscription'){
@@ -721,9 +749,12 @@ export function MapMaker(props){
             };
 
             passages.frontPassages.forEach(passage=>{
-                if(this.getTilePassageType(passage) === 'spawn_point'){
+                const pType = this.getTilePassageType(passage);
+                if(pType === 'spawn_point'){
                     spawns.push(passage);
                     dungeonSpawns.push(passage);
+                } else if (pType === 'locus' || pType === 'emerald_locus' || pType === 'frozen_locus' || pType === 'cosmic_locus' || (typeof pType === 'string' && pType.includes('locus'))) {
+                    // Locus overlay icons don't require inter-level passage connections
                 } else {
                     let connectedMatch = passages.connected.find(e=>e.locationCode === passage.locationCode)
                     if(!connectedMatch){
@@ -737,9 +768,12 @@ export function MapMaker(props){
                 }
             })
             passages.backPassages.forEach(passage=>{
-                if(this.getTilePassageType(passage) === 'spawn_point'){
+                const pType = this.getTilePassageType(passage);
+                if(pType === 'spawn_point'){
                     spawns.push(passage);
                     dungeonSpawns.push(passage);
+                } else if (pType === 'locus' || pType === 'emerald_locus' || pType === 'frozen_locus' || pType === 'cosmic_locus' || (typeof pType === 'string' && pType.includes('locus'))) {
+                    // Locus overlay icons don't require inter-level passage connections
                 } else {
                     let connectedMatch = passages.connected.find(e=>e.locationCode === passage.locationCode)
                     if(!connectedMatch){
@@ -871,6 +905,8 @@ export function MapMaker(props){
                 return 'moon_castle'
             case 'dungeon portal':
                 return 'dungeon_portal'
+            case 'locuses':
+                return 'emerald_locus'
             case 'food':
                 return 'food'
             case 'spawn':
@@ -958,6 +994,63 @@ export function MapMaker(props){
             });
         });
         return portals;
+    }
+
+    this.getAllLociInDungeon = (dungeon, locusType = null) => {
+        const loci = [];
+        if (!dungeon || !Array.isArray(dungeon.levels)) return loci;
+        dungeon.levels.forEach((level) => {
+            ['front', 'back'].forEach((orientation) => {
+                const plane = level[orientation];
+                if (plane && Array.isArray(plane.miniboards)) {
+                    plane.miniboards.forEach((mb, mbIndex) => {
+                        if (mb && Array.isArray(mb.tiles)) {
+                            mb.tiles.forEach((tile) => {
+                                const contains = tile.contains;
+                                const type = contains && (contains.type || contains);
+                                const subtype = contains && (contains.subtype || contains.key);
+                                const isLocus = type === 'locus' || subtype === 'locus' ||
+                                    (typeof type === 'string' && type.includes('locus')) ||
+                                    (typeof subtype === 'string' && subtype.includes('locus')) ||
+                                    (typeof tile.image === 'string' && tile.image.includes('locus'));
+                                if (isLocus) {
+                                    const tileCoords = (tile.coordinates && Array.isArray(tile.coordinates) && tile.coordinates.length >= 2 && tile.coordinates[0] !== undefined && tile.coordinates[0] !== null)
+                                        ? tile.coordinates
+                                        : [(typeof tile.id === 'number' ? tile.id % 15 : 0), (typeof tile.id === 'number' ? Math.floor(tile.id / 15) : 0)];
+
+                                    const thisLocusType = (contains && contains.locusType) ||
+                                        (String(subtype || type || tile.image || '').includes('emerald') ? 'emerald' :
+                                         String(subtype || type || tile.image || '').includes('frozen') ? 'frozen' :
+                                         String(subtype || type || tile.image || '').includes('cosmic') ? 'cosmic' : 'emerald');
+
+                                    if (locusType && thisLocusType !== locusType) {
+                                        return;
+                                    }
+
+                                    const locusId = (contains && contains.locusId) || `locus_${thisLocusType}_lvl_${level.id}_${orientation}_mb_${mbIndex}_tile_${tile.id}`;
+                                    const locusName = (contains && contains.name) ||
+                                        `${thisLocusType.charAt(0).toUpperCase() + thisLocusType.slice(1)} Locus (Lvl ${level.id} ${orientation === 'front' ? 'Front' : 'Back'} Board ${mbIndex + 1})`;
+
+                                    loci.push({
+                                        tileId: tile.id,
+                                        coordinates: tileCoords,
+                                        miniboardIndex: mbIndex,
+                                        orientation: orientation,
+                                        levelId: level.id,
+                                        levelName: level.name || `Level ${level.id}`,
+                                        locusType: thisLocusType,
+                                        locusId: locusId,
+                                        name: locusName,
+                                        image: (contains && contains.subtype) || `${thisLocusType}_locus`,
+                                    });
+                                }
+                            });
+                        }
+                    });
+                }
+            });
+        });
+        return loci;
     }
 
     this.applyForestStamp = (tiles, centerIdx, options = {}) => applyForestStamp(tiles, centerIdx, options);
