@@ -1,33 +1,45 @@
-/* Inventory popup styles (shared) */
-.inventory-popup,
-.inventory-modal{
+.inventory-popup {
     position: absolute;
     left: 8%;
-    top: 6%;
+    top: 4%;
     z-index: 2000;
-    // background: #f0f0f0; /* light grey background as requested */
     color: #111;
     border-radius: 8px;
-    padding: 20px;
+    padding: 12px;
     box-shadow: 0 8px 24px rgba(0,0,0,0.35);
     width: 84%;
     max-width: 1400px;
-    min-width: 800px; /* ensure minimum width */
-    min-height: 700px; /* ensure minimum height as requested */
+    min-width: 800px;
+    max-height: 88vh;
+    min-height: 0;
     overflow: hidden;
     display: flex;
-    align-items: stretch; /* ensure children can expand */
+    align-items: stretch;
     justify-content: center;
     box-sizing: border-box;
 }
-.modal.inventory-modal{
+
+.modal.inventory-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 2000;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     overflow: hidden;
 }
+
 /* Override CoreUI modal max-width for inventory modal/dialog instances */
 .inventory-modal .modal-dialog,
 .inventory-popup .modal-dialog{
     max-width: 750px !important;
-    margin: 0 auto !important; /* center the modal dialog */
+    max-height: 88vh !important;
+    margin: auto !important; /* center the modal dialog vertically and horizontally */
+    display: flex;
+    flex-direction: column;
 }
 .modal-backdrop{
     /* dark translucent backdrop so page behind modal is dimmed (not white) */
@@ -38,16 +50,14 @@
 .inventory-modal .modal-content{
     background: transparent !important;
     box-shadow: none !important;
+    max-height: 88vh !important;
+    display: flex;
+    flex-direction: column;
 }
 
 .inventory-content{
-    /* make the visible modal content area the light panel */
-    // background: #ffffff;
-    /* Use comma-separated rgba arguments for Sass compatibility */
-    // background-color: rgba(255, 255, 255, 0.5);
     border-radius: 6px;
     padding: 16px;
-    // background-color: #d3d3d380;
     border: 1px solid white;
     color: white;
 }
@@ -57,11 +67,10 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    min-height: 885px;
-    
-    height: 100%;
+    max-height: 88vh;
+    min-height: 0;
     box-sizing: border-box;
-    padding: 8px 12px;
+    padding: 8px 14px 14px 14px;
 }
 .inventory-popup .inventory-title,
 .inventory-modal .inventory-title{
@@ -92,14 +101,14 @@
 .inventory-modal .crew-panels{
     display: flex;
     flex-wrap: wrap;
-    gap: 16px;
-    overflow: auto; /* allow scrolling if many crew panels */
-    padding-bottom: 8px;
+    gap: 12px;
+    overflow-y: auto; /* allow scrolling if many crew panels */
+    padding-bottom: 4px;
     align-content: flex-start;
     flex: 1 1 auto; /* allow crew panels to take remaining space */
     width: 100%;
-    min-height: 560px; /* ensure panels area has visible height */
-    max-height: calc(100% - 80px);
+    min-height: 0;
+    max-height: calc(100% - 150px);
 }
 
 .inventory-popup .inventory-strip,
@@ -111,18 +120,20 @@
     border-top: 1px solid rgba(255,255,255,0.06);
     align-items: center;
     overflow-x: auto;
-    height: 100px; /* fixed strip height */
+    height: 80px; /* strip height tuned for laptop viewports */
+    flex: 0 0 80px;
     box-sizing: border-box;
 }
 .inventory-descriptor-panel{
     width: 100%;
-    height: 90px;
+    height: 72px;
+    flex: 0 0 72px;
     overflow: hidden;
     border: 1px solid rgba(255,255,255,0.12);
     border-radius: 6px;
     background: rgba(0,0,0,0.25);
     box-sizing: border-box;
-    padding: 8px 12px;
+    padding: 6px 10px;
     display: flex;
     align-items: center;
 
@@ -213,8 +224,8 @@
 }
 .inventory-popup .inventory-strip .strip-item,
 .inventory-modal .inventory-strip .strip-item{
-    width: 76px;
-    height: 96px;
+    width: 68px;
+    height: 76px;
     flex: 0 0 auto;
     display: flex;
     align-items: center;
@@ -256,8 +267,8 @@
 .inventory-modal .crew-panel{
     // width: 160px;
     min-width: 200px;
-    min-height: 260px;
-    padding: 8px;
+    min-height: 240px;
+    padding: 6px;
     // background: rgba(255,255,255,0.95);
     border-radius: 6px;
     display: flex;
@@ -391,8 +402,8 @@
 }
 .inventory-popup .crew-portrait,
 .inventory-modal .crew-portrait{
-    width: 112px;
-    height: 112px;
+    width: 96px;
+    height: 96px;
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -401,9 +412,9 @@
 }
 .inventory-popup .crew-body,
 .inventory-modal .crew-body{
-    width: 210px;
-    height: 350px;
-    margin-top: 8px;
+    width: 200px;
+    height: 315px;
+    margin-top: 4px;
     flex: 0 0 auto;
     position: relative;
 }
@@ -486,7 +497,8 @@
         flex-direction: row;
         gap: 24px;
         align-items: stretch;
-        height: 800px;
+        max-height: calc(88vh - 80px);
+        height: 100%;
         
         .inventory-main-column {
             flex: 0 0 460px;

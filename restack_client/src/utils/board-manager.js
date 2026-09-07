@@ -691,12 +691,13 @@ export function BoardManager(){
             }
 
             // If destination is an impassable building (outpost, observer platform, etc. except hut), block movement onto it unless shiftKey/ignoreBuilding is set
-            const isShiftBypass = !!(options.shiftKey || options.ignoreBuilding || options.bypassBuilding);
+            const opts = (options && typeof options === 'object') ? options : {};
+            const isShiftBypass = !!(opts.shiftKey || opts.ignoreBuilding || opts.bypassBuilding);
             if (!isShiftBypass && (this.isImpassableBuildingTile(toTile) || (toBoardTile && this.isImpassableBuildingTile(toBoardTile)))) return true;
 
             const fromBlocked = this.hasSolidBorder(fromTile, fromSide) || (fromBoardTile && this.hasSolidBorder(fromBoardTile, fromSide));
             const toBlocked = this.hasSolidBorder(toTile, toSide) || (toBoardTile && this.hasSolidBorder(toBoardTile, toSide));
-            return fromBlocked || toBlocked;
+            return !!(fromBlocked || toBlocked);
         } catch (e) {
             return false;
         }
@@ -2293,6 +2294,7 @@ export function BoardManager(){
     })
     this.handleInteraction = (destinationTile, options = {}) => {
         if (!destinationTile) return null;
+        const opts = (options && typeof options === 'object') ? options : {};
         // Intercept visited/used narrative and shrines for the current user to bypass interactions
         try {
             const rawType = this.getContainsType(destinationTile.contains);
@@ -2364,7 +2366,7 @@ export function BoardManager(){
 
         const type = this.getContainsType(destinationTile.contains);
         const subtype = this.getContainsSubtype(destinationTile.contains);
-        const isShiftBypass = !!(options.shiftKey || options.ignoreBuilding || options.bypassBuilding);
+        const isShiftBypass = !!(opts.shiftKey || opts.ignoreBuilding || opts.bypassBuilding);
         
         if (this.isImpassableBuildingTile(destinationTile)) {
             if (isShiftBypass) {
@@ -2383,14 +2385,10 @@ export function BoardManager(){
                 type ||
                 'building'
             ).toLowerCase();
-            const bldgName = (subtype || destinationTile.building || type || 'building').replace(/_/g, ' ').replace(' under construction', '');
-            const article = ['a', 'e', 'i', 'o', 'u'].includes(bldgName.charAt(0).toLowerCase()) ? 'An' : 'A';
-            if (rawBldg.includes('dream_den') || rawBldg.includes('dream den')) {
-                try {
-                    if (this.triggerVendorEncounter) {
-                        this.triggerVendorEncounter('dream_den');
-                    }
-                } catch (e) {}
+            const bldgName = rawBldg.replace(/_/g, ' ');
+            const article = /^[aeiou]/i.test(bldgName) ? 'An' : 'A';
+            if (rawBldg.includes('outpost') || rawBldg.includes('fort') || rawBldg.includes('camp') || rawBldg.includes('hut') || rawBldg.includes('platform') || rawBldg.includes('locus')) {
+                if (this.messaging) this.messaging(`The ${bldgName} obstructs your movement.`);
             } else {
                 if (this.messaging) this.messaging(`${article} ${bldgName} obstructs your movement.`);
             }
@@ -2398,7 +2396,6 @@ export function BoardManager(){
         }
 
         if (isShiftBypass) {
-            const bldg = destinationTile.building || destinationTile.contains?.building;
             const isBuildingOrLocus = type === 'building' || type === 'generator' || type === 'locus' || type === 'vendor' || (subtype && (subtype.includes('locus') || subtype.includes('outpost') || subtype.includes('platform') || subtype.includes('fort') || subtype.includes('camp') || subtype.includes('hut')));
             if (isBuildingOrLocus) {
                 return null; // Passable when holding Shift

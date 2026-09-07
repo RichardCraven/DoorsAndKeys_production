@@ -98,6 +98,29 @@ describe('Pocket Dimension Multi-Tile (2x2) Structure Rendering and Sanitization
             expect(portrait).not.toBeNull();
         });
 
+        test('Player-owned Cultivation Vat renders a blue structure ring in the dungeon', () => {
+            const boardTiles = createBoardTiles([
+                { id: 20, ownedByPlayer: true, contains: { type: 'building', subtype: 'cultivation_vat', building: 'cultivation_vat', name: 'Cultivation Vat' }, building: 'cultivation_vat' }
+            ]);
+
+            const { container } = render(
+                <Tile
+                    id={20}
+                    index={20}
+                    color="#6b6057"
+                    inSuperboard={false}
+                    ownedByPlayer={true}
+                    boardTiles={boardTiles}
+                    contains={{ type: 'building', subtype: 'cultivation_vat', building: 'cultivation_vat', name: 'Cultivation Vat', ownedByPlayer: true }}
+                    building="cultivation_vat"
+                />
+            );
+
+            const ring = container.querySelector('.structure-faction-ring');
+            expect(ring).not.toBeNull();
+            expect(ring.style.borderColor).toBe('rgba(59, 130, 246, 0.9)');
+        });
+
         test('Top-right quadrant renders slice 100% 0% and suppresses faction ring', () => {
             const boardTiles = createBoardTiles([
                 { id: 20, contains: { type: 'building', subtype: 'ore_mine', vendorGroupId: 'mine_1', vendorCell: 'anchor', vendorAnchorId: 20 }, image: 'ore_mine' },

@@ -570,6 +570,9 @@ import moxadite_banner from '../assets/icons/misc/moxadite banner.png'
 import benthachite_banner from '../assets/icons/misc/benthachite banner.png'
 import pyremnite_banner from '../assets/icons/misc/pyremnite banner.png'
 
+import totem from '../assets/icons/misc/loot/totem.png'
+import map_icon from '../assets/icons/misc/map.png'
+
 
 // runes
 import volcanic_rune from '../assets/icons/runes/volcanic.png'
@@ -2739,6 +2742,10 @@ export {
     monadic_dust,
     shimmering_dust,
     monadic_nugget,
+    totem,
+    totem as totems,
+    map_icon as map,
+    map_icon as camp_map,
 
     // unlock spell & indicator
     unlock,
