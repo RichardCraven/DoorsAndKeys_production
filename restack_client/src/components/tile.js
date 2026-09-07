@@ -493,7 +493,7 @@ function Tile(props) {
     const sKey = (props.building || containsObj?.subtype || containsObj?.building || containsObj?.type || containsObj?.key || containsObj?.name || props.contains || props.image || '').toString().toLowerCase();
     const is3x3Structure = sKey.includes('keep') || sKey.includes('fortress') || sKey.includes('fractured_monolith');
     const isLocusTile = sKey.includes('locus') || !!props.isAdjacentLocus || (containsObj && (containsObj.type === 'locus' || containsObj.locusType || (typeof containsObj.subtype === 'string' && containsObj.subtype.includes('locus'))));
-    const isLocusActiveOrAdjacent = isLocusTile && (props.illuminated || props.isIlluminated || props.isAdjacentLocus);
+    const isLocusActiveOrAdjacent = isLocusTile && (props.isAdjacentLocus || props.isLocusActive || props.activeLocus);
     const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || sKey.includes('under_construction') || sKey.includes('construction') || is3x3Structure || isLocusTile;
 
     const containsObjForHp = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined')
@@ -1516,10 +1516,29 @@ function Tile(props) {
                 const containsAffiliation = containsObj?.affiliation || props.affiliation || currentTileObj?.affiliation;
                 const affStr = String(containsAffiliation || rawTerr || '').toLowerCase();
 
-                const isPlayerAffiliated = affStr.includes('friendly') || affStr.includes('player') || affStr.includes('crew');
+                const isOwnedByPlayer = !!(
+                    props.ownedByPlayer ||
+                    currentTileObj?.ownedByPlayer ||
+                    (currentIdx !== null && currentIdx !== undefined && boardTiles?.[currentIdx]?.ownedByPlayer) ||
+                    (props.id !== undefined && boardTiles?.[props.id]?.ownedByPlayer) ||
+                    containsObj?.ownedByPlayer ||
+                    gData?.ownedByPlayer ||
+                    gData?.owned === true ||
+                    containsObj?.ownedBy === 'player' ||
+                    containsObj?.owner === 'player' ||
+                    containsObj?.ownerId === 'player' ||
+                    containsObj?.placedBy === 'player' ||
+                    containsObj?.faction === 'player' ||
+                    containsObj?.isAllied ||
+                    props.placedBy === 'player' ||
+                    props.isPlayerBuilt ||
+                    props.ownedBy === 'player'
+                );
+
+                const isPlayerAffiliated = affStr.includes('friendly') || affStr.includes('player') || affStr.includes('crew') || isOwnedByPlayer;
                 const isHostileAffiliated = affStr.includes('hostile') || affStr.includes('enemy') || affStr.includes('automaton');
 
-                const isPlayerBuilt = isPlayerAffiliated || isGeneratorActive || !!(
+                const isPlayerBuilt = isPlayerAffiliated || isGeneratorActive || isOwnedByPlayer || !!(
                     (containsObj && (containsObj.placedBy === 'player' || containsObj.ownerId === 'player' || containsObj.faction === 'player' || containsObj.isAllied)) ||
                     props.placedBy === 'player' ||
                     props.isPlayerBuilt
@@ -1562,7 +1581,7 @@ function Tile(props) {
                     ringColor = 'rgba(59, 130, 246, 0.9)'; // Allied / Friendly Blue
                     ringGlow = '0 0 16px rgba(59, 130, 246, 0.85), inset 0 0 12px rgba(59, 130, 246, 0.5)';
                     bgGradient = 'radial-gradient(ellipse at center, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.08) 70%, transparent 100%)';
-                    labelTitle = isGeneratorActive ? 'Friendly Resource Generator' : 'Friendly Structure';
+                    labelTitle = (isGeneratorActive || isGenerator) ? 'Friendly Resource Generator' : 'Friendly Structure';
                 } else if (isHostile) {
                     ringColor = 'rgba(239, 68, 68, 0.9)'; // Hostile Red
                     ringGlow = '0 0 16px rgba(239, 68, 68, 0.85), inset 0 0 12px rgba(239, 68, 68, 0.5)';
@@ -2218,8 +2237,8 @@ function Tile(props) {
                     (isClaimableBuilding && (!!rawTerritory || !!containsObj?.affiliation || !!props.affiliation || !!currentContains?.affiliation));
                 const obsScale = isEncompassedByFriendlyDomain ? 1.5 : 1.0;
 
-                const isLocusTile = sKey.includes('locus') || (containsObj && (containsObj.type === 'locus' || (typeof containsObj.subtype === 'string' && containsObj.subtype.includes('locus'))));
-                const isLocusActiveOrAdjacent = isLocusTile && (props.illuminated || props.isIlluminated || props.isAdjacentLocus);
+                const isLocusTile = sKey.includes('locus') || !!props.isAdjacentLocus || (containsObj && (containsObj.type === 'locus' || containsObj.locusType || (typeof containsObj.subtype === 'string' && containsObj.subtype.includes('locus'))));
+                const isLocusActiveOrAdjacent = isLocusTile && (props.isAdjacentLocus || props.isLocusActive || props.activeLocus);
                 const locusScale = isLocusActiveOrAdjacent ? 1.4 : 1.0;
 
                 const baseTransform = isPaletteTile ? 'none' : (isUnderConstruction 
@@ -3098,7 +3117,7 @@ export function propsAreEqual(prevProps, nextProps) {
         'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
         'isPlayerOnTile', 'className', 'illuminated', 'sabotageProgress', 'monolithActivationProgress', 'upgradeProgress', 'convertingTarget', 'converting',
         'isDisabledOutpost', 'disabledUntil', 'inscriptions', 'debugMode',
-        'isPlayerTile', 'hasLivingSummoner', 'playerImgKey', 'playerFacing', 'cursor', 'isFadingOut',
+        'isPlayerTile', 'isAdjacentLocus', 'isPlayerAdjacent', 'hasLivingSummoner', 'playerImgKey', 'playerFacing', 'cursor', 'isFadingOut',
         'ownedByPlayer', 'ownedByEnemy', 'isBumpingAttack', 'bumpVector', 'isGliding', 'glideVector', 'hoveredTileFootprint', 'isAutomated', 'isPaletteTile'
     ];
 

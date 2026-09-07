@@ -1677,10 +1677,33 @@ class MonsterBattle extends React.Component {
         this._gameOverHandled = true;
 
         // Snapshot battle data BEFORE reset() wipes combatManager.combatants.
-        // Attempt to use the freshest battleData available. Prefer component state
-        // (updated via updateBattleData). If that's empty (race), fall back to the
-        // authoritative combatManager.combatants snapshot.
-        let latestBattleData = (this.state.battleData && Object.keys(this.state.battleData).length) ? this.state.battleData : (this.props.combatManager && this.props.combatManager.combatants ? JSON.parse(JSON.stringify(this.props.combatManager.combatants)) : {});
+        // Prefer authoritative synchronous combatManager.combatants if available,
+        // otherwise fall back to component state. Always merge to ensure dead flags & 0 HP
+        // are preserved even if component state updates were batched asynchronously.
+        const cmCombatants = (this.props.combatManager && this.props.combatManager.combatants)
+            ? JSON.parse(JSON.stringify(this.props.combatManager.combatants))
+            : null;
+        let latestBattleData = cmCombatants && Object.keys(cmCombatants).length
+            ? cmCombatants
+            : (this.state.battleData ? JSON.parse(JSON.stringify(this.state.battleData)) : {});
+
+        // Merge any dead units or 0-HP units from state or combatManager into latestBattleData
+        const stateData = this.state.battleData || {};
+        const cmData = cmCombatants || {};
+        const allKeys = new Set([...Object.keys(latestBattleData), ...Object.keys(stateData), ...Object.keys(cmData)]);
+        allKeys.forEach(id => {
+            const uState = stateData[id];
+            const uCm = cmData[id];
+            const isDeadInState = uState && (uState.dead || (typeof uState.hp === 'number' && uState.hp <= 0));
+            const isDeadInCm = uCm && (uCm.dead || (typeof uCm.hp === 'number' && uCm.hp <= 0));
+            if (isDeadInState || isDeadInCm) {
+                if (!latestBattleData[id]) {
+                    latestBattleData[id] = JSON.parse(JSON.stringify(uCm || uState));
+                }
+                latestBattleData[id].dead = true;
+                latestBattleData[id].hp = 0;
+            }
+        });
 
         const executeTeardown = () => {
             this.props.overlayManager.reset();

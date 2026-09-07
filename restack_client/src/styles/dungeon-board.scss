@@ -4689,6 +4689,27 @@
             background: rgba(45, 45, 60, 0.95);
             color: #ffd473;
         }
+
+        .minimap-location-label {
+            text-transform: none;
+            color: #cbd5e1;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            cursor: help;
+            padding: 1px 6px;
+            border-radius: 3px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            transition: all 0.2s ease;
+
+            &:hover {
+                color: #ffffff;
+                background: rgba(255, 255, 255, 0.15);
+                border-color: rgba(212, 168, 68, 0.5);
+                box-shadow: 0 0 6px rgba(212, 168, 68, 0.3);
+            }
+        }
     }
 
     .section-content {

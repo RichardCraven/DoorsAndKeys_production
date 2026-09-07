@@ -762,8 +762,12 @@ const resolvePortrait = (portraitVal) => {
     return res;
 };
 
-const getCombatantPortrait = (unit, greetingInProcess, activeAnimations) => {
+const getCombatantPortrait = (unit, greetingInProcess, activeAnimations, showDeathAnimation, fullyDead) => {
     if (!unit) return '';
+    const isUnitDead = !!(unit.dead || (typeof unit.hp === 'number' && unit.hp <= 0 && !unit.isVCT && !unit.isTrialIcon));
+    if (isUnitDead && fullyDead && fullyDead[unit.id]) {
+        return '';
+    }
     if (unit.stagedPortraits) {
         const sp = unit.stagedPortraits;
         if (greetingInProcess && unit.isMainMonster && sp.greeting) {
@@ -933,6 +937,7 @@ export default function CombatGrid(props) {
     const [meltScales, setMeltScales] = React.useState({});
     const deathTimeoutsRef = React.useRef({});
     const consumableTimeoutsRef = React.useRef({});
+    const deadUnitIdsRef = React.useRef(new Set());
 
     // ── High-frequency render loop for status effect durations ────────────────
     const [, setTick] = React.useState(0);
@@ -964,7 +969,11 @@ export default function CombatGrid(props) {
         const allUnits = Object.values(battleData);
         allUnits.forEach(unit => {
             if (!unit) return;
-            if (unit.dead && !showDeathAnimation[unit.id] && !fullyDead[unit.id]) {
+            const isUnitDead = !!(unit.dead || (typeof unit.hp === 'number' && unit.hp <= 0 && !unit.isVCT && !unit.isTrialIcon));
+            if (isUnitDead) {
+                deadUnitIdsRef.current.add(unit.id);
+            }
+            if (isUnitDead && !showDeathAnimation[unit.id] && !fullyDead[unit.id]) {
                 if (isMountedRef.current) {
                     setShowDeathAnimation(prev => ({ ...prev, [unit.id]: true }));
                 }
@@ -1006,7 +1015,7 @@ export default function CombatGrid(props) {
                     delete deathTimeoutsRef.current[id];
                 }, 2400);
                 deathTimeoutsRef.current[id] = { timeout: t, animId };
-            } else if (!unit.dead && (showDeathAnimation[unit.id] || fullyDead[unit.id])) {
+            } else if (!isUnitDead && !deadUnitIdsRef.current.has(unit.id) && (showDeathAnimation[unit.id] || fullyDead[unit.id])) {
                 if (deathTimeoutsRef.current[unit.id]) {
                     const item = deathTimeoutsRef.current[unit.id];
                     if (item.timeout) clearTimeout(item.timeout);
@@ -2343,7 +2352,7 @@ export default function CombatGrid(props) {
     const renderMonsterUnit = (unit) => {
         const isMonster = unit.isMonster;
         const isMinion = unit.isMinion;
-        const isDead = unit.dead;
+        const isDead = !!(unit.dead || (typeof unit.hp === 'number' && unit.hp <= 0 && !unit.isVCT && !unit.isTrialIcon) || deadUnitIdsRef.current.has(unit.id));
         const shouldShow = !unit.invisible && (!isDead || unit.bifurcating || (showDeathAnimation[unit.id] && !fullyDead[unit.id]));
         if (!shouldShow) return null;
         if (!unit.coordinates) return null;
@@ -2556,7 +2565,7 @@ export default function CombatGrid(props) {
                                 className={portraitClasses}
                                 style={{
                                     backgroundImage: (isWalkerUnit || isSobekUnit) ? 'none' : (() => {
-                                        const url = getCombatantPortrait(unit, greetingInProcess, activeAnimations);
+                                        const url = getCombatantPortrait(unit, greetingInProcess, activeAnimations, showDeathAnimation, fullyDead);
                                         if (!url) {
                                             console.warn(`[PvP Diagnostic] renderMonsterUnit: unit id="${unit.id}" name="${unit.name}" has empty portrait URL`, unit);
                                             return 'none';
