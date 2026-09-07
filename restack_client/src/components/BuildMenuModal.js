@@ -5,7 +5,7 @@
 
 import React, { Component } from 'react';
 import * as images from '../utils/images';
-import { getAdjustedBuildTime, hasArcaneUnit, hasEngineerUnit } from '../utils/building-utils';
+import { getAdjustedBuildTime, hasArcaneUnit, hasEngineerUnit, isEngineerSelected } from '../utils/building-utils';
 import { getMeta } from '../utils/session-handler';
 
 export const BUILDINGS = [
@@ -147,6 +147,17 @@ export const BUILDINGS = [
         tag: 'STRUCTURE',
         description: 'A sturdy wall that blocks movement for non-owners. Cannot be inscribed by other players.',
     },
+    {
+        key: 'walker',
+        name: 'Walker',
+        category: 'advanced',
+        imageKey: 'walker',
+        fallbackImageKey: 'walker_turret_full',
+        costs: { wood: 0, stone: 0, ore: 0, slate: 0, dust: 0 },
+        buildTime: 30,
+        tag: 'CONSTRUCT',
+        description: 'A four-legged mechanical crawler engineered for combat and heavy traversal. Detaches the Engineer during assembly.',
+    },
 ];
 
 // hasArcaneUnit imported from building-utils.js
@@ -162,7 +173,12 @@ const TABS = [
         id: 'advanced',
         label: 'Advanced',
         icon: '⚙️',
-        isDisabled: (crew, inSuperboard) => inSuperboard ? false : !hasEngineerUnit(crew),
+        isDisabled: (crew, inSuperboard, selectedCrewMember) => {
+            if (inSuperboard) {
+                return !isEngineerSelected(selectedCrewMember);
+            }
+            return !hasEngineerUnit(crew);
+        },
     },
     {
         id: 'arcane',
@@ -241,6 +257,9 @@ class BuildMenuModal extends Component {
             }
             if (building.key === 'war_fort') {
                 return { wood: 40, ore: 25, slate: 20, dust: 0 };
+            }
+            if (building.key === 'walker') {
+                return { wood: 0, ore: 0, slate: 0, dust: 0 };
             }
             if (building.key === 'outpost') {
                 return { wood: 20, ore: 20, slate: 0, dust: 0 };
@@ -381,7 +400,8 @@ class BuildMenuModal extends Component {
                     <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(229, 181, 79, 0.2)', paddingBottom: '1px' }}>
                         {TABS.map(tab => {
                             const isActive = this.state.activeTab === tab.id;
-                            const isDisabled = tab.isDisabled(crew, this.props.inSuperboard);
+                            const selectedCrewMember = this.props.selectedCrewMember || crew.find(c => c && c.selected);
+                            const isDisabled = tab.isDisabled(crew, this.props.inSuperboard, selectedCrewMember);
 
                             return (
                                 <button
@@ -392,7 +412,11 @@ class BuildMenuModal extends Component {
                                         }
                                     }}
                                     disabled={isDisabled}
-                                    title={isDisabled ? (tab.id === 'arcane' ? 'Requires a Wizard or Summoner in your crew' : 'Obscure buildings are currently locked') : undefined}
+                                    title={isDisabled ? (
+                                        tab.id === 'advanced' && this.props.inSuperboard
+                                            ? 'Requires the Engineer to be currently selected'
+                                            : (tab.id === 'arcane' ? 'Requires a Wizard or Summoner in your crew' : (tab.id === 'advanced' ? 'Requires an Engineer in your crew' : 'Obscure buildings are currently locked'))
+                                    ) : undefined}
                                     style={{
                                         padding: '8px 18px',
                                         borderRadius: '4px 4px 0 0',
@@ -437,19 +461,19 @@ class BuildMenuModal extends Component {
                     }}>
                         {this.props.inSuperboard ? (
                             <>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Wood" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.wood} alt="Wood" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Wood: <strong style={{ color: '#f9b115' }}>{available.wood}</strong></span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Ore" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.stone} alt="Ore" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Ore: <strong style={{ color: '#f9b115' }}>{available.stone}</strong></span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Slate" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.slate} alt="Slate" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Slate: <strong style={{ color: '#f9b115' }}>{available.slate}</strong></span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Dust" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.spectral_dust} alt="Dust" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Dust: <strong style={{ color: '#f9b115' }}>{available.dust}</strong></span>
                                 </div>
@@ -457,21 +481,21 @@ class BuildMenuModal extends Component {
                         ) : (
                             <>
                                 {this.state.activeTab !== 'arcane' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                    <div title="Available Wood" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                         <img src={images.wood} alt="Wood" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                         <span>Wood: <strong style={{ color: '#f9b115' }}>{available.wood}</strong></span>
                                     </div>
                                 )}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Stone" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.stone} alt="Stone" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Stone: <strong style={{ color: '#f9b115' }}>{available.stone}</strong></span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Slate" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.slate} alt="Slate" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Slate: <strong style={{ color: '#f9b115' }}>{available.slate}</strong></span>
                                 </div>
                                 {this.state.activeTab === 'arcane' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                    <div title="Available Dust" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                         <img src={images.spectral_dust} alt="Dust" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                         <span>Dust: <strong style={{ color: '#f9b115' }}>{available.dust}</strong></span>
                                     </div>
@@ -584,27 +608,27 @@ class BuildMenuModal extends Component {
                                                 ) : (
                                                     <>
                                                         {costs.resolve > 0 && (
-                                                            <span style={{ color: available.resolve >= costs.resolve ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', fontWeight: '600' }}>
+                                                            <span title={`${costs.resolve} Resolve`} style={{ color: available.resolve >= costs.resolve ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', fontWeight: '600', cursor: 'help' }}>
                                                                 ⚡ {costs.resolve} Resolve
                                                             </span>
                                                         )}
                                                         {costs.wood > 0 && (
-                                                            <span style={{ color: available.wood >= costs.wood ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                            <span title={`${costs.wood} Wood`} style={{ color: available.wood >= costs.wood ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
                                                                 <img src={images.wood} alt="Wood" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.wood}
                                                             </span>
                                                         )}
                                                         {(costs.stone > 0 || costs.ore > 0) && (
-                                                            <span style={{ color: (available.ore !== undefined ? available.ore : available.stone) >= (costs.ore !== undefined ? costs.ore : costs.stone) ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                            <span title={`${costs.ore !== undefined ? costs.ore : costs.stone} ${this.props.inSuperboard ? "Ore" : "Stone"}`} style={{ color: (available.ore !== undefined ? available.ore : available.stone) >= (costs.ore !== undefined ? costs.ore : costs.stone) ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
                                                                 <img src={images.stone} alt={this.props.inSuperboard ? "Ore" : "Stone"} style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.ore !== undefined ? costs.ore : costs.stone}
                                                             </span>
                                                         )}
                                                         {costs.slate > 0 && (
-                                                            <span style={{ color: available.slate >= costs.slate ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                            <span title={`${costs.slate} Slate`} style={{ color: available.slate >= costs.slate ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
                                                                 <img src={images.slate} alt="Slate" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.slate}
                                                             </span>
                                                         )}
                                                         {costs.dust > 0 && (
-                                                            <span style={{ color: available.dust >= costs.dust ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                            <span title={`${costs.dust} Shimmering Dust`} style={{ color: available.dust >= costs.dust ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
                                                                 <img src={images.spectral_dust} alt="Dust" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.dust}
                                                             </span>
                                                         )}

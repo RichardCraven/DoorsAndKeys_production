@@ -756,6 +756,9 @@ class CrewManagerPage extends React.Component {
                             if (!basics.includes('slash')) basics.push('slash');
                         } else if (member.type === 'barbarian') {
                             if (!basics.includes('barbarian_slash')) basics.push('barbarian_slash');
+                        } else if (member.type === 'monk') {
+                            if (!basics.includes('monk_punch')) basics.push('monk_punch');
+                            if (!specials.includes('monk_twin_finger_authority')) specials.push('monk_twin_finger_authority');
                         }
                         member.skills = [...basics, ...specials];
                     } else {
@@ -776,6 +779,11 @@ class CrewManagerPage extends React.Component {
                         } else if (member.type === 'barbarian') {
                             member.attacks = member.attacks || [];
                             if (!member.attacks.includes('barbarian_slash')) member.attacks.push('barbarian_slash');
+                        } else if (member.type === 'monk') {
+                            member.specials = member.specials || [];
+                            if (!member.specials.includes('monk_twin_finger_authority')) member.specials.push('monk_twin_finger_authority');
+                            member.attacks = member.attacks || [];
+                            if (!member.attacks.includes('monk_punch')) member.attacks.push('monk_punch');
                         }
                     }
 

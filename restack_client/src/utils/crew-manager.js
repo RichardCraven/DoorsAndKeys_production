@@ -795,7 +795,7 @@ export function CrewManager() {
             portrait: images['monk_portrait'],
             inventory: [],
             passives: ['diamond_skin', 'swift_step'],
-            skills: ['monk_punch', 'monk_ethereal_speed', 'monk_meditate', 'monk_force_punch', 'monk_flurry'],
+            skills: ['monk_punch', 'monk_ethereal_speed', 'monk_meditate', 'monk_force_punch', 'monk_flurry', 'monk_twin_finger_authority'],
             weaknesses: ['fire', 'electricity', 'ice', 'blood_magic', 'crushing'],
             description: "Yu was born into the dynastic order of the White Serpent, inheriting the secrets of absolute stillness and unyielding motion",
             specialActions: [],

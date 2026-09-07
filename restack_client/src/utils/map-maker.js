@@ -14,6 +14,7 @@ export function MapMaker(props){
         'pocket buildings',
         'generators',
         'dungeon litter',
+        'dimension litter',
         'terrain',
         'delete',
         'door',
@@ -208,6 +209,16 @@ export function MapMaker(props){
         { key: 'litter_battle_debris', name: 'Battle Debris', image: 'litter_battle_debris' },
         { key: 'litter_iron_chains', name: 'Iron Chains', image: 'litter_iron_chains' },
     ];
+
+    this.pocketLitterOptions = [
+        { key: 'pocket_litter_mana_crystals', name: 'Mana Crystals', image: 'pocket_litter_mana_crystals' },
+        { key: 'pocket_litter_ruined_arch', name: 'Ruined Arch', image: 'pocket_litter_ruined_arch' },
+        { key: 'pocket_litter_broken_wagon', name: 'Broken Wagon', image: 'pocket_litter_broken_wagon' },
+        { key: 'pocket_litter_fractured_monolith', name: 'Fractured Monolith', image: 'pocket_litter_fractured_monolith', isLarge: true, isMultiTile: true, footprintType: '3x3' },
+        { key: 'pocket_litter_forge_remnants', name: 'Forge Remnants', image: 'pocket_litter_forge_remnants' },
+        { key: 'pocket_litter_rift_embers', name: 'Rift Embers', image: 'pocket_litter_rift_embers', isLarge: true, isMultiTile: true },
+    ];
+    this.dimensionLitterOptions = this.pocketLitterOptions;
 
     this.terrainOptions = [
         { key: 'terrain_tree_1', name: 'Pine Trees', image: 'terrain_tree_1' },
@@ -559,6 +570,16 @@ export function MapMaker(props){
                     image: 'litter_scattered_rocks',
                     color: null,
                     isDungeonLitter: true,
+                    id: i
+                })
+            } else if(key === 'dimension litter'){
+                this.paletteTiles.push({
+                    type: 'palette-tile',
+                    optionType: 'dimension litter',
+                    image: 'pocket_litter_mana_crystals',
+                    color: null,
+                    isDimensionLitter: true,
+                    isPocketLitter: true,
                     id: i
                 })
             } else if(key === 'terrain'){

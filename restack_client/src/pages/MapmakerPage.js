@@ -43,6 +43,7 @@ import { generateRandomDungeon } from '../utils/dungeon-generator'
 import { getRandomInscription } from '../utils/inscriptions-manager'
 import { updateTerrainAutotiles, applyForestStamp, applyMountainStamp } from '../utils/autotile-utils'
 import { superboardCleanup } from '../utils/cache-cleanup'
+import PerformanceOverlay from '../components/PerformanceOverlay'
 
 const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__';
 const GENERATE_DUNGEON_VALUE = '__generate_dungeon__';
@@ -413,6 +414,12 @@ class MapMakerPage extends React.Component {
         containsObj = { type: 'dungeon_litter', subtype: litterOption.key };
         tileImage = litterOption.image;
       }
+    } else if (pinnedOption.type === 'pocket-litter-tile') {
+      const pocketLitterOption = this.props.mapMaker?.pocketLitterOptions?.[pinnedOption.id];
+      if (pocketLitterOption) {
+        containsObj = { type: 'pocket_litter', subtype: pocketLitterOption.key };
+        tileImage = images[pocketLitterOption.image] || pocketLitterOption.image;
+      }
     } else if (pinnedOption.type === 'terrain-tile') {
       const terrainOption = this.props.mapMaker?.terrainOptions?.[pinnedOption.id];
       if (terrainOption) {
@@ -581,6 +588,13 @@ class MapMakerPage extends React.Component {
                     if (terrainOption) {
                         vendorKey = terrainOption.key;
                         image = images[terrainOption.image] || terrainOption.image;
+                    }
+                } else if (this.state.pinnedOption.type === 'pocket-litter-tile') {
+                    baseType = 'pocket_litter';
+                    const pocketLitterOption = this.props.mapMaker?.pocketLitterOptions?.[this.state.pinnedOption.id];
+                    if (pocketLitterOption) {
+                        vendorKey = pocketLitterOption.key;
+                        image = images[pocketLitterOption.image] || pocketLitterOption.image;
                     }
                 }
                 board.tiles = this.placeVendorFootprint([...board.tiles], tileIdx, vendorKey, baseType, image, footprintType);
@@ -1381,7 +1395,7 @@ class MapMakerPage extends React.Component {
   }
 
   isParentPaletteOption = (optionType) => {
-    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'terrain'].includes(optionType);
+    return ['monsters', 'gate', 'key', 'items', 'jewels', 'runes', 'treasure', 'vendors', 'shrine', 'territory', 'buildings', 'pocket buildings', 'generators', 'dungeon litter', 'dimension litter', 'pocket litter', 'terrain'].includes(optionType);
   }
 
   getVendorFootprintTileIds = (anchorTileId, footprintType = '2x2') => {
@@ -1442,11 +1456,17 @@ class MapMakerPage extends React.Component {
     } else if (pinnedOption.type === 'terrain-tile') {
       const terrainOption = this.props.mapMaker?.terrainOptions?.[pinnedOption.id];
       if (terrainOption && (terrainOption.isLarge || terrainOption.isMultiTile)) return '2x2';
+    } else if (pinnedOption.type === 'pocket-litter-tile') {
+      const pocketLitterOption = this.props.mapMaker?.pocketLitterOptions?.[pinnedOption.id];
+      if (pocketLitterOption) {
+        if (pocketLitterOption.footprintType) return pocketLitterOption.footprintType;
+        keyToCheck = pocketLitterOption.key;
+      }
     }
 
     if (keyToCheck) {
-      if (['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(keyToCheck)) return '3x3';
-      if (['war_camp', 'war_fort', 'dream_den'].includes(keyToCheck)) return '2x2';
+      if (['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2', 'pocket_litter_fractured_monolith', 'fractured_monolith'].includes(keyToCheck)) return '3x3';
+      if (['war_camp', 'war_fort', 'dream_den', 'pocket_litter_rift_embers', 'rift_embers'].includes(keyToCheck)) return '2x2';
     }
 
     if (pinnedOption.type === 'vendor-tile') return '2x2';
@@ -1469,6 +1489,11 @@ class MapMakerPage extends React.Component {
     if (pinnedOption.type === 'terrain-tile') {
       const terrainOption = this.props.mapMaker?.terrainOptions?.[pinnedOption.id];
       if (terrainOption && (terrainOption.isLarge || terrainOption.isMultiTile)) return '2x2';
+    }
+    if (pinnedOption.type === 'pocket-litter-tile') {
+      const pocketLitterOption = this.props.mapMaker?.pocketLitterOptions?.[pinnedOption.id];
+      if (pocketLitterOption?.footprintType) return pocketLitterOption.footprintType;
+      if (pocketLitterOption && (pocketLitterOption.isLarge || pocketLitterOption.isMultiTile)) return '2x2';
     }
     return null;
   }
@@ -1761,7 +1786,7 @@ class MapMakerPage extends React.Component {
       vendorOption = this.props.mapMaker.vendorOptions[pinnedOption.id];
     }
 
-    let shrineOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null;
+    let shrineOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null, pocketLitterOption = null;
     if (pinnedOption.type === 'shrine-tile') {
       shrineOption = this.props.mapMaker.shrineOptions[pinnedOption.id];
     }
@@ -1780,6 +1805,9 @@ class MapMakerPage extends React.Component {
     if (pinnedOption.type === 'dungeon-litter-tile') {
       dungeonLitterOption = this.props.mapMaker.dungeonLitterOptions[pinnedOption.id];
     }
+    if (pinnedOption.type === 'pocket-litter-tile') {
+      pocketLitterOption = this.props.mapMaker.pocketLitterOptions[pinnedOption.id];
+    }
     let terrainOption = null;
     if (pinnedOption.type === 'terrain-tile') {
       terrainOption = this.props.mapMaker.terrainOptions[pinnedOption.id];
@@ -1789,141 +1817,160 @@ class MapMakerPage extends React.Component {
       locusOption = this.props.mapMaker?.locusOptions?.[pinnedOption.id];
     }
 
-    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption || terrainOption || locusOption;
+    const isSpecialOption = monster || gate || key || tierOption || jewelOption || runeOption || treasureOption || vendorOption || shrineOption || territoryOption || buildingOption || pocketBuildingOption || generatorOption || dungeonLitterOption || pocketLitterOption || terrainOption || locusOption;
     if (!isSpecialOption && !pinned) return null;
 
     let arr = this.state.tiles.map(t => ({ ...t }));
 
-    if (monster) {
-      arr[tileId].contains = { type: 'monster', subtype: monster.key };
-      arr[tileId].image = monster.portrait;
-      arr[tileId].color = null;
-    } else if (gate) {
-      arr[tileId].contains = { type: 'gate', subtype: gate.key };
-      arr[tileId].image = images[gate.key];
-      arr[tileId].color = null;
-    } else if (key) {
-      arr[tileId].contains = { type: 'item', subtype: key.key };
-      arr[tileId].image = images[key.key];
-      arr[tileId].color = null;
-    } else if (tierOption) {
-      arr[tileId].contains = { type: tierOption.key === 'chemical_lantern' ? 'item' : tierOption.key, subtype: tierOption.key === 'chemical_lantern' ? 'chemical_lantern' : null };
-      arr[tileId].image = images[tierOption.image];
-      arr[tileId].color = null;
-    } else if (jewelOption) {
-      arr[tileId].contains = { type: 'item', subtype: jewelOption.key };
-      arr[tileId].image = images[jewelOption.image];
-      arr[tileId].color = null;
-    } else if (runeOption) {
-      arr[tileId].contains = { type: 'item', subtype: runeOption.key };
-      arr[tileId].image = images[runeOption.image];
-      arr[tileId].color = null;
-    } else if (treasureOption) {
-      arr[tileId].contains = { type: 'item', subtype: treasureOption.key };
-      arr[tileId].image = images[treasureOption.image];
-      arr[tileId].color = null;
-    } else if (vendorOption) {
-      if (!this.canPlaceVendorFootprint(arr, tileId)) {
-        this.toast('Vendors require a 2x2 empty space.');
-        return null;
-      }
-      arr = this.placeVendorFootprint(arr, tileId, vendorOption.key);
-    } else if (shrineOption) {
-      arr[tileId].contains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
-      arr[tileId].color = shrineOption.color;
-      arr[tileId].image = null;
-
-    } else if (territoryOption) {
-      const currentTile = arr[tileId];
-      const containsType = this.getContainsType(currentTile?.contains);
-      if (containsType === 'void' || currentTile?.color === 'black') {
-        arr[tileId].contains = { type: 'empty_space', subtype: null };
+    if (isSpecialOption) {
+      if (monster) {
+        arr[tileId].contains = { type: 'monster', subtype: monster.key };
+        arr[tileId].image = monster.portrait;
         arr[tileId].color = null;
+      } else if (gate) {
+        arr[tileId].contains = { type: 'gate', subtype: gate.key };
+        arr[tileId].image = images[gate.key];
+        arr[tileId].color = null;
+      } else if (key) {
+        arr[tileId].contains = { type: 'item', subtype: key.key };
+        arr[tileId].image = images[key.key];
+        arr[tileId].color = null;
+      } else if (tierOption) {
+        arr[tileId].contains = { type: tierOption.key === 'chemical_lantern' ? 'item' : tierOption.key, subtype: tierOption.key === 'chemical_lantern' ? 'chemical_lantern' : null };
+        arr[tileId].image = images[tierOption.image];
+        arr[tileId].color = null;
+      } else if (jewelOption) {
+        arr[tileId].contains = { type: 'item', subtype: jewelOption.key };
+        arr[tileId].image = images[jewelOption.image];
+        arr[tileId].color = null;
+      } else if (runeOption) {
+        arr[tileId].contains = { type: 'item', subtype: runeOption.key };
+        arr[tileId].image = images[runeOption.image];
+        arr[tileId].color = null;
+      } else if (treasureOption) {
+        arr[tileId].contains = { type: 'item', subtype: treasureOption.key };
+        arr[tileId].image = images[treasureOption.image];
+        arr[tileId].color = null;
+      } else if (vendorOption) {
+        if (!this.canPlaceVendorFootprint(arr, tileId)) {
+          this.toast('Vendors require a 2x2 empty space.');
+          return null;
+        }
+        arr = this.placeVendorFootprint(arr, tileId, vendorOption.key);
+      } else if (shrineOption) {
+        arr[tileId].contains = { type: 'shrine', subtype: shrineOption.classKey, key: shrineOption.key };
+        arr[tileId].color = shrineOption.color;
         arr[tileId].image = null;
-      }
-      arr[tileId].territory = territoryOption.clan;
-    } else if (buildingOption) {
-      if (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort') {
-        if (!this.canPlaceVendorFootprint(arr, tileId)) {
-          this.toast(`${buildingOption.name} requires a 2x2 empty space.`);
-          return null;
-        }
-        arr = this.placeVendorFootprint(arr, tileId, buildingOption.key, 'building');
-      } else {
+      } else if (territoryOption) {
         const currentTile = arr[tileId];
-        const currentContains = currentTile?.contains;
-        let fortLevel = 1;
-        if (buildingOption.key === 'earthen_fort') {
-          const isExistingFort = currentContains && currentContains.type === 'building' && currentContains.subtype === 'earthen_fort';
-          if (isExistingFort) {
-            const existingLvl = typeof currentContains.level === 'number' ? currentContains.level : 1;
-            fortLevel = existingLvl + 1;
+        const containsType = this.getContainsType(currentTile?.contains);
+        if (containsType === 'void' || currentTile?.color === 'black') {
+          arr[tileId].contains = { type: 'empty_space', subtype: null };
+          arr[tileId].color = null;
+          arr[tileId].image = null;
+        }
+        arr[tileId].territory = territoryOption.clan;
+      } else if (buildingOption) {
+        if (buildingOption.key === 'war_camp' || buildingOption.key === 'war_fort') {
+          if (!this.canPlaceVendorFootprint(arr, tileId)) {
+            this.toast(`${buildingOption.name} requires a 2x2 empty space.`);
+            return null;
           }
+          arr = this.placeVendorFootprint(arr, tileId, buildingOption.key, 'building');
+        } else {
+          const currentTile = arr[tileId];
+          const currentContains = currentTile?.contains;
+          let fortLevel = 1;
+          if (buildingOption.key === 'earthen_fort') {
+            const isExistingFort = currentContains && currentContains.type === 'building' && currentContains.subtype === 'earthen_fort';
+            if (isExistingFort) {
+              const existingLvl = typeof currentContains.level === 'number' ? currentContains.level : 1;
+              fortLevel = existingLvl + 1;
+            }
+          }
+          arr[tileId].contains = { type: 'building', subtype: buildingOption.key, level: fortLevel };
+          arr[tileId].image = images[buildingOption.image] || buildingOption.image;
+          arr[tileId].color = null;
         }
-        arr[tileId].contains = { type: 'building', subtype: buildingOption.key, level: fortLevel };
-        arr[tileId].image = images[buildingOption.image] || buildingOption.image;
+      } else if (pocketBuildingOption) {
+        const isLargePocketBuilding = pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key);
+        if (isLargePocketBuilding) {
+          let footprintType = '2x2';
+          if (['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key)) {
+              footprintType = '3x3';
+          }
+          if (!this.canPlaceVendorFootprint(arr, tileId, footprintType)) {
+            this.toast(`${pocketBuildingOption.name} requires a ${footprintType} empty space.`);
+            return null;
+          }
+          arr = this.placeVendorFootprint(arr, tileId, pocketBuildingOption.key, 'building', images[pocketBuildingOption.image] || pocketBuildingOption.image, footprintType);
+        } else {
+          arr[tileId].contains = { type: 'building', subtype: pocketBuildingOption.key };
+          arr[tileId].image = images[pocketBuildingOption.image] || pocketBuildingOption.image;
+          arr[tileId].color = null;
+        }
+      } else if (generatorOption) {
+        if (generatorOption.isLarge || generatorOption.isMultiTile) {
+          if (!this.canPlaceVendorFootprint(arr, tileId)) {
+            this.toast(`${generatorOption.name} requires a 2x2 empty space.`);
+            return null;
+          }
+          arr = this.placeVendorFootprint(arr, tileId, generatorOption.key, 'building', images[generatorOption.image] || generatorOption.image);
+        } else {
+          delete arr[tileId].vendorCell;
+          delete arr[tileId].vendorGroupId;
+          delete arr[tileId].vendorAnchorId;
+          delete arr[tileId].building;
+          arr[tileId].contains = { type: 'building', subtype: generatorOption.key };
+          arr[tileId].image = images[generatorOption.image] || generatorOption.image;
+          arr[tileId].color = null;
+        }
+      } else if (dungeonLitterOption) {
+        const existingRot = (arr[tileId] && arr[tileId].contains && (arr[tileId].contains.type === 'dungeon_litter' || arr[tileId].contains.type === 'dungeon litter') && (arr[tileId].contains.subtype === dungeonLitterOption.key || arr[tileId].contains === dungeonLitterOption.key) && typeof arr[tileId].contains.rotation === 'number') ? arr[tileId].contains.rotation : 0;
+        arr[tileId].contains = { type: 'dungeon_litter', subtype: dungeonLitterOption.key, rotation: existingRot };
+        arr[tileId].image = images[dungeonLitterOption.image] || dungeonLitterOption.image;
         arr[tileId].color = null;
-      }
-    } else if (pocketBuildingOption) {
-      const isLargePocketBuilding = pocketBuildingOption.isLarge || pocketBuildingOption.isMultiTile || ['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key);
-      if (isLargePocketBuilding) {
-        let footprintType = '2x2';
-        if (['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2'].includes(pocketBuildingOption.key)) {
+      } else if (pocketLitterOption) {
+        if (pocketLitterOption.isLarge || pocketLitterOption.isMultiTile) {
+          let footprintType = pocketLitterOption.footprintType || '2x2';
+          if (['pocket_litter_fractured_monolith', 'fractured_monolith'].includes(pocketLitterOption.key)) {
             footprintType = '3x3';
+          }
+          if (!this.canPlaceVendorFootprint(arr, tileId, footprintType)) {
+            this.toast(`${pocketLitterOption.name} requires a ${footprintType} empty space.`);
+            return null;
+          }
+          arr = this.placeVendorFootprint(arr, tileId, pocketLitterOption.key, 'pocket_litter', images[pocketLitterOption.image] || pocketLitterOption.image, footprintType);
+        } else {
+          const existingRot = (arr[tileId] && arr[tileId].contains && (arr[tileId].contains.type === 'pocket_litter' || arr[tileId].contains.type === 'pocket litter') && (arr[tileId].contains.subtype === pocketLitterOption.key || arr[tileId].contains === pocketLitterOption.key) && typeof arr[tileId].contains.rotation === 'number') ? arr[tileId].contains.rotation : 0;
+          arr[tileId].contains = { type: 'pocket_litter', subtype: pocketLitterOption.key, rotation: existingRot };
+          arr[tileId].image = images[pocketLitterOption.image] || pocketLitterOption.image;
+          arr[tileId].color = null;
         }
-        if (!this.canPlaceVendorFootprint(arr, tileId, footprintType)) {
-          this.toast(`${pocketBuildingOption.name} requires a ${footprintType} empty space.`);
-          return null;
+      } else if (terrainOption) {
+        if (terrainOption.isLarge || terrainOption.isMultiTile) {
+          if (!this.canPlaceVendorFootprint(arr, tileId)) {
+            this.toast(`${terrainOption.name} requires a 2x2 empty space.`);
+            return null;
+          }
+          arr = this.placeVendorFootprint(arr, tileId, terrainOption.key, 'terrain', images[terrainOption.image] || terrainOption.image);
+          arr[tileId].contains = { type: 'terrain', subtype: terrainOption.key };
+          arr[tileId].image = images[terrainOption.image] || terrainOption.image;
+          arr[tileId].color = null;
         }
-        arr = this.placeVendorFootprint(arr, tileId, pocketBuildingOption.key, 'building', images[pocketBuildingOption.image] || pocketBuildingOption.image, footprintType);
-      } else {
-        arr[tileId].contains = { type: 'building', subtype: pocketBuildingOption.key };
-        arr[tileId].image = images[pocketBuildingOption.image] || pocketBuildingOption.image;
+      } else if (locusOption) {
+        arr[tileId].contains = {
+          type: 'locus',
+          subtype: locusOption.key,
+          locusType: locusOption.locusType,
+          name: locusOption.name,
+          locusId: `locus_${locusOption.locusType}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
+        };
+        arr[tileId].image = images[locusOption.image] || locusOption.image;
         arr[tileId].color = null;
       }
-    } else if (generatorOption) {
-      if (generatorOption.isLarge || generatorOption.isMultiTile) {
-        if (!this.canPlaceVendorFootprint(arr, tileId)) {
-          this.toast(`${generatorOption.name} requires a 2x2 empty space.`);
-          return null;
-        }
-        arr = this.placeVendorFootprint(arr, tileId, generatorOption.key, 'building', images[generatorOption.image] || generatorOption.image);
-      } else {
-        delete arr[tileId].vendorCell;
-        delete arr[tileId].vendorGroupId;
-        delete arr[tileId].vendorAnchorId;
-        delete arr[tileId].building;
-        arr[tileId].contains = { type: 'building', subtype: generatorOption.key };
-        arr[tileId].image = images[generatorOption.image] || generatorOption.image;
-        arr[tileId].color = null;
-      }
-    } else if (dungeonLitterOption) {
-      const existingRot = (arr[tileId] && arr[tileId].contains && (arr[tileId].contains.type === 'dungeon_litter' || arr[tileId].contains.type === 'dungeon litter') && (arr[tileId].contains.subtype === dungeonLitterOption.key || arr[tileId].contains === dungeonLitterOption.key) && typeof arr[tileId].contains.rotation === 'number') ? arr[tileId].contains.rotation : 0;
-      arr[tileId].contains = { type: 'dungeon_litter', subtype: dungeonLitterOption.key, rotation: existingRot };
-      arr[tileId].image = images[dungeonLitterOption.image] || dungeonLitterOption.image;
-      arr[tileId].color = null;
-    } else if (terrainOption) {
-      if (terrainOption.isLarge || terrainOption.isMultiTile) {
-        if (!this.canPlaceVendorFootprint(arr, tileId)) {
-          this.toast(`${terrainOption.name} requires a 2x2 empty space.`);
-          return null;
-        }
-        arr = this.placeVendorFootprint(arr, tileId, terrainOption.key, 'terrain', images[terrainOption.image] || terrainOption.image);
-        arr[tileId].contains = { type: 'terrain', subtype: terrainOption.key };
-        arr[tileId].image = images[terrainOption.image] || terrainOption.image;
-        arr[tileId].color = null;
-      }
-    } else if (locusOption) {
-      arr[tileId].contains = {
-        type: 'locus',
-        subtype: locusOption.key,
-        locusType: locusOption.locusType,
-        name: locusOption.name,
-        locusId: `locus_${locusOption.locusType}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
-      };
-      arr[tileId].image = images[locusOption.image] || locusOption.image;
-      arr[tileId].color = null;
-    } else if (pinned.optionType === 'passage') {
+      return updateTerrainAutotiles(arr, tileId);
+    } else if (pinned && pinned.optionType === 'passage') {
       let prevTileIdx = this.state.hoveredTileIdx;
       let connectedTop = false, connectedBot = false, connectedLeft = false, connectedRight = false;
       let isAdjacent = false;
@@ -2022,7 +2069,7 @@ class MapMakerPage extends React.Component {
       : null;
     const isSpecialOption = this.state.pinnedOption && [
       'monster-tile', 'gate-tile', 'key-tile', 'tier-tile', 'jewel-tile', 
-      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile', 'terrain-tile', 'locus-tile', 'forest-stamp-tile', 'mountain-stamp-tile'
+      'rune-tile', 'treasure-tile', 'vendor-tile', 'shrine-tile', 'territory-tile', 'building-tile', 'pocket-building-tile', 'generator-tile', 'dungeon-litter-tile', 'pocket-litter-tile', 'terrain-tile', 'locus-tile', 'forest-stamp-tile', 'mountain-stamp-tile'
     ].includes(this.state.pinnedOption.type);
 
     if (this.state.mouseDown && this.state.pinnedOption && (pinnedPaletteTile || pinnedPassageTool || isSpecialOption)) {
@@ -2894,7 +2941,9 @@ class MapMakerPage extends React.Component {
 
       const isLitter = containsType === 'dungeon_litter' ||
                        containsType === 'dungeon litter' ||
-                       (typeof containsSubtype === 'string' && (containsSubtype.startsWith('litter_') || containsSubtype.includes('litter')));
+                       containsType === 'pocket_litter' ||
+                       containsType === 'pocket litter' ||
+                       (typeof containsSubtype === 'string' && (containsSubtype.startsWith('litter_') || containsSubtype.includes('litter') || containsSubtype.startsWith('pocket_litter_')));
 
       if (isLitter) {
         const currentRotation = typeof contains === 'object' && typeof contains.rotation === 'number' ? contains.rotation : 0;
@@ -2904,7 +2953,7 @@ class MapMakerPage extends React.Component {
           ...contains,
           rotation: nextRotation
         } : {
-          type: 'dungeon_litter',
+          type: containsType || 'dungeon_litter',
           subtype: contains,
           rotation: nextRotation
         };
@@ -2997,7 +3046,7 @@ class MapMakerPage extends React.Component {
         })
       }
 
-    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile' || tile.type === 'terrain-tile' || tile.type === 'locus-tile' || tile.type === 'forest-stamp-tile' || tile.type === 'mountain-stamp-tile') {
+    } else if (tile.type === 'monster-tile' || tile.type === 'gate-tile' || tile.type === 'key-tile' || tile.type === 'tier-tile' || tile.type === 'jewel-tile' || tile.type === 'rune-tile' || tile.type === 'treasure-tile' || tile.type === 'vendor-tile' || tile.type === 'shrine-tile' || tile.type === 'territory-tile' || tile.type === 'building-tile' || tile.type === 'pocket-building-tile' || tile.type === 'generator-tile' || tile.type === 'dungeon-litter-tile' || tile.type === 'pocket-litter-tile' || tile.type === 'terrain-tile' || tile.type === 'locus-tile' || tile.type === 'forest-stamp-tile' || tile.type === 'mountain-stamp-tile') {
       this.setState({
         pinnedOption: tile
       })
@@ -3839,6 +3888,8 @@ class MapMakerPage extends React.Component {
       boardIndex: context.boardIndex,
       x,
       y,
+      tileIndex: tileId,
+      tileId,
       label
     };
 
@@ -3850,8 +3901,7 @@ class MapMakerPage extends React.Component {
       c.levelId === context.levelId &&
       c.orientation === context.orientation &&
       c.boardIndex === context.boardIndex &&
-      c.x === x &&
-      c.y === y
+      (c.tileIndex === tileId || (c.x === x && c.y === y))
     );
 
     if (duplicateIdx !== -1) {
@@ -8152,6 +8202,17 @@ class MapMakerPage extends React.Component {
     })
   }
 
+  purgeMemoryAndArrays = () => {
+    this.setState(prevState => ({
+      devConsoleOutput: Array.isArray(prevState.devConsoleOutput) ? prevState.devConsoleOutput.slice(-50) : []
+    }));
+
+    try {
+      if (this.state.dungeon) superboardCleanup(this.state.dungeon);
+      if (this.state.loadedDungeon) superboardCleanup(this.state.loadedDungeon);
+    } catch (_) { }
+  };
+
   render() {
     return (
       <div className="mapmaker-container">
@@ -10192,6 +10253,7 @@ class MapMakerPage extends React.Component {
             </div>
           </div>
         )}
+        <PerformanceOverlay onPurgeMemory={this.purgeMemoryAndArrays} />
       </div>
     )
 

@@ -357,7 +357,7 @@ export default function FightersCombatGrid(props) {
                                             <div className="damage-indicator-container" style={{ userSelect: 'none', WebkitUserSelect: 'none' }}>
                                                 {props.getFighterDetails(fighter)?.damageIndicators.map((e,i)=>{
                                                     const isStatDebuff = !e.isCrit && !e.isMiss && typeof e.value === 'string' && isNaN(e.value);
-                                                    return <div key={e.id || i} className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${e.isCrit ? ' crit' : ''}${e.isMiss ? ' miss' : ''}`} style={{ userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'none' }}>
+                                                    return <div key={e.id || i} className={`damage-indicator${isStatDebuff ? ' stat-debuff' : ''}${e.isCrit ? ' crit' : ''}${e.type === 'heal' ? ' heal' : ''}${e.type === 'robbed' ? ' robbed' : ''}${e.isMiss ? ' miss' : ''}`} style={{ userSelect: 'none', WebkitUserSelect: 'none', pointerEvents: 'none' }}>
                                                         {formatDamageIndicatorValue(e.value)}
                                                     </div>
                                                 })}

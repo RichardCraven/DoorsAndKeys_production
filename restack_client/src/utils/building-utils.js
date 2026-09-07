@@ -24,8 +24,9 @@ import { updateUserRequest } from './api-handler';
  * @param {Array} crew - Current crew list
  * @returns {number} Adjusted build time in seconds
  */
-export function getAdjustedBuildTime(baseBuildTimeSec, crew = [], inSuperboard = false) {
-    if (inSuperboard) return 1;
+export function getAdjustedBuildTime(baseBuildTimeSec, crew = [], inSuperboard = false, buildingKey = null) {
+    if (buildingKey === 'walker' || (typeof baseBuildTimeSec === 'number' && baseBuildTimeSec === 30 && buildingKey === 'walker')) return 30;
+    if (inSuperboard) return (buildingKey === 'walker' ? 30 : 1);
     const base = typeof baseBuildTimeSec === 'number' ? baseBuildTimeSec : 20;
     if (!Array.isArray(crew) || crew.length === 0) return base;
 
@@ -158,4 +159,25 @@ export function hasEngineerUnit(crew = []) {
 
         return searchStr.includes('engineer') || searchStr.includes('machinist');
     });
+}
+
+export function isEngineerSelected(member) {
+    if (!member) return false;
+    const isDead = member.dead === true || member.isDead === true || (typeof member.hp === 'number' && member.hp <= 0);
+    if (isDead || member.detached) return false;
+
+    const stringValues = [];
+    for (const [key, value] of Object.entries(member)) {
+        if (typeof value === 'string') {
+            stringValues.push(value.toLowerCase());
+        } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+            for (const subVal of Object.values(value)) {
+                if (typeof subVal === 'string') {
+                    stringValues.push(subVal.toLowerCase());
+                }
+            }
+        }
+    }
+    const searchStr = stringValues.join(' ');
+    return searchStr.includes('engineer') || searchStr.includes('machinist');
 }

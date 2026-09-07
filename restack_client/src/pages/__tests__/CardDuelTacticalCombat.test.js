@@ -214,8 +214,6 @@ describe('CardDuel Tactical Combat & Movement Mechanics', () => {
             hp: 3,
             maxHp: 3,
             anchorRow: 0,
-            anchorCol: 0,
-            summoningSickness: false,
             hasActedThisTurn: false,
             occupiedKeys: ['0_0']
         };
@@ -227,5 +225,47 @@ describe('CardDuel Tactical Combat & Movement Mechanics', () => {
 
         expect(instance.state.reaperHP).toBe(16);
         expect(attacker.hasActedThisTurn).toBe(true);
+    });
+
+    test('reaper turn attack removes defeated player unit from grid cleanly', () => {
+        const reaperUnit = {
+            id: 'reaper_warband_1',
+            name: 'Pygmy War Band',
+            owner: 'reaper',
+            atk: 3,
+            hp: 3,
+            maxHp: 3,
+            anchorRow: 1,
+            anchorCol: 0,
+            summoningSickness: false,
+            hasActedThisTurn: false,
+            occupiedKeys: ['1_0', '2_0']
+        };
+
+        const playerPygmy = {
+            id: 'player_pygmy_1',
+            name: 'Cave Pygmy',
+            owner: 'player',
+            atk: 1,
+            hp: 1,
+            maxHp: 1,
+            anchorRow: 3,
+            anchorCol: 0,
+            summoningSickness: false,
+            hasActedThisTurn: false,
+            occupiedKeys: ['3_0']
+        };
+
+        instance.state.grid = {
+            '1_0': reaperUnit,
+            '2_0': reaperUnit,
+            '3_0': playerPygmy
+        };
+        instance.state.currentTurn = 'reaper';
+
+        instance.executeReaperTurn();
+
+        expect(instance.state.grid['3_0']).toBeUndefined();
+        expect(instance.state.playerDiscard.some(c => c.id === playerPygmy.id)).toBe(true);
     });
 });
