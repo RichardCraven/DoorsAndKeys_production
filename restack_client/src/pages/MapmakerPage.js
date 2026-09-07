@@ -43,6 +43,7 @@ import { generateRandomDungeon } from '../utils/dungeon-generator'
 import { getRandomInscription } from '../utils/inscriptions-manager'
 import { updateTerrainAutotiles, applyForestStamp, applyMountainStamp } from '../utils/autotile-utils'
 import { superboardCleanup } from '../utils/cache-cleanup'
+import PerformanceOverlay from '../components/PerformanceOverlay'
 
 const CLEAR_UNIQUE_DUNGEON_INSTANCES_VALUE = '__clear_unique_dungeon_instances__';
 const GENERATE_DUNGEON_VALUE = '__generate_dungeon__';
@@ -8152,6 +8153,17 @@ class MapMakerPage extends React.Component {
     })
   }
 
+  purgeMemoryAndArrays = () => {
+    this.setState(prevState => ({
+      devConsoleOutput: Array.isArray(prevState.devConsoleOutput) ? prevState.devConsoleOutput.slice(-50) : []
+    }));
+
+    try {
+      if (this.state.dungeon) superboardCleanup(this.state.dungeon);
+      if (this.state.loadedDungeon) superboardCleanup(this.state.loadedDungeon);
+    } catch (_) { }
+  };
+
   render() {
     return (
       <div className="mapmaker-container">
@@ -10192,6 +10204,7 @@ class MapMakerPage extends React.Component {
             </div>
           </div>
         )}
+        <PerformanceOverlay onPurgeMemory={this.purgeMemoryAndArrays} />
       </div>
     )
 

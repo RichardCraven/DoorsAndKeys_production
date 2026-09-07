@@ -2402,6 +2402,9 @@ export function BoardManager(){
                             if (chestResult) return chestResult;
                         } else {
                             this.messaging(`This chest is locked. You need a ${keyDetails.keyName} to open it.`);
+                            if (typeof this.triggerLockedChestIndicator === 'function') {
+                                try { this.triggerLockedChestIndicator(destinationTile); } catch (e) {}
+                            }
                             return 'impassable'; // impassable locked chest
                         }
                     } else {

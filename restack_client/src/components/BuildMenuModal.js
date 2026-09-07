@@ -437,19 +437,19 @@ class BuildMenuModal extends Component {
                     }}>
                         {this.props.inSuperboard ? (
                             <>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Wood" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.wood} alt="Wood" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Wood: <strong style={{ color: '#f9b115' }}>{available.wood}</strong></span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Ore" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.stone} alt="Ore" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Ore: <strong style={{ color: '#f9b115' }}>{available.stone}</strong></span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Slate" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.slate} alt="Slate" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Slate: <strong style={{ color: '#f9b115' }}>{available.slate}</strong></span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Dust" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.spectral_dust} alt="Dust" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Dust: <strong style={{ color: '#f9b115' }}>{available.dust}</strong></span>
                                 </div>
@@ -457,21 +457,21 @@ class BuildMenuModal extends Component {
                         ) : (
                             <>
                                 {this.state.activeTab !== 'arcane' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                    <div title="Available Wood" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                         <img src={images.wood} alt="Wood" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                         <span>Wood: <strong style={{ color: '#f9b115' }}>{available.wood}</strong></span>
                                     </div>
                                 )}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Stone" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.stone} alt="Stone" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Stone: <strong style={{ color: '#f9b115' }}>{available.stone}</strong></span>
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                <div title="Available Slate" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                     <img src={images.slate} alt="Slate" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                     <span>Slate: <strong style={{ color: '#f9b115' }}>{available.slate}</strong></span>
                                 </div>
                                 {this.state.activeTab === 'arcane' && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600' }}>
+                                    <div title="Available Dust" style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: '600', cursor: 'help' }}>
                                         <img src={images.spectral_dust} alt="Dust" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
                                         <span>Dust: <strong style={{ color: '#f9b115' }}>{available.dust}</strong></span>
                                     </div>
@@ -584,27 +584,27 @@ class BuildMenuModal extends Component {
                                                 ) : (
                                                     <>
                                                         {costs.resolve > 0 && (
-                                                            <span style={{ color: available.resolve >= costs.resolve ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', fontWeight: '600' }}>
+                                                            <span title={`${costs.resolve} Resolve`} style={{ color: available.resolve >= costs.resolve ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', fontWeight: '600', cursor: 'help' }}>
                                                                 ⚡ {costs.resolve} Resolve
                                                             </span>
                                                         )}
                                                         {costs.wood > 0 && (
-                                                            <span style={{ color: available.wood >= costs.wood ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                            <span title={`${costs.wood} Wood`} style={{ color: available.wood >= costs.wood ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
                                                                 <img src={images.wood} alt="Wood" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.wood}
                                                             </span>
                                                         )}
                                                         {(costs.stone > 0 || costs.ore > 0) && (
-                                                            <span style={{ color: (available.ore !== undefined ? available.ore : available.stone) >= (costs.ore !== undefined ? costs.ore : costs.stone) ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                            <span title={`${costs.ore !== undefined ? costs.ore : costs.stone} ${this.props.inSuperboard ? "Ore" : "Stone"}`} style={{ color: (available.ore !== undefined ? available.ore : available.stone) >= (costs.ore !== undefined ? costs.ore : costs.stone) ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
                                                                 <img src={images.stone} alt={this.props.inSuperboard ? "Ore" : "Stone"} style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.ore !== undefined ? costs.ore : costs.stone}
                                                             </span>
                                                         )}
                                                         {costs.slate > 0 && (
-                                                            <span style={{ color: available.slate >= costs.slate ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                            <span title={`${costs.slate} Slate`} style={{ color: available.slate >= costs.slate ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
                                                                 <img src={images.slate} alt="Slate" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.slate}
                                                             </span>
                                                         )}
                                                         {costs.dust > 0 && (
-                                                            <span style={{ color: available.dust >= costs.dust ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                                                            <span title={`${costs.dust} Shimmering Dust`} style={{ color: available.dust >= costs.dust ? '#e2e8f0' : '#f87171', display: 'flex', alignItems: 'center', gap: '2px', cursor: 'help' }}>
                                                                 <img src={images.spectral_dust} alt="Dust" style={{ width: '14px', height: '14px', objectFit: 'contain' }} /> {costs.dust}
                                                             </span>
                                                         )}

@@ -36,11 +36,17 @@ const getTileTerritoryAffiliationHelper = (tObj, fallbackProps) => {
 
 const checkIsDomainSuperboardPerfectSquare = (superboard, anchorGx, anchorGy, growthCycles, expectedAff) => {
     if (!superboard || !Array.isArray(superboard.miniboards)) return false;
+    const mbIdx = Math.floor(anchorGy / 15) * 3 + Math.floor(anchorGx / 15);
+    const tIdx = (anchorGy % 15) * 15 + (anchorGx % 15);
+    const anchorTile = superboard.miniboards[mbIdx]?.tiles?.[tIdx];
+    const sKey = String(anchorTile?.contains?.subtype || anchorTile?.contains?.key || anchorTile?.building || anchorTile?.contains?.type || '').toLowerCase();
+    const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
+
     const C = Math.max(1, growthCycles || 1);
     const minGx = anchorGx - C;
-    const maxGx = anchorGx + 1 + C;
+    const maxGx = anchorGx + (isNode ? 0 : 1) + C;
     const minGy = anchorGy - C;
-    const maxGy = anchorGy + 1 + C;
+    const maxGy = anchorGy + (isNode ? 0 : 1) + C;
 
     if (minGx < 0 || maxGx >= 45 || minGy < 0 || maxGy >= 45) return false;
 
@@ -50,7 +56,7 @@ const checkIsDomainSuperboardPerfectSquare = (superboard, anchorGx, anchorGy, gr
 
     for (let gy = minGy; gy <= maxGy; gy++) {
         for (let gx = minGx; gx <= maxGx; gx++) {
-            if (gx >= anchorGx && gx <= anchorGx + 1 && gy >= anchorGy && gy <= anchorGy + 1) {
+            if (gx >= anchorGx && gx <= anchorGx + (isNode ? 0 : 1) && gy >= anchorGy && gy <= anchorGy + (isNode ? 0 : 1)) {
                 continue;
             }
 
@@ -61,12 +67,6 @@ const checkIsDomainSuperboardPerfectSquare = (superboard, anchorGx, anchorGy, gr
 
             const isVoid = t.isVoid === true || t.contains === 'void' || (t.contains && typeof t.contains === 'object' && (t.contains.type === 'void' || t.contains.isVoid));
             if (isVoid) return false;
-
-            const cObj = t.contains && typeof t.contains === 'object' ? t.contains : null;
-            const subtype = String(cObj?.subtype || cObj?.key || cObj?.building || t.building || cObj?.type || t.terrain || t.image || '').toLowerCase();
-            if (subtype.includes('tree') || subtype.includes('grove') || subtype.includes('pine') || subtype.includes('oak') || subtype.includes('forest')) {
-                return false;
-            }
 
             const tAff = String(t.territoryAffiliation || t.territory || t.contains?.territoryAffiliation || t.contains?.territory || '').toLowerCase();
             if (isFriendly) {
@@ -86,12 +86,16 @@ const checkIsDomainPerfectSquare = (anchorIdx, boardTiles, growthCycles, expecte
     if (anchorIdx === null || anchorIdx === undefined || !Array.isArray(boardTiles) || boardTiles.length < 225) return false;
     const anchorCol = anchorIdx % 15;
     const anchorRow = Math.floor(anchorIdx / 15);
+    const anchorTile = boardTiles[anchorIdx];
+    const sKey = String(anchorTile?.contains?.subtype || anchorTile?.contains?.key || anchorTile?.building || anchorTile?.contains?.type || '').toLowerCase();
+    const isNode = sKey.includes('domain_node') || sKey.includes('dark_domain_node');
+
     const C = Math.max(1, growthCycles || 1);
 
     const minCol = anchorCol - C;
-    const maxCol = anchorCol + 1 + C;
+    const maxCol = anchorCol + (isNode ? 0 : 1) + C;
     const minRow = anchorRow - C;
-    const maxRow = anchorRow + 1 + C;
+    const maxRow = anchorRow + (isNode ? 0 : 1) + C;
 
     // If domain square bounds extend outside the 15x15 board, it is clipped and not a complete square
     if (minCol < 0 || maxCol >= 15 || minRow < 0 || maxRow >= 15) return false;
@@ -100,8 +104,8 @@ const checkIsDomainPerfectSquare = (anchorIdx, boardTiles, growthCycles, expecte
 
     for (let r = minRow; r <= maxRow; r++) {
         for (let c = minCol; c <= maxCol; c++) {
-            // The 2x2 monolith itself is always the center of its own domain
-            if (c >= anchorCol && c <= anchorCol + 1 && r >= anchorRow && r <= anchorRow + 1) {
+            // The monolith/node itself is always the center of its own domain
+            if (c >= anchorCol && c <= anchorCol + (isNode ? 0 : 1) && r >= anchorRow && r <= anchorRow + (isNode ? 0 : 1)) {
                 continue;
             }
 
@@ -481,7 +485,9 @@ function Tile(props) {
     const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
     const sKey = (props.building || containsObj?.subtype || containsObj?.building || containsObj?.type || containsObj?.key || containsObj?.name || props.contains || props.image || '').toString().toLowerCase();
     const is3x3Structure = sKey.includes('keep') || sKey.includes('fortress');
-    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || is3x3Structure;
+    const isLocusTile = sKey.includes('locus') || !!props.isAdjacentLocus || (containsObj && (containsObj.type === 'locus' || containsObj.locusType || (typeof containsObj.subtype === 'string' && containsObj.subtype.includes('locus'))));
+    const isLocusActiveOrAdjacent = isLocusTile && (props.illuminated || props.isIlluminated || props.isAdjacentLocus);
+    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || is3x3Structure || isLocusTile;
 
     const containsObjForHp = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined')
         ? (typeof currentTileForContains.contains === 'object' ? currentTileForContains.contains : null)
@@ -1480,7 +1486,25 @@ function Tile(props) {
                 let bgGradient = 'radial-gradient(ellipse at center, rgba(255, 255, 255, 0.2) 0%, rgba(255, 255, 255, 0.05) 70%, transparent 100%)';
                 let labelTitle = 'Neutral Structure';
 
-                if (isPlayerBuilt) {
+                if (isLocusTile) {
+                    const lType = (containsObj?.locusType || (sKey.includes('frozen') ? 'frozen' : (sKey.includes('cosmic') ? 'cosmic' : 'emerald')));
+                    if (lType === 'frozen') {
+                        ringColor = 'rgba(6, 182, 212, 0.95)';
+                        ringGlow = '0 0 16px rgba(6, 182, 212, 0.9), inset 0 0 12px rgba(6, 182, 212, 0.5)';
+                        bgGradient = 'radial-gradient(ellipse at center, rgba(6, 182, 212, 0.35) 0%, rgba(6, 182, 212, 0.08) 70%, transparent 100%)';
+                        labelTitle = 'Frozen Locus';
+                    } else if (lType === 'cosmic') {
+                        ringColor = 'rgba(168, 85, 247, 0.95)';
+                        ringGlow = '0 0 16px rgba(168, 85, 247, 0.9), inset 0 0 12px rgba(168, 85, 247, 0.5)';
+                        bgGradient = 'radial-gradient(ellipse at center, rgba(168, 85, 247, 0.35) 0%, rgba(168, 85, 247, 0.08) 70%, transparent 100%)';
+                        labelTitle = 'Cosmic Locus';
+                    } else {
+                        ringColor = 'rgba(16, 185, 129, 0.95)';
+                        ringGlow = '0 0 16px rgba(16, 185, 129, 0.9), inset 0 0 12px rgba(16, 185, 129, 0.5)';
+                        bgGradient = 'radial-gradient(ellipse at center, rgba(16, 185, 129, 0.35) 0%, rgba(16, 185, 129, 0.08) 70%, transparent 100%)';
+                        labelTitle = 'Emerald Locus';
+                    }
+                } else if (isPlayerBuilt) {
                     ringColor = 'rgba(59, 130, 246, 0.9)'; // Allied / Friendly Blue
                     ringGlow = '0 0 16px rgba(59, 130, 246, 0.85), inset 0 0 12px rgba(59, 130, 246, 0.5)';
                     bgGradient = 'radial-gradient(ellipse at center, rgba(59, 130, 246, 0.3) 0%, rgba(59, 130, 246, 0.08) 70%, transparent 100%)';
@@ -1708,8 +1732,9 @@ function Tile(props) {
                                 const vRole = c?.vendorCell || t.vendorCell;
                                 if (vRole && vRole !== 'anchor') continue;
 
-                                const isHostile = monoKey.includes('dark_domain_monolith') || monoKey.includes('dark_domain_node') || t.isHostile || c?.isHostile || c?.faction === 'hostile';
-                                const rawAff = c?.affiliation || t.affiliation || t.territoryAffiliation || c?.territoryAffiliation || t.territory || c?.territory;
+                                const isPlayerClaimed = c?.affiliation === 'player' || t.affiliation === 'player' || t.territory === 'player' || c?.territory === 'player' || (!t.isHostile && !c?.isHostile && (c?.activated || t.activated));
+                                const isHostile = !isPlayerClaimed && (monoKey.includes('dark_domain_monolith') || monoKey.includes('dark_domain_node') || t.isHostile || c?.isHostile || c?.faction === 'hostile');
+                                const rawAff = isPlayerClaimed ? 'player' : (c?.affiliation || t.affiliation || t.territoryAffiliation || c?.territoryAffiliation || t.territory || c?.territory);
                                 const isMonoActive = !!(c?.activated || t.activated || (c?.growthCycles > 0) || (t.growthCycles > 0) || isHostile || (rawAff && rawAff !== 'none'));
                                 if (!isMonoActive) continue;
 
@@ -1718,8 +1743,10 @@ function Tile(props) {
                                 const aGx = mbX * 15 + (tIdx % 15);
                                 const aGy = mbY * 15 + Math.floor(tIdx / 15);
 
-                                if (props.globalX >= aGx - monoCycles && props.globalX <= aGx + 1 + monoCycles &&
-                                    props.globalY >= aGy - monoCycles && props.globalY <= aGy + 1 + monoCycles) {
+                                const isNode = monoKey.includes('domain_node') || monoKey.includes('dark_domain_node');
+                                const boundOffset = isNode ? 0 : 1;
+                                if (props.globalX >= aGx - monoCycles && props.globalX <= aGx + boundOffset + monoCycles &&
+                                    props.globalY >= aGy - monoCycles && props.globalY <= aGy + boundOffset + monoCycles) {
                                     if (checkIsDomainSuperboardPerfectSquare(sb, aGx, aGy, monoCycles, monoAff)) {
                                         insidePerfectSquareDomain = true;
                                         break;
@@ -1742,8 +1769,9 @@ function Tile(props) {
                             const vRole = c?.vendorCell || t.vendorCell;
                             if (vRole && vRole !== 'anchor') continue;
 
-                            const isHostile = monoKey.includes('dark_domain_monolith') || monoKey.includes('dark_domain_node') || t.isHostile || c?.isHostile || c?.faction === 'hostile';
-                            const rawAff = c?.affiliation || t.affiliation || t.territoryAffiliation || c?.territoryAffiliation || t.territory || c?.territory;
+                            const isPlayerClaimed = c?.affiliation === 'player' || t.affiliation === 'player' || t.territory === 'player' || c?.territory === 'player' || (!t.isHostile && !c?.isHostile && (c?.activated || t.activated));
+                            const isHostile = !isPlayerClaimed && (monoKey.includes('dark_domain_monolith') || monoKey.includes('dark_domain_node') || t.isHostile || c?.isHostile || c?.faction === 'hostile');
+                            const rawAff = isPlayerClaimed ? 'player' : (c?.affiliation || t.affiliation || t.territoryAffiliation || c?.territoryAffiliation || t.territory || c?.territory);
                             const isMonoActive = !!(c?.activated || t.activated || (c?.growthCycles > 0) || (t.growthCycles > 0) || isHostile || (rawAff && rawAff !== 'none'));
                             if (!isMonoActive) continue;
 
@@ -1751,12 +1779,14 @@ function Tile(props) {
                             const monoAff = isHostile ? 'hostile' : (rawAff && rawAff !== 'none' ? rawAff : 'friendly');
 
                             if (checkIsDomainPerfectSquare(idx, boardTiles, monoCycles, monoAff)) {
+                                const isNode = monoKey.includes('domain_node') || monoKey.includes('dark_domain_node');
+                                const boundOffset = isNode ? 0 : 1;
                                 const aCol = idx % 15;
                                 const aRow = Math.floor(idx / 15);
                                 const curCol = currentIdx % 15;
                                 const curRow = Math.floor(currentIdx / 15);
-                                if (curCol >= aCol - monoCycles && curCol <= aCol + 1 + monoCycles &&
-                                    curRow >= aRow - monoCycles && curRow <= aRow + 1 + monoCycles) {
+                                if (curCol >= aCol - monoCycles && curCol <= aCol + boundOffset + monoCycles &&
+                                    curRow >= aRow - monoCycles && curRow <= aRow + boundOffset + monoCycles) {
                                     insidePerfectSquareDomain = true;
                                     break;
                                 }
@@ -1989,8 +2019,8 @@ function Tile(props) {
                              territoryBg = 'rgba(220, 38, 38, 0.28)';
                              borderColor = 'rgba(239, 68, 68, 0.6)';
                          } else if (clan.includes('player') || clan.includes('crew') || clan.includes('friendly')) {
-                             territoryBg = 'rgba(30, 90, 160, 0.20)';
-                             borderColor = 'transparent';
+                             territoryBg = 'rgba(14, 116, 144, 0.28)';
+                             borderColor = 'rgba(56, 189, 248, 0.5)';
                          }
                          const isFriendly = clan.includes('player') || clan.includes('crew') || clan.includes('friendly');
                          const isNewlyClaimed = props.newlyClaimed || (props.contains && props.contains.newlyClaimed);
@@ -2002,8 +2032,8 @@ function Tile(props) {
                                      position: 'absolute', 
                                      top: 0, left: 0, right: 0, bottom: 0, 
                                      backgroundColor: territoryBg, 
-                                     boxShadow: isFriendly ? 'none' : `inset 0 0 5px ${borderColor}`, 
-                                     border: isFriendly ? 'none' : `1px dashed ${borderColor}`, 
+                                     boxShadow: isFriendly ? 'inset 0 0 8px rgba(56, 189, 248, 0.35)' : `inset 0 0 5px ${borderColor}`, 
+                                     border: isFriendly ? '1px dashed rgba(56, 189, 248, 0.35)' : `1px dashed ${borderColor}`, 
                                      zIndex: 1, 
                                      pointerEvents: 'none', 
                                      opacity: ((isBlackTile || isMainTileBlack || color === 'black' || currentTileColor === 'black') && !props.inSuperboard) ? 0 : 1, 
@@ -2134,30 +2164,57 @@ function Tile(props) {
                     (isClaimableBuilding && (!!rawTerritory || !!containsObj?.affiliation || !!props.affiliation || !!currentContains?.affiliation));
                 const obsScale = isEncompassedByFriendlyDomain ? 1.5 : 1.0;
 
+                const isLocusTile = sKey.includes('locus') || (containsObj && (containsObj.type === 'locus' || (typeof containsObj.subtype === 'string' && containsObj.subtype.includes('locus'))));
+                const isLocusActiveOrAdjacent = isLocusTile && (props.illuminated || props.isIlluminated || props.isAdjacentLocus);
+                const locusScale = isLocusActiveOrAdjacent ? 1.4 : 1.0;
+
                 const baseTransform = isPaletteTile ? 'none' : (isUnderConstruction 
                     ? `scale(${1.5 * obsScale}) rotate(${rotationDeg}deg)` 
                     : (isEnlargeableStructure && isOccupied 
                         ? `scale(${2.0 * obsScale}) rotate(${rotationDeg}deg)` 
-                        : (isEncompassedByFriendlyDomain 
-                            ? `scale(1.5) ${rotationDeg ? `rotate(${rotationDeg}deg)` : ''}`.trim() 
-                            : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none'))));
+                        : (isLocusActiveOrAdjacent
+                            ? `scale(${locusScale})`
+                            : (isEncompassedByFriendlyDomain 
+                                ? `scale(1.5) ${rotationDeg ? `rotate(${rotationDeg}deg)` : ''}`.trim() 
+                                : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')))));
                 const portraitTransform = flipTransform ? (baseTransform === 'none' ? flipTransform : `${flipTransform} ${baseTransform}`) : baseTransform;
 
                 return (
-                    <div className="portrait" style={{
-                         position: 'absolute',
-                         top: 0, left: 0, right: 0, bottom: 0,
-                         backgroundImage: toCssUrl(resolvedPortraitUrl),
-                         backgroundSize: isVendorCell ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%'),
-                         backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
-                         backgroundRepeat: 'no-repeat',
-                         zIndex: isVendorCell ? 40 : (isObsPlatform || isEncompassedByFriendlyDomain ? 12 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex)),
-                         opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
-                         transform: portraitTransform,
-                         transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform ? 'bottom center' : 'center center',
-                         transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
-                         pointerEvents: 'none'
-                    }} />
+                    <>
+                        <div className="portrait" style={{
+                             position: 'absolute',
+                             top: 0, left: 0, right: 0, bottom: 0,
+                             backgroundImage: toCssUrl(resolvedPortraitUrl),
+                             backgroundSize: isVendorCell ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%'),
+                             backgroundPosition: isVendorCell ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
+                             backgroundRepeat: 'no-repeat',
+                             zIndex: isVendorCell ? 40 : (isLocusActiveOrAdjacent ? 25 : (isObsPlatform || isEncompassedByFriendlyDomain ? 12 : ((isEnlargeableStructure && isOccupied) || isUnderConstruction ? 4 : portraitZIndex))),
+                             opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
+                             transform: portraitTransform,
+                             transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent ? 'bottom center' : 'center center',
+                             transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
+                             pointerEvents: 'none'
+                        }} />
+
+                        {/* Locus Adjacency Elemental Glow Ring Overlay */}
+                        { isLocusActiveOrAdjacent && (
+                            <div style={{
+                                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                                borderRadius: '50%',
+                                boxShadow: sKey.includes('frozen')
+                                    ? '0 0 18px rgba(56, 189, 248, 0.95), inset 0 0 14px rgba(56, 189, 248, 0.8)'
+                                    : (sKey.includes('cosmic')
+                                        ? '0 0 18px rgba(192, 132, 252, 0.95), inset 0 0 14px rgba(192, 132, 252, 0.8)'
+                                        : '0 0 18px rgba(16, 185, 129, 0.95), inset 0 0 14px rgba(16, 185, 129, 0.8)'),
+                                border: sKey.includes('frozen')
+                                    ? '2px solid #38bdf8'
+                                    : (sKey.includes('cosmic') ? '2px solid #c084fc' : '2px solid #10b981'),
+                                zIndex: 26,
+                                pointerEvents: 'none',
+                                animation: 'structureRingPulse 1.8s infinite ease-in-out'
+                            }} />
+                        )}
+                    </>
                 );
             })()}
 

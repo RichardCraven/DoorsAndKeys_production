@@ -2437,6 +2437,27 @@
     filter: drop-shadow(0 0 12px rgba(255, 0, 0, 1)) brightness(1.1) sepia(0.2) saturate(2.5);
 }
 
+/* ── Pocket Dimension Sub-Tile Entity Sprites (Fluid Micro-Grid) ── */
+.pocket-entity-sprite {
+    will-change: transform;
+    transition: transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
+    pointer-events: none;
+    image-rendering: pixelated;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &.allied {
+        filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.85));
+    }
+    &.neutral {
+        filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.75));
+    }
+    &.hostile {
+        filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.9));
+    }
+}
+
 /* ── Recuperating Campfire Billowing Flames Effect ── */
 .floating-player.recuperating {
     position: absolute;
@@ -3354,7 +3375,7 @@
 }
 
 .player-glide {
-    animation: playerGlide 0.15s linear forwards !important;
+    animation: playerGlide 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
 }
 
 @keyframes pulseGlow {
@@ -5715,6 +5736,33 @@
         box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(16, 185, 129, 0.15);
         border-radius: 12px;
         overflow: hidden;
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
+    .modal-header {
+        position: relative !important;
+        z-index: 10;
+        flex-shrink: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        padding: 16px 20px !important;
+        height: auto !important;
+        min-height: unset !important;
+    }
+
+    .modal-body {
+        position: relative !important;
+        z-index: 1;
+        flex: 1 1 auto !important;
+        overflow-y: auto !important;
+        max-height: 65vh !important;
+        padding: 20px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        margin-top: 0 !important;
     }
 
     .modal-dialog {
@@ -5730,6 +5778,34 @@
         &:active {
             transform: translateY(1px);
         }
+    }
+}
+
+/* Floating 'Locked' chest badge animation */
+@keyframes floatLockMsg {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, 4px) scale(0.85);
+    }
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -6px) scale(1);
+    }
+    80% {
+        opacity: 1;
+        transform: translate(-50%, -10px) scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -18px) scale(0.9);
+    }
+}
+
+.locked-chest-floating-badge {
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    &.fade-out {
+        opacity: 0 !important;
+        transform: translateY(-8px) scale(0.9) !important;
     }
 }
 
