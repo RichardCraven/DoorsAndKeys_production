@@ -1028,6 +1028,12 @@ import litter_broken_crates from '../assets/gemini_images/litter_broken_crates.p
 import litter_broken_urns from '../assets/gemini_images/litter_broken_urns.png';
 import litter_battle_debris from '../assets/gemini_images/litter_battle_debris.png';
 import litter_iron_chains from '../assets/gemini_images/litter_iron_chains.png';
+import pocket_litter_mana_crystals from '../assets/gemini_images/pocket_litter_mana_crystals.png';
+import pocket_litter_ruined_arch from '../assets/gemini_images/pocket_litter_ruined_arch.png';
+import pocket_litter_broken_wagon from '../assets/gemini_images/pocket_litter_broken_wagon.png';
+import pocket_litter_fractured_monolith from '../assets/gemini_images/pocket_litter_fractured_monolith.png';
+import pocket_litter_forge_remnants from '../assets/gemini_images/pocket_litter_forge_remnants.png';
+import pocket_litter_rift_embers from '../assets/gemini_images/pocket_litter_rift_embers.png';
 import chemical_lantern from '../assets/gemini_images/chemical_lantern.png';
 import territorial_lantern from '../assets/gemini_images/territorial_lantern.png';
 import automaton from '../assets/automatons/automaton.png';
@@ -2836,6 +2842,12 @@ export {
     litter_broken_urns,
     litter_battle_debris,
     litter_iron_chains,
+    pocket_litter_mana_crystals,
+    pocket_litter_ruined_arch,
+    pocket_litter_broken_wagon,
+    pocket_litter_fractured_monolith,
+    pocket_litter_forge_remnants,
+    pocket_litter_rift_embers,
     chemical_lantern,
     territorial_lantern,
 

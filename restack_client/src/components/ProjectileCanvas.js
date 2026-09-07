@@ -36,6 +36,36 @@ export default class ProjectileCanvas extends React.Component {
         this.animationFrameId = requestAnimationFrame(loop);
     };
 
+    fireProjectileCoords = (startX, startY, endX, endY, onHit) => {
+        const dx = endX - startX;
+        const dy = endY - startY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance === 0) {
+            if (onHit) {
+                try { onHit(); } catch(e) { console.error(e); }
+            }
+            return;
+        }
+
+        // Speed in pixels per second (approx 450px/sec)
+        const speed = 450;
+
+        this.projectiles.push({
+            x: startX,
+            y: startY,
+            startX,
+            startY,
+            endX,
+            endY,
+            dx,
+            dy,
+            distance,
+            traveled: 0,
+            speed,
+            onHit
+        });
+    };
+
     fireProjectile = (startTileIdx, endTileIdx, onHit) => {
         const { tileSize } = this.props;
         if (!tileSize) return;
@@ -53,27 +83,7 @@ export default class ProjectileCanvas extends React.Component {
         const endX = endCol * tileSize + tileSize / 2;
         const endY = endRow * tileSize + tileSize / 2;
 
-        const dx = endX - startX;
-        const dy = endY - startY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Speed in pixels per second (approx 450px/sec)
-        const speed = 450; 
-
-        this.projectiles.push({
-            x: startX,
-            y: startY,
-            startX,
-            startY,
-            endX,
-            endY,
-            dx,
-            dy,
-            distance,
-            traveled: 0,
-            speed,
-            onHit
-        });
+        this.fireProjectileCoords(startX, startY, endX, endY, onHit);
     };
 
     update = (dt) => {
@@ -116,8 +126,11 @@ export default class ProjectileCanvas extends React.Component {
                 }
             }
 
-            // If it reached destination without hitting the player, it's a miss
+            // If it reached destination without hitting the player, explode and trigger onHit if targeted
             if (p.traveled >= p.distance) {
+                if (p.onHit) {
+                    try { p.onHit(); } catch(e) { console.error(e); }
+                }
                 this.createExplosion(p.endX, p.endY);
                 this.projectiles.splice(i, 1);
             }

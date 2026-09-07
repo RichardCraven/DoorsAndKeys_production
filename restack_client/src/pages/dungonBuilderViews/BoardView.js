@@ -106,6 +106,9 @@ class BoardView extends React.Component {
             const litterMatch = (this.props.mapMaker?.dungeonLitterOptions || []).find((entry) => entry.key === subtype);
             if (litterMatch?.name) return litterMatch.name;
 
+            const pocketLitterMatch = (this.props.mapMaker?.pocketLitterOptions || []).find((entry) => entry.key === subtype);
+            if (pocketLitterMatch?.name) return pocketLitterMatch.name;
+
             const terrainMatch = (this.props.mapMaker?.terrainOptions || []).find((entry) => entry.key === subtype);
             if (terrainMatch?.name) return terrainMatch.name;
 
@@ -182,7 +185,7 @@ class BoardView extends React.Component {
                 vendorOption = this.props.mapMaker?.vendorOptions?.[pinnedOption.id];
             }
 
-            let shrineOption = null, locusOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null, terrainOption = null;
+            let shrineOption = null, locusOption = null, territoryOption = null, buildingOption = null, pocketBuildingOption = null, generatorOption = null, dungeonLitterOption = null, pocketLitterOption = null, terrainOption = null;
             if (pinnedOption.type === 'shrine-tile') {
                 shrineOption = this.props.mapMaker?.shrineOptions?.[pinnedOption.id];
             }
@@ -203,6 +206,9 @@ class BoardView extends React.Component {
             }
             if (pinnedOption.type === 'dungeon-litter-tile') {
                 dungeonLitterOption = this.props.mapMaker?.dungeonLitterOptions?.[pinnedOption.id];
+            }
+            if (pinnedOption.type === 'pocket-litter-tile') {
+                pocketLitterOption = this.props.mapMaker?.pocketLitterOptions?.[pinnedOption.id];
             }
             if (pinnedOption.type === 'terrain-tile') {
                 terrainOption = this.props.mapMaker?.terrainOptions?.[pinnedOption.id];
@@ -238,7 +244,7 @@ class BoardView extends React.Component {
             } else if (locusOption) {
                 previewContains = { type: 'locus', subtype: locusOption.key, locusType: locusOption.locusType, name: locusOption.name };
                 previewImage = images[locusOption.image] || locusOption.image;
-            } else if (pinned.optionType === 'tablet') {
+            } else if (pinned && pinned.optionType === 'tablet') {
                 previewContains = { type: 'tablet', subtype: null };
                 previewImage = 'tablet';
             } else if (territoryOption) {
@@ -255,22 +261,25 @@ class BoardView extends React.Component {
             } else if (dungeonLitterOption) {
                 previewContains = { type: 'dungeon_litter', subtype: dungeonLitterOption.key };
                 previewImage = images[dungeonLitterOption.image] || dungeonLitterOption.image;
+            } else if (pocketLitterOption) {
+                previewContains = { type: 'pocket_litter', subtype: pocketLitterOption.key };
+                previewImage = images[pocketLitterOption.image] || pocketLitterOption.image;
             } else if (terrainOption) {
                 previewContains = { type: 'terrain', subtype: terrainOption.key };
                 previewImage = images[terrainOption.image] || terrainOption.image;
-            } else if (pinned.optionType === 'passage') {
+            } else if (pinned && pinned.optionType === 'passage') {
                 previewContains = { type: 'passage', subtype: null };
-            } else if (pinned.optionType === 'empty space') {
+            } else if (pinned && pinned.optionType === 'empty space') {
                 previewContains = { type: 'empty_space', subtype: null };
-            } else if (pinned.optionType === 'obscured space') {
+            } else if (pinned && pinned.optionType === 'obscured space') {
                 previewContains = { type: 'obscured_space', subtype: null };
                 previewColor = '#111012';
-            } else if (pinned.optionType === 'void') {
+            } else if (pinned && pinned.optionType === 'void') {
                 previewContains = { type: 'void', subtype: null };
                 previewColor = 'black';
-            } else if (pinned.optionType === 'delete') {
+            } else if (pinned && pinned.optionType === 'delete') {
                 previewContains = { type: 'empty_space', subtype: null };
-            } else {
+            } else if (pinned) {
                 const rawType = pinned.optionType || pinned.image || pinned.type || 'misc';
                 const normalizedType = String(rawType).replace(/\s+/g, '_');
                 let containsObj = { type: normalizedType, subtype: pinned.image };

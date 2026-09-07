@@ -718,6 +718,8 @@ export default class CardDuel extends React.Component {
             }
         });
 
+        this.cleanDeadUnitsFromGrid(updatedGrid);
+
         // Draw card for active player
         let updatedPlayerDeck = [...this.state.playerDeck];
         let updatedPlayerHand = [...this.state.playerHand];
@@ -909,12 +911,45 @@ export default class CardDuel extends React.Component {
         });
     }
 
-    executeTacticalAttack = (attacker, defender) => {
-        let updatedGrid = { ...this.state.grid };
+    cleanDeadUnitsFromGrid = (grid, playerDiscard = null, reaperDiscard = null) => {
+        const deadUnits = [];
+        const processedIds = new Set();
+
+        Object.values(grid).forEach(unit => {
+            if (unit && unit.hp <= 0 && !processedIds.has(unit.id)) {
+                processedIds.add(unit.id);
+                deadUnits.push(unit);
+            }
+        });
+
+        deadUnits.forEach(unit => {
+            Object.keys(grid).forEach(k => {
+                if (grid[k] && (grid[k].id === unit.id || grid[k] === unit)) {
+                    delete grid[k];
+                }
+            });
+            if (playerDiscard && reaperDiscard) {
+                const resetUnit = {
+                    ...unit,
+                    hp: unit.maxHp || unit.startingHp || unit.cost || 1,
+                    anchorRow: undefined,
+                    anchorCol: undefined,
+                    occupiedKeys: undefined
+                };
+                if (unit.owner === 'player') playerDiscard.push(resetUnit);
+                else reaperDiscard.push(resetUnit);
+            }
+        });
+
+        return grid;
+    }
+
+    executeTacticalAttack = (attacker, defender, customGrid = null, customPlayerDiscard = null, customReaperDiscard = null) => {
+        let updatedGrid = customGrid || { ...this.state.grid };
         let playerHP = this.state.playerHP;
         let reaperHP = this.state.reaperHP;
-        let playerDiscard = [...this.state.playerDiscard];
-        let reaperDiscard = [...this.state.reaperDiscard];
+        let playerDiscard = customPlayerDiscard || [...this.state.playerDiscard];
+        let reaperDiscard = customReaperDiscard || [...this.state.reaperDiscard];
 
         const attackerOwner = attacker.owner === 'player' ? 'Your' : `${this.getEnemyName()}'s`;
         const defenderOwner = defender.owner === 'player' ? 'Your' : `${this.getEnemyName()}'s`;
@@ -935,9 +970,11 @@ export default class CardDuel extends React.Component {
             defender.hp = 0;
             this.addLog(`☠️ ${defenderOwner} ${defender.name} was defeated!`);
 
-            if (Array.isArray(defender.occupiedKeys)) {
-                defender.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-            }
+            Object.keys(updatedGrid).forEach(k => {
+                if (updatedGrid[k] && (updatedGrid[k].id === defender.id || updatedGrid[k] === defender)) {
+                    delete updatedGrid[k];
+                }
+            });
             const resetDefender = {
                 ...defender,
                 hp: defender.maxHp || defender.startingHp || defender.cost || 1,
@@ -959,9 +996,11 @@ export default class CardDuel extends React.Component {
                 attacker.hp = 0;
                 this.addLog(`☠️ ${attackerOwner} ${attacker.name} was defeated in counter-attack!`);
 
-                if (Array.isArray(attacker.occupiedKeys)) {
-                    attacker.occupiedKeys.forEach(k => { delete updatedGrid[k]; });
-                }
+                Object.keys(updatedGrid).forEach(k => {
+                    if (updatedGrid[k] && (updatedGrid[k].id === attacker.id || updatedGrid[k] === attacker)) {
+                        delete updatedGrid[k];
+                    }
+                });
                 const resetAttacker = {
                     ...attacker,
                     hp: attacker.maxHp || attacker.startingHp || attacker.cost || 1,
@@ -976,17 +1015,27 @@ export default class CardDuel extends React.Component {
 
         attacker.hasActedThisTurn = true;
 
-        this.setState({
-            grid: updatedGrid,
-            playerDiscard,
-            reaperDiscard,
-            attackAnim,
-            selectedBoardUnit: null
-        }, () => {
-            setTimeout(() => {
-                this.setState({ attackAnim: null });
-            }, 800);
-        });
+        if (!customGrid) {
+            this.setState({
+                grid: updatedGrid,
+                playerDiscard,
+                reaperDiscard,
+                attackAnim,
+                selectedBoardUnit: null
+            }, () => {
+                setTimeout(() => {
+                    this.setState({ attackAnim: null });
+                }, 800);
+            });
+        } else {
+            this.setState({ attackAnim, playerDiscard, reaperDiscard, selectedBoardUnit: null }, () => {
+                setTimeout(() => {
+                    this.setState({ attackAnim: null });
+                }, 800);
+            });
+        }
+
+        return { updatedGrid, playerDiscard, reaperDiscard };
     }
 
     executeDirectHeroAttack = (attacker) => {
@@ -1028,6 +1077,7 @@ export default class CardDuel extends React.Component {
         let currentReaperSpirit = reaperSpirit;
         let currentHand = [...reaperHand];
         let currentDiscard = [...this.state.reaperDiscard];
+        let currentPlayerDiscard = [...this.state.playerDiscard];
         const enemyName = this.getEnemyName();
 
         // Step 1: Play unit cards from hand into empty slots in Reaper territory
@@ -1092,27 +1142,37 @@ export default class CardDuel extends React.Component {
             if (u.hp <= 0) return;
             const r = u.anchorRow;
             const c = u.anchorCol;
+            const unitKeys = Array.isArray(u.occupiedKeys) && u.occupiedKeys.length > 0
+                ? u.occupiedKeys
+                : [`${r}_${c}`];
 
             const offsets = [
                 [1, 0], [1, -1], [1, 1], [0, -1], [0, 1], [-1, 0], [-1, -1], [-1, 1]
             ];
 
             let targetEnemy = null;
-            for (const [dr, dc] of offsets) {
-                const nr = r + dr;
-                const nc = c + dc;
-                if (nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4) {
-                    const target = currentGrid[`${nr}_${nc}`];
-                    if (target && target.owner === 'player' && target.hp > 0) {
-                        targetEnemy = target;
-                        break;
+            for (const key of unitKeys) {
+                const [ur, uc] = key.split('_').map(Number);
+                for (const [dr, dc] of offsets) {
+                    const nr = ur + dr;
+                    const nc = uc + dc;
+                    if (nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4) {
+                        const target = currentGrid[`${nr}_${nc}`];
+                        if (target && target.owner === 'player' && target.hp > 0) {
+                            targetEnemy = target;
+                            break;
+                        }
                     }
                 }
+                if (targetEnemy) break;
             }
 
             if (targetEnemy) {
-                this.executeTacticalAttack(u, targetEnemy);
-            } else if (r === 4) {
+                const res = this.executeTacticalAttack(u, targetEnemy, currentGrid, currentPlayerDiscard, currentDiscard);
+                currentGrid = res.updatedGrid;
+                currentPlayerDiscard = res.playerDiscard;
+                currentDiscard = res.reaperDiscard;
+            } else if (u.anchorRow === 4) {
                 this.executeDirectHeroAttack(u);
             } else {
                 const forwardMoves = [
@@ -1130,11 +1190,14 @@ export default class CardDuel extends React.Component {
             }
         });
 
+        this.cleanDeadUnitsFromGrid(currentGrid, currentPlayerDiscard, currentDiscard);
+
         this.setState({
             grid: currentGrid,
             reaperHand: currentHand,
             reaperSpirit: currentReaperSpirit,
             reaperDiscard: currentDiscard,
+            playerDiscard: currentPlayerDiscard,
             isAiThinking: false
         }, () => {
             this.advanceToNextTurn();

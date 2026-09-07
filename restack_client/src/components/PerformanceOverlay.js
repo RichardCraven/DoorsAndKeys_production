@@ -5,7 +5,7 @@ export class PerformanceOverlay extends Component {
         super(props);
         this.state = {
             isCollapsed: true,
-            isHidden: false,
+            isHidden: this.props.visible !== undefined ? !this.props.visible : true,
             lastPurgeMsg: ''
         };
         this._rafId = null;
@@ -24,25 +24,58 @@ export class PerformanceOverlay extends Component {
         this.panelHeapRef = React.createRef();
     }
 
+    effectiveHidden = () => {
+        if (this.props.visible !== undefined) {
+            return !this.props.visible;
+        }
+        return this.state.isHidden;
+    };
+
     componentDidMount() {
-        this.startMonitoring();
+        if (!this.effectiveHidden()) {
+            this.startMonitoring();
+        }
+    }
+
+    componentDidUpdate(prevProps, prevState) {
+        const wasHidden = (prevProps.visible !== undefined) ? !prevProps.visible : prevState.isHidden;
+        const nowHidden = this.effectiveHidden();
+        if (wasHidden && !nowHidden) {
+            this.startMonitoring();
+        } else if (!wasHidden && nowHidden) {
+            this.stopMonitoring();
+        }
     }
 
     componentWillUnmount() {
+        this.stopMonitoring();
+    }
+
+    stopMonitoring = () => {
         if (this._rafId) {
             cancelAnimationFrame(this._rafId);
             this._rafId = null;
         }
-    }
+    };
 
     startMonitoring = () => {
+        if (this._rafId || this.effectiveHidden()) return;
+        this._lastTime = typeof performance !== 'undefined' ? performance.now() : Date.now();
+        this._lastFpsUpdate = this._lastTime;
+        this._frameCount = 0;
+
         const loop = (now) => {
+            if (this.effectiveHidden()) {
+                this.stopMonitoring();
+                return;
+            }
+
             this._frameCount++;
             const delta = now - this._lastTime;
             this._lastTime = now;
 
-            // Update metrics twice per second without triggering React re-renders
-            if (now - this._lastFpsUpdate >= 500) {
+            // Update metrics every 2000ms (2 seconds) to avoid main-thread micro-stutter
+            if (now - this._lastFpsUpdate >= 2000) {
                 const interval = now - this._lastFpsUpdate;
                 const measuredFps = Math.min(60, Math.round((this._frameCount * 1000) / interval));
                 
@@ -99,6 +132,15 @@ export class PerformanceOverlay extends Component {
         this._rafId = requestAnimationFrame(loop);
     };
 
+    handleClose = (e) => {
+        if (e) e.stopPropagation();
+        this.stopMonitoring();
+        this.setState({ isHidden: true });
+        if (typeof this.props.onClose === 'function') {
+            this.props.onClose();
+        }
+    };
+
     handlePurgeMemory = () => {
         if (typeof this.props.onPurgeMemory === 'function') {
             this.props.onPurgeMemory();
@@ -129,7 +171,7 @@ export class PerformanceOverlay extends Component {
     };
 
     render() {
-        if (this.state.isHidden) return null;
+        if (this.effectiveHidden()) return null;
 
         const { isCollapsed, lastPurgeMsg } = this.state;
 
@@ -166,6 +208,19 @@ export class PerformanceOverlay extends Component {
                     <span ref={this.badgeFpsRef}>⚡ -- FPS</span>
                     <span style={{ color: 'rgba(255, 255, 255, 0.4)' }}>|</span>
                     <span ref={this.badgePingRef} style={{ color: '#4ade80' }}>--ms</span>
+                    <span
+                        onClick={this.handleClose}
+                        title="Hide Performance Monitor"
+                        style={{
+                            marginLeft: '4px',
+                            color: 'rgba(255, 255, 255, 0.4)',
+                            fontSize: '13px',
+                            padding: '0 3px',
+                            cursor: 'pointer'
+                        }}
+                    >
+                        ✕
+                    </span>
                 </div>
             );
         }
@@ -211,7 +266,7 @@ export class PerformanceOverlay extends Component {
                             ─
                         </button>
                         <button
-                            onClick={() => this.setState({ isHidden: true })}
+                            onClick={this.handleClose}
                             title="Close overlay completely"
                             style={{
                                 background: 'none',
