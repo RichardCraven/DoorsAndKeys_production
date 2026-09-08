@@ -463,6 +463,70 @@ function AutomatonConversionProgressBar({ converting, isVendorCell, is3x3Structu
     );
 }
 
+function MonolithBottomProgressBar({ progress, convertingTarget, isVendorCell, is3x3Structure }) {
+    const [now, setNow] = React.useState(Date.now());
+
+    const hasConvTarget = !!(convertingTarget && convertingTarget.startTime && convertingTarget.duration);
+
+    React.useEffect(() => {
+        if (!hasConvTarget) return;
+        const intervalId = setInterval(() => {
+            setNow(Date.now());
+        }, 100);
+        return () => clearInterval(intervalId);
+    }, [hasConvTarget, convertingTarget?.startTime, convertingTarget?.duration]);
+
+    let actualProgress = progress;
+    if (actualProgress === undefined || actualProgress === null) {
+        if (hasConvTarget) {
+            const elapsed = Math.max(0, now - convertingTarget.startTime);
+            actualProgress = Math.min(1, Math.max(0, elapsed / convertingTarget.duration));
+        } else {
+            return null;
+        }
+    }
+
+    const isPlayerConv = !!(convertingTarget && (convertingTarget.isPlayerClaim || convertingTarget.isPlayer));
+    const isEnemyConv = !!(convertingTarget && !isPlayerConv);
+
+    const borderColor = isPlayerConv ? '#38bdf8' : (isEnemyConv ? '#ef4444' : '#c084fc');
+    const barBg = isPlayerConv ? '#38bdf8' : (isEnemyConv ? '#ef4444' : '#c084fc');
+    const barGlow = isPlayerConv ? 'rgba(56, 189, 248, 0.9)' : (isEnemyConv ? 'rgba(239, 68, 68, 0.9)' : 'rgba(168, 85, 247, 0.8)');
+    const barGradient = isPlayerConv
+        ? 'linear-gradient(90deg, #0284c7, #38bdf8, #7dd3fc)'
+        : (isEnemyConv
+            ? 'linear-gradient(90deg, #dc2626, #f87171, #ef4444)'
+            : 'linear-gradient(90deg, #9333ea, #d8b4fe)');
+
+    return (
+        <div style={{
+            position: 'absolute',
+            bottom: is3x3Structure ? 'calc(-200% - 12px)' : (isVendorCell ? 'calc(-100% - 12px)' : '-12px'),
+            left: '1px',
+            right: is3x3Structure ? '-200%' : (isVendorCell ? '-100%' : '1px'),
+            height: '7px',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            border: `1px solid ${borderColor}`,
+            borderRadius: '3px',
+            padding: '1px',
+            boxSizing: 'border-box',
+            zIndex: 60,
+            pointerEvents: 'none',
+            boxShadow: `0 0 ${isPlayerConv || isEnemyConv ? '6px' : '0px'} ${barGlow}, 0 2px 6px rgba(0,0,0,0.9)`
+        }}>
+            <div style={{
+                width: `${Math.min(100, Math.max(0, actualProgress * 100))}%`,
+                height: '100%',
+                backgroundColor: barBg,
+                backgroundImage: barGradient,
+                borderRadius: '2px',
+                transition: 'width 0.1s linear',
+                boxShadow: `0 0 6px ${barGlow}`
+            }} />
+        </div>
+    );
+}
+
 function Tile(props) {
     const colorVal = (props.color === 'null' || props.color === 'undefined') ? null : props.color;
     const isShrine = (props.contains && props.contains.type === 'shrine') || props.optionType === 'shrine' || props.isShrine;
@@ -673,7 +737,7 @@ function Tile(props) {
     const thisContainsSubtype = containsObj?.subtype || containsObj?.key || containsObj?.building || (typeof props.contains === 'string' ? props.contains : null);
     const thisKey = String(thisContainsSubtype || props.building || containsObj?.type || props.image || '').toLowerCase();
 
-    const is2x2StructureSelf = !isSingleTile && (
+    const is2x2StructureSelf = !isPaletteTile && !isSingleTile && (
         thisKey.includes('war_camp') || thisKey.includes('war_fort') || thisKey.includes('dream_den') ||
         thisKey.includes('domain_monolith') || thisKey.includes('dark_domain_monolith') || (thisKey.includes('monolith') && !thisKey.includes('shrine')) ||
         thisKey.includes('cultivation_vat') || thisKey.includes('dust_collector') || thisKey.includes('larder') ||
@@ -1410,34 +1474,24 @@ function Tile(props) {
                </div>
            )}
 
-           {/* Monolith Activation Progress Bar under tile/complex (in dungeon) */}
-           { (!isVendorCell || getVendorCellRole() === 'anchor') && (props.monolithActivationProgress !== undefined && props.monolithActivationProgress !== null) && (
-               <div style={{
-                   position: 'absolute',
-                   bottom: is3x3Structure ? 'calc(-200% - 12px)' : (isVendorCell ? 'calc(-100% - 12px)' : '-12px'),
-                   left: '1px',
-                   right: is3x3Structure ? '-200%' : (isVendorCell ? '-100%' : '1px'),
-                   height: '7px',
-                   backgroundColor: 'rgba(0, 0, 0, 0.9)',
-                   border: '1px solid #c084fc',
-                   borderRadius: '3px',
-                   padding: '1px',
-                   boxSizing: 'border-box',
-                   zIndex: 60,
-                   pointerEvents: 'none',
-                   boxShadow: '0 2px 6px rgba(0,0,0,0.9)'
-               }}>
-                   <div style={{
-                       width: `${Math.min(100, Math.max(0, props.monolithActivationProgress * 100))}%`,
-                       height: '100%',
-                       backgroundColor: '#c084fc',
-                       backgroundImage: 'linear-gradient(90deg, #9333ea, #d8b4fe)',
-                       borderRadius: '2px',
-                       transition: 'width 0.1s linear',
-                       boxShadow: '0 0 6px rgba(168, 85, 247, 0.8)'
-                   }} />
-               </div>
-           )}
+
+            {/* Monolith Activation Progress Bar under tile/complex (in dungeon) */}
+            { (!isVendorCell || getVendorCellRole() === 'anchor') && (() => {
+                const convTarget = props.convertingTarget || (typeof props.contains === 'object' ? props.contains?.convertingTarget : null) || (currentTileForContains && (currentTileForContains.convertingTarget || (currentTileForContains.contains && currentTileForContains.contains.convertingTarget)));
+                const hasActivationProgress = props.monolithActivationProgress !== undefined && props.monolithActivationProgress !== null;
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+
+                if (!hasActivationProgress && (!isDomainMonolith || !convTarget)) return null;
+
+                return (
+                    <MonolithBottomProgressBar
+                        progress={props.monolithActivationProgress}
+                        convertingTarget={convTarget}
+                        isVendorCell={isVendorCell}
+                        is3x3Structure={is3x3Structure}
+                    />
+                );
+            })()}
 
             {/* Structure Upgrade Progress Bar under tile/complex */}
             { (!isVendorCell || getVendorCellRole() === 'anchor') && (props.upgradeProgress !== undefined && props.upgradeProgress !== null) && (
@@ -2259,7 +2313,7 @@ function Tile(props) {
                              top: 0, left: 0, right: 0, bottom: 0,
                              backgroundImage: toCssUrl(resolvedPortraitUrl),
                              backgroundSize: (isVendorCell || is2x2StructureSelf) ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%'),
-                             backgroundPosition: (isVendorCell || is2x2StructureSelf) ? vendorBackgroundPosition : (isItemCell ? 'center' : 'inherit'),
+                             backgroundPosition: (isVendorCell || is2x2StructureSelf) ? vendorBackgroundPosition : ((isItemCell || isPaletteTile) ? 'center' : 'inherit'),
                              backgroundRepeat: 'no-repeat',
                              zIndex: (isVendorCell || is2x2StructureSelf) ? 40 : ((isEnlargeableStructure && isOccupied) ? 35 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex))),
                              opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
@@ -2470,6 +2524,12 @@ function Tile(props) {
 
                 if (!converting) return null;
                 if (isVendorCell && getVendorCellRole() !== 'anchor') return null;
+
+                // When converting a domain monolith, suppress the top bar — only the bottom progress bar is shown
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                if (isDomainMonolith || (props.monolithActivationProgress !== undefined && props.monolithActivationProgress !== null)) {
+                    return null;
+                }
 
                 return <AutomatonConversionProgressBar converting={converting} isVendorCell={isVendorCell} is3x3Structure={is3x3Structure} />;
             })()}

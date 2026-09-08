@@ -377,7 +377,81 @@ export function BoardManager(){
         const img = tile.image || tile.contains?.image;
         const sKey = String(containsSubtype || bldg || img || containsType || (tile.contains && typeof tile.contains === 'object' ? (tile.contains.key || tile.contains.name || tile.contains.type) : '') || '').toLowerCase();
 
+        // Check if tile is part of a multi-tile structure footprint via nearby anchor in boardTiles
+        const boardTiles = this.currentBoard?.tiles || this.tiles;
+        if (boardTiles && typeof tile.id === 'number') {
+            const cId = tile.id;
+            const cRow = Math.floor(cId / 15);
+            const cCol = cId % 15;
+
+            // 2x2 checks: anchor at cId - 16, cId - 15, cId - 1
+            const checks2x2 = [
+                { dRow: 1, dCol: 1, anchorOffset: -16, role: 'bottom_right' },
+                { dRow: 1, dCol: 0, anchorOffset: -15, role: 'bottom_left' },
+                { dRow: 0, dCol: 1, anchorOffset: -1, role: 'top_right' }
+            ];
+            for (const { dRow, dCol, anchorOffset, role } of checks2x2) {
+                if (cRow >= dRow && cCol >= dCol) {
+                    const aTile = boardTiles[cId + anchorOffset];
+                    if (aTile && aTile !== tile) {
+                        const aContainsType = this.getContainsType(aTile.contains) || aTile.contains?.type;
+                        const aContainsSub = this.getContainsSubtype(aTile.contains) || aTile.contains?.subtype;
+                        const aBldg = aTile.building || aTile.contains?.building;
+                        const aImg = aTile.image || aTile.contains?.image;
+                        const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
+                        if (aKey.includes('hut')) continue;
+
+                        const aRole = aTile.contains?.vendorCell || aTile.vendorCell;
+                        if (!aRole || aRole === 'anchor' || aTile.contains?.vendorAnchorId === (cId + anchorOffset)) {
+                            const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'dream_den'];
+                            if (vendorKeys.some(k => aKey.includes(k))) {
+                                return false; // Vendor structure tiles are interactive vendors, not impassable building walls
+                            }
+                            const multi2x2 = [
+                                'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
+                                'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort'
+                            ];
+                            const is2x2 = multi2x2.some(k => aKey.includes(k)) || aTile.isLarge || aTile.contains?.isLarge || aTile.isMultiTile || aTile.contains?.isMultiTile;
+                            if (is2x2) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3x3 checks (keep, fortress, fractured_monolith)
+            for (let dy = 2; dy >= 0; dy--) {
+                for (let dx = 2; dx >= 0; dx--) {
+                    if (dx === 0 && dy === 0) continue;
+                    if (cRow >= dy && cCol >= dx) {
+                        const anchorOffset = -(dy * 15 + dx);
+                        const aTile = boardTiles[cId + anchorOffset];
+                        if (aTile && aTile !== tile) {
+                            const aKey = String(aTile.contains?.subtype || aTile.building || aTile.contains?.building || aTile.contains?.type || '').toLowerCase();
+                            if (aKey.includes('hut')) continue;
+                            const aRole = aTile.contains?.vendorCell || aTile.vendorCell;
+                            if (!aRole || aRole === 'anchor') {
+                                if (aKey.includes('keep') || aKey.includes('fortress') || (aTile.contains?.footprint && aTile.contains.footprint.length === 9)) {
+                                    return true;
+                                }
+                                if (aKey.includes('fractured_monolith')) {
+                                    const isCorner = (dx === 0 && dy === 2) || (dx === 2 && dy === 0) || (dx === 2 && dy === 2);
+                                    if (!isCorner) return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if (!tile.contains || containsType === 'empty' || containsType === 'empty_space' || containsType === 'empty space' || containsSubtype === 'empty' || containsSubtype === 'empty_space' || containsSubtype === 'empty space' || containsType === 'void' || containsSubtype === 'void') {
+            return false;
+        }
+
+        // Vendor structure tiles ('dream_den', 'merchant', 'alchemist', 'fungal_nursery') are interactive vendors, not impassable building walls
+        if (sKey.includes('dream_den') || sKey.includes('dream den') || sKey.includes('merchant') || sKey.includes('alchemist') || sKey.includes('fungal_nursery')) {
             return false;
         }
 
@@ -946,7 +1020,7 @@ export function BoardManager(){
                 sKey === 'domain_monolith' || sKey === 'dark_domain_monolith' || sKey === 'war_camp' || sKey === 'war_fort' ||
                 sKey === 'alchemist' || sKey === 'merchant' || sKey === 'cultivation_vat' || sKey === 'dust_collector' ||
                 sKey === 'larder' || sKey === 'sawmill' || sKey === 'lumber_mill' || sKey === 'ore_mine' || sKey === 'slate_mine' ||
-                sKey === 'fungal_nursery' || (sKey.includes('monolith') && !sKey.includes('shrine')) ||
+                sKey === 'fungal_nursery' || sKey === 'dream_den' || sKey === 'dream den' || sKey.includes('dream_den') || sKey.includes('dream den') || (sKey.includes('monolith') && !sKey.includes('shrine')) ||
                 sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2')
             );
             if (is2x2Structure) {
@@ -2368,6 +2442,29 @@ export function BoardManager(){
         const subtype = this.getContainsSubtype(destinationTile.contains);
         const isShiftBypass = !!(opts.shiftKey || opts.ignoreBuilding || opts.bypassBuilding);
         
+        const cObj = typeof destinationTile.contains === 'object' ? destinationTile.contains : null;
+        const rawBldg = String(
+            subtype ||
+            destinationTile.building ||
+            cObj?.building ||
+            cObj?.subtype ||
+            cObj?.name ||
+            cObj?.key ||
+            destinationTile.image ||
+            cObj?.image ||
+            type ||
+            ''
+        ).toLowerCase();
+
+        if (type === 'dream_den' || type === 'dream den' || rawBldg.includes('dream_den') || rawBldg.includes('dream den')) {
+            try {
+                if (this.triggerVendorEncounter) {
+                    this.triggerVendorEncounter('dream_den', destinationTile);
+                }
+            } catch (e) {}
+            return 'vendor';
+        }
+
         if (this.isImpassableBuildingTile(destinationTile)) {
             if (isShiftBypass) {
                 return null; // Passable when holding Shift: step through building without blocking or opening interaction panel

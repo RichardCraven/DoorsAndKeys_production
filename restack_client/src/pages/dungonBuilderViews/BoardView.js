@@ -50,6 +50,21 @@ export const FLOOR_TEXTURES = [
 ];
 const DEFAULT_FLOOR_TEXTURE = FLOOR_TEXTURES[0].src;
 
+export function resolveFloorTexture(floorTexture) {
+    if (!floorTexture) return null;
+    if (typeof floorTexture === 'string') {
+        if (floorTexture.includes('/') || floorTexture.startsWith('data:') || floorTexture.startsWith('blob:')) {
+            return floorTexture;
+        }
+        const match = FLOOR_TEXTURES.find(t => t.key === floorTexture || t.label === floorTexture || t.src === floorTexture);
+        if (match && match.src) return match.src;
+        if (images && images[floorTexture]) {
+            return images[floorTexture];
+        }
+    }
+    return floorTexture;
+}
+
 /**
  * Semi-transparent dark overlay used for empty-space and passage tiles.
  * The board container's texture background shows through this overlay,
@@ -383,7 +398,7 @@ class BoardView extends React.Component {
                         position: 'relative',
                         width: this.props.boardSize+'px', height: this.props.boardSize+ 'px',
                         backgroundColor: '#0e0e12',
-                        backgroundImage: `url(${this.props.floorTexture || DEFAULT_FLOOR_TEXTURE})`,
+                        backgroundImage: `url(${resolveFloorTexture(this.props.floorTexture) || DEFAULT_FLOOR_TEXTURE})`,
                         backgroundRepeat: 'repeat',
                         backgroundSize: '350px 350px',
                         boxShadow: 'inset 0 0 14px 4px rgba(0, 0, 0, 0.85)'
