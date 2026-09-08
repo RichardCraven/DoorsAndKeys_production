@@ -1010,5 +1010,317 @@ describe('Pocket Dimension Multi-Tile (2x2) Structure Rendering and Sanitization
             jest.useRealTimers();
         });
     });
+
+    describe('Pocket Dimension UI & Palette Adjustments', () => {
+        test('1. Equipment section returns null in pocket dimension (inSuperboard = true)', () => {
+            const pageInstance = new DungeonPage({});
+            pageInstance.state = { inSuperboard: true };
+            expect(pageInstance.renderEquipmentSection()).toBeNull();
+
+            pageInstance.state = { inSuperboard: false };
+            expect(pageInstance.renderEquipmentSection()).not.toBeNull();
+        });
+
+        test('2. resolveFloorTexture resolves string key concrete_floor_damaged_01 to actual asset URL', () => {
+            const { resolveFloorTexture } = require('../dungonBuilderViews/BoardView');
+            const resolved = resolveFloorTexture('concrete_floor_damaged_01');
+            expect(resolved).toBeDefined();
+            expect(resolved).not.toBe('concrete_floor_damaged_01');
+            expect(typeof resolved).toBe('string');
+        });
+
+        test('3. Large 2x2 building icons in palette (isPaletteTile=true) scale to fit inside regular tile without 2x2 quadrant cropping', () => {
+            const { container } = render(
+                <Tile
+                    id={1}
+                    index={1}
+                    isPaletteTile={true}
+                    contains={{ type: 'building', subtype: 'cultivation_vat', building: 'cultivation_vat' }}
+                    building="cultivation_vat"
+                    image="cultivation_vat"
+                />
+            );
+            const portrait = container.querySelector('.portrait');
+            expect(portrait).not.toBeNull();
+            expect(portrait.style.backgroundPosition).toBe('center');
+        });
+
+        test('4. Hardcoded tele console command outputs coordinate string and teleports to level:-2,orientation:back,board:1,x:2,y:6', () => {
+            const pageInstance = new DungeonPage({});
+            pageInstance._isMounted = true;
+            pageInstance.setState = (updater) => {
+                const patch = typeof updater === 'function' ? updater(pageInstance.state) : updater;
+                pageInstance.state = { ...pageInstance.state, ...patch };
+            };
+            pageInstance.teleportCrew = jest.fn();
+            pageInstance.state = {
+                devConsoleInput: 'tele',
+                devConsoleOutput: [],
+                devConsoleOpen: true,
+                keysLocked: true
+            };
+            const mockEvent = { key: 'Enter', preventDefault: jest.fn() };
+            pageInstance.handleDevConsoleKeyDown(mockEvent);
+
+            expect(mockEvent.preventDefault).toHaveBeenCalled();
+            expect(pageInstance.teleportCrew).toHaveBeenCalledWith(expect.objectContaining({
+                levelId: -2,
+                orientation: 'back',
+                boardIndex: 1,
+                x: 2,
+                y: 6
+            }));
+            expect(pageInstance.state.devConsoleOutput).toContain('tele level:-2,orientation:back,board:1,x:2,y:6');
+            expect(pageInstance.state.devConsoleOpen).toBe(false);
+        });
+
+        test('5. Minimap indicator processing safely handles tiles with contains: null without throwing TypeError', () => {
+            const pageInstance = new DungeonPage({});
+            pageInstance._isMounted = true;
+            pageInstance.state = {
+                currentLevelId: 1,
+                currentOrientation: 'front',
+                superboardTiles: [],
+                inSuperboard: true,
+                minimap: []
+            };
+
+            const boardTiles = [
+                { id: 106, contains: null, building: 'war_camp' }
+            ];
+
+            expect(() => {
+                pageInstance.renderMinimapSection();
+            }).not.toThrow();
+        });
+
+        test("6. Console command 'exit' triggers exitSuperboardPocketDimension when inside pocket dimension", () => {
+            const pageInstance = new DungeonPage({});
+            pageInstance._isMounted = true;
+            pageInstance.setState = (updater) => {
+                const patch = typeof updater === 'function' ? updater(pageInstance.state) : updater;
+                pageInstance.state = { ...pageInstance.state, ...patch };
+            };
+            pageInstance.exitSuperboardPocketDimension = jest.fn();
+            pageInstance.state = {
+                devConsoleOpen: true,
+                devConsoleInput: 'exit',
+                devConsoleOutput: [],
+                inSuperboard: true,
+                keysLocked: true
+            };
+            const mockEvent = { key: 'Enter', preventDefault: jest.fn() };
+            pageInstance.handleDevConsoleKeyDown(mockEvent);
+
+            expect(mockEvent.preventDefault).toHaveBeenCalled();
+            expect(pageInstance.exitSuperboardPocketDimension).toHaveBeenCalledWith('✨ Exited Pocket Dimension');
+            expect(pageInstance.state.devConsoleOutput).toContain('Exited Pocket Dimension.');
+            expect(pageInstance.state.devConsoleOpen).toBe(false);
+        });
+
+        test('7. All quadrants of 2x2 structure (Sawmill) are impassable in isSuperboardTilePassable', () => {
+            const pageInstance = new DungeonPage({});
+            pageInstance.props = { boardManager: new BoardManager() };
+
+            const miniboards = [];
+            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                const tiles = [];
+                for (let tIdx = 0; tIdx < 225; tIdx++) {
+                    tiles.push({
+                        type: 'board-tile',
+                        id: tIdx,
+                        coordinates: [tIdx % 15, Math.floor(tIdx / 15)],
+                        contains: { type: 'empty_space' },
+                        color: 'rgba(15, 15, 20, 0.55)'
+                    });
+                }
+                miniboards.push({ id: mbIdx, tiles });
+            }
+
+            const superboard = { miniboards };
+            // Place 2x2 Sawmill at globalX=5, globalY=5 (all within miniboard 0)
+            const anchorIdx = 5 * 15 + 5;
+            superboard.miniboards[0].tiles[anchorIdx] = {
+                id: anchorIdx,
+                coordinates: [5, 5],
+                contains: { type: 'building', subtype: 'sawmill', building: 'sawmill' },
+                building: 'sawmill',
+                color: 'rgba(15, 15, 20, 0.55)'
+            };
+
+            // Before or after sanitization, ALL 4 tiles of the 2x2 complex must be impassable
+            expect(pageInstance.isSuperboardTilePassable(superboard, 5, 5)).toBe(false); // top-left (anchor)
+            expect(pageInstance.isSuperboardTilePassable(superboard, 6, 5)).toBe(false); // top-right
+            expect(pageInstance.isSuperboardTilePassable(superboard, 5, 6)).toBe(false); // bottom-left
+            expect(pageInstance.isSuperboardTilePassable(superboard, 6, 6)).toBe(false); // bottom-right
+
+            // Surrounding tile should still be passable
+            expect(pageInstance.isSuperboardTilePassable(superboard, 4, 5)).toBe(true);
+            expect(pageInstance.isSuperboardTilePassable(superboard, 7, 5)).toBe(true);
+        });
+
+        test('8. movePlayerInSuperboard blocks movement into non-anchor quadrant of 2x2 building and triggers openGeneratorModal with anchor tile', () => {
+            const pageInstance = new DungeonPage({});
+            const bm = new BoardManager();
+            pageInstance.props = { boardManager: bm };
+            pageInstance.openGeneratorModal = jest.fn();
+            pageInstance.setState = (updater) => {
+                const patch = typeof updater === 'function' ? updater(pageInstance.state) : updater;
+                pageInstance.state = { ...pageInstance.state, ...patch };
+            };
+
+            const miniboards = [];
+            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                const tiles = [];
+                for (let tIdx = 0; tIdx < 225; tIdx++) {
+                    tiles.push({
+                        type: 'board-tile',
+                        id: tIdx,
+                        coordinates: [tIdx % 15, Math.floor(tIdx / 15)],
+                        contains: { type: 'empty_space' },
+                        color: 'rgba(15, 15, 20, 0.55)'
+                    });
+                }
+                miniboards.push({ id: mbIdx, tiles });
+            }
+
+            const anchorIdx = 5 * 15 + 5;
+            const anchorTile = {
+                id: anchorIdx,
+                coordinates: [5, 5],
+                contains: { type: 'building', subtype: 'sawmill', building: 'sawmill' },
+                building: 'sawmill',
+                color: 'rgba(15, 15, 20, 0.55)'
+            };
+            miniboards[0].tiles[anchorIdx] = anchorTile;
+
+            const superboard = { miniboards };
+            pageInstance.state = {
+                inSuperboard: true,
+                superboardType: 'pocket_plains',
+                superboardPlayerPos: { gx: 7, gy: 5 },
+                superboardViewMinX: 0,
+                superboardViewMinY: 0,
+                dungeon: {
+                    superboards: {
+                        pocket_plains: superboard
+                    }
+                }
+            };
+
+            // Player attempts to step left from (7, 5) into (6, 5), which is top-right quadrant of Sawmill
+            pageInstance.movePlayerInSuperboard(-1, 0);
+
+            // Movement blocked, and openGeneratorModal called with anchor tile
+            expect(pageInstance.openGeneratorModal).toHaveBeenCalled();
+            const calledTile = pageInstance.openGeneratorModal.mock.calls[0][0];
+            expect(calledTile.building || calledTile.contains?.building || calledTile.contains?.subtype).toContain('sawmill');
+            expect(calledTile.globalX).toBe(5);
+            expect(calledTile.globalY).toBe(5);
+        });
+
+        test('9. Pocket dimension floor tiles use semi-transparent overlay allowing background texture visibility', () => {
+            const pageInstance = new DungeonPage({});
+            const bm = new BoardManager();
+            pageInstance.props = { boardManager: bm };
+            pageInstance.setState = (updater) => {
+                const patch = typeof updater === 'function' ? updater(pageInstance.state) : updater;
+                pageInstance.state = { ...pageInstance.state, ...patch };
+            };
+
+            const miniboards = [];
+            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                const tiles = [];
+                for (let tIdx = 0; tIdx < 225; tIdx++) {
+                    tiles.push({
+                        type: 'board-tile',
+                        id: tIdx,
+                        coordinates: [tIdx % 15, Math.floor(tIdx / 15)],
+                        contains: { type: 'empty_space' },
+                        color: '#6b6057' // legacy opaque color
+                    });
+                }
+                miniboards.push({ id: mbIdx, tiles });
+            }
+
+            const dungeonObj = {
+                superboards: {
+                    pocket_plains: { miniboards, floorTexture: 'ground_grey' }
+                }
+            };
+            bm.dungeon = dungeonObj;
+
+            pageInstance.state = {
+                inSuperboard: true,
+                superboardType: 'pocket_plains',
+                superboardPlayerPos: { gx: 5, gy: 5 },
+                superboardViewMinX: 0,
+                superboardViewMinY: 0,
+                dungeon: dungeonObj
+            };
+
+            pageInstance.updateSuperboardViewport(0, 0);
+
+            // Verify viewport tiles converted legacy #6b6057 to semi-transparent overlay rgba(15, 15, 20, 0.55)
+            const vpTiles = pageInstance.state.tiles;
+            expect(vpTiles).toBeDefined();
+            expect(vpTiles.length).toBe(225);
+            expect(vpTiles[0].color).toBe('rgba(15, 15, 20, 0.55)');
+            expect(vpTiles[10].color).toBe('rgba(15, 15, 20, 0.55)');
+        });
+
+        test('10. BoardManager.normalizeBoardTiles normalizes all 4 tiles of 2x2 Dream Den structure and allows vendor interaction across all 4 tiles', () => {
+            const bm = new BoardManager();
+            const tiles = Array.from({ length: 225 }, (_, idx) => ({
+                id: idx,
+                type: 'board-tile',
+                contains: null
+            }));
+
+            // Place Dream Den anchor on tile 32 (row 2, col 2)
+            tiles[32].contains = { type: 'building', subtype: 'dream_den' };
+
+            const board = { id: 1, tiles };
+            const dungeon = {
+                levels: [{
+                    id: 1,
+                    front: { miniboards: [board] }
+                }]
+            };
+
+            bm.normalizeBoardTiles(board);
+
+            // Check that all 4 tiles (32=anchor, 33=top_right, 47=bottom_left, 48=bottom_right) are normalized
+            expect(board.tiles[32].contains.vendorCell).toBe('anchor');
+            expect(board.tiles[33].contains.vendorCell).toBe('top_right');
+            expect(board.tiles[47].contains.vendorCell).toBe('bottom_left');
+            expect(board.tiles[48].contains.vendorCell).toBe('bottom_right');
+
+            expect(board.tiles[33].contains.vendorAnchorId).toBe(32);
+            expect(board.tiles[47].contains.vendorAnchorId).toBe(32);
+            expect(board.tiles[48].contains.vendorAnchorId).toBe(32);
+
+            expect(board.tiles[33].contains.subtype).toBe('dream_den');
+            expect(board.tiles[47].contains.subtype).toBe('dream_den');
+            expect(board.tiles[48].contains.subtype).toBe('dream_den');
+
+            // Verify isImpassableBuildingTile returns false for vendor tiles (not treated as impassable walls)
+            expect(bm.isImpassableBuildingTile(board.tiles[32])).toBe(false);
+            expect(bm.isImpassableBuildingTile(board.tiles[33])).toBe(false);
+            expect(bm.isImpassableBuildingTile(board.tiles[47])).toBe(false);
+            expect(bm.isImpassableBuildingTile(board.tiles[48])).toBe(false);
+
+            // Verify handleInteraction triggers triggerVendorEncounter on top_right, bottom_left, and bottom_right tiles
+            bm.triggerVendorEncounter = jest.fn();
+            const res33 = bm.handleInteraction(board.tiles[33]);
+            expect(bm.triggerVendorEncounter).toHaveBeenCalledWith('dream_den', board.tiles[33]);
+            expect(res33).toBe('vendor');
+
+            bm.triggerVendorEncounter.mockClear();
+            const res48 = bm.handleInteraction(board.tiles[48]);
+            expect(bm.triggerVendorEncounter).toHaveBeenCalledWith('dream_den', board.tiles[48]);
+            expect(res48).toBe('vendor');
+        });
+    });
 });
 

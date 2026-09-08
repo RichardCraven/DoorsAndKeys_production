@@ -4,7 +4,7 @@ import '@coreui/coreui/dist/css/coreui.min.css'
 import '../../styles/dungeon-board.scss'
 import '../../styles/map-maker.scss'
 import Tile from '../../components/tile'
-import { FLOOR_TEXTURES } from './BoardView'
+import { FLOOR_TEXTURES, resolveFloorTexture } from './BoardView'
 import { CDropdown, CDropdownToggle, CDropdownMenu, CDropdownItem, CSpinner, CFormSelect} from '@coreui/react';
 import  CIcon  from '@coreui/icons-react'
 import { cilSave, cilQrCode, cilLevelDown, cilLevelUp, cilLibraryAdd, cilTrash, cilOptions, cilPlus, cilHistory } from '@coreui/icons';
@@ -1270,7 +1270,7 @@ class DungeonView extends React.Component {
                         (() => {
                             const activeMiniboards = currentZoomKey === 'light' ? lightMiniboards : darkMiniboards;
                             const isDark = currentZoomKey === 'dark';
-                            const superboardTexture = this.props.loadedDungeon?.superboards?.[currentZoomKey]?.floorTexture;
+                            const superboardTexture = resolveFloorTexture(this.props.loadedDungeon?.superboards?.[currentZoomKey]?.floorTexture);
                             const visualZoomLevel = this.state.superboardVisualZoomLevel || 1;
                             const boardPixelSize = 720 * visualZoomLevel;
                             const bgSize = 240 * visualZoomLevel;

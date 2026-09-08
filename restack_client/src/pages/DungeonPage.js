@@ -48,6 +48,7 @@ import CIcon from '@coreui/icons-react';
 
 import { CButton, CFormSelect, CFormInput, CModal, CModalHeader, CModalTitle, CModalBody, CModalFooter } from '@coreui/react';
 import * as images from '../utils/images'
+import { resolveFloorTexture } from './dungonBuilderViews/BoardView';
 import { getRandomInscription } from '../utils/inscriptions-manager';
 import { RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, DISCIPLINE_CATEGORIES, SCRY_OPTIONS } from '../utils/spells-table'
 import { RECIPES } from '../utils/spells-table'
@@ -5569,8 +5570,9 @@ class DungeonPage extends React.Component {
         const multi2x2Keys = [
             'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
             'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort',
-            'fungal_nursery', 'alchemist', 'merchant'
+            'fungal_nursery', 'alchemist', 'merchant', 'dream_den'
         ];
+        const multi3x3Keys = ['keep', 'fortress', 'fractured_monolith'];
 
         for (let gy = 0; gy < 44; gy++) {
             for (let gx = 0; gx < 44; gx++) {
@@ -5580,66 +5582,228 @@ class DungeonPage extends React.Component {
                 const sKey0 = String(cObj0?.subtype || t0.building || cObj0?.building || (cObj0?.type !== 'generator' && cObj0?.type !== 'building' ? (cObj0?.type || '') : '')).toLowerCase();
 
                 const is2x2 = multi2x2Keys.some(k => sKey0.includes(k));
-                if (!is2x2) continue;
+                const is3x3 = !is2x2 && multi3x3Keys.some(k => sKey0.includes(k));
+                if (!is2x2 && !is3x3) continue;
 
                 // Only consider this tile an anchor if it's explicitly 'anchor' or unassigned
                 const cellRole0 = cObj0?.vendorCell || t0.vendorCell;
                 if (cellRole0 && cellRole0 !== 'anchor') continue;
 
-                const t1 = getTileAt(gx + 1, gy);
-                const t2 = getTileAt(gx, gy + 1);
-                const t3 = getTileAt(gx + 1, gy + 1);
+                if (is2x2) {
+                    const t1 = getTileAt(gx + 1, gy);
+                    const t2 = getTileAt(gx, gy + 1);
+                    const t3 = getTileAt(gx + 1, gy + 1);
 
-                const sKey1 = String(t1?.contains?.subtype || t1?.building || t1?.contains?.building || '').toLowerCase();
-                const sKey2 = String(t2?.contains?.subtype || t2?.building || t2?.contains?.building || '').toLowerCase();
-                const sKey3 = String(t3?.contains?.subtype || t3?.building || t3?.contains?.building || '').toLowerCase();
+                    const sKey1 = String(t1?.contains?.subtype || t1?.building || t1?.contains?.building || '').toLowerCase();
+                    const sKey2 = String(t2?.contains?.subtype || t2?.building || t2?.contains?.building || '').toLowerCase();
+                    const sKey3 = String(t3?.contains?.subtype || t3?.building || t3?.contains?.building || '').toLowerCase();
 
-                const isQuadrantMatch = (sKey1.includes(sKey0) || sKey0.includes(sKey1)) &&
-                    (sKey2.includes(sKey0) || sKey0.includes(sKey2)) &&
-                    (sKey3.includes(sKey0) || sKey0.includes(sKey3));
+                    const isQuadrantMatch = (sKey1.includes(sKey0) || sKey0.includes(sKey1)) &&
+                        (sKey2.includes(sKey0) || sKey0.includes(sKey2)) &&
+                        (sKey3.includes(sKey0) || sKey0.includes(sKey3));
 
-                if (isQuadrantMatch || cObj0?.vendorGroupId || t0.vendorGroupId) {
+                    const isT1EmptyOrMatch = !t1 || !t1.contains || t1.contains.type === 'empty_space' || t1.contains.type === 'empty' || sKey1.includes(sKey0) || sKey0.includes(sKey1);
+                    const isT2EmptyOrMatch = !t2 || !t2.contains || t2.contains.type === 'empty_space' || t2.contains.type === 'empty' || sKey2.includes(sKey0) || sKey0.includes(sKey2);
+                    const isT3EmptyOrMatch = !t3 || !t3.contains || t3.contains.type === 'empty_space' || t3.contains.type === 'empty' || sKey3.includes(sKey0) || sKey0.includes(sKey3);
+                    const noneAreOtherAnchors = (!t1?.vendorCell || t1.vendorCell !== 'anchor') && (!t2?.vendorCell || t2.vendorCell !== 'anchor') && (!t3?.vendorCell || t3.vendorCell !== 'anchor');
+
+                    if (isQuadrantMatch || cObj0?.vendorGroupId || t0.vendorGroupId || (isT1EmptyOrMatch && isT2EmptyOrMatch && isT3EmptyOrMatch && noneAreOtherAnchors)) {
+                        const vendorGroupId = cObj0?.vendorGroupId || t0.vendorGroupId || `superboard_building_${sKey0}_${gx}_${gy}`;
+                        const anchorMbIdx = Math.floor(gy / 15) * 3 + Math.floor(gx / 15);
+                        const anchorTileIdx = (gy % 15) * 15 + (gx % 15);
+                        const sharedAffiliation = cObj0?.affiliation || t0.affiliation;
+
+                        const quadDefs = [
+                            { tile: t0, role: 'anchor', qGx: gx, qGy: gy },
+                            { tile: t1, role: 'top_right', qGx: gx + 1, qGy: gy },
+                            { tile: t2, role: 'bottom_left', qGx: gx, qGy: gy + 1 },
+                            { tile: t3, role: 'bottom_right', qGx: gx + 1, qGy: gy + 1 }
+                        ];
+
+                        quadDefs.forEach(({ tile, role }) => {
+                            if (!tile) return;
+                            const existingC = typeof tile.contains === 'object' && tile.contains ? tile.contains : {};
+                            tile.contains = {
+                                ...existingC,
+                                type: existingC.type || 'building',
+                                subtype: existingC.subtype || sKey0,
+                                building: existingC.building || sKey0,
+                                vendorGroupId,
+                                vendorAnchorId: anchorTileIdx,
+                                vendorAnchorMbIdx: anchorMbIdx,
+                                vendorAnchorGx: gx,
+                                vendorAnchorGy: gy,
+                                vendorCell: role
+                            };
+                            if (sharedAffiliation) {
+                                tile.affiliation = sharedAffiliation;
+                                tile.contains.affiliation = sharedAffiliation;
+                            }
+                            tile.building = tile.building || sKey0;
+                            tile.vendorGroupId = vendorGroupId;
+                            tile.vendorAnchorId = anchorTileIdx;
+                            tile.vendorCell = role;
+                        });
+                    }
+                } else if (is3x3 && gx <= 42 && gy <= 42) {
                     const vendorGroupId = cObj0?.vendorGroupId || t0.vendorGroupId || `superboard_building_${sKey0}_${gx}_${gy}`;
                     const anchorMbIdx = Math.floor(gy / 15) * 3 + Math.floor(gx / 15);
                     const anchorTileIdx = (gy % 15) * 15 + (gx % 15);
                     const sharedAffiliation = cObj0?.affiliation || t0.affiliation;
 
-                    const quadDefs = [
-                        { tile: t0, role: 'anchor', qGx: gx, qGy: gy },
-                        { tile: t1, role: 'top_right', qGx: gx + 1, qGy: gy },
-                        { tile: t2, role: 'bottom_left', qGx: gx, qGy: gy + 1 },
-                        { tile: t3, role: 'bottom_right', qGx: gx + 1, qGy: gy + 1 }
+                    const roles3x3 = [
+                        ['anchor', 'top_center', 'top_right'],
+                        ['middle_left', 'center', 'middle_right'],
+                        ['bottom_left', 'bottom_center', 'bottom_right']
                     ];
 
-                    quadDefs.forEach(({ tile, role }) => {
-                        if (!tile) return;
-                        const existingC = typeof tile.contains === 'object' && tile.contains ? tile.contains : {};
-                        tile.contains = {
-                            ...existingC,
-                            type: existingC.type || 'building',
-                            subtype: existingC.subtype || sKey0,
-                            building: existingC.building || sKey0,
-                            vendorGroupId,
-                            vendorAnchorId: anchorTileIdx,
-                            vendorAnchorMbIdx: anchorMbIdx,
-                            vendorAnchorGx: gx,
-                            vendorAnchorGy: gy,
-                            vendorCell: role
-                        };
-                        if (sharedAffiliation) {
-                            tile.affiliation = sharedAffiliation;
-                            tile.contains.affiliation = sharedAffiliation;
+                    for (let dy = 0; dy < 3; dy++) {
+                        for (let dx = 0; dx < 3; dx++) {
+                            const tile = getTileAt(gx + dx, gy + dy);
+                            if (!tile) continue;
+                            const role = roles3x3[dy][dx];
+                            const existingC = typeof tile.contains === 'object' && tile.contains ? tile.contains : {};
+                            tile.contains = {
+                                ...existingC,
+                                type: existingC.type || 'building',
+                                subtype: existingC.subtype || sKey0,
+                                building: existingC.building || sKey0,
+                                vendorGroupId,
+                                vendorAnchorId: anchorTileIdx,
+                                vendorAnchorMbIdx: anchorMbIdx,
+                                vendorAnchorGx: gx,
+                                vendorAnchorGy: gy,
+                                vendorCell: role
+                            };
+                            if (sharedAffiliation) {
+                                tile.affiliation = sharedAffiliation;
+                                tile.contains.affiliation = sharedAffiliation;
+                            }
+                            tile.building = tile.building || sKey0;
+                            tile.vendorGroupId = vendorGroupId;
+                            tile.vendorAnchorId = anchorTileIdx;
+                            tile.vendorCell = role;
                         }
-                        tile.building = tile.building || sKey0;
-                        tile.vendorGroupId = vendorGroupId;
-                        tile.vendorAnchorId = anchorTileIdx;
-                        tile.vendorCell = role;
-                    });
+                    }
                 }
             }
         }
 
         return sb;
+    };
+
+    getLargeBuildingAtSuperboardCoord = (superboard, gx, gy) => {
+        if (!superboard || !superboard.miniboards) return null;
+        if (typeof gx !== 'number' || typeof gy !== 'number' || gx < 0 || gy < 0 || gx >= 45 || gy >= 45) return null;
+
+        const getTile = (x, y) => {
+            if (x < 0 || y < 0 || x >= 45 || y >= 45) return null;
+            const mbIdx = Math.floor(y / 15) * 3 + Math.floor(x / 15);
+            const tIdx = (y % 15) * 15 + (x % 15);
+            return superboard.miniboards?.[mbIdx]?.tiles?.[tIdx] || null;
+        };
+
+        const targetTile = getTile(gx, gy);
+        if (!targetTile) return null;
+
+        const multi2x2Keys = [
+            'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
+            'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort',
+            'fungal_nursery', 'alchemist', 'merchant', 'dream_den'
+        ];
+        const multi3x3Keys = ['keep', 'fortress', 'fractured_monolith'];
+
+        const isMatchKey = (tile, keys) => {
+            if (!tile) return null;
+            const c = typeof tile.contains === 'object' && tile.contains !== null ? tile.contains : null;
+            const sKey = String(c?.subtype || tile.building || c?.building || c?.key || c?.name || tile.image || (c && c.type !== 'generator' && c.type !== 'building' ? c.type : '') || '').toLowerCase();
+            if (sKey.includes('observer') || sKey.includes('outpost') || sKey.includes('earthen_fort') || sKey.includes('hut') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('locus')) return null;
+            const match = keys.find(k => sKey.includes(k));
+            return match ? { match, sKey } : null;
+        };
+
+        // 1. If targetTile explicitly records its anchor coordinates
+        const cObj = typeof targetTile.contains === 'object' && targetTile.contains !== null ? targetTile.contains : null;
+        if (typeof cObj?.vendorAnchorGx === 'number' && typeof cObj?.vendorAnchorGy === 'number') {
+            const aTile = getTile(cObj.vendorAnchorGx, cObj.vendorAnchorGy);
+            if (aTile) {
+                return {
+                    anchorTile: aTile,
+                    anchorGx: cObj.vendorAnchorGx,
+                    anchorGy: cObj.vendorAnchorGy,
+                    buildingKey: cObj.subtype || cObj.building || targetTile.building,
+                    role: cObj.vendorCell || targetTile.vendorCell,
+                    isHuge: multi3x3Keys.some(k => String(cObj.subtype || cObj.building || '').toLowerCase().includes(k)),
+                    isLarge: true
+                };
+            }
+        }
+
+        // 2. Check if an anchor is within 2x2 range: dx in [0, 1], dy in [0, 1]
+        const check2x2 = [
+            { dx: 1, dy: 1, role: 'bottom_right' },
+            { dx: 0, dy: 1, role: 'bottom_left' },
+            { dx: 1, dy: 0, role: 'top_right' },
+            { dx: 0, dy: 0, role: 'anchor' }
+        ];
+        for (const { dx, dy, role } of check2x2) {
+            const agx = gx - dx;
+            const agy = gy - dy;
+            if (agx < 0 || agy < 0) continue;
+            const aTile = getTile(agx, agy);
+            if (!aTile) continue;
+            const aContains = typeof aTile.contains === 'object' && aTile.contains ? aTile.contains : null;
+            const aRole = aContains?.vendorCell || aTile.vendorCell;
+            if (aRole && aRole !== 'anchor') continue;
+
+            const match = isMatchKey(aTile, multi2x2Keys) || (aContains && (aContains.isMultiTile || aContains.isLarge) ? { match: 'large', sKey: aContains.subtype || aContains.building } : null);
+            if (match) {
+                return {
+                    anchorTile: aTile,
+                    anchorGx: agx,
+                    anchorGy: agy,
+                    buildingKey: match.sKey,
+                    role,
+                    isHuge: false,
+                    isLarge: true
+                };
+            }
+        }
+
+        // 3. Check if an anchor is within 3x3 range: dx in [0..2], dy in [0..2]
+        const roles3x3 = [
+            ['anchor', 'top_center', 'top_right'],
+            ['middle_left', 'center', 'middle_right'],
+            ['bottom_left', 'bottom_center', 'bottom_right']
+        ];
+        for (let dy = 2; dy >= 0; dy--) {
+            for (let dx = 2; dx >= 0; dx--) {
+                if (dx === 0 && dy === 0) continue;
+                const agx = gx - dx;
+                const agy = gy - dy;
+                if (agx < 0 || agy < 0) continue;
+                const aTile = getTile(agx, agy);
+                if (!aTile) continue;
+                const aContains = typeof aTile.contains === 'object' && aTile.contains ? aTile.contains : null;
+                const aRole = aContains?.vendorCell || aTile.vendorCell;
+                if (aRole && aRole !== 'anchor') continue;
+
+                const match = isMatchKey(aTile, multi3x3Keys) || (aContains && aContains.footprint?.length === 9 ? { match: 'huge', sKey: aContains.subtype || aContains.building } : null);
+                if (match) {
+                    return {
+                        anchorTile: aTile,
+                        anchorGx: agx,
+                        anchorGy: agy,
+                        buildingKey: match.sKey,
+                        role: roles3x3[dy][dx],
+                        isHuge: true,
+                        isLarge: false
+                    };
+                }
+            }
+        }
+
+        return null;
     };
 
     enterSuperboardPocketDimension = (type) => {
@@ -5671,6 +5835,7 @@ class DungeonPage extends React.Component {
             if (!this._templateSuperboards[type]) {
                 const existing = dungeon.superboards[type];
                 if (existing && Array.isArray(existing.miniboards) && existing.miniboards.length === 9) {
+                    if (!existing.floorTexture) existing.floorTexture = 'ground_grey';
                     this._templateSuperboards[type] = this.sanitizeSuperboardTiles(JSON.parse(JSON.stringify(existing)));
                 } else {
                     const miniboards = [];
@@ -5689,14 +5854,16 @@ class DungeonPage extends React.Component {
                         }
                         miniboards.push({ id: mbIdx, name: `superboard_slot_${mbIdx}`, tiles });
                     }
-                    this._templateSuperboards[type] = { miniboards };
+                    this._templateSuperboards[type] = { miniboards, floorTexture: 'ground_grey' };
                 }
             } else {
+                if (!this._templateSuperboards[type].floorTexture) this._templateSuperboards[type].floorTexture = 'ground_grey';
                 this._templateSuperboards[type] = this.sanitizeSuperboardTiles(this._templateSuperboards[type]);
             }
 
             // Always reset pocket dimension data on enter to a fresh unaltered clone from map template
             dungeon.superboards[type] = this.sanitizeSuperboardTiles(JSON.parse(JSON.stringify(this._templateSuperboards[type])));
+            if (!dungeon.superboards[type].floorTexture) dungeon.superboards[type].floorTexture = 'ground_grey';
             let superboard = dungeon.superboards[type];
             if (superboard && superboard.miniboards && bm && typeof bm.normalizeBoardTiles === 'function') {
                 superboard.miniboards.forEach(mb => {
@@ -6237,8 +6404,9 @@ class DungeonPage extends React.Component {
 
                 const isVoid = !mbTile || globalX >= 45 || globalY >= 45 || mbX >= 3 || mbY >= 3 || isExplicitVoid;
 
-                const defaultEmptyColor = superboardType === 'dark' ? 'rgba(25, 20, 45, 0.95)' : '#6b6057';
-                const tileColor = isVoid ? 'black' : (storedColor && storedColor !== 'black' && storedColor !== '#000000' && storedColor !== '#000' ? storedColor : defaultEmptyColor);
+                const defaultEmptyColor = superboardType === 'dark' ? 'rgba(25, 20, 45, 0.75)' : 'rgba(15, 15, 20, 0.55)';
+                const isExistingOpaqueTan = storedColor === '#6b6057' || storedColor === 'rgb(107, 96, 87)';
+                const tileColor = isVoid ? 'black' : ((storedColor && storedColor !== 'black' && storedColor !== '#000000' && storedColor !== '#000' && !isExistingOpaqueTan) ? storedColor : defaultEmptyColor);
 
                 if (mbTile && mbTile.terrain === undefined) {
                     mbTile.terrain = null;
@@ -6479,6 +6647,20 @@ class DungeonPage extends React.Component {
             (storedColor === 'black' || storedColor === '#000000' || storedColor === '#000');
         if (isVoid) return false;
 
+        const largeBldg = this.getLargeBuildingAtSuperboardCoord(superboard, macroGx, macroGy);
+        if (largeBldg) {
+            const bKey = String(largeBldg.buildingKey || '').toLowerCase();
+            if (bKey.includes('hut')) {
+                // hut is explicitly passable
+            } else if (bKey.includes('fractured_monolith')) {
+                if (!['anchor', 'top_right', 'bottom_left', 'bottom_right'].includes(largeBldg.role)) {
+                    return false;
+                }
+            } else {
+                return false;
+            }
+        }
+
         // If contains is explicitly empty_space, the tile is always passable regardless of stale building/image fields
         const cType = (t.contains && typeof t.contains === 'object' && t.contains !== null) ? t.contains.type : t.contains;
         const cSub = (t.contains && typeof t.contains === 'object' && t.contains !== null) ? t.contains.subtype : null;
@@ -6645,31 +6827,56 @@ class DungeonPage extends React.Component {
             const targetContains = targetTile?.contains;
             const targetContainsType = (targetContains && typeof targetContains === 'object' && targetContains !== null) ? targetContains.type : targetContains;
             const targetContainsSub = (targetContains && typeof targetContains === 'object' && targetContains !== null) ? targetContains.subtype : null;
-            // If the tile is explicitly empty space, skip all impassability checks (stale building fields cannot override this)
-            const isExplicitlyEmpty = targetContainsType === 'empty_space' || targetContainsType === 'empty' || targetContainsSub === 'empty_space' || targetContainsSub === 'empty';
 
-            const isTargetAllied = (targetContains && (targetContains.isAllied || targetContains.faction === 'player' || targetContains.placedBy === 'player' || targetContains.ownerId)) || targetTile?.placedBy === 'player';
-            const cSubtypeOrType = targetContains && typeof targetContains === 'object' ? (targetContains.subtype || targetContains.type) : null;
-            const structKey = cSubtypeOrType || targetTile?.building || targetContains?.building;
-            const isEnemyBuildingTarget = targetContains && ['earthen_fort', 'war_camp', 'war_fort'].includes(structKey) && !isTargetAllied && (typeof targetContains.hp === 'number' && targetContains.hp > 0);
+            const largeBldg = this.getLargeBuildingAtSuperboardCoord(superboard, macroGx, macroGy);
+            const effectiveAnchorTile = largeBldg?.anchorTile || targetTile;
+            const effectiveContains = effectiveAnchorTile?.contains;
+            const effectiveSubtypeOrType = (effectiveContains && typeof effectiveContains === 'object') ? (effectiveContains.subtype || effectiveContains.type) : null;
+            const effectiveStructKey = String(effectiveSubtypeOrType || effectiveAnchorTile?.building || effectiveContains?.building || largeBldg?.buildingKey || '').toLowerCase();
 
-            const buildingCheckResult = (bm.isImpassableBuildingTile
-                ? (bm.isImpassableBuildingTile(mockTile) || bm.isImpassableBuildingTile(targetTile))
-                : false) ||
+            let isBlockedByLargeBuilding = false;
+            if (largeBldg) {
+                if (effectiveStructKey.includes('hut')) {
+                    isBlockedByLargeBuilding = false;
+                } else if (effectiveStructKey.includes('fractured_monolith')) {
+                    isBlockedByLargeBuilding = !['anchor', 'top_right', 'bottom_left', 'bottom_right'].includes(largeBldg.role);
+                } else {
+                    isBlockedByLargeBuilding = true;
+                }
+            }
+
+            // If the tile is explicitly empty space, skip all impassability checks UNLESS blocked by a large building complex
+            const isExplicitlyEmpty = !isBlockedByLargeBuilding && (targetContainsType === 'empty_space' || targetContainsType === 'empty' || targetContainsSub === 'empty_space' || targetContainsSub === 'empty');
+
+            const isTargetAllied = (effectiveContains && (effectiveContains.isAllied || effectiveContains.faction === 'player' || effectiveContains.placedBy === 'player' || effectiveContains.ownerId)) || effectiveAnchorTile?.placedBy === 'player' || targetTile?.placedBy === 'player';
+            const isEnemyBuildingTarget = effectiveContains && ['earthen_fort', 'war_camp', 'war_fort'].some(k => effectiveStructKey.includes(k)) && !isTargetAllied && (typeof effectiveContains.hp === 'number' && effectiveContains.hp > 0);
+
+            const buildingCheckResult = isBlockedByLargeBuilding ||
+                (bm.isImpassableBuildingTile
+                    ? (bm.isImpassableBuildingTile(mockTile) || bm.isImpassableBuildingTile(targetTile) || bm.isImpassableBuildingTile(effectiveAnchorTile))
+                    : false) ||
                 this.isBuildingOrGeneratorTile(mockTile) ||
-                this.isBuildingOrGeneratorTile(targetTile);
+                this.isBuildingOrGeneratorTile(targetTile) ||
+                this.isBuildingOrGeneratorTile(effectiveAnchorTile);
             const isImpassable = !isExplicitlyEmpty && buildingCheckResult;
 
             if (isImpassable && !isEnemyBuildingTarget) {
-                const targetKey = String(targetTile?.contains?.subtype || targetTile?.contains?.type || targetTile?.building || targetTile?.image || '').toLowerCase();
+                const targetKey = effectiveStructKey;
                 if (!targetKey.includes('house') && !targetKey.includes('farm') && !targetKey.includes('hut') && !targetKey.includes('windmill') && !targetKey.includes('manor') && !targetKey.includes('estate')) {
-                    if (targetTile) {
-                        targetTile.globalX = macroGx;
-                        targetTile.globalY = macroGy;
-                        targetTile.mbIdx = mbIdx;
-                        targetTile.tIdx = tIdx;
+                    if (effectiveAnchorTile) {
+                        if (largeBldg) {
+                            effectiveAnchorTile.globalX = largeBldg.anchorGx;
+                            effectiveAnchorTile.globalY = largeBldg.anchorGy;
+                            effectiveAnchorTile.mbIdx = Math.floor(largeBldg.anchorGy / 15) * 3 + Math.floor(largeBldg.anchorGx / 15);
+                            effectiveAnchorTile.tIdx = (largeBldg.anchorGy % 15) * 15 + (largeBldg.anchorGx % 15);
+                        } else {
+                            effectiveAnchorTile.globalX = macroGx;
+                            effectiveAnchorTile.globalY = macroGy;
+                            effectiveAnchorTile.mbIdx = mbIdx;
+                            effectiveAnchorTile.tIdx = tIdx;
+                        }
                     }
-                    this.openGeneratorModal(targetTile);
+                    this.openGeneratorModal(effectiveAnchorTile);
                 }
                 return; // Block movement into impassable buildings
             }
@@ -6694,7 +6901,7 @@ class DungeonPage extends React.Component {
                 (hostileEntityAtTarget && (hostileEntityAtTarget.isPocketPygmy || hostileEntityAtTarget.subtype === 'pocket_pygmy' || hostileEntityAtTarget.type === 'pygmies'));
             const isAutomatonTarget = (targetContains && (targetContains.isAutomaton || targetContains.subtype === 'automaton') && !isTargetAllied) ||
                 (hostileEntityAtTarget && (hostileEntityAtTarget.isAutomaton || hostileEntityAtTarget.subtype === 'automaton'));
-            const activeCombatTarget = hostileEntityAtTarget || targetContains;
+            const activeCombatTarget = hostileEntityAtTarget || (isEnemyBuildingTarget ? effectiveContains : targetContains);
 
             if (isPocketPygmyTarget || isAutomatonTarget || isEnemyBuildingTarget) {
                 // Player crew attacks the target unit!
@@ -6744,12 +6951,12 @@ class DungeonPage extends React.Component {
                     }, 550);
                 }
 
-                const maxHpVal = activeCombatTarget?.maxHp || (isAutomatonTarget ? 30 : (isEnemyBuildingTarget ? (structKey.includes('war_fort') ? 100 : 50) : 10));
+                const maxHpVal = activeCombatTarget?.maxHp || (isAutomatonTarget ? 30 : (isEnemyBuildingTarget ? (effectiveStructKey.includes('war_fort') ? 100 : 50) : 10));
                 if (activeCombatTarget) {
                     activeCombatTarget.hp = (activeCombatTarget.hp || maxHpVal) - dmg;
                     activeCombatTarget.lastDamageTime = Date.now();
                 }
-                const targetName = isEnemyBuildingTarget ? (structKey.includes('war_fort') ? 'War Fort' : 'War Camp') : (isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy');
+                const targetName = isEnemyBuildingTarget ? (effectiveStructKey.includes('war_fort') ? 'War Fort' : 'War Camp') : (isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy');
 
                 // Mutual damage exchange: Target unit counter-attacks crew if it's a mobile unit
                 let unitCounterDmg = 0;
@@ -6758,16 +6965,17 @@ class DungeonPage extends React.Component {
                     this.damagePlayerCrew(unitCounterDmg);
                 }
 
-                if (isEnemyBuildingTarget && targetContains?.vendorGroupId) {
+                const vGroupId = effectiveContains?.vendorGroupId || targetContains?.vendorGroupId;
+                if (isEnemyBuildingTarget && vGroupId) {
                     const sb = this.state.dungeon?.superboards?.[this.state.superboardType];
                     if (sb) {
                         for (let mb of sb.miniboards) {
                             if (!mb || !mb.tiles) continue;
                             for (let t of mb.tiles) {
-                                if (t?.contains?.vendorGroupId === targetContains.vendorGroupId) {
-                                    t.contains.hp = targetContains.hp;
-                                    t.contains.lastDamageTime = targetContains.lastDamageTime;
-                                    if (targetContains.hp <= 0) t.contains.destroyedAt = Date.now();
+                                if (t?.contains?.vendorGroupId === vGroupId) {
+                                    t.contains.hp = activeCombatTarget.hp;
+                                    t.contains.lastDamageTime = activeCombatTarget.lastDamageTime;
+                                    if (activeCombatTarget.hp <= 0) t.contains.destroyedAt = Date.now();
                                 }
                             }
                         }
@@ -14457,6 +14665,7 @@ class DungeonPage extends React.Component {
     };
 
     renderEquipmentSection = () => {
+        if (this.state.inSuperboard) return null;
         const collapsed = this.isSectionCollapsed('equipment');
         const selected = this.state.selectedCrewMember || {};
         const findEquipped = (slot) => {
@@ -14965,7 +15174,7 @@ class DungeonPage extends React.Component {
                                                         const isGen = !isTerritory && (this.isBuildingOrGeneratorTile(tile) || !!tile.generatorData || isOutpost || isObserverPlatform || isWarStructure || isDreamDen || isMonolith);
                                                         if (isGen && !isVendor) {
                                                             if (isMonolith) {
-                                                                const containsObj = typeof contains === 'object' ? contains : null;
+                                                                const containsObj = typeof contains === 'object' && contains !== null ? contains : null;
                                                                 const affiliation = tile.affiliation || containsObj?.affiliation || tile.territory || containsObj?.territory;
                                                                 const isHostile = tile.isHostile || containsObj?.isHostile || containsObj?.faction === 'hostile' || containsObj?.faction === 'enemy' || keysToCheck.some(k => k.includes('dark_domain_monolith') || k.includes('dark_domain_node')) || affiliation === 'hostile' || affiliation === 'enemy';
                                                                 const isPlayerBuilt = (containsObj && (containsObj.placedBy === 'player' || containsObj.ownerId)) || tile.placedBy === 'player' || affiliation === 'player' || affiliation === 'friendly' || affiliation === 'crew';
@@ -14990,7 +15199,8 @@ class DungeonPage extends React.Component {
                                                                     isPlayerBuilt
                                                                 });
                                                             } else if (isWarStructure) {
-                                                                const isPB = (typeof contains === 'object' && (contains.placedBy === 'player' || contains.ownerId)) || tile.placedBy === 'player';
+                                                                const containsObj = typeof contains === 'object' && contains !== null ? contains : null;
+                                                                const isPB = (containsObj && (containsObj.placedBy === 'player' || containsObj.ownerId)) || tile.placedBy === 'player';
                                                                 mergedByTile.delete(`generator_${tile.id}`);
                                                                 mergedByTile.delete(`outpost_${tile.id}`);
                                                                 mergedByTile.delete(`observer_${tile.id}`);
@@ -16775,7 +16985,48 @@ class DungeonPage extends React.Component {
                 return;
             }
 
-            if (cmd === 'tele...' || cmd === 'teleport...' || cmd === 'tele' || cmd === 'teleport') {
+            if (cmd === 'tele') {
+                const targetCoordStr = 'level:-2,orientation:back,board:1,x:2,y:6';
+                const outputStr = `tele ${targetCoordStr}`;
+                const parsed = this.parseCoordinates(targetCoordStr);
+                if (parsed) {
+                    this.teleportCrew(parsed);
+                    this.setState(prev => ({
+                        devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, outputStr, `Teleported to Level ${parsed.levelId}, Orientation ${parsed.orientation}, Board ${parsed.boardIndex} @ (${parsed.x}, ${parsed.y})`],
+                        devConsoleInput: '',
+                        devConsoleOpen: false,
+                        keysLocked: false
+                    }));
+                } else {
+                    this.setState(prev => ({
+                        devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, outputStr],
+                        devConsoleInput: ''
+                    }));
+                }
+                e.preventDefault();
+                return;
+            }
+
+            if (cmd === 'exit' || cmd === 'exit-pocket' || cmd === 'exitpocket') {
+                if (this.state.inSuperboard) {
+                    this.setState(prev => ({
+                        devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Exited Pocket Dimension.'],
+                        devConsoleInput: '',
+                        devConsoleOpen: false,
+                        keysLocked: false
+                    }));
+                    this.exitSuperboardPocketDimension('✨ Exited Pocket Dimension');
+                } else {
+                    this.setState(prev => ({
+                        devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, "Error: 'exit' command is only available inside a Pocket Dimension."],
+                        devConsoleInput: ''
+                    }));
+                }
+                e.preventDefault();
+                return;
+            }
+
+            if (cmd === 'tele...' || cmd === 'teleport...' || cmd === 'teleport') {
                 this.setState({
                     showTeleportPopup: true,
                     devConsoleOpen: false,
@@ -17075,6 +17326,7 @@ class DungeonPage extends React.Component {
                         'launch cardgame — start a card duel battle',
                         'reagents — add 1 of each reagent type to inventory',
                         'lvl up / level up — level up the currently selected crew member',
+                        'exit / exit-pocket — exit the pocket dimension back to spawn point',
                         'tele <coordinates> — teleport to coordinates (copied from mapmaker)',
                         'tele / teleport / tele... / teleport... — open stored coordinates teleport modal',
                         'time — output the dungeon\'s current universal PST time',
@@ -20241,6 +20493,10 @@ class DungeonPage extends React.Component {
             if (isStructureAdjacent || manhattanDist <= 1 || isAdjacent) {
                 this.illuminateBuildingTile(actualTile);
                 this.triggerVendorEncounter('dream_den', actualTile);
+                return;
+            } else {
+                this.illuminateBuildingTile(actualTile);
+                this.displayMessage('Move adjacent to the Dream Den to interact with it.');
                 return;
             }
         }
@@ -32049,11 +32305,12 @@ class DungeonPage extends React.Component {
                                 overflow: 'hidden',
                                 width: this.state.boardSize + 'px', height: this.state.boardSize + 'px',
                                 backgroundColor: 'white',
-                                backgroundImage: (this.state.inSuperboard && this.state.dungeon?.superboards?.[this.state.superboardType]?.floorTexture)
-                                    ? `url(${this.state.dungeon.superboards[this.state.superboardType].floorTexture})`
-                                    : ((this.props.boardManager?.currentLevel?.floorTexture)
-                                        ? `url(${this.props.boardManager.currentLevel.floorTexture})`
-                                        : undefined),
+                                backgroundImage: (() => {
+                                    const rawSuper = (this.state.inSuperboard && (this.state.dungeon?.superboards?.[this.state.superboardType]?.floorTexture || 'ground_grey'));
+                                    const rawLvl = this.props.boardManager?.currentLevel?.floorTexture;
+                                    const resolved = resolveFloorTexture(rawSuper || rawLvl || (this.state.inSuperboard ? 'ground_grey' : null));
+                                    return resolved ? `url(${resolved})` : undefined;
+                                })(),
                                 backgroundSize: this.state.inSuperboard ? '300% 300%' : '100% 100%',
                                 backgroundPosition: this.state.inSuperboard ? `${((this.state.superboardViewportOrigin?.vx || 0) / 30) * 100}% ${((this.state.superboardViewportOrigin?.vy || 0) / 30) * 100}%` : 'center',
                                 touchAction: 'none'
@@ -32119,14 +32376,17 @@ class DungeonPage extends React.Component {
                                     const isVoidTile = (bm && typeof bm.isVoidTile === 'function')
                                         ? bm.isVoidTile(tile)
                                         : (tile.isVoid === true || (tile.contains === 'void' || (tile.contains && tile.contains.type === 'void')));
-                                    const defaultEmptyColor = (this.state.inSuperboard && !isVoidTile) ? '#6b6057' : 'black';
+                                    const defaultEmptyColor = (this.state.inSuperboard && !isVoidTile)
+                                        ? (this.state.superboardType === 'dark' ? 'rgba(25, 20, 45, 0.75)' : 'rgba(15, 15, 20, 0.55)')
+                                        : 'black';
+                                    const isExistingOpaqueTan = tile.color === '#6b6057' || tile.color === 'rgb(107, 96, 87)';
                                     const rawColor = isVoidTile
                                         ? 'black'
-                                        : (tile.color && tile.color !== 'null' && tile.color !== 'undefined' && (!this.state.inSuperboard || (tile.color !== 'black' && tile.color !== '#000000' && tile.color !== '#000'))
+                                        : (tile.color && tile.color !== 'null' && tile.color !== 'undefined' && (!this.state.inSuperboard || (tile.color !== 'black' && tile.color !== '#000000' && tile.color !== '#000' && !isExistingOpaqueTan))
                                             ? tile.color
-                                            : (this.state.inSuperboard ? '#6b6057' : defaultEmptyColor));
+                                            : (this.state.inSuperboard ? defaultEmptyColor : 'black'));
                                     const isMonsterTile = bm && typeof bm.isMonster === 'function' ? bm.isMonster(tile) : false;
-                                    const safeColor = (String(rawColor).includes('ff0000') && (!isMonsterTile || !this.state.debugMode)) ? ((this.state.inSuperboard && !isVoidTile) ? '#6b6057' : 'black') : rawColor;
+                                    const safeColor = (String(rawColor).includes('ff0000') && (!isMonsterTile || !this.state.debugMode)) ? ((this.state.inSuperboard && !isVoidTile) ? defaultEmptyColor : 'black') : rawColor;
 
                                     const isPlayerOnTile = playerIdx !== null && tile.id === playerIdx;
 

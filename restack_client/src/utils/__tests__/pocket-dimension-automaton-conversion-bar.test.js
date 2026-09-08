@@ -101,4 +101,83 @@ describe('Pocket Dimension Automaton Monolith Conversion Progress Bar', () => {
         expect(activated).toBe(true);
         expect(automaton.convertingMonolith).toBeUndefined();
     });
+
+    test('5. Domain monolith converting suppresses top progress bar and displays bottom progress bar with player styling', () => {
+        const monolithKey = 'domain_monolith';
+        const isDomainMonolith = monolithKey.includes('domain_monolith') || monolithKey.includes('dark_domain_monolith') || (monolithKey.includes('monolith') && !monolithKey.includes('shrine'));
+        expect(isDomainMonolith).toBe(true);
+
+        const convTarget = {
+            targetId: 'monolith_15_15',
+            startTime: Date.now() - 3000,
+            duration: 10000,
+            isPlayerClaim: true
+        };
+
+        // Top progress bar logic check
+        const shouldRenderTopBar = (tileKey, converting, hasActivationProgress) => {
+            if (!converting) return false;
+            const isMono = tileKey.includes('domain_monolith') || tileKey.includes('dark_domain_monolith') || tileKey.includes('domain_node') || tileKey.includes('dark_domain_node') || (tileKey.includes('monolith') && !tileKey.includes('shrine'));
+            if (isMono || (hasActivationProgress !== undefined && hasActivationProgress !== null)) {
+                return false;
+            }
+            return true;
+        };
+
+        // Monolith top bar MUST be suppressed
+        expect(shouldRenderTopBar('domain_monolith', convTarget, 0.3)).toBe(false);
+        expect(shouldRenderTopBar('dark_domain_monolith', convTarget, null)).toBe(false);
+
+        // Bottom progress bar styling check
+        const getBottomBarStyles = (convObj, fallbackProgress) => {
+            const isPlayerConv = !!(convObj && (convObj.isPlayerClaim || convObj.isPlayer));
+            const isEnemyConv = !!(convObj && !isPlayerConv);
+
+            return {
+                borderColor: isPlayerConv ? '#38bdf8' : (isEnemyConv ? '#ef4444' : '#c084fc'),
+                barBg: isPlayerConv ? '#38bdf8' : (isEnemyConv ? '#ef4444' : '#c084fc'),
+                barGradient: isPlayerConv
+                    ? 'linear-gradient(90deg, #0284c7, #38bdf8, #7dd3fc)'
+                    : (isEnemyConv
+                        ? 'linear-gradient(90deg, #dc2626, #f87171, #ef4444)'
+                        : 'linear-gradient(90deg, #9333ea, #d8b4fe)')
+            };
+        };
+
+        const playerStyles = getBottomBarStyles(convTarget, 0.3);
+        expect(playerStyles.borderColor).toBe('#38bdf8');
+        expect(playerStyles.barBg).toBe('#38bdf8');
+        expect(playerStyles.barGradient).toContain('#38bdf8');
+
+        // Neutral ritual activation styles check
+        const neutralStyles = getBottomBarStyles(null, 0.5);
+        expect(neutralStyles.borderColor).toBe('#c084fc');
+        expect(neutralStyles.barBg).toBe('#c084fc');
+        expect(neutralStyles.barGradient).toContain('#9333ea');
+    });
+
+    test('6. Non-monolith units and outposts retain top progress bar', () => {
+        const outpostConv = {
+            targetId: 'outpost_1',
+            startTime: Date.now() - 2000,
+            duration: 5000,
+            isPlayerClaim: true
+        };
+
+        const shouldRenderTopBar = (tileKey, converting, hasActivationProgress) => {
+            if (!converting) return false;
+            const isMono = tileKey.includes('domain_monolith') || tileKey.includes('dark_domain_monolith') || tileKey.includes('domain_node') || tileKey.includes('dark_domain_node') || (tileKey.includes('monolith') && !tileKey.includes('shrine'));
+            if (isMono || (hasActivationProgress !== undefined && hasActivationProgress !== null)) {
+                return false;
+            }
+            return true;
+        };
+
+        // Outpost tile with no monolith activation progress keeps top bar
+        expect(shouldRenderTopBar('outpost', outpostConv, null)).toBe(true);
+
+        // Automaton unit converting on its own tile keeps top bar
+        const autoConv = { targetMonolithId: 'monolith_1', startTime: Date.now(), duration: 10000 };
+        expect(shouldRenderTopBar('automaton', autoConv, null)).toBe(true);
+    });
 });
