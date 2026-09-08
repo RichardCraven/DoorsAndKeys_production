@@ -6672,6 +6672,10 @@ class DungeonPage extends React.Component {
 
         if (this.isPocketTileTree(t)) return false;
 
+        const bldgKey = String(t.building || t.contains?.building || t.contains?.subtype || t.contains?.type || '').toLowerCase();
+        const isBldg = ['earthen_fort', 'outpost', 'war_camp', 'war_fort', 'wall', 'keep', 'fortress', 'sawmill', 'mine', 'larder', 'vat', 'monolith'].some(k => bldgKey.includes(k));
+        if (isBldg) return false;
+
         const bm = this.props.boardManager;
         if (bm && bm.isImpassableBuildingTile && bm.isImpassableBuildingTile(t)) {
             return false;
@@ -6834,6 +6838,32 @@ class DungeonPage extends React.Component {
 
             const largeBldg = this.getLargeBuildingAtSuperboardCoord(superboard, macroGx, macroGy);
             const effectiveAnchorTile = largeBldg?.anchorTile || targetTile;
+            if (effectiveAnchorTile && effectiveAnchorTile.building && (!effectiveAnchorTile.contains || typeof effectiveAnchorTile.contains !== 'object')) {
+                effectiveAnchorTile.contains = {
+                    type: 'building',
+                    subtype: effectiveAnchorTile.building,
+                    building: effectiveAnchorTile.building,
+                    affiliation: effectiveAnchorTile.affiliation || 'hostile',
+                    placedBy: effectiveAnchorTile.placedBy || 'automaton',
+                    hp: 40,
+                    maxHp: 40,
+                    level: 1,
+                    id: `healed_${effectiveAnchorTile.building}_${macroGx}_${macroGy}`
+                };
+            }
+            if (targetTile && targetTile.building && (!targetTile.contains || typeof targetTile.contains !== 'object')) {
+                targetTile.contains = {
+                    type: 'building',
+                    subtype: targetTile.building,
+                    building: targetTile.building,
+                    affiliation: targetTile.affiliation || 'hostile',
+                    placedBy: targetTile.placedBy || 'automaton',
+                    hp: 40,
+                    maxHp: 40,
+                    level: 1,
+                    id: `healed_${targetTile.building}_${macroGx}_${macroGy}`
+                };
+            }
             const effectiveContains = effectiveAnchorTile?.contains;
             const effectiveSubtypeOrType = (effectiveContains && typeof effectiveContains === 'object') ? (effectiveContains.subtype || effectiveContains.type) : null;
             const effectiveStructKey = String(effectiveSubtypeOrType || effectiveAnchorTile?.building || effectiveContains?.building || largeBldg?.buildingKey || '').toLowerCase();
@@ -6955,12 +6985,12 @@ class DungeonPage extends React.Component {
                     }, 550);
                 }
 
-                const maxHpVal = activeCombatTarget?.maxHp || (isAutomatonTarget ? 30 : (isEnemyBuildingTarget ? (effectiveStructKey.includes('war_fort') ? 100 : 50) : 10));
+                const maxHpVal = activeCombatTarget?.maxHp || (isAutomatonTarget ? 30 : (isEnemyBuildingTarget ? (effectiveStructKey.includes('war_fort') ? 100 : (effectiveStructKey.includes('earthen_fort') ? 40 : 50)) : 10));
                 if (activeCombatTarget) {
                     activeCombatTarget.hp = (activeCombatTarget.hp || maxHpVal) - dmg;
                     activeCombatTarget.lastDamageTime = Date.now();
                 }
-                const targetName = isEnemyBuildingTarget ? (effectiveStructKey.includes('war_fort') ? 'War Fort' : 'War Camp') : (isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy');
+                const targetName = isEnemyBuildingTarget ? (effectiveStructKey.includes('earthen_fort') ? 'Earthen Fort' : (effectiveStructKey.includes('war_fort') ? 'War Fort' : (effectiveStructKey.includes('outpost') ? 'Outpost' : 'War Camp'))) : (isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy');
 
                 // Mutual damage exchange: Target unit counter-attacks crew if it's a mobile unit
                 let unitCounterDmg = 0;
@@ -6996,6 +7026,24 @@ class DungeonPage extends React.Component {
                         if (targetContains) {
                             targetContains.hp = 0;
                             if (!targetContains.destroyedAt) targetContains.destroyedAt = Date.now();
+                        }
+                        if (effectiveContains) {
+                            effectiveContains.hp = 0;
+                            if (!effectiveContains.destroyedAt) effectiveContains.destroyedAt = Date.now();
+                        }
+                        if (effectiveStructKey.includes('earthen_fort')) {
+                            if (effectiveAnchorTile) {
+                                effectiveAnchorTile.contains = null;
+                                effectiveAnchorTile.building = null;
+                                effectiveAnchorTile.image = null;
+                                delete effectiveAnchorTile.affiliation;
+                            }
+                            if (targetTile) {
+                                targetTile.contains = null;
+                                targetTile.building = null;
+                                targetTile.image = null;
+                                delete targetTile.affiliation;
+                            }
                         }
                         this.displayMessage(`💥 Crew dealt ${dmg} damage and destroyed the ${targetName}!`);
                     } else {
@@ -10976,6 +11024,8 @@ class DungeonPage extends React.Component {
             if (fromTile.isEnemySpawn === true || fromTile.originalMarker === 'narrative') {
                 fromTile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
                 fromTile.image = images.narrative || 'narrative';
+            } else if (fromTile.building || (fromTile.contains && (fromTile.contains.type === 'building' || fromTile.contains.building))) {
+                // Preserve building contains and image on fromTile!
             } else {
                 fromTile.contains = null;
                 fromTile.image = null;
@@ -11936,7 +11986,21 @@ class DungeonPage extends React.Component {
             const mbY = Math.floor(mbIdx / 3);
             for (let tIdx = 0; tIdx < 225; tIdx++) {
                 const t = mb.tiles[tIdx];
-                if (!t || !t.contains) continue;
+                if (!t) continue;
+                if (t.building && (!t.contains || typeof t.contains !== 'object')) {
+                    t.contains = {
+                        type: 'building',
+                        subtype: t.building,
+                        building: t.building,
+                        affiliation: t.affiliation || 'hostile',
+                        placedBy: t.placedBy || 'automaton',
+                        hp: 40,
+                        maxHp: 40,
+                        level: 1,
+                        id: `healed_${t.building}_${mbIdx}_${tIdx}`
+                    };
+                }
+                if (!t.contains) continue;
                 const targetObj = typeof t.contains === 'object' ? t.contains : null;
                 if (!targetObj) continue;
 
@@ -12262,13 +12326,26 @@ class DungeonPage extends React.Component {
                     if (targetUnit.hp <= 0) {
                         if (isBuilding) {
                             targetUnit.hp = 0;
-                            targetUnit.affiliation = 'neutral';
-                            targetUnit.placedBy = null;
-                            targetUnit.owned = false;
-                            if (targetEnemyUnit.tile) targetEnemyUnit.tile.affiliation = 'neutral';
-                            if (targetUnit.generatorData) targetUnit.generatorData.activated = false;
-                            if (isCombatVisible) {
-                                this.displayMessage(`💥 A ${targetName} was reduced to 0 HP and lost its affiliation!`);
+                            targetUnit.destroyedAt = now;
+                            if (String(structKey).includes('earthen_fort')) {
+                                if (targetEnemyUnit.tile) {
+                                    targetEnemyUnit.tile.contains = null;
+                                    targetEnemyUnit.tile.building = null;
+                                    targetEnemyUnit.tile.image = null;
+                                    delete targetEnemyUnit.tile.affiliation;
+                                }
+                                if (isCombatVisible) {
+                                    this.displayMessage(`💥 An Earthen Fort was destroyed!`);
+                                }
+                            } else {
+                                targetUnit.affiliation = 'neutral';
+                                targetUnit.placedBy = null;
+                                targetUnit.owned = false;
+                                if (targetEnemyUnit.tile) targetEnemyUnit.tile.affiliation = 'neutral';
+                                if (targetUnit.generatorData) targetUnit.generatorData.activated = false;
+                                if (isCombatVisible) {
+                                    this.displayMessage(`💥 A ${targetName} was reduced to 0 HP and lost its affiliation!`);
+                                }
                             }
                         } else {
                             if (targetUnit.isAutomaton || targetUnit.subtype === 'automaton') {
@@ -12749,15 +12826,12 @@ class DungeonPage extends React.Component {
 
                         if (adjEmpty.length > 0) {
                             const stepTile = adjEmpty[0];
-                            currentTile.building = 'earthen_fort';
-                            currentTile.contains = newFort;
-                            currentTile.image = images.buildable_earthen_fort || images.earthen_fort || 'earthen_fort';
-                            currentTile.affiliation = 'hostile';
                             this.movePocketPygmyUnit(superboard, auto.mbIdx, auto.tIdx, stepTile.mbIdx, stepTile.tIdx, auto.gx, auto.gy, stepTile.gx, stepTile.gy, { skipSetState: true, entities });
-                        } else {
-                            currentTile.building = 'earthen_fort';
-                            currentTile.affiliation = 'hostile';
                         }
+                        currentTile.building = 'earthen_fort';
+                        currentTile.contains = newFort;
+                        currentTile.image = images.buildable_earthen_fort || images.earthen_fort || 'earthen_fort';
+                        currentTile.affiliation = 'hostile';
 
                         if (this.isSuperboardCoordVisibleToUser(auto.gx, auto.gy, targetTile)) {
                             this.displayMessage(`🤖 Hostile Automaton constructed an Earthen Fort at (${auto.gx}, ${auto.gy})!`);
@@ -12811,15 +12885,12 @@ class DungeonPage extends React.Component {
 
                         if (adjEmpty.length > 0) {
                             const stepTile = adjEmpty[0];
-                            currentTile.building = 'outpost';
-                            currentTile.contains = newOutpost;
-                            currentTile.image = images.outpost || 'outpost';
-                            currentTile.affiliation = 'hostile';
                             this.movePocketPygmyUnit(superboard, auto.mbIdx, auto.tIdx, stepTile.mbIdx, stepTile.tIdx, auto.gx, auto.gy, stepTile.gx, stepTile.gy, { skipSetState: true, entities });
-                        } else {
-                            currentTile.building = 'outpost';
-                            currentTile.affiliation = 'hostile';
                         }
+                        currentTile.building = 'outpost';
+                        currentTile.contains = newOutpost;
+                        currentTile.image = images.outpost || 'outpost';
+                        currentTile.affiliation = 'hostile';
 
                         if (this.isSuperboardCoordVisibleToUser(auto.gx, auto.gy, targetTile)) {
                             this.displayMessage(`🤖 Hostile Automaton constructed an Outpost Tower at (${auto.gx}, ${auto.gy})!`);
