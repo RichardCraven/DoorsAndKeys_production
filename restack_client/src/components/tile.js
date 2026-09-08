@@ -2304,11 +2304,12 @@ function Tile(props) {
                             : (isEncompassedByFriendlyDomain 
                                 ? `scale(1.5) ${rotationDeg ? `rotate(${rotationDeg}deg)` : ''}`.trim() 
                                 : (rotationDeg ? `rotate(${rotationDeg}deg)` : 'none')))));
-                const portraitTransform = flipTransform ? (baseTransform === 'none' ? flipTransform : `${flipTransform} ${baseTransform}`) : baseTransform;
+                const portraitTransform = flipTransform ? `${baseTransform} ${flipTransform}`.trim() : baseTransform;
+                const isUnitDying = !!(props.isDying || containsObj?.isDying || props.contains?.isDying || currentContains?.isDying);
 
                 return (
                     <>
-                        <div className="portrait" style={{
+                        <div className={`portrait ${isUnitDying ? 'automaton-death-anim' : ''}`.trim()} style={{
                              position: 'absolute',
                              top: 0, left: 0, right: 0, bottom: 0,
                              backgroundImage: toCssUrl(resolvedPortraitUrl),

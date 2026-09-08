@@ -500,6 +500,57 @@ describe('Pocket Dimension Multi-Tile (2x2) Structure Rendering and Sanitization
             expect(pageInstance.updateSuperboardViewport).toHaveBeenCalled();
         });
 
+        test('finishConstruction safely places non-generator buildings like hut without crashing on def.key', () => {
+            const pageInstance = new DungeonPage({});
+            const miniboards = [];
+            for (let m = 0; m < 9; m++) {
+                miniboards.push({
+                    id: m,
+                    tiles: new Array(225).fill(null).map((_, idx) => ({
+                        id: idx,
+                        contains: { type: 'empty_space' },
+                        color: '#6b6057'
+                    }))
+                });
+            }
+            const sb = { miniboards };
+
+            pageInstance.state = {
+                inSuperboard: true,
+                superboardPlayerPos: { gx: 5, gy: 5 },
+                superboardType: 'pocket_plains',
+                dungeon: {
+                    superboards: {
+                        pocket_plains: sb
+                    }
+                }
+            };
+            pageInstance.setState = jest.fn((patch, cb) => {
+                Object.assign(pageInstance.state, patch);
+                if (cb) cb();
+            });
+            pageInstance.updateSuperboardViewport = jest.fn();
+
+            expect(() => {
+                pageInstance.finishConstruction({
+                    buildingDef: {
+                        key: 'hut',
+                        name: 'Hut',
+                        imageKey: 'buildable_hut'
+                    },
+                    targetTileIdx: 80,
+                    superboardGx: 5,
+                    superboardGy: 5,
+                    superboardType: 'pocket_plains',
+                    footprint: [80]
+                });
+            }).not.toThrow();
+
+            const tile = sb.miniboards[0].tiles[80];
+            expect(tile.building).toBe('hut');
+            expect(tile.contains.subtype).toBe('hut');
+        });
+
         test('finishConstruction floors fractional coordinates (e.g. 7.5, 8.5) and ensures observer platform persists and grants vision', () => {
             const pageInstance = new DungeonPage({});
             const miniboards = [];

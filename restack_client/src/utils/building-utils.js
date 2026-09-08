@@ -99,73 +99,61 @@ export function clearBuildingStaminaPenalties(crew) {
 }
 
 /**
- * Checks if the living crew has a Wizard, Summoner, or other arcane unit.
- * @param {Array} crew 
+ * Checks if a member is an arcane unit (Wizard, Summoner, Sage, etc.).
+ * @param {Object} member
  * @returns {boolean}
  */
-export function hasArcaneUnit(crew = []) {
-    if (!Array.isArray(crew)) return false;
-    return crew.some(member => {
-        if (!member) return false;
-        const isDead = member.dead === true || member.isDead === true || (typeof member.hp === 'number' && member.hp <= 0);
-        if (isDead) return false;
-
-        const stringValues = [];
-        for (const [key, value] of Object.entries(member)) {
-            if (typeof value === 'string') {
-                stringValues.push(value.toLowerCase());
-            } else if (value && typeof value === 'object' && !Array.isArray(value)) {
-                for (const subVal of Object.values(value)) {
-                    if (typeof subVal === 'string') {
-                        stringValues.push(subVal.toLowerCase());
-                    }
-                }
-            }
-        }
-        const searchStr = stringValues.join(' ');
-
-        return (
-            searchStr.includes('wizard') ||
-            searchStr.includes('summoner') ||
-            searchStr.includes('summon') ||
-            searchStr.includes('zildjikan') ||
-            searchStr.includes('arcane') ||
-            searchStr.includes('spellcaster') ||
-            searchStr.includes('sage')
-        );
-    });
-}
-
-export function hasEngineerUnit(crew = []) {
-    if (!Array.isArray(crew)) return false;
-    return crew.some(member => {
-        if (!member) return false;
-        const isDead = member.dead === true || member.isDead === true || (typeof member.hp === 'number' && member.hp <= 0);
-        if (isDead) return false;
-
-        const stringValues = [];
-        for (const [key, value] of Object.entries(member)) {
-            if (typeof value === 'string') {
-                stringValues.push(value.toLowerCase());
-            } else if (value && typeof value === 'object' && !Array.isArray(value)) {
-                for (const subVal of Object.values(value)) {
-                    if (typeof subVal === 'string') {
-                        stringValues.push(subVal.toLowerCase());
-                    }
-                }
-            }
-        }
-        const searchStr = stringValues.join(' ');
-
-        return searchStr.includes('engineer') || searchStr.includes('machinist');
-    });
-}
-
-export function isEngineerSelected(member) {
+export function isArcaneUnit(member) {
     if (!member) return false;
-    const isDead = member.dead === true || member.isDead === true || (typeof member.hp === 'number' && member.hp <= 0);
-    if (isDead || member.detached) return false;
+    const stringValues = [];
+    for (const [key, value] of Object.entries(member)) {
+        if (typeof value === 'string') {
+            stringValues.push(value.toLowerCase());
+        } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+            for (const subVal of Object.values(value)) {
+                if (typeof subVal === 'string') {
+                    stringValues.push(subVal.toLowerCase());
+                }
+            }
+        }
+    }
+    const searchStr = stringValues.join(' ');
 
+    return (
+        searchStr.includes('wizard') ||
+        searchStr.includes('summoner') ||
+        searchStr.includes('summon') ||
+        searchStr.includes('zildjikan') ||
+        searchStr.includes('arcane') ||
+        searchStr.includes('spellcaster') ||
+        searchStr.includes('sage')
+    );
+}
+
+export function isArcaneSelected(member) {
+    return isArcaneUnit(member);
+}
+
+/**
+ * Checks if the crew has a Wizard, Summoner, or other arcane unit,
+ * or if an arcane unit is currently selected.
+ * @param {Array} crew 
+ * @param {Object} [selectedCrewMember]
+ * @returns {boolean}
+ */
+export function hasArcaneUnit(crew = [], selectedCrewMember = null) {
+    if (selectedCrewMember && isArcaneUnit(selectedCrewMember)) return true;
+    if (!Array.isArray(crew)) return false;
+    return crew.some(member => isArcaneUnit(member));
+}
+
+/**
+ * Checks if a member is an engineer or machinist.
+ * @param {Object} member
+ * @returns {boolean}
+ */
+export function isEngineerUnit(member) {
+    if (!member) return false;
     const stringValues = [];
     for (const [key, value] of Object.entries(member)) {
         if (typeof value === 'string') {
@@ -180,4 +168,23 @@ export function isEngineerSelected(member) {
     }
     const searchStr = stringValues.join(' ');
     return searchStr.includes('engineer') || searchStr.includes('machinist');
+}
+
+/**
+ * Checks if the crew has an Engineer unit, or if an engineer is currently selected.
+ * @param {Array} crew 
+ * @param {Object} [selectedCrewMember]
+ * @returns {boolean}
+ */
+export function hasEngineerUnit(crew = [], selectedCrewMember = null) {
+    if (selectedCrewMember && isEngineerUnit(selectedCrewMember)) return true;
+    if (!Array.isArray(crew)) return false;
+    return crew.some(member => isEngineerUnit(member));
+}
+
+export function isEngineerSelected(member) {
+    if (!member) return false;
+    const isDead = member.dead === true || member.isDead === true || (typeof member.hp === 'number' && member.hp <= 0);
+    if (isDead || member.detached) return false;
+    return isEngineerUnit(member);
 }

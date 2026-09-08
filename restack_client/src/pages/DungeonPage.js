@@ -3277,6 +3277,8 @@ class DungeonPage extends React.Component {
         delete meta.activatedGenerators;
         delete meta.disabledOutposts;
         delete meta.failedMonolithActivations;
+        delete meta.activatedLoci;
+        delete meta.activatedLocusRecords;
         if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
             this.props.crewManager.crew.forEach(c => {
                 if (c) {
@@ -3508,6 +3510,8 @@ class DungeonPage extends React.Component {
                         console.log(`[DungeonPage] User ${user.username || user._id} instance registration has timed out. Clearing registration.`);
                         delete userMeta.dungeonId;
                         delete userMeta.dungeonEntryTimestamp;
+                        delete userMeta.activatedLoci;
+                        delete userMeta.activatedLocusRecords;
                         try {
                             await updateUserRequest(user._id, userMeta);
                         } catch (err) {
@@ -6999,31 +7003,62 @@ class DungeonPage extends React.Component {
                             if (!targetTile.isSnuffedOut && targetTile.originalMarker !== 'narrative_visited') {
                                 this._automatonRespawnTime = Date.now() + 10000;
                             }
-                        } else if (activeCombatTarget.homeStructureKey) {
-                            if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
-                            this._pocketStructureRespawns.push({
-                                readyTime: Date.now() + 10000,
-                                structureKey: activeCombatTarget.homeStructureKey,
-                                mbIdx,
-                                tIdx,
-                                superboardType
-                            });
-                        }
-                        if (targetTile.isSnuffedOut || targetTile.originalMarker === 'narrative_visited' || targetTile.contains?.type === 'narrative_visited') {
-                            targetTile.contains = { type: 'narrative_visited', subtype: null, isEnemySpawn: false, isSnuffedOut: true };
-                            targetTile.image = images.narrative_visited || 'narrative_visited';
-                            targetTile.isEnemySpawn = false;
-                            targetTile.originalMarker = 'narrative_visited';
-                        } else if (targetTile.isEnemySpawn === true || targetTile.originalMarker === 'narrative') {
-                            targetTile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
-                            targetTile.image = images.narrative || 'narrative';
-                            targetTile.isEnemySpawn = true;
-                            targetTile.originalMarker = 'narrative';
+                            targetTile.contains = {
+                                ...(targetTile.contains || {}),
+                                hp: 0,
+                                isDying: true,
+                                isAutomaton: true,
+                                subtype: 'automaton',
+                                image: images.automaton || 'automaton'
+                            };
+                            const tileToClear = targetTile;
+                            const bm = this.props.boardManager;
+                            setTimeout(() => {
+                                if (tileToClear.isSnuffedOut || tileToClear.originalMarker === 'narrative_visited' || tileToClear.contains?.type === 'narrative_visited') {
+                                    tileToClear.contains = { type: 'narrative_visited', subtype: null, isEnemySpawn: false, isSnuffedOut: true };
+                                    tileToClear.image = images.narrative_visited || 'narrative_visited';
+                                    tileToClear.isEnemySpawn = false;
+                                    tileToClear.originalMarker = 'narrative_visited';
+                                } else if (tileToClear.isEnemySpawn === true || tileToClear.originalMarker === 'narrative') {
+                                    tileToClear.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                    tileToClear.image = images.narrative || 'narrative';
+                                    tileToClear.isEnemySpawn = true;
+                                    tileToClear.originalMarker = 'narrative';
+                                } else {
+                                    tileToClear.contains = null;
+                                    tileToClear.image = null;
+                                    tileToClear.isEnemySpawn = false;
+                                    tileToClear.originalMarker = null;
+                                }
+                                if (typeof bm?.refreshTiles === 'function') bm.refreshTiles();
+                            }, 1800);
                         } else {
-                            targetTile.contains = null;
-                            targetTile.image = null;
-                            targetTile.isEnemySpawn = false;
-                            targetTile.originalMarker = null;
+                            if (activeCombatTarget.homeStructureKey) {
+                                if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
+                                this._pocketStructureRespawns.push({
+                                    readyTime: Date.now() + 10000,
+                                    structureKey: activeCombatTarget.homeStructureKey,
+                                    mbIdx,
+                                    tIdx,
+                                    superboardType
+                                });
+                            }
+                            if (targetTile.isSnuffedOut || targetTile.originalMarker === 'narrative_visited' || targetTile.contains?.type === 'narrative_visited') {
+                                targetTile.contains = { type: 'narrative_visited', subtype: null, isEnemySpawn: false, isSnuffedOut: true };
+                                targetTile.image = images.narrative_visited || 'narrative_visited';
+                                targetTile.isEnemySpawn = false;
+                                targetTile.originalMarker = 'narrative_visited';
+                            } else if (targetTile.isEnemySpawn === true || targetTile.originalMarker === 'narrative') {
+                                targetTile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                targetTile.image = images.narrative || 'narrative';
+                                targetTile.isEnemySpawn = true;
+                                targetTile.originalMarker = 'narrative';
+                            } else {
+                                targetTile.contains = null;
+                                targetTile.image = null;
+                                targetTile.isEnemySpawn = false;
+                                targetTile.originalMarker = null;
+                            }
                         }
                         if (unitCounterDmg > 0) {
                             this.displayMessage(`💥 Crew dealt ${dmg} damage and slain ${targetName} (${targetName} dealt ${unitCounterDmg} counter-damage to crew)!`);
@@ -9028,8 +9063,10 @@ class DungeonPage extends React.Component {
 
         if (!isAlreadyActivated) {
             meta.activatedLoci.push(locusId);
+            const currentDungeonId = bm.dungeon?.id || meta.dungeonId || null;
             const record = {
                 locusId,
+                dungeonId: currentDungeonId,
                 locusType,
                 name: locusName,
                 levelId: currentLevelId,
@@ -10846,6 +10883,52 @@ class DungeonPage extends React.Component {
         return results;
     };
 
+    findSuperboardBFSPath = (superboard, startGx, startGy, targetGx, targetGy, entitiesOverride = null, maxNodes = 400) => {
+        if (startGx === targetGx && startGy === targetGy) return [];
+        if (!superboard) return [];
+
+        const queue = [{ gx: startGx, gy: startGy, path: [] }];
+        const visited = new Set();
+        visited.add(`${startGx},${startGy}`);
+
+        let nodesExplored = 0;
+
+        while (queue.length > 0 && nodesExplored < maxNodes) {
+            const current = queue.shift();
+            nodesExplored++;
+
+            const distToTarget = Math.max(Math.abs(current.gx - targetGx), Math.abs(current.gy - targetGy));
+            if (distToTarget <= 1) {
+                if (current.path.length > 0) return current.path;
+                const adj = this.getAdjacentSuperboardTiles(superboard, startGx, startGy, false, entitiesOverride).filter(c => c.isEmpty);
+                adj.sort((a, b) => {
+                    const dA = Math.hypot(a.gx - targetGx, a.gy - targetGy);
+                    const dB = Math.hypot(b.gx - targetGx, b.gy - targetGy);
+                    return dA - dB;
+                });
+                return adj.length > 0 ? [adj[0]] : [];
+            }
+
+            const adjCandidates = this.getAdjacentSuperboardTiles(superboard, current.gx, current.gy, false, entitiesOverride);
+            for (const cand of adjCandidates) {
+                const isTargetCell = (cand.gx === targetGx && cand.gy === targetGy);
+                if (!cand.isEmpty && !isTargetCell) continue;
+
+                const key = `${cand.gx},${cand.gy}`;
+                if (!visited.has(key)) {
+                    visited.add(key);
+                    const newPath = [...current.path, cand];
+                    if (isTargetCell || (Math.abs(cand.gx - targetGx) <= 1 && Math.abs(cand.gy - targetGy) <= 1)) {
+                        return newPath;
+                    }
+                    queue.push({ gx: cand.gx, gy: cand.gy, path: newPath });
+                }
+            }
+        }
+
+        return [];
+    };
+
     movePocketPygmyUnit = (superboard, fromMbIdx, fromTIdx, toMbIdx, toTIdx, fromGx, fromGy, toGx, toGy, options = {}) => {
         if (toGx < 0 || toGx >= 45 || toGy < 0 || toGy >= 45) return false;
         if (!superboard) return false;
@@ -10860,7 +10943,11 @@ class DungeonPage extends React.Component {
 
         // Find the unit in superboardEntities
         const entities = options.entities || this.state.superboardEntities || {};
-        let entity = Object.values(entities).find(e => e && e.gx === fromGx && e.gy === fromGy && (e.hp || 0) > 0);
+        const unitId = options.unitId || options.entityId || options.id;
+        let entity = unitId ? entities[unitId] : null;
+        if (!entity) {
+            entity = Object.values(entities).find(e => e && e.gx === fromGx && e.gy === fromGy && (e.hp || 0) > 0);
+        }
         if (!entity) {
             const fromMb = superboard.miniboards?.[fromMbIdx];
             const fromTile = fromMb?.tiles?.[fromTIdx];
@@ -11930,7 +12017,7 @@ class DungeonPage extends React.Component {
                         });
                         const bestFlee = adjCandidates[0];
                         if (bestFlee) {
-                            this.movePocketPygmyUnit(superboard, unit.mbIdx, unit.tIdx, bestFlee.mbIdx, bestFlee.tIdx, gx, gy, bestFlee.gx, bestFlee.gy, { skipSetState: true, entities });
+                            this.movePocketPygmyUnit(superboard, unit.mbIdx, unit.tIdx, bestFlee.mbIdx, bestFlee.tIdx, gx, gy, bestFlee.gx, bestFlee.gy, { skipSetState: true, entities, unitId: pygmy.id });
                             continue;
                         }
                     }
@@ -12186,6 +12273,32 @@ class DungeonPage extends React.Component {
                         } else {
                             if (targetUnit.isAutomaton || targetUnit.subtype === 'automaton') {
                                 this._automatonRespawnTime = now + 10000;
+                                const tileToClear = targetEnemyUnit.tile;
+                                if (tileToClear) {
+                                    tileToClear.contains = {
+                                        ...(tileToClear.contains || {}),
+                                        hp: 0,
+                                        isDying: true,
+                                        isAutomaton: true,
+                                        subtype: 'automaton',
+                                        image: images.automaton || 'automaton'
+                                    };
+                                    const bm = this.props.boardManager;
+                                    setTimeout(() => {
+                                        if (tileToClear.isEnemySpawn === true || tileToClear.originalMarker === 'narrative') {
+                                            tileToClear.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                            tileToClear.image = images.narrative || 'narrative';
+                                            tileToClear.isEnemySpawn = true;
+                                            tileToClear.originalMarker = 'narrative';
+                                        } else {
+                                            tileToClear.contains = null;
+                                            tileToClear.image = null;
+                                            tileToClear.isEnemySpawn = false;
+                                            tileToClear.originalMarker = null;
+                                        }
+                                        if (typeof bm?.refreshTiles === 'function') bm.refreshTiles();
+                                    }, 1800);
+                                }
                             } else if (targetUnit.homeStructureKey) {
                                 this._pocketStructureRespawns.push({
                                     readyTime: now + 10000,
@@ -12200,16 +12313,18 @@ class DungeonPage extends React.Component {
                             if (targetUnit.id && entities[targetUnit.id]) {
                                 delete entities[targetUnit.id];
                             }
-                            if (targetEnemyUnit.tile.isEnemySpawn === true || targetEnemyUnit.tile.originalMarker === 'narrative') {
-                                targetEnemyUnit.tile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
-                                targetEnemyUnit.tile.image = images.narrative || 'narrative';
-                                targetEnemyUnit.tile.isEnemySpawn = true;
-                                targetEnemyUnit.tile.originalMarker = 'narrative';
-                            } else {
-                                targetEnemyUnit.tile.contains = null;
-                                targetEnemyUnit.tile.image = null;
-                                targetEnemyUnit.tile.isEnemySpawn = false;
-                                targetEnemyUnit.tile.originalMarker = null;
+                            if (!(targetUnit.isAutomaton || targetUnit.subtype === 'automaton')) {
+                                if (targetEnemyUnit.tile.isEnemySpawn === true || targetEnemyUnit.tile.originalMarker === 'narrative') {
+                                    targetEnemyUnit.tile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                    targetEnemyUnit.tile.image = images.narrative || 'narrative';
+                                    targetEnemyUnit.tile.isEnemySpawn = true;
+                                    targetEnemyUnit.tile.originalMarker = 'narrative';
+                                } else {
+                                    targetEnemyUnit.tile.contains = null;
+                                    targetEnemyUnit.tile.image = null;
+                                    targetEnemyUnit.tile.isEnemySpawn = false;
+                                    targetEnemyUnit.tile.originalMarker = null;
+                                }
                             }
                             if (isCombatVisible) {
                                 this.displayMessage(`💥 A ${targetName} was destroyed in combat!`);
@@ -12235,10 +12350,17 @@ class DungeonPage extends React.Component {
                         const isOtherAllied = !!(other.pygmy.isAllied || other.pygmy.faction === 'player' || other.pygmy.placedBy === 'player' || other.pygmy.affiliation === 'friendly');
                         if (!isOtherAllied && (other.pygmy.hp || 0) > 0) {
                             const d = Math.max(Math.abs(gx - other.gx), Math.abs(gy - other.gy));
-                            if (d < minEnemyDist && d <= 10) {
+                            if (d < minEnemyDist && d <= 12) {
                                 minEnemyDist = d;
                                 targetEnemyCoord = { gx: other.gx, gy: other.gy };
                             }
+                        }
+                    }
+                    // If no hostile units in range <= 12, follow/accompany player avatar (staying within 2 tiles)!
+                    if (!targetEnemyCoord && superboardPlayerPos) {
+                        const dPlayer = Math.max(Math.abs(gx - superboardPlayerPos.gx), Math.abs(gy - superboardPlayerPos.gy));
+                        if (dPlayer > 2) {
+                            targetEnemyCoord = superboardPlayerPos;
                         }
                     }
                 } else if (isNeutralPygmy) {
@@ -12282,19 +12404,50 @@ class DungeonPage extends React.Component {
                     }
                 }
 
-                if (targetEnemyCoord) {
-                    adjEmpty.sort((a, b) => {
-                        const distA = Math.hypot(a.gx - targetEnemyCoord.gx, a.gy - targetEnemyCoord.gy);
-                        const distB = Math.hypot(b.gx - targetEnemyCoord.gx, b.gy - targetEnemyCoord.gy);
-                        return distA - distB;
-                    });
+                let chosen = null;
+
+                // Track position history & stuck counter for obstacle/collision avoidance
+                if (pygmy._lastGx === gx && pygmy._lastGy === gy) {
+                    pygmy._stuckTicks = (pygmy._stuckTicks || 0) + 1;
                 } else {
-                    adjEmpty.sort(() => Math.random() - 0.5);
+                    pygmy._lastGx = gx;
+                    pygmy._lastGy = gy;
+                    pygmy._stuckTicks = 0;
                 }
 
-                const chosen = adjEmpty[0];
+                if (targetEnemyCoord) {
+                    // 1. Attempt BFS Pathfinding if unit is not stuck
+                    if ((pygmy._stuckTicks || 0) < 2) {
+                        const bfsPath = this.findSuperboardBFSPath(superboard, gx, gy, targetEnemyCoord.gx, targetEnemyCoord.gy, entities, 300);
+                        if (bfsPath && bfsPath.length > 0) {
+                            chosen = bfsPath[0];
+                        }
+                    }
+
+                    // 2. Fallback to un-stuck detour / greedy distance sorting if BFS has no path or unit is stuck
+                    if (!chosen) {
+                        const candidates = adjEmpty.filter(c => !(pygmy._stuckTicks >= 2 && c.gx === pygmy._lastFailedStepGx && c.gy === pygmy._lastFailedStepGy));
+                        const pool = candidates.length > 0 ? candidates : adjEmpty;
+                        pool.sort((a, b) => {
+                            const distA = Math.hypot(a.gx - targetEnemyCoord.gx, a.gy - targetEnemyCoord.gy);
+                            const distB = Math.hypot(b.gx - targetEnemyCoord.gx, b.gy - targetEnemyCoord.gy);
+                            return distA - distB;
+                        });
+                        if (pygmy._stuckTicks >= 2 && pool.length > 1) {
+                            chosen = pool[Math.floor(Math.random() * Math.min(pool.length, 3))];
+                        } else {
+                            chosen = pool[0];
+                        }
+                    }
+                } else {
+                    adjEmpty.sort(() => Math.random() - 0.5);
+                    chosen = adjEmpty[0];
+                }
+
                 if (chosen) {
-                    this.movePocketPygmyUnit(superboard, unit.mbIdx, unit.tIdx, chosen.mbIdx, chosen.tIdx, gx, gy, chosen.gx, chosen.gy, { skipSetState: true, entities });
+                    pygmy._lastFailedStepGx = chosen.gx;
+                    pygmy._lastFailedStepGy = chosen.gy;
+                    this.movePocketPygmyUnit(superboard, unit.mbIdx, unit.tIdx, chosen.mbIdx, chosen.tIdx, gx, gy, chosen.gx, chosen.gy, { skipSetState: true, entities, unitId: pygmy.id });
                 }
             }
         }
@@ -13848,27 +14001,55 @@ class DungeonPage extends React.Component {
                                     }
                                     if (target.isAutomaton) {
                                         this._automatonRespawnTime = Date.now() + 10000;
-                                    } else if (target.contains.homeStructureKey) {
-                                        if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
-                                        this._pocketStructureRespawns.push({
-                                            readyTime: Date.now() + 10000,
-                                            structureKey: target.contains.homeStructureKey,
-                                            mbIdx: target.mbIdx,
-                                            tIdx: target.tIdx,
-                                            superboardType: this.state.superboardType
-                                        });
-                                    }
-                                    if (target.tile) {
-                                        if (target.tile.isEnemySpawn === true || target.tile.originalMarker === 'narrative') {
-                                            target.tile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
-                                            target.tile.image = images.narrative || 'narrative';
-                                            target.tile.isEnemySpawn = true;
-                                            target.tile.originalMarker = 'narrative';
-                                        } else {
-                                            target.tile.contains = null;
-                                            target.tile.image = null;
-                                            target.tile.isEnemySpawn = false;
-                                            target.tile.originalMarker = null;
+                                        if (target.tile) {
+                                            target.tile.contains = {
+                                                ...(target.contains || {}),
+                                                hp: 0,
+                                                isDying: true,
+                                                isAutomaton: true,
+                                                subtype: 'automaton',
+                                                image: images.automaton || 'automaton'
+                                            };
+                                            const tileToClear = target.tile;
+                                            const bm = this.props.boardManager;
+                                            setTimeout(() => {
+                                                if (tileToClear.isEnemySpawn === true || tileToClear.originalMarker === 'narrative') {
+                                                    tileToClear.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                                    tileToClear.image = images.narrative || 'narrative';
+                                                    tileToClear.isEnemySpawn = true;
+                                                    tileToClear.originalMarker = 'narrative';
+                                                } else {
+                                                    tileToClear.contains = null;
+                                                    tileToClear.image = null;
+                                                    tileToClear.isEnemySpawn = false;
+                                                    tileToClear.originalMarker = null;
+                                                }
+                                                if (typeof bm?.refreshTiles === 'function') bm.refreshTiles();
+                                            }, 1800);
+                                        }
+                                    } else {
+                                        if (target.contains.homeStructureKey) {
+                                            if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
+                                            this._pocketStructureRespawns.push({
+                                                readyTime: Date.now() + 10000,
+                                                structureKey: target.contains.homeStructureKey,
+                                                mbIdx: target.mbIdx,
+                                                tIdx: target.tIdx,
+                                                superboardType: this.state.superboardType
+                                            });
+                                        }
+                                        if (target.tile) {
+                                            if (target.tile.isEnemySpawn === true || target.tile.originalMarker === 'narrative') {
+                                                target.tile.contains = { type: 'narrative', subtype: null, isEnemySpawn: true };
+                                                target.tile.image = images.narrative || 'narrative';
+                                                target.tile.isEnemySpawn = true;
+                                                target.tile.originalMarker = 'narrative';
+                                            } else {
+                                                target.tile.contains = null;
+                                                target.tile.image = null;
+                                                target.tile.isEnemySpawn = false;
+                                                target.tile.originalMarker = null;
+                                            }
                                         }
                                     }
                                     this.displayMessage(`💥 Your Outpost eliminated a ${targetName}!`);
@@ -21571,6 +21752,8 @@ class DungeonPage extends React.Component {
             delete meta.activatedGenerators;
             delete meta.disabledOutposts;
             delete meta.failedMonolithActivations;
+            delete meta.activatedLoci;
+            delete meta.activatedLocusRecords;
             meta.dungeonId = matchedDungeon.id;
             storeMeta(meta);
 
@@ -21602,6 +21785,8 @@ class DungeonPage extends React.Component {
         delete meta.activatedGenerators;
         delete meta.disabledOutposts;
         delete meta.failedMonolithActivations;
+        delete meta.activatedLoci;
+        delete meta.activatedLocusRecords;
         meta.dungeonId = selectedDungeon.id;
         storeMeta(meta);
 
@@ -27650,7 +27835,7 @@ class DungeonPage extends React.Component {
         const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
         const mySocketId = (typeof socketHandler !== 'undefined' && socketHandler.socket) ? socketHandler.socket.id : null;
 
-        const initialGeneratorData = {
+        const initialGeneratorData = def ? {
             activated: true,
             level: 1,
             owned: true,
@@ -27660,13 +27845,13 @@ class DungeonPage extends React.Component {
             activatedAt: Date.now(),
             lastCollectedAt: Date.now(),
             accumulated: 0,
-            key: def.key,
-            resource: def.resource,
-            currencyType: def.currencyType,
-            rate: def.rate,
+            key: def.key || buildingDef.key,
+            resource: def.resource || 'Resource',
+            currencyType: def.currencyType || null,
+            rate: typeof def.rate === 'number' ? def.rate : 0,
             orientation: bm ? bm.currentOrientation : 'F',
             placedBy: 'player'
-        };
+        } : null;
 
         const buildingImageKey = buildingDef.imageKey || buildingDef.fallbackImageKey || def?.imageKey || buildingDef.key;
         const buildingObj = {
@@ -27679,7 +27864,7 @@ class DungeonPage extends React.Component {
             affiliation: 'friendly',
             faction: 'player',
             ownerId: currentUserId,
-            generatorData: initialGeneratorData
+            ...(initialGeneratorData ? { generatorData: initialGeneratorData } : {})
         };
 
         if (this.state.inSuperboard) {
@@ -27734,7 +27919,10 @@ class DungeonPage extends React.Component {
 
                             const mb = sb.miniboards[targetMbIdx];
                             if (mb && mb.tiles && mb.tiles[targetTileIdx]) {
-                                const tileObj = { ...buildingObj, generatorData: { ...initialGeneratorData } };
+                                const tileObj = { ...buildingObj };
+                                if (initialGeneratorData) {
+                                    tileObj.generatorData = { ...initialGeneratorData };
+                                }
                                 if (isLarge || isHuge) {
                                     tileObj.vendorGroupId = vendorGroupId;
                                     tileObj.vendorAnchorId = anchorTileIdx;
@@ -27743,7 +27931,9 @@ class DungeonPage extends React.Component {
                                 mb.tiles[targetTileIdx].contains = tileObj;
                                 mb.tiles[targetTileIdx].building = buildingDef.key;
                                 mb.tiles[targetTileIdx].image = buildingImageKey;
-                                mb.tiles[targetTileIdx].generatorData = { ...initialGeneratorData };
+                                if (initialGeneratorData) {
+                                    mb.tiles[targetTileIdx].generatorData = { ...initialGeneratorData };
+                                }
                                 mb.tiles[targetTileIdx].affiliation = 'friendly';
                                 mb.tiles[targetTileIdx].placedBy = 'player';
                             }
@@ -27753,7 +27943,10 @@ class DungeonPage extends React.Component {
             }
         } else if (bm) {
             footprint.forEach((tId, idx) => {
-                const tileObj = { ...buildingObj, generatorData: { ...initialGeneratorData } };
+                const tileObj = { ...buildingObj };
+                if (initialGeneratorData) {
+                    tileObj.generatorData = { ...initialGeneratorData };
+                }
                 if (isLarge) {
                     tileObj.vendorGroupId = vendorGroupId;
                     tileObj.vendorAnchorId = targetTileIdx;
@@ -27763,7 +27956,9 @@ class DungeonPage extends React.Component {
                     bm.tiles[tId].contains = tileObj;
                     bm.tiles[tId].building = buildingDef.key;
                     bm.tiles[tId].image = buildingImageKey;
-                    bm.tiles[tId].generatorData = { ...initialGeneratorData };
+                    if (initialGeneratorData) {
+                        bm.tiles[tId].generatorData = { ...initialGeneratorData };
+                    }
                     bm.tiles[tId].affiliation = 'friendly';
                     bm.tiles[tId].placedBy = 'player';
                 }
@@ -27771,7 +27966,9 @@ class DungeonPage extends React.Component {
                     bm.currentBoard.tiles[tId].contains = tileObj;
                     bm.currentBoard.tiles[tId].building = buildingDef.key;
                     bm.currentBoard.tiles[tId].image = buildingImageKey;
-                    bm.currentBoard.tiles[tId].generatorData = { ...initialGeneratorData };
+                    if (initialGeneratorData) {
+                        bm.currentBoard.tiles[tId].generatorData = { ...initialGeneratorData };
+                    }
                     bm.currentBoard.tiles[tId].affiliation = 'friendly';
                     bm.currentBoard.tiles[tId].placedBy = 'player';
                 }

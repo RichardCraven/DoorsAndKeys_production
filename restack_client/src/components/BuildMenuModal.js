@@ -5,7 +5,14 @@
 
 import React, { Component } from 'react';
 import * as images from '../utils/images';
-import { getAdjustedBuildTime, hasArcaneUnit, hasEngineerUnit, isEngineerSelected } from '../utils/building-utils';
+import {
+    getAdjustedBuildTime,
+    hasArcaneUnit,
+    hasEngineerUnit,
+    isEngineerSelected,
+    isEngineerUnit,
+    isArcaneUnit,
+} from '../utils/building-utils';
 import { getMeta } from '../utils/session-handler';
 
 export const BUILDINGS = [
@@ -162,7 +169,7 @@ export const BUILDINGS = [
 
 // hasArcaneUnit imported from building-utils.js
 
-const TABS = [
+export const TABS = [
     {
         id: 'earthly',
         label: 'Earthly',
@@ -177,14 +184,17 @@ const TABS = [
             if (inSuperboard) {
                 return !isEngineerSelected(selectedCrewMember);
             }
-            return !hasEngineerUnit(crew);
+            return !(isEngineerUnit(selectedCrewMember) || hasEngineerUnit(crew, selectedCrewMember));
         },
     },
     {
         id: 'arcane',
         label: 'Arcane',
         icon: '🔮',
-        isDisabled: (crew, inSuperboard) => inSuperboard ? false : !hasArcaneUnit(crew),
+        isDisabled: (crew, inSuperboard, selectedCrewMember) => {
+            if (inSuperboard) return false;
+            return !(isArcaneUnit(selectedCrewMember) || hasArcaneUnit(crew, selectedCrewMember));
+        },
     },
     {
         id: 'obscure',
@@ -305,11 +315,14 @@ class BuildMenuModal extends Component {
     };
 
     render() {
-        const { onClose, activeConstruction, crewManager } = this.props;
+        const { onClose, activeConstruction, crewManager, crew: propsCrew, selectedCrewMember: propsSelected } = this.props;
         const available = this.getResourceCounts();
 
         const meta = getMeta() || {};
-        const crew = (crewManager && crewManager.crew) || meta.crew || [];
+        const crew = (propsCrew && propsCrew.length > 0)
+            ? propsCrew
+            : ((crewManager && crewManager.crew) || meta.crew || []);
+        const selectedCrewMember = propsSelected || this.props.selectedCrewMember || crew.find(c => c && c.selected);
         const deadCount = crew.filter(m => m && (m.dead === true || (typeof m.hp === 'number' && m.hp <= 0))).length;
 
         const visibleBuildings = BUILDINGS.filter(b => (b.category || 'earthly') === this.state.activeTab);
@@ -400,7 +413,7 @@ class BuildMenuModal extends Component {
                     <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(229, 181, 79, 0.2)', paddingBottom: '1px' }}>
                         {TABS.map(tab => {
                             const isActive = this.state.activeTab === tab.id;
-                            const selectedCrewMember = this.props.selectedCrewMember || crew.find(c => c && c.selected);
+                            const selectedCrewMember = propsSelected || this.props.selectedCrewMember || crew.find(c => c && c.selected);
                             const isDisabled = tab.isDisabled(crew, this.props.inSuperboard, selectedCrewMember);
 
                             return (
