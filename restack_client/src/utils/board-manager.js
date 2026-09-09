@@ -377,6 +377,14 @@ export function BoardManager(){
         const img = tile.image || tile.contains?.image;
         const sKey = String(containsSubtype || bldg || img || containsType || (tile.contains && typeof tile.contains === 'object' ? (tile.contains.key || tile.contains.name || tile.contains.type) : '') || '').toLowerCase();
 
+        // If tile itself is empty or void or destroyed, it is not impassable
+        const isEmptyTile = !tile.contains || containsType === 'empty' || containsType === 'empty_space' || containsType === 'empty space' || containsSubtype === 'empty' || containsSubtype === 'empty_space' || containsSubtype === 'empty space' || containsType === 'void' || containsSubtype === 'void';
+        const isDestroyed = (tile.contains && typeof tile.contains === 'object' && (tile.contains.hp <= 0 || !!tile.contains.destroyedAt));
+        if (isDestroyed) return false;
+
+        const tileVendorGroup = (tile.contains && typeof tile.contains === 'object' && tile.contains.vendorGroupId) || tile.vendorGroupId;
+        const tileVendorCell = (tile.contains && typeof tile.contains === 'object' && tile.contains.vendorCell) || tile.vendorCell;
+
         // Check if tile is part of a multi-tile structure footprint via nearby anchor in boardTiles
         const boardTiles = this.currentBoard?.tiles || this.tiles;
         if (boardTiles && typeof tile.id === 'number') {
@@ -401,18 +409,30 @@ export function BoardManager(){
                         const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
                         if (aKey.includes('hut')) continue;
 
+                        const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
+                        if (aIsDestroyed) continue;
+
                         const aRole = aTile.contains?.vendorCell || aTile.vendorCell;
-                        if (!aRole || aRole === 'anchor' || aTile.contains?.vendorAnchorId === (cId + anchorOffset)) {
+                        const aGroup = aTile.contains?.vendorGroupId || aTile.vendorGroupId;
+                        const multi2x2 = [
+                            'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
+                            'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort'
+                        ];
+                        const is2x2 = multi2x2.some(k => aKey.includes(k)) || aTile.isLarge || aTile.contains?.isLarge || aTile.isMultiTile || aTile.contains?.isMultiTile;
+                        const aIsMulti = !!(is2x2 || (aRole === 'anchor') || aGroup);
+
+                        if (aIsMulti && (!aRole || aRole === 'anchor' || aTile.contains?.vendorAnchorId === (cId + anchorOffset))) {
                             const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'dream_den'];
                             if (vendorKeys.some(k => aKey.includes(k))) {
                                 return false; // Vendor structure tiles are interactive vendors, not impassable building walls
                             }
-                            const multi2x2 = [
-                                'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
-                                'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort'
-                            ];
-                            const is2x2 = multi2x2.some(k => aKey.includes(k)) || aTile.isLarge || aTile.contains?.isLarge || aTile.isMultiTile || aTile.contains?.isMultiTile;
                             if (is2x2) {
+                                if (tileVendorGroup && aGroup && tileVendorGroup !== aGroup) {
+                                    continue;
+                                }
+                                if (tileVendorCell === 'anchor') {
+                                    continue;
+                                }
                                 return true;
                             }
                         }
@@ -420,23 +440,32 @@ export function BoardManager(){
                 }
             }
 
-            // 3x3 checks (keep, fortress, fractured_monolith)
-            for (let dy = 2; dy >= 0; dy--) {
-                for (let dx = 2; dx >= 0; dx--) {
-                    if (dx === 0 && dy === 0) continue;
-                    if (cRow >= dy && cCol >= dx) {
-                        const anchorOffset = -(dy * 15 + dx);
-                        const aTile = boardTiles[cId + anchorOffset];
+            // 3x3 checks (Keep / Fortress)
+            for (let dRow = 0; dRow <= 2; dRow++) {
+                for (let dCol = 0; dCol <= 2; dCol++) {
+                    if (dRow === 0 && dCol === 0) continue;
+                    if (cRow >= dRow && cCol >= dCol) {
+                        const aTile = boardTiles[cId - (dRow * 15 + dCol)];
                         if (aTile && aTile !== tile) {
                             const aKey = String(aTile.contains?.subtype || aTile.building || aTile.contains?.building || aTile.contains?.type || '').toLowerCase();
                             if (aKey.includes('hut')) continue;
+                            const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
+                            if (aIsDestroyed) continue;
+
                             const aRole = aTile.contains?.vendorCell || aTile.vendorCell;
+                            const aGroup = aTile.contains?.vendorGroupId || aTile.vendorGroupId;
                             if (!aRole || aRole === 'anchor') {
+                                if (tileVendorGroup && aGroup && tileVendorGroup !== aGroup) {
+                                    continue;
+                                }
+                                if (tileVendorCell === 'anchor') {
+                                    continue;
+                                }
                                 if (aKey.includes('keep') || aKey.includes('fortress') || (aTile.contains?.footprint && aTile.contains.footprint.length === 9)) {
                                     return true;
                                 }
                                 if (aKey.includes('fractured_monolith')) {
-                                    const isCorner = (dx === 0 && dy === 2) || (dx === 2 && dy === 0) || (dx === 2 && dy === 2);
+                                    const isCorner = (dCol === 0 && dRow === 2) || (dCol === 2 && dRow === 0) || (dCol === 2 && dRow === 2);
                                     if (!isCorner) return true;
                                 }
                             }
@@ -446,12 +475,12 @@ export function BoardManager(){
             }
         }
 
-        if (!tile.contains || containsType === 'empty' || containsType === 'empty_space' || containsType === 'empty space' || containsSubtype === 'empty' || containsSubtype === 'empty_space' || containsSubtype === 'empty space' || containsType === 'void' || containsSubtype === 'void') {
+        if (isEmptyTile) {
             return false;
         }
 
-        // Vendor structure tiles ('dream_den', 'merchant', 'alchemist', 'fungal_nursery') are interactive vendors, not impassable building walls
-        if (sKey.includes('dream_den') || sKey.includes('dream den') || sKey.includes('merchant') || sKey.includes('alchemist') || sKey.includes('fungal_nursery')) {
+        // Vendor structure tiles ('merchant', 'alchemist', 'fungal_nursery') are interactive vendors, not impassable building walls
+        if (sKey.includes('merchant') || sKey.includes('alchemist') || sKey.includes('fungal_nursery')) {
             return false;
         }
 
@@ -482,6 +511,7 @@ export function BoardManager(){
         }
 
         const buildingSubtypes = [
+            'dream_den', 'dream den', 'buildable_dream_den', 'dream_den_under_construction',
             'outpost', 'buildable_outpost',
             'observer_platform', 'buildable_observer_platform',
             'observation_platform', 'buildable_observation_platform',
@@ -507,12 +537,15 @@ export function BoardManager(){
             'outpost_tower', 'buildable_outpost_tower'
         ];
 
-        if (containsType === 'building' || containsType === 'generator' || containsType === 'locus') return true;
-        if (sKey.includes('locus') || sKey.includes('outpost')) return true;
-        if (containsSubtype && buildingSubtypes.includes(containsSubtype)) return true;
-        if (bldg && buildingSubtypes.includes(bldg)) return true;
-        if (img && buildingSubtypes.includes(img)) return true;
-        if (tile.isBuilding) return true;
+        const hasRecognizedSubtype = (containsSubtype && buildingSubtypes.includes(containsSubtype)) ||
+            (bldg && buildingSubtypes.includes(bldg)) ||
+            (img && buildingSubtypes.includes(img)) ||
+            buildingSubtypes.some(k => sKey.includes(k));
+
+        if (containsType === 'locus' || sKey.includes('locus') || sKey.includes('outpost')) return true;
+        if ((containsType === 'building' || containsType === 'generator') && hasRecognizedSubtype) return true;
+        if (hasRecognizedSubtype) return true;
+        if (tile.isBuilding && hasRecognizedSubtype) return true;
 
         return false;
     };
@@ -2035,20 +2068,26 @@ export function BoardManager(){
 
         let resolvedSpawnIndex = spawnTileIndex;
         if (board && Array.isArray(board.tiles)) {
-            const isVoidAt = (idx) => {
+            const isUnsuitableSpawnAt = (idx) => {
                 if (idx === null || idx === undefined || idx < 0 || idx >= board.tiles.length) return true;
                 const t = board.tiles[idx];
-                return !t || this.isVoidTile(t);
+                if (!t || this.isVoidTile(t)) return true;
+                const cType = this.getContainsType(t.contains);
+                const cSub = this.getContainsSubtype(t.contains);
+                const raw = String(cSub || cType || t.building || t.image || '').toLowerCase();
+                if (raw.includes('dream_den') || raw.includes('dream den')) return true;
+                if (this.isImpassableBuildingTile(t)) return true;
+                return false;
             };
 
-            if (resolvedSpawnIndex === null || resolvedSpawnIndex === undefined || isVoidAt(resolvedSpawnIndex)) {
+            if (resolvedSpawnIndex === null || resolvedSpawnIndex === undefined || isUnsuitableSpawnAt(resolvedSpawnIndex)) {
                 const startSearch = (resolvedSpawnIndex !== null && resolvedSpawnIndex !== undefined && resolvedSpawnIndex >= 0 && resolvedSpawnIndex < board.tiles.length) ? resolvedSpawnIndex : 112;
                 const queue = [startSearch];
                 const visited = new Set([startSearch]);
                 let foundPassable = null;
                 while (queue.length > 0) {
                     const curr = queue.shift();
-                    if (!isVoidAt(curr)) {
+                    if (!isUnsuitableSpawnAt(curr)) {
                         foundPassable = curr;
                         break;
                     }

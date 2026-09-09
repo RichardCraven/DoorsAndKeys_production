@@ -14,6 +14,7 @@ import {
     isArcaneUnit,
 } from '../utils/building-utils';
 import { getMeta } from '../utils/session-handler';
+import { ResourceCostBarList } from './ResourceCostBar';
 
 export const BUILDINGS = [
     // --- EARTHLY BUILDINGS ---
@@ -587,6 +588,7 @@ class BuildMenuModal extends Component {
                                                     {b.key === 'observer_platform' && <span style={{ color: '#f9b115', marginLeft: '6px', fontSize: '12px', fontWeight: 'bold' }}>[O]</span>}
                                                     {b.key === 'war_camp' && <span style={{ color: '#f9b115', marginLeft: '6px', fontSize: '12px', fontWeight: 'bold' }}>[C]</span>}
                                                     {b.key === 'war_fort' && <span style={{ color: '#f9b115', marginLeft: '6px', fontSize: '12px', fontWeight: 'bold' }}>[F]</span>}
+                                                    {b.key === 'earthen_fort' && <span style={{ color: '#f9b115', marginLeft: '6px', fontSize: '12px', fontWeight: 'bold' }}>[E]</span>}
                                                 </span>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <span
@@ -611,8 +613,9 @@ class BuildMenuModal extends Component {
                                                 {b.description}
                                             </div>
                                         </div>
+                                        <ResourceCostBarList costs={costs} available={available} inSuperboard={this.props.inSuperboard} />
 
-                                        {/* Bottom row: Costs & Action Button */}
+                                            {/* Bottom row: Costs & Action Button */}
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
                                             {/* Costs display */}
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>

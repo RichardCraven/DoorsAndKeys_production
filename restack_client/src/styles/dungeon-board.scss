@@ -152,13 +152,15 @@
 
             &.superboard-hud-row {
                 left: calc(-1 * min(200px, max(0px, (100vw - 100%) / 2 - 16px)));
-                width: calc(100% + min(200px, max(0px, (100vw - 100%) / 2 - 16px)));
+                width: max(100%, calc(100vw - 100px));
+                max-width: calc(100vw - 60px);
                 transition: left 0.3s ease, width 0.3s ease;
             }
         }
         .left-side-panel.expanded ~ & .board-hud-row.superboard-hud-row {
             left: 0;
-            width: 100%;
+            width: max(100%, calc(100vw - 260px));
+            max-width: calc(100vw - 260px);
         }
         .message-container{
             position: relative;
@@ -179,13 +181,18 @@
             position: relative;
             height: var(--hud-row-height);
             width: max-content;
-            max-width: 92vw;
-            pointer-events: none;
+            max-width: calc(100vw - 240px);
+            overflow-x: auto;
+            pointer-events: auto;
             display: flex;
             align-items: center;
             justify-content: flex-start;
             white-space: nowrap;
             color: white;
+            scrollbar-width: none;
+            &::-webkit-scrollbar {
+                display: none;
+            }
             .hourglass-icon{
                 height: 20px;
                 width: 20px;
@@ -259,6 +266,66 @@
                 &:active {
                     transform: scale(0.96);
                 }
+            }
+        }
+
+        .pocket-zoom-viewport {
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+            contain: layout paint;
+        }
+
+        .pocket-zoom-toggle-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(20, 15, 30, 0.85);
+            border: 1px solid rgba(245, 158, 11, 0.5);
+            color: #fef08a;
+            font-family: 'Cinzel', serif;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            padding: 3px 9px;
+            border-radius: 12px;
+            cursor: pointer;
+            pointer-events: auto;
+            user-select: none;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5), inset 0 0 4px rgba(245, 158, 11, 0.15);
+            transition: all 0.2s ease;
+
+            &:hover {
+                background: rgba(35, 25, 45, 0.95);
+                border-color: #f59e0b;
+                box-shadow: 0 0 10px rgba(245, 158, 11, 0.4), inset 0 0 8px rgba(245, 158, 11, 0.3);
+                transform: translateY(-1px);
+            }
+
+            &:active {
+                transform: translateY(0);
+            }
+
+            &.zoomed-in {
+                background: rgba(45, 30, 15, 0.9);
+                border-color: #fbbf24;
+                color: #fde047;
+                box-shadow: 0 0 10px rgba(245, 158, 11, 0.6), inset 0 0 6px rgba(245, 158, 11, 0.35);
+            }
+
+            .zoom-icon {
+                font-size: 12px;
+                line-height: 1;
+            }
+
+            .zoom-badge {
+                font-size: 9.5px;
+                padding: 1px 4px;
+                border-radius: 4px;
+                background: rgba(245, 158, 11, 0.25);
+                color: #fbbf24;
+                font-weight: 700;
+                font-family: 'Inter', sans-serif;
             }
         }
     }
@@ -5509,6 +5576,26 @@
 .tile.pygmy-bump-absorb .pygmy-hp-bar {
     animation: pygmyBumpAbsorb 0.65s cubic-bezier(0.25, 1, 0.5, 1) forwards !important;
 }
+
+@keyframes meleeWhirlwindSpin {
+    0% {
+        transform: rotate(0deg) translate(0, -55px) rotate(0deg) scale(0);
+        opacity: 0;
+    }
+    15% {
+        opacity: 1;
+        transform: rotate(108deg) translate(0, -55px) rotate(360deg) scale(1.2);
+    }
+    85% {
+        opacity: 1;
+        transform: rotate(612deg) translate(0, -55px) rotate(2160deg) scale(1.2);
+    }
+    100% {
+        transform: rotate(720deg) translate(0, -55px) rotate(2520deg) scale(0);
+        opacity: 0;
+    }
+}
+
 
 /* ── Pocket Dimension Lightweight Fog of War Overlay ────────────────────────── */
 .pocket-fog-canvas {

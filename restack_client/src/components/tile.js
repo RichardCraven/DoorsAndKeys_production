@@ -1229,8 +1229,31 @@ function Tile(props) {
     const bumpX = `${(bumpVector?.dCol ?? 0) * 85}%`;
     const bumpY = `${(bumpVector?.dRow ?? -1) * 85}%`;
 
-    const isBumpedBack = !!(currentTile && currentTile.isBumpedBack) || !!props.isBumpedBack || !!(currentContains && currentContains.isBumpedBack);
-    const bumpedBackVector = (currentTile && currentTile.bumpedBackVector) || props.bumpedBackVector || (currentContains && currentContains.bumpedBackVector) || { dRow: -1, dCol: 0 };
+    let isBumpedBack = !!(currentTile && currentTile.isBumpedBack) || !!props.isBumpedBack || !!(currentContains && currentContains.isBumpedBack);
+    let bumpedBackVector = (currentTile && currentTile.bumpedBackVector) || props.bumpedBackVector || (currentContains && currentContains.bumpedBackVector) || null;
+
+    // Synchronize hit animation across all quadrants of a multi-tile structure
+    if (!isBumpedBack && (isVendorCell || is2x2StructureSelf) && Array.isArray(props.boardTiles)) {
+        const vGId = containsObj?.vendorGroupId || currentTile?.vendorGroupId || props.vendorGroupId;
+        const vAId = containsObj?.vendorAnchorId ?? currentTile?.vendorAnchorId ?? props.vendorAnchorId;
+        if (vGId || vAId !== undefined) {
+            for (let i = 0; i < props.boardTiles.length; i++) {
+                const bt = props.boardTiles[i];
+                if (!bt) continue;
+                const btContains = bt.contains;
+                const matchesGroup = (vGId && (bt.vendorGroupId === vGId || btContains?.vendorGroupId === vGId));
+                const matchesAnchor = (vAId !== undefined && (bt.vendorAnchorId === vAId || btContains?.vendorAnchorId === vAId || bt.id === vAId));
+                if (matchesGroup || matchesAnchor) {
+                    if (bt.isBumpedBack || btContains?.isBumpedBack) {
+                        isBumpedBack = true;
+                        bumpedBackVector = bt.bumpedBackVector || btContains?.bumpedBackVector || bumpedBackVector;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    bumpedBackVector = bumpedBackVector || { dRow: -1, dCol: 0 };
     const bumpedX = `${(bumpedBackVector?.dCol ?? 0) * 45}%`;
     const bumpedY = `${(bumpedBackVector?.dRow ?? -1) * 45}%`;
 
@@ -1348,6 +1371,8 @@ function Tile(props) {
     const isLayeredForestTile = isTerrainType && densityTier !== null && densityTier !== undefined && densityTier <= 4 && densityTier > 0 && props.type !== 'palette-tile' && props.optionType !== 'delete' && props.optionType !== 'voidfill';
     const isLayeredMountainTile = isTerrainType && mountainDensityTier !== null && mountainDensityTier !== undefined && mountainDensityTier <= 4 && mountainDensityTier > 0 && props.type !== 'palette-tile' && props.optionType !== 'delete' && props.optionType !== 'voidfill';
 
+    const isSpawnFlashing = !!(currentTile && currentTile.isSpawnFlashing) || !!props.isSpawnFlashing || !!(currentContains && currentContains.isSpawnFlashing);
+
     return (
         <div 
             data-portal-id={props['data-portal-id']}
@@ -1374,8 +1399,8 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: isPaletteTile ? 'hidden' : ((isStructureTile || hasConvertingMonolith || hasConvertingTarget || isIlluminatedGlow || isBumpingAttack || isGliding || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || (props.upgradeProgress !== null && props.upgradeProgress !== undefined)) ? 'visible' : 'hidden'),
-            zIndex: (props.upgradeProgress !== null && props.upgradeProgress !== undefined) ? 60 : ((hasConvertingMonolith || hasConvertingTarget) ? 40 : (isBumpingAttack ? 100 : (isGliding ? 90 : (isStructureTile || isUnderConstruction ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 30 : 8) : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : ((isEnlargeableStructure && isOccupied) ? 5 : undefined)))))))),
+            overflow: isPaletteTile ? 'hidden' : ((isStructureTile || hasConvertingMonolith || hasConvertingTarget || isIlluminatedGlow || isBumpingAttack || isGliding || isSpawnFlashing || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || (props.upgradeProgress !== null && props.upgradeProgress !== undefined)) ? 'visible' : 'hidden'),
+            zIndex: (props.upgradeProgress !== null && props.upgradeProgress !== undefined) ? 60 : ((hasConvertingMonolith || hasConvertingTarget) ? 40 : (isBumpingAttack || isSpawnFlashing ? 100 : (isGliding ? 90 : (isStructureTile || isUnderConstruction ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 30 : 8) : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : ((isEnlargeableStructure && isOccupied) ? 5 : undefined)))))))),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
@@ -1423,7 +1448,7 @@ function Tile(props) {
                 }
             }}
             onDragStart={(e) => e.preventDefault()}
-            className={`tile ${props.className || ''} ${props.type || ''} ${isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : ''))}`.trim()}
+            className={`tile ${props.className || ''} ${props.type || ''} ${isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : (isSpawnFlashing ? 'pygmy-spawn-flash' : '')))}`.trim()}
             data-tile-id={props.index}
         >
            {props.isMobileTouchHover && (
@@ -2319,7 +2344,20 @@ function Tile(props) {
                              zIndex: (isVendorCell || is2x2StructureSelf) ? 40 : ((isEnlargeableStructure && isOccupied) ? 35 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex))),
                              opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
                              transform: portraitTransform,
-                             transformOrigin: (isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent ? 'bottom center' : 'center center',
+                             transformOrigin: (isBumpedBack && (isVendorCell || is2x2StructureSelf)) ? (() => {
+                                 switch (vendorCellRole) {
+                                     case 'anchor': return '100% 100%';
+                                     case 'top_right': return '0% 100%';
+                                     case 'bottom_left': return '100% 0%';
+                                     case 'bottom_right': return '0% 0%';
+                                     case 'top_center': return '50% 100%';
+                                     case 'middle_left': return '100% 50%';
+                                     case 'center': return '50% 50%';
+                                     case 'middle_right': return '0% 50%';
+                                     case 'bottom_center': return '50% 0%';
+                                     default: return 'center center';
+                                 }
+                             })() : (((isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent) ? 'bottom center' : 'center center'),
                              transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
                              pointerEvents: 'none'
                         }} />
@@ -2484,12 +2522,27 @@ function Tile(props) {
                 const shouldShow = hpBarVisible || isRecentlyDamaged;
                 if (!shouldShow) return null;
 
+                // For multi-tile / large structures, suppress on non-bottom-left cells and render a single wide HP bar spanning the bottom of the structure
+                const vRole = vendorCellRole || (activeUnit && activeUnit.vendorCell) || (props && props.vendorCell);
+                const isMultiBuilding = isVendorCell || is2x2StructureSelf || is3x3Structure || !!(activeUnit && (activeUnit.is2x2 || activeUnit.isMultiTile || activeUnit.isLarge || activeUnit.vendorCell || activeUnit.vendorAnchorId !== undefined || activeUnit.isStructure || activeUnit.isBuilding));
+
+                if (isMultiBuilding) {
+                    if (vRole && vRole !== 'bottom_left' && vRole !== 'anchor') return null;
+                    if (vRole === 'anchor') {
+                        const boardTiles = Array.isArray(props.boardTiles) ? props.boardTiles : null;
+                        const currentIdx = props.id !== undefined ? props.id : props.index;
+                        const hasBottomLeft = boardTiles && boardTiles.some(t => t && (t.vendorCell === 'bottom_left' || t.contains?.vendorCell === 'bottom_left' || (t.contains?.vendorAnchorId === currentIdx && t.id === currentIdx + 15)));
+                        if (hasBottomLeft) return null;
+                    }
+                }
+
                 return (
                     <div className="pygmy-hp-bar" style={{
                         position: 'absolute',
                         bottom: '3px',
                         left: '10%',
-                        right: '10%',
+                        right: isMultiBuilding ? undefined : '10%',
+                        width: isMultiBuilding ? (is3x3Structure ? '280%' : '180%') : undefined,
                         height: '5px',
                         backgroundColor: 'rgba(0,0,0,0.85)',
                         border: '1px solid rgba(255,255,255,0.5)',
@@ -3028,50 +3081,69 @@ function Tile(props) {
             )}
 
             {/* Generator Ownership Indicators */}
-            {(props.ownedByPlayer || props.boardTiles?.[props.index]?.ownedByPlayer || props.boardTiles?.[props.id]?.ownedByPlayer) && (
-                <div style={{
-                    position: 'absolute',
-                    top: '2px',
-                    left: '2px',
-                    width: '18px',
-                    height: '18px',
-                    background: 'radial-gradient(circle, rgba(59, 130, 246, 0.9) 0%, rgba(29, 78, 216, 0.9) 100%)',
-                    border: '1px solid #60a5fa',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 0 8px rgba(59, 130, 246, 0.8)',
-                    zIndex: 40,
-                    pointerEvents: 'none'
-                }}>
-                    <span style={{ fontSize: '12px' }}>👑</span>
-                </div>
-            )}
-            
-            {(props.ownedByEnemy || props.boardTiles?.[props.index]?.ownedByEnemy || props.boardTiles?.[props.id]?.ownedByEnemy) && (
-                <div style={{
-                    position: 'absolute',
-                    top: '2px',
-                    left: '2px',
-                    width: '18px',
-                    height: '18px',
-                    background: 'radial-gradient(circle, rgba(220, 38, 38, 0.9) 0%, rgba(153, 27, 27, 0.9) 100%)',
-                    border: '1px solid #f87171',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 0 8px rgba(220, 38, 38, 0.8)',
-                    zIndex: 40,
-                    pointerEvents: 'none'
-                }}>
-                    <span style={{ fontSize: '12px' }}>⚔️</span>
-                </div>
-            )}
+            {(() => {
+                const isSecondaryMultiTile = (
+                    (vendorCellRole && vendorCellRole !== 'anchor') ||
+                    (nearbyAnchorInfo && nearbyAnchorInfo.role && nearbyAnchorInfo.role !== 'anchor') ||
+                    (containsObj?.vendorCell && containsObj.vendorCell !== 'anchor') ||
+                    (props.vendorCell && props.vendorCell !== 'anchor')
+                );
+                if (isSecondaryMultiTile) return null;
+
+                const isOwnedByPlayer = !!(props.ownedByPlayer || props.boardTiles?.[props.index]?.ownedByPlayer || props.boardTiles?.[props.id]?.ownedByPlayer);
+                const isOwnedByEnemy = !!(props.ownedByEnemy || props.boardTiles?.[props.index]?.ownedByEnemy || props.boardTiles?.[props.id]?.ownedByEnemy);
+
+                if (isOwnedByPlayer) {
+                    return (
+                        <div style={{
+                            position: 'absolute',
+                            top: '2px',
+                            left: '2px',
+                            width: '18px',
+                            height: '18px',
+                            background: 'radial-gradient(circle, rgba(59, 130, 246, 0.9) 0%, rgba(29, 78, 216, 0.9) 100%)',
+                            border: '1px solid #60a5fa',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 0 8px rgba(59, 130, 246, 0.8)',
+                            zIndex: 40,
+                            pointerEvents: 'none'
+                        }}>
+                            <span style={{ fontSize: '12px' }}>👑</span>
+                        </div>
+                    );
+                }
+                
+                if (isOwnedByEnemy) {
+                    return (
+                        <div style={{
+                            position: 'absolute',
+                            top: '2px',
+                            left: '2px',
+                            width: '18px',
+                            height: '18px',
+                            background: 'radial-gradient(circle, rgba(220, 38, 38, 0.9) 0%, rgba(153, 27, 27, 0.9) 100%)',
+                            border: '1px solid #f87171',
+                            borderRadius: '50%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 0 8px rgba(220, 38, 38, 0.8)',
+                            zIndex: 40,
+                            pointerEvents: 'none'
+                        }}>
+                            <span style={{ fontSize: '12px' }}>⚔️</span>
+                        </div>
+                    );
+                }
+
+                return null;
+            })()}
 
             {/* Automaton Badge Overlay */}
-            {(!props.inSuperboard && (isStructureTile || props.generatorData) && (props.isAutomated || props.contains?.automated || props.contains?.generatorData?.automated || props.data?.automated || props.data?.generatorData?.automated)) && (
+            {(!props.inSuperboard && !((vendorCellRole && vendorCellRole !== 'anchor') || (containsObj?.vendorCell && containsObj.vendorCell !== 'anchor') || (props.vendorCell && props.vendorCell !== 'anchor')) && (isStructureTile || props.generatorData) && (props.isAutomated || props.contains?.automated || props.contains?.generatorData?.automated || props.data?.automated || props.data?.generatorData?.automated)) && (
                 <div style={{
                     position: 'absolute',
                     bottom: '2px',
@@ -3191,16 +3263,21 @@ export function propsAreEqual(prevProps, nextProps) {
         if (!a || !b) return false;
         if (typeof a !== 'object' || typeof b !== 'object') return false;
         
-        // Fast shallow compare for contains object instead of JSON.stringify
-        const keysA = Object.keys(a);
-        const keysB = Object.keys(b);
-        if (keysA.length !== keysB.length) return false;
-        
-        for (let i = 0; i < keysA.length; i++) {
-            const k = keysA[i];
-            if (a[k] !== b[k]) return false;
+        // Fast zero-allocation compare without Object.keys array creation
+        let countA = 0;
+        for (let k in a) {
+            if (Object.prototype.hasOwnProperty.call(a, k)) {
+                countA++;
+                if (a[k] !== b[k]) return false;
+            }
         }
-        return true;
+        let countB = 0;
+        for (let k in b) {
+            if (Object.prototype.hasOwnProperty.call(b, k)) {
+                countB++;
+            }
+        }
+        return countA === countB;
     };
 
     const prevContains = prevProps.contains;

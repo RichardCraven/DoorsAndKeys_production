@@ -219,6 +219,87 @@ describe('Pocket Dimension Multi-Tile (2x2) Structure Rendering and Sanitization
             expect(portrait.style.backgroundPosition).toBe('100% 100%');
         });
 
+        test('Player-owned 2x2 resource generator renders exactly 1 crown badge on anchor tile and suppresses crown badge on secondary quadrants', () => {
+            const boardTiles = createBoardTiles([
+                { id: 20, ownedByPlayer: true, contains: { type: 'building', subtype: 'sawmill', vendorGroupId: 'saw_1', vendorCell: 'anchor', vendorAnchorId: 20 }, image: 'sawmill', vendorCell: 'anchor' },
+                { id: 21, ownedByPlayer: true, contains: { type: 'building', subtype: 'sawmill', vendorGroupId: 'saw_1', vendorCell: 'top_right', vendorAnchorId: 20 }, image: 'sawmill', vendorCell: 'top_right' },
+                { id: 35, ownedByPlayer: true, contains: { type: 'building', subtype: 'sawmill', vendorGroupId: 'saw_1', vendorCell: 'bottom_left', vendorAnchorId: 20 }, image: 'sawmill', vendorCell: 'bottom_left' },
+                { id: 36, ownedByPlayer: true, contains: { type: 'building', subtype: 'sawmill', vendorGroupId: 'saw_1', vendorCell: 'bottom_right', vendorAnchorId: 20 }, image: 'sawmill', vendorCell: 'bottom_right' }
+            ]);
+
+            // Anchor tile (id 20) SHOULD render the crown badge (👑)
+            const { container: anchorContainer } = render(
+                <Tile
+                    id={20}
+                    index={20}
+                    color="#6b6057"
+                    inSuperboard={true}
+                    boardTiles={boardTiles}
+                    ownedByPlayer={true}
+                    contains={boardTiles[20].contains}
+                    vendorCell="anchor"
+                    vendorGroupId="saw_1"
+                    vendorAnchorId={20}
+                    image="sawmill"
+                />
+            );
+            expect(anchorContainer.textContent).toContain('👑');
+
+            // Top-right tile (id 21) must NOT render the crown badge
+            const { container: trContainer } = render(
+                <Tile
+                    id={21}
+                    index={21}
+                    color="#6b6057"
+                    inSuperboard={true}
+                    boardTiles={boardTiles}
+                    ownedByPlayer={true}
+                    contains={boardTiles[21].contains}
+                    vendorCell="top_right"
+                    vendorGroupId="saw_1"
+                    vendorAnchorId={20}
+                    image="sawmill"
+                />
+            );
+            expect(trContainer.textContent).not.toContain('👑');
+
+            // Bottom-left tile (id 35) must NOT render the crown badge
+            const { container: blContainer } = render(
+                <Tile
+                    id={35}
+                    index={35}
+                    color="#6b6057"
+                    inSuperboard={true}
+                    boardTiles={boardTiles}
+                    ownedByPlayer={true}
+                    contains={boardTiles[35].contains}
+                    vendorCell="bottom_left"
+                    vendorGroupId="saw_1"
+                    vendorAnchorId={20}
+                    image="sawmill"
+                />
+            );
+            expect(blContainer.textContent).not.toContain('👑');
+
+            // Bottom-right tile (id 36) must NOT render the crown badge
+            const { container: brContainer } = render(
+                <Tile
+                    id={36}
+                    index={36}
+                    color="#6b6057"
+                    inSuperboard={true}
+                    boardTiles={boardTiles}
+                    ownedByPlayer={true}
+                    contains={boardTiles[36].contains}
+                    vendorCell="bottom_right"
+                    vendorGroupId="saw_1"
+                    vendorAnchorId={20}
+                    image="sawmill"
+                />
+            );
+            expect(brContainer.textContent).not.toContain('👑');
+        });
+
         test('Superboard viewport collision: isAnchorSingle does not break 200% slicing or trigger duplicate rings when viewport index has a single-tile structure', () => {
             // Viewport tile 5 happens to be a domain_node or hut
             const boardTiles = createBoardTiles([
@@ -811,12 +892,16 @@ describe('Pocket Dimension Multi-Tile (2x2) Structure Rendering and Sanitization
             // Messaging should confirm the Engineer has rejoined the crew
             expect(mockMessaging).toHaveBeenCalledWith(expect.stringContaining('The Engineer has rejoined the crew'));
 
-            // The tile must have image: 'walker'
+            // Exactly 1 Walker unit must be spawned in superboardEntities
+            const walkers = Object.values(pageInstance.state.superboardEntities || {}).filter(e => e && (e.isWalker || e.subtype === 'walker'));
+            expect(walkers.length).toBe(1);
+            expect(walkers[0].isAllied).toBe(true);
+            expect(walkers[0].affiliation).toBe('friendly');
+
+            // The tile is cleared of static building obstruction so the unit can roam
             const tile = superboard.miniboards[0].tiles[10];
-            expect(tile.image).toBe('walker');
-            expect(tile.building).toBe('walker');
-            expect(tile.contains.subtype).toBe('walker');
-            expect(tile.contains.image).toBe('walker');
+            expect(tile.building).toBeFalsy();
+            expect(tile.contains).toBeFalsy();
         });
 
         test('cycleSelectedCrewMember skips detached crew members', () => {
@@ -1355,11 +1440,11 @@ describe('Pocket Dimension Multi-Tile (2x2) Structure Rendering and Sanitization
             expect(board.tiles[47].contains.subtype).toBe('dream_den');
             expect(board.tiles[48].contains.subtype).toBe('dream_den');
 
-            // Verify isImpassableBuildingTile returns false for vendor tiles (not treated as impassable walls)
-            expect(bm.isImpassableBuildingTile(board.tiles[32])).toBe(false);
-            expect(bm.isImpassableBuildingTile(board.tiles[33])).toBe(false);
-            expect(bm.isImpassableBuildingTile(board.tiles[47])).toBe(false);
-            expect(bm.isImpassableBuildingTile(board.tiles[48])).toBe(false);
+            // Verify isImpassableBuildingTile returns true for dream den tiles (treated as impassable building so avatar never overlaps icon)
+            expect(bm.isImpassableBuildingTile(board.tiles[32])).toBe(true);
+            expect(bm.isImpassableBuildingTile(board.tiles[33])).toBe(true);
+            expect(bm.isImpassableBuildingTile(board.tiles[47])).toBe(true);
+            expect(bm.isImpassableBuildingTile(board.tiles[48])).toBe(true);
 
             // Verify handleInteraction triggers triggerVendorEncounter on top_right, bottom_left, and bottom_right tiles
             bm.triggerVendorEncounter = jest.fn();
@@ -1372,6 +1457,121 @@ describe('Pocket Dimension Multi-Tile (2x2) Structure Rendering and Sanitization
             expect(bm.triggerVendorEncounter).toHaveBeenCalledWith('dream_den', board.tiles[48]);
             expect(res48).toBe('vendor');
         });
+
+        test('11. Single-tile buildings (e.g. earthen_fort, outpost, domain_node) do not project phantom 2x2 hitboxes onto adjacent empty tiles', () => {
+            const pageInstance = new DungeonPage({});
+            const bm = new BoardManager();
+            pageInstance.props = { boardManager: bm };
+
+            const miniboards = [];
+            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                const tiles = [];
+                for (let tIdx = 0; tIdx < 225; tIdx++) {
+                    tiles.push({
+                        type: 'board-tile',
+                        id: tIdx,
+                        coordinates: [tIdx % 15, Math.floor(tIdx / 15)],
+                        contains: { type: 'empty_space' },
+                        color: 'rgba(15, 15, 20, 0.55)'
+                    });
+                }
+                miniboards.push({ id: mbIdx, tiles });
+            }
+
+            const superboard = { miniboards };
+            // Place 1x1 Earthen Fort at globalX=5, globalY=5
+            const anchorIdx = 5 * 15 + 5;
+            superboard.miniboards[0].tiles[anchorIdx] = {
+                id: anchorIdx,
+                coordinates: [5, 5],
+                contains: { type: 'building', subtype: 'earthen_fort', building: 'earthen_fort' },
+                building: 'earthen_fort',
+                color: 'rgba(15, 15, 20, 0.55)'
+            };
+
+            // Earthen fort itself is impassable
+            expect(pageInstance.isSuperboardTilePassable(superboard, 5, 5)).toBe(false);
+
+            // Adjacent empty tiles must ALL remain passable (no 2x2 phantom collision cast onto empty space)
+            expect(pageInstance.isSuperboardTilePassable(superboard, 6, 5)).toBe(true);
+            expect(pageInstance.isSuperboardTilePassable(superboard, 5, 6)).toBe(true);
+            expect(pageInstance.isSuperboardTilePassable(superboard, 6, 6)).toBe(true);
+
+            // getLargeBuildingAtSuperboardCoord must return null for adjacent empty tiles
+            expect(pageInstance.getLargeBuildingAtSuperboardCoord(superboard, 6, 5)).toBeNull();
+            expect(pageInstance.getLargeBuildingAtSuperboardCoord(superboard, 5, 6)).toBeNull();
+            expect(pageInstance.getLargeBuildingAtSuperboardCoord(superboard, 6, 6)).toBeNull();
+        });
+
+        test('12. Destroyed multi-tile structures (hp <= 0 or destroyedAt) have all quadrants passable', () => {
+            const pageInstance = new DungeonPage({});
+            const bm = new BoardManager();
+            pageInstance.props = { boardManager: bm };
+
+            const miniboards = [];
+            for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                const tiles = [];
+                for (let tIdx = 0; tIdx < 225; tIdx++) {
+                    tiles.push({
+                        type: 'board-tile',
+                        id: tIdx,
+                        coordinates: [tIdx % 15, Math.floor(tIdx / 15)],
+                        contains: { type: 'empty_space' },
+                        color: 'rgba(15, 15, 20, 0.55)'
+                    });
+                }
+                miniboards.push({ id: mbIdx, tiles });
+            }
+
+            const superboard = { miniboards };
+            const anchorIdx = 5 * 15 + 5;
+            // Place destroyed War Camp anchor
+            superboard.miniboards[0].tiles[anchorIdx] = {
+                id: anchorIdx,
+                coordinates: [5, 5],
+                contains: {
+                    type: 'building',
+                    subtype: 'war_camp',
+                    building: 'war_camp',
+                    hp: 0,
+                    destroyedAt: Date.now()
+                },
+                building: 'war_camp',
+                color: 'rgba(15, 15, 20, 0.55)'
+            };
+
+            // All quadrants must be passable now that structure is destroyed
+            expect(pageInstance.isSuperboardTilePassable(superboard, 5, 5)).toBe(true);
+            expect(pageInstance.isSuperboardTilePassable(superboard, 6, 5)).toBe(true);
+            expect(pageInstance.isSuperboardTilePassable(superboard, 5, 6)).toBe(true);
+            expect(pageInstance.isSuperboardTilePassable(superboard, 6, 6)).toBe(true);
+
+            expect(pageInstance.getLargeBuildingAtSuperboardCoord(superboard, 5, 5)).toBeNull();
+            expect(pageInstance.getLargeBuildingAtSuperboardCoord(superboard, 6, 5)).toBeNull();
+        });
+
+        test('13. getGeneratorDef returns null for generic building or empty tiles, and openGeneratorModal does not open for unknown buildings', () => {
+            const pageInstance = new DungeonPage({});
+            pageInstance.setState = jest.fn();
+
+            // Generic tile with no specific generator definition
+            const genericTile = {
+                contains: { type: 'building', subtype: 'building' },
+                building: 'building'
+            };
+            expect(pageInstance.getGeneratorDef(genericTile)).toBeNull();
+
+            // Empty tile
+            const emptyTile = {
+                contains: { type: 'empty_space' }
+            };
+            expect(pageInstance.getGeneratorDef(emptyTile)).toBeNull();
+
+            // Calling openGeneratorModal on genericTile must abort without setting state
+            pageInstance.openGeneratorModal(genericTile);
+            expect(pageInstance.setState).not.toHaveBeenCalled();
+        });
     });
 });
+
 
