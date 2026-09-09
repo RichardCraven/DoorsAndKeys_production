@@ -546,6 +546,7 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
             vendorAnchorId: 999
         };
 
+        pageInstance.state.superboardPlayerPos = { gx: 6, gy: 7 };
         pageInstance.openGeneratorModal(t);
 
         // Active generator tile must remain tile 112 at (7, 7), NOT redirected to 999

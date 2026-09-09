@@ -7214,7 +7214,7 @@ class DungeonPage extends React.Component {
                 targetTile?.placedBy === 'player' ||
                 targetTile?.affiliation === 'friendly' ||
                 targetTile?.affiliation === 'player';
-            const isEnemyBuildingTarget = effectiveContains && ['earthen_fort', 'war_camp', 'war_fort'].some(k => effectiveStructKey.includes(k)) && !isTargetAllied && (typeof effectiveContains.hp === 'number' && effectiveContains.hp > 0);
+            const isEnemyBuildingTarget = effectiveContains && ['earthen_fort', 'war_camp', 'war_fort', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node'].some(k => effectiveStructKey.includes(k)) && !isTargetAllied && (typeof effectiveContains.hp === 'number' && effectiveContains.hp > 0);
 
             const buildingCheckResult = isBlockedByLargeBuilding ||
                 (bm.isImpassableBuildingTile
@@ -7409,12 +7409,12 @@ class DungeonPage extends React.Component {
                     }, 550);
                 }
 
-                const maxHpVal = activeCombatTarget?.maxHp || (isAutomatonTarget ? 30 : (isEnemyBuildingTarget ? (effectiveStructKey.includes('war_fort') ? 100 : (effectiveStructKey.includes('earthen_fort') ? 40 : 50)) : 10));
+                const maxHpVal = activeCombatTarget?.maxHp || (isAutomatonTarget ? 30 : (isEnemyBuildingTarget ? (effectiveStructKey.includes('war_fort') ? 100 : (effectiveStructKey.includes('earthen_fort') ? 40 : (effectiveStructKey.includes('monolith') ? 80 : 50))) : 10));
                 if (activeCombatTarget) {
                     activeCombatTarget.hp = (activeCombatTarget.hp || maxHpVal) - dmg;
                     activeCombatTarget.lastDamageTime = Date.now();
                 }
-                const targetName = isEnemyBuildingTarget ? (effectiveStructKey.includes('earthen_fort') ? 'Earthen Fort' : (effectiveStructKey.includes('war_fort') ? 'War Fort' : (effectiveStructKey.includes('outpost') ? 'Outpost' : 'War Camp'))) : (isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy');
+                const targetName = isEnemyBuildingTarget ? (effectiveStructKey.includes('earthen_fort') ? 'Earthen Fort' : (effectiveStructKey.includes('war_fort') ? 'War Fort' : (effectiveStructKey.includes('monolith') ? 'Domain Monolith' : (effectiveStructKey.includes('node') ? 'Domain Node' : (effectiveStructKey.includes('outpost') ? 'Outpost' : 'War Camp'))))) : (isAutomatonTarget ? 'Automaton' : 'Pocket Pygmy');
 
                 // Mutual damage exchange: Target unit counter-attacks crew if it's a mobile unit
                 let unitCounterDmg = 0;
@@ -7447,13 +7447,21 @@ class DungeonPage extends React.Component {
                         this.setState({ superboardEntities: { ...this.state.superboardEntities } });
                     }
                     if (isEnemyBuildingTarget) {
+                        const isDomainMonolith = ['domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node'].some(k => effectiveStructKey.includes(k));
+                        if (isDomainMonolith) {
+                            this.clearMonolithTerritory(superboard, effectiveContains?.id || targetContains?.id || vGroupId, effectiveContains?.affiliation || 'hostile', curMacroGx, curMacroGy);
+                        }
+
+                        const nowDestroyed = Date.now();
                         if (targetContains) {
                             targetContains.hp = 0;
-                            if (!targetContains.destroyedAt) targetContains.destroyedAt = Date.now();
+                            if (!targetContains.destroyedAt) targetContains.destroyedAt = nowDestroyed;
+                            if (isDomainMonolith) targetContains.affiliation = 'neutral';
                         }
                         if (effectiveContains) {
                             effectiveContains.hp = 0;
-                            if (!effectiveContains.destroyedAt) effectiveContains.destroyedAt = Date.now();
+                            if (!effectiveContains.destroyedAt) effectiveContains.destroyedAt = nowDestroyed;
+                            if (isDomainMonolith) effectiveContains.affiliation = 'neutral';
                         }
                         const targetVGroupId = targetContains?.vendorGroupId || targetTile?.vendorGroupId || effectiveContains?.vendorGroupId || effectiveAnchorTile?.vendorGroupId;
                         if (targetVGroupId && superboard && Array.isArray(superboard.miniboards)) {
@@ -7461,34 +7469,61 @@ class DungeonPage extends React.Component {
                                 if (!mb || !mb.tiles) continue;
                                 for (let t of mb.tiles) {
                                     if (t?.contains?.vendorGroupId === targetVGroupId || t?.vendorGroupId === targetVGroupId) {
-                                        t.contains = { type: 'empty_space', subtype: null };
-                                        t.building = null;
-                                        t.image = null;
-                                        delete t.vendorCell;
-                                        delete t.vendorGroupId;
-                                        delete t.vendorAnchorId;
-                                        delete t.affiliation;
+                                        if (isDomainMonolith) {
+                                            if (t.contains && typeof t.contains === 'object') {
+                                                t.contains.hp = 0;
+                                                t.contains.destroyedAt = nowDestroyed;
+                                                t.contains.affiliation = 'neutral';
+                                            }
+                                            t.affiliation = 'neutral';
+                                        } else {
+                                            t.contains = { type: 'empty_space', subtype: null };
+                                            t.building = null;
+                                            t.image = null;
+                                            delete t.vendorCell;
+                                            delete t.vendorGroupId;
+                                            delete t.vendorAnchorId;
+                                            delete t.affiliation;
+                                        }
                                     }
                                 }
                             }
                         }
                         if (effectiveAnchorTile) {
-                            effectiveAnchorTile.contains = { type: 'empty_space', subtype: null };
-                            effectiveAnchorTile.building = null;
-                            effectiveAnchorTile.image = null;
-                            delete effectiveAnchorTile.vendorCell;
-                            delete effectiveAnchorTile.vendorGroupId;
-                            delete effectiveAnchorTile.vendorAnchorId;
-                            delete effectiveAnchorTile.affiliation;
+                            if (isDomainMonolith) {
+                                if (effectiveAnchorTile.contains && typeof effectiveAnchorTile.contains === 'object') {
+                                    effectiveAnchorTile.contains.hp = 0;
+                                    effectiveAnchorTile.contains.destroyedAt = nowDestroyed;
+                                    effectiveAnchorTile.contains.affiliation = 'neutral';
+                                }
+                                effectiveAnchorTile.affiliation = 'neutral';
+                            } else {
+                                effectiveAnchorTile.contains = { type: 'empty_space', subtype: null };
+                                effectiveAnchorTile.building = null;
+                                effectiveAnchorTile.image = null;
+                                delete effectiveAnchorTile.vendorCell;
+                                delete effectiveAnchorTile.vendorGroupId;
+                                delete effectiveAnchorTile.vendorAnchorId;
+                                delete effectiveAnchorTile.affiliation;
+                            }
                         }
                         if (targetTile) {
-                            targetTile.contains = { type: 'empty_space', subtype: null };
-                            targetTile.building = null;
-                            targetTile.image = null;
-                            delete targetTile.vendorCell;
-                            delete targetTile.vendorGroupId;
-                            delete targetTile.vendorAnchorId;
-                            delete targetTile.affiliation;
+                            if (isDomainMonolith) {
+                                if (targetTile.contains && typeof targetTile.contains === 'object') {
+                                    targetTile.contains.hp = 0;
+                                    targetTile.contains.destroyedAt = nowDestroyed;
+                                    targetTile.contains.affiliation = 'neutral';
+                                }
+                                targetTile.affiliation = 'neutral';
+                            } else {
+                                targetTile.contains = { type: 'empty_space', subtype: null };
+                                targetTile.building = null;
+                                targetTile.image = null;
+                                delete targetTile.vendorCell;
+                                delete targetTile.vendorGroupId;
+                                delete targetTile.vendorAnchorId;
+                                delete targetTile.affiliation;
+                            }
                         }
                         this.displayMessage(`💥 Crew dealt ${dmg} damage and destroyed the ${targetName}!`);
                     } else {
@@ -12015,9 +12050,22 @@ class DungeonPage extends React.Component {
             if (!tile || !tile.contains) return;
             if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') return;
 
-                const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
-                const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
-                if (!isExplicitlyActive) return;
+            const isDestroyed = (cObj && (cObj.hp <= 0 || !!cObj.destroyedAt)) || (tile.hp <= 0 || !!tile.destroyedAt) || (tile.contains && typeof tile.contains === 'object' && (tile.contains.hp <= 0 || !!tile.contains.destroyedAt));
+            if (isDestroyed) {
+                const anchorGx = (mbIdx % 3) * 15 + (tIdx % 15);
+                const anchorGy = Math.floor(mbIdx / 3) * 15 + Math.floor(tIdx / 15);
+                const monolithId = cObj?.id || tile.id || `monolith_${anchorGx}_${anchorGy}`;
+                let affiliation = cObj?.affiliation || tile.affiliation || 'hostile';
+                if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node')) {
+                    affiliation = 'hostile';
+                }
+                this.clearMonolithTerritory(superboard, monolithId, affiliation, anchorGx, anchorGy);
+                return;
+            }
+
+            const isGeneratorActive = !!(tile.generatorData?.activated || cObj?.generatorData?.activated);
+            const isExplicitlyActive = !!(cObj?.activated || tile.activated || isGeneratorActive || (cObj?.growthCycles > 0) || (tile.growthCycles > 0) || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node') || tile.isHostile || cObj?.isHostile || (cObj?.affiliation && cObj.affiliation !== 'none') || (tile.affiliation && tile.affiliation !== 'none'));
+            if (!isExplicitlyActive) return;
 
                 let affiliation = cObj?.affiliation || tile.affiliation || (isGeneratorActive ? 'player' : null);
                 if (tile.isHostile || cObj?.isHostile || cObj?.faction === 'hostile' || sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node')) {
@@ -12175,6 +12223,141 @@ class DungeonPage extends React.Component {
                 }
             }
         }
+    };
+
+    clearMonolithTerritory = (superboard, monolithId, affiliation = 'hostile', anchorGx = null, anchorGy = null) => {
+        if (!superboard || !superboard.miniboards) return 0;
+
+        const possibleIds = new Set();
+        if (monolithId) possibleIds.add(String(monolithId));
+        if (anchorGx !== null && anchorGy !== null) {
+            possibleIds.add(`monolith_${anchorGx}_${anchorGy}`);
+        }
+
+        let minGx = anchorGx;
+        let maxGx = anchorGx !== null ? anchorGx + 1 : null;
+        let minGy = anchorGy;
+        let maxGy = anchorGy !== null ? anchorGy + 1 : null;
+        let isNode = false;
+
+        // Discover all IDs, vendorGroupId, anchor coordinates, and footprint associated with this monolith
+        superboard.miniboards.forEach((mb, mbIdx) => {
+            if (!mb || !mb.tiles) return;
+            const mbX = (mbIdx % 3) * 15;
+            const mbY = Math.floor(mbIdx / 3) * 15;
+            mb.tiles.forEach((t, tIdx) => {
+                if (!t) return;
+                const cObj = typeof t.contains === 'object' ? t.contains : null;
+                const sKey = String(cObj?.subtype || t.building || cObj?.key || cObj?.type || '').toLowerCase();
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+
+                const gx = mbX + (t.coordinates ? t.coordinates[0] : (tIdx % 15));
+                const gy = mbY + (t.coordinates ? t.coordinates[1] : Math.floor(tIdx / 15));
+
+                const matchesMonolith = (monolithId && (String(t.id) === String(monolithId) || String(cObj?.id) === String(monolithId) || String(cObj?.vendorGroupId) === String(monolithId) || String(t.vendorGroupId) === String(monolithId) || String(t.territoryMonolithId) === String(monolithId))) ||
+                    (anchorGx !== null && anchorGy !== null && gx === anchorGx && gy === anchorGy);
+
+                if (isDomainMonolith && matchesMonolith) {
+                    if (t.id) possibleIds.add(String(t.id));
+                    if (cObj?.id) possibleIds.add(String(cObj.id));
+                    if (t.vendorGroupId) possibleIds.add(String(t.vendorGroupId));
+                    if (cObj?.vendorGroupId) possibleIds.add(String(cObj.vendorGroupId));
+                    possibleIds.add(`monolith_${gx}_${gy}`);
+                    possibleIds.add(`monolith_${t.id}`);
+
+                    if (sKey.includes('node')) {
+                        isNode = true;
+                    }
+                    if (minGx === null || gx < minGx) minGx = gx;
+                    if (maxGx === null || gx > maxGx) maxGx = gx;
+                    if (minGy === null || gy < minGy) minGy = gy;
+                    if (maxGy === null || gy > maxGy) maxGy = gy;
+
+                    // Reset growth state and activation on the monolith itself
+                    t.growthCycles = 0;
+                    t.activated = false;
+                    delete t.territory;
+                    delete t.territoryAffiliation;
+                    delete t.territoryMonolithId;
+                    delete t.newlyClaimed;
+                    delete t.claimDelayMs;
+                    if (cObj) {
+                        cObj.growthCycles = 0;
+                        cObj.activated = false;
+                        delete cObj.territory;
+                        delete cObj.territoryAffiliation;
+                        delete cObj.territoryMonolithId;
+                        delete cObj.newlyClaimed;
+                        delete cObj.claimDelayMs;
+                    }
+                }
+            });
+        });
+
+        if (minGx !== null && maxGx === minGx && !isNode) {
+            maxGx = minGx + 1;
+        }
+        if (minGy !== null && maxGy === minGy && !isNode) {
+            maxGy = minGy + 1;
+        }
+
+        let clearedCount = 0;
+        superboard.miniboards.forEach((mb, mbIdx) => {
+            if (!mb || !mb.tiles) return;
+            const mbX = (mbIdx % 3) * 15;
+            const mbY = Math.floor(mbIdx / 3) * 15;
+            mb.tiles.forEach((t, tIdx) => {
+                if (!t) return;
+                const cObj = typeof t.contains === 'object' ? t.contains : null;
+                const tMonolithId = t.territoryMonolithId || cObj?.territoryMonolithId;
+
+                const gx = mbX + (t.coordinates ? t.coordinates[0] : (tIdx % 15));
+                const gy = mbY + (t.coordinates ? t.coordinates[1] : Math.floor(tIdx / 15));
+
+                let dist = 999;
+                if (minGx !== null && minGy !== null) {
+                    let dx = 0;
+                    if (gx < minGx) dx = minGx - gx;
+                    else if (gx > maxGx) dx = gx - maxGx;
+
+                    let dy = 0;
+                    if (gy < minGy) dy = minGy - gy;
+                    else if (gy > maxGy) dy = gy - maxGy;
+
+                    dist = Math.max(dx, dy);
+                }
+
+                const isTagged = tMonolithId && possibleIds.has(String(tMonolithId));
+                const tAff = t.territory || t.territoryAffiliation || cObj?.territory || cObj?.territoryAffiliation;
+                const isMatchingAffiliation = tAff && (tAff === affiliation || (affiliation === 'hostile' && (tAff === 'hostile' || tAff === 'enemy')));
+                const isProximityMatch = !tMonolithId && isMatchingAffiliation && dist <= 12;
+
+                if (isTagged || isProximityMatch) {
+                    delete t.territory;
+                    delete t.territoryAffiliation;
+                    delete t.territoryMonolithId;
+                    delete t.newlyClaimed;
+                    delete t.claimDelayMs;
+                    if (cObj) {
+                        delete cObj.territory;
+                        delete cObj.territoryAffiliation;
+                        delete cObj.territoryMonolithId;
+                        delete cObj.newlyClaimed;
+                        delete cObj.claimDelayMs;
+                    }
+                    clearedCount++;
+                }
+            });
+        });
+
+        if (clearedCount > 0) {
+            this.invalidateSuperboardStructureCache();
+            this.updateSuperboardViewport(true);
+            this.checkPocketDimensionVictory();
+            this.forceUpdate();
+        }
+
+        return clearedCount;
     };
 
     activateSuperboardDomainMonolith = (superboard, monolith, affiliation = 'hostile') => {
@@ -12900,6 +13083,10 @@ class DungeonPage extends React.Component {
                         if (isBuilding) {
                             targetUnit.hp = 0;
                             targetUnit.destroyedAt = now;
+                            const isDomainMonolith = String(structKey).includes('domain_monolith') || String(structKey).includes('dark_domain_monolith') || String(structKey).includes('domain_node') || String(structKey).includes('dark_domain_node') || (String(structKey).includes('monolith') && !String(structKey).includes('shrine'));
+                            if (isDomainMonolith) {
+                                this.clearMonolithTerritory(superboard, targetUnit.id || targetEnemyUnit.tile?.id, targetUnit.affiliation || 'hostile', targetEnemyUnit.gx, targetEnemyUnit.gy);
+                            }
                             if (String(structKey).includes('earthen_fort') || String(structKey).includes('wall')) {
                                 if (targetEnemyUnit.tile) {
                                     targetEnemyUnit.tile.contains = null;
@@ -14112,6 +14299,11 @@ class DungeonPage extends React.Component {
                         if (c.hp <= 0) {
                             c.hp = 0;
                             c.destroyedAt = now;
+                            const sKey = String(c.subtype || tgt.tile?.building || c.key || c.type || '').toLowerCase();
+                            const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine'));
+                            if (isDomainMonolith) {
+                                this.clearMonolithTerritory(superboard, c.id || tgt.tile?.id || c.vendorGroupId, c.affiliation || tgt.tile?.affiliation || 'hostile', tgt.gx, tgt.gy);
+                            }
                             if (c.vendorGroupId) {
                                 for (let mb of superboard.miniboards) {
                                     if (!mb || !mb.tiles) continue;

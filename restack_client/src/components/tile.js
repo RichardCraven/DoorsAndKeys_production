@@ -1714,6 +1714,9 @@ function Tile(props) {
                 // Only render once on the anchor tile of the monolith (or single tile if not multi)
                 if (isVendorCell && vRole && vRole !== 'anchor') return null;
 
+                const isDestroyed = (cObj && (cObj.hp <= 0 || !!cObj.destroyedAt)) || (props.hp <= 0 || !!props.destroyedAt) || (props.contains && typeof props.contains === 'object' && (props.contains.hp <= 0 || !!props.contains.destroyedAt));
+                if (isDestroyed) return null;
+
                 const isHostileMonolith = sKey.includes('dark_domain_monolith') || sKey.includes('dark_domain_node') || props.isHostile || cObj?.isHostile || cObj?.faction === 'hostile';
                 const rawAff = cObj?.affiliation || props.affiliation || props.territoryAffiliation || cObj?.territoryAffiliation || props.territory || cObj?.territory;
                 const isActivated = !!(cObj?.activated || props.activated || (cObj?.growthCycles > 0) || (props.growthCycles > 0) || isHostileMonolith || (rawAff && rawAff !== 'none'));
