@@ -285,7 +285,7 @@ export function BoardManager(){
         const isMatch = (str) => {
             if (!str || typeof str !== 'string') return false;
             const norm = str.toLowerCase().replace(/\s+/g, '_');
-            return norm === 'connecting_path' || norm === 'connecting_path_tile' || norm === 'connecting_path_space' || norm === 'connecting';
+            return norm.includes('connecting') || norm.includes('passage') || norm === 'path' || norm === 'connecting_path' || norm.includes('yellow_stripes') || norm.includes('door_transition');
         };
 
         const checkTile = (t) => {
@@ -295,13 +295,16 @@ export function BoardManager(){
             const contains = t.contains;
             let cType = typeof contains === 'string' ? contains : (contains ? (contains.type || contains.key || contains.name || contains.item) : null);
             let cSubtype = contains && typeof contains === 'object' ? (contains.subtype || contains.key || contains.name || contains.item) : null;
+            const cImg = contains && typeof contains === 'object' ? contains.image : null;
             const bldg = t.building || (contains && contains.building);
             const opt = t.optionType;
             const tp = t.type;
             const key = t.key;
             const name = t.name;
+            const img = t.image;
+            const terrain = t.terrain;
 
-            if (isMatch(cType) || isMatch(cSubtype) || isMatch(bldg) || isMatch(opt) || isMatch(tp) || isMatch(key) || isMatch(name) || (typeof cSubtype === 'string' && cSubtype.toLowerCase() === 'passage')) return true;
+            if (isMatch(cType) || isMatch(cSubtype) || isMatch(cImg) || isMatch(bldg) || isMatch(opt) || isMatch(tp) || isMatch(key) || isMatch(name) || isMatch(img) || isMatch(terrain)) return true;
             return false;
         };
 
@@ -392,6 +395,24 @@ export function BoardManager(){
             const cRow = Math.floor(cId / 15);
             const cCol = cId % 15;
 
+            // Direct check via vendorAnchorId if present
+            const explicitAnchorId = (tile.contains && typeof tile.contains === 'object' && typeof tile.contains.vendorAnchorId === 'number')
+                ? tile.contains.vendorAnchorId
+                : (typeof tile.vendorAnchorId === 'number' ? tile.vendorAnchorId : null);
+            if (explicitAnchorId !== null && boardTiles[explicitAnchorId]) {
+                const aTile = boardTiles[explicitAnchorId];
+                const aContainsType = this.getContainsType(aTile.contains) || aTile.contains?.type;
+                const aContainsSub = this.getContainsSubtype(aTile.contains) || aTile.contains?.subtype;
+                const aBldg = aTile.building || aTile.contains?.building;
+                const aImg = aTile.image || aTile.contains?.image;
+                const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
+                const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'dream_den'];
+                if (!vendorKeys.some(k => aKey.includes(k)) && !aKey.includes('hut')) {
+                    const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
+                    if (!aIsDestroyed) return true;
+                }
+            }
+
             // 2x2 checks: anchor at cId - 16, cId - 15, cId - 1
             const checks2x2 = [
                 { dRow: 1, dCol: 1, anchorOffset: -16, role: 'bottom_right' },
@@ -416,7 +437,8 @@ export function BoardManager(){
                         const aGroup = aTile.contains?.vendorGroupId || aTile.vendorGroupId;
                         const multi2x2 = [
                             'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
-                            'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort'
+                            'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort',
+                            'rift_embers', 'pocket_litter_rift_embers'
                         ];
                         const is2x2 = multi2x2.some(k => aKey.includes(k)) || aTile.isLarge || aTile.contains?.isLarge || aTile.isMultiTile || aTile.contains?.isMultiTile;
                         const aIsMulti = !!(is2x2 || (aRole === 'anchor') || aGroup);
@@ -430,9 +452,6 @@ export function BoardManager(){
                                 if (tileVendorGroup && aGroup && tileVendorGroup !== aGroup) {
                                     continue;
                                 }
-                                if (tileVendorCell === 'anchor') {
-                                    continue;
-                                }
                                 return true;
                             }
                         }
@@ -440,7 +459,7 @@ export function BoardManager(){
                 }
             }
 
-            // 3x3 checks (Keep / Fortress)
+            // 3x3 checks (Keep / Fortress / Fractured Monolith)
             for (let dRow = 0; dRow <= 2; dRow++) {
                 for (let dCol = 0; dCol <= 2; dCol++) {
                     if (dRow === 0 && dCol === 0) continue;
@@ -461,12 +480,8 @@ export function BoardManager(){
                                 if (tileVendorCell === 'anchor') {
                                     continue;
                                 }
-                                if (aKey.includes('keep') || aKey.includes('fortress') || (aTile.contains?.footprint && aTile.contains.footprint.length === 9)) {
+                                if (aKey.includes('keep') || aKey.includes('fortress') || aKey.includes('fractured_monolith') || (aTile.contains?.footprint && aTile.contains.footprint.length === 9)) {
                                     return true;
-                                }
-                                if (aKey.includes('fractured_monolith')) {
-                                    const isCorner = (dCol === 0 && dRow === 2) || (dCol === 2 && dRow === 0) || (dCol === 2 && dRow === 2);
-                                    if (!isCorner) return true;
                                 }
                             }
                         }
@@ -489,15 +504,12 @@ export function BoardManager(){
             return false;
         }
 
-        // Fractured Monolith (3x3 dimension litter) has passable corners on the micro-grid
-        if (sKey.includes('fractured_monolith')) {
-            const vCell = (tile.contains && typeof tile.contains === 'object' && tile.contains.vendorCell) || tile.vendorCell;
-            if (['anchor', 'top_right', 'bottom_left', 'bottom_right'].includes(vCell)) {
-                return false; // Corners are passable
-            }
-            return true; // Central/edge cells are impassable
-        }
-        if (sKey.includes('rift_embers')) {
+        // All dimension litter (pocket litter) types are strictly impassable
+        const isDimensionLitter = containsType === 'pocket_litter' || containsType === 'dimension_litter' || containsType === 'dimension litter' ||
+            tile.isDimensionLitter || tile.isPocketLitter || (tile.contains && typeof tile.contains === 'object' && (tile.contains.isDimensionLitter || tile.contains.isPocketLitter)) ||
+            sKey.includes('pocket_litter') || sKey.includes('mana_crystals') || sKey.includes('ruined_arch') ||
+            sKey.includes('broken_wagon') || sKey.includes('fractured_monolith') || sKey.includes('forge_remnants') || sKey.includes('rift_embers');
+        if (isDimensionLitter) {
             return true;
         }
 
@@ -744,7 +756,8 @@ export function BoardManager(){
         if (!borderValue || String(borderValue).includes('transparent') || String(borderValue) === 'none') return false;
         const str = String(borderValue).toLowerCase();
         if (str.includes('d4a844') || str.includes('e5b54f') || str.includes('gold')) return false;
-        return str.includes('black') || str.includes('#000') || str.includes('rgb(0,0,0)') || str.includes('2px solid');
+        if (str.includes('1px solid black') || str.includes('1px solid #000')) return false;
+        return str.includes('2px solid') || str.includes('black') || str.includes('#000') || str.includes('rgb(0,0,0)');
     }
 
     this.isPassageWallBlockingBetween = (fromIdx, toIdx, options = {}) => {
@@ -789,6 +802,11 @@ export function BoardManager(){
             const toIsVoid = this.isVoidTile(toTile) || (toBoardTile && this.isVoidTile(toBoardTile));
             if (fromIsVoid || toIsVoid) return true;
 
+            // If either tile has a solid wall border, movement is ALWAYS blocked!
+            const fromBlocked = this.hasSolidBorder(fromTile, fromSide) || (fromBoardTile && this.hasSolidBorder(fromBoardTile, fromSide));
+            const toBlocked = this.hasSolidBorder(toTile, toSide) || (toBoardTile && this.hasSolidBorder(toBoardTile, toSide));
+            if (fromBlocked || toBlocked) return true;
+
             // Transitioning between normal floor and a connecting path edge connector:
             // allow transition so the player can enter/exit the connecting path
             const fromIsConnecting = this.isConnectingPathTile(fromTile) || (fromBoardTile && this.isConnectingPathTile(fromBoardTile));
@@ -802,9 +820,7 @@ export function BoardManager(){
             const isShiftBypass = !!(opts.shiftKey || opts.ignoreBuilding || opts.bypassBuilding);
             if (!isShiftBypass && (this.isImpassableBuildingTile(toTile) || (toBoardTile && this.isImpassableBuildingTile(toBoardTile)))) return true;
 
-            const fromBlocked = this.hasSolidBorder(fromTile, fromSide) || (fromBoardTile && this.hasSolidBorder(fromBoardTile, fromSide));
-            const toBlocked = this.hasSolidBorder(toTile, toSide) || (toBoardTile && this.hasSolidBorder(toBoardTile, toSide));
-            return !!(fromBlocked || toBlocked);
+            return false;
         } catch (e) {
             return false;
         }

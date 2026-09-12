@@ -57,6 +57,7 @@ describe('Destroyed Enemy Domain Generator Territory Loss', () => {
                 currentOrientation: 'F',
                 getContainsType: (c) => typeof c === 'object' ? c?.type : c,
                 getContainsSubtype: (c) => typeof c === 'object' ? (c?.subtype || c?.key) : c,
+                getIndexFromCoordinates: jest.fn(() => 0),
                 dungeon: {
                     superboards: {
                         pocket_plains: superboard
@@ -220,12 +221,17 @@ describe('Destroyed Enemy Domain Generator Territory Loss', () => {
             gy: 2,
             mbIdx: 0,
             tIdx: 31,
+            isWalker: true,
+            subtype: 'walker',
+            hp: 50,
             lastAttackTime: 0
         };
-        pageInstance._pocketWalkers = [walker];
+        pageInstance.state.superboardEntities = {
+            [walker.id]: walker
+        };
 
-        // Run tickPocketWalkers
-        pageInstance.tickPocketWalkers(superboard);
+        // Run tickPocketPygmies which processes walker cleave
+        pageInstance.tickPocketPygmies(superboard);
 
         // Node took 10 cleave damage, reducing hp from 5 to 0 (destroyed)
         expect(nodeTile.contains.hp).toBe(0);
@@ -246,7 +252,7 @@ describe('Destroyed Enemy Domain Generator Territory Loss', () => {
             subtype: 'dark_domain_monolith',
             id: 'monolith_5_4',
             affiliation: 'hostile',
-            hp: 3,
+            hp: 1,
             maxHp: 40
         };
 
@@ -264,6 +270,9 @@ describe('Destroyed Enemy Domain Generator Territory Loss', () => {
             tIdx: 64,
             affiliation: 'player',
             isHostile: false,
+            isPocketPygmy: true,
+            subtype: 'pocket_pygmy',
+            hp: 20,
             lastAttackTime: 0
         };
         pageInstance.state.superboardEntities = {
@@ -279,4 +288,174 @@ describe('Destroyed Enemy Domain Generator Territory Loss', () => {
         expect(territoryTile.territory).toBeUndefined();
         expect(territoryTile.territoryMonolithId).toBeUndefined();
     });
+
+    test('Moving into a neutral domain monolith opens generator modal and does NOT destroy it', () => {
+        const monolithTile = superboard.miniboards[0].tiles[80];
+        monolithTile.coordinates = [5, 5];
+        monolithTile.globalX = 5;
+        monolithTile.globalY = 5;
+        monolithTile.building = 'domain_monolith';
+        monolithTile.contains = {
+            type: 'building',
+            subtype: 'domain_monolith',
+            id: 'monolith_5_5',
+            affiliation: 'neutral',
+            hp: 40,
+            maxHp: 40
+        };
+
+        // Player is at (4, 5) and moves right towards (5, 5)
+        pageInstance.state.superboardPlayerPos = { gx: 4, gy: 5 };
+        pageInstance.movePlayerInSuperboard(1, 0);
+
+        // Monolith MUST NOT be destroyed
+        expect(monolithTile.contains.hp).toBe(40);
+        expect(monolithTile.contains.destroyedAt).toBeUndefined();
+    });
+
+    test('Friendly pygmy units destroying a hostile resource generator makes it neutral with 10s cooldown and blocks activation', () => {
+        const vendorGroupId = 'building_fungal_nursery_95';
+        const anchorTile = superboard.miniboards[0].tiles[95];
+        const trTile = superboard.miniboards[0].tiles[96];
+        const blTile = superboard.miniboards[0].tiles[110];
+        const brTile = superboard.miniboards[0].tiles[111];
+
+        const cells = [
+            { tile: anchorTile, vCell: 'anchor', gx: 5, gy: 6 },
+            { tile: trTile, vCell: 'top_right', gx: 6, gy: 6 },
+            { tile: blTile, vCell: 'bottom_left', gx: 5, gy: 7 },
+            { tile: brTile, vCell: 'bottom_right', gx: 6, gy: 7 }
+        ];
+
+        cells.forEach(({ tile, vCell, gx, gy }) => {
+            tile.globalX = gx;
+            tile.globalY = gy;
+            tile.building = 'fungal_nursery';
+            tile.affiliation = 'hostile';
+            tile.vendorGroupId = vendorGroupId;
+            tile.vendorCell = vCell;
+            tile.contains = {
+                type: 'building',
+                subtype: 'fungal_nursery',
+                id: `gen_${gx}_${gy}`,
+                affiliation: 'hostile',
+                vendorGroupId,
+                vendorCell: vCell,
+                hp: 1,
+                maxHp: 40,
+                generatorData: {
+                    key: 'fungal_nursery',
+                    name: 'Fungal Nursery',
+                    resource: 'spores',
+                    rate: 5,
+                    activated: true,
+                    affiliation: 'hostile'
+                }
+            };
+        });
+
+        // Place friendly pygmy at (4, 6) next to anchor
+        const pygmy = {
+            id: 'pygmy_friendly_fn',
+            gx: 4,
+            gy: 6,
+            mbIdx: 0,
+            tIdx: 94,
+            affiliation: 'player',
+            isHostile: false,
+            isPocketPygmy: true,
+            subtype: 'pocket_pygmy',
+            hp: 20,
+            lastAttackTime: 0
+        };
+        pageInstance.state.superboardEntities = {
+            [pygmy.id]: pygmy
+        };
+
+        const now = Date.now();
+        pageInstance.tickPocketPygmies(superboard);
+
+        // 1. All cells of vendorGroupId should be neutral, hp 0, and have 10s cooldown
+        cells.forEach(({ tile }) => {
+            expect(tile.contains.hp).toBe(0);
+            expect(tile.contains.affiliation).toBe('neutral');
+            expect(tile.affiliation).toBe('neutral');
+            expect(tile.contains.destroyedAt).toBeDefined();
+            expect(tile.contains.destroyedDuration).toBe(10000);
+            expect(tile.contains.disabledUntil).toBeGreaterThanOrEqual(now + 10000);
+        });
+
+        // 2. User trying to activate it while destroyed is unable to
+        pageInstance.state.activeGeneratorTile = anchorTile;
+        pageInstance.handleActivateGenerator();
+        expect(pageInstance.displayMessage).toHaveBeenCalledWith(expect.stringContaining('Cannot activate a destroyed building'));
+        expect(anchorTile.contains.generatorData?.activated).toBe(false);
+
+        pageInstance.displayMessage.mockClear();
+        pageInstance.startClaimingPocketOutpost(anchorTile);
+        expect(pageInstance.displayMessage).toHaveBeenCalledWith(expect.stringContaining('Cannot activate a destroyed building'));
+        expect(anchorTile.contains.generatorData?.activated).toBe(false);
+
+        // 3. Automaton AI targeting skips destroyed resource generator
+        const auto = {
+            id: 'auto_enemy_1',
+            gx: 4,
+            gy: 5,
+            mbIdx: 0,
+            tIdx: 79,
+            hp: 30,
+            maxHp: 30,
+            isAutomaton: true,
+            subtype: 'automaton',
+            affiliation: 'hostile',
+            faction: 'hostile'
+        };
+        pageInstance.state.superboardEntities[auto.id] = auto;
+
+        // Ticking pygmies (which includes automaton logic) will not assign destroyed generator as target
+        pageInstance.tickPocketPygmies(superboard);
+        expect(auto.convertingTarget).toBeUndefined();
+
+        // 4. After 10 seconds, tickPocketResourceGenerators restores it to neutral with full HP
+        const originalNow = Date.now;
+        try {
+            Date.now = () => now + 10500;
+            pageInstance.tickPocketResourceGenerators(superboard);
+
+            // Destroyed badge & flags cleared, hp restored to maxHp (40)
+            expect(anchorTile.contains.destroyedAt).toBeUndefined();
+            expect(anchorTile.contains.disabledUntil).toBeUndefined();
+            expect(anchorTile.contains.hp).toBe(40);
+            expect(trTile.contains.destroyedAt).toBeUndefined();
+            expect(trTile.contains.hp).toBe(40);
+
+            // Building is now available to activate
+            pageInstance.state.activeGeneratorTile = anchorTile;
+            pageInstance.handleActivateGenerator();
+            expect(anchorTile.generatorData.activated).toBe(true);
+            expect(anchorTile.contains.generatorData.activated).toBe(true);
+        } finally {
+            Date.now = originalNow;
+        }
+    });
+
+    test('getActiveSuperboardPerfectSquares returns empty when dark domain node is destroyed or disabled', () => {
+        const nodeTile = superboard.miniboards[0].tiles[30];
+        nodeTile.coordinates = [0, 2];
+        nodeTile.globalX = 0;
+        nodeTile.globalY = 2;
+        nodeTile.contains = {
+            type: 'building',
+            subtype: 'dark_domain_node',
+            id: 'monolith_0_2',
+            affiliation: 'hostile',
+            hp: 0,
+            destroyedAt: Date.now(),
+            disabledUntil: Date.now() + 10000
+        };
+
+        const activeSquares = pageInstance.getActiveSuperboardPerfectSquares(superboard);
+        expect(activeSquares).toEqual([]);
+    });
 });
+

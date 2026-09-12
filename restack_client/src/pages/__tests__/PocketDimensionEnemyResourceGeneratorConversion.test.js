@@ -421,4 +421,103 @@ describe('Pocket Dimension Enemy Resource Generator Conversion', () => {
         expect(pageInstance.state.showGeneratorModal).toBe(true);
         expect(pageInstance.state.activeGeneratorTile).toBeDefined();
     });
+
+    test('12. clearAutomatonConversionOnTarget clears automaton convertingTarget across 2x2 footprint while preserving player claim conversions', () => {
+        // Setup automaton conversion on enemySawmillTiles
+        const autoConv = { targetId: 'sawmill_1', anchorGx: 20, anchorGy: 20, startTime: Date.now(), duration: 10000 };
+        enemySawmillTiles.forEach(t => {
+            t.convertingTarget = { ...autoConv };
+            t.contains.convertingTarget = { ...autoConv };
+        });
+
+        // Setup player claim on a different tile
+        const playerTile = miniboards[0].tiles[0];
+        const playerConv = { isPlayerClaim: true, isPlayer: true, targetId: 'player_outpost', anchorGx: 0, anchorGy: 0, startTime: Date.now(), duration: 10000 };
+        playerTile.convertingTarget = { ...playerConv };
+        playerTile.contains.convertingTarget = { ...playerConv };
+
+        pageInstance.clearAutomatonConversionOnTarget(superboard, 20, 20, 'sawmill_1');
+
+        // Automaton conversion should be cleansed from all 4 tiles of the 2x2 structure
+        enemySawmillTiles.forEach(t => {
+            expect(t.convertingTarget).toBeUndefined();
+            expect(t.contains.convertingTarget).toBeUndefined();
+        });
+
+        // Player conversion must be preserved!
+        expect(playerTile.convertingTarget).toBeDefined();
+        expect(playerTile.convertingTarget.isPlayerClaim).toBe(true);
+    });
+
+    test('13. clearOrphanAutomatonConversions clears stale automaton conversions when no automaton is nearby', () => {
+        // Place an automaton conversion on sawmill with no living automaton near it
+        const autoConv = { targetId: 'sawmill_1', anchorGx: 20, anchorGy: 20, startTime: Date.now(), duration: 10000 };
+        enemySawmillTiles[0].convertingTarget = { ...autoConv };
+        enemySawmillTiles[0].contains.convertingTarget = { ...autoConv };
+
+        // Player conversion on another tile
+        const playerTile = miniboards[0].tiles[0];
+        const playerConv = { isPlayerClaim: true, isPlayer: true, targetId: 'player_outpost', anchorGx: 0, anchorGy: 0, startTime: Date.now(), duration: 10000 };
+        playerTile.convertingTarget = { ...playerConv };
+        playerTile.contains.convertingTarget = { ...playerConv };
+
+        // Living automaton far away at (5, 5)
+        miniboards[0].tiles[5 * 15 + 5].contains = { isAutomaton: true, hp: 30, isDying: false };
+
+        pageInstance.clearOrphanAutomatonConversions(superboard);
+
+        // Orphan automaton conversion at (20, 20) should be wiped because distance > 2
+        expect(enemySawmillTiles[0].convertingTarget).toBeUndefined();
+        expect(enemySawmillTiles[0].contains.convertingTarget).toBeUndefined();
+
+        // Player conversion preserved
+        expect(playerTile.convertingTarget).toBeDefined();
+    });
+
+    test('14. Automaton completes 10s conversion on military/resource structure, converting all quadrants to hostile control', async () => {
+        // Setup friendly outpost at (10, 10) in miniboard 0
+        const outpostTile = miniboards[0].tiles[10 * 15 + 10];
+        outpostTile.building = 'outpost';
+        outpostTile.affiliation = 'friendly';
+        outpostTile.placedBy = 'player';
+        outpostTile.ownedByPlayer = true;
+        outpostTile.contains = {
+            id: 'outpost_10_10',
+            type: 'building',
+            subtype: 'outpost',
+            building: 'outpost',
+            affiliation: 'friendly',
+            placedBy: 'player',
+            isAllied: true
+        };
+
+        // Automaton adjacent at (10, 9)
+        const autoTile = miniboards[0].tiles[9 * 15 + 10];
+        const automaton = {
+            isAutomaton: true,
+            hp: 30,
+            convertingTarget: { targetId: 'outpost_10_10', anchorGx: 10, anchorGy: 10, startTime: Date.now() - 11000, duration: 10000 }
+        };
+        autoTile.contains = automaton;
+
+        pageInstance.state.inSuperboard = true;
+        pageInstance.state.superboardType = 'pocket_plains';
+        pageInstance.displayMessage = jest.fn();
+        pageInstance.updateSuperboardViewport = jest.fn();
+        pageInstance.animatePocketPygmyBump = jest.fn();
+        await pageInstance.tickPocketPygmies();
+
+        // Outpost should now be hostile and owned by automaton
+        expect(outpostTile.affiliation).toBe('hostile');
+        expect(outpostTile.isHostile).toBe(true);
+        expect(outpostTile.placedBy).toBe('automaton');
+        expect(outpostTile.ownedByPlayer).toBeUndefined();
+        expect(outpostTile.contains.affiliation).toBe('hostile');
+        expect(outpostTile.contains.isHostile).toBe(true);
+        expect(outpostTile.contains.isAllied).toBeUndefined();
+
+        // Conversion state cleared on both structure and automaton
+        expect(outpostTile.convertingTarget).toBeUndefined();
+        expect(autoTile.contains.convertingTarget).toBeUndefined();
+    });
 });

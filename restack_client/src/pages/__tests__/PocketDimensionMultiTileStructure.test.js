@@ -77,6 +77,58 @@ describe('Pocket Dimension Multi-Tile (2x2) Structure Rendering and Sanitization
             expect(portrait.style.backgroundPosition).toBe('0% 0%');
         });
 
+        test('Dimension debris (Rift Embers 2x2) does NOT render a structure faction ring on anchor tile', () => {
+            const boardTiles = createBoardTiles([
+                { id: 20, contains: { type: 'pocket_litter', subtype: 'pocket_litter_rift_embers', vendorGroupId: 'litter_1', vendorCell: 'anchor', vendorAnchorId: 20 }, image: 'pocket_litter_rift_embers' },
+                { id: 21, contains: { type: 'pocket_litter', subtype: 'pocket_litter_rift_embers', vendorGroupId: 'litter_1', vendorCell: 'top_right', vendorAnchorId: 20 }, image: 'pocket_litter_rift_embers' },
+                { id: 35, contains: { type: 'pocket_litter', subtype: 'pocket_litter_rift_embers', vendorGroupId: 'litter_1', vendorCell: 'bottom_left', vendorAnchorId: 20 }, image: 'pocket_litter_rift_embers' },
+                { id: 36, contains: { type: 'pocket_litter', subtype: 'pocket_litter_rift_embers', vendorGroupId: 'litter_1', vendorCell: 'bottom_right', vendorAnchorId: 20 }, image: 'pocket_litter_rift_embers' }
+            ]);
+
+            const { container } = render(
+                <Tile
+                    id={20}
+                    index={20}
+                    color="#6b6057"
+                    inSuperboard={true}
+                    boardTiles={boardTiles}
+                    contains={{ type: 'pocket_litter', subtype: 'pocket_litter_rift_embers', vendorGroupId: 'litter_1', vendorCell: 'anchor', vendorAnchorId: 20 }}
+                    vendorCell="anchor"
+                    vendorGroupId="litter_1"
+                    vendorAnchorId={20}
+                    image="pocket_litter_rift_embers"
+                />
+            );
+
+            // Anchor tile of debris must NOT render a faction ring
+            const ring = container.querySelector('.structure-faction-ring');
+            expect(ring).toBeNull();
+        });
+
+        test('Dimension debris (Fractured Monolith 3x3) does NOT render a structure faction ring on anchor tile', () => {
+            const boardTiles = createBoardTiles([
+                { id: 20, contains: { type: 'pocket_litter', subtype: 'pocket_litter_fractured_monolith', vendorGroupId: 'monolith_1', vendorCell: 'anchor', vendorAnchorId: 20 }, image: 'pocket_litter_fractured_monolith' }
+            ]);
+
+            const { container } = render(
+                <Tile
+                    id={20}
+                    index={20}
+                    color="#6b6057"
+                    inSuperboard={true}
+                    boardTiles={boardTiles}
+                    contains={{ type: 'pocket_litter', subtype: 'pocket_litter_fractured_monolith', vendorGroupId: 'monolith_1', vendorCell: 'anchor', vendorAnchorId: 20 }}
+                    vendorCell="anchor"
+                    vendorGroupId="monolith_1"
+                    vendorAnchorId={20}
+                    image="pocket_litter_fractured_monolith"
+                />
+            );
+
+            const ring = container.querySelector('.structure-faction-ring');
+            expect(ring).toBeNull();
+        });
+
         test('Single-tile Earthen Fort renders portrait in Superboard', () => {
             const boardTiles = createBoardTiles([
                 { id: 20, contains: { type: 'building', subtype: 'earthen_fort', building: 'earthen_fort', name: 'Earthen Fort' }, building: 'earthen_fort' }

@@ -25,17 +25,17 @@ describe('Tutorial Dungeon Launch & Sequence Tests', () => {
     bm.setCurrentOrientation('F');
     bm.initializeTilesFromMap(4, 110);
 
-    // Standing at (9,6) [tile 99]
+    // Standing at (9,6) [tile 99] - tile 101 (11,6) is 2 steps away
     bm.handleFogOfWar(bm.tiles[99]);
-    expect(bm.tiles[85].color).not.toBe('black');
+    expect(bm.tiles[101].color).not.toBe('black');
 
-    // Standing at (10,6) [tile 100]
+    // Standing at (10,6) [tile 100] - tile 101 (11,6) is 1 step away
     bm.handleFogOfWar(bm.tiles[100]);
-    expect(bm.tiles[85].color).not.toBe('black');
+    expect(bm.tiles[101].color).not.toBe('black');
 
-    // Standing at (10,5) [tile 85]
+    // Standing at (10,5) [tile 85] - tile 86 (11,5) is 1 step away
     bm.handleFogOfWar(bm.tiles[85]);
-    expect(bm.tiles[99].color).not.toBe('black');
+    expect(bm.tiles[86].color).not.toBe('black');
   });
 
   test('superboard 45x45 viewport calculation clamps top-left correctly', () => {

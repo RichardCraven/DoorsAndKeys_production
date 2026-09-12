@@ -16,7 +16,9 @@ jest.mock('@coreui/react', () => ({
 }));
 
 import React from 'react';
+import { render } from '@testing-library/react';
 import DungeonPage from '../DungeonPage';
+import Tile from '../../components/tile';
 
 describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
     let pageInstance;
@@ -554,5 +556,43 @@ describe('Pocket Dimension Domain Node Territory Activation & Growth', () => {
         expect(pageInstance.state.activeGeneratorTile.globalX).toBe(7);
         expect(pageInstance.state.activeGeneratorTile.globalY).toBe(7);
     });
+
+    test('Tile renders continuous domain plane without dashed border or inset shadow in pocket dimension', () => {
+        const { container } = render(
+            <Tile
+                id={112}
+                type="board-tile"
+                inSuperboard={true}
+                territory="player"
+                territoryAffiliation="player"
+                territoryMonolithId="domain_node_7_7"
+                color="rgba(15, 15, 20, 0.55)"
+            />
+        );
+
+        const territoryDiv = container.querySelector('.territory-bg');
+        expect(territoryDiv).not.toBeNull();
+        expect(territoryDiv.style.border).not.toContain('dashed');
+        expect(territoryDiv.style.boxShadow).not.toContain('inset');
+        expect(territoryDiv.style.backgroundColor).toBe('rgba(14, 116, 144, 0.28)');
+    });
+
+    test('Tile preserves dashed borders and inset shadow for pygmy clan territory in pocket dimension', () => {
+        const { container } = render(
+            <Tile
+                id={112}
+                type="board-tile"
+                inSuperboard={true}
+                territory="woodland"
+                color="rgba(15, 15, 20, 0.55)"
+            />
+        );
+
+        const territoryDiv = container.querySelector('.territory-bg');
+        expect(territoryDiv).not.toBeNull();
+        expect(territoryDiv.style.border).toContain('dashed');
+        expect(territoryDiv.style.boxShadow).toContain('inset');
+    });
 });
+
 

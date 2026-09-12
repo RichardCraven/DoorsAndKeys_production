@@ -435,5 +435,188 @@ describe('Pocket Dimension Pygmy Aggression: Neutral & Hostile Pygmies', () => {
         expect(spawnedPygmy.affiliation).toBe('friendly');
         expect(spawnedPygmy.homeStructureKey).toContain('earthen_fort');
     });
+
+    test('Pygmy remains at same tile and continuously attacks adjacent domain generator until destroyed', async () => {
+        page.state.superboardPlayerPos = { gx: 35, gy: 35 };
+
+        const generatorTile = placeTileAt(superboard, 21, 20, {
+            building: 'domain_generator',
+            affiliation: 'hostile',
+            contains: {
+                id: 'domain_gen_1',
+                type: 'building',
+                building: 'domain_generator',
+                affiliation: 'hostile',
+                hp: 10,
+                maxHp: 40
+            }
+        });
+
+        const pygmy = {
+            id: 'pygmy_allied_station',
+            gx: 20,
+            gy: 20,
+            mbIdx: 4,
+            tIdx: 5,
+            hp: 10,
+            maxHp: 10,
+            isAllied: true,
+            faction: 'player',
+            affiliation: 'friendly',
+            isPocketPygmy: true,
+            lastAttackTime: 0
+        };
+
+        placeTileAt(superboard, 20, 20, { contains: pygmy });
+        page.state.superboardEntities = { [pygmy.id]: pygmy };
+        page.movePocketPygmyUnit = jest.fn();
+
+        // Tick 1: Attack tick (canAttack = true)
+        await page.tickPocketPygmies();
+        expect(generatorTile.contains.hp).toBeLessThan(10);
+        expect(page.movePocketPygmyUnit).not.toHaveBeenCalled();
+
+        // Tick 2: Non-attack tick (cooldown tick)
+        await page.tickPocketPygmies();
+        // Must remain on same tile (no roaming away)
+        expect(page.movePocketPygmyUnit).not.toHaveBeenCalled();
+    });
+
+    test('Pygmy breaks concentration on domain generator if adjacent hostile unit appears', async () => {
+        page.state.superboardPlayerPos = { gx: 35, gy: 35 };
+
+        placeTileAt(superboard, 21, 20, {
+            building: 'domain_generator',
+            affiliation: 'hostile',
+            contains: {
+                id: 'domain_gen_1',
+                type: 'building',
+                building: 'domain_generator',
+                affiliation: 'hostile',
+                hp: 20,
+                maxHp: 40
+            }
+        });
+
+        const hostileUnit = {
+            id: 'hostile_pygmy_adj',
+            gx: 20,
+            gy: 21,
+            hp: 10,
+            maxHp: 10,
+            faction: 'hostile',
+            isHostile: true,
+            affiliation: 'hostile',
+            isPocketPygmy: true
+        };
+        placeTileAt(superboard, 20, 21, { contains: hostileUnit });
+
+        const pygmy = {
+            id: 'pygmy_allied_broken',
+            gx: 20,
+            gy: 20,
+            mbIdx: 4,
+            tIdx: 5,
+            hp: 10,
+            maxHp: 10,
+            isAllied: true,
+            faction: 'player',
+            affiliation: 'friendly',
+            isPocketPygmy: true,
+            lastAttackTime: 0
+        };
+        placeTileAt(superboard, 20, 20, { contains: pygmy });
+        page.state.superboardEntities = { [pygmy.id]: pygmy, [hostileUnit.id]: hostileUnit };
+
+        await page.tickPocketPygmies();
+
+        // Pygmy should attack adjacent hostile unit instead of generator
+        expect(hostileUnit.hp).toBeLessThan(10);
+    });
+
+    test('Pygmy attacked by Outpost Tower prioritizes attacking that tower', async () => {
+        page.state.superboardPlayerPos = { gx: 35, gy: 35 };
+
+        // Domain generator at (21, 20) (dist 1)
+        placeTileAt(superboard, 21, 20, {
+            building: 'domain_generator',
+            affiliation: 'hostile',
+            contains: { id: 'gen_1', type: 'building', building: 'domain_generator', affiliation: 'hostile', hp: 20 }
+        });
+
+        // Outpost Tower at (20, 23) (dist 3, straight south)
+        const outpostTile = placeTileAt(superboard, 20, 23, {
+            building: 'outpost',
+            affiliation: 'hostile',
+            contains: { id: 'outpost_1', type: 'building', building: 'outpost', affiliation: 'hostile', hp: 40 }
+        });
+
+        const pygmy = {
+            id: 'pygmy_tower_aggro',
+            gx: 20,
+            gy: 20,
+            mbIdx: 4,
+            tIdx: 5,
+            hp: 10,
+            maxHp: 10,
+            isAllied: true,
+            faction: 'player',
+            affiliation: 'friendly',
+            isPocketPygmy: true,
+            lastAttackTime: Date.now(), // On cooldown
+            lastDamageTime: Date.now(),
+            lastDamagedByOutpost: {
+                gx: 20,
+                gy: 23,
+                time: Date.now()
+            }
+        };
+        placeTileAt(superboard, 20, 20, { contains: pygmy });
+        page.state.superboardEntities = { [pygmy.id]: pygmy };
+        page.movePocketPygmyUnit = jest.fn();
+
+        await page.tickPocketPygmies();
+
+        // Pygmy should step towards Outpost Tower at (20, 23)
+        expect(page.movePocketPygmyUnit).toHaveBeenCalled();
+        const moveCall = page.movePocketPygmyUnit.mock.calls[0];
+        expect(moveCall[7]).toBe(20);
+        expect(moveCall[8]).toBe(21); // Steps south towards gy: 23
+    });
+
+    test('Pygmy near death (hp <= 2) flees away from Outpost Tower', async () => {
+        page.state.superboardPlayerPos = { gx: 35, gy: 35 };
+
+        const pygmy = {
+            id: 'pygmy_fleeing',
+            gx: 20,
+            gy: 20,
+            mbIdx: 4,
+            tIdx: 5,
+            hp: 2, // Near death!
+            maxHp: 10,
+            isAllied: true,
+            faction: 'player',
+            affiliation: 'friendly',
+            isPocketPygmy: true,
+            lastDamagedByOutpost: {
+                gx: 21,
+                gy: 20,
+                time: Date.now()
+            }
+        };
+        placeTileAt(superboard, 20, 20, { contains: pygmy });
+        page.state.superboardEntities = { [pygmy.id]: pygmy };
+        page.movePocketPygmyUnit = jest.fn();
+
+        await page.tickPocketPygmies();
+
+        // Pygmy should flee away from (21, 20)
+        expect(page.movePocketPygmyUnit).toHaveBeenCalled();
+        const moveCall = page.movePocketPygmyUnit.mock.calls[0];
+        const destGx = moveCall[7];
+        expect(destGx).toBe(19); // Flees to gx: 19 (away from 21)
+    });
 });
+
 

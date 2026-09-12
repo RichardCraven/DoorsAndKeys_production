@@ -8,11 +8,10 @@ describe('Fractured Monolith Pocket Litter', () => {
         bm = new BoardManager();
     });
 
-    test('isImpassableBuildingTile returns false for the 4 corners and true for 5 inner/side cells of Fractured Monolith', () => {
-        const cornerCells = ['anchor', 'top_right', 'bottom_left', 'bottom_right'];
-        const innerCells = ['top_center', 'middle_left', 'center', 'middle_right', 'bottom_center'];
+    test('isImpassableBuildingTile returns true for all cells of Fractured Monolith and all dimension litter types', () => {
+        const allCells = ['anchor', 'top_center', 'top_right', 'middle_left', 'center', 'middle_right', 'bottom_left', 'bottom_center', 'bottom_right'];
 
-        cornerCells.forEach(cell => {
+        allCells.forEach(cell => {
             const tile = {
                 contains: {
                     type: 'pocket_litter',
@@ -20,15 +19,22 @@ describe('Fractured Monolith Pocket Litter', () => {
                     vendorCell: cell
                 }
             };
-            expect(bm.isImpassableBuildingTile(tile)).toBe(false);
+            expect(bm.isImpassableBuildingTile(tile)).toBe(true);
         });
 
-        innerCells.forEach(cell => {
+        const litterSubtypes = [
+            'pocket_litter_mana_crystals',
+            'pocket_litter_ruined_arch',
+            'pocket_litter_broken_wagon',
+            'pocket_litter_forge_remnants',
+            'pocket_litter_rift_embers'
+        ];
+
+        litterSubtypes.forEach(subtype => {
             const tile = {
                 contains: {
                     type: 'pocket_litter',
-                    subtype: 'pocket_litter_fractured_monolith',
-                    vendorCell: cell
+                    subtype
                 }
             };
             expect(bm.isImpassableBuildingTile(tile)).toBe(true);
