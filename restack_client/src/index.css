@@ -188,3 +188,47 @@ img[src*="burst_shot"], [style*="burst_shot"] {
   100% { transform: translateY(0px); }
 }
 
+@keyframes resourceDeductionPulse {
+  0% { opacity: 0.75; }
+  50% { opacity: 1; filter: brightness(1.2); }
+  100% { opacity: 0.75; }
+}
+
+.pygmy-spawn-flash {
+  animation: pygmySpawnFlash 0.6s ease-out forwards !important;
+  z-index: 100 !important;
+}
+
+@keyframes pygmySpawnFlash {
+  0% {
+    transform: scale(0.2);
+    filter: brightness(2.5) drop-shadow(0 0 15px #f59e0b) drop-shadow(0 0 25px #fbbf24);
+    opacity: 0.2;
+  }
+  50% {
+    transform: scale(1.35);
+    filter: brightness(3.0) drop-shadow(0 0 20px #f59e0b) drop-shadow(0 0 35px #f59e0b);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.0);
+    filter: brightness(1.0) drop-shadow(0 0 4px rgba(245, 158, 11, 0.4));
+    opacity: 1;
+  }
+}
+
+@keyframes monsterGlowPulse {
+  0% { transform: scale(0.95); opacity: 0.82; }
+  100% { transform: scale(1.08); opacity: 1.0; }
+}
+
+@keyframes pygmyGlowPulse {
+  0% { transform: scale(0.92); opacity: 0.85; }
+  100% { transform: scale(1.12); opacity: 1.0; }
+}
+
+@keyframes pygmyChargePulse {
+  0% { transform: scale(0.95); opacity: 0.85; filter: brightness(1); }
+  100% { transform: scale(1.25); opacity: 1.0; filter: brightness(1.4); }
+}
+

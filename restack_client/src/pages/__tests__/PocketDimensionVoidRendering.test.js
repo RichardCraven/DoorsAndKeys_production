@@ -141,14 +141,14 @@ describe('Pocket Dimension Void vs Empty Space Tile Classification', () => {
         expect(emptyTile).toBeDefined();
         expect(emptyTile.isVoid).toBe(false);
         expect(emptyTile.contains?.type).toBe('empty_space');
-        expect(emptyTile.color).toBe('#6b6057');
+        expect(emptyTile.color).toBe('rgba(15, 15, 20, 0.55)');
 
         // Tile (7, 8) is empty_space
         const emptyTile2 = tiles.find(t => t.globalX === 7 && t.globalY === 8);
         expect(emptyTile2).toBeDefined();
         expect(emptyTile2.isVoid).toBe(false);
         expect(emptyTile2.contains?.type).toBe('empty_space');
-        expect(emptyTile2.color).toBe('#6b6057');
+        expect(emptyTile2.color).toBe('rgba(15, 15, 20, 0.55)');
 
         // Tile (7, 9) was marked void
         const voidTile2 = tiles.find(t => t.globalX === 7 && t.globalY === 9);

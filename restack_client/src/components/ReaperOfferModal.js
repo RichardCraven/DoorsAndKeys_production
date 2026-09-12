@@ -145,34 +145,36 @@ export default function ReaperOfferModal({ visible, onAccept }) {
                         width: '100%',
                         padding: 'min(12px, 1.8vh) 24px',
                         borderRadius: '10px',
-                        border: '1px solid #d8b4fe',
-                        background: 'linear-gradient(135deg, #7e22ce 0%, #a855f7 50%, #6b21a8 100%)',
-                        color: '#ffffff',
+                        border: '1px solid rgba(168, 85, 247, 0.5)',
+                        background: 'transparent',
+                        color: '#f3e8ff',
                         fontFamily: "'Cinzel', 'Trajan Pro', serif",
                         fontSize: 'clamp(13px, 3vw, 15px)',
                         fontWeight: 700,
                         letterSpacing: '2px',
                         textTransform: 'uppercase',
                         cursor: 'pointer',
-                        boxShadow: '0 6px 20px rgba(126, 34, 206, 0.6), 0 0 15px rgba(168, 85, 247, 0.4)',
+                        boxShadow: 'none',
                         transition: 'all 0.2s ease-in-out',
                         flexShrink: 0
                     }}
                     onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.boxShadow = '0 10px 28px rgba(168, 85, 247, 0.85), 0 0 25px rgba(216, 180, 254, 0.6)';
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #9333ea 0%, #c084fc 50%, #7e22ce 100%)';
+                        e.currentTarget.style.boxShadow = '0 4px 14px rgba(0, 0, 0, 0.6)';
+                        e.currentTarget.style.background = 'rgba(168, 85, 247, 0.12)';
+                        e.currentTarget.style.borderColor = '#d8b4fe';
                     }}
                     onMouseLeave={(e) => {
                         e.currentTarget.style.transform = 'translateY(0)';
-                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(126, 34, 206, 0.6), 0 0 15px rgba(168, 85, 247, 0.4)';
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #7e22ce 0%, #a855f7 50%, #6b21a8 100%)';
+                        e.currentTarget.style.boxShadow = 'none';
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.borderColor = 'rgba(168, 85, 247, 0.5)';
                     }}
                     onMouseDown={(e) => {
                         e.currentTarget.style.transform = 'scale(0.98)';
                     }}
                 >
-                    ⚔ Wager Your Souls Against {deathEnemy.name} 🃏
+                    Play Cards
                 </button>
             </div>
         </div>

@@ -55,7 +55,7 @@ function sanitizeMeta(metadata){
     const safe = {};
     // Copy only small, commonly useful properties. Avoid large nested objects
     // like full dungeon boards, tile arrays, or other heavy structures.
-    const whitelistedKeys = ['skipIntro','dungeonId','boardIndex','tileIndex','crew','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','deathEnemyIndex','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp','mailbox','dungeonHistory','welcomeMailSent','leftExpanded','rightExpanded','hasEnteredFirstDungeon','hasSeenSidePanelsDelay'];
+    const whitelistedKeys = ['skipIntro','dungeonId','boardIndex','tileIndex','crew','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','deathEnemyIndex','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp','mailbox','dungeonHistory','welcomeMailSent','leftExpanded','rightExpanded','hasEnteredFirstDungeon','hasSeenSidePanelsDelay','food','resolve','lastFoodExpiryCheck','pocketResources','pocketPlayerBuildings'];
     for (const k of whitelistedKeys) {
         if (k in metadata) safe[k] = metadata[k];
     }
@@ -174,4 +174,67 @@ function applyResolvePenalty(basePenalty) {
     return Math.round(finalPenalty);
 }
 
-export {storeSessionData, storeMeta, getMeta, getUserId, setEditorPreference, getUserName, setUserName, getResolvePenaltyReduction, applyResolvePenalty};
+function resetDungeonInstanceMeta(meta = null, inventoryManager = null) {
+    const m = meta || getMeta() || {};
+    delete m.dungeonId;
+    delete m.dungeonEntryTimestamp;
+    delete m.boardIndex;
+    delete m.tileIndex;
+    delete m.location;
+    delete m.spawnPoint;
+    delete m.visitedBoards;
+    delete m.deathTracker;
+    delete m.scroungeActive;
+    delete m.scoutActive;
+    delete m.activatedGenerators;
+    delete m.disabledOutposts;
+    delete m.failedMonolithActivations;
+    delete m.pocketPlayerBuildings;
+    delete m.pocketResources;
+
+    // Reset instance resources to clean initial state
+    m.food = 55;
+    m.resolve = 100;
+    m.lastFoodExpiryCheck = Date.now();
+
+    const resourceKeys = ['wood', 'lumber', 'mushrooms', 'mushroom', 'stone', 'ore', 'slate'];
+
+    if (inventoryManager) {
+        if (Array.isArray(inventoryManager.inventory)) {
+            inventoryManager.inventory = inventoryManager.inventory.filter(item => {
+                if (!item) return false;
+                const k = String(item._im_key || item.id || item.name || item.type || item.subtype || '').toLowerCase();
+                return !resourceKeys.some(rk => k === rk || k.includes(rk));
+            });
+        }
+        inventoryManager.gold = 0;
+        inventoryManager.shimmering_dust = 0;
+        inventoryManager.totems = 0;
+        inventoryManager.wood = 0;
+        inventoryManager.stone = 0;
+        inventoryManager.slate = 0;
+        inventoryManager.mushrooms = 0;
+    }
+
+    if (m.inventory) {
+        if (Array.isArray(m.inventory.items)) {
+            m.inventory.items = m.inventory.items.filter(item => {
+                if (!item) return false;
+                const k = String(item._im_key || item.id || item.name || item.type || item.subtype || '').toLowerCase();
+                return !resourceKeys.some(rk => k === rk || k.includes(rk));
+            });
+        }
+        m.inventory.gold = 0;
+        m.inventory.shimmering_dust = 0;
+        m.inventory.totems = 0;
+        m.inventory.wood = 0;
+        m.inventory.stone = 0;
+        m.inventory.slate = 0;
+        m.inventory.mushrooms = 0;
+    }
+
+    storeMeta(m);
+    return m;
+}
+
+export {storeSessionData, storeMeta, getMeta, getUserId, setEditorPreference, getUserName, setUserName, getResolvePenaltyReduction, applyResolvePenalty, resetDungeonInstanceMeta};

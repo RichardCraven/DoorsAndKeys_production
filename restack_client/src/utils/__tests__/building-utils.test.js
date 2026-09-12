@@ -1,9 +1,11 @@
 import {
     getAdjustedBuildTime,
     applyBuildingStaminaPenalty,
-    clearBuildingStaminaPenalties
+    clearBuildingStaminaPenalties,
+    isArcaneUnit,
+    hasArcaneUnit,
 } from '../building-utils';
-import { BUILDINGS } from '../../components/BuildMenuModal';
+import { BUILDINGS, TABS } from '../../components/BuildMenuModal';
 
 describe('Building Construction & Stamina Tax Utils', () => {
     test('getAdjustedBuildTime returns base build time when 0% of crew is dead', () => {
@@ -89,5 +91,46 @@ describe('Building Construction & Stamina Tax Utils', () => {
 
         expect(arcane.map(b => b.key)).toEqual(['frozen_locus', 'emerald_locus', 'cosmic_locus']);
         expect(obscure.map(b => b.key)).toEqual(['infernal_tower', 'infernal_pit']);
+    });
+
+    test('isArcaneUnit correctly identifies Wizard, Summoner, Sage, and Zildjikan', () => {
+        expect(isArcaneUnit({ type: 'wizard', name: 'Mage' })).toBe(true);
+        expect(isArcaneUnit({ name: 'Zildjikan', type: 'spellcaster' })).toBe(true);
+        expect(isArcaneUnit({ type: 'summoner' })).toBe(true);
+        expect(isArcaneUnit({ type: 'sage' })).toBe(true);
+        expect(isArcaneUnit({ type: 'soldier' })).toBe(false);
+        expect(isArcaneUnit(null)).toBe(false);
+    });
+
+    test('hasArcaneUnit recognizes arcane unit in crew or as selectedCrewMember even with 0 hp', () => {
+        const wizardDead = { id: 'w1', type: 'wizard', name: 'Wizard', hp: 0, dead: true };
+        const soldier = { id: 's1', type: 'soldier', name: 'Soldier', hp: 10, dead: false };
+
+        // Wizard selected
+        expect(hasArcaneUnit([soldier], wizardDead)).toBe(true);
+
+        // Wizard in crew
+        expect(hasArcaneUnit([soldier, wizardDead])).toBe(true);
+
+        // No arcane unit
+        expect(hasArcaneUnit([soldier])).toBe(false);
+    });
+
+    test('BuildMenuModal arcane tab is enabled when wizard is selected in dungeon view', () => {
+        const arcaneTab = TABS.find(t => t.id === 'arcane');
+        expect(arcaneTab).toBeDefined();
+
+        const wizard = { id: 'w1', type: 'wizard', name: 'Wizard' };
+        const soldier = { id: 's1', type: 'soldier', name: 'Soldier' };
+
+        // In dungeon view (inSuperboard = false)
+        // With wizard selected:
+        expect(arcaneTab.isDisabled([soldier], false, wizard)).toBe(false);
+
+        // With wizard in crew:
+        expect(arcaneTab.isDisabled([soldier, wizard], false, soldier)).toBe(false);
+
+        // With no wizard in crew and soldier selected:
+        expect(arcaneTab.isDisabled([soldier], false, soldier)).toBe(true);
     });
 });

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
-import { getMeta, storeMeta, getUserId, getUserName } from '../utils/session-handler';
+import { getMeta, storeMeta, getUserId, getUserName, resetDungeonInstanceMeta } from '../utils/session-handler';
 import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest, getActivePresenceRequest, sendFeedbackNotification, ensureServerWarm, isServerWarm } from '../utils/api-handler';
 
 
@@ -713,20 +713,7 @@ export default function LandingPage(props) {
       await deleteDungeonRequest(id);
       const meta = getMeta() || {};
       if (meta.dungeonId === id) {
-        delete meta.dungeonId;
-        delete meta.dungeonEntryTimestamp;
-        delete meta.boardIndex;
-        delete meta.tileIndex;
-        delete meta.location;
-        delete meta.spawnPoint;
-        delete meta.visitedBoards;
-        delete meta.deathTracker;
-        delete meta.scroungeActive;
-        delete meta.scoutActive;
-        delete meta.activatedGenerators;
-        delete meta.disabledOutposts;
-        delete meta.failedMonolithActivations;
-        storeMeta(meta);
+        resetDungeonInstanceMeta(meta);
       }
       setInstanceFeedbackMsg(`Deleted instance "${name}".`);
       await fetchInstances();
@@ -1004,7 +991,7 @@ export default function LandingPage(props) {
       setNavDungeon(true)
       return
     }
-    const nextMeta = meta || {};
+    const nextMeta = resetDungeonInstanceMeta(meta || {});
     if (selectedDungeonTemplateId) {
       const selectedDungeon = validDungeons.find((d) => d.id === selectedDungeonTemplateId);
       nextMeta.selectedDungeonTemplateId = selectedDungeonTemplateId;
@@ -1082,19 +1069,7 @@ export default function LandingPage(props) {
     if (!pendingDungeonSelection) return;
     const dungeon = pendingDungeonSelection;
     const meta = getMeta() || {};
-    delete meta.dungeonId;
-    delete meta.dungeonEntryTimestamp;
-    delete meta.boardIndex;
-    delete meta.tileIndex;
-    delete meta.location;
-    delete meta.spawnPoint;
-    delete meta.visitedBoards;
-    delete meta.deathTracker;
-    delete meta.scroungeActive;
-    delete meta.scoutActive;
-    delete meta.activatedGenerators;
-    delete meta.disabledOutposts;
-    delete meta.failedMonolithActivations;
+    resetDungeonInstanceMeta(meta);
 
     setSelectedDungeonTemplateId(dungeon.id);
     meta.selectedDungeonTemplateId = dungeon.id;
@@ -1175,7 +1150,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.6.6 BETA</span>
+          <span className="logo-subtitle">v 0.6.9 BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',

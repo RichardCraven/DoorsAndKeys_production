@@ -36,7 +36,7 @@ export default class ProjectileCanvas extends React.Component {
         this.animationFrameId = requestAnimationFrame(loop);
     };
 
-    fireProjectileCoords = (startX, startY, endX, endY, onHit) => {
+    fireProjectileCoords = (startX, startY, endX, endY, onHit, type = 'fireball') => {
         const dx = endX - startX;
         const dy = endY - startY;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -47,8 +47,8 @@ export default class ProjectileCanvas extends React.Component {
             return;
         }
 
-        // Speed in pixels per second (approx 450px/sec)
-        const speed = 450;
+        // Speed in pixels per second (approx 450px/sec, faster for magic_missile)
+        const speed = type === 'magic_missile' ? 520 : 450;
 
         this.projectiles.push({
             x: startX,
@@ -62,11 +62,12 @@ export default class ProjectileCanvas extends React.Component {
             distance,
             traveled: 0,
             speed,
-            onHit
+            onHit,
+            type
         });
     };
 
-    fireProjectile = (startTileIdx, endTileIdx, onHit) => {
+    fireProjectile = (startTileIdx, endTileIdx, onHit, type = 'fireball') => {
         const { tileSize } = this.props;
         if (!tileSize) return;
 
@@ -83,7 +84,7 @@ export default class ProjectileCanvas extends React.Component {
         const endX = endCol * tileSize + tileSize / 2;
         const endY = endRow * tileSize + tileSize / 2;
 
-        this.fireProjectileCoords(startX, startY, endX, endY, onHit);
+        this.fireProjectileCoords(startX, startY, endX, endY, onHit, type);
     };
 
     update = (dt) => {
@@ -109,8 +110,8 @@ export default class ProjectileCanvas extends React.Component {
             p.x = p.startX + p.dx * ratio;
             p.y = p.startY + p.dy * ratio;
 
-            // Check collision with player's current location
-            if (px !== null && py !== null) {
+            // Check collision with player's current location (only for hostile projectiles aimed at player)
+            if (p.type !== 'magic_missile' && px !== null && py !== null) {
                 const dx = px - p.x;
                 const dy = py - p.y;
                 const distToPlayer = Math.sqrt(dx * dx + dy * dy);
@@ -120,7 +121,7 @@ export default class ProjectileCanvas extends React.Component {
                     if (p.onHit) {
                         try { p.onHit(); } catch(e) { console.error(e); }
                     }
-                    this.createExplosion(p.x, p.y);
+                    this.createExplosion(p.x, p.y, p.type);
                     this.projectiles.splice(i, 1);
                     continue;
                 }
@@ -131,7 +132,7 @@ export default class ProjectileCanvas extends React.Component {
                 if (p.onHit) {
                     try { p.onHit(); } catch(e) { console.error(e); }
                 }
-                this.createExplosion(p.endX, p.endY);
+                this.createExplosion(p.endX, p.endY, p.type);
                 this.projectiles.splice(i, 1);
             }
         }
@@ -158,18 +159,24 @@ export default class ProjectileCanvas extends React.Component {
         }
     };
 
-    createExplosion = (x, y) => {
+    createExplosion = (x, y, type = 'fireball') => {
         const particles = [];
-        const particleCount = 15;
+        const particleCount = type === 'magic_missile' ? 18 : 15;
+        const mmColors = ['#d946ef', '#b5179e', '#9d4edd', '#ffffff', '#38bdf8'];
+        const fbColors = ['#ff9900', '#ff0000'];
+
         for (let i = 0; i < particleCount; i++) {
             const angle = Math.random() * Math.PI * 2;
             const speed = Math.random() * 3 + 1;
+            const randColor = type === 'magic_missile' 
+                ? mmColors[Math.floor(Math.random() * mmColors.length)]
+                : (Math.random() > 0.5 ? fbColors[0] : fbColors[1]);
             particles.push({
                 x,
                 y,
                 vx: Math.cos(angle) * speed,
                 vy: Math.sin(angle) * speed,
-                color: Math.random() > 0.5 ? '#ff9900' : '#ff0000',
+                color: randColor,
                 size: Math.random() * 3 + 2,
                 alpha: 1
             });
@@ -194,22 +201,42 @@ export default class ProjectileCanvas extends React.Component {
         // Draw projectiles
         this.projectiles.forEach(p => {
             ctx.save();
-            // Draw outer glow
-            const grad = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 8);
-            grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            grad.addColorStop(0.3, 'rgba(255, 200, 50, 0.8)');
-            grad.addColorStop(1, 'rgba(255, 100, 0, 0)');
-            
-            ctx.fillStyle = grad;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-            ctx.fill();
+            if (p.type === 'magic_missile') {
+                // Magic Missile: magenta/purple radial aura with white star core (matching combat skill look)
+                const grad = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 14);
+                grad.addColorStop(0, '#ffffff');
+                grad.addColorStop(0.3, '#d946ef');
+                grad.addColorStop(0.75, '#701a75');
+                grad.addColorStop(1, 'rgba(112, 26, 117, 0)');
+                
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 14, 0, Math.PI * 2);
+                ctx.fill();
 
-            // Core
-            ctx.fillStyle = '#ffffff';
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
-            ctx.fill();
+                // Core white light
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                // Standard Fireball / Outpost projectile glow
+                const grad = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, 8);
+                grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                grad.addColorStop(0.3, 'rgba(255, 200, 50, 0.8)');
+                grad.addColorStop(1, 'rgba(255, 100, 0, 0)');
+                
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Core
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
             
             ctx.restore();
         });

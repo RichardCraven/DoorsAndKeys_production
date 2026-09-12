@@ -13,22 +13,35 @@ import { AnimationManagerRedux as AnimationManager } from './utils/animation-man
 import { OverlayManager } from './utils/overlay-manager';
 import { QuestManager } from './utils/quest-manager';
 
-// Suppress browser extension (e.g. Chrome Extension) communication errors from triggering the CRA error overlay
+// Suppress browser extension (e.g. MetaMask, Chrome/Firefox Extensions) communication errors from triggering the CRA error overlay
 if (typeof window !== 'undefined') {
+  const isExtensionError = (msg, stack, filename) => {
+    const str = `${msg} ${stack} ${filename}`.toLowerCase();
+    return (
+      str.includes('chrome-extension://') ||
+      str.includes('moz-extension://') ||
+      str.includes('metamask') ||
+      str.includes('could not establish connection') ||
+      str.includes('receiving end does not exist') ||
+      str.includes('failed to connect to metamask')
+    );
+  };
+
   window.addEventListener('unhandledrejection', (event) => {
     const reason = event?.reason;
     const msg = String(reason?.message || reason || '');
     const stack = String(reason?.stack || '');
-    if (msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist') || stack.includes('chrome-extension://')) {
+    if (isExtensionError(msg, stack, '')) {
       event.stopImmediatePropagation();
       event.preventDefault();
     }
-  });
+  }, true);
 
   window.addEventListener('error', (event) => {
-    const msg = String(event?.message || '');
+    const msg = String(event?.message || event?.error?.message || '');
     const filename = String(event?.filename || '');
-    if (msg.includes('Could not establish connection') || msg.includes('Receiving end does not exist') || filename.includes('chrome-extension://')) {
+    const stack = String(event?.error?.stack || '');
+    if (isExtensionError(msg, stack, filename)) {
       event.stopImmediatePropagation();
       event.preventDefault();
     }

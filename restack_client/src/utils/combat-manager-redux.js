@@ -902,12 +902,8 @@ export function CombatManagerRedux() {
             fighter.cooldowns = {};
             fighter.movesTakenThisRound = 0;
             fighter.actionsTakenThisRound = 0;
-            const isRanger = e.type === 'ranger' || e.image === 'ranger' || e.class === 'ranger' || String(e.name || '').toLowerCase().includes('ranger') || String(e.id || '').toLowerCase().includes('ranger');
-            fighter.power = isRanger ? 100 : 0;  // Ranger starts combat with 100 Power (Ultimate Ready)
-            fighter.ultimateActive = isRanger;
-            if (isRanger) {
-                console.log(`%c 🏹 RANGER: ${fighter.name || fighter.id} starts with 100 POWER & ULTIMATE READY! 🏹`, 'background: #5aab5a; color: #fff; font-size: 16px; font-weight: bold; padding: 6px 12px; border-radius: 4px;');
-            }
+            fighter.power = typeof e.power === 'number' ? e.power : 0;
+            fighter.ultimateActive = typeof e.ultimateActive === 'boolean' ? e.ultimateActive : (fighter.power >= 100);
 
             this.combatants[e.id] = fighter;
             this._initializeInitialCooldowns(fighter);

@@ -5,8 +5,16 @@
 
 import React, { Component } from 'react';
 import * as images from '../utils/images';
-import { getAdjustedBuildTime, hasArcaneUnit, hasEngineerUnit, isEngineerSelected } from '../utils/building-utils';
+import {
+    getAdjustedBuildTime,
+    hasArcaneUnit,
+    hasEngineerUnit,
+    isEngineerSelected,
+    isEngineerUnit,
+    isArcaneUnit,
+} from '../utils/building-utils';
 import { getMeta } from '../utils/session-handler';
+import { ResourceCostBarList } from './ResourceCostBar';
 
 export const BUILDINGS = [
     // --- EARTHLY BUILDINGS ---
@@ -162,7 +170,7 @@ export const BUILDINGS = [
 
 // hasArcaneUnit imported from building-utils.js
 
-const TABS = [
+export const TABS = [
     {
         id: 'earthly',
         label: 'Earthly',
@@ -177,14 +185,17 @@ const TABS = [
             if (inSuperboard) {
                 return !isEngineerSelected(selectedCrewMember);
             }
-            return !hasEngineerUnit(crew);
+            return !(isEngineerUnit(selectedCrewMember) || hasEngineerUnit(crew, selectedCrewMember));
         },
     },
     {
         id: 'arcane',
         label: 'Arcane',
         icon: '🔮',
-        isDisabled: (crew, inSuperboard) => inSuperboard ? false : !hasArcaneUnit(crew),
+        isDisabled: (crew, inSuperboard, selectedCrewMember) => {
+            if (inSuperboard) return false;
+            return !(isArcaneUnit(selectedCrewMember) || hasArcaneUnit(crew, selectedCrewMember));
+        },
     },
     {
         id: 'obscure',
@@ -305,11 +316,14 @@ class BuildMenuModal extends Component {
     };
 
     render() {
-        const { onClose, activeConstruction, crewManager } = this.props;
+        const { onClose, activeConstruction, crewManager, crew: propsCrew, selectedCrewMember: propsSelected } = this.props;
         const available = this.getResourceCounts();
 
         const meta = getMeta() || {};
-        const crew = (crewManager && crewManager.crew) || meta.crew || [];
+        const crew = (propsCrew && propsCrew.length > 0)
+            ? propsCrew
+            : ((crewManager && crewManager.crew) || meta.crew || []);
+        const selectedCrewMember = propsSelected || this.props.selectedCrewMember || crew.find(c => c && c.selected);
         const deadCount = crew.filter(m => m && (m.dead === true || (typeof m.hp === 'number' && m.hp <= 0))).length;
 
         const visibleBuildings = BUILDINGS.filter(b => (b.category || 'earthly') === this.state.activeTab);
@@ -400,7 +414,7 @@ class BuildMenuModal extends Component {
                     <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid rgba(229, 181, 79, 0.2)', paddingBottom: '1px' }}>
                         {TABS.map(tab => {
                             const isActive = this.state.activeTab === tab.id;
-                            const selectedCrewMember = this.props.selectedCrewMember || crew.find(c => c && c.selected);
+                            const selectedCrewMember = propsSelected || this.props.selectedCrewMember || crew.find(c => c && c.selected);
                             const isDisabled = tab.isDisabled(crew, this.props.inSuperboard, selectedCrewMember);
 
                             return (
@@ -574,6 +588,7 @@ class BuildMenuModal extends Component {
                                                     {b.key === 'observer_platform' && <span style={{ color: '#f9b115', marginLeft: '6px', fontSize: '12px', fontWeight: 'bold' }}>[O]</span>}
                                                     {b.key === 'war_camp' && <span style={{ color: '#f9b115', marginLeft: '6px', fontSize: '12px', fontWeight: 'bold' }}>[C]</span>}
                                                     {b.key === 'war_fort' && <span style={{ color: '#f9b115', marginLeft: '6px', fontSize: '12px', fontWeight: 'bold' }}>[F]</span>}
+                                                    {b.key === 'earthen_fort' && <span style={{ color: '#f9b115', marginLeft: '6px', fontSize: '12px', fontWeight: 'bold' }}>[E]</span>}
                                                 </span>
                                                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                                                     <span
@@ -598,8 +613,9 @@ class BuildMenuModal extends Component {
                                                 {b.description}
                                             </div>
                                         </div>
+                                        <ResourceCostBarList costs={costs} available={available} inSuperboard={this.props.inSuperboard} />
 
-                                        {/* Bottom row: Costs & Action Button */}
+                                            {/* Bottom row: Costs & Action Button */}
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '6px' }}>
                                             {/* Costs display */}
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px' }}>
