@@ -130,23 +130,23 @@ export function CombatManagerRedux() {
         unit.endurance = Math.max(0, (unit.endurance || 0) - actualCost);
         if (unit.endurance > 0) return;
 
-        const longDuration = getDurationRounds('long');
+        const exhaustionDuration = getDurationRounds('short');
         const now = Date.now();
         unit.exhausted = true;
         unit.asleep = true;
-        unit.sleepRounds = Math.max(unit.sleepRounds || 0, longDuration);
-        unit.sleepTotalRounds = Math.max(unit.sleepTotalRounds || 0, longDuration);
+        unit.sleepRounds = Math.max(unit.sleepRounds || 0, exhaustionDuration);
+        unit.sleepTotalRounds = Math.max(unit.sleepTotalRounds || 0, exhaustionDuration);
         const sleepDurMs = getStatusDurationMs(unit, unit.sleepRounds);
         unit.sleepTotalDurationMs = sleepDurMs;
         unit.sleepEndTimeMs = now + sleepDurMs;
         unit.stunned = true;
-        unit.stunnedRounds = Math.max(unit.stunnedRounds || 0, longDuration);
-        unit.stunnedTotalRounds = Math.max(unit.stunnedTotalRounds || 0, longDuration);
-        unit.stunnedStackDuration = longDuration;
+        unit.stunnedRounds = Math.max(unit.stunnedRounds || 0, exhaustionDuration);
+        unit.stunnedTotalRounds = Math.max(unit.stunnedTotalRounds || 0, exhaustionDuration);
+        unit.stunnedStackDuration = exhaustionDuration;
         const stunDurMs = getStatusDurationMs(unit, unit.stunnedRounds);
         unit.stunnedTotalDurationMs = stunDurMs;
         unit.stunnedEndTimeMs = now + stunDurMs;
-        if (unit.enduranceFrozenRounds <= 0) unit.enduranceFrozenRounds = longDuration;
+        if (unit.enduranceFrozenRounds <= 0) unit.enduranceFrozenRounds = exhaustionDuration;
         this.appendCombatLog(`${this.getCombatantLogName(unit)} is exhausted and collapses into sleep.`);
     };
 
@@ -5689,7 +5689,7 @@ export function CombatManagerRedux() {
     };
 
     this._aiWalker = (unit) => {
-        // Walker moves straight and uses cleave if enemies are nearby
+        // Walker moves straight when path is clear
         const maxMoves = 1;
         const canMove = !unit.ensnared && !this.isUnitInWeb(unit) && !unit.shieldWallActive && unit.movesTakenThisRound < maxMoves;
         if (canMove) {
@@ -5705,20 +5705,29 @@ export function CombatManagerRedux() {
             }
         }
 
-        if (this._abilityReady(unit, 'walker_cleave')) {
-            const pick = this.resolveSpecial(unit, 'walker_cleave');
-            if (pick) {
-                const enemies = Object.values(this.combatants).filter(c => c && !c.dead && !!c.isMonster !== !!unit.isMonster);
-                const adjacentEnemy = enemies.find(e => this.targetInRange(unit, e, 'close'));
-                if (adjacentEnemy) {
-                    this.useAbility(unit, pick, adjacentEnemy);
-                    return;
-                }
-            }
+        // Always check for 360-degree adjacent enemies and swing, even if movement was blocked
+        if (unit.cooldowns) delete unit.cooldowns['walker_cleave'];
+        const pick = this.resolveSpecial(unit, 'walker_cleave') || {
+            id: 'walker_cleave',
+            name: 'Walker Cleave',
+            desc: 'Swings a sword in a 360 degree arc dealing 10 damage to adjacent enemies.',
+            type: 'damage',
+            flatDamage: 10,
+            range: 'close'
+        };
+
+        const enemies = Object.values(this.combatants).filter(c => c && !c.dead && !!c.isMonster !== !!unit.isMonster);
+        const adjacentEnemy = enemies.find(e => this.targetInRange(unit, e, 'close'));
+        if (adjacentEnemy) {
+            this.useAbility(unit, pick, adjacentEnemy);
+            return;
         }
+
         this.acquireTarget(unit, true);
         const target = this.combatants[unit.targetId];
-        if (target) this._basicAttack(unit, target);
+        if (target && this.targetInRange(unit, target, 'close')) {
+            this.useAbility(unit, pick, target);
+        }
     };
 
     this._isEngineerInCentralPosition = (unit) => {

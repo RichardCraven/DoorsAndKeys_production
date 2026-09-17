@@ -5,6 +5,9 @@ const registerPvPCombat = require('./pvpCombatHandler');
 
 function initSocketManager(httpServer) {
   const io = new Server(httpServer, {
+    pingTimeout: 60000,
+    pingInterval: 25000,
+    maxHttpBufferSize: 1e8,
     cors: {
       origin: function (origin, callback) {
         // Allow same origins as Express app

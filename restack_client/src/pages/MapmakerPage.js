@@ -6804,6 +6804,7 @@ class MapMakerPage extends React.Component {
         });
       }
 
+      plane = this.validatePlane(plane);
       planes.push(plane)
 
       if (this.state.loadedDungeon) {

@@ -27,7 +27,10 @@ describe('Fractured Monolith Pocket Litter', () => {
             'pocket_litter_ruined_arch',
             'pocket_litter_broken_wagon',
             'pocket_litter_forge_remnants',
-            'pocket_litter_rift_embers'
+            'pocket_litter_rift_embers',
+            'pocket_litter_astral_obelisk',
+            'pocket_litter_ancient_reliquary',
+            'pocket_litter_celestial_geode'
         ];
 
         litterSubtypes.forEach(subtype => {
@@ -47,5 +50,19 @@ describe('Fractured Monolith Pocket Litter', () => {
         expect(monolith).toBeDefined();
         expect(monolith.footprintType).toBe('3x3');
         expect(monolith.isMultiTile).toBe(true);
+    });
+
+    test('pocketLitterOptions contains all 3 new dimension litter items', () => {
+        const mm = new MapMaker();
+        const obelisk = mm.pocketLitterOptions.find(opt => opt.key === 'pocket_litter_astral_obelisk');
+        const reliquary = mm.pocketLitterOptions.find(opt => opt.key === 'pocket_litter_ancient_reliquary');
+        const geode = mm.pocketLitterOptions.find(opt => opt.key === 'pocket_litter_celestial_geode');
+
+        expect(obelisk).toBeDefined();
+        expect(obelisk.name).toBe('Astral Obelisk');
+        expect(reliquary).toBeDefined();
+        expect(reliquary.name).toBe('Ancient Reliquary');
+        expect(geode).toBeDefined();
+        expect(geode.name).toBe('Celestial Geode');
     });
 });

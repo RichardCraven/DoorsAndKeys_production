@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 
-const Typewriter = ({ text, delay }) => {
+const Typewriter = ({ text, delay, align = 'left' }) => {
   const containerRef = useRef(null);
   const [lines, setLines] = useState([]);
   const [measured, setMeasured] = useState(false);
@@ -42,18 +42,15 @@ const Typewriter = ({ text, delay }) => {
         }
       }
 
-      const key = foundKey !== null ? foundKey : top;
-      if (!lineMap.has(key)) {
-        lineMap.set(key, []);
+      if (foundKey !== null) {
+        lineMap.get(foundKey).push(tokens[index]);
+      } else {
+        lineMap.set(top, [tokens[index]]);
       }
-      lineMap.get(key).push(tokens[index]);
     });
 
-    // Sort lines by their vertical position (top)
-    const sortedTops = Array.from(lineMap.keys()).sort((a, b) => a - b);
-    const calculatedLines = sortedTops.map(top => lineMap.get(top).join(' '));
-
-    setLines(calculatedLines);
+    const detectedLines = Array.from(lineMap.values()).map(words => words.join(' '));
+    setLines(detectedLines);
     setMeasured(true);
   }, [tokens]);
 
@@ -66,39 +63,38 @@ const Typewriter = ({ text, delay }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Compute staggered animation durations and delays for each line
+  // Compute timing for each line to run sequentially
   const lineAnimations = useMemo(() => {
     let currentDelay = 0;
-    return lines.map((line) => {
-      // Calculate duration proportional to line length (approx 20ms per character)
-      const lineDuration = line.length * (delay || 20);
-      const startDelay = currentDelay;
-      // Stagger next line to start exactly as the current one finishes
-      currentDelay += lineDuration;
-      return {
+    return lines.map(line => {
+      const charCount = line.length;
+      const duration = charCount * (delay || 30);
+      const anim = {
         text: line,
-        duration: lineDuration,
-        delay: startDelay
+        delay: currentDelay,
+        duration: Math.max(duration, 50)
       };
+      currentDelay += duration;
+      return anim;
     });
   }, [lines, delay]);
 
+  // If no text, render empty
   if (!text) return null;
 
-  // Render hidden tokens to measure line breaks
-  if (!measured && tokens.length > 0) {
+  // Measurement render: invisible layout to discover word wrapping
+  if (!measured) {
     return (
       <div
         ref={containerRef}
         style={{
           position: 'relative',
-          display: 'block',
-          width: '100%',
-          textAlign: 'center',
-          whiteSpace: 'pre-wrap',
           visibility: 'hidden',
+          pointerEvents: 'none',
           height: 0,
-          overflow: 'hidden'
+          overflow: 'hidden',
+          textAlign: align,
+          width: '100%'
         }}
       >
         {tokens.map((token, idx) => (
@@ -130,14 +126,14 @@ const Typewriter = ({ text, delay }) => {
           key={`${text}-${idx}`}
           style={{
             display: 'flex',
-            justifyContent: 'center',
+            justifyContent: align === 'center' ? 'center' : (align === 'right' ? 'flex-end' : 'flex-start'),
             width: '100%'
           }}
         >
           <div
             style={{
               display: 'inline-block',
-              textAlign: 'center',
+              textAlign: align,
               whiteSpace: 'pre-wrap',
               clipPath: 'inset(0 100% 0 0)',
               animation: `smoothReveal ${anim.duration}ms linear ${anim.delay}ms forwards`

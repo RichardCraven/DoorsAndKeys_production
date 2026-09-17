@@ -109,4 +109,15 @@ initSocketManager(server);
 
 server.listen(port, () => console.log(`\n Running on port ${port} with WebSockets enabled!\n`));
 
-app.use((err, req, res, next) => { console.error(err); res.status(500).json({ error: err.message || err }); });
+app.use((err, req, res, next) => {
+  if (err && (err.code === 'ECONNABORTED' || err.type === 'request.aborted' || err.message === 'request aborted' || (err.status === 400 && err.type === 'request.aborted'))) {
+    if (!res.headersSent) {
+      return res.status(400).json({ error: 'Request aborted by client' });
+    }
+    return;
+  }
+  console.error(err);
+  if (!res.headersSent) {
+    res.status(500).json({ error: err.message || err });
+  }
+});

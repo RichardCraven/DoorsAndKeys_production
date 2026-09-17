@@ -517,7 +517,7 @@ const monstersData = [
     abilities: [
       { id: 'greater_magic_missile', name: 'Greater Magic Missile', desc: 'Fire five seeking magic missiles in sequence.', icon: greater_magic_missile, type: 'greater_magic_missile' },
       { id: 'hex', name: 'Hex', desc: 'Curse the target for 4 rounds. Reduces ATK by 2 and gives all skill uses a 35% chance to backfire, failing the action and dealing 10 damage to the caster.', icon: hex, type: 'hex_type' },
-      { id: 'shadow_curse', name: 'Shadow Curse', desc: 'Curse the target for 4 rounds. While active, the stamina (endurance) cost of any movement or action is tripled (increased from 2 to 6). If stamina drops to 0, the unit is immediately exhausted, falling asleep and becoming stunned for 4 rounds.', icon: shadow_curse, type: 'shadow_curse_type' },
+      { id: 'shadow_curse', name: 'Shadow Curse', desc: 'Curse the target for 4 rounds. While active, the stamina (endurance) cost of any movement or action is tripled (increased from 2 to 6). If stamina drops to 0, the unit is immediately exhausted, falling asleep and becoming stunned for 3 rounds.', icon: shadow_curse, type: 'shadow_curse_type' },
       { id: 'spiderweb', name: 'Spiderweb', desc: 'Trap targets in a sticky web, restricting movement.', icon: spiderweb, type: 'spiderweb_type' },
       { id: 'summon_spiders', name: 'Summon Spiders', desc: 'Summon arachnid minions to aid in battle.', icon: summon_spiders_icon, type: 'summon_spiders_type' },
       { id: 'dispell', name: 'Dispell', desc: 'Remove magical effects.', icon: witch_dispell, type: 'witch_dispell_type' },

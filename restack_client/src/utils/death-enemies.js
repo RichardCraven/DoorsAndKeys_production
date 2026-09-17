@@ -9,7 +9,7 @@ export const PROGRESSIVE_DEATH_ENEMIES = [
         classification: 'Lesser Entity',
         subtitle: 'Three Ethereal Individuals',
         portrait: images.the_principalities_portrait || images.the_principalities,
-        loreText: 'Your crew has fallen in combat. As the mist settles, three ethereal individuals manifest from the void, floating in silent, ominous accord.',
+        loreText: 'Your crew has fallen in combat. As the mist settles, three ethereal individuals manifest from the void, floating in silent accord.',
         quote: '"Your mortals\' journey ends here... unless you dare wager your collective souls in a game of cards. Defeat us, and your crew shall draw breath once more and grow in power."',
         hp: 20
     },

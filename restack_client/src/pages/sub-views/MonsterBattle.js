@@ -125,7 +125,16 @@ const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
 // const SHOW_BORDERS = true;
 class MonsterBattle extends React.Component {
     getTileSize = () => {
-        const size = this.state.isMobileLandscape ? Math.floor((window.innerHeight - 4) / 6) : 100;
+        let size;
+        if (this.state.isMobileLandscape) {
+            size = Math.floor((window.innerHeight - 4) / 6);
+        } else {
+            const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
+            // Reserved height: top header & margins (~54px) + grid bottom margin (~8px) + interaction pane (~205px) + border/safety (~13px) = 280px
+            const reserved = 280;
+            const computed = Math.floor((vh - reserved) / 6);
+            size = Math.max(50, Math.min(100, computed));
+        }
         if (this._animManagerRedux) {
             this._animManagerRedux.TILE_SIZE = size;
         }
@@ -225,6 +234,8 @@ class MonsterBattle extends React.Component {
         const isMobile = window.matchMedia("(max-width: 1024px) and (orientation: landscape)").matches;
         this.state = {
             isMobileLandscape: isMobile,
+            windowHeight: typeof window !== 'undefined' ? window.innerHeight : 900,
+            windowWidth: typeof window !== 'undefined' ? window.innerWidth : 1440,
             eventLogPoppedOut: isMobile,
             goldIcon: images.getRandomGoldIcon(),
             activeSkillsTab: 'skills',
@@ -371,7 +382,11 @@ class MonsterBattle extends React.Component {
     _handleResize = () => {
         if (this._isMounted) {
             const isMobile = window.matchMedia("(max-width: 1024px) and (orientation: landscape)").matches;
-            this.setState({ isMobileLandscape: isMobile });
+            this.setState({
+                isMobileLandscape: isMobile,
+                windowHeight: window.innerHeight,
+                windowWidth: window.innerWidth
+            });
         }
     }
 
@@ -3735,7 +3750,7 @@ class MonsterBattle extends React.Component {
                     <button
                         style={{
                             flex: 1,
-                            padding: '8px 12px',
+                            padding: '5px 10px',
                             background: activeTab === 'skills' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
                             border: 'none',
                             color: activeTab === 'skills' ? '#fff' : '#888',
@@ -3755,7 +3770,7 @@ class MonsterBattle extends React.Component {
                     <button
                         style={{
                             flex: 1,
-                            padding: '8px 12px',
+                            padding: '5px 10px',
                             background: activeTab === 'consumables' ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
                             border: 'none',
                             color: activeTab === 'consumables' ? '#fff' : '#888',
@@ -3971,7 +3986,7 @@ class MonsterBattle extends React.Component {
                         {/* Monster name in upper left */}
                         <div style={{
                             position: 'absolute',
-                            top: 20,
+                            top: 10,
                             left: 20,
                             color: 'white',
                             fontSize: '18px',
@@ -3987,7 +4002,7 @@ class MonsterBattle extends React.Component {
                         {/* Game speed / Round clock readout in upper right */}
                         <div style={{
                             position: 'absolute',
-                            top: 20,
+                            top: 10,
                             right: 20,
                             display: 'flex',
                             alignItems: 'center',
@@ -4182,36 +4197,51 @@ class MonsterBattle extends React.Component {
                         return (
                             <div className="summary-overlay-container">
                                 <div className={`summary-panel ${isVictory ? 'victory' : 'defeat'}`}>
-                                {/* Header */}
-                                <div className="summary-header">
-                                    <h1 className={headerClass}>{headerText}</h1>
-                                    <div className="summary-subtitle">{this.state.summaryMessage}</div>
-                                </div>
+                                    {/* Esoteric Corner Brackets */}
+                                    <div className="card-corner top-left"></div>
+                                    <div className="card-corner top-right"></div>
+                                    <div className="card-corner bottom-left"></div>
+                                    <div className="card-corner bottom-right"></div>
 
-                                {/* Content Grid */}
-                                <div className="summary-content-grid">
-                                    {/* Left: Battle Spoils */}
-                                    <div className="summary-section spoils-section">
-                                        <h2 className="section-title">BATTLE REWARDS</h2>
-                                        <div className="spoils-grid">
-                                            {this.state.goldGained > 0 && (
-                                                <div className="spoil-card gold">
-                                                    <img className="spoil-icon" src={this.state.goldIcon} alt="Gold" />
-                                                    <div className="spoil-info">
-                                                        <span className="spoil-label">Gold Gained</span>
-                                                        <span className="spoil-value">+{this.state.goldGained}</span>
+                                    {/* Header */}
+                                    <div className="summary-header">
+                                        <h1 className={headerClass}>{headerText}</h1>
+                                        <div className="summary-subtitle">{this.state.summaryMessage}</div>
+                                        <div className="summary-divider">
+                                            <span className="summary-divider-line" />
+                                            <span className="summary-divider-glyph">❖</span>
+                                            <span className="summary-divider-line" />
+                                        </div>
+                                    </div>
+
+                                    {/* Content Grid */}
+                                    <div className="summary-content-grid">
+                                        {/* Left: Battle Spoils */}
+                                        <div className="summary-section spoils-section">
+                                            <h2 className="section-title">✦ BATTLE REWARDS ✦</h2>
+                                            <div className="spoils-grid">
+                                                {this.state.goldGained > 0 && (
+                                                    <div className="spoil-card gold">
+                                                        <img className="spoil-icon" src={this.state.goldIcon} alt="Gold" />
+                                                        <div className="spoil-info">
+                                                            <span className="spoil-label">Gold Gained</span>
+                                                            <span className="spoil-value">+{this.state.goldGained}</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
-                                            {this.state.foodGained > 0 && (
-                                                <div className="spoil-card food">
-                                                    <span className="spoil-icon-emoji" role="img" aria-label="meat">🍖</span>
-                                                    <div className="spoil-info">
-                                                        <span className="spoil-label">Food Foraged</span>
-                                                        <span className="spoil-value">+{this.state.foodGained}</span>
+                                                )}
+                                                {this.state.foodGained > 0 && (
+                                                    <div className="spoil-card food">
+                                                        {images && images.food ? (
+                                                            <img className="spoil-icon" src={images.food} alt="Food" />
+                                                        ) : (
+                                                            <span className="spoil-icon-glyph">✦</span>
+                                                        )}
+                                                        <div className="spoil-info">
+                                                            <span className="spoil-label">Food Foraged</span>
+                                                            <span className="spoil-value">+{this.state.foodGained}</span>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            )}
+                                                )}
                                             {this.state.experienceGained > 0 && (
                                                 <div className="spoil-card exp">
                                                     <img className="spoil-icon" src={images.exp} alt="XP" />
@@ -4303,7 +4333,7 @@ class MonsterBattle extends React.Component {
                                     {/* Right: Crew Status */}
                                     {!this.state.suppressSummaryPortraits && (
                                         <div className="summary-section crew-section">
-                                            <h2 className="section-title">HEROES</h2>
+                                            <h2 className="section-title">✦ HEROES ✦</h2>
                                             <div className="summary-crew-list">
                                                 {/* Surviving Crew */}
                                                 {Object.values(this.state.battleData).filter(e => !e.dead && !e.isMonster && !e.isMinion).map((crewMember, i) => {
@@ -5038,7 +5068,7 @@ class MonsterBattle extends React.Component {
                                                 weakness: 'Weakness. Takes increased damage from physical and magical hits.',
                                                 marked: 'Marked. Ranged attacks against this unit deal extra damage.',
                                                 ensnared: 'Ensnared. Restricted movement. Cannot walk to adjacent tiles.',
-                                                shadow_curse: 'Curse the target for 4 rounds. While active, the stamina (endurance) cost of any movement or action is tripled (increased from 2 to 6). If stamina drops to 0, the unit is immediately exhausted, falling asleep and becoming stunned for 4 rounds.',
+                                                shadow_curse: 'Curse the target for 4 rounds. While active, the stamina (endurance) cost of any movement or action is tripled (increased from 2 to 6). If stamina drops to 0, the unit is immediately exhausted, falling asleep and becoming stunned for 3 rounds.',
                                                 hexed: 'Hexed. Reduces ATK by 2 for 4 rounds. All skill uses have a 35% chance to backfire, failing the action and dealing 10 damage to the caster.',
                                                 polymorphed: 'Polymorphed into a harmless creature. Stunned for the duration.',
                                                 third_eye: 'Third Eye. Increases accuracy and critical strike chance.',

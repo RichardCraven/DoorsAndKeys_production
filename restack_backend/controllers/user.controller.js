@@ -1,5 +1,10 @@
 const userSchema = require('../models/user.model')
 const { sendNotificationEmail } = require('../utils/email')
+const mongoose = require('mongoose')
+
+const isValidId = (id) => {
+  return id && id !== 'null' && id !== 'undefined' && mongoose.Types.ObjectId.isValid(id);
+};
 
 // CREATE User
 exports.create = (req, res, next) => {
@@ -20,7 +25,7 @@ exports.create = (req, res, next) => {
 }
 
 // READ Users
-exports.findAll = (req, res) => {
+exports.findAll = (req, res, next) => {
   userSchema.find((error, data) => {
     if (error) {
       return next(error)
@@ -31,7 +36,10 @@ exports.findAll = (req, res) => {
 };
 
 // Find a single user with an id
-exports.findOne = (req, res) => {
+exports.findOne = (req, res, next) => {
+  if (!isValidId(req.params.id)) {
+    return res.status(400).json({ error: 'Invalid user ID' });
+  }
   userSchema.find({'_id': req.params.id}, (error, data) => {
     if (error) {
       return next(error)
@@ -43,7 +51,7 @@ exports.findOne = (req, res) => {
 
 // Update User
 exports.update = (req, res, next) => {
-  if (!req.params.id || req.params.id === 'undefined') {
+  if (!isValidId(req.params.id)) {
     return res.status(400).json({ error: 'Invalid user ID' });
   }
   userSchema.findOneAndUpdate({'_id': req.params.id}, {

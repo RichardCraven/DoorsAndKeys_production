@@ -350,6 +350,106 @@ describe('Pocket Dimension Melee Autofire & Non-Military Building Filtering', ()
         });
     });
 
+    describe('Ranger Arrow Autofire', () => {
+        test('Ranger fires arrow at hostile enemy unit (Automaton) within 4.5 tiles', async () => {
+            page.state.selectedCrewMember = { type: 'ranger', name: 'Dormund', stats: { dexterity: 12, atk: 12 } };
+            page._lastRangerArrowTime = 0;
+            page.projectileCanvasRef = { current: { fireProjectileCoords: jest.fn((sx, sy, ex, ey, onHit, type) => { if (onHit) onHit(); }) } };
+
+            const hostileAuto = {
+                id: 'hostile_auto_1',
+                gx: 32,
+                gy: 30, // 2 tiles away (distance 2.0 <= 4.5)
+                hp: 30,
+                maxHp: 30,
+                isHostile: true,
+                subtype: 'automaton',
+                isAutomaton: true
+            };
+            page.state.superboardEntities = { hostile_auto_1: hostileAuto };
+
+            await page.tickPocketPygmies();
+
+            expect(page._lastRangerArrowTime).toBeGreaterThan(0);
+            expect(page.projectileCanvasRef.current.fireProjectileCoords).toHaveBeenCalledWith(
+                expect.any(Number),
+                expect.any(Number),
+                expect.any(Number),
+                expect.any(Number),
+                expect.any(Function),
+                'arrow'
+            );
+            expect(hostileAuto.hp).toBeLessThan(30);
+            expect(page.displayMessage).toHaveBeenCalledWith(
+                expect.stringMatching(/Ranger fired an arrow at automaton/i)
+            );
+        });
+
+        test('Ranger respects 4.5-second arrow cooldown', async () => {
+            page.state.selectedCrewMember = { type: 'ranger', name: 'Dormund', stats: { dexterity: 12 } };
+            page._lastRangerArrowTime = Date.now() - 1500; // Fired 1.5s ago
+            page.projectileCanvasRef = { current: { fireProjectileCoords: jest.fn() } };
+
+            const enemyUnit = {
+                id: 'enemy_pygmy_3',
+                gx: 32,
+                gy: 30,
+                hp: 10,
+                isHostile: true,
+                subtype: 'pocket_pygmy'
+            };
+            page.state.superboardEntities = { enemy_pygmy_3: enemyUnit };
+
+            await page.tickPocketPygmies();
+
+            expect(page.projectileCanvasRef.current.fireProjectileCoords).not.toHaveBeenCalled();
+            expect(enemyUnit.hp).toBe(10);
+        });
+
+        test('Ranger does NOT fire arrow at enemies outside range (> 4.5 tiles)', async () => {
+            page.state.selectedCrewMember = { type: 'ranger', name: 'Dormund', stats: { dexterity: 12 } };
+            page._lastRangerArrowTime = 0;
+            page.projectileCanvasRef = { current: { fireProjectileCoords: jest.fn() } };
+
+            const distantEnemy = {
+                id: 'distant_enemy_2',
+                gx: 36, // 6 tiles away
+                gy: 30,
+                hp: 30,
+                isHostile: true,
+                subtype: 'automaton'
+            };
+            page.state.superboardEntities = { distant_enemy_2: distantEnemy };
+
+            await page.tickPocketPygmies();
+
+            expect(page.projectileCanvasRef.current.fireProjectileCoords).not.toHaveBeenCalled();
+            expect(distantEnemy.hp).toBe(30);
+        });
+
+        test('Ranger does NOT fire arrow at non-military buildings', async () => {
+            page.state.selectedCrewMember = { type: 'ranger', name: 'Dormund', stats: { dexterity: 12 } };
+            page._lastRangerArrowTime = 0;
+            page.projectileCanvasRef = { current: { fireProjectileCoords: jest.fn() } };
+
+            placeTileAt(superboard, 32, 30, {
+                isHostile: true,
+                affiliation: 'hostile',
+                contains: {
+                    type: 'building',
+                    subtype: 'farm',
+                    affiliation: 'hostile',
+                    isHostile: true,
+                    hp: 40
+                }
+            });
+
+            await page.tickPocketPygmies();
+
+            expect(page.projectileCanvasRef.current.fireProjectileCoords).not.toHaveBeenCalled();
+        });
+    });
+
     describe('Range Ring Specification Check', () => {
         test('Barbarian and Soldier do NOT receive range rings', () => {
             const barbMember = { type: 'barbarian', name: 'Ulaf' };

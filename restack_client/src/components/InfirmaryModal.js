@@ -190,18 +190,29 @@ export default function InfirmaryModal({ onClose, crewManager }) {
                             const maxHp = p.stats?.hp || p.starting_hp || 100;
                             const hpPct = Math.min(100, Math.max(0, (p.hp / maxHp) * 100));
                             return (
-                                <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.05)', padding: '10px', borderRadius: '4px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flex: 1 }}>
-                                        <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundImage: `url(${p.portrait || p.image})`, backgroundSize: 'cover', border: '1px solid #555' }} />
-                                        <div style={{ flex: 1 }}>
-                                            <div style={{ fontWeight: 'bold' }}>{p.name}</div>
-                                            <div style={{ fontSize: '0.8em', color: '#aaa' }}>{Math.floor(p.hp)} / {maxHp} HP</div>
-                                            <div style={{ width: '100%', height: '6px', backgroundColor: '#333', borderRadius: '3px', marginTop: '4px', overflow: 'hidden' }}>
-                                                <div style={{ width: `${hpPct}%`, height: '100%', backgroundColor: hpPct < 15 ? '#b91c1c' : '#16a34a', transition: 'width 1s linear' }} />
+                                <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(255,255,255,0.05)', padding: '12px 14px', borderRadius: '6px', border: '1px solid rgba(255,255,255,0.1)' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flex: 1, marginRight: '15px' }}>
+                                        <div style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundImage: `url(${p.portrait || p.image})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '2px solid #ca8a04', boxShadow: '0 0 8px rgba(202, 138, 4, 0.4)', flexShrink: 0 }} />
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                <div style={{ fontWeight: 'bold', fontSize: '0.98rem', color: '#fef08a' }}>{p.name}</div>
+                                                <div style={{ fontSize: '0.84rem', fontWeight: 'bold', color: hpPct >= 100 ? '#4ade80' : '#d4d4d8' }}>
+                                                    {Math.floor(p.hp)} / {maxHp} HP ({Math.round(hpPct)}%)
+                                                </div>
+                                            </div>
+                                            <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(255,255,255,0.15)', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.6)' }}>
+                                                <div style={{
+                                                    width: `${hpPct}%`,
+                                                    height: '100%',
+                                                    background: hpPct >= 100 ? 'linear-gradient(90deg, #16a34a, #4ade80)' : (hpPct < 25 ? 'linear-gradient(90deg, #991b1b, #ef4444)' : 'linear-gradient(90deg, #ca8a04, #facc15)'),
+                                                    boxShadow: hpPct >= 100 ? '0 0 10px rgba(74, 222, 128, 0.6)' : '0 0 8px rgba(250, 204, 21, 0.4)',
+                                                    borderRadius: '3px',
+                                                    transition: 'width 0.5s ease-in-out'
+                                                }} />
                                             </div>
                                         </div>
                                     </div>
-                                    <button onClick={() => handleDischarge(p.id)} style={{ marginLeft: '15px', padding: '5px 10px', backgroundColor: hpPct >= 100 ? '#16a34a' : '#7f1d1d', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                                    <button onClick={() => handleDischarge(p.id)} style={{ padding: '7px 14px', backgroundColor: hpPct >= 100 ? '#16a34a' : '#7f1d1d', color: '#fff', border: '1px solid ' + (hpPct >= 100 ? '#22c55e' : '#ef4444'), borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.4)', transition: 'all 0.2s ease' }}>
                                         {hpPct >= 100 ? 'Discharge' : 'Pull Early'}
                                     </button>
                                 </div>
@@ -217,16 +228,31 @@ export default function InfirmaryModal({ onClose, crewManager }) {
                             {injuredRoster.map(u => {
                                 const maxHp = u.stats?.hp || u.starting_hp || 100;
                                 const hp = typeof u.hp === 'number' ? u.hp : maxHp;
+                                const hpPct = Math.min(100, Math.max(0, (hp / maxHp) * 100));
+                                const isDead = u.dead || hp <= 0;
                                 return (
-                                    <div key={u.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(185, 28, 28, 0.1)', border: '1px solid rgba(185, 28, 28, 0.3)', padding: '10px', borderRadius: '4px' }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                                            <div style={{ width: '40px', height: '40px', borderRadius: '50%', backgroundImage: `url(${u.portrait || u.image})`, backgroundSize: 'cover', border: '1px solid #b91c1c' }} />
-                                            <div>
-                                                <div style={{ fontWeight: 'bold', color: '#fca5a5' }}>{u.name}</div>
-                                                <div style={{ fontSize: '0.8em', color: '#f87171' }}>{u.dead || hp <= 0 ? 'Dead' : `${Math.floor(hp)} / ${maxHp} HP`}</div>
+                                    <div key={u.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'rgba(185, 28, 28, 0.1)', border: '1px solid rgba(185, 28, 28, 0.3)', padding: '12px 14px', borderRadius: '6px' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '15px', flex: 1, marginRight: '15px' }}>
+                                            <div style={{ width: '44px', height: '44px', borderRadius: '50%', backgroundImage: `url(${u.portrait || u.image})`, backgroundSize: 'cover', backgroundPosition: 'center', border: '2px solid #b91c1c', boxShadow: '0 0 8px rgba(185, 28, 28, 0.4)', flexShrink: 0 }} />
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                                                    <div style={{ fontWeight: 'bold', color: '#fca5a5', fontSize: '0.98rem' }}>{u.name}</div>
+                                                    <div style={{ fontSize: '0.84rem', fontWeight: 'bold', color: isDead ? '#ef4444' : '#f87171' }}>
+                                                        {isDead ? 'Dead' : `${Math.floor(hp)} / ${maxHp} HP (${Math.round(hpPct)}%)`}
+                                                    </div>
+                                                </div>
+                                                <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: '4px', overflow: 'hidden', border: '1px solid rgba(185, 28, 28, 0.4)', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.6)' }}>
+                                                    <div style={{
+                                                        width: `${isDead ? 0 : hpPct}%`,
+                                                        height: '100%',
+                                                        background: isDead ? '#991b1b' : (hpPct < 25 ? 'linear-gradient(90deg, #7f1d1d, #ef4444)' : 'linear-gradient(90deg, #b45309, #f59e0b)'),
+                                                        borderRadius: '3px',
+                                                        transition: 'width 0.3s ease'
+                                                    }} />
+                                                </div>
                                             </div>
                                         </div>
-                                        <button onClick={() => handleCommit(u)} style={{ padding: '5px 15px', backgroundColor: '#b91c1c', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>
+                                        <button onClick={() => handleCommit(u)} style={{ padding: '7px 15px', backgroundColor: '#b91c1c', color: '#fff', border: '1px solid #ef4444', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem', flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.4)', transition: 'all 0.2s ease' }}>
                                             Commit to Infirmary
                                         </button>
                                     </div>

@@ -2880,6 +2880,18 @@ class DungeonPage extends React.Component {
         if (this.state.inMonsterBattle && !prevState.inMonsterBattle) {
             this.wireMonsterBattleRefToWizardAI();
         }
+        if (this.state.showFoodGoneBadPopup && !prevState.showFoodGoneBadPopup) {
+            if (this._foodGoneBadTimer) clearTimeout(this._foodGoneBadTimer);
+            this._foodGoneBadTimer = setTimeout(() => {
+                this.setState({ showFoodGoneBadPopup: false });
+                this._foodGoneBadTimer = null;
+            }, 6000);
+        } else if (!this.state.showFoodGoneBadPopup && prevState.showFoodGoneBadPopup) {
+            if (this._foodGoneBadTimer) {
+                clearTimeout(this._foodGoneBadTimer);
+                this._foodGoneBadTimer = null;
+            }
+        }
         if (this.state.inMonsterBattle !== prevState.inMonsterBattle || this.state.inTowerSiege !== prevState.inTowerSiege) {
             if (this.state.inMonsterBattle || this.state.inTowerSiege) {
                 document.body.classList.add('combat-active');
@@ -11044,6 +11056,7 @@ class DungeonPage extends React.Component {
         // Clear any timers/intervals created via helpers
         try { if (Array.isArray(this._timers)) { this._timers.forEach(t => clearTimeout(t)); this._timers = []; } } catch (e) { }
         try { if (Array.isArray(this._intervals)) { this._intervals.forEach(i => clearInterval(i)); this._intervals = []; } } catch (e) { }
+        try { if (this._foodGoneBadTimer) { clearTimeout(this._foodGoneBadTimer); this._foodGoneBadTimer = null; } } catch (e) { }
         // Backwards compat: clear any direct references as well
         try { if (this.realTimeSpecialActionCheckInterval) { clearInterval(this.realTimeSpecialActionCheckInterval); } } catch (e) { }
         try { if (this.pygmiesInterval) { clearInterval(this.pygmiesInterval); this.pygmiesInterval = null; } } catch (e) { }
@@ -11542,6 +11555,71 @@ class DungeonPage extends React.Component {
                 }
             }
         });
+
+        // 3. Ensure 1 housed worker pygmy per dwelling building (farm, house, hut, manor, estate, windmill)
+        const dwellingKeys = ['farm', 'house', 'hut', 'manor', 'estate', 'windmill'];
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (!tile) continue;
+                const cObj = typeof tile.contains === 'object' ? tile.contains : null;
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof tile.contains === 'string' ? tile.contains : null);
+                const sKey = String(containsSubtype || tile.building || cObj?.type || '').toLowerCase();
+
+                const isDwelling = dwellingKeys.some(k => sKey.includes(k));
+
+                // Ensure non-combat buildings start with full undamaged HP so no red HP bar shows
+                if (cObj && (isDwelling || sKey.includes('larder') || sKey.includes('sawmill') || sKey.includes('mine') || sKey.includes('dust_collector') || sKey.includes('cultivation_vat'))) {
+                    if (typeof cObj.hp === 'number' && typeof cObj.maxHp === 'number' && cObj.hp < cObj.maxHp && !cObj.lastDamageTime) {
+                        cObj.hp = cObj.maxHp;
+                    }
+                }
+
+                if (!isDwelling) continue;
+                if (cObj && cObj.vendorCell && cObj.vendorCell !== 'anchor') continue;
+
+                const anchorGx = mbX * 15 + (tIdx % 15);
+                const anchorGy = mbY * 15 + Math.floor(tIdx / 15);
+                const dStructKey = `${mbIdx}_${tIdx}_${sKey}`;
+
+                const isInside = !!(cObj?.workerPygmyInside || (cObj?.workerHidingUntil && cObj.workerHidingUntil > now));
+                const existingWorker = Object.values(entities).find(e => e && e.isWorkerPygmy && (e.homeStructureKey === dStructKey || (e.homeGx === anchorGx && e.homeGy === anchorGy)));
+
+                if (!isInside && !existingWorker) {
+                    const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, anchorGx, anchorGy, false) || { mbIdx, tIdx, gx: anchorGx, gy: anchorGy };
+                    const workerId = `worker_pygmy_${mbIdx}_${tIdx}`;
+                    entities[workerId] = {
+                        id: workerId,
+                        type: 'pygmies',
+                        subtype: 'worker_pygmy',
+                        isWorkerPygmy: true,
+                        homeStructureKey: dStructKey,
+                        homeGx: anchorGx,
+                        homeGy: anchorGy,
+                        gx: spawnCoord.gx,
+                        gy: spawnCoord.gy,
+                        mbIdx: spawnCoord.mbIdx,
+                        tIdx: spawnCoord.tIdx,
+                        image: 'cave-individual',
+                        imageKey: 'cave_individual',
+                        faction: 'neutral',
+                        affiliation: 'neutral',
+                        hp: 10,
+                        maxHp: 10,
+                        scale: 0.75,
+                        lastWanderTime: now
+                    };
+                    if (cObj) {
+                        cObj.workerPygmyInside = false;
+                    }
+                }
+            }
+        }
 
         if (prunedAny) {
             this.rebuildOccupancy(entities);
@@ -13328,6 +13406,54 @@ class DungeonPage extends React.Component {
             }
         }
 
+        // Process hiding Worker Pygmies re-emerging from dwellings after 8 seconds
+        for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+            const mb = superboard.miniboards[mbIdx];
+            if (!mb || !Array.isArray(mb.tiles)) continue;
+            const mbX = mbIdx % 3;
+            const mbY = Math.floor(mbIdx / 3);
+
+            for (let tIdx = 0; tIdx < 225; tIdx++) {
+                const tile = mb.tiles[tIdx];
+                if (!tile || !tile.contains || typeof tile.contains !== 'object') continue;
+                const cObj = tile.contains;
+                if (cObj.workerPygmyInside && cObj.workerHidingUntil && now >= cObj.workerHidingUntil) {
+                    cObj.workerPygmyInside = false;
+                    delete cObj.workerHidingUntil;
+
+                    const anchorGx = mbX * 15 + (tIdx % 15);
+                    const anchorGy = mbY * 15 + Math.floor(tIdx / 15);
+                    const containsSubtype = cObj.subtype || cObj.key || cObj.building;
+                    const sKey = String(containsSubtype || tile.building || '').toLowerCase();
+                    const dStructKey = `${mbIdx}_${tIdx}_${sKey}`;
+
+                    const spawnCoord = this.findAdjacentSuperboardEmptyTile(superboard, anchorGx, anchorGy, false) || { mbIdx, tIdx, gx: anchorGx, gy: anchorGy };
+                    const workerId = `worker_pygmy_${mbIdx}_${tIdx}`;
+                    entities[workerId] = {
+                        id: workerId,
+                        type: 'pygmies',
+                        subtype: 'worker_pygmy',
+                        isWorkerPygmy: true,
+                        homeStructureKey: dStructKey,
+                        homeGx: anchorGx,
+                        homeGy: anchorGy,
+                        gx: spawnCoord.gx,
+                        gy: spawnCoord.gy,
+                        mbIdx: spawnCoord.mbIdx,
+                        tIdx: spawnCoord.tIdx,
+                        image: 'cave-individual',
+                        imageKey: 'cave_individual',
+                        faction: 'neutral',
+                        affiliation: 'neutral',
+                        hp: 10,
+                        maxHp: 10,
+                        scale: 0.75,
+                        lastWanderTime: now
+                    };
+                }
+            }
+        }
+
         // 2-Phase Staggered Movement: Alternate units so half step on even ticks and half step on odd ticks
         this._pocketPygmyTickPhase = ((this._pocketPygmyTickPhase || 0) + 1) % 2;
 
@@ -13346,6 +13472,82 @@ class DungeonPage extends React.Component {
             const currentTile = superboard.miniboards[unit.mbIdx]?.tiles?.[unit.tIdx];
 
             const { gx, gy } = unit;
+
+            // Worker Pygmy AI: Flee inside dwelling if non-neutral unit <= 2 tiles away, otherwise wander within 5-tile radius of home dwelling
+            if (pygmy.isWorkerPygmy || pygmy.subtype === 'worker_pygmy') {
+                const nonNeutralUnits = [];
+                if (superboardPlayerPos) {
+                    nonNeutralUnits.push({ gx: superboardPlayerPos.gx, gy: superboardPlayerPos.gy });
+                }
+                Object.values(entities).forEach(e => {
+                    if (!e || (e.hp || 0) <= 0 || e.id === pygmy.id) return;
+                    if (e.isAutomaton || e.subtype === 'automaton') {
+                        nonNeutralUnits.push({ gx: e.gx, gy: e.gy });
+                    } else if (e.isPocketPygmy || e.type === 'pygmies') {
+                        const eAllied = !!(e.isAllied || e.faction === 'player' || e.placedBy === 'player' || e.affiliation === 'friendly');
+                        const eHostile = !!(e.isHostile || e.faction === 'hostile' || e.affiliation === 'hostile');
+                        if (eAllied || eHostile) {
+                            nonNeutralUnits.push({ gx: e.gx, gy: e.gy });
+                        }
+                    }
+                });
+
+                let threatNearby = false;
+                for (const u of nonNeutralUnits) {
+                    const dist = Math.hypot(gx - u.gx, gy - u.gy);
+                    if (dist <= 2.5) {
+                        threatNearby = true;
+                        break;
+                    }
+                }
+
+                if (threatNearby) {
+                    const homeGx = pygmy.homeGx ?? gx;
+                    const homeGy = pygmy.homeGy ?? gy;
+                    const hMbIdx = Math.floor(homeGy / 15) * 3 + Math.floor(homeGx / 15);
+                    const hTidx = (homeGy % 15) * 15 + (homeGx % 15);
+                    const homeTile = superboard.miniboards?.[hMbIdx]?.tiles?.[hTidx];
+
+                    if (homeTile && homeTile.contains && typeof homeTile.contains === 'object') {
+                        homeTile.contains.workerPygmyInside = true;
+                        homeTile.contains.workerHidingUntil = now + 8000;
+                    }
+                    if (currentTile && currentTile.contains?.id === pygmy.id) {
+                        currentTile.contains = null;
+                    }
+                    delete entities[pygmy.id];
+                } else {
+                    if (now - (pygmy.lastWanderTime || 0) >= 1200) {
+                        pygmy.lastWanderTime = now;
+                        const dirs = [
+                            { dx: -1, dy: 0 }, { dx: 1, dy: 0 },
+                            { dx: 0, dy: -1 }, { dx: 0, dy: 1 },
+                            { dx: 0, dy: 0 }
+                        ];
+                        const pick = dirs[Math.floor(Math.random() * dirs.length)];
+                        if (pick.dx !== 0 || pick.dy !== 0) {
+                            const nextGx = gx + pick.dx;
+                            const nextGy = gy + pick.dy;
+                            const homeGx = pygmy.homeGx ?? gx;
+                            const homeGy = pygmy.homeGy ?? gy;
+                            const distFromHome = Math.hypot(nextGx - homeGx, nextGy - homeGy);
+
+                            if (distFromHome <= 5) {
+                                const targetMbIdx = Math.floor(nextGy / 15) * 3 + Math.floor(nextGx / 15);
+                                const targetTidx = (nextGy % 15) * 15 + (nextGx % 15);
+                                const targetTile = superboard.miniboards?.[targetMbIdx]?.tiles?.[targetTidx];
+                                const isVoid = !targetTile || targetTile.isVoid || targetTile.contains === 'void' || targetTile.contains?.type === 'void' || targetTile.color === 'black';
+                                const isBlocked = targetTile && (targetTile.building || targetTile.contains?.building || (targetTile.contains && typeof targetTile.contains === 'object' && targetTile.contains.id !== pygmy.id && (targetTile.contains.hp || 0) > 0));
+
+                                if (!isVoid && !isBlocked) {
+                                    this.movePocketPygmyUnit(superboard, unit.mbIdx, unit.tIdx, targetMbIdx, targetTidx, gx, gy, nextGx, nextGy, { skipSetState: true, entities, unitId: pygmy.id });
+                                }
+                            }
+                        }
+                    }
+                }
+                continue;
+            }
             const isAlliedPygmy = !!(pygmy.isAllied || pygmy.faction === 'player' || pygmy.placedBy === 'player' || pygmy.affiliation === 'friendly');
             const isNeutralPygmy = !isAlliedPygmy && (pygmy.faction === 'neutral' || pygmy.faction === 'wild' || pygmy.affiliation === 'neutral' || (!pygmy.isHostile && pygmy.faction !== 'hostile' && pygmy.faction !== 'enemy'));
             const isHostilePygmy = !isAlliedPygmy && !isNeutralPygmy;
@@ -15410,6 +15612,142 @@ class DungeonPage extends React.Component {
                                 );
                             }
                         }, i * 150);
+                    }
+                }
+            }
+        }
+
+        // 6b. Process Ranger Arrow Autofire in Pocket Dimension
+        if (this.state.inSuperboard && this.state.superboardPlayerPos) {
+            const selectedMember = this.state.selectedCrewMember || (this.props.crewManager?.crew || []).find(c => c && c.selected);
+            const mTypeStr = String(
+                selectedMember?.type ||
+                selectedMember?.role ||
+                selectedMember?.class ||
+                selectedMember?.image ||
+                selectedMember?.portrait ||
+                selectedMember?.name ||
+                selectedMember?.job ||
+                selectedMember?.subtype ||
+                selectedMember?.id ||
+                ''
+            ).toLowerCase();
+            const bgStr = String(this.state.playerFloatStyle?.backgroundImage || '').toLowerCase();
+            const isRangerSelected = !!(selectedMember && (
+                mTypeStr.includes('ranger') ||
+                mTypeStr.includes('dormund') ||
+                mTypeStr.includes('archer') ||
+                bgStr.includes('ranger') ||
+                bgStr.includes('dormund')
+            ));
+
+            const now = Date.now();
+            const lastArrow = this._lastRangerArrowTime || 0;
+
+            if (isRangerSelected && (now - lastArrow >= 4500)) {
+                const { gx: pGx, gy: pGy } = this.state.superboardPlayerPos;
+                const radius = 4.5;
+
+                let nearestTarget = null;
+                let minTargetDist = 999;
+
+                // A. Scan living hostile pygmies / units in superboardEntities
+                Object.values(entities).forEach(e => {
+                    if (!e || (e.hp || 0) <= 0 || e.dead || e.destroyedAt || e.id === 'player') return;
+                    if (this.isNonMilitaryBuilding(e)) return;
+                    const isAllied = !!(e.isAllied || e.faction === 'player' || e.placedBy === 'player' || e.affiliation === 'friendly');
+                    const isHostile = !isAllied && !!(e.isHostile || e.faction === 'hostile' || e.faction === 'enemy' || e.affiliation === 'hostile' || e.isAutomaton || e.subtype === 'automaton');
+                    if (isHostile && typeof e.gx === 'number' && typeof e.gy === 'number') {
+                        const dist = Math.hypot(e.gx - pGx, e.gy - pGy);
+                        if (dist <= radius && dist < minTargetDist) {
+                            minTargetDist = dist;
+                            nearestTarget = {
+                                unit: e,
+                                gx: e.gx,
+                                gy: e.gy,
+                                id: e.id,
+                                name: e.name || e.subtype || e.type || 'Hostile Unit'
+                            };
+                        }
+                    }
+                });
+
+                // B. Scan miniboard tiles for hostile units/monsters if not found in entities
+                if (superboard && Array.isArray(superboard.miniboards)) {
+                    for (let mbIdx = 0; mbIdx < 9; mbIdx++) {
+                        const mb = superboard.miniboards[mbIdx];
+                        if (!mb || !Array.isArray(mb.tiles)) continue;
+                        const mbX = mbIdx % 3;
+                        const mbY = Math.floor(mbIdx / 3);
+                        for (let tIdx = 0; tIdx < 225; tIdx++) {
+                            const t = mb.tiles[tIdx];
+                            if (!t || !t.contains || typeof t.contains !== 'object') continue;
+                            const c = t.contains;
+                            if ((c.hp || 0) <= 0 || c.dead || c.destroyedAt || c.id === 'player') continue;
+                            if (this.isNonMilitaryBuilding(c) || this.isNonMilitaryBuilding(t)) continue;
+                            const isAllied = !!(c.isAllied || c.faction === 'player' || c.placedBy === 'player' || c.affiliation === 'friendly' || t.affiliation === 'friendly');
+                            const isHostile = !isAllied && !!(c.isHostile || t.isHostile || c.faction === 'hostile' || c.faction === 'enemy' || c.affiliation === 'hostile' || c.isAutomaton || c.subtype === 'automaton');
+                            if (isHostile) {
+                                const tgx = mbX * 15 + (tIdx % 15);
+                                const tgy = mbY * 15 + Math.floor(tIdx / 15);
+                                const dist = Math.hypot(tgx - pGx, tgy - pGy);
+                                if (dist <= radius && dist < minTargetDist) {
+                                    minTargetDist = dist;
+                                    nearestTarget = {
+                                        unit: c,
+                                        tile: t,
+                                        gx: tgx,
+                                        gy: tgy,
+                                        id: c.id || `tile_${mbIdx}_${tIdx}`,
+                                        name: c.name || c.subtype || c.type || 'Hostile Unit'
+                                    };
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (nearestTarget) {
+                    this._lastRangerArrowTime = now;
+
+                    const { gx: targetGx, gy: targetGy, unit: targetUnit, name: targetName } = nearestTarget;
+                    const { superboardViewMinX = 0, superboardViewMinY = 0, tileSize = 40 } = this.state;
+
+                    const pVx = pGx - superboardViewMinX;
+                    const pVy = pGy - superboardViewMinY;
+                    const tVx = targetGx - superboardViewMinX;
+                    const tVy = targetGy - superboardViewMinY;
+
+                    const startX = pVx * tileSize + tileSize / 2;
+                    const startY = pVy * tileSize + tileSize / 2;
+                    const endX = tVx * tileSize + tileSize / 2;
+                    const endY = tVy * tileSize + tileSize / 2;
+
+                    const baseAtk = selectedMember?.stats?.atk || selectedMember?.stats?.dexterity || 10;
+                    const dmg = Math.floor(baseAtk * 0.9 + Math.random() * (baseAtk * 0.3 + 2));
+
+                    if (this.projectileCanvasRef && this.projectileCanvasRef.current) {
+                        this.projectileCanvasRef.current.fireProjectileCoords(
+                            startX, startY, endX, endY,
+                            () => {
+                                if (targetUnit && (targetUnit.hp || 0) > 0) {
+                                    targetUnit.hp = Math.max(0, targetUnit.hp - dmg);
+                                    targetUnit.lastDamageTime = Date.now();
+                                    if (targetUnit.hp <= 0) {
+                                        targetUnit.dead = true;
+                                        targetUnit.destroyedAt = Date.now();
+                                        if (nearestTarget.tile && nearestTarget.tile.contains === targetUnit) {
+                                            nearestTarget.tile.contains = null;
+                                        }
+                                        this.displayMessage(`🏹 Ranger fired an arrow at ${targetName} for ${dmg} damage, eliminating the target!`);
+                                    } else {
+                                        this.displayMessage(`🏹 Ranger fired an arrow at ${targetName} for ${dmg} damage! (HP: ${targetUnit.hp}/${targetUnit.maxHp || 10})`);
+                                    }
+                                    this.forceUpdate();
+                                }
+                            },
+                            'arrow'
+                        );
                     }
                 }
             }
@@ -17565,7 +17903,7 @@ class DungeonPage extends React.Component {
                                                                         isOnCurrentPlane = genData.orientation === currentOrientation;
                                                                     } else {
                                                                         // Legacy: Check if the actual tile on this plane looks like a generator
-                                                                        const t = boardTiles.find(bt => Number(bt.id) === tId);
+                                                                        const t = boardTiles[tId] || boardTiles.find(bt => Number(bt.id) === tId);
                                                                         const isTerr = t && (t.territory || t.contains?.territory || t.contains?.type === 'territory' || t.contains?.subtype === 'territory');
                                                                         if (t && !isTerr && (t.generatorData || t.building || (t.contains && (t.contains.type === 'domain_monolith' || t.contains.subtype === 'domain_monolith' || t.contains.type === 'domain_node' || t.contains.subtype === 'domain_node' || t.contains.type === 'generator' || (t.contains.type === 'building' && t.contains.subtype !== 'territory'))))) {
                                                                             isOnCurrentPlane = true;
@@ -17573,7 +17911,7 @@ class DungeonPage extends React.Component {
                                                                             // Check opposite plane to see if it definitively belongs there
                                                                             const oppositePlane = levelObj ? (currentOrientation === 'B' ? levelObj.front : levelObj.back) : null;
                                                                             const oppBoard = oppositePlane && oppositePlane.miniboards && oppositePlane.miniboards[i];
-                                                                            const oppTile = oppBoard && oppBoard.tiles && oppBoard.tiles.find(bt => Number(bt.id) === tId);
+                                                                            const oppTile = oppBoard && oppBoard.tiles && (oppBoard.tiles[tId] || oppBoard.tiles.find(bt => Number(bt.id) === tId));
                                                                             const isOppTerr = oppTile && (oppTile.territory || oppTile.contains?.territory || oppTile.contains?.type === 'territory' || oppTile.contains?.subtype === 'territory');
                                                                             if (oppTile && !isOppTerr && (oppTile.generatorData || oppTile.building || (oppTile.contains && (oppTile.contains.type === 'domain_monolith' || oppTile.contains.subtype === 'domain_monolith' || oppTile.contains.type === 'domain_node' || oppTile.contains.subtype === 'domain_node' || oppTile.contains.type === 'generator' || (oppTile.contains.type === 'building' && oppTile.contains.subtype !== 'territory'))))) {
                                                                                 isOnCurrentPlane = false; // It definitively belongs to the other plane
@@ -17605,7 +17943,7 @@ class DungeonPage extends React.Component {
                                                                     const tId = Number(parts[2]);
                                                                     const genData = meta.discoveredGenerators[key];
                                                                     if (genData && genData.orientation === currentOrientation) {
-                                                                        const t = boardTiles.find(bt => Number(bt.id) === tId);
+                                                                        const t = boardTiles[tId] || boardTiles.find(bt => Number(bt.id) === tId);
                                                                         if (t && this.isBuildingOrGeneratorTile(t)) {
                                                                             if (!isNaN(tId) && !mergedByTile.has(`generator_${tId}`)) {
                                                                                 mergedByTile.set(`generator_${tId}`, { tileId: tId, indicatorType: 'generator' });
@@ -18285,7 +18623,7 @@ class DungeonPage extends React.Component {
                 </div>
                 {!collapsed && (
                     <div className="section-content">
-                        {deaths > 0 && (
+                        {deaths > 0 && !this.state.inSuperboard && !this.state.isInPocketDimension && (
                             <div className="death-tracker" title={tooltip} aria-label={tooltip}>
                                 <div className="death-tracker-title">Death Tracker</div>
                                 <div className="death-skulls-list">
@@ -19700,7 +20038,7 @@ class DungeonPage extends React.Component {
 
                 {/* 4. Crew Resolve / Attack / Defense */}
                 <div>
-                    {deaths > 0 && (
+                    {deaths > 0 && !this.state.inSuperboard && !this.state.isInPocketDimension && (
                         <div className="death-tracker" title={tooltip} aria-label={tooltip} style={{ marginBottom: '10px' }}>
                             <div className="death-tracker-title">Death Tracker</div>
                             <div className="death-skulls-list">
@@ -24542,6 +24880,32 @@ class DungeonPage extends React.Component {
                 }
             }
         }
+
+        // Propagate generator activation across all member tiles of multi-tile buildings
+        tiles.forEach(tile => {
+            if (!tile) return;
+            const vGroupId = tile.vendorGroupId || tile.contains?.vendorGroupId;
+            const vAnchorId = tile.vendorAnchorId !== undefined ? tile.vendorAnchorId : tile.contains?.vendorAnchorId;
+            if (vGroupId || vAnchorId !== undefined) {
+                const memberTiles = tiles.filter(t => t && (
+                    (vGroupId && (t.vendorGroupId === vGroupId || t.contains?.vendorGroupId === vGroupId)) ||
+                    (vAnchorId !== undefined && (t.vendorAnchorId === vAnchorId || t.contains?.vendorAnchorId === vAnchorId || t.id === vAnchorId))
+                ));
+                const activeMember = memberTiles.find(m => m.generatorData && m.generatorData.activated);
+                if (activeMember) {
+                    memberTiles.forEach(m => {
+                        if (!m.generatorData || !m.generatorData.activated) {
+                            m.generatorData = { ...activeMember.generatorData };
+                        }
+                        if (activeMember.ownedByPlayer) {
+                            m.ownedByPlayer = true;
+                            m.ownedByEnemy = false;
+                        }
+                    });
+                }
+            }
+        });
+
         // ── Apply Domain Monolith Territory ──
         const activeMonoliths = [];
         tiles.forEach(t => {
@@ -30368,36 +30732,55 @@ class DungeonPage extends React.Component {
         }
 
         if (bm) {
-            if (bm.tiles && bm.tiles[tileId]) {
-                bm.tiles[tileId].generatorData = genData;
-            }
-            if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[tileId]) {
-                bm.currentBoard.tiles[tileId].generatorData = genData;
-            }
-            if (bm.dungeon && bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
-                try {
-                    const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
-                    if (levelEntry) {
-                        const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
-                        if (targetPlane && targetPlane.miniboards) {
-                            const b = targetPlane.miniboards[bm.playerTile.boardIndex];
-                            if (b && b.tiles && b.tiles[tileId]) {
-                                b.tiles[tileId].generatorData = genData;
+            const vGroupId = tile.vendorGroupId || tile.contains?.vendorGroupId;
+            const vAnchorId = tile.vendorAnchorId !== undefined ? tile.vendorAnchorId : tile.contains?.vendorAnchorId;
+            const memberTiles = (bm.tiles || []).filter(t => t && (
+                (vGroupId && (t.vendorGroupId === vGroupId || t.contains?.vendorGroupId === vGroupId)) ||
+                (vAnchorId !== undefined && (t.vendorAnchorId === vAnchorId || t.contains?.vendorAnchorId === vAnchorId || t.id === vAnchorId)) ||
+                t.id === tileId
+            ));
+
+            const tilesToUpdate = memberTiles.length > 0 ? memberTiles : [bm.tiles[tileId]].filter(Boolean);
+
+            tilesToUpdate.forEach(memberTile => {
+                const mId = memberTile.id;
+                memberTile.generatorData = { ...genData };
+                memberTile.ownedByPlayer = true;
+                if (memberTile.contains && typeof memberTile.contains === 'object') {
+                    memberTile.contains.generatorData = { ...genData };
+                    memberTile.contains.ownedByPlayer = true;
+                }
+
+                if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[mId]) {
+                    bm.currentBoard.tiles[mId].generatorData = { ...genData };
+                    bm.currentBoard.tiles[mId].ownedByPlayer = true;
+                }
+                if (bm.dungeon && bm.dungeon.levels && bm.currentLevel && bm.currentBoard) {
+                    try {
+                        const levelEntry = bm.dungeon.levels.find(e => e.id === bm.currentLevel.id);
+                        if (levelEntry) {
+                            const targetPlane = bm.currentOrientation === 'F' ? levelEntry.front : levelEntry.back;
+                            if (targetPlane && targetPlane.miniboards) {
+                                const b = targetPlane.miniboards[bm.playerTile.boardIndex];
+                                if (b && b.tiles && b.tiles[mId]) {
+                                    b.tiles[mId].generatorData = { ...genData };
+                                    b.tiles[mId].ownedByPlayer = true;
+                                }
                             }
                         }
-                    }
-                } catch (e) { }
-            }
-        }
-        if (!isPocket) {
-            try {
-                const meta = getMeta() || {};
-                meta.activatedGenerators = meta.activatedGenerators || {};
-                const key = `${bm?.currentLevel?.id ?? 0}_${bm?.playerTile?.boardIndex ?? 0}_${tileId}`;
-                genData.tileId = tileId;
-                meta.activatedGenerators[key] = genData;
-                storeMeta(meta);
-            } catch (e) { }
+                    } catch (e) { }
+                }
+
+                if (!isPocket) {
+                    try {
+                        const meta = getMeta() || {};
+                        meta.activatedGenerators = meta.activatedGenerators || {};
+                        const key = `${bm?.currentLevel?.id ?? 0}_${bm?.playerTile?.boardIndex ?? 0}_${mId}`;
+                        meta.activatedGenerators[key] = { ...genData, tileId: mId };
+                        storeMeta(meta);
+                    } catch (e) { }
+                }
+            });
         }
 
         // If it's an observer platform, recalculate fog of war immediately to reveal the map
@@ -32847,43 +33230,48 @@ class DungeonPage extends React.Component {
                         alignment="center"
                         className="food-gone-bad-modal"
                     >
-                        <div style={{ padding: '24px', textAlign: 'center', backgroundColor: '#1a120b', border: '2px solid #8f5c38', color: '#f5efe6', borderRadius: '8px' }}>
-                            <div style={{ marginBottom: '16px' }}>
-                                <img src={images['poison']} alt="Spoiled Food" style={{ width: '64px', height: '64px', filter: 'drop-shadow(0 0 8px rgba(46, 204, 113, 0.4))' }} />
+                        <div className="food-gone-bad-card">
+                            <div className="card-corner top-left" />
+                            <div className="card-corner top-right" />
+                            <div className="card-corner bottom-left" />
+                            <div className="card-corner bottom-right" />
+
+                            <div className="food-gone-bad-card__icon-wrap">
+                                <div className="food-gone-bad-card__icon-halo" />
+                                <img
+                                    src={images.spoiled_rations || images['poison']}
+                                    alt="Spoiled Provisions"
+                                    className="food-gone-bad-card__icon-img"
+                                />
                             </div>
-                            <h3 style={{ color: '#e74c3c', fontSize: '26px', margin: '0 0 16px 0', fontFamily: "'Cinzel', serif", fontWeight: '700', letterSpacing: '0.05em', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>Food Has Gone Bad!</h3>
-                            <p style={{ fontSize: '16px', lineHeight: '1.5', margin: '0 0 20px 0', fontFamily: "'Inter', sans-serif" }}>
-                                Your food supply exceeded the fresh storage limit of <strong style={{ color: '#2ecc71', fontSize: '18px' }}>{this.state.foodGoneBadLimit}</strong> units.
+
+                            <h3 className="food-gone-bad-card__title">SPOILED PROVISIONS</h3>
+
+                            <div className="food-gone-bad-card__divider">
+                                <span className="divider-line" />
+                                <span className="divider-glyph">❖</span>
+                                <span className="divider-line" />
+                            </div>
+
+                            <p className="food-gone-bad-card__desc">
+                                Your stores exceeded the freshness limit of{' '}
+                                <strong className="limit-highlight">{this.state.foodGoneBadLimit}</strong> rations.
                             </p>
-                            <div style={{ backgroundColor: '#2c1e12', padding: '14px', borderRadius: '4px', border: '1px solid #d35400', marginBottom: '24px', boxShadow: 'inset 0 0 10px rgba(0,0,0,0.5)' }}>
-                                <span style={{ fontSize: '18px', color: '#e67e22', fontWeight: 'bold', fontFamily: "'Cinzel', serif", letterSpacing: '0.05em' }}>-{this.state.foodGoneBadAmount} Food Spoiled</span>
+                            <p className="food-gone-bad-card__flavor">
+                                Damp cavern air and persistent gloom have claimed the unpreserved stores.
+                            </p>
+
+                            <div className="food-gone-bad-card__loss-plaque">
+                                <span className="loss-amount">-{this.state.foodGoneBadAmount}</span>
+                                <span className="loss-label">Food Lost to Decay</span>
                             </div>
+
                             <button
+                                type="button"
+                                className="food-gone-bad-card__btn"
                                 onClick={() => this.setState({ showFoodGoneBadPopup: false })}
-                                style={{
-                                    padding: '10px 24px',
-                                    fontSize: '16px',
-                                    backgroundColor: '#8f5c38',
-                                    border: '1px solid #c78b5a',
-                                    color: '#f5efe6',
-                                    borderRadius: '4px',
-                                    cursor: 'pointer',
-                                    fontWeight: 'bold',
-                                    fontFamily: "'Cinzel', serif",
-                                    letterSpacing: '0.05em',
-                                    transition: 'background-color 0.2s, box-shadow 0.2s',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
-                                }}
-                                onMouseEnter={(e) => {
-                                    e.target.style.backgroundColor = '#a06d4a';
-                                    e.target.style.boxShadow = '0 4px 8px rgba(0,0,0,0.6)';
-                                }}
-                                onMouseLeave={(e) => {
-                                    e.target.style.backgroundColor = '#8f5c38';
-                                    e.target.style.boxShadow = '0 2px 4px rgba(0,0,0,0.5)';
-                                }}
                             >
-                                Understood
+                                OK
                             </button>
                         </div>
                     </CModal>
@@ -32916,49 +33304,60 @@ class DungeonPage extends React.Component {
                     return (
                         <div className="ambush-popup-overlay">
                             <div className="ambush-popup-card">
+                                <div className="card-corner top-left" />
+                                <div className="card-corner top-right" />
+                                <div className="card-corner bottom-left" />
+                                <div className="card-corner bottom-right" />
+
+                                <div className="ambush-eyebrow">
+                                    <span className="glyph">✦</span> THREAT ENCOUNTER <span className="glyph">✦</span>
+                                </div>
                                 <h2 className="ambush-title">Ambush!</h2>
+
+                                <div className="ambush-divider">
+                                    <span className="divider-line" />
+                                    <span className="divider-glyph">❖</span>
+                                    <span className="divider-line" />
+                                </div>
+
                                 <p className="ambush-subtitle">
                                     You were ambushed by a <span className="monster-highlight">{monster.name}</span>!
                                 </p>
-                                <div className="ambush-portrait-frame" style={{ border: `2px solid ${tierColor}`, boxShadow: `0 0 15px ${tierColor}40` }}>
+                                <div className="ambush-portrait-frame" style={{ border: `2px solid ${tierColor}`, boxShadow: `0 0 20px ${tierColor}33, inset 0 0 15px rgba(0,0,0,0.8)` }}>
                                     <img
                                         src={portraitSrc}
                                         alt={monster.name}
                                         className="ambush-portrait"
                                     />
-                                    <div className="ambush-badge" style={{ borderColor: tierColor, color: tierColor }}>
-                                        {tierLabel}
+                                    <div className="ambush-badge" style={{ borderColor: tierColor, color: tierColor, textShadow: `0 0 8px ${tierColor}88` }}>
+                                        <span className="badge-glyph">❖</span> {tierLabel} <span className="badge-glyph">❖</span>
                                     </div>
                                 </div>
 
                                 <div className="ambush-stats-grid">
-                                    <div className="ambush-stat-item">
-                                        <span className="stat-icon" role="img" aria-label="Heart">❤️</span>
-                                        <span className="stat-label">Health</span>
+                                    <div className="ambush-stat-item stat-hp">
+                                        <span className="stat-label">HP</span>
                                         <span className="stat-value">{displayHp}</span>
                                     </div>
-                                    <div className="ambush-stat-item">
-                                        <span className="stat-icon" role="img" aria-label="Swords">⚔️</span>
-                                        <span className="stat-label">Attack</span>
+                                    <div className="ambush-stat-item stat-atk">
+                                        <span className="stat-label">ATK</span>
                                         <span className="stat-value">{monster.stats?.atk || 0}</span>
                                     </div>
-                                    <div className="ambush-stat-item">
-                                        <span className="stat-icon" role="img" aria-label="Shield">🛡️</span>
-                                        <span className="stat-label">Defense</span>
+                                    <div className="ambush-stat-item stat-def">
+                                        <span className="stat-label">DEF</span>
                                         <span className="stat-value">{monster.stats?.def || 0}</span>
                                     </div>
-                                    <div className="ambush-stat-item">
-                                        <span className="stat-icon" role="img" aria-label="Lightning bolt">⚡</span>
-                                        <span className="stat-label">Speed</span>
+                                    <div className="ambush-stat-item stat-spd">
+                                        <span className="stat-label">SPD</span>
                                         <span className="stat-value">{displaySpeed}</span>
                                     </div>
                                 </div>
 
                                 <button className="ambush-fight-btn" onClick={() => this.startAmbushCombat()}>
-                                    Fight
+                                    <span>Fight</span>
                                 </button>
                                 <div className="ambush-shortcut-hint">
-                                    Press [Enter] to Fight
+                                    Press [Enter] to Engage
                                 </div>
                             </div>
                         </div>

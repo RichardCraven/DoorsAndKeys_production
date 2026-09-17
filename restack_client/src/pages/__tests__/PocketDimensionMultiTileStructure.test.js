@@ -352,6 +352,72 @@ describe('Pocket Dimension Multi-Tile (2x2) Structure Rendering and Sanitization
             expect(brContainer.textContent).not.toContain('👑');
         });
 
+        test('Plain ground tile inside player domain territory does NOT render a crown badge', () => {
+            const boardTiles = createBoardTiles([
+                { id: 10, ownedByPlayer: true, territory: 'player', territoryAffiliation: 'player', contains: { type: 'empty_space' }, image: 'stone_floor' }
+            ]);
+
+            const { container } = render(
+                <Tile
+                    id={10}
+                    index={10}
+                    color="#6b6057"
+                    inSuperboard={false}
+                    ownedByPlayer={true}
+                    territory="player"
+                    territoryAffiliation="player"
+                    boardTiles={boardTiles}
+                    contains={boardTiles[10].contains}
+                    image="stone_floor"
+                />
+            );
+
+            expect(container.textContent).not.toContain('👑');
+            expect(container.textContent).not.toContain('⚔️');
+        });
+
+        test('Domain Node or Domain Monolith tile does NOT render a crown ownership badge', () => {
+            const boardTiles = createBoardTiles([
+                { id: 15, ownedByPlayer: true, territory: 'player', contains: { type: 'building', subtype: 'domain_node' }, building: 'domain_node' }
+            ]);
+
+            const { container } = render(
+                <Tile
+                    id={15}
+                    index={15}
+                    color="#6b6057"
+                    inSuperboard={false}
+                    ownedByPlayer={true}
+                    boardTiles={boardTiles}
+                    contains={boardTiles[15].contains}
+                    building="domain_node"
+                />
+            );
+
+            expect(container.textContent).not.toContain('👑');
+        });
+
+        test('Locus structure tile DOES render a crown ownership badge when owned by player', () => {
+            const boardTiles = createBoardTiles([
+                { id: 12, ownedByPlayer: true, contains: { type: 'locus', subtype: 'emerald_locus' }, building: 'emerald_locus' }
+            ]);
+
+            const { container } = render(
+                <Tile
+                    id={12}
+                    index={12}
+                    color="#6b6057"
+                    inSuperboard={false}
+                    ownedByPlayer={true}
+                    boardTiles={boardTiles}
+                    contains={boardTiles[12].contains}
+                    building="emerald_locus"
+                />
+            );
+
+            expect(container.textContent).toContain('👑');
+        });
+
         test('Superboard viewport collision: isAnchorSingle does not break 200% slicing or trigger duplicate rings when viewport index has a single-tile structure', () => {
             // Viewport tile 5 happens to be a domain_node or hut
             const boardTiles = createBoardTiles([
