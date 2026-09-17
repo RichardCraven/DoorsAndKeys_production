@@ -161,8 +161,9 @@ export default class ProjectileCanvas extends React.Component {
 
     createExplosion = (x, y, type = 'fireball') => {
         const particles = [];
-        const particleCount = type === 'magic_missile' ? 18 : 15;
+        const particleCount = type === 'magic_missile' ? 18 : (type === 'arrow' ? 12 : 15);
         const mmColors = ['#d946ef', '#b5179e', '#9d4edd', '#ffffff', '#38bdf8'];
+        const arrowColors = ['#4ade80', '#e5b54f', '#ffffff', '#22c55e'];
         const fbColors = ['#ff9900', '#ff0000'];
 
         for (let i = 0; i < particleCount; i++) {
@@ -170,7 +171,9 @@ export default class ProjectileCanvas extends React.Component {
             const speed = Math.random() * 3 + 1;
             const randColor = type === 'magic_missile' 
                 ? mmColors[Math.floor(Math.random() * mmColors.length)]
-                : (Math.random() > 0.5 ? fbColors[0] : fbColors[1]);
+                : (type === 'arrow'
+                    ? arrowColors[Math.floor(Math.random() * arrowColors.length)]
+                    : (Math.random() > 0.5 ? fbColors[0] : fbColors[1]));
             particles.push({
                 x,
                 y,
@@ -218,6 +221,52 @@ export default class ProjectileCanvas extends React.Component {
                 ctx.fillStyle = '#ffffff';
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (p.type === 'arrow') {
+                // Arrow: directional wooden shaft with sharp head, emerald fletching, and trail glow
+                const angle = Math.atan2(p.dy, p.dx);
+                ctx.translate(p.x, p.y);
+                ctx.rotate(angle);
+
+                // Motion trail glow
+                const trailGrad = ctx.createLinearGradient(-18, 0, 8, 0);
+                trailGrad.addColorStop(0, 'rgba(74, 222, 128, 0)');
+                trailGrad.addColorStop(0.6, 'rgba(74, 222, 128, 0.4)');
+                trailGrad.addColorStop(1, 'rgba(229, 181, 79, 0.9)');
+
+                ctx.strokeStyle = trailGrad;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(-18, 0);
+                ctx.lineTo(8, 0);
+                ctx.stroke();
+
+                // Arrow shaft
+                ctx.strokeStyle = '#d4a844';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(-10, 0);
+                ctx.lineTo(8, 0);
+                ctx.stroke();
+
+                // Arrowhead
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.moveTo(12, 0);
+                ctx.lineTo(6, -4);
+                ctx.lineTo(7, 0);
+                ctx.lineTo(6, 4);
+                ctx.closePath();
+                ctx.fill();
+
+                // Fletching (green feathers)
+                ctx.fillStyle = '#4ade80';
+                ctx.beginPath();
+                ctx.moveTo(-9, 0);
+                ctx.lineTo(-14, -3);
+                ctx.lineTo(-11, 0);
+                ctx.lineTo(-14, 3);
+                ctx.closePath();
                 ctx.fill();
             } else {
                 // Standard Fireball / Outpost projectile glow

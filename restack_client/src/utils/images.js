@@ -1037,8 +1037,12 @@ import pocket_litter_broken_wagon from '../assets/gemini_images/pocket_litter_br
 import pocket_litter_fractured_monolith from '../assets/gemini_images/pocket_litter_fractured_monolith.png';
 import pocket_litter_forge_remnants from '../assets/gemini_images/pocket_litter_forge_remnants.png';
 import pocket_litter_rift_embers from '../assets/gemini_images/pocket_litter_rift_embers.png';
+import pocket_litter_astral_obelisk from '../assets/gemini_images/pocket_litter_astral_obelisk.png';
+import pocket_litter_ancient_reliquary from '../assets/gemini_images/pocket_litter_ancient_reliquary.png';
+import pocket_litter_celestial_geode from '../assets/gemini_images/pocket_litter_celestial_geode.png';
 import chemical_lantern from '../assets/gemini_images/chemical_lantern.png';
 import territorial_lantern from '../assets/gemini_images/territorial_lantern.png';
+import spoiled_rations from '../assets/gemini_images/spoiled_rations.png';
 import automaton from '../assets/automatons/automaton.png';
 import codex from '../assets/icons/codex.png';
 
@@ -2855,8 +2859,12 @@ export {
     pocket_litter_fractured_monolith,
     pocket_litter_forge_remnants,
     pocket_litter_rift_embers,
+    pocket_litter_astral_obelisk,
+    pocket_litter_ancient_reliquary,
+    pocket_litter_celestial_geode,
     chemical_lantern,
     territorial_lantern,
+    spoiled_rations,
 
     // Pocket Dimension Buildings
     pocket_town_1,

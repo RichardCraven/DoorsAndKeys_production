@@ -874,9 +874,6 @@ export default function LandingPage(props) {
 
   useEffect(() => {
     let mounted = true;
-    history.push({
-      pathname: '/landing'
-    })
     if (mounted) {
       const isAdminUser = localStorage.getItem('isAdmin') === 'true';
       if (isAdminUser) {
@@ -889,7 +886,7 @@ export default function LandingPage(props) {
     return () => {
       mounted = false;
     }
-  }, [history])
+  }, [])
 
   const getDungeonOnlineCount = (d, presenceMap, allDungeons = []) => {
     if (!d || !presenceMap) return 0;
@@ -1150,7 +1147,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.6.9 BETA</span>
+          <span className="logo-subtitle">v 0.6.10 BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',

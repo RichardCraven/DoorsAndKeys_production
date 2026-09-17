@@ -93,32 +93,53 @@ const deleteUserRequest = (userId) => {
     })
 }
 
+const _pendingUserTimeouts = new Map();
+const _pendingDungeonTimeouts = new Map();
+
 const updateUserRequest = async (userId, metadata, username, isAdmin) => {
+  if (!userId || userId === 'null' || userId === 'undefined') {
+    return Promise.resolve({ status: 400, data: null, error: 'Invalid user ID' });
+  }
   await ensureServerWarm();
-  const payload = {};
-  if (metadata !== undefined) {
-    payload.metadata = JSON.stringify(metadata);
+
+  if (_pendingUserTimeouts.has(userId)) {
+    clearTimeout(_pendingUserTimeouts.get(userId));
   }
-  if (username !== undefined) {
-    payload.username = username;
-  }
-  if (isAdmin !== undefined) {
-    payload.isAdmin = isAdmin;
-  }
-  return axios.put(API_BASE + "/api/users/"+userId, payload, { timeout: 10000 })
-    .then(res=>{
-      if(res.status === 200){
-        if (metadata !== undefined) {
-          res.data.metadata = metadata;
-        }
-        return(res)
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(async () => {
+      _pendingUserTimeouts.delete(userId);
+      const payload = {};
+      if (metadata !== undefined) {
+        payload.metadata = JSON.stringify(metadata);
       }
-      return { status: res.status, data: null };
-    })
-    .catch(err=> {
-      console.log(err)
-      return { status: 500, data: null, error: err };
-    })
+      if (username !== undefined) {
+        payload.username = username;
+      }
+      if (isAdmin !== undefined) {
+        payload.isAdmin = isAdmin;
+      }
+      try {
+        const res = await axios.put(API_BASE + "/api/users/" + userId, payload, { timeout: 45000 });
+        if (res.status === 200) {
+          if (metadata !== undefined) {
+            res.data.metadata = metadata;
+          }
+          resolve(res);
+        } else {
+          resolve({ status: res.status, data: null });
+        }
+      } catch (err) {
+        if (err && (err.code === 'ECONNABORTED' || err.message?.includes('aborted') || err.message?.includes('timeout'))) {
+          resolve({ status: 499, data: null, error: 'Client request timed out or aborted' });
+        } else {
+          console.log(err);
+          resolve({ status: 500, data: null, error: err });
+        }
+      }
+    }, 300);
+    _pendingUserTimeouts.set(userId, timer);
+  });
 }
 
 // Map APIs --------------------------------------------------------
@@ -311,17 +332,33 @@ const addDungeonRequest = (dungeonObj) => {
     })
 }
 const updateDungeonRequest = (id, dungeonObj) => {
-  return axios.put(API_BASE + "/api/dungeons/"+id, {dungeon: JSON.stringify(dungeonObj)}, { timeout: 15000 })
-    .then(res=>{
-      if(res.status === 200 || res.status === 201){
-        return(res)
+  if (!id) return Promise.resolve({ status: 400, data: null });
+
+  if (_pendingDungeonTimeouts.has(id)) {
+    clearTimeout(_pendingDungeonTimeouts.get(id));
+  }
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(async () => {
+      _pendingDungeonTimeouts.delete(id);
+      try {
+        const res = await axios.put(API_BASE + "/api/dungeons/" + id, { dungeon: JSON.stringify(dungeonObj) }, { timeout: 45000 });
+        if (res.status === 200 || res.status === 201) {
+          resolve(res);
+        } else {
+          resolve({ status: res.status, data: null });
+        }
+      } catch (err) {
+        if (err && (err.code === 'ECONNABORTED' || err.message?.includes('aborted') || err.message?.includes('timeout'))) {
+          resolve({ status: 499, data: null, error: 'Client request timed out or aborted' });
+        } else {
+          console.log(err);
+          resolve({ status: 500, data: null, error: err });
+        }
       }
-      return { status: res.status, data: null };
-    })
-    .catch(err=> {
-      console.log(err)
-      return { status: 500, data: null, error: err };
-    })
+    }, 300);
+    _pendingDungeonTimeouts.set(id, timer);
+  });
 }
 const loadAllDungeonsRequest = async (id) => {
   await ensureServerWarm();

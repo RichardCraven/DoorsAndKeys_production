@@ -1,6 +1,7 @@
 import React from 'react';
 import * as images from '../utils/images'
 import { getTreeLayersForDensity, getMountainLayersForDensity } from '../utils/autotile-utils';
+import { getMeta, getUserId } from '../utils/session-handler';
 
 
 const getTileTerritoryAffiliationHelper = (tObj, fallbackProps) => {
@@ -425,6 +426,7 @@ function AutomatonConversionProgressBar({ converting, isVendorCell, is3x3Structu
     if (!converting || !converting.startTime || !converting.duration) return null;
 
     const elapsed = Math.max(0, now - converting.startTime);
+    if (elapsed >= converting.duration) return null;
     const progress = Math.min(1, Math.max(0, elapsed / converting.duration));
 
     const isPlayerClaim = !!(converting.isPlayerClaim || converting.isPlayer);
@@ -632,8 +634,8 @@ function Tile(props) {
     const containsObj = (props.contains && typeof props.contains === 'object') ? props.contains : null;
     const sKey = (props.building || containsObj?.subtype || containsObj?.building || containsObj?.type || containsObj?.key || containsObj?.name || props.contains || props.image || '').toString().toLowerCase();
     const is3x3Structure = sKey.includes('keep') || sKey.includes('fortress') || sKey.includes('fractured_monolith');
-    const isLocusTile = sKey.includes('locus') || !!props.isAdjacentLocus || (containsObj && (containsObj.type === 'locus' || containsObj.locusType || (typeof containsObj.subtype === 'string' && containsObj.subtype.includes('locus'))));
-    const isLocusActiveOrAdjacent = isLocusTile && (props.isAdjacentLocus || props.isLocusActive || props.activeLocus);
+    const isLocusTile = sKey.includes('locus') || (containsObj && (containsObj.type === 'locus' || containsObj.locusType || (typeof containsObj.subtype === 'string' && containsObj.subtype.includes('locus'))));
+    const isLocusActiveOrAdjacent = (isLocusTile || props.isAdjacentLocus) && (props.isAdjacentLocus || props.isLocusActive || props.activeLocus);
     const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || sKey.includes('under_construction') || sKey.includes('construction') || sKey.includes('rift_embers') || is3x3Structure || isLocusTile;
 
     const containsObjForHp = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined')
@@ -1243,6 +1245,7 @@ function Tile(props) {
                 const sub = props.contains.subtype || props.contains.building || props.contains.type || props.contains.name;
                 if (sub && typeof sub === 'string') {
                     const key = sub.trim().toLowerCase().replace(/[\s-]+/g, '_');
+                    if (key === 'worker_pygmy' || key === 'pocket_worker_pygmy' || key === 'cave_individual') return images.cave_individual;
                     if (['portal', 'teleporter', 'dungeon_portal'].includes(key)) return images.dungeon_portal;
                     if (images[key]) return images[key];
                     if (images[`buildable_${key}`]) return images[`buildable_${key}`];
@@ -1651,8 +1654,8 @@ function Tile(props) {
             { color !== 'black' && (() => {
                 if (!isStructureTile) return null;
 
-                // Palette tiles must NEVER render structure rings
-                if (props.type === 'palette-tile' || props.isPaletteTile) return null;
+                // Palette, crew, and POI tiles must NEVER render structure rings
+                if (props.type === 'palette-tile' || props.isPaletteTile || props.type === 'poi-tile' || props.isPoiTile || props.type === 'crew-tile') return null;
 
                 // For multi-tile structures, only render the ring once on the anchor cell
                 const vRole = getVendorCellRole();
@@ -1681,30 +1684,91 @@ function Tile(props) {
                     allKeys.includes('rift_embers') || allKeys.includes('fractured_monolith') ||
                     allKeys.includes('broken_wagon') || allKeys.includes('forge_remnants') ||
                     allKeys.includes('mana_crystals') || allKeys.includes('ruined_arch') ||
+                    allKeys.includes('astral_obelisk') || allKeys.includes('ancient_reliquary') || allKeys.includes('celestial_geode') ||
                     allKeys.includes('pocket_litter') || allKeys.includes('dimension_litter') ||
                     allKeys.includes('battle_debris') || allKeys.includes('debris') || allKeys.includes('litter');
                 if (isDimensionDebrisOrLitter) return null;
 
                 const isGenerator = sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine');
-                const gData = props.generatorData || containsObj?.generatorData;
-                const isGeneratorActive = isGenerator && !!(gData?.activated || props.activated || containsObj?.activated);
+                let gData = props.generatorData || containsObj?.generatorData;
 
                 const boardTiles = Array.isArray(props.boardTiles) ? props.boardTiles : null;
                 const currentIdx = props.id !== undefined ? props.id : props.index;
                 const currentTileObj = (currentIdx !== null && currentIdx !== undefined && boardTiles) ? boardTiles[currentIdx] : null;
+
+                let isMemberOwnedByPlayer = false;
+                let isMemberOwnedByEnemy = false;
+
+                if (isGenerator && boardTiles && currentIdx !== null && currentIdx !== undefined) {
+                    const memberOffsets = [0, 1, 15, 16];
+                    for (const offset of memberOffsets) {
+                        const mIdx = currentIdx + offset;
+                        if (mIdx >= 0 && mIdx < boardTiles.length) {
+                            const mTile = boardTiles[mIdx];
+                            if (mTile) {
+                                if (mTile.ownedByPlayer || mTile.contains?.ownedByPlayer || mTile.affiliation === 'friendly' || mTile.contains?.affiliation === 'friendly' || mTile.faction === 'player' || mTile.contains?.faction === 'player') {
+                                    isMemberOwnedByPlayer = true;
+                                }
+                                if (mTile.ownedByEnemy || mTile.contains?.ownedByEnemy || mTile.affiliation === 'hostile' || mTile.contains?.affiliation === 'hostile' || mTile.faction === 'hostile' || mTile.contains?.faction === 'hostile' || mTile.faction === 'enemy' || mTile.contains?.faction === 'enemy') {
+                                    isMemberOwnedByEnemy = true;
+                                }
+                                const mgData = mTile.generatorData || mTile.contains?.generatorData;
+                                if (mgData && mgData.activated) {
+                                    if (!gData || !gData.activated) {
+                                        gData = mgData;
+                                    }
+                                    if (mgData.ownedByPlayer) isMemberOwnedByPlayer = true;
+                                    if (mgData.ownedByPlayer === false || mgData.ownerName === 'Enemy' || mgData.ownerId === 'enemy') {
+                                        isMemberOwnedByEnemy = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (isGenerator && (!gData || !gData.activated)) {
+                    try {
+                        const meta = (typeof getMeta === 'function' && getMeta()) || {};
+                        const actGens = meta.activatedGenerators;
+                        if (actGens && currentIdx !== null && currentIdx !== undefined) {
+                            const checkIds = [currentIdx, currentIdx + 1, currentIdx + 15, currentIdx + 16];
+                            for (const cId of checkIds) {
+                                for (const k of Object.keys(actGens)) {
+                                    if (k.endsWith(`_${cId}`) || actGens[k]?.tileId === cId) {
+                                        gData = actGens[k];
+                                        if (gData && gData.ownedByPlayer) isMemberOwnedByPlayer = true;
+                                        break;
+                                    }
+                                }
+                                if (gData && gData.activated) break;
+                            }
+                        }
+                    } catch (e) { }
+                }
+
                 const rawTerr = getTileTerritoryAffiliationHelper(currentTileObj, props);
 
                 const containsAffiliation = containsObj?.affiliation || props.affiliation || currentTileObj?.affiliation;
                 const affStr = String(containsAffiliation || rawTerr || '').toLowerCase();
 
+                const isGeneratorActive = isGenerator && !!(gData?.activated || props.activated || containsObj?.activated);
+                const isGeneratorEnemy = isGeneratorActive && (isMemberOwnedByEnemy || gData?.ownedByPlayer === false || gData?.ownerName === 'Enemy' || gData?.ownerId === 'enemy' || gData?.isHostile);
+                const isGeneratorPlayer = isGeneratorActive && !isGeneratorEnemy && (
+                    isMemberOwnedByPlayer ||
+                    gData?.ownedByPlayer === true ||
+                    (gData?.owned !== false && (!gData?.ownerName || gData?.ownerName !== 'Enemy'))
+                );
+
                 const isOwnedByPlayer = !!(
+                    isMemberOwnedByPlayer ||
+                    isGeneratorPlayer ||
                     props.ownedByPlayer ||
                     currentTileObj?.ownedByPlayer ||
                     (currentIdx !== null && currentIdx !== undefined && boardTiles?.[currentIdx]?.ownedByPlayer) ||
                     (props.id !== undefined && boardTiles?.[props.id]?.ownedByPlayer) ||
                     containsObj?.ownedByPlayer ||
                     gData?.ownedByPlayer ||
-                    gData?.owned === true ||
                     containsObj?.ownedBy === 'player' ||
                     containsObj?.owner === 'player' ||
                     containsObj?.ownerId === 'player' ||
@@ -1719,15 +1783,19 @@ function Tile(props) {
                 const isPlayerAffiliated = affStr.includes('friendly') || affStr.includes('player') || affStr.includes('crew') || isOwnedByPlayer;
                 const isHostileAffiliated = affStr.includes('hostile') || affStr.includes('enemy') || affStr.includes('automaton');
 
-                const isPlayerBuilt = isPlayerAffiliated || isGeneratorActive || isOwnedByPlayer || !!(
+                const isPlayerBuilt = (isPlayerAffiliated || isGeneratorPlayer || isOwnedByPlayer) && !isGeneratorEnemy && !!(
+                    isPlayerAffiliated ||
+                    isGeneratorPlayer ||
+                    isOwnedByPlayer ||
                     (containsObj && (containsObj.placedBy === 'player' || containsObj.ownerId === 'player' || containsObj.faction === 'player' || containsObj.isAllied)) ||
                     props.placedBy === 'player' ||
                     props.isPlayerBuilt
                 );
 
-                const isHostile = isHostileAffiliated || (!isPlayerBuilt && !!(
+                const isHostile = isHostileAffiliated || isMemberOwnedByEnemy || isGeneratorEnemy || (!isPlayerBuilt && !!(
                     (containsObj && (containsObj.faction === 'hostile' || containsObj.isHostile || containsObj.faction === 'enemy')) ||
-                    props.isHostile
+                    props.isHostile ||
+                    (isGenerator && gData?.activated && (gData?.ownerName === 'Enemy' || gData?.ownerId === 'enemy'))
                 ));
 
                 const isNeutral = !isPlayerBuilt && !isHostile;
@@ -2462,6 +2530,13 @@ function Tile(props) {
                 const isLocusActiveOrAdjacent = isLocusTile && (props.isAdjacentLocus || props.isLocusActive || props.activeLocus);
                 const locusScale = isLocusActiveOrAdjacent ? 1.4 : 1.0;
 
+                const isWorkerPygmyUnit = !!(
+                    (containsObj && (containsObj.isWorkerPygmy || containsObj.subtype === 'worker_pygmy')) ||
+                    (currentContains && typeof currentContains === 'object' && (currentContains.isWorkerPygmy || currentContains.subtype === 'worker_pygmy')) ||
+                    (props.contains && typeof props.contains === 'object' && (props.contains.isWorkerPygmy || props.contains.subtype === 'worker_pygmy')) ||
+                    (typeof props.contains === 'string' && props.contains === 'worker_pygmy')
+                );
+
                 const isAutomatonUnit = !!(
                     (containsObj && (containsObj.isAutomaton || containsObj.subtype === 'automaton')) ||
                     (currentContains && typeof currentContains === 'object' && (currentContains.isAutomaton || currentContains.subtype === 'automaton')) ||
@@ -2469,7 +2544,8 @@ function Tile(props) {
                     (typeof props.contains === 'string' && props.contains === 'automaton') ||
                     (props.image === 'automaton' || props.imageOverride === 'automaton')
                 );
-                const autoUnitScale = isAutomatonUnit ? 1.85 : 1.0;
+                const workerScale = isWorkerPygmyUnit ? 0.75 : 1.0;
+                const autoUnitScale = isAutomatonUnit ? 1.85 : workerScale;
 
                 const baseTransform = isPaletteTile ? 'none' : (isUnderConstruction 
                     ? `scale(${1.5 * obsScale * autoUnitScale}) rotate(${rotationDeg}deg)` 
@@ -3251,8 +3327,31 @@ function Tile(props) {
                 );
                 if (isSecondaryMultiTile) return null;
 
-                const isOwnedByPlayer = !!(props.ownedByPlayer || props.boardTiles?.[props.index]?.ownedByPlayer || props.boardTiles?.[props.id]?.ownedByPlayer);
-                const isOwnedByEnemy = !!(props.ownedByEnemy || props.boardTiles?.[props.index]?.ownedByEnemy || props.boardTiles?.[props.id]?.ownedByEnemy);
+                const cObj = props.contains && typeof props.contains === 'object' ? props.contains : null;
+                const containsSubtype = cObj?.subtype || cObj?.key || cObj?.building || (typeof props.contains === 'string' ? props.contains : null);
+                const structSubtype = String(containsSubtype || props.building || cObj?.type || '').toLowerCase();
+
+                const isActualLocus = structSubtype.includes('locus') || (cObj && (cObj.type === 'locus' || cObj.locusType || (typeof cObj.subtype === 'string' && cObj.subtype.includes('locus'))));
+                
+                // ONLY actual Loci are eligible in dungeon mode (!inSuperboard).
+                // In Pocket Dimension (inSuperboard), actual resource generators are also eligible on anchor tiles.
+                // EXCLUDE domain_node, dark_domain_node, domain_monolith, dark_domain_monolith, monolith, shrine, observer, fort, outpost, house, farm, territory.
+                const isActualGenerator = props.inSuperboard && [
+                    'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder',
+                    'dust_collector', 'fungal_nursery', 'cultivation_vat', 'generator'
+                ].some(k => structSubtype.includes(k));
+
+                const validGenData = (props.generatorData && (props.generatorData.key || props.generatorData.activated || props.generatorData.resource)) ||
+                                     (cObj?.generatorData && (cObj.generatorData.key || cObj.generatorData.activated || cObj.generatorData.resource));
+
+                // Must be either an actual Locus or an actual Resource Generator (in Pocket Dimension)
+                const isEligibleForBadge = (isActualLocus || isActualGenerator) &&
+                    structSubtype !== 'empty_space' && structSubtype !== 'path' && structSubtype !== 'void' && structSubtype !== 'territory';
+
+                if (!isEligibleForBadge || props.type === 'poi-tile' || props.isPoiTile) return null;
+
+                const isOwnedByPlayer = !!(props.ownedByPlayer || props.boardTiles?.[props.index]?.ownedByPlayer || props.boardTiles?.[props.id]?.ownedByPlayer || cObj?.ownedByPlayer || cObj?.placedBy === 'player' || validGenData?.ownedByPlayer);
+                const isOwnedByEnemy = !!(props.ownedByEnemy || props.boardTiles?.[props.index]?.ownedByEnemy || props.boardTiles?.[props.id]?.ownedByEnemy || cObj?.ownedByEnemy || cObj?.isHostile || validGenData?.ownedByEnemy);
 
                 if (isOwnedByPlayer) {
                     return (
@@ -3304,7 +3403,7 @@ function Tile(props) {
             })()}
 
             {/* Automaton Badge Overlay */}
-            {(!props.inSuperboard && !((vendorCellRole && vendorCellRole !== 'anchor') || (containsObj?.vendorCell && containsObj.vendorCell !== 'anchor') || (props.vendorCell && props.vendorCell !== 'anchor')) && (isStructureTile || props.generatorData) && (props.isAutomated || props.contains?.automated || props.contains?.generatorData?.automated || props.data?.automated || props.data?.generatorData?.automated)) && (
+            {(!props.inSuperboard && props.type !== 'poi-tile' && !props.isPoiTile && !((vendorCellRole && vendorCellRole !== 'anchor') || (containsObj?.vendorCell && containsObj.vendorCell !== 'anchor') || (props.vendorCell && props.vendorCell !== 'anchor')) && (isStructureTile || props.generatorData) && (props.isAutomated || props.contains?.automated || props.contains?.generatorData?.automated || props.data?.automated || props.data?.generatorData?.automated)) && (
                 <div style={{
                     position: 'absolute',
                     bottom: '2px',
@@ -3367,6 +3466,48 @@ function Tile(props) {
                     );
                 }
                 return null;
+            })()}
+
+            {/* Dwelling Housed Worker Pygmy Circle Indicator (Top-Left) */}
+            {(() => {
+                const bSubtype = String(containsSubtype || (containsObj && (containsObj.subtype || containsObj.building || containsObj.key)) || props.building || (props.generatorData && props.generatorData.key) || '').toLowerCase();
+                const isDwelling = ['farm', 'house', 'hut', 'manor', 'estate', 'windmill'].some(k => bSubtype.includes(k));
+                if (!isDwelling) return null;
+
+                const vRole = vendorCellRole || (containsObj && containsObj.vendorCell) || props.vendorCell;
+                if (vRole && vRole !== 'anchor' && vRole !== 'top_left' && vRole !== 'bottom_left') return null;
+
+                const isInside = !!(
+                    containsObj?.workerPygmyInside ||
+                    props.contains?.workerPygmyInside ||
+                    currentContains?.workerPygmyInside ||
+                    props.workerPygmyInside ||
+                    (containsObj?.workerHidingUntil && containsObj.workerHidingUntil > Date.now()) ||
+                    (props.contains?.workerHidingUntil && props.contains.workerHidingUntil > Date.now())
+                );
+
+                const circleSize = Math.max(9, Math.round((props.tileSize || 30) * 0.3));
+
+                return (
+                    <div
+                        className="dwelling-worker-indicator"
+                        title={isInside ? "Worker Pygmy inside dwelling (hiding)" : "Worker Pygmy outside wandering"}
+                        style={{
+                            position: 'absolute',
+                            top: '3px',
+                            left: '3px',
+                            width: `${circleSize}px`,
+                            height: `${circleSize}px`,
+                            borderRadius: '50%',
+                            backgroundColor: isInside ? '#ffffff' : 'transparent',
+                            border: isInside ? '1.5px solid #ffffff' : '2px solid #ffffff',
+                            boxShadow: isInside ? '0 0 6px rgba(255, 255, 255, 0.9)' : '0 0 4px rgba(0, 0, 0, 0.8)',
+                            zIndex: 35,
+                            pointerEvents: 'none',
+                            transition: 'background-color 0.2s ease-in-out, border 0.2s ease-in-out'
+                        }}
+                    />
+                );
             })()}
 
             {/* Earthen Fort Pygmy Spawn Food Deduction Particle */}

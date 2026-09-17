@@ -508,7 +508,8 @@ export function BoardManager(){
         const isDimensionLitter = containsType === 'pocket_litter' || containsType === 'dimension_litter' || containsType === 'dimension litter' ||
             tile.isDimensionLitter || tile.isPocketLitter || (tile.contains && typeof tile.contains === 'object' && (tile.contains.isDimensionLitter || tile.contains.isPocketLitter)) ||
             sKey.includes('pocket_litter') || sKey.includes('mana_crystals') || sKey.includes('ruined_arch') ||
-            sKey.includes('broken_wagon') || sKey.includes('fractured_monolith') || sKey.includes('forge_remnants') || sKey.includes('rift_embers');
+            sKey.includes('broken_wagon') || sKey.includes('fractured_monolith') || sKey.includes('forge_remnants') || sKey.includes('rift_embers') ||
+            sKey.includes('astral_obelisk') || sKey.includes('ancient_reliquary') || sKey.includes('celestial_geode');
         if (isDimensionLitter) {
             return true;
         }
@@ -3910,13 +3911,26 @@ export function BoardManager(){
 
         let hasTerritorialLantern = false;
         try {
-            const inv = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || [];
-            hasTerritorialLantern = inv.some(item => item && (item.name === 'territorial lantern' || item._im_key === 'territorial_lantern'));
+            const inv = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || (getMeta()?.inventory) || [];
+            hasTerritorialLantern = inv.some(item => item && (
+                item.name === 'territorial lantern' ||
+                item.name === 'chemical lantern' ||
+                item.name === 'lantern' ||
+                item.type === 'lantern' ||
+                item._im_key === 'territorial_lantern' ||
+                item._im_key === 'chemical_lantern' ||
+                (typeof item.name === 'string' && item.name.toLowerCase().includes('lantern'))
+            ));
         } catch(e) {}
         
+        const tileClanMemo = new Map();
         const getTileClan = (tId) => {
+            if (tileClanMemo.has(tId)) return tileClanMemo.get(tId);
             const t = this.tiles[tId];
-            if (!t) return null;
+            if (!t) {
+                tileClanMemo.set(tId, null);
+                return null;
+            }
             let raw = t.territory || (t.contains && t.contains.territory);
             if (!raw && this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tId]) {
                 const cbTile = this.currentBoard.tiles[tId];
@@ -3960,7 +3974,9 @@ export function BoardManager(){
                     }
                 }
             }
-            return raw ? (typeof raw === 'object' ? raw.clan || raw.type : String(raw)) : null;
+            const res = raw ? (typeof raw === 'object' ? raw.clan || raw.type : String(raw)) : null;
+            tileClanMemo.set(tId, res);
+            return res;
         };
 
         let lanternTerritory = null;
@@ -3970,19 +3986,25 @@ export function BoardManager(){
             if (lanternTerritory) {
                 const queue = [destinationTile.id];
                 contiguousLanternTiles.add(destinationTile.id);
+                const visitedInBFS = new Set([destinationTile.id]);
                 while (queue.length > 0) {
                     const curr = queue.shift();
                     const row = Math.floor(curr / 15);
                     const col = curr % 15;
                     const neighbors = [];
-                    if (row > 0 && !this.isPassageWallBlockingBetween(curr, (row - 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row - 1) * 15 + col);
-                    if (row < 14 && !this.isPassageWallBlockingBetween(curr, (row + 1) * 15 + col, { ignoreBuilding: true })) neighbors.push((row + 1) * 15 + col);
-                    if (col > 0 && !this.isPassageWallBlockingBetween(curr, row * 15 + (col - 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col - 1));
-                    if (col < 14 && !this.isPassageWallBlockingBetween(curr, row * 15 + (col + 1), { ignoreBuilding: true })) neighbors.push(row * 15 + (col + 1));
+                    if (row > 0) neighbors.push((row - 1) * 15 + col);
+                    if (row < 14) neighbors.push((row + 1) * 15 + col);
+                    if (col > 0) neighbors.push(row * 15 + (col - 1));
+                    if (col < 14) neighbors.push(row * 15 + (col + 1));
                     for (const n of neighbors) {
-                        if (!contiguousLanternTiles.has(n) && getTileClan(n) === lanternTerritory) {
-                            contiguousLanternTiles.add(n);
-                            queue.push(n);
+                        if (!visitedInBFS.has(n)) {
+                            visitedInBFS.add(n);
+                            if (!this.isPassageWallBlockingBetween(curr, n, { ignoreBuilding: true })) {
+                                if (getTileClan(n) === lanternTerritory) {
+                                    contiguousLanternTiles.add(n);
+                                    queue.push(n);
+                                }
+                            }
                         }
                     }
                 }
@@ -3990,6 +4012,10 @@ export function BoardManager(){
         }
 
         const destCoords = this.getCoordinatesFromIndex(destinationTile.id);
+
+        const isDebugMode = !!(this.debugMode || (typeof window !== 'undefined' && window.debugMode === true));
+        const breadcrumbsMap = (hasBreadcrumbsPassive && typeof this.getBreadcrumbs === 'function') ? this.getBreadcrumbs() : null;
+        const breadcrumbNow = Date.now();
 
         this.tiles.forEach((e) => {
             try {
@@ -4012,18 +4038,14 @@ export function BoardManager(){
                 // Reveal tiles within radius 2 that are reachable OR within the scouted/rat-reveal area
                 // Debug mode: Pygmies tiles are always visible (unaffected by fog of war)
                 const isPygmies = this.getContainsType(e.contains) === 'pygmies';
-                const isDebugMode = !!(this.debugMode || (typeof window !== 'undefined' && window.debugMode === true));
                 const revealByDebugPygmies = isDebugMode && isPygmies;
 
                 let inBreadcrumbPassiveReveal = false;
-                if (hasBreadcrumbsPassive && typeof this.getBreadcrumbs === 'function') {
-                    const breadcrumbsMap = this.getBreadcrumbs();
-                    if (breadcrumbsMap) {
-                        const key = `${this.currentLevel.id}:${this.currentOrientation}:${this.playerTile.boardIndex}:${coords[0]}:${coords[1]}`;
-                        const entry = breadcrumbsMap.get(key);
-                        if (entry && (Date.now() - entry.ts <= 20000)) {
-                            inBreadcrumbPassiveReveal = true;
-                        }
+                if (breadcrumbsMap) {
+                    const key = `${this.currentLevel.id}:${this.currentOrientation}:${this.playerTile.boardIndex}:${coords[0]}:${coords[1]}`;
+                    const entry = breadcrumbsMap.get(key);
+                    if (entry && (breadcrumbNow - entry.ts <= 20000)) {
+                        inBreadcrumbPassiveReveal = true;
                     }
                 }
                 

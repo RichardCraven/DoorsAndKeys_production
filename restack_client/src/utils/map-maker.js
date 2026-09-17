@@ -217,6 +217,9 @@ export function MapMaker(props){
         { key: 'pocket_litter_fractured_monolith', name: 'Fractured Monolith', image: 'pocket_litter_fractured_monolith', isLarge: true, isMultiTile: true, footprintType: '3x3' },
         { key: 'pocket_litter_forge_remnants', name: 'Forge Remnants', image: 'pocket_litter_forge_remnants' },
         { key: 'pocket_litter_rift_embers', name: 'Rift Embers', image: 'pocket_litter_rift_embers', isLarge: true, isMultiTile: true },
+        { key: 'pocket_litter_astral_obelisk', name: 'Astral Obelisk', image: 'pocket_litter_astral_obelisk' },
+        { key: 'pocket_litter_ancient_reliquary', name: 'Ancient Reliquary', image: 'pocket_litter_ancient_reliquary' },
+        { key: 'pocket_litter_celestial_geode', name: 'Celestial Geode', image: 'pocket_litter_celestial_geode' },
     ];
     this.dimensionLitterOptions = this.pocketLitterOptions;
 

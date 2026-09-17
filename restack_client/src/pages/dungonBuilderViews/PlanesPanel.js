@@ -334,18 +334,31 @@ class PlanesPanel extends React.Component {
                     <div
                         className={`grid-3x3 ${isSelected ? 'selected' : ''} ${isHovered ? 'hovered' : ''}`}
                         style={isTemplate ? { border: '1px dashed rgba(229, 181, 79, 0.5)', cursor: 'grab', background: 'rgba(0, 0, 0, 0.4)' } : {}}
-                        title={isTemplate ? `Drag empty ${orientation} template plane to Level ${subfolder.title}` : `${activePlane.name}${!activePlane.valid ? ' (Invalid)' : ''}`}
+                        title={isTemplate ? `Drag empty ${orientation} template plane to Level ${subfolder.title}` : `${activePlane.name}${activePlane.valid === false ? ' (Invalid)' : ''}`}
                         onMouseEnter={() => this.setState({ hoveredPlane: previewKey })}
                         onMouseLeave={() => this.setState({ hoveredPlane: null })}
                     >
                         {activePlane.miniboards.map((mb, idx) => {
                             const isFilled = !isTemplate && mb && (mb.id || mb._id || (mb.tiles && mb.tiles.length > 0) || mb.name);
                             const isEmptyBoard = isTemplate || isBoardEmpty(mb);
+                            const slotNames = [
+                                'top_left', 'top_mid', 'top_right',
+                                'middle_left', 'center', 'middle_right',
+                                'bottom_left', 'bottom_mid', 'bottom_right'
+                            ];
+                            const slotName = slotNames[idx] || '';
+                            const slotLabel = `${folderTitle} > Level ${subfolder.title} > ${orientation.toUpperCase()} > ${slotName.replace(/_/g, ' ')}`;
+                            const boardName = (mb && (mb.displayName || mb.name)) ? (mb.displayName || mb.name) : null;
+                            const cellTitle = boardName && !isEmptyBoard
+                                ? `${boardName} (${slotLabel})`
+                                : `Empty Slot (${slotLabel})`;
+
                             return (
                                 <div
                                     key={idx}
                                     className={`grid-cell ${isFilled ? (isEmptyBoard ? 'empty-board' : 'filled') : 'empty-board'}`}
                                     style={{ fontSize: '8px' }}
+                                    title={cellTitle}
                                     onDoubleClick={(e) => {
                                         e.stopPropagation();
                                         if (!isTemplate && isFilled && !isEmptyBoard && mb) {

@@ -21,10 +21,11 @@ class SocketHandler {
         userId: userObj.id || userObj._id || userObj.username,
         username: userObj.username || 'Explorer'
       },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnection: true,
       reconnectionAttempts: 10,
-      reconnectionDelay: 1000
+      reconnectionDelay: 2000,
+      reconnectionDelayMax: 5000
     });
 
     this.socket.on('connect', () => {

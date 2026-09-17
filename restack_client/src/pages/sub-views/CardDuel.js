@@ -884,6 +884,9 @@ export default class CardDuel extends React.Component {
 
     // ─── Tactical Movement, Attack, and Hero Attack Actions ────────────────────
     executeTacticalMove = (unit, targetRow, targetCol) => {
+        const oldRow = unit.anchorRow;
+        const oldCol = unit.anchorCol;
+
         const updatedGrid = { ...this.state.grid };
         const updatedTerritory = { ...this.state.territory };
 
@@ -891,7 +894,17 @@ export default class CardDuel extends React.Component {
         unit.hasActedThisTurn = true;
 
         const moveAnims = { ...this.state.moveAnims };
-        const dir = targetRow < unit.anchorRow ? 'up' : (targetRow > unit.anchorRow ? 'down' : 'left');
+        // Unit entered target tile from its previous tile position:
+        // targetRow < oldRow (moved UP): entered from below -> 'down' (slideFromDown: translateY(100%) -> 0)
+        // targetRow > oldRow (moved DOWN): entered from above -> 'up' (slideFromUp: translateY(-100%) -> 0)
+        // targetCol < oldCol (moved LEFT): entered from right -> 'right' (slideFromRight: translateX(100%) -> 0)
+        // targetCol > oldCol (moved RIGHT): entered from left -> 'left' (slideFromLeft: translateX(-100%) -> 0)
+        let dir = 'down';
+        if (targetRow < oldRow) dir = 'down';
+        else if (targetRow > oldRow) dir = 'up';
+        else if (targetCol < oldCol) dir = 'right';
+        else if (targetCol > oldCol) dir = 'left';
+
         if (Array.isArray(unit.occupiedKeys)) {
             unit.occupiedKeys.forEach(k => { moveAnims[k] = dir; });
         }
@@ -1129,6 +1142,7 @@ export default class CardDuel extends React.Component {
         }
 
         // Step 2: Move / Attack with ready Reaper units
+        const moveAnims = { ...this.state.moveAnims };
         const readyReaperUnits = [];
         const processedIds = new Set();
         Object.values(currentGrid).forEach(u => {
@@ -1183,8 +1197,22 @@ export default class CardDuel extends React.Component {
 
                 if (forwardMoves.length > 0) {
                     const [targetRow, targetCol] = forwardMoves[0];
+                    const oldRow = u.anchorRow;
+                    const oldCol = u.anchorCol;
+
                     this.applyUnitMove(u, targetRow, targetCol, currentGrid, territory, 'reaper');
                     u.hasActedThisTurn = true;
+
+                    let dir = 'up';
+                    if (targetRow < oldRow) dir = 'down';
+                    else if (targetRow > oldRow) dir = 'up';
+                    else if (targetCol < oldCol) dir = 'right';
+                    else if (targetCol > oldCol) dir = 'left';
+
+                    if (Array.isArray(u.occupiedKeys)) {
+                        u.occupiedKeys.forEach(k => { moveAnims[k] = dir; });
+                    }
+
                     this.addLog(`💀 ${enemyName}'s ${u.name} advanced to Row ${targetRow + 1}, Lane ${targetCol + 1}.`);
                 }
             }
@@ -1198,8 +1226,12 @@ export default class CardDuel extends React.Component {
             reaperSpirit: currentReaperSpirit,
             reaperDiscard: currentDiscard,
             playerDiscard: currentPlayerDiscard,
-            isAiThinking: false
+            isAiThinking: false,
+            moveAnims
         }, () => {
+            setTimeout(() => {
+                this.setState({ moveAnims: {} });
+            }, 300);
             this.advanceToNextTurn();
         });
     }
@@ -2141,17 +2173,19 @@ export default class CardDuel extends React.Component {
 
                         {/* ── RIGHT SIDE: 3 Equipped Crew Rune Slots ── */}
                         <div className="pe-right-sidebar">
-                            {(this.props.scrimmage || this.props.onClose) && (
-                                <button
-                                    className="pe-exit-scrimmage-btn"
-                                    onClick={() => {
+                            <button
+                                className="pe-exit-scrimmage-btn"
+                                onClick={() => {
+                                    if (this.props.scrimmage) {
                                         if (this.props.onClose) this.props.onClose();
                                         else if (this.props.onFinish) this.props.onFinish({ winner: 'reaper', forfeited: true });
-                                    }}
-                                >
-                                    ✕ Exit Scrimmage
-                                </button>
-                            )}
+                                    } else {
+                                        this.setState({ showForfeitModal: true });
+                                    }
+                                }}
+                            >
+                                {this.props.scrimmage ? '✕ Exit Scrimmage' : '🏳 Forfeit'}
+                            </button>
                             <div className="pe-rune-slots-header">CREW RUNES</div>
                             <div className="pe-rune-slots-list">
                                 {[0, 1, 2].map(idx => {
@@ -2359,7 +2393,9 @@ export default class CardDuel extends React.Component {
                         <div className="pe-forfeit-modal">
                             <div className="pe-forfeit-icon">🏳</div>
                             <h2 className="pe-forfeit-title">Forfeit the Duel?</h2>
-                            <p className="pe-forfeit-body">Are you sure you want to forfeit this tactical duel?</p>
+                            <p className="pe-forfeit-body">
+                                Are you sure you want to forfeit this duel? Forfeiting will incur a 25% gold penalty and add a death marker to your crew.
+                            </p>
                             <div className="pe-forfeit-btns">
                                 <button className="pe-btn pe-forfeit-cancel" onClick={() => this.setState({ showForfeitModal: false })}>
                                     Cancel
@@ -2368,7 +2404,7 @@ export default class CardDuel extends React.Component {
                                     className="pe-btn pe-forfeit-confirm"
                                     onClick={() => {
                                         this.setState({ showForfeitModal: false });
-                                        if (this.props.onFinish) this.props.onFinish({ winner: 'reaper' });
+                                        if (this.props.onFinish) this.props.onFinish({ winner: 'reaper', forfeited: true });
                                         else if (this.props.onClose) this.props.onClose();
                                     }}
                                 >
