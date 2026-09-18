@@ -179,4 +179,50 @@ describe('TeleportCrew Passable Tile and Fog of War Tests', () => {
     const revealedTiles = pageInstance.state.tiles.filter(t => !bm.isVoidTile(t) && t.color !== 'black');
     expect(revealedTiles.length).toBeGreaterThan(0);
   });
+
+  test('executeLocusTeleport and teleportCrew clear illuminatedTileId so destination does not keep highlight', () => {
+    jest.useFakeTimers();
+    const DungeonPage = require('../DungeonPage').default;
+    const pageInstance = new DungeonPage({ boardManager: bm, crewManager: { crew: [] } });
+
+    pageInstance.state = {
+      illuminatedTileId: 97,
+      showLocusModal: true,
+      keysLocked: true,
+      levelTracker: [{ id: 0, active: true }],
+      minimap: [{ active: true }],
+      tiles: [{ id: 97, illuminated: true }],
+      overlayTiles: []
+    };
+    pageInstance.setState = (updater, cb) => {
+      const next = typeof updater === 'function' ? updater(pageInstance.state) : updater;
+      pageInstance.state = { ...pageInstance.state, ...next };
+      if (typeof cb === 'function') cb();
+    };
+
+    // Teleport to target locus
+    pageInstance.executeLocusTeleport({
+      name: 'Emerald Locus (Lvl 0 Front Board 1)',
+      locusType: 'emerald',
+      levelId: 0,
+      orientation: 'front',
+      miniboardIndex: 0,
+      tileId: 112
+    });
+
+    // Advance timers for teleport sequence
+    jest.runAllTimers();
+
+    // illuminatedTileId must be null
+    expect(pageInstance.state.illuminatedTileId).toBe(null);
+    expect(pageInstance.state.showLocusModal).toBe(false);
+    expect(pageInstance.state.keysLocked).toBe(false);
+
+    // Any tiles on the board must have illuminated = false
+    const illuminatedTiles = (pageInstance.state.tiles || []).filter(t => t && t.illuminated);
+    expect(illuminatedTiles.length).toBe(0);
+
+    jest.useRealTimers();
+  });
 });
+

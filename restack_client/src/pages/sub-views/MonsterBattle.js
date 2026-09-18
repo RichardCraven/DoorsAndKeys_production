@@ -3296,28 +3296,27 @@ class MonsterBattle extends React.Component {
     }
 
     monsterCombatPortraitClicked = (id) => {
-        // console.log('battle data: ', this.state.battleData);
-        // console.log('images[this.state.battleData[e]?.portrait]', this.state.battleData[id].targettedBy);
-        // let targettedBy = this.state.battleData[id].targettedBy;
-        // console.log('should be Sadronis: ', this.state.battleData[targettedBy]);\
+        const monsterObj = this.state.battleData[id];
+        const targetId = (monsterObj && monsterObj.isVCT && monsterObj.parentMonsterId) ? monsterObj.parentMonsterId : id;
+        const selectedMonster = this.state.battleData[targetId] || monsterObj;
 
-        const selectedMonster = this.state.battleData[id];
-        // monster selected
-        if (this.state.showCrosshair) {
-            this.props.combatManager.queueAction(this.state.selectedFighter.id, id, this.state.selectedAttack)
+        if (this.state.selectedFighter) {
+            this.props.combatManager?.setTargetFromClick(this.state.selectedFighter.id, targetId);
+            if (this.state.showCrosshair) {
+                this.props.combatManager?.queueAction(this.state.selectedFighter.id, targetId, this.state.selectedAttack);
+            }
             this.setState({
-                showCrosshair: false
-            })
+                showCrosshair: false,
+                selectedAttack: null,
+                selectedMonster
+            });
         } else {
             this.setState({
                 selectedMonster,
                 selectedFighter: null,
                 selectedAttack: null
-            })
+            });
         }
-        // selectedMonster.portrait = this.props.crew.find(e=>e.id === id).portrait
-
-
     }
     targetTileClicked = (tile) => {
         this.props.combatManager.setTargetFromClick(this.state.selectedFighter.id, tile.id)

@@ -179,6 +179,7 @@ export function MapMaker(props){
         { key: 'tower_4', name: 'Tower 4', image: 'pocket_tower_4' },
         { key: 'tower_5', name: 'Tower 5', image: 'pocket_tower_5' },
         { key: 'blacksmith', name: 'Blacksmith', image: 'pocket_blacksmith' },
+        { key: 'healing_circle', name: 'Healing Circle', image: 'healing_circle', isMultiTile: true, isLarge: true },
     ];
 
     this.generatorOptions = [

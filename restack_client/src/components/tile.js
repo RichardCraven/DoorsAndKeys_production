@@ -483,10 +483,13 @@ function MonolithBottomProgressBar({ progress, convertingTarget, isVendorCell, i
     if (actualProgress === undefined || actualProgress === null) {
         if (hasConvTarget) {
             const elapsed = Math.max(0, now - convertingTarget.startTime);
+            if (elapsed >= convertingTarget.duration) return null;
             actualProgress = Math.min(1, Math.max(0, elapsed / convertingTarget.duration));
         } else {
             return null;
         }
+    } else if (hasConvTarget && actualProgress >= 1) {
+        return null;
     }
 
     const isPlayerConv = !!(convertingTarget && (convertingTarget.isPlayerClaim || convertingTarget.isPlayer));
@@ -1589,11 +1592,13 @@ function Tile(props) {
 
             {/* Monolith Activation Progress Bar under tile/complex (in dungeon) */}
             { (!isVendorCell || getVendorCellRole() === 'anchor') && (() => {
+                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine') && !sKey.includes('fractured_monolith'));
+                if (!isDomainMonolith) return null;
+
                 const convTarget = props.convertingTarget || (typeof props.contains === 'object' ? props.contains?.convertingTarget : null) || (currentTileForContains && (currentTileForContains.convertingTarget || (currentTileForContains.contains && currentTileForContains.contains.convertingTarget)));
                 const hasActivationProgress = props.monolithActivationProgress !== undefined && props.monolithActivationProgress !== null;
-                const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine') && !sKey.includes('fractured_monolith'));
 
-                if (!hasActivationProgress && (!isDomainMonolith || !convTarget)) return null;
+                if (!hasActivationProgress && !convTarget) return null;
 
                 return (
                     <MonolithBottomProgressBar
@@ -2818,7 +2823,7 @@ function Tile(props) {
 
                 // When converting a domain monolith, suppress the top bar — only the bottom progress bar is shown
                 const isDomainMonolith = sKey.includes('domain_monolith') || sKey.includes('dark_domain_monolith') || sKey.includes('domain_node') || sKey.includes('dark_domain_node') || (sKey.includes('monolith') && !sKey.includes('shrine') && !sKey.includes('fractured_monolith'));
-                if (isDomainMonolith || (props.monolithActivationProgress !== undefined && props.monolithActivationProgress !== null)) {
+                if (isDomainMonolith) {
                     return null;
                 }
 
@@ -3478,15 +3483,18 @@ function Tile(props) {
                 if (vRole && vRole !== 'anchor' && vRole !== 'top_left' && vRole !== 'bottom_left') return null;
 
                 const isInside = !!(
-                    containsObj?.workerPygmyInside ||
-                    props.contains?.workerPygmyInside ||
-                    currentContains?.workerPygmyInside ||
+                    (containsObj && typeof containsObj === 'object' && containsObj.workerPygmyInside) ||
+                    (props.contains && typeof props.contains === 'object' && props.contains.workerPygmyInside) ||
+                    (currentContains && typeof currentContains === 'object' && currentContains.workerPygmyInside) ||
+                    (props.generatorData && typeof props.generatorData === 'object' && props.generatorData.workerPygmyInside) ||
+                    (props.tile && props.tile.contains && typeof props.tile.contains === 'object' && props.tile.contains.workerPygmyInside) ||
                     props.workerPygmyInside ||
-                    (containsObj?.workerHidingUntil && containsObj.workerHidingUntil > Date.now()) ||
-                    (props.contains?.workerHidingUntil && props.contains.workerHidingUntil > Date.now())
+                    (containsObj && typeof containsObj === 'object' && containsObj.workerHidingUntil && containsObj.workerHidingUntil > Date.now()) ||
+                    (props.contains && typeof props.contains === 'object' && props.contains.workerHidingUntil && props.contains.workerHidingUntil > Date.now()) ||
+                    (props.generatorData && typeof props.generatorData === 'object' && props.generatorData.workerHidingUntil && props.generatorData.workerHidingUntil > Date.now())
                 );
 
-                const circleSize = Math.max(9, Math.round((props.tileSize || 30) * 0.3));
+                const circleSize = Math.max(5, Math.round((props.tileSize || 30) * 0.15));
 
                 return (
                     <div
@@ -3500,8 +3508,8 @@ function Tile(props) {
                             height: `${circleSize}px`,
                             borderRadius: '50%',
                             backgroundColor: isInside ? '#ffffff' : 'transparent',
-                            border: isInside ? '1.5px solid #ffffff' : '2px solid #ffffff',
-                            boxShadow: isInside ? '0 0 6px rgba(255, 255, 255, 0.9)' : '0 0 4px rgba(0, 0, 0, 0.8)',
+                            border: isInside ? '1px solid #ffffff' : '1.5px solid #ffffff',
+                            boxShadow: isInside ? '0 0 4px rgba(255, 255, 255, 0.9)' : '0 0 3px rgba(0, 0, 0, 0.8)',
                             zIndex: 35,
                             pointerEvents: 'none',
                             transition: 'background-color 0.2s ease-in-out, border 0.2s ease-in-out'
