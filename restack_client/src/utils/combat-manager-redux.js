@@ -2121,8 +2121,9 @@ export function CombatManagerRedux() {
 
             const limit = typeof rangeType === 'number' ? rangeType : (RANGE_LIMITS[rangeType] || null);
             if (limit !== null) {
-                const ok = dist <= limit;
-                siegeLog(`[targetInRange] cc:`, cc, `tc:`, tc, `rangeType:`, rangeType, `limit:`, limit, `dist:`, dist, `ok:`, ok);
+                const gridDist = Math.max(dx, dy);
+                const ok = gridDist <= limit;
+                siegeLog(`[targetInRange] cc:`, cc, `tc:`, tc, `rangeType:`, rangeType, `limit:`, limit, `gridDist:`, gridDist, `ok:`, ok);
                 return ok;
             }
 

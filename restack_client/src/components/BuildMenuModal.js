@@ -302,6 +302,20 @@ class BuildMenuModal extends Component {
             return;
         }
 
+        const counts = this.props.structureCounts || {};
+        if (this.props.inSuperboard) {
+            if (building.key === 'war_camp' && (counts.war_camp || 0) >= 1) {
+                this.setState({ errorMessage: `Cannot build more than 1 War Camp in a Pocket Dimension!` });
+                setTimeout(() => this.setState({ errorMessage: null }), 3000);
+                return;
+            }
+            if (building.key === 'war_fort' && (counts.war_fort || 0) >= 1) {
+                this.setState({ errorMessage: `Cannot build more than 1 War Fort in a Pocket Dimension!` });
+                setTimeout(() => this.setState({ errorMessage: null }), 3000);
+                return;
+            }
+        }
+
         const available = this.getResourceCounts();
         const costs = this.getBuildingCosts(building);
         if (!this.canAfford(costs, available)) {
@@ -554,6 +568,12 @@ class BuildMenuModal extends Component {
                             const imgUrl = images[b.imageKey] || images[b.fallbackImageKey] || images.building;
                             const costs = this.getBuildingCosts(b);
                             const affordable = this.canAfford(costs, available) && !activeConstruction;
+                            const counts = this.props.structureCounts || {};
+                            const isCapReached = !!(this.props.inSuperboard && (
+                                (b.key === 'war_camp' && (counts.war_camp || 0) >= 1) ||
+                                (b.key === 'war_fort' && (counts.war_fort || 0) >= 1)
+                            ));
+                            const canAct = affordable && !isCapReached;
                             const isFree = (costs.wood === 0 && (costs.stone || 0) === 0 && (costs.ore || 0) === 0 && (costs.slate || 0) === 0 && (costs.dust || 0) === 0);
 
                             const adjustedBuildTime = getAdjustedBuildTime(b.buildTime, crew, this.props.inSuperboard);
@@ -567,7 +587,7 @@ class BuildMenuModal extends Component {
                                         gap: '14px',
                                         padding: '14px',
                                         background: 'rgba(255, 255, 255, 0.03)',
-                                        border: affordable ? '1px solid rgba(229, 181, 79, 0.3)' : '1px solid rgba(255, 255, 255, 0.07)',
+                                        border: canAct ? '1px solid rgba(229, 181, 79, 0.3)' : '1px solid rgba(255, 255, 255, 0.07)',
                                         borderRadius: '4px',
                                         transition: 'all 0.2s ease',
                                         position: 'relative'
@@ -655,39 +675,39 @@ class BuildMenuModal extends Component {
                                             {/* Build button */}
                                             <button
                                                 onClick={() => this.handleBuildClick(b)}
-                                                disabled={!affordable}
+                                                disabled={!canAct}
                                                 style={{
                                                     padding: '8px 18px',
                                                     borderRadius: '4px',
                                                     border: '1px solid rgba(229, 181, 79, 0.4)',
-                                                    background: affordable
+                                                    background: canAct
                                                         ? 'rgba(22, 19, 17, 0.45)'
                                                         : 'rgba(0, 0, 0, 0.3)',
-                                                    color: affordable ? '#e5b54f' : 'rgba(255, 255, 255, 0.3)',
+                                                    color: canAct ? '#e5b54f' : 'rgba(255, 255, 255, 0.3)',
                                                     fontFamily: "'Cinzel', serif",
                                                     fontWeight: '700',
                                                     fontSize: '0.95rem',
                                                     letterSpacing: '2px',
                                                     textTransform: 'uppercase',
-                                                    boxShadow: affordable ? '0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(229, 181, 79, 0.03)' : 'none',
-                                                    cursor: affordable ? 'pointer' : 'not-allowed',
+                                                    boxShadow: canAct ? '0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(229, 181, 79, 0.03)' : 'none',
+                                                    cursor: canAct ? 'pointer' : 'not-allowed',
                                                     transition: 'all 0.2s ease',
                                                     alignSelf: 'flex-end',
                                                 }}
                                                 onMouseEnter={e => {
-                                                    if (affordable) {
+                                                    if (canAct) {
                                                         e.currentTarget.style.background = 'rgba(32, 26, 22, 0.8)';
                                                         e.currentTarget.style.boxShadow = '0 6px 16px rgba(0, 0, 0, 0.6), inset 0 0 15px rgba(229, 181, 79, 0.15)';
                                                     }
                                                 }}
                                                 onMouseLeave={e => {
-                                                    if (affordable) {
+                                                    if (canAct) {
                                                         e.currentTarget.style.background = 'rgba(22, 19, 17, 0.45)';
                                                         e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(229, 181, 79, 0.03)';
                                                     }
                                                 }}
                                             >
-                                                {activeConstruction ? 'Busy' : 'Build'}
+                                                {isCapReached ? 'Cap (1/1)' : 'Build'}
                                             </button>
                                         </div>
                                     </div>

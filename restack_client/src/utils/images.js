@@ -1270,6 +1270,8 @@ import pocket_tower_4 from '../assets/icons/buildings/pocket dimension/tower_4.p
 import pocket_tower_5 from '../assets/icons/buildings/pocket dimension/tower_5.png';
 import pocket_blacksmith from '../assets/icons/buildings/pocket dimension/blacksmith.png';
 
+const healing_circle = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ffffff' stroke-width='8'/></svg>";
+
 // ── Terrain Assets ────────────────────────────────────────────────────────
 import grass_rocks_base from '../assets/icons/terrain/grass_rocks_base.png';
 import grass_rocks_base_2 from '../assets/icons/terrain/grass_rocks_base_2.png';
@@ -2887,6 +2889,8 @@ export {
     pocket_tower_4,
     pocket_tower_5,
     pocket_blacksmith,
+    healing_circle,
+    healing_circle as pocket_healing_circle,
 
     // Terrain Assets
 

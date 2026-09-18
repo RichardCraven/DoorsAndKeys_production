@@ -19,6 +19,12 @@ export default class ProjectileCanvas extends React.Component {
         }
     }
 
+    shouldComponentUpdate(nextProps) {
+        return this.props.boardSize !== nextProps.boardSize ||
+               this.props.tileSize !== nextProps.tileSize ||
+               this.props.playerTileIdx !== nextProps.playerTileIdx;
+    }
+
     startLoop = () => {
         let lastTime = performance.now();
         const loop = (currentTime) => {
@@ -36,7 +42,7 @@ export default class ProjectileCanvas extends React.Component {
         this.animationFrameId = requestAnimationFrame(loop);
     };
 
-    fireProjectileCoords = (startX, startY, endX, endY, onHit, type = 'fireball') => {
+    fireProjectileCoords = (startX, startY, endX, endY, onHit, type = 'fireball', meta = {}) => {
         const dx = endX - startX;
         const dy = endY - startY;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -63,11 +69,12 @@ export default class ProjectileCanvas extends React.Component {
             traveled: 0,
             speed,
             onHit,
-            type
+            type,
+            aimedAtPlayer: !!(meta && meta.aimedAtPlayer)
         });
     };
 
-    fireProjectile = (startTileIdx, endTileIdx, onHit, type = 'fireball') => {
+    fireProjectile = (startTileIdx, endTileIdx, onHit, type = 'fireball', meta = {}) => {
         const { tileSize } = this.props;
         if (!tileSize) return;
 
@@ -84,7 +91,7 @@ export default class ProjectileCanvas extends React.Component {
         const endX = endCol * tileSize + tileSize / 2;
         const endY = endRow * tileSize + tileSize / 2;
 
-        this.fireProjectileCoords(startX, startY, endX, endY, onHit, type);
+        this.fireProjectileCoords(startX, startY, endX, endY, onHit, type, meta);
     };
 
     update = (dt) => {
@@ -110,30 +117,43 @@ export default class ProjectileCanvas extends React.Component {
             p.x = p.startX + p.dx * ratio;
             p.y = p.startY + p.dy * ratio;
 
-            // Check collision with player's current location (only for hostile projectiles aimed at player)
-            if (p.type !== 'magic_missile' && px !== null && py !== null) {
-                const dx = px - p.x;
-                const dy = py - p.y;
-                const distToPlayer = Math.sqrt(dx * dx + dy * dy);
-                
-                // If it hits the player within 40% of tile size
-                if (distToPlayer < tileSize * 0.4) {
-                    if (p.onHit) {
-                        try { p.onHit(); } catch(e) { console.error(e); }
-                    }
-                    this.createExplosion(p.x, p.y, p.type);
-                    this.projectiles.splice(i, 1);
-                    continue;
+            // Check if projectile reached or passed its destination
+            if (p.traveled >= p.distance) {
+                this.createExplosion(p.endX, p.endY, p.type);
+                if (p.onHit) {
+                    const cb = p.onHit;
+                    setTimeout(() => {
+                        try { cb(); } catch(e) { console.error(e); }
+                    }, 120);
                 }
+                this.projectiles.splice(i, 1);
+                continue;
             }
 
-            // If it reached destination without hitting the player, explode and trigger onHit if targeted
-            if (p.traveled >= p.distance) {
-                if (p.onHit) {
-                    try { p.onHit(); } catch(e) { console.error(e); }
+            // Only check dynamic collision with player if projectile was NOT aimed at player and player moved into its path
+            if (!p.aimedAtPlayer && p.type !== 'magic_missile' && px !== null && py !== null) {
+                const dxEnd = p.endX - px;
+                const dyEnd = p.endY - py;
+                const distToEnd = Math.sqrt(dxEnd * dxEnd + dyEnd * dyEnd);
+
+                // If projectile was not aimed at player, check if player moved into its path
+                if (distToEnd > tileSize * 0.5) {
+                    const dx = px - p.x;
+                    const dy = py - p.y;
+                    const distToPlayer = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distToPlayer < tileSize * 0.3) {
+                        this.createExplosion(p.x, p.y, p.type);
+                        if (p.onHit) {
+                            const cb = p.onHit;
+                            setTimeout(() => {
+                                try { cb(); } catch(e) { console.error(e); }
+                            }, 120);
+                        }
+                        this.projectiles.splice(i, 1);
+                        continue;
+                    }
                 }
-                this.createExplosion(p.endX, p.endY, p.type);
-                this.projectiles.splice(i, 1);
             }
         }
 

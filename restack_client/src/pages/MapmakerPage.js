@@ -1466,7 +1466,7 @@ class MapMakerPage extends React.Component {
 
     if (keyToCheck) {
       if (['keep', 'fortress', 'summoning_temple', 'rift', 'rift_2', 'pocket_litter_fractured_monolith', 'fractured_monolith'].includes(keyToCheck)) return '3x3';
-      if (['war_camp', 'war_fort', 'dream_den', 'pocket_litter_rift_embers', 'rift_embers'].includes(keyToCheck)) return '2x2';
+      if (['war_camp', 'war_fort', 'dream_den', 'pocket_litter_rift_embers', 'rift_embers', 'healing_circle', 'pocket_healing_circle'].includes(keyToCheck)) return '2x2';
     }
 
     if (pinnedOption.type === 'vendor-tile') return '2x2';

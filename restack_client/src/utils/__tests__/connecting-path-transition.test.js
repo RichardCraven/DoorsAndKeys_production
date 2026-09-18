@@ -32,16 +32,16 @@ describe('Connecting Path & Board Edge Transitions', () => {
         expect(bm.isConnectingPathTile({ contains: { type: 'empty_space' } })).toBe(false);
     });
 
-    it('isPassageWallBlockingBetween does not block passage between floor tile and connecting path tile', () => {
+    it('isPassageWallBlockingBetween does not block passage between floor tile and connecting path tile even with solid wall borders', () => {
         const floorTile = {
             id: 112,
             contains: { type: 'empty_space' },
-            borders: { right: '1px solid black' }
+            borders: { right: '2px solid black' }
         };
         const connectingPathTile = {
             id: 113,
             contains: { type: 'connecting_path' },
-            borders: { left: '1px solid black' }
+            borders: { left: '2px solid black' }
         };
 
         bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
@@ -49,6 +49,44 @@ describe('Connecting Path & Board Edge Transitions', () => {
         bm.tiles[113] = connectingPathTile;
 
         expect(bm.isPassageWallBlockingBetween(112, 113)).toBe(false);
+        expect(bm.isPassageWallBlockingBetween(113, 112)).toBe(false);
+    });
+
+    it('isPassageWallBlockingBetween does not block passage between two connecting path tiles', () => {
+        const path1 = {
+            id: 112,
+            contains: { type: 'connecting_path' },
+            borders: { right: '2px solid black' }
+        };
+        const path2 = {
+            id: 113,
+            contains: { type: 'connecting_path' },
+            borders: { left: '2px solid black' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[112] = path1;
+        bm.tiles[113] = path2;
+
+        expect(bm.isPassageWallBlockingBetween(112, 113)).toBe(false);
+    });
+
+    it('isPassageWallBlockingBetween blocks stepping off connecting path into pure void dropoff', () => {
+        const path = {
+            id: 112,
+            contains: { type: 'connecting_path' }
+        };
+        const voidTile = {
+            id: 113,
+            isVoid: true,
+            contains: { type: 'void' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[112] = path;
+        bm.tiles[113] = voidTile;
+
+        expect(bm.isPassageWallBlockingBetween(112, 113)).toBe(true);
     });
 
     it('allows board transition when player is on connecting path at right edge of miniboard 0', () => {
@@ -62,6 +100,30 @@ describe('Connecting Path & Board Edge Transitions', () => {
         bm.playerTile = {
             location: [22, 29], // row 7, col 14 (y = 15 + 14 = 29)
             boardIndex: 0
+        };
+
+        let transitionDirection = null;
+        bm.establishBoardTransitionCallback((dir) => {
+            transitionDirection = dir;
+        });
+
+        bm.moveRight();
+
+        expect(transitionDirection).toBe('right');
+        expect(bm.playerTile.boardIndex).toBe(1);
+    });
+
+    it('allows board transition when boardIndex is a string', () => {
+        const edgeConnectingTile = {
+            id: 119,
+            contains: { type: 'connecting_path' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[119] = edgeConnectingTile;
+        bm.playerTile = {
+            location: [22, 29],
+            boardIndex: '0'
         };
 
         let transitionDirection = null;

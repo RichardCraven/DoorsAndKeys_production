@@ -798,6 +798,43 @@ export function BoardManager(){
             const fromBoardTile = (boardTiles && boardTiles[fromIdx]) || null;
             const toBoardTile = (boardTiles && boardTiles[toIdx]) || null;
 
+            // If destination is an impassable building (outpost, observer platform, etc. except hut), block movement onto it unless shiftKey/ignoreBuilding is set
+            const opts = (options && typeof options === 'object') ? options : {};
+            const isShiftBypass = !!(opts.shiftKey || opts.ignoreBuilding || opts.bypassBuilding);
+            if (!isShiftBypass && (this.isImpassableBuildingTile(toTile) || (toBoardTile && this.isImpassableBuildingTile(toBoardTile)))) return true;
+
+            const isTransparentBorder = (tileData, side) => {
+                if (!tileData || !tileData.borders) return false;
+                const b = String(tileData.borders[side] || '').toLowerCase();
+                return b.includes('transparent');
+            };
+
+            const isCorridorSideWall = (tileData, side) => {
+                if (!tileData || !this.hasSolidBorder(tileData, side)) return false;
+                if (side === 'top' || side === 'bottom') {
+                    return isTransparentBorder(tileData, 'left') || isTransparentBorder(tileData, 'right');
+                } else {
+                    return isTransparentBorder(tileData, 'top') || isTransparentBorder(tileData, 'bottom');
+                }
+            };
+
+            // If movement is perpendicular to a corridor's open path direction into its solid side wall, ALWAYS block movement!
+            if (isCorridorSideWall(fromTile, fromSide) || isCorridorSideWall(fromBoardTile, fromSide) ||
+                isCorridorSideWall(toTile, toSide) || isCorridorSideWall(toBoardTile, toSide)) {
+                return true;
+            }
+
+            // Connecting path tiles pierce room borders and board perimeters:
+            // if either tile is a connecting path, passage is open unless stepping into pure void dropoff
+            const fromIsConnecting = this.isConnectingPathTile(fromTile) || (fromBoardTile && this.isConnectingPathTile(fromBoardTile));
+            const toIsConnecting = this.isConnectingPathTile(toTile) || (toBoardTile && this.isConnectingPathTile(toBoardTile));
+            if (fromIsConnecting || toIsConnecting) {
+                const destIsVoidDropoff = !toIsConnecting && (this.isVoidTile(toTile) || (toBoardTile && this.isVoidTile(toBoardTile)));
+                const fromIsVoidDropoff = !fromIsConnecting && (this.isVoidTile(fromTile) || (fromBoardTile && this.isVoidTile(fromBoardTile)));
+                if (destIsVoidDropoff || fromIsVoidDropoff) return true;
+                return false;
+            }
+
             // If either tile is a void tile, movement between them is ALWAYS blocked!
             const fromIsVoid = this.isVoidTile(fromTile) || (fromBoardTile && this.isVoidTile(fromBoardTile));
             const toIsVoid = this.isVoidTile(toTile) || (toBoardTile && this.isVoidTile(toBoardTile));
@@ -807,19 +844,6 @@ export function BoardManager(){
             const fromBlocked = this.hasSolidBorder(fromTile, fromSide) || (fromBoardTile && this.hasSolidBorder(fromBoardTile, fromSide));
             const toBlocked = this.hasSolidBorder(toTile, toSide) || (toBoardTile && this.hasSolidBorder(toBoardTile, toSide));
             if (fromBlocked || toBlocked) return true;
-
-            // Transitioning between normal floor and a connecting path edge connector:
-            // allow transition so the player can enter/exit the connecting path
-            const fromIsConnecting = this.isConnectingPathTile(fromTile) || (fromBoardTile && this.isConnectingPathTile(fromBoardTile));
-            const toIsConnecting = this.isConnectingPathTile(toTile) || (toBoardTile && this.isConnectingPathTile(toBoardTile));
-            if (fromIsConnecting !== toIsConnecting) {
-                return false;
-            }
-
-            // If destination is an impassable building (outpost, observer platform, etc. except hut), block movement onto it unless shiftKey/ignoreBuilding is set
-            const opts = (options && typeof options === 'object') ? options : {};
-            const isShiftBypass = !!(opts.shiftKey || opts.ignoreBuilding || opts.bypassBuilding);
-            if (!isShiftBypass && (this.isImpassableBuildingTile(toTile) || (toBoardTile && this.isImpassableBuildingTile(toBoardTile)))) return true;
 
             return false;
         } catch (e) {
@@ -2088,7 +2112,9 @@ export function BoardManager(){
             const isUnsuitableSpawnAt = (idx) => {
                 if (idx === null || idx === undefined || idx < 0 || idx >= board.tiles.length) return true;
                 const t = board.tiles[idx];
-                if (!t || this.isVoidTile(t)) return true;
+                if (!t) return true;
+                if (this.isConnectingPathTile(t)) return false;
+                if (this.isVoidTile(t)) return true;
                 const cType = this.getContainsType(t.contains);
                 const cSub = this.getContainsSubtype(t.contains);
                 const raw = String(cSub || cType || t.building || t.image || '').toLowerCase();
@@ -3506,15 +3532,17 @@ export function BoardManager(){
                 return;
             }
 
-            const currentBoardIndex = this.playerTile.boardIndex;
-            if (currentBoardIndex < 3) {
+            const currentBoardIndex = Number(this.playerTile.boardIndex);
+            if (isNaN(currentBoardIndex) || currentBoardIndex < 3) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
 
             let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
             if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            if (!plane || !plane.miniboards || !plane.miniboards[currentBoardIndex - 3]) {
+            const targetIndex = currentBoardIndex - 3;
+            const targetBoard = plane && plane.miniboards && (plane.miniboards[targetIndex] || (Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (b.id === targetIndex || b._id === targetIndex))));
+            if (!targetBoard) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3539,15 +3567,17 @@ export function BoardManager(){
                 return;
             }
 
-            const currentBoardIndex = this.playerTile.boardIndex;
-            if (currentBoardIndex >= 6) {
+            const currentBoardIndex = Number(this.playerTile.boardIndex);
+            if (isNaN(currentBoardIndex) || currentBoardIndex >= 6) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
 
             let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
             if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            if (!plane || !plane.miniboards || !plane.miniboards[currentBoardIndex + 3]) {
+            const targetIndex = currentBoardIndex + 3;
+            const targetBoard = plane && plane.miniboards && (plane.miniboards[targetIndex] || (Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (b.id === targetIndex || b._id === targetIndex))));
+            if (!targetBoard) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3572,15 +3602,17 @@ export function BoardManager(){
                 return;
             }
 
-            const currentBoardIndex = this.playerTile.boardIndex;
-            if (currentBoardIndex % 3 === 0) {
+            const currentBoardIndex = Number(this.playerTile.boardIndex);
+            if (isNaN(currentBoardIndex) || currentBoardIndex % 3 === 0) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
 
             let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
             if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            if (!plane || !plane.miniboards || !plane.miniboards[currentBoardIndex - 1]) {
+            const targetIndex = currentBoardIndex - 1;
+            const targetBoard = plane && plane.miniboards && (plane.miniboards[targetIndex] || (Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (b.id === targetIndex || b._id === targetIndex))));
+            if (!targetBoard) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3605,15 +3637,17 @@ export function BoardManager(){
                 return;
             }
 
-            const currentBoardIndex = this.playerTile.boardIndex;
-            if (currentBoardIndex % 3 === 2) {
+            const currentBoardIndex = Number(this.playerTile.boardIndex);
+            if (isNaN(currentBoardIndex) || currentBoardIndex % 3 === 2) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
 
             let plane = this.currentOrientation === 'F' ? this.currentLevel.front : this.currentLevel.back;
             if (!plane) plane = this.currentLevel.front || this.currentLevel.back || this.currentLevel;
-            if (!plane || !plane.miniboards || !plane.miniboards[currentBoardIndex + 1]) {
+            const targetIndex = currentBoardIndex + 1;
+            const targetBoard = plane && plane.miniboards && (plane.miniboards[targetIndex] || (Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (b.id === targetIndex || b._id === targetIndex))));
+            if (!targetBoard) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3626,22 +3660,26 @@ export function BoardManager(){
     this.moveBoardLeft = () => {
         this.boardTransition('left')
         this.tiles = [];
-        this.initializeTilesFromMap(this.playerTile.boardIndex-1, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1]+14]))
+        const bIdx = Number(this.playerTile.boardIndex);
+        this.initializeTilesFromMap(bIdx - 1, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1] + 14]))
     }
     this.moveBoardRight = () => {
         this.boardTransition('right')
         this.tiles = [];
-        this.initializeTilesFromMap(this.playerTile.boardIndex+1, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1]-14]))
+        const bIdx = Number(this.playerTile.boardIndex);
+        this.initializeTilesFromMap(bIdx + 1, this.getIndexFromCoordinates([this.playerTile.location[0], this.playerTile.location[1] - 14]))
     }
     this.moveBoardUp = () => {
         this.boardTransition('up')
         this.tiles = [];
-        this.initializeTilesFromMap(this.playerTile.boardIndex-3, this.getIndexFromCoordinates([this.playerTile.location[0]+14, this.playerTile.location[1]]))
+        const bIdx = Number(this.playerTile.boardIndex);
+        this.initializeTilesFromMap(bIdx - 3, this.getIndexFromCoordinates([this.playerTile.location[0] + 14, this.playerTile.location[1]]))
     }
     this.moveBoardDown = () => {
         this.boardTransition('down')
         this.tiles = [];
-        this.initializeTilesFromMap(this.playerTile.boardIndex+3, this.getIndexFromCoordinates([this.playerTile.location[0]-14, this.playerTile.location[1]]))
+        const bIdx = Number(this.playerTile.boardIndex);
+        this.initializeTilesFromMap(bIdx + 3, this.getIndexFromCoordinates([this.playerTile.location[0] - 14, this.playerTile.location[1]]))
     }
     this.getImage = (key) => {
         switch(key){
