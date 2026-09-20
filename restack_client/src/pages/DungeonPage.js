@@ -1010,7 +1010,17 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                                         const sellPrice = getItemSellPrice(item);
                                         return (
                                             <div key={idx} className="item-card">
-                                                {renderItemIcon(item.icon)}
+                                                <div
+                                                    className="merchant-item-icon-btn"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setInspectedItem({ ...item, isStock: false, originalIndex: indices[0], count, sellPrice });
+                                                    }}
+                                                    title={`Inspect ${item.name}`}
+                                                >
+                                                    {renderItemIcon(item.icon)}
+                                                    <span className="merchant-icon-inspect-cue">🔍</span>
+                                                </div>
                                                 <div className="item-details">
                                                     <div className="item-name">{item.name}{count > 1 ? ` (x${count})` : ''}</div>
                                                     <div className="item-description">{item.description || item.type}</div>
@@ -1036,6 +1046,187 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
                             <div className="feedback-message" style={{ color: feedbackColor }}>{feedbackMsg}</div>
                         )}
                     </div>
+
+                    {inspectedItem && (() => {
+                        const largeImgSrc = resolveItemImgSrc(inspectedItem.icon);
+                        const isStock = !!inspectedItem.isStock;
+                        const itemType = inspectedItem.type || 'Item';
+                        const itemSubtype = inspectedItem.subtype || '';
+                        const itemTier = inspectedItem.tier != null ? `Tier ${inspectedItem.tier}` : 'Tier 1';
+                        const atkDmg = inspectedItem.damage || inspectedItem.attack || inspectedItem.stats?.damage || inspectedItem.stats?.atk;
+                        const defArm = inspectedItem.armor || inspectedItem.defense || inspectedItem.stats?.armor || inspectedItem.stats?.def;
+                        const rangeVal = inspectedItem.range != null ? inspectedItem.range : (inspectedItem.isRanged ? 'Ranged' : null);
+                        const healVal = inspectedItem.healAmount || inspectedItem.hp || inspectedItem.heal;
+                        const foodVal = inspectedItem.amount;
+                        const displayPrice = isStock ? inspectedItem.price : (inspectedItem.sellPrice ?? getItemSellPrice(inspectedItem));
+                        const priceLabel = isStock ? (inspectedItem.isBuyback ? 'Buyback Cost' : 'Acquisition Cost') : 'Liquidation Value';
+                        const currencyGlyph = (isStock && inspectedItem.currencyType === 'dust') ? '✦' : '◆';
+                        const currencyUnit = (isStock && inspectedItem.currencyType === 'dust') ? 'Dust' : 'Gold';
+
+                        return (
+                            <div
+                                className="ambush-popup-overlay esoteric-item-details-overlay"
+                                onClick={() => setInspectedItem(null)}
+                            >
+                                <div
+                                    className="ambush-popup-card esoteric-item-details-card"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <div className="card-corner top-left" />
+                                    <div className="card-corner top-right" />
+                                    <div className="card-corner bottom-left" />
+                                    <div className="card-corner bottom-right" />
+
+                                    <button
+                                        className="esoteric-item-close-btn"
+                                        onClick={() => setInspectedItem(null)}
+                                        aria-label="Close"
+                                        title="Close (Esc)"
+                                    >
+                                        ×
+                                    </button>
+
+                                    <div className="ambush-eyebrow">
+                                        <span className="glyph">◆</span> ITEM SPECIFICATION <span className="glyph">◆</span>
+                                    </div>
+
+                                    <h2 className="ambush-title" style={{ fontSize: '20px', letterSpacing: '2px' }}>
+                                        {inspectedItem.name}
+                                    </h2>
+
+                                    <div className="ambush-divider">
+                                        <span className="divider-line" />
+                                        <span className="divider-glyph">❖</span>
+                                        <span className="divider-line" />
+                                    </div>
+
+                                    <div className="ambush-portrait-frame">
+                                        {largeImgSrc ? (
+                                            <img
+                                                src={largeImgSrc}
+                                                alt={inspectedItem.name}
+                                                className="ambush-portrait item-large-icon"
+                                            />
+                                        ) : (
+                                            <div style={{
+                                                width: 64,
+                                                height: 64,
+                                                backgroundColor: '#241916',
+                                                borderRadius: 6,
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: '#ffd700',
+                                                fontSize: '24px'
+                                            }}>
+                                                ◆
+                                            </div>
+                                        )}
+                                        <div className="ambush-badge">
+                                            <span className="badge-glyph">❖</span> {itemTier.toUpperCase()} • {itemType.toUpperCase()} <span className="badge-glyph">❖</span>
+                                        </div>
+                                    </div>
+
+                                    {inspectedItem.description && (
+                                        <p className="ambush-subtitle" style={{ fontSize: '13px', fontStyle: 'italic', marginBottom: '14px' }}>
+                                            {inspectedItem.description}
+                                        </p>
+                                    )}
+
+                                    <div className="ambush-stats-grid">
+                                        <div className="ambush-stat-item stat-type">
+                                            <span className="stat-label">CLASS</span>
+                                            <span className="stat-value">{itemSubtype ? `${itemType} / ${itemSubtype}` : itemType}</span>
+                                        </div>
+                                        <div className="ambush-stat-item stat-tier">
+                                            <span className="stat-label">TIER</span>
+                                            <span className="stat-value">{itemTier}</span>
+                                        </div>
+                                        {atkDmg != null && (
+                                            <div className="ambush-stat-item stat-atk">
+                                                <span className="stat-label">DAMAGE</span>
+                                                <span className="stat-value">+{atkDmg}</span>
+                                            </div>
+                                        )}
+                                        {defArm != null && (
+                                            <div className="ambush-stat-item stat-def">
+                                                <span className="stat-label">ARMOR</span>
+                                                <span className="stat-value">+{defArm}</span>
+                                            </div>
+                                        )}
+                                        {rangeVal != null && (
+                                            <div className="ambush-stat-item stat-range">
+                                                <span className="stat-label">RANGE</span>
+                                                <span className="stat-value">{rangeVal}</span>
+                                            </div>
+                                        )}
+                                        {healVal != null && (
+                                            <div className="ambush-stat-item stat-hp">
+                                                <span className="stat-label">RESTORES</span>
+                                                <span className="stat-value">+{healVal} HP</span>
+                                            </div>
+                                        )}
+                                        {foodVal != null && (
+                                            <div className="ambush-stat-item stat-hp">
+                                                <span className="stat-label">SUPPLY</span>
+                                                <span className="stat-value">+{foodVal} Food</span>
+                                            </div>
+                                        )}
+                                        {inspectedItem.count > 1 && (
+                                            <div className="ambush-stat-item stat-count">
+                                                <span className="stat-label">HELD</span>
+                                                <span className="stat-value">x{inspectedItem.count}</span>
+                                            </div>
+                                        )}
+                                        <div className="ambush-stat-item stat-gold">
+                                            <span className="stat-label">{priceLabel}</span>
+                                            <span className="stat-value">
+                                                <span style={{ color: currencyGlyph === '✦' ? '#b388ff' : '#ffd700', marginRight: '4px' }}>{currencyGlyph}</span>
+                                                {displayPrice} {currencyUnit}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="ambush-actions">
+                                        {isStock ? (
+                                            <button
+                                                className="ambush-fight-btn buy-action"
+                                                onClick={() => {
+                                                    handleBuyItem(inspectedItem);
+                                                    setInspectedItem(null);
+                                                }}
+                                            >
+                                                <span>{inspectedItem.isBuyback ? 'Buy Back' : 'Buy Item'}</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                className="ambush-fight-btn sell-action"
+                                                onClick={() => {
+                                                    let targetIndex = inspectedItem.originalIndex;
+                                                    const currentInv = inventoryManager?.inventory || [];
+                                                    if (!currentInv[targetIndex] || currentInv[targetIndex].name !== inspectedItem.name) {
+                                                        targetIndex = currentInv.findIndex(it => it && it.name === inspectedItem.name && it.equippedBy == null);
+                                                    }
+                                                    if (targetIndex !== -1 && targetIndex != null) {
+                                                        handleSellItem(inspectedItem, targetIndex);
+                                                    }
+                                                    setInspectedItem(null);
+                                                }}
+                                            >
+                                                <span>Sell Item</span>
+                                            </button>
+                                        )}
+                                        <button
+                                            className="ambush-fight-btn dismiss-action"
+                                            onClick={() => setInspectedItem(null)}
+                                        >
+                                            <span>Dismiss</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
                 </div>
             )}
 
@@ -9648,10 +9839,11 @@ class DungeonPage extends React.Component {
 
             const originCoords = [curCoords[0], curCoords[1]];
             const originIndex = bm.getIndexFromCoordinates(curCoords);
-            const destIndex = bm.getIndexFromCoordinates(destCoords);
+            const isOffBoard = destCoords[0] < 15 || destCoords[0] > 29 || destCoords[1] < 15 || destCoords[1] > 29;
+            const destIndex = isOffBoard ? null : bm.getIndexFromCoordinates(destCoords);
 
             // Check if moving into a tile occupied by another player
-            const peerOnDest = this.getPeerPlayerOnTile(destIndex);
+            const peerOnDest = destIndex !== null ? this.getPeerPlayerOnTile(destIndex) : null;
             if (peerOnDest) {
                 this._isMoving = false;
                 this._movementQueue = [];
@@ -9661,7 +9853,7 @@ class DungeonPage extends React.Component {
             }
 
             const originPixel = this.getPixelForIndex(originIndex);
-            const destPixel = this.getPixelForIndex(destIndex);
+            const destPixel = destIndex !== null ? this.getPixelForIndex(destIndex) : null;
 
             let playerGlideVector = null;
             if (originPixel && destPixel) {
@@ -25858,12 +26050,13 @@ class DungeonPage extends React.Component {
                     const cSub = (targetTileObj && typeof targetTileObj.contains === 'object' && targetTileObj.contains !== null) ? (targetTileObj.contains.subtype || targetTileObj.contains.building || targetTileObj.contains.name) : (targetTileObj?.building || null);
                     const rawKey = String(cSub || cType || targetTileObj?.image || '').toLowerCase();
 
-                    const isDreamDen = rawKey.includes('dream_den') || rawKey.includes('dream den');
+                    const isVendorInSb = rawKey.includes('dream_den') || rawKey.includes('dream den') || rawKey.includes('merchant') || rawKey.includes('alchemist') || rawKey.includes('fungal_nursery') || cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' || cSub === 'merchant' || cSub === 'alchemist' || (targetTileObj?.contains && typeof targetTileObj.contains === 'object' && (targetTileObj.contains.vendorGroupId || targetTileObj.contains.vendorCell));
+                    const isDreamDen = isVendorInSb;
                     const isLocusInSb = targetTileObj && this.getIsLocusHelper(targetTileObj);
                     const largeBldg = superboard ? this.getLargeBuildingAtSuperboardCoord(superboard, clickedGx, clickedGy) : null;
                     const isLargeBuildingNonHut = largeBldg && !String(largeBldg.buildingKey || '').toLowerCase().includes('hut') && !String(largeBldg.buildingKey || '').toLowerCase().includes('healing_circle');
                     const isCustomBuildingKey = ['earthen_fort', 'outpost', 'war_camp', 'war_fort', 'wall', 'keep', 'fortress', 'sawmill', 'lumber_mill', 'mine', 'ore_mine', 'slate_mine', 'larder', 'vat', 'cultivation_vat', 'dust_collector', 'fungal_nursery', 'alchemist', 'merchant', 'monolith', 'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node', 'observer', 'observation_platform', 'under_construction'].some(k => rawKey.includes(k));
-                    const isBuilding = targetTileObj && (isLargeBuildingNonHut || this.isBuildingOrGeneratorTile(targetTileObj) || isCustomBuildingKey) && !rawKey.includes('farm') && !rawKey.includes('house') && !rawKey.includes('hut') && !rawKey.includes('windmill') && !rawKey.includes('manor') && !rawKey.includes('estate') && !rawKey.includes('town') && !rawKey.includes('healing_circle') && !(largeBldg && String(largeBldg.buildingKey || '').toLowerCase().includes('healing_circle'));
+                    const isBuilding = targetTileObj && (isLargeBuildingNonHut || this.isBuildingOrGeneratorTile(targetTileObj) || isCustomBuildingKey) && !isVendorInSb && !rawKey.includes('farm') && !rawKey.includes('house') && !rawKey.includes('hut') && !rawKey.includes('windmill') && !rawKey.includes('manor') && !rawKey.includes('estate') && !rawKey.includes('town') && !rawKey.includes('healing_circle') && !(largeBldg && String(largeBldg.buildingKey || '').toLowerCase().includes('healing_circle'));
                     const isEnemySpawn = targetTileObj && (
                         targetTileObj.isEnemySpawn ||
                         targetTileObj.isSnuffedOut ||
@@ -25942,10 +26135,13 @@ class DungeonPage extends React.Component {
                                 targetTileObj.mbIdx = mbIdx;
                                 targetTileObj.tIdx = tIdx;
                             }
-                            if (isDreamDen) {
+                            if (isVendorInSb) {
                                 const targetTile = targetTileObj || tile;
+                                const vType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
+                                              (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
+                                              (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
                                 this.illuminateBuildingTile(targetTile);
-                                this.triggerVendorEncounter('dream_den', targetTile);
+                                this.triggerVendorEncounter(vType, targetTile);
                             } else if (isEnemySpawn) {
                                 this.openEnemySpawnModal(targetTileObj);
                             } else if (isLocusInSb) {
@@ -26099,7 +26295,15 @@ class DungeonPage extends React.Component {
         const now = Date.now();
         this._lastTileClickInfo = { tileIdx: tileIndex, ts: now };
 
-        if (rawKey.includes('dream_den') || rawKey.includes('dream den')) {
+        const isVendorTileClick = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' ||
+            ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)) ||
+            (actualTile?.contains && typeof actualTile.contains === 'object' && (actualTile.contains.vendorGroupId || actualTile.contains.vendorCell));
+
+        if (isVendorTileClick) {
+            const vendorType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
+                               (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
+                               (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
+
             const playerIdx = bm.getIndexFromCoordinates(startCoords);
             const playerRow = Math.floor(playerIdx / 15);
             const playerCol = playerIdx % 15;
@@ -26120,12 +26324,13 @@ class DungeonPage extends React.Component {
             const isStructureAdjacent = Math.max(rowDist, colDist) <= 1;
 
             if (isStructureAdjacent || manhattanDist <= 1 || isAdjacent) {
-                this.illuminateBuildingTile(actualTile);
-                this.triggerVendorEncounter('dream_den', actualTile);
+                this.illuminateBuildingTile(actualTile || tile);
+                this.triggerVendorEncounter(vendorType, actualTile || tile);
                 return;
             } else {
-                this.illuminateBuildingTile(actualTile);
-                this.displayMessage('Move adjacent to the Dream Den to interact with it.');
+                this.illuminateBuildingTile(actualTile || tile);
+                const vendorLabel = vendorType === 'alchemist' ? 'Alchemist' : vendorType === 'dream_den' ? 'Dream Den' : vendorType === 'fungal_nursery' ? 'Fungal Nursery' : 'Merchant';
+                this.displayMessage(`Move adjacent to the ${vendorLabel} to interact with it.`);
                 return;
             }
         }
@@ -26264,7 +26469,9 @@ class DungeonPage extends React.Component {
                 }
 
                 if (!isTarget) {
-                    if (type === 'monster' || type === 'vendor' || type === 'narrative' || type === 'door' || type === 'way_up' || type === 'way_down' || type === 'spell' || type === 'dream den' || type === 'dream_den' || t.isLoot) {
+                    const isVendor = type === 'vendor' || type === 'merchant' || type === 'alchemist' || type === 'dream den' || type === 'dream_den' ||
+                        ['merchant', 'alchemist', 'vendor', 'dream_den', 'fungal_nursery'].some(k => String(subtype || t.building || '').toLowerCase().includes(k));
+                    if (type === 'monster' || isVendor || type === 'narrative' || type === 'door' || type === 'way_up' || type === 'way_down' || type === 'spell' || t.isLoot) {
                         return true;
                     }
                     const subtype = bm.getContainsSubtype(t.contains);
@@ -30579,8 +30786,13 @@ class DungeonPage extends React.Component {
             return false;
         }
 
-        const nonInteractableBuildingKeys = ['house', 'farm', 'pocket_farm', 'buildable_farm', 'buildable_house', 'hut', 'buildable_hut', 'hut_under_construction', 'windmill', 'manor', 'estate', 'healing_circle', 'pocket_healing_circle'];
         const fullKeyStr = String(containsSubtype || bldg || img || cKey || containsType || '').toLowerCase();
+        const vendorKeys = ['merchant', 'alchemist', 'vendor', 'fungal_nursery', 'buildable_merchant', 'buildable_alchemist'];
+        if (vendorKeys.some(k => fullKeyStr.includes(k))) {
+            return false;
+        }
+
+        const nonInteractableBuildingKeys = ['house', 'farm', 'pocket_farm', 'buildable_farm', 'buildable_house', 'hut', 'buildable_hut', 'hut_under_construction', 'windmill', 'manor', 'estate', 'healing_circle', 'pocket_healing_circle'];
         if (nonInteractableBuildingKeys.some(k => fullKeyStr.includes(k))) {
             return false;
         }
@@ -31312,9 +31524,12 @@ class DungeonPage extends React.Component {
         if (rawKey.includes('house') || rawKey.includes('farm')) {
             return;
         }
-        if (rawKey.includes('dream_den') || rawKey.includes('dream den')) {
+        if (rawKey.includes('merchant') || rawKey.includes('alchemist') || rawKey.includes('vendor') || rawKey.includes('dream_den') || rawKey.includes('dream den') || rawKey.includes('fungal_nursery')) {
+            const vType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
+                          (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
+                          (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
             this.illuminateBuildingTile(tile);
-            this.triggerVendorEncounter('dream_den', tile);
+            this.triggerVendorEncounter(vType, tile);
             return;
         }
 

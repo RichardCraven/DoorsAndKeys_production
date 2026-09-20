@@ -2547,10 +2547,17 @@ export function BoardManager(){
             ''
         ).toLowerCase();
 
-        if (type === 'dream_den' || type === 'dream den' || rawBldg.includes('dream_den') || rawBldg.includes('dream den')) {
+        const isVendorTile = type === 'vendor' || type === 'merchant' || type === 'alchemist' || type === 'fungal_nursery' || type === 'dream_den' || type === 'dream den' ||
+            ['merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].some(k => rawBldg.includes(k)) ||
+            (cObj && (cObj.vendorGroupId || cObj.vendorCell));
+
+        if (isVendorTile) {
+            const vendorType = (rawBldg.includes('alchemist') || subtype === 'alchemist' || type === 'alchemist') ? 'alchemist' :
+                               (rawBldg.includes('fungal_nursery') || subtype === 'fungal_nursery' || type === 'fungal_nursery') ? 'fungal_nursery' :
+                               (rawBldg.includes('dream_den') || rawBldg.includes('dream den') || subtype === 'dream_den' || type === 'dream_den') ? 'dream_den' : 'merchant';
             try {
                 if (this.triggerVendorEncounter) {
-                    this.triggerVendorEncounter('dream_den', destinationTile);
+                    this.triggerVendorEncounter(vendorType, destinationTile);
                 }
             } catch (e) {}
             return 'vendor';
@@ -2718,22 +2725,22 @@ export function BoardManager(){
             break;
             case 'dream den':
             case 'dream_den':
-                try {
-                    if (this.triggerVendorEncounter) {
-                        this.triggerVendorEncounter('dream_den', destinationTile);
-                    }
-                } catch (e) {}
-                return 'vendor';
-            break;
-            case 'narrative':
-                return 'narrative';
+            case 'merchant':
+            case 'alchemist':
+            case 'fungal_nursery':
             case 'vendor':
                 try {
+                    const vType = (type === 'alchemist' || subtype === 'alchemist') ? 'alchemist' :
+                                  (type === 'fungal_nursery' || subtype === 'fungal_nursery') ? 'fungal_nursery' :
+                                  (type === 'dream_den' || type === 'dream den' || subtype === 'dream_den') ? 'dream_den' :
+                                  (subtype || 'merchant');
                     if (this.triggerVendorEncounter) {
-                        this.triggerVendorEncounter(subtype, destinationTile);
+                        this.triggerVendorEncounter(vType, destinationTile);
                     }
                 } catch (e) {}
                 return 'vendor';
+            case 'narrative':
+                return 'narrative';
             case 'gold':
                 let factor, num = Math.random();
                 if(num > .85){
@@ -3536,7 +3543,7 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3555,6 +3562,15 @@ export function BoardManager(){
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
+
+            const col = this.playerTile.location[1] - 15;
+            const targetTileIdx = 14 * 15 + col;
+            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
+            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+
             this.moveBoardUp();
             return;
         }
@@ -3571,7 +3587,7 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3590,6 +3606,15 @@ export function BoardManager(){
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
+
+            const col = this.playerTile.location[1] - 15;
+            const targetTileIdx = 0 * 15 + col;
+            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
+            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+
             this.moveBoardDown();
             return;
         }
@@ -3606,7 +3631,7 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3625,6 +3650,15 @@ export function BoardManager(){
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
+
+            const row = this.playerTile.location[0] - 15;
+            const targetTileIdx = row * 15 + 14;
+            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
+            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+
             this.moveBoardLeft();
             return;
         }
@@ -3641,7 +3675,7 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3660,6 +3694,15 @@ export function BoardManager(){
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
+
+            const row = this.playerTile.location[0] - 15;
+            const targetTileIdx = row * 15 + 0;
+            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
+            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+
             this.moveBoardRight();
             return;
         }
