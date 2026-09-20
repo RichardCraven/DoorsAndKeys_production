@@ -364,10 +364,10 @@ export default function NarrativeSequence(props) {
                 } else {
                     switch(type){
                         case 'intro':
-                            props.endIntroSequence();
+                            if (props.endIntroSequence) props.endIntroSequence();
                         break;
                         case 'death': 
-                            props.endDeathSequence();
+                            // Do not end prematurely; wait until wreck and fade finish in endSequenceAndNav
                         break;
                         default:
                             return
@@ -379,10 +379,10 @@ export default function NarrativeSequence(props) {
         const endSequenceAndNav = () => {
             switch(type){
                 case 'intro':
-                    props.endIntroSequence();
+                    if (props.endIntroSequence) props.endIntroSequence();
                     setNavToDungeon(true)
                     break;
-                    case 'death': 
+                case 'death': 
                     setWreckImage(true)
                     delay(0.85).then(()=>{
                         setMoreWrecked(true)
@@ -390,20 +390,20 @@ export default function NarrativeSequence(props) {
                             
                             setFadeOutLastFrame(true);
                             const __id = setTimeout(()=>{
-                                props.endDeathSequence();
+                                if (props.endDeathSequence) props.endDeathSequence();
                                 setNavToLanding(true)
                             }, 700)
                             try { timersRef.current.push(__id); } catch(e){}
                         })
                     })
                     break;
-                    default:
-                        return
-                    }
-                }
-                // props.endIntroSequence();
-                // endSequenceAndNav();
-                // return
+                default:
+                    return
+            }
+        }
+        // props.endIntroSequence();
+        // endSequenceAndNav();
+        // return
         fireItOff();
     }
   useEffect(()=> {
@@ -416,7 +416,7 @@ export default function NarrativeSequence(props) {
                 setFadeInFirstFrame(true);
                 runSequence('intro');
             })
-            props.beginIntroSequence();
+            if (props.beginIntroSequence) props.beginIntroSequence();
         break;
         case 'death':
             setCurrentOddSequence(deathSequence[0])
@@ -424,7 +424,7 @@ export default function NarrativeSequence(props) {
                 setFadeInFirstFrame(true);
                 runSequence('death');
             })
-            props.beginDeathSequence();
+            if (props.beginDeathSequence) props.beginDeathSequence();
         break;
         default:
         break;

@@ -1744,5 +1744,197 @@ export const LANDING_REDUX_CSS = `
   transform: translateY(-4px) scale(1.04) !important;
   box-shadow: 0 0 30px rgba(249, 177, 21, 0.5) !important;
 }
+
+/* ─── Esoteric Dark Popup Styling ─────────────────────── */
+.ambush-popup-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(6, 5, 8, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    box-sizing: border-box;
+    overflow-y: auto;
+    animation: smoothOverlayFadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes smoothOverlayFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes smoothCardScaleIn {
+    from { opacity: 0; transform: scale(0.94) translateY(6px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.ambush-popup-card {
+    position: relative;
+    background: radial-gradient(circle at 50% 0%, rgba(55, 18, 22, 0.85) 0%, rgba(16, 12, 16, 0.98) 70%),
+                linear-gradient(180deg, #181114 0%, #0c090c 100%);
+    border: 1px solid rgba(212, 163, 89, 0.35);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.92),
+                0 0 35px rgba(180, 45, 30, 0.25),
+                inset 0 1px 0 rgba(255, 230, 180, 0.12),
+                inset 0 0 30px rgba(0, 0, 0, 0.75);
+    padding: 28px 24px 24px;
+    color: #f3eae0;
+    text-align: center;
+    border-radius: 12px;
+    width: 440px;
+    max-width: 94%;
+    box-sizing: border-box;
+    margin: auto;
+    animation: smoothCardScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+    overflow: hidden;
+}
+
+.ambush-popup-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, rgba(212, 163, 89, 0.7) 20%, #e05d5d 50%, rgba(212, 163, 89, 0.7) 80%, transparent);
+    box-shadow: 0 0 12px rgba(224, 93, 93, 0.7);
+}
+
+.ambush-popup-card .card-corner {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-color: rgba(212, 163, 89, 0.45);
+    pointer-events: none;
+}
+.ambush-popup-card .card-corner.top-left {
+    top: 8px;
+    left: 8px;
+    border-top: 1px solid;
+    border-left: 1px solid;
+}
+.ambush-popup-card .card-corner.top-right {
+    top: 8px;
+    right: 8px;
+    border-top: 1px solid;
+    border-right: 1px solid;
+}
+.ambush-popup-card .card-corner.bottom-left {
+    bottom: 8px;
+    left: 8px;
+    border-bottom: 1px solid;
+    border-left: 1px solid;
+}
+.ambush-popup-card .card-corner.bottom-right {
+    bottom: 8px;
+    right: 8px;
+    border-bottom: 1px solid;
+    border-right: 1px solid;
+}
+
+.ambush-eyebrow {
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #bfa57b;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+.ambush-eyebrow .glyph {
+    color: #d66453;
+    font-size: 9px;
+}
+
+.ambush-title {
+    font-family: 'Cinzel', serif !important;
+    font-size: 24px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 3px !important;
+    color: #f1e7d8 !important;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 24px rgba(220, 60, 60, 0.5) !important;
+    margin: 0 0 8px !important;
+}
+
+.ambush-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 0 auto 12px;
+    max-width: 220px;
+}
+.ambush-divider .divider-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(212, 163, 89, 0.4), transparent);
+}
+.ambush-divider .divider-glyph {
+    font-size: 10px;
+    color: #d4a359;
+    opacity: 0.85;
+}
+
+.ambush-subtitle {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px !important;
+    color: #d8cebe;
+    margin-bottom: 16px !important;
+    line-height: 1.5;
+}
+.ambush-subtitle .monster-highlight {
+    color: #e5c158;
+    font-weight: 700;
+    text-shadow: 0 0 8px rgba(229, 193, 88, 0.35);
+}
+
+.ambush-fight-btn {
+    font-family: 'Cinzel', serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 10px 24px;
+    background: linear-gradient(180deg, #3d1b1b 0%, #1c0d0e 100%);
+    border: 1px solid rgba(220, 70, 70, 0.6);
+    color: #f1e2cd;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 16px rgba(180, 40, 40, 0.25), inset 0 1px 0 rgba(255, 230, 180, 0.08);
+    transition: all 0.2s ease;
+    display: inline-block;
+}
+.ambush-fight-btn:hover {
+    background: linear-gradient(180deg, #522424 0%, #281214 100%);
+    border-color: #ff6b6b;
+    color: #ffffff;
+    box-shadow: 0 0 24px rgba(220, 60, 60, 0.5), 0 4px 16px rgba(0, 0, 0, 0.8);
+    transform: translateY(-1px);
+}
+.ambush-fight-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
+}
+
+.ambush-shortcut-hint {
+    margin-top: 10px;
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    color: #8e8477;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
 `;
 

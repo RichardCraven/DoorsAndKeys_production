@@ -136,4 +136,126 @@ describe('Connecting Path & Board Edge Transitions', () => {
         expect(transitionDirection).toBe('right');
         expect(bm.playerTile.boardIndex).toBe(1);
     });
+
+    it('does NOT allow board transition when player is on a regular floor tile at right edge of miniboard 0', () => {
+        const floorTile = {
+            id: 119, // row 7, col 14
+            contains: { type: 'empty_space' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[119] = floorTile;
+        bm.playerTile = {
+            location: [22, 29],
+            boardIndex: 0
+        };
+
+        let transitionDirection = null;
+        bm.establishBoardTransitionCallback((dir) => {
+            transitionDirection = dir;
+        });
+        bm.messaging = jest.fn();
+
+        bm.moveRight();
+
+        expect(transitionDirection).toBeNull();
+        expect(bm.playerTile.boardIndex).toBe(0);
+        expect(bm.messaging).toHaveBeenCalledWith('A wall blocks your way.');
+    });
+
+    it('does NOT allow board transition when player is on a regular floor tile at top edge of miniboard 3', () => {
+        const floorTile = {
+            id: 7, // row 0, col 7
+            contains: { type: 'empty_space' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[7] = floorTile;
+        bm.playerTile = {
+            location: [15, 22],
+            boardIndex: 3
+        };
+
+        let transitionDirection = null;
+        bm.establishBoardTransitionCallback((dir) => {
+            transitionDirection = dir;
+        });
+        bm.messaging = jest.fn();
+
+        bm.moveUp();
+
+        expect(transitionDirection).toBeNull();
+        expect(bm.playerTile.boardIndex).toBe(3);
+        expect(bm.messaging).toHaveBeenCalledWith('A wall blocks your way.');
+    });
+
+    it('does NOT allow board transition when target board landing tile is an unpainted void dropoff', () => {
+        const edgeConnectingTile = {
+            id: 119, // row 7, col 14
+            contains: { type: 'connecting_path' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[119] = edgeConnectingTile;
+        bm.playerTile = {
+            location: [22, 29],
+            boardIndex: 0
+        };
+
+        // Populate target board miniboards[1] where landing tile (row 7, col 0 -> idx 105) is pure void
+        const targetBoardTiles = new Array(225).fill(null).map((_, i) => ({
+            id: i,
+            isVoid: true,
+            contains: { type: 'void' }
+        }));
+        bm.dungeon.levels[0].front.miniboards[1].tiles = targetBoardTiles;
+
+        let transitionDirection = null;
+        bm.establishBoardTransitionCallback((dir) => {
+            transitionDirection = dir;
+        });
+        bm.messaging = jest.fn();
+
+        bm.moveRight();
+
+        expect(transitionDirection).toBeNull();
+        expect(bm.playerTile.boardIndex).toBe(0);
+        expect(bm.messaging).toHaveBeenCalledWith('A wall blocks your way.');
+    });
+
+    it('allows board transition when target board landing tile is a connecting path', () => {
+        const edgeConnectingTile = {
+            id: 119, // row 7, col 14
+            contains: { type: 'connecting_path' }
+        };
+
+        bm.tiles = new Array(225).fill(null).map((_, i) => ({ id: i, contains: { type: 'empty_space' } }));
+        bm.tiles[119] = edgeConnectingTile;
+        bm.playerTile = {
+            location: [22, 29],
+            boardIndex: 0
+        };
+
+        // Populate target board miniboards[1] where landing tile (row 7, col 0 -> idx 105) is also a connecting path
+        const targetBoardTiles = new Array(225).fill(null).map((_, i) => ({
+            id: i,
+            isVoid: true,
+            contains: { type: 'void' }
+        }));
+        targetBoardTiles[105] = {
+            id: 105,
+            contains: { type: 'connecting_path' }
+        };
+        bm.dungeon.levels[0].front.miniboards[1].tiles = targetBoardTiles;
+
+        let transitionDirection = null;
+        bm.establishBoardTransitionCallback((dir) => {
+            transitionDirection = dir;
+        });
+
+        bm.moveRight();
+
+        expect(transitionDirection).toBe('right');
+        expect(bm.playerTile.boardIndex).toBe(1);
+    });
 });

@@ -214,6 +214,22 @@ class BuildMenuModal extends Component {
         };
     }
 
+    componentDidMount() {
+        window.addEventListener('keydown', this.handleKeyDown);
+    }
+
+    componentWillUnmount() {
+        window.removeEventListener('keydown', this.handleKeyDown);
+    }
+
+    handleKeyDown = (e) => {
+        if (e.key === 'Escape' || e.key === 'Esc' || e.code === 'Escape') {
+            if (typeof this.props.onClose === 'function') {
+                this.props.onClose();
+            }
+        }
+    };
+
     getResourceCounts = () => {
         const { inventoryManager, inSuperboard, pocketResources } = this.props;
         const meta = getMeta() || {};

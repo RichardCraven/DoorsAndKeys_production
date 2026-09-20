@@ -2,9 +2,115 @@ import React from 'react';
 import * as images from '../utils/images'
 import { getTreeLayersForDensity, getMountainLayersForDensity } from '../utils/autotile-utils';
 import { getMeta, getUserId } from '../utils/session-handler';
+import { MonsterManager } from '../utils/monster-manager';
+
+const defaultMonsterManager = new MonsterManager();
 
 
-const getTileTerritoryAffiliationHelper = (tObj, fallbackProps) => {
+export const isTerritoryLanternItem = (item) => {
+    if (!item || typeof item !== 'object') return false;
+    const name = String(item.name || '').toLowerCase();
+    const key = String(item._im_key || item.key || item.id || item.icon || '').toLowerCase();
+    const type = String(item.type || '').toLowerCase();
+    return (
+        name === 'territorial lantern' ||
+        name === 'territory lantern' ||
+        key === 'territorial_lantern' ||
+        key === 'territory_lantern' ||
+        type === 'territorial_lantern' ||
+        type === 'territory_lantern' ||
+        (name.includes('territor') && name.includes('lantern')) ||
+        (key.includes('territor') && key.includes('lantern'))
+    );
+};
+
+export const checkHasTerritoryLantern = (props) => {
+    if (props && props.hasTerritoryLantern !== undefined) {
+        return !!props.hasTerritoryLantern;
+    }
+    try {
+        const meta = getMeta() || {};
+        const inv = meta.inventory || [];
+        const crew = Array.isArray(meta.crew) ? meta.crew : [];
+        const allItems = [...inv];
+        crew.forEach(m => {
+            if (m && Array.isArray(m.inventory)) allItems.push(...m.inventory);
+        });
+        return allItems.some(isTerritoryLanternItem);
+    } catch (e) {
+        return false;
+    }
+};
+
+export const isPlayerAdjacentOrInsideContiguousTerritory = (currentIdx, currentRawTerr, boardTiles, props = {}) => {
+    if (currentIdx === null || currentIdx === undefined || !boardTiles || !currentRawTerr) return false;
+
+    // Find player tile index
+    let playerIdx = props.playerIdx;
+    if (playerIdx === null || playerIdx === undefined) {
+        const playerTile = boardTiles.find(t => t && (t.isPlayerTile || t.isPlayerOnTile || (t.location && Array.isArray(t.location))));
+        if (playerTile) {
+            playerIdx = (playerTile.id !== undefined) ? playerTile.id : boardTiles.indexOf(playerTile);
+        }
+    }
+    if (playerIdx === null || playerIdx === undefined) return false;
+
+    const pRow = Math.floor(playerIdx / 15);
+    const pCol = playerIdx % 15;
+
+    // Determine the player's 3x3 footprint (standing on tile or adjacent to it)
+    const playerReachSet = new Set();
+    for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+            const r = pRow + dr;
+            const c = pCol + dc;
+            if (r >= 0 && r < 15 && c >= 0 && c < 15) {
+                playerReachSet.add(r * 15 + c);
+            }
+        }
+    }
+
+    // Fast path: if the current tile itself is within player reach (player is on it or adjacent to it)
+    if (playerReachSet.has(currentIdx)) {
+        return true;
+    }
+
+    // Otherwise, perform BFS from currentIdx to find all contiguous tiles of this territory,
+    // and check if any of them touch playerReachSet.
+    const visited = new Set([currentIdx]);
+    const queue = [currentIdx];
+    const targetTerrStr = String(currentRawTerr).toLowerCase();
+
+    while (queue.length > 0) {
+        const curr = queue.shift();
+        const r = Math.floor(curr / 15);
+        const c = curr % 15;
+
+        const neighbors = [];
+        if (r > 0) neighbors.push((r - 1) * 15 + c);
+        if (r < 14) neighbors.push((r + 1) * 15 + c);
+        if (c > 0) neighbors.push(r * 15 + (c - 1));
+        if (c < 14) neighbors.push(r * 15 + (c + 1));
+
+        for (const nIdx of neighbors) {
+            if (!visited.has(nIdx)) {
+                visited.add(nIdx);
+                const nTile = boardTiles[nIdx];
+                const nTerr = getTileTerritoryAffiliationHelper(nTile, null);
+                if (nTerr && String(nTerr).toLowerCase() === targetTerrStr) {
+                    if (playerReachSet.has(nIdx)) {
+                        return true;
+                    }
+                    queue.push(nIdx);
+                }
+            }
+        }
+    }
+
+    return false;
+};
+
+export const getTileTerritoryAffiliationHelper = (tObj, fallbackProps) => {
     if (!tObj && !fallbackProps) return null;
     const cObj = tObj?.contains && typeof tObj.contains === 'object' ? tObj.contains : null;
     const fObj = fallbackProps?.contains && typeof fallbackProps.contains === 'object' ? fallbackProps.contains : null;
@@ -639,7 +745,7 @@ function Tile(props) {
     const is3x3Structure = sKey.includes('keep') || sKey.includes('fortress') || sKey.includes('fractured_monolith');
     const isLocusTile = sKey.includes('locus') || (containsObj && (containsObj.type === 'locus' || containsObj.locusType || (typeof containsObj.subtype === 'string' && containsObj.subtype.includes('locus'))));
     const isLocusActiveOrAdjacent = (isLocusTile || props.isAdjacentLocus) && (props.isAdjacentLocus || props.isLocusActive || props.activeLocus);
-    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || sKey.includes('under_construction') || sKey.includes('construction') || sKey.includes('rift_embers') || is3x3Structure || isLocusTile;
+    const isStructureTile = sKey.includes('war_camp') || sKey.includes('war_fort') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('observation') || sKey.includes('dream_den') || sKey.includes('monolith') || sKey.includes('vat') || sKey.includes('generator') || sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('mine') || sKey.includes('hut') || sKey.includes('tower') || sKey.includes('windmill') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('graveyard') || sKey.includes('blacksmith') || sKey.includes('under_construction') || sKey.includes('construction') || sKey.includes('rift_embers') || sKey.includes('healing_circle') || is3x3Structure || isLocusTile;
 
     const containsObjForHp = (currentTileForContains && typeof currentTileForContains.contains !== 'undefined')
         ? (typeof currentTileForContains.contains === 'object' ? currentTileForContains.contains : null)
@@ -804,7 +910,8 @@ function Tile(props) {
             'naked_trees_4', 'terrain_naked_trees_4',
             'naked_mountains_2', 'terrain_naked_mountains_2',
             'fractured_monolith', 'pocket_litter_fractured_monolith',
-            'rift_embers', 'pocket_litter_rift_embers'
+            'rift_embers', 'pocket_litter_rift_embers',
+            'healing_circle', 'pocket_healing_circle'
         ];
         if (multiKeys.includes(s)) return true;
         return multiKeys.some(k => s.includes(k));
@@ -815,10 +922,21 @@ function Tile(props) {
         return s.includes('observer') || s.includes('outpost') || s.includes('earthen_fort') || s.includes('hut') || s.includes('farm') || s.includes('house') || s.includes('domain_node') || s.includes('dark_domain_node') || s.includes('node') || s.includes('locus');
     })();
 
+    const isHealingCircle = (
+        sKey.includes('healing_circle') ||
+        String(props.building || '').toLowerCase().includes('healing_circle') ||
+        String(props.image || '').toLowerCase().includes('healing_circle') ||
+        String(props.imageOverride || '').toLowerCase().includes('healing_circle') ||
+        String(props.optionType || '').toLowerCase().includes('healing_circle') ||
+        String(containsObj?.subtype || containsObj?.type || containsObj?.building || containsObj?.key || '').toLowerCase().includes('healing_circle') ||
+        (typeof props.contains === 'string' && props.contains.toLowerCase().includes('healing_circle'))
+    );
+
     const thisContainsSubtype = containsObj?.subtype || containsObj?.key || containsObj?.building || (typeof props.contains === 'string' ? props.contains : null);
     const thisKey = String(thisContainsSubtype || props.building || containsObj?.type || props.image || '').toLowerCase();
 
     const is2x2StructureSelf = !isPaletteTile && !isSingleTile && (
+        thisKey.includes('healing_circle') ||
         thisKey.includes('war_camp') || thisKey.includes('war_fort') || thisKey.includes('dream_den') ||
         thisKey.includes('domain_monolith') || thisKey.includes('dark_domain_monolith') || (thisKey.includes('monolith') && !thisKey.includes('shrine') && !thisKey.includes('fractured_monolith')) ||
         thisKey.includes('cultivation_vat') || thisKey.includes('dust_collector') || thisKey.includes('larder') ||
@@ -1201,16 +1319,19 @@ function Tile(props) {
             if (images[`buildable_${key}`]) return images[`buildable_${key}`];
         }
         if (props.imageOverride) {
-            if (typeof props.imageOverride === 'string' && (props.imageOverride.includes('/') || props.imageOverride.startsWith('data:'))) {
+            if (typeof props.imageOverride === 'string' && (props.imageOverride.includes('/') || props.imageOverride.startsWith('data:') || /\.(png|jpg|jpeg|svg|webp|gif)$/i.test(props.imageOverride))) {
                 return props.imageOverride;
             }
             if (images[props.imageOverride]) return images[props.imageOverride];
             const cleanKey = String(props.imageOverride).trim().toLowerCase().replace(/[\s-]+/g, '_');
             if (['portal', 'teleporter', 'dungeon_portal'].includes(cleanKey)) return images.dungeon_portal;
         }
+        if (props.isSpawnPoint && images.spawn_point) {
+            return images.spawn_point;
+        }
         if (props.image) {
             if (typeof props.image === 'string') {
-                if (props.image.includes('/') || props.image.startsWith('data:')) {
+                if (props.image.includes('/') || props.image.startsWith('data:') || /\.(png|jpg|jpeg|svg|webp|gif)$/i.test(props.image)) {
                     return props.image;
                 }
                 const key = props.image.trim().toLowerCase().replace(/[\s-]+/g, '_');
@@ -1287,7 +1408,15 @@ function Tile(props) {
     const mainTile = props.boardTiles?.[targetTileId];
     const isMainTileBlack = mainTile ? isBlackRenderedTile(mainTile.contains, mainTile.color) : isBlackTile;
     const isBierTile = isNarrative || isEnemySpawnTile || sKey.includes('narrative') || sKey.includes('flaming_bier') || sKey.includes('bier');
-    const isEnlargeableStructure = (containsObj && (['hut', 'archway'].includes(containsObj.subtype) || ['hut', 'archway'].includes(containsObj.building) || ['hut', 'archway'].includes(containsObj.type))) ||
+    const isSpawnPoint = !!props.isSpawnPoint ||
+                         sKey.includes('spawn_point') ||
+                         String(props.image || '').includes('spawn_point') ||
+                         String(props.imageOverride || '').includes('spawn_point') ||
+                         props.type === 'spawn_point' ||
+                         (containsObj && (containsObj.type === 'spawn_point' || containsObj.subtype === 'spawn_point' || containsObj.building === 'spawn_point')) ||
+                         (currentContains && (currentContains.type === 'spawn_point' || currentContains.subtype === 'spawn_point' || currentContains.building === 'spawn_point'));
+    const isEnlargeableStructure = isSpawnPoint ||
+                                   (containsObj && (['hut', 'archway'].includes(containsObj.subtype) || ['hut', 'archway'].includes(containsObj.building) || ['hut', 'archway'].includes(containsObj.type))) ||
                                    (currentContains && (['hut', 'archway'].includes(currentContains.subtype) || ['hut', 'archway'].includes(currentContains.building) || ['hut', 'archway'].includes(currentContains.type))) ||
                                    isBierTile;
     const isUnderConstruction = (props.contains && typeof props.contains.subtype === 'string' && props.contains.subtype.includes('_under_construction')) ||
@@ -1310,6 +1439,28 @@ function Tile(props) {
     const bumpVector = (currentTile && currentTile.bumpVector) || props.bumpVector || (currentContains && currentContains.bumpVector) || { dRow: -1, dCol: 0 };
     const bumpX = `${(bumpVector?.dCol ?? 0) * 85}%`;
     const bumpY = `${(bumpVector?.dRow ?? -1) * 85}%`;
+
+    const isAggroAttacking = !!(currentTile && currentTile.isAggroAttacking) || !!props.isAggroAttacking || !!(currentContains && currentContains.isAggroAttacking);
+    const aggroAttackVector = (currentTile && currentTile.aggroAttackVector) || props.aggroAttackVector || (currentContains && currentContains.aggroAttackVector) || { dRow: 0, dCol: 0 };
+    const aggroAttackX = `${(aggroAttackVector?.dCol ?? 0) * 100}%`;
+    const aggroAttackY = `${(aggroAttackVector?.dRow ?? 0) * 100}%`;
+
+    const monsterTypeKey = (() => {
+        if (containsObj && typeof containsObj === 'object') return containsObj.type || containsObj.subtype || containsObj.key || containsObj.monsterType;
+        if (currentContains && typeof currentContains === 'object') return currentContains.type || currentContains.subtype || currentContains.key || currentContains.monsterType;
+        if (typeof containsType === 'string') return containsType;
+        if (typeof containsSubtype === 'string') return containsSubtype;
+        return null;
+    })();
+
+    const mmRef = props.monsterManager || defaultMonsterManager;
+    const isAggroMonster = isMonsterOrPygmyTile && !!(
+        (containsObj && (containsObj.aggro === true || containsObj.isAggro === true)) ||
+        (currentContains && typeof currentContains === 'object' && (currentContains.aggro === true || currentContains.isAggro === true)) ||
+        props.aggro === true ||
+        props.isAggro === true ||
+        (monsterTypeKey && (mmRef?.monsters?.[monsterTypeKey]?.aggro === true || defaultMonsterManager.monsters?.[monsterTypeKey]?.aggro === true))
+    );
 
     let isBumpedBack = !!(currentTile && currentTile.isBumpedBack) || !!props.isBumpedBack || !!(currentContains && currentContains.isBumpedBack);
     let bumpedBackVector = (currentTile && currentTile.bumpedBackVector) || props.bumpedBackVector || (currentContains && currentContains.bumpedBackVector) || null;
@@ -1370,6 +1521,24 @@ function Tile(props) {
     const isLitterCell = imageString.includes('litter') || imageString.includes('terrain') ||
                          (containsObj && (containsObj.type === 'dungeon_litter' || containsObj.type === 'terrain')) ||
                          props.optionType === 'dungeon litter' || props.optionType === 'terrain';
+
+    const rawContainsType = String(containsObj?.type || props.type || props.optionType || '').toLowerCase();
+    const allKeys = (
+        sKey + ' ' +
+        String(props.optionType || '') + ' ' +
+        String(containsObj?.name || '') + ' ' +
+        String(props.name || '') + ' ' +
+        imageString
+    ).toLowerCase();
+
+    const isDimensionDebrisOrLitter = rawContainsType === 'pocket_litter' || rawContainsType === 'dimension_litter' || rawContainsType === 'dimension litter' || rawContainsType === 'litter' || rawContainsType === 'dungeon_litter' || rawContainsType === 'dungeon litter' ||
+        !!props.isDimensionLitter || !!props.isPocketLitter || !!props.isDungeonLitter || !!containsObj?.isDimensionLitter || !!containsObj?.isPocketLitter || !!containsObj?.isDungeonLitter ||
+        allKeys.includes('rift_embers') || allKeys.includes('fractured_monolith') ||
+        allKeys.includes('broken_wagon') || allKeys.includes('forge_remnants') ||
+        allKeys.includes('mana_crystals') || allKeys.includes('ruined_arch') ||
+        allKeys.includes('astral_obelisk') || allKeys.includes('ancient_reliquary') || allKeys.includes('celestial_geode') ||
+        allKeys.includes('pocket_litter') || allKeys.includes('dimension_litter') || allKeys.includes('dungeon_litter') || allKeys.includes('dungeon litter') ||
+        allKeys.includes('battle_debris') || allKeys.includes('debris') || allKeys.includes('litter');
 
     const isItemCell = !isLitterCell && (props.type === 'item' || 
                        (containsObj && (containsObj.type === 'item' || containsObj.type === 'key')) ||
@@ -1473,6 +1642,8 @@ function Tile(props) {
             '--bumped-y': bumpedY,
             '--glide-x': glideX,
             '--glide-y': glideY,
+            '--aggro-attack-x': aggroAttackX,
+            '--aggro-attack-y': aggroAttackY,
             opacity: props.isPreview ? 0.6 : 1,
             pointerEvents: props.passThrough ? 'none' : 'inherit',
             boxSizing: 'border-box',
@@ -1482,15 +1653,17 @@ function Tile(props) {
             width: typeof props.tileSize === 'string' ? props.tileSize : (props.tileSize ? props.tileSize + 'px' : '100%'),
             backgroundColor: 
                 props.backgroundColor ? props.backgroundColor :
-                (props.hovered && props.type === 'board-tile') ? 
+                (isAggroMonster && color !== 'black') ?
+                'rgba(220, 20, 20, 0.85)' :
+                ((props.hovered && props.type === 'board-tile') ? 
                 '#8080807a' : 
                 ( props.type === 'overlay-tile' ? 
                     'transparent': 
-                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color)),
+                    (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color))),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: isPaletteTile ? 'hidden' : ((isStructureTile || isAutomatonUnit || hasConvertingMonolith || hasConvertingTarget || isIlluminatedGlow || isBumpingAttack || isGliding || isSpawnFlashing || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || (props.upgradeProgress !== null && props.upgradeProgress !== undefined)) ? 'visible' : 'hidden'),
-            zIndex: (props.upgradeProgress !== null && props.upgradeProgress !== undefined) ? 60 : ((hasConvertingMonolith || hasConvertingTarget) ? 40 : (isBumpingAttack || isSpawnFlashing ? 100 : (isGliding ? 90 : (isAutomatonUnit ? 45 : (isStructureTile || isUnderConstruction ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 30 : 8) : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : ((isEnlargeableStructure && isOccupied) ? 5 : undefined))))))))),
+            overflow: isPaletteTile ? 'hidden' : ((isAggroAttacking || isStructureTile || isAutomatonUnit || hasConvertingMonolith || hasConvertingTarget || isIlluminatedGlow || isBumpingAttack || isGliding || isSpawnFlashing || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || (props.upgradeProgress !== null && props.upgradeProgress !== undefined)) ? 'visible' : 'hidden'),
+            zIndex: isAggroAttacking ? 150 : (isDimensionDebrisOrLitter ? 120 : ((props.upgradeProgress !== null && props.upgradeProgress !== undefined) ? 60 : ((hasConvertingMonolith || hasConvertingTarget) ? 40 : (isBumpingAttack || isSpawnFlashing ? 100 : (isGliding ? 90 : (isAutomatonUnit ? 45 : (isStructureTile || isUnderConstruction ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 30 : 8) : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : ((isEnlargeableStructure && isOccupied) ? 5 : undefined))))))))))),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
@@ -1538,7 +1711,7 @@ function Tile(props) {
                 }
             }}
             onDragStart={(e) => e.preventDefault()}
-            className={`tile ${props.className || ''} ${props.type || ''} ${isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : (isSpawnFlashing ? 'pygmy-spawn-flash' : '')))}`.trim()}
+            className={`tile ${props.className || ''} ${props.type || ''} ${isAggroAttacking ? 'aggro-attack-lunge' : (isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : (isSpawnFlashing ? 'pygmy-spawn-flash' : ''))))} ${isDimensionDebrisOrLitter ? 'foreground-zindex' : ''}`.trim()}
             data-tile-id={props.index}
         >
            {props.isMobileTouchHover && (
@@ -1677,22 +1850,10 @@ function Tile(props) {
 
                 // Dimension debris and litter (such as rift embers, fractured monolith, broken wagon, forge remnants, etc.)
                 // cannot be claimed with domain or activated, and must NOT have a colored ring around them.
-                const containsType = String(containsObj?.type || props.type || '').toLowerCase();
-                const allKeys = (
-                    sKey + ' ' +
-                    String(props.optionType || '') + ' ' +
-                    String(containsObj?.name || '') + ' ' +
-                    String(props.name || '')
-                ).toLowerCase();
-                const isDimensionDebrisOrLitter = containsType === 'pocket_litter' || containsType === 'dimension_litter' || containsType === 'dimension litter' || containsType === 'litter' ||
-                    !!props.isDimensionLitter || !!props.isPocketLitter || !!containsObj?.isDimensionLitter || !!containsObj?.isPocketLitter ||
-                    allKeys.includes('rift_embers') || allKeys.includes('fractured_monolith') ||
-                    allKeys.includes('broken_wagon') || allKeys.includes('forge_remnants') ||
-                    allKeys.includes('mana_crystals') || allKeys.includes('ruined_arch') ||
-                    allKeys.includes('astral_obelisk') || allKeys.includes('ancient_reliquary') || allKeys.includes('celestial_geode') ||
-                    allKeys.includes('pocket_litter') || allKeys.includes('dimension_litter') ||
-                    allKeys.includes('battle_debris') || allKeys.includes('debris') || allKeys.includes('litter');
                 if (isDimensionDebrisOrLitter) return null;
+
+                // Healing circle does not need an affiliation colored-circle
+                if (isHealingCircle || sKey.includes('healing_circle')) return null;
 
                 const isGenerator = sKey.includes('ore_mine') || sKey.includes('slate_mine') || sKey.includes('sawmill') || sKey.includes('lumber_mill') || sKey.includes('larder') || sKey.includes('dust_collector') || sKey.includes('fungal_nursery') || sKey.includes('cultivation_vat') || sKey.includes('generator') || sKey.includes('mine');
                 let gData = props.generatorData || containsObj?.generatorData;
@@ -2039,6 +2200,19 @@ function Tile(props) {
                 const currentRawTerr = getTileTerritoryAffiliationHelper(currentTileObj, props);
 
                 if (!currentRawTerr) return null;
+
+                const isDungeon = !props.inSuperboard && !props.isInPocketDimension;
+                const isBuilder = !!(props.isBuilderTile || props.isBuilder || props.isMapmaker || props.type === 'palette-tile' || props.type === 'builder-tile');
+                if (isDungeon && !isBuilder) {
+                    if (props.showTerritoryBoundary !== undefined) {
+                        if (!props.showTerritoryBoundary) return null;
+                    } else {
+                        if (!checkHasTerritoryLantern(props)) return null;
+                        if (!isPlayerAdjacentOrInsideContiguousTerritory(currentIdx, currentRawTerr, boardTiles, props)) {
+                            return null;
+                        }
+                    }
+                }
 
                 // Check if this tile is covered by an active domain monolith whose domain is a perfect rotating square
                 if (props.insidePerfectSquareDomain !== undefined) {
@@ -2425,25 +2599,29 @@ function Tile(props) {
                           const redGradient = isChargingAmbush
                               ? 'radial-gradient(circle at center, rgba(255, 0, 0, 1) 0%, rgba(239, 68, 68, 0.95) 38%, rgba(185, 28, 28, 0.65) 68%, transparent 95%)'
                               : 'radial-gradient(circle at center, rgba(239, 68, 68, 1) 0%, rgba(220, 38, 38, 0.85) 38%, rgba(185, 28, 28, 0.45) 68%, transparent 95%)';
+                          // Aggro = Brighter Pulsing Crimson
+                          const aggroGradient = 'radial-gradient(circle at center, rgba(255, 30, 30, 1) 0%, rgba(255, 0, 0, 0.95) 45%, rgba(185, 10, 10, 0.75) 75%, transparent 98%)';
 
-                          const glowBackground = isAlliedUnit ? blueGradient : (isNeutralUnit ? amberGradient : redGradient);
-                          const glowBoxShadow = isAlliedUnit
-                              ? '0 0 24px rgba(56, 189, 248, 0.95), 0 0 12px rgba(14, 165, 233, 0.8)'
-                              : (isNeutralUnit
-                                  ? '0 0 24px rgba(250, 204, 21, 0.95), 0 0 12px rgba(245, 158, 11, 0.8)'
-                                  : '0 0 24px rgba(239, 68, 68, 0.95), 0 0 12px rgba(220, 38, 38, 0.8)');
+                          const glowBackground = isAggroMonster ? aggroGradient : (isAlliedUnit ? blueGradient : (isNeutralUnit ? amberGradient : redGradient));
+                          const glowBoxShadow = isAggroMonster
+                              ? '0 0 35px rgba(255, 0, 0, 1), 0 0 18px rgba(255, 50, 50, 0.95), inset 0 0 15px rgba(255, 0, 0, 0.8)'
+                              : (isAlliedUnit
+                                  ? '0 0 24px rgba(56, 189, 248, 0.95), 0 0 12px rgba(14, 165, 233, 0.8)'
+                                  : (isNeutralUnit
+                                      ? '0 0 24px rgba(250, 204, 21, 0.95), 0 0 12px rgba(245, 158, 11, 0.8)'
+                                      : '0 0 24px rgba(239, 68, 68, 0.95), 0 0 12px rgba(220, 38, 38, 0.8)'));
 
-                          const glowClass = isAlliedUnit ? 'allied-glow' : (isNeutralUnit ? 'neutral-glow' : (isChargingAmbush ? 'charging-ambush-glow' : (isNearbyMonster ? 'nearby-glow' : '')));
+                          const glowClass = isAggroMonster ? 'aggro-monster-glow' : (isAlliedUnit ? 'allied-glow' : (isNeutralUnit ? 'neutral-glow' : (isChargingAmbush ? 'charging-ambush-glow' : (isNearbyMonster ? 'nearby-glow' : ''))));
 
                           return (
                               <div 
                                   className={`monster-portrait-glow ${glowClass}`}
                                   style={{
                                       position: 'absolute',
-                                      top: isChargingAmbush ? '-40%' : '-35%',
-                                      left: isChargingAmbush ? '-40%' : '-35%',
-                                      right: isChargingAmbush ? '-40%' : '-35%',
-                                      bottom: isChargingAmbush ? '-40%' : '-35%',
+                                      top: (isChargingAmbush || isAggroMonster) ? '-40%' : '-35%',
+                                      left: (isChargingAmbush || isAggroMonster) ? '-40%' : '-35%',
+                                      right: (isChargingAmbush || isAggroMonster) ? '-40%' : '-35%',
+                                      bottom: (isChargingAmbush || isAggroMonster) ? '-40%' : '-35%',
                                       borderRadius: '50%',
                                       background: glowBackground,
                                       boxShadow: glowBoxShadow,
@@ -2451,12 +2629,15 @@ function Tile(props) {
                                       pointerEvents: 'none',
                                       opacity: (color === 'black' || props.type === 'overlay-tile' || props.isFadingOut) ? 0 : 1,
                                       transition: 'opacity 0.35s ease-in-out, background 0.2s ease-in-out, top 0.2s ease-in-out, left 0.2s ease-in-out',
-                                      animation: isChargingAmbush
-                                          ? 'pygmyChargePulse 0.35s ease-in-out infinite alternate'
-                                          : 'pygmyGlowPulse 1.4s ease-in-out infinite alternate'
+                                      animation: isAggroMonster
+                                          ? 'aggroMonsterPulse 0.8s ease-in-out infinite alternate'
+                                          : (isChargingAmbush
+                                              ? 'pygmyChargePulse 0.35s ease-in-out infinite alternate'
+                                              : 'pygmyGlowPulse 1.4s ease-in-out infinite alternate')
                                   }}
                               />
                           );
+
                       })()}
 
                       {/* Faint gold light source glow emanating from behind key items in the dungeon (disabled in palette/builder/inventory) */}
@@ -2519,7 +2700,7 @@ function Tile(props) {
            })()}
 
            {/* Portrait sits above the hp-fill and terrain so the image remains visible */}
-           {!isLayeredForestTile && !isLayeredMountainTile && resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && (() => {
+           {!isLayeredForestTile && !isLayeredMountainTile && resolvedPortraitUrl && props.optionType !== 'delete' && props.optionType !== 'voidfill' && !(props.contains && (props.contains === 'shrine' || props.contains.type === 'shrine')) && !(props.data && props.data.type === 'soul_shard') && !(isHealingCircle && !isPaletteTile) && (() => {
                 const isAvatarPortrait = !!(props.contains && (props.contains.type === 'avatar' || props.contains.type === 'camp'));
                 const isFlippedLeft = isAvatarPortrait && (props.playerFacing === 'left' || props.playerFacingDirection === 'left');
                 const flipTransform = isFlippedLeft ? 'scaleX(-1)' : '';
@@ -2574,7 +2755,7 @@ function Tile(props) {
 
                 return (
                     <>
-                        <div className={`portrait ${isUnitDying ? 'automaton-death-anim' : ''} ${isRiftEmbers ? 'spin-slow' : ''}`.trim()} style={{
+                        <div className={`portrait ${isUnitDying ? 'automaton-death-anim' : ''} ${isRiftEmbers ? 'spin-slow' : ''} ${(isSpawnPoint && isOccupied) ? 'spawn-point-spinning' : ''}`.trim()} style={{
                              position: 'absolute',
                              top: 0, left: 0,
                              right: (isRiftEmbers && !isPaletteTile) ? '-100%' : 0,
@@ -2583,10 +2764,10 @@ function Tile(props) {
                              backgroundSize: isRiftEmbers ? (isPaletteTile ? 'contain' : '100% 100%') : ((isVendorCell || is2x2StructureSelf) ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%')),
                              backgroundPosition: isRiftEmbers ? 'center' : ((isVendorCell || is2x2StructureSelf) ? vendorBackgroundPosition : ((isItemCell || isPaletteTile) ? 'center' : 'inherit')),
                              backgroundRepeat: 'no-repeat',
-                             zIndex: (isVendorCell || is2x2StructureSelf) ? 40 : ((isEnlargeableStructure && isOccupied) ? 35 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex))),
+                             zIndex: isDimensionDebrisOrLitter ? 120 : ((isVendorCell || is2x2StructureSelf) ? 40 : ((isEnlargeableStructure && isOccupied) ? 35 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex)))),
                              opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
                              transform: portraitTransform,
-                             transformOrigin: isRiftEmbers ? 'center center' : ((isBumpedBack && (isVendorCell || is2x2StructureSelf)) ? (() => {
+                             transformOrigin: isSpawnPoint ? 'center center' : (isRiftEmbers ? 'center center' : ((isBumpedBack && (isVendorCell || is2x2StructureSelf)) ? (() => {
                                  switch (vendorCellRole) {
                                      case 'anchor': return isPaletteTile ? 'center center' : '100% 100%';
                                      case 'top_right': return '0% 100%';
@@ -2599,7 +2780,7 @@ function Tile(props) {
                                      case 'bottom_center': return '50% 0%';
                                      default: return 'center center';
                                  }
-                             })() : (((isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent) ? 'bottom center' : 'center center')),
+                             })() : (((isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent) ? 'bottom center' : 'center center'))),
                              transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
                              pointerEvents: 'none'
                         }} />
@@ -2623,6 +2804,118 @@ function Tile(props) {
                             }} />
                         )}
                     </>
+                );
+            })()}
+
+            {/* Healing Circle Complex: layered base platform and 5 floating shards spanning 2x2 footprint */}
+            {isHealingCircle && !isPaletteTile && (() => {
+                const vRole = vendorCellRole || getVendorCellRole();
+                if (vRole && vRole !== 'anchor') return null;
+
+                const cId = props.id !== undefined && props.id !== null ? props.id : props.index;
+                const isPlayerIn2x2 = (cId !== null && cId !== undefined && props.playerIdx !== undefined && props.playerIdx !== null) && (
+                    props.playerIdx === cId ||
+                    props.playerIdx === cId + 1 ||
+                    props.playerIdx === cId + 15 ||
+                    props.playerIdx === cId + 16
+                );
+
+                const isOccupiedByPlayer = !!(
+                    props.isPlayerOnTile ||
+                    props.isPlayerTile ||
+                    isPlayerIn2x2 ||
+                    (props.playerIdx !== undefined && props.playerIdx !== null && props.playerIdx === props.id) ||
+                    (props.contains && (props.contains.type === 'avatar' || props.contains.type === 'camp')) ||
+                    props.active
+                );
+
+                const shardImages = [
+                    images.healing_circle_shard_1,
+                    images.healing_circle_shard_2,
+                    images.healing_circle_shard_3,
+                    images.healing_circle_shard_4,
+                    images.healing_circle_shard_5
+                ];
+
+                const baseImg = images.healing_circle_base || images.healing_circle;
+
+                // Inert downward offsets to place floating shards resting lower down to the ground
+                const inertOffsets = [
+                    { y: '10%', scale: 0.96 },
+                    { y: '14%', scale: 0.94 },
+                    { y: '16%', scale: 0.92 },
+                    { y: '14%', scale: 0.94 },
+                    { y: '10%', scale: 0.96 }
+                ];
+
+                return (
+                    <div
+                        className={`healing-circle-complex ${isOccupiedByPlayer ? 'active' : 'inert'}`}
+                        data-testid="healing-circle-complex"
+                        style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: '-100%',
+                            bottom: '-100%',
+                            zIndex: 21,
+                            pointerEvents: 'none',
+                            opacity: (color === 'black' || isDarkColor || props.isFadingOut) ? 0 : 1,
+                            transition: 'opacity 0.35s ease-in-out'
+                        }}
+                    >
+                        <div
+                            className="healing-circle-base"
+                            data-testid="healing-circle-base"
+                            style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                right: 0,
+                                bottom: 0,
+                                backgroundImage: toCssUrl(baseImg),
+                                backgroundSize: '100% 100%',
+                                backgroundPosition: 'center',
+                                backgroundRepeat: 'no-repeat',
+                                pointerEvents: 'none',
+                                filter: isOccupiedByPlayer ? 'drop-shadow(0 0 6px rgba(52, 211, 153, 0.6)) brightness(1.05)' : 'none',
+                                transition: 'filter 0.65s ease'
+                            }}
+                        />
+                        {shardImages.map((shardImg, sIdx) => {
+                            const offset = inertOffsets[sIdx] || { y: '12%', scale: 0.95 };
+                            const transform = isOccupiedByPlayer
+                                ? 'translateY(0%) scale(1)'
+                                : `translateY(${offset.y}) scale(${offset.scale})`;
+                            const filter = isOccupiedByPlayer
+                                ? 'drop-shadow(0 0 5px rgba(52, 211, 153, 0.8)) brightness(1.1)'
+                                : 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45)) brightness(0.92)';
+
+                            return (
+                                <div
+                                    key={`hc-shard-${sIdx}`}
+                                    className={`healing-circle-shard healing-circle-shard-${sIdx + 1} ${isOccupiedByPlayer ? 'active' : 'inert'}`}
+                                    data-testid={`healing-circle-shard-${sIdx + 1}`}
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        right: 0,
+                                        bottom: 0,
+                                        backgroundImage: toCssUrl(shardImg),
+                                        backgroundSize: '100% 100%',
+                                        backgroundPosition: 'center',
+                                        backgroundRepeat: 'no-repeat',
+                                        pointerEvents: 'none',
+                                        transition: 'transform 0.65s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.65s ease',
+                                        transitionDelay: `${sIdx * 40}ms`,
+                                        transform,
+                                        filter
+                                    }}
+                                />
+                            );
+                        })}
+                    </div>
                 );
             })()}
 
@@ -2733,7 +3026,7 @@ function Tile(props) {
 
            {/* Dead overlay: visible when data.dead === true or hp <= 0 */}
            { (Boolean(props.data && props.data.dead) || (typeof props.hp === 'number' && props.hp <= 0) || (props.data && typeof props.data.hp === 'number' && props.data.hp <= 0)) && (
-                <div className="dead-overlay" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', zIndex: 10, borderRadius: '4px'}}>
+                <div className="dead-overlay" style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', zIndex: 50, borderRadius: '4px', pointerEvents: 'none'}}>
                     <div 
                         className="death-skull" 
                         style={{
@@ -2809,9 +3102,12 @@ function Tile(props) {
                     ? (typeof currentTileForContains.contains === 'object' ? currentTileForContains.contains : null)
                     : ((typeof props.contains === 'object' ? props.contains : null) || containsObj || containsObjForHp);
 
-                const isAutomaton = !!(activeUnit && (activeUnit.isAutomaton || activeUnit.subtype === 'automaton') && !activeUnit.dead && !activeUnit.destroyedAt);
-                const converting = (isAutomaton && activeUnit.convertingMonolith)
-                    || (props.contains && props.contains.convertingMonolith)
+                const isAutomaton = !!(activeUnit && (activeUnit.isAutomaton || activeUnit.subtype === 'automaton') && !activeUnit.dead && !activeUnit.destroyedAt) || isAutomatonUnit;
+                
+                // Only render progress bar on the building structure being converted, NOT over the automaton unit
+                if (isAutomaton) return null;
+
+                const converting = (props.contains && props.contains.convertingMonolith)
                     || (currentTileForContains && currentTileForContains.contains && currentTileForContains.contains.convertingMonolith)
                     || props.converting
                     || props.convertingTarget
@@ -3475,8 +3771,30 @@ function Tile(props) {
 
             {/* Dwelling Housed Worker Pygmy Circle Indicator (Top-Left) */}
             {(() => {
-                const bSubtype = String(containsSubtype || (containsObj && (containsObj.subtype || containsObj.building || containsObj.key)) || props.building || (props.generatorData && props.generatorData.key) || '').toLowerCase();
-                const isDwelling = ['farm', 'house', 'hut', 'manor', 'estate', 'windmill'].some(k => bSubtype.includes(k));
+                const cType = containsObj?.type;
+                const validCType = (cType && cType !== 'empty_space' && cType !== 'empty' && cType !== 'board-tile') ? cType : null;
+                const rawImg = typeof props.image === 'string' ? props.image : (typeof props.tile?.image === 'string' ? props.tile.image : '');
+                const bSubtype = String(
+                    containsSubtype ||
+                    (containsObj && (containsObj.subtype || containsObj.building || containsObj.key || validCType)) ||
+                    props.building ||
+                    (props.tile && (props.tile.building || props.tile.subtype)) ||
+                    (props.generatorData && props.generatorData.key) ||
+                    rawImg ||
+                    ''
+                ).toLowerCase();
+                
+                const isUnderConstruction = bSubtype.includes('under_construction') || 
+                                            bSubtype.includes('construction') || 
+                                            bSubtype.includes('buildable') || 
+                                            !!(containsObj && (containsObj.underConstruction || containsObj.isConstruction || containsObj.type === 'construction')) ||
+                                            !!(props.contains && (props.contains.underConstruction || props.contains.isConstruction || props.contains.type === 'construction')) ||
+                                            !!props.underConstruction || !!props.isConstruction;
+                
+                if (isUnderConstruction) return null;
+
+                const dwellingKeys = ['farm', 'house', 'manor', 'estate', 'town_1', 'town_2', 'town_3', 'town'];
+                const isDwelling = dwellingKeys.some(k => bSubtype.includes(k)) && !bSubtype.includes('hut');
                 if (!isDwelling) return null;
 
                 const vRole = vendorCellRole || (containsObj && containsObj.vendorCell) || props.vendorCell;
@@ -3525,6 +3843,50 @@ function Tile(props) {
                 if (!spawnTime) return null;
                 return <EarthenFortSpawnParticleBadge lastPygmySpawnTime={spawnTime} foodCost={foodCost} />;
             })()}
+
+            {/* Pocket Dimension Destination Reticle: faint white corner brackets */}
+            {props.destinationReticle && (
+                <div
+                    className={`pocket-destination-reticle ${props.destinationReticle.fading ? 'fading-out' : ''}`}
+                    data-testid="pocket-destination-reticle"
+                    style={{
+                        position: 'absolute',
+                        top: '2px',
+                        left: '2px',
+                        right: '2px',
+                        bottom: '2px',
+                        pointerEvents: 'none',
+                        zIndex: 45
+                    }}
+                >
+                    <div className="reticle-corner top-left" style={{ position: 'absolute', top: 0, left: 0, width: 8, height: 8, boxSizing: 'border-box', borderTop: '1.5px solid rgba(255, 255, 255, 0.8)', borderLeft: '1.5px solid rgba(255, 255, 255, 0.8)' }} />
+                    <div className="reticle-corner top-right" style={{ position: 'absolute', top: 0, right: 0, width: 8, height: 8, boxSizing: 'border-box', borderTop: '1.5px solid rgba(255, 255, 255, 0.8)', borderRight: '1.5px solid rgba(255, 255, 255, 0.8)' }} />
+                    <div className="reticle-corner bottom-left" style={{ position: 'absolute', bottom: 0, left: 0, width: 8, height: 8, boxSizing: 'border-box', borderBottom: '1.5px solid rgba(255, 255, 255, 0.8)', borderLeft: '1.5px solid rgba(255, 255, 255, 0.8)' }} />
+                    <div className="reticle-corner bottom-right" style={{ position: 'absolute', bottom: 0, right: 0, width: 8, height: 8, boxSizing: 'border-box', borderBottom: '1.5px solid rgba(255, 255, 255, 0.8)', borderRight: '1.5px solid rgba(255, 255, 255, 0.8)' }} />
+                </div>
+            )}
+
+            {/* Ranged Auto-Target Reticle: sharp red bracket box borders slightly larger than tile edges */}
+            {props.isTargetedByRanged && (
+                <div
+                    className="ranged-auto-target-reticle"
+                    data-testid="ranged-auto-target-reticle"
+                    style={{
+                        position: 'absolute',
+                        top: '-4px',
+                        left: '-4px',
+                        right: '-4px',
+                        bottom: '-4px',
+                        pointerEvents: 'none',
+                        zIndex: 48
+                    }}
+                >
+                    <div className="reticle-corner top-left" style={{ position: 'absolute', top: 0, left: 0, width: 10, height: 10, boxSizing: 'border-box', borderTop: '2.5px solid #ef4444', borderLeft: '2.5px solid #ef4444', boxShadow: '-1px -1px 4px rgba(239, 68, 68, 0.8)' }} />
+                    <div className="reticle-corner top-right" style={{ position: 'absolute', top: 0, right: 0, width: 10, height: 10, boxSizing: 'border-box', borderTop: '2.5px solid #ef4444', borderRight: '2.5px solid #ef4444', boxShadow: '1px -1px 4px rgba(239, 68, 68, 0.8)' }} />
+                    <div className="reticle-corner bottom-left" style={{ position: 'absolute', bottom: 0, left: 0, width: 10, height: 10, boxSizing: 'border-box', borderBottom: '2.5px solid #ef4444', borderLeft: '2.5px solid #ef4444', boxShadow: '-1px 1px 4px rgba(239, 68, 68, 0.8)' }} />
+                    <div className="reticle-corner bottom-right" style={{ position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, boxSizing: 'border-box', borderBottom: '2.5px solid #ef4444', borderRight: '2.5px solid #ef4444', boxShadow: '1px 1px 4px rgba(239, 68, 68, 0.8)' }} />
+                </div>
+            )}
         </div>
     )
 }
@@ -3532,17 +3894,29 @@ function Tile(props) {
 export function propsAreEqual(prevProps, nextProps) {
     if (prevProps === nextProps) return true;
 
+    if (prevProps.destinationReticle !== nextProps.destinationReticle) {
+        if (!prevProps.destinationReticle || !nextProps.destinationReticle) return false;
+        if (prevProps.destinationReticle.fading !== nextProps.destinationReticle.fading ||
+            prevProps.destinationReticle.gx !== nextProps.destinationReticle.gx ||
+            prevProps.destinationReticle.gy !== nextProps.destinationReticle.gy ||
+            prevProps.destinationReticle.id !== nextProps.destinationReticle.id) {
+            return false;
+        }
+    }
+
     const keysToCompare = [
         'id', 'index', 'type', 'color', 'tileSize', 'hovered', 'selected',
         'isPreview', 'passThrough', 'backgroundColor', 'terrain', 'territory', 'territoryAffiliation',
         'isShrine', 'isLoreTablet', 'trapRevealed', 'trapVisionEnabled', 'hasTrap', 'connectedEdge',
         'insidePerfectSquareDomain', 'territoryMonolithId', 'inSuperboard',
+        'showTerritoryBoundary', 'hasTerritoryLantern', 'playerIdx',
         'partialObscured', 'showCoordinates', 'image', 'imageOverride', 'building', 'affiliation',
-        'optionType', 'data', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
+        'optionType', 'data', 'hp', 'maxHp', 'hpVal', 'maxHpVal', 'hpBarWidth', 'level',
         'isPlayerOnTile', 'className', 'illuminated', 'sabotageProgress', 'monolithActivationProgress', 'upgradeProgress', 'convertingTarget', 'converting',
         'isDisabledOutpost', 'disabledUntil', 'inscriptions', 'debugMode',
         'isPlayerTile', 'isAdjacentLocus', 'isPlayerAdjacent', 'hasLivingSummoner', 'playerImgKey', 'playerFacing', 'cursor', 'isFadingOut',
-        'ownedByPlayer', 'ownedByEnemy', 'isBumpingAttack', 'bumpVector', 'isGliding', 'glideVector', 'hoveredTileFootprint', 'isAutomated', 'isPaletteTile'
+        'ownedByPlayer', 'ownedByEnemy', 'isBumpingAttack', 'bumpVector', 'isGliding', 'glideVector', 'hoveredTileFootprint', 'isAutomated', 'isPaletteTile',
+        'isSpawnPoint', 'isTargetedByRanged'
     ];
 
     for (let key of keysToCompare) {

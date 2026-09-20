@@ -8,8 +8,6 @@
  * @returns {Object|null} Ring specifications or null if not applicable
  */
 export function getCrewRangeRingSpecs(selectedMember, bgStr = '', inSuperboard = false, tileSize = 48) {
-    if (!inSuperboard) return null;
-
     const mType = String(
         selectedMember?.type ||
         selectedMember?.role ||
@@ -25,7 +23,29 @@ export function getCrewRangeRingSpecs(selectedMember, bgStr = '', inSuperboard =
     const isWizard = mType.includes('wizard') || mType.includes('zildjikan') || bgLower.includes('wizard') || bgLower.includes('zildjikan');
     const isRanger = mType.includes('ranger') || mType.includes('dormund') || bgLower.includes('ranger') || bgLower.includes('dormund');
 
-    if (!isWizard && !isRanger) return null;
+    const isGlitterburn = mType.includes('glitterburn') || bgLower.includes('glitterburn');
+    if (isGlitterburn) return null;
+
+    if (!selectedMember && !bgStr) return null;
+
+    const isMelee = !isWizard && !isRanger;
+
+    if (!isWizard && !isRanger && !isMelee) return null;
+
+    if (isMelee) {
+        const diameterPx = tileSize * 2; // 1-tile radius
+        return {
+            isMelee:   true,
+            isWizard:  false,
+            isRanger:  false,
+            rangeTiles: 1,
+            diameterPx,
+            color:     '#f59e0b',
+            bgGlow:    'rgba(245, 158, 11, 0.05)',
+            boxShadow: '0 0 10px rgba(245, 158, 11, 0.35), inset 0 0 10px rgba(245, 158, 11, 0.12)',
+            animClass: 'melee-ring',
+        };
+    }
 
     // Wizard: regular vision radius = 2 tiles
     // Ranger: enhanced vision radius = 4 tiles (chemical lantern vision radius)
@@ -38,6 +58,7 @@ export function getCrewRangeRingSpecs(selectedMember, bgStr = '', inSuperboard =
         : '0 0 16px rgba(74, 222, 128, 0.45), inset 0 0 16px rgba(74, 222, 128, 0.18)';
 
     return {
+        isMelee: false,
         isWizard,
         isRanger,
         rangeTiles,

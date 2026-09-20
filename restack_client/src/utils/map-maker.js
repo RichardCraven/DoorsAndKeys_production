@@ -1,4 +1,4 @@
-import { getForestDensityTier, getMountainDensityTier, updateTerrainAutotiles, applyForestStamp, applyMountainStamp } from './autotile-utils';
+import { applyForestStamp, applyMountainStamp } from './autotile-utils';
 
 export function MapMaker(props){
     this.tiles = [];

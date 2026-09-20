@@ -88,7 +88,8 @@ export function MonsterManager() {
             drops: [
                 { item: TIER1_POTION, percentChance: 35 },
                 { itemPool: TIER1_WEAPONS, percentChance: 25 },
-            ]
+            ],
+            aggro: true
         },
         goblin_warrior: {
             type: 'goblin_warrior',
@@ -184,7 +185,8 @@ export function MonsterManager() {
             drops: [
                 { item: TIER1_POTION, percentChance: 35 },
                 { itemPool: TIER1_WEAPONS, percentChance: 25 },
-            ]
+            ],
+            aggro: true
         },
         // ── Level 3 ──────────────────────────────────────────────────────
         skeleton: {
@@ -609,7 +611,8 @@ export function MonsterManager() {
             drops: [
                 { item: TIER1_POTION, percentChance: 35 },
                 { itemPool: TIER1_WEAPONS, percentChance: 45 },
-            ]
+            ],
+            aggro: true
         },
         // ── Level 10 ─────────────────────────────────────────────────────
         vampire: {
@@ -672,7 +675,8 @@ export function MonsterManager() {
             drops: [
                 { item: TIER2_POTION, percentChance: 35 },
                 { itemPool: TIER2_WEAPONS, percentChance: 35 },
-            ]
+            ],
+            aggro: true
         },
 
         // ── Level 11 ─────────────────────────────────────────────────────
@@ -706,7 +710,8 @@ export function MonsterManager() {
                 { item: TIER2_POTION, percentChance: 35 },
                 { itemPool: TIER2_WEAPONS, percentChance: 35 },
                 { itemPool: TIER2_WEAPONS, percentChance: 35 },
-            ]
+            ],
+            aggro: true
         },
         cyclops: {
             type: 'cyclops',
@@ -738,7 +743,8 @@ export function MonsterManager() {
                 { item: TIER2_POTION, percentChance: 35 },
                 { itemPool: TIER2_WEAPONS, percentChance: 35 },
                 { itemPool: TIER2_WEAPONS, percentChance: 35 },
-            ]
+            ],
+            aggro: true
         },
         // ── Level 12 ─────────────────────────────────────────────────────
         witch: {
@@ -925,7 +931,8 @@ export function MonsterManager() {
             drops: [
                 { item: TIER2_POTION, percentChance: 35 },
                 { itemPool: TIER3_ITEM, percentChance: 35 },
-            ]
+            ],
+            aggro: true
         },
         qlippoth: {
             type: 'qlippoth',
@@ -956,7 +963,8 @@ export function MonsterManager() {
             drops: [
                 { item: TIER1_POTION, percentChance: 35 },
                 { itemPool: TIER1_ITEM, percentChance: 35 },
-            ]
+            ],
+            aggro: true
         },
         // ── Level 19 ─────────────────────────────────────────────────────
         eidolon: {
@@ -1031,7 +1039,8 @@ export function MonsterManager() {
             drops: [
                 { item: TIER2_POTION, percentChance: 35 },
                 { itemPool: TIER3_MAGICAL, percentChance: 45 },
-            ]
+            ],
+            aggro: true
         },
         precipice_guardian: {
             type: 'precipice_guardian',
@@ -1122,7 +1131,8 @@ export function MonsterManager() {
                 { item: TIER4_POTION, percentChance: 35 },
                 { itemPool: TIER4_ITEM, percentChance: 35 },
                 { itemPool: TIER4_ITEM, percentChance: 20 },
-            ]
+            ],
+            aggro: true
         },
         dragon_egg: {
             type: 'dragon_egg',

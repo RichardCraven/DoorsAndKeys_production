@@ -39,65 +39,80 @@ export default function PvPChallengeModal({
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px'
-      }}
+      className="ambush-popup-overlay"
+      style={{ zIndex: 9999 }}
+      onClick={!isIncoming ? onClose : undefined}
     >
       <div
+        className="ambush-popup-card"
         style={{
-          width: '100%',
-          maxWidth: '420px',
-          backgroundColor: '#0a192f',
-          border: '2px solid #64ffda',
-          borderRadius: '16px',
-          boxShadow: '0 0 30px rgba(100, 255, 218, 0.35), 0 10px 40px rgba(0,0,0,0.8)',
-          padding: '28px',
-          textAlign: 'center',
-          color: '#e6f1ff',
-          fontFamily: "'Inter', sans-serif",
-          animation: 'popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+          maxWidth: '440px',
+          padding: '30px 24px',
+          borderColor: 'rgba(212, 163, 89, 0.55)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.95), 0 0 35px rgba(212, 163, 89, 0.2), inset 0 0 25px rgba(0, 0, 0, 0.8)'
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Header Icon & Title */}
-        <div style={{ fontSize: '42px', marginBottom: '10px' }}>
-          ⚔️
+        {/* Corner Brackets */}
+        <div className="card-corner top-left" />
+        <div className="card-corner top-right" />
+        <div className="card-corner bottom-left" />
+        <div className="card-corner bottom-right" />
+
+        {/* Eyebrow */}
+        <div className="ambush-eyebrow">
+          <span className="glyph">◆</span> TRIAL OF COMBAT <span className="glyph">◆</span>
         </div>
 
+        {/* Title */}
         <h3
+          className="ambush-title"
           style={{
-            fontSize: '22px',
-            fontWeight: 'bold',
-            color: '#64ffda',
-            margin: '0 0 8px 0',
-            textTransform: 'uppercase',
-            letterSpacing: '1px'
+            color: '#f5dfa8',
+            textShadow: '0 0 15px rgba(229, 181, 79, 0.5)',
+            marginBottom: '10px'
           }}
         >
-          {isIncoming ? 'PvP Challenge Received!' : 'PvP Challenge Issued'}
+          {isIncoming ? 'CHALLENGE RECEIVED' : 'CHALLENGE ISSUED'}
         </h3>
 
-        <p style={{ color: '#8892b0', fontSize: '14px', margin: '0 0 20px 0' }}>
+        {/* Diamond Divider */}
+        <div className="ambush-divider">
+          <div className="divider-line" />
+          <span className="divider-glyph">❖</span>
+          <div className="divider-line" />
+        </div>
+
+        {/* Emblem Frame */}
+        <div
+          style={{
+            width: '76px',
+            height: '76px',
+            margin: '0 auto 16px',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, #2a2012 0%, #0c0a06 100%)',
+            border: '1px solid rgba(212, 163, 89, 0.5)',
+            boxShadow: '0 0 25px rgba(229, 181, 79, 0.3), inset 0 0 12px rgba(0,0,0,0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <span style={{ fontSize: '2.2rem', color: '#f5dfa8', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.8))' }}>⚔</span>
+        </div>
+
+        {/* Subtitle / Peer Message */}
+        <div className="ambush-subtitle" style={{ marginBottom: '18px' }}>
           {isIncoming ? (
             <span>
-              <strong style={{ color: '#ffffff' }}>{peerName}</strong> has challenged your crew to a real-time battle!
+              <span className="monster-highlight">{peerName}</span> has challenged your crew to a real-time tactical duel.
             </span>
           ) : (
             <span>
-              Waiting for <strong style={{ color: '#ffffff' }}>{peerName}</strong> to accept your challenge...
+              Awaiting <span className="monster-highlight">{peerName}</span> to accept the duel challenge...
             </span>
           )}
-        </p>
+        </div>
 
         {/* Countdown Ring / Timer */}
         <div
@@ -105,16 +120,17 @@ export default function PvPChallengeModal({
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: '64px',
-            height: '64px',
+            width: '60px',
+            height: '60px',
             borderRadius: '50%',
-            backgroundColor: 'rgba(100, 255, 218, 0.1)',
-            border: `3px solid ${timeLeft <= 5 ? '#ff4d4d' : '#64ffda'}`,
-            fontSize: '24px',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            border: `2px solid ${timeLeft <= 5 ? '#ef4444' : '#d4a359'}`,
+            fontSize: '20px',
             fontWeight: 'bold',
-            color: timeLeft <= 5 ? '#ff4d4d' : '#64ffda',
-            marginBottom: '24px',
-            boxShadow: `0 0 15px ${timeLeft <= 5 ? 'rgba(255, 77, 77, 0.4)' : 'rgba(100, 255, 218, 0.3)'}`,
+            fontFamily: "'Cinzel', serif",
+            color: timeLeft <= 5 ? '#fca5a5' : '#f5dfa8',
+            marginBottom: '22px',
+            boxShadow: `0 0 16px ${timeLeft <= 5 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(212, 163, 89, 0.25)'}`,
             transition: 'all 0.3s ease'
           }}
         >
@@ -122,65 +138,47 @@ export default function PvPChallengeModal({
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
           {isIncoming ? (
             <>
               <button
+                type="button"
                 onClick={onAccept}
+                className="ambush-fight-btn"
                 style={{
                   flex: 1,
-                  padding: '12px 20px',
-                  borderRadius: '10px',
-                  backgroundColor: '#64ffda',
-                  color: '#0a192f',
-                  fontWeight: 'bold',
-                  fontSize: '15px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: '0 0 15px rgba(100, 255, 218, 0.5)',
-                  transition: 'transform 0.15s ease, backgroundColor 0.15s ease'
+                  background: 'linear-gradient(180deg, #3d2a14 0%, #1c1409 100%)',
+                  border: '1px solid rgba(229, 181, 79, 0.7)',
+                  color: '#f5dfa8',
+                  boxShadow: '0 0 16px rgba(229, 181, 79, 0.35)'
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.03)')}
-                onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1)')}
               >
-                ⚔️ Accept Battle
+                ACCEPT DUEL
               </button>
               <button
+                type="button"
                 onClick={onDecline}
+                className="ambush-fight-btn danger"
                 style={{
-                  flex: 1,
-                  padding: '12px 20px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(255, 77, 77, 0.15)',
-                  color: '#ff4d4d',
-                  fontWeight: 'bold',
-                  fontSize: '15px',
-                  border: '1px solid rgba(255, 77, 77, 0.5)',
-                  cursor: 'pointer',
-                  transition: 'transform 0.15s ease'
+                  flex: 1
                 }}
-                onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.03)')}
-                onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1)')}
               >
-                ✖ Decline
+                DECLINE
               </button>
             </>
           ) : (
             <button
+              type="button"
               onClick={onClose}
+              className="ambush-fight-btn"
               style={{
                 width: '100%',
-                padding: '12px 20px',
-                borderRadius: '10px',
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                color: '#8892b0',
-                fontWeight: 'bold',
-                fontSize: '14px',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                cursor: 'pointer'
+                background: 'linear-gradient(180deg, #1f181c 0%, #100d0e 100%)',
+                border: '1px solid rgba(212, 163, 89, 0.35)',
+                color: '#c8bda8'
               }}
             >
-              Cancel Challenge
+              CANCEL CHALLENGE
             </button>
           )}
         </div>

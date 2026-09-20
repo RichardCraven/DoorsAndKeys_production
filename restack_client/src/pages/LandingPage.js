@@ -700,6 +700,20 @@ export default function LandingPage(props) {
 
   const [pendingDeleteInstance, setPendingDeleteInstance] = useState(null);
 
+  useEffect(() => {
+    if (!pendingDeleteInstance) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setPendingDeleteInstance(null);
+      } else if (e.key === 'Enter' || e.key === 'Return') {
+        confirmDeleteInstance();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingDeleteInstance]);
+
   const handleDeleteInstance = (id, name) => {
     setPendingDeleteInstance({ id, name });
   };
@@ -985,6 +999,14 @@ export default function LandingPage(props) {
       return
     }
     if (meta.dungeonId) {
+      meta.dungeonEntered = true;
+      meta.rosterLocked = true;
+      if (!meta.lockedRoster && (Array.isArray(meta.crew) || Array.isArray(meta.alternateCrew))) {
+        const activeIds = (meta.crew || []).map(c => c && c.id).filter(Boolean);
+        const altIds = (meta.alternateCrew || []).map(c => c && c.id).filter(Boolean);
+        meta.lockedRoster = [...activeIds, ...altIds];
+      }
+      storeMeta(meta);
       setNavDungeon(true)
       return
     }
@@ -1000,6 +1022,14 @@ export default function LandingPage(props) {
     const targetDungeonObj = validDungeons.find((d) => d.id === selectedDungeonTemplateId);
     const targetDungeonName = getMeta()?.selectedDungeonTemplateName || targetDungeonObj?.name || 'Dungeon';
     recordDungeonVisit(targetDungeonName, selectedDungeonTemplateId || getMeta()?.dungeonId);
+
+    nextMeta.dungeonEntered = true;
+    nextMeta.rosterLocked = true;
+    if (Array.isArray(meta.crew) || Array.isArray(meta.alternateCrew)) {
+      const activeIds = (meta.crew || []).map(c => c && c.id).filter(Boolean);
+      const altIds = (meta.alternateCrew || []).map(c => c && c.id).filter(Boolean);
+      nextMeta.lockedRoster = [...activeIds, ...altIds];
+    }
 
     storeMeta(nextMeta);
 
@@ -1147,7 +1177,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.6.11 BETA</span>
+          <span className="logo-subtitle">v 0.6.12 BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',
@@ -1945,55 +1975,96 @@ export default function LandingPage(props) {
       )}
 
       <main className="landing-main-grid">
-        {/* Dungeon Change Warning Modal */}
+        {/* Dungeon Change Warning Modal (Esoteric Styling) */}
         {pendingDungeonSelection && (
-          <div className="crew-showcase-overlay" style={{ zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setPendingDungeonSelection(null)}>
-            <div className="crew-showcase-modal" style={{ maxWidth: '400px', textAlign: 'center', padding: '30px', margin: 'auto', backgroundColor: '#1c1917', border: '1px solid rgba(229, 181, 79, 0.3)', borderRadius: '8px', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }} onClick={(e) => e.stopPropagation()}>
-              <h3 style={{ color: '#e5b54f', fontFamily: "'Outfit', sans-serif", marginBottom: '20px', fontSize: '1.5rem', marginTop: '0', textTransform: 'uppercase', letterSpacing: '1px' }}>Warning</h3>
-              <p style={{ color: '#d6d3d1', marginBottom: '30px', lineHeight: '1.5', fontFamily: "'Inter', sans-serif", fontSize: '0.95rem' }}>
-                Choosing a new dungeon will clear all progress in the current dungeon, though the crew remains.<br /><br />
-                Are you sure you want to change dungeons?
-              </p>
-              <div style={{ display: 'flex', gap: '15px', justifyContent: 'center' }}>
+          <div
+            className="ambush-popup-overlay"
+            style={{ zIndex: 100000 }}
+            onClick={() => setPendingDungeonSelection(null)}
+          >
+            <div
+              className="ambush-popup-card"
+              style={{ maxWidth: '440px' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Esoteric Metallic Corner Brackets */}
+              <div className="card-corner top-left" />
+              <div className="card-corner top-right" />
+              <div className="card-corner bottom-left" />
+              <div className="card-corner bottom-right" />
+
+              {/* Eyebrow */}
+              <div className="ambush-eyebrow">
+                <span className="glyph">◆</span> REALM TRANSITION <span className="glyph">◆</span>
+              </div>
+
+              {/* Title */}
+              <h3 className="ambush-title" style={{ color: '#f1e7d8' }}>
+                ABANDON EXPEDITION?
+              </h3>
+
+              {/* Diamond Divider */}
+              <div className="ambush-divider">
+                <div className="divider-line" />
+                <span className="divider-glyph">❖</span>
+                <div className="divider-line" />
+              </div>
+
+              {/* Warning Emblem Frame */}
+              <div
+                style={{
+                  width: '76px',
+                  height: '76px',
+                  margin: '0 auto 16px',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle, #2a1b12 0%, #0c0a06 100%)',
+                  border: '1px solid rgba(212, 163, 89, 0.45)',
+                  boxShadow: '0 0 20px rgba(229, 181, 79, 0.25), inset 0 0 12px rgba(0,0,0,0.8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <span style={{ fontSize: '2rem', color: '#e5b54f', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.8))' }}>⚠</span>
+              </div>
+
+              {/* Subtitle Message */}
+              <div className="ambush-subtitle" style={{ marginBottom: '16px' }}>
+                Choosing a new dungeon will abandon all current dungeon progress.
+                <br />
+                <span className="monster-highlight" style={{ display: 'inline-block', marginTop: '6px' }}>
+                  Your crew and supplies will remain intact.
+                </span>
+                <br />
+                <span style={{ fontFamily: "'Cinzel', serif", fontSize: '11px', color: '#e5b54f', textTransform: 'uppercase', letterSpacing: '1.5px', marginTop: '10px', display: 'inline-block' }}>
+                  ✦ Are you certain you wish to proceed? ✦
+                </span>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', marginTop: '16px' }}>
                 <button
+                  type="button"
                   onClick={() => setPendingDungeonSelection(null)}
+                  className="ambush-fight-btn"
                   style={{
-                    padding: '10px 20px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid #78716c',
-                    color: '#a8a29e',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontFamily: "'Inter', sans-serif",
-                    fontSize: '1rem',
-                    minWidth: '100px',
-                    transition: 'all 0.2s'
+                    background: 'linear-gradient(180deg, #1f181c 0%, #100d0e 100%)',
+                    border: '1px solid rgba(212, 163, 89, 0.35)',
+                    color: '#c8bda8',
+                    minWidth: '120px'
                   }}
-                  onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'; e.currentTarget.style.color = '#fff'; }}
-                  onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.color = '#a8a29e'; }}
                 >
-                  Cancel
+                  CANCEL
                 </button>
                 <button
+                  type="button"
                   onClick={confirmDungeonChange}
+                  className="ambush-fight-btn danger"
                   style={{
-                    padding: '10px 20px',
-                    background: '#e5b54f',
-                    border: 'none',
-                    color: '#0c0a09',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontFamily: "'Inter', sans-serif",
-                    fontSize: '1rem',
-                    minWidth: '100px',
-                    transition: 'all 0.2s',
-                    boxShadow: '0 0 10px rgba(229, 181, 79, 0.3)'
+                    minWidth: '120px'
                   }}
-                  onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 0 15px rgba(229, 181, 79, 0.6)'; }}
-                  onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 0 10px rgba(229, 181, 79, 0.3)'; }}
                 >
-                  Confirm
+                  CONFIRM
                 </button>
               </div>
             </div>
@@ -2003,123 +2074,94 @@ export default function LandingPage(props) {
         {/* Delete Instance Confirmation Modal */}
         {pendingDeleteInstance && (
           <div
-            className="crew-showcase-overlay"
-            style={{
-              position: 'fixed',
-              top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.85)',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-              zIndex: 100000,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '20px'
-            }}
+            className="ambush-popup-overlay"
+            style={{ zIndex: 100000 }}
             onClick={() => setPendingDeleteInstance(null)}
           >
             <div
-              className="crew-showcase-modal"
-              style={{
-                maxWidth: '440px',
-                width: '100%',
-                textAlign: 'center',
-                padding: '28px 24px',
-                backgroundColor: '#1c1917',
-                border: '1.5px solid rgba(239, 68, 68, 0.4)',
-                borderRadius: '12px',
-                boxShadow: '0 20px 50px rgba(0,0,0,0.9), 0 0 25px rgba(239, 68, 68, 0.2)'
-              }}
+              className="ambush-popup-card"
+              style={{ maxWidth: '440px' }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>🗑️</div>
-              <h3
-                style={{
-                  color: '#ef4444',
-                  fontFamily: "'Cinzel', 'Cinzel Decorative', serif",
-                  marginBottom: '14px',
-                  fontSize: '1.35rem',
-                  marginTop: '0',
-                  textTransform: 'uppercase',
-                  letterSpacing: '1px'
-                }}
-              >
-                Delete Instance
+              {/* Esoteric Metallic Corner Brackets */}
+              <div className="card-corner top-left" />
+              <div className="card-corner top-right" />
+              <div className="card-corner bottom-left" />
+              <div className="card-corner bottom-right" />
+
+              {/* Eyebrow */}
+              <div className="ambush-eyebrow">
+                <span className="glyph">◆</span> PURGE INSTANCE <span className="glyph">◆</span>
+              </div>
+
+              {/* Title */}
+              <h3 className="ambush-title" style={{ color: '#f1e7d8' }}>
+                DELETE INSTANCE
               </h3>
-              <p
+
+              {/* Diamond Divider */}
+              <div className="ambush-divider">
+                <div className="divider-line" />
+                <span className="divider-glyph">❖</span>
+                <div className="divider-line" />
+              </div>
+
+              {/* Trash Emblem Frame */}
+              <div
                 style={{
-                  color: '#d6d3d1',
-                  marginBottom: '28px',
-                  lineHeight: '1.5',
-                  fontFamily: "'Inter', 'Outfit', sans-serif",
-                  fontSize: '0.95rem'
+                  width: '80px',
+                  height: '80px',
+                  margin: '0 auto 16px',
+                  borderRadius: '50%',
+                  background: 'radial-gradient(circle, #2a1215 0%, #0c090c 100%)',
+                  border: '1px solid rgba(212, 163, 89, 0.35)',
+                  boxShadow: '0 0 20px rgba(180, 45, 30, 0.3), inset 0 0 12px rgba(0,0,0,0.8)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
               >
+                <span style={{ fontSize: '2.2rem', color: '#e05d5d', filter: 'drop-shadow(0 0 10px rgba(224, 93, 93, 0.6))' }}>☠</span>
+              </div>
+
+              {/* Subtitle Message */}
+              <div className="ambush-subtitle" style={{ marginBottom: '16px' }}>
                 Are you sure you want to delete dungeon instance{' '}
-                <strong style={{ color: '#e5b54f', fontFamily: "'Outfit', sans-serif" }}>
-                  "{pendingDeleteInstance.name}"
-                </strong>
-                ?<br />
-                <span style={{ fontSize: '0.82rem', color: '#a8a29e', marginTop: '6px', display: 'inline-block' }}>
-                  This action cannot be undone.
+                <span className="monster-highlight">"{pendingDeleteInstance.name}"</span>?
+                <br />
+                <span style={{ fontFamily: "'Cinzel', serif", fontSize: '11px', color: '#e05d5d', textTransform: 'uppercase', letterSpacing: '1.5px', marginTop: '8px', display: 'inline-block' }}>
+                  ✦ This action cannot be undone ✦
                 </span>
-              </p>
-              <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', marginTop: '20px' }}>
                 <button
+                  type="button"
                   onClick={() => setPendingDeleteInstance(null)}
+                  className="ambush-fight-btn"
                   style={{
-                    padding: '10px 20px',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid #78716c',
-                    color: '#a8a29e',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontFamily: "'Inter', sans-serif",
-                    fontSize: '0.95rem',
-                    fontWeight: '600',
-                    minWidth: '110px',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.color = '#fff';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                    e.currentTarget.style.color = '#a8a29e';
+                    background: 'linear-gradient(180deg, #1f181c 0%, #100d0e 100%)',
+                    border: '1px solid rgba(212, 163, 89, 0.35)',
+                    color: '#bfa57b',
+                    minWidth: '110px'
                   }}
                 >
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={confirmDeleteInstance}
-                  style={{
-                    padding: '10px 20px',
-                    background: '#dc2626',
-                    border: 'none',
-                    color: '#ffffff',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontWeight: 'bold',
-                    fontFamily: "'Inter', sans-serif",
-                    fontSize: '0.95rem',
-                    minWidth: '130px',
-                    transition: 'all 0.2s',
-                    boxShadow: '0 0 12px rgba(220, 38, 38, 0.4)'
-                  }}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.transform = 'translateY(-1px)';
-                    e.currentTarget.style.boxShadow = '0 0 18px rgba(220, 38, 38, 0.7)';
-                    e.currentTarget.style.background = '#ef4444';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = '0 0 12px rgba(220, 38, 38, 0.4)';
-                    e.currentTarget.style.background = '#dc2626';
-                  }}
+                  className="ambush-fight-btn"
+                  style={{ minWidth: '160px' }}
                 >
                   Delete Instance
                 </button>
+              </div>
+
+              {/* Shortcut Hint */}
+              <div className="ambush-shortcut-hint" style={{ marginTop: '12px' }}>
+                [Enter] Confirm &nbsp;•&nbsp; [Esc] Cancel
               </div>
             </div>
           </div>

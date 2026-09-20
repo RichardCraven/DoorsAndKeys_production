@@ -2,6 +2,7 @@ import { getMeta, storeMeta, getUserId } from './session-handler';
 import { MonsterManager } from './monster-manager';
 import { REAGENT_KEYS } from './reagents';
 import { BREW_INGREDIENT_KEYS } from './brew-ingredients';
+import { getDomainExpansionIntervalMs } from './user-perks';
 
 // Gate configuration: maps closed gate types to their requirements and opened versions
 const GATE_CONFIG = {
@@ -380,6 +381,11 @@ export function BoardManager(){
         const img = tile.image || tile.contains?.image;
         const sKey = String(containsSubtype || bldg || img || containsType || (tile.contains && typeof tile.contains === 'object' ? (tile.contains.key || tile.contains.name || tile.contains.type) : '') || '').toLowerCase();
 
+        // 'hut', 'buildable_hut', and 'healing_circle' are EXPLICITLY passable
+        if (sKey.includes('hut') || sKey.includes('healing_circle')) {
+            return false;
+        }
+
         // If tile itself is empty or void or destroyed, it is not impassable
         const isEmptyTile = !tile.contains || containsType === 'empty' || containsType === 'empty_space' || containsType === 'empty space' || containsSubtype === 'empty' || containsSubtype === 'empty_space' || containsSubtype === 'empty space' || containsType === 'void' || containsSubtype === 'void';
         const isDestroyed = (tile.contains && typeof tile.contains === 'object' && (tile.contains.hp <= 0 || !!tile.contains.destroyedAt));
@@ -407,7 +413,7 @@ export function BoardManager(){
                 const aImg = aTile.image || aTile.contains?.image;
                 const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
                 const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'dream_den'];
-                if (!vendorKeys.some(k => aKey.includes(k)) && !aKey.includes('hut')) {
+                if (!vendorKeys.some(k => aKey.includes(k)) && !aKey.includes('hut') && !aKey.includes('healing_circle')) {
                     const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
                     if (!aIsDestroyed) return true;
                 }
@@ -428,7 +434,7 @@ export function BoardManager(){
                         const aBldg = aTile.building || aTile.contains?.building;
                         const aImg = aTile.image || aTile.contains?.image;
                         const aKey = String(aContainsSub || aBldg || aImg || aContainsType || '').toLowerCase();
-                        if (aKey.includes('hut')) continue;
+                        if (aKey.includes('hut') || aKey.includes('healing_circle')) continue;
 
                         const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
                         if (aIsDestroyed) continue;
@@ -467,7 +473,7 @@ export function BoardManager(){
                         const aTile = boardTiles[cId - (dRow * 15 + dCol)];
                         if (aTile && aTile !== tile) {
                             const aKey = String(aTile.contains?.subtype || aTile.building || aTile.contains?.building || aTile.contains?.type || '').toLowerCase();
-                            if (aKey.includes('hut')) continue;
+                            if (aKey.includes('hut') || aKey.includes('healing_circle')) continue;
                             const aIsDestroyed = aTile.contains && typeof aTile.contains === 'object' && (aTile.contains.hp <= 0 || !!aTile.contains.destroyedAt);
                             if (aIsDestroyed) continue;
 
@@ -499,8 +505,8 @@ export function BoardManager(){
             return false;
         }
 
-        // 'hut' and 'buildable_hut' are EXPLICITLY passable
-        if (sKey.includes('hut')) {
+        // 'hut', 'buildable_hut', and 'healing_circle' are EXPLICITLY passable
+        if (sKey.includes('hut') || sKey.includes('healing_circle')) {
             return false;
         }
 
@@ -543,9 +549,9 @@ export function BoardManager(){
             'stone_tower', 'buildable_stone_tower',
             'storage', 'buildable_storage',
             'temple', 'buildable_temple',
-            'larder', 'sawmill', 'lumber_mill', 'ore_mine', 'slate_mine',
-            'dust_collector', 'fungal_nursery', 'cultivation_vat',
-            'domain_monolith', 'dark_domain_monolith', 'domain_node', 'dark_domain_node',
+            'larder', 'pocket_larder', 'sawmill', 'pocket_sawmill', 'lumber_mill', 'pocket_lumber_mill', 'ore_mine', 'pocket_ore_mine', 'pocket_mine', 'slate_mine', 'pocket_slate_mine',
+            'dust_collector', 'pocket_dust_collector', 'fungal_nursery', 'pocket_fungal_nursery', 'cultivation_vat', 'pocket_cultivation_vat',
+            'domain_monolith', 'pocket_domain_monolith', 'dark_domain_monolith', 'pocket_dark_domain_monolith', 'domain_node', 'pocket_domain_node', 'dark_domain_node', 'pocket_dark_domain_node',
             'infernal_tower', 'infernal_pit', 'locus', 'buildable_locus', 'frozen_locus', 'emerald_locus', 'cosmic_locus',
             'outpost_tower', 'buildable_outpost_tower'
         ];
@@ -1026,7 +1032,7 @@ export function BoardManager(){
             const cSub = cObj?.subtype || '';
             const bldg = t.building || cObj?.building || '';
             const sKey = String(cSub || bldg || (cType !== 'generator' && cType !== 'building' ? cType : '')).toLowerCase();
-            const isSingle = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('hut') || sKey.includes('farm') || sKey.includes('house');
+            const isSingle = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('hut') || sKey.includes('farm') || sKey.includes('house') || sKey.includes('manor') || sKey.includes('estate') || sKey.includes('town') || sKey.includes('windmill');
 
             if (isSingle) {
                 if (cObj) {
@@ -1091,10 +1097,13 @@ export function BoardManager(){
 
             const isSingleTile = sKey.includes('domain_node') || sKey.includes('dark_domain_node') || sKey.includes('node') || sKey.includes('earthen_fort') || sKey.includes('outpost') || sKey.includes('observer') || sKey.includes('hut') || sKey.includes('farm') || sKey.includes('house');
             const is2x2Structure = !isSingleTile && (
-                sKey === 'domain_monolith' || sKey === 'dark_domain_monolith' || sKey === 'war_camp' || sKey === 'war_fort' ||
-                sKey === 'alchemist' || sKey === 'merchant' || sKey === 'cultivation_vat' || sKey === 'dust_collector' ||
-                sKey === 'larder' || sKey === 'sawmill' || sKey === 'lumber_mill' || sKey === 'ore_mine' || sKey === 'slate_mine' ||
-                sKey === 'fungal_nursery' || sKey === 'dream_den' || sKey === 'dream den' || sKey.includes('dream_den') || sKey.includes('dream den') || (sKey.includes('monolith') && !sKey.includes('shrine')) ||
+                sKey === 'healing_circle' || sKey === 'pocket_healing_circle' || sKey.includes('healing_circle') ||
+                sKey === 'domain_monolith' || sKey === 'dark_domain_monolith' || sKey === 'pocket_domain_monolith' || sKey === 'pocket_dark_domain_monolith' ||
+                sKey === 'war_camp' || sKey === 'war_fort' || sKey === 'alchemist' || sKey === 'merchant' ||
+                sKey === 'cultivation_vat' || sKey === 'pocket_cultivation_vat' || sKey === 'dust_collector' || sKey === 'pocket_dust_collector' ||
+                sKey === 'larder' || sKey === 'pocket_larder' || sKey === 'sawmill' || sKey === 'pocket_sawmill' || sKey === 'lumber_mill' || sKey === 'pocket_lumber_mill' ||
+                sKey === 'ore_mine' || sKey === 'pocket_ore_mine' || sKey === 'mine' || sKey === 'pocket_mine' || sKey === 'slate_mine' || sKey === 'pocket_slate_mine' ||
+                sKey === 'fungal_nursery' || sKey === 'pocket_fungal_nursery' || sKey === 'dream_den' || sKey === 'dream den' || sKey.includes('dream_den') || sKey.includes('dream den') || (sKey.includes('monolith') && !sKey.includes('shrine')) ||
                 sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2')
             );
             if (is2x2Structure) {
@@ -2538,10 +2547,17 @@ export function BoardManager(){
             ''
         ).toLowerCase();
 
-        if (type === 'dream_den' || type === 'dream den' || rawBldg.includes('dream_den') || rawBldg.includes('dream den')) {
+        const isVendorTile = type === 'vendor' || type === 'merchant' || type === 'alchemist' || type === 'fungal_nursery' || type === 'dream_den' || type === 'dream den' ||
+            ['merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].some(k => rawBldg.includes(k)) ||
+            (cObj && (cObj.vendorGroupId || cObj.vendorCell));
+
+        if (isVendorTile) {
+            const vendorType = (rawBldg.includes('alchemist') || subtype === 'alchemist' || type === 'alchemist') ? 'alchemist' :
+                               (rawBldg.includes('fungal_nursery') || subtype === 'fungal_nursery' || type === 'fungal_nursery') ? 'fungal_nursery' :
+                               (rawBldg.includes('dream_den') || rawBldg.includes('dream den') || subtype === 'dream_den' || type === 'dream_den') ? 'dream_den' : 'merchant';
             try {
                 if (this.triggerVendorEncounter) {
-                    this.triggerVendorEncounter('dream_den', destinationTile);
+                    this.triggerVendorEncounter(vendorType, destinationTile);
                 }
             } catch (e) {}
             return 'vendor';
@@ -2709,22 +2725,22 @@ export function BoardManager(){
             break;
             case 'dream den':
             case 'dream_den':
-                try {
-                    if (this.triggerVendorEncounter) {
-                        this.triggerVendorEncounter('dream_den', destinationTile);
-                    }
-                } catch (e) {}
-                return 'vendor';
-            break;
-            case 'narrative':
-                return 'narrative';
+            case 'merchant':
+            case 'alchemist':
+            case 'fungal_nursery':
             case 'vendor':
                 try {
+                    const vType = (type === 'alchemist' || subtype === 'alchemist') ? 'alchemist' :
+                                  (type === 'fungal_nursery' || subtype === 'fungal_nursery') ? 'fungal_nursery' :
+                                  (type === 'dream_den' || type === 'dream den' || subtype === 'dream_den') ? 'dream_den' :
+                                  (subtype || 'merchant');
                     if (this.triggerVendorEncounter) {
-                        this.triggerVendorEncounter(subtype, destinationTile);
+                        this.triggerVendorEncounter(vType, destinationTile);
                     }
                 } catch (e) {}
                 return 'vendor';
+            case 'narrative':
+                return 'narrative';
             case 'gold':
                 let factor, num = Math.random();
                 if(num > .85){
@@ -3527,7 +3543,7 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3546,6 +3562,15 @@ export function BoardManager(){
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
+
+            const col = this.playerTile.location[1] - 15;
+            const targetTileIdx = 14 * 15 + col;
+            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
+            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+
             this.moveBoardUp();
             return;
         }
@@ -3562,7 +3587,7 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3581,6 +3606,15 @@ export function BoardManager(){
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
+
+            const col = this.playerTile.location[1] - 15;
+            const targetTileIdx = 0 * 15 + col;
+            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
+            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+
             this.moveBoardDown();
             return;
         }
@@ -3597,7 +3631,7 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3616,6 +3650,15 @@ export function BoardManager(){
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
+
+            const row = this.playerTile.location[0] - 15;
+            const targetTileIdx = row * 15 + 14;
+            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
+            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+
             this.moveBoardLeft();
             return;
         }
@@ -3632,7 +3675,7 @@ export function BoardManager(){
                 return;
             }
 
-            if (!this.isConnectingPathTile(currentTile) && this.isVoidTile(currentTile)) {
+            if (!this.isConnectingPathTile(currentTile)) {
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
@@ -3651,6 +3694,15 @@ export function BoardManager(){
                 try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
                 return;
             }
+
+            const row = this.playerTile.location[0] - 15;
+            const targetTileIdx = row * 15 + 0;
+            const targetTile = targetBoard.tiles && targetBoard.tiles[targetTileIdx];
+            if (targetTile && this.isVoidTile(targetTile) && !this.isConnectingPathTile(targetTile)) {
+                try { if (this.messaging) this.messaging('A wall blocks your way.'); } catch (e) {}
+                return;
+            }
+
             this.moveBoardRight();
             return;
         }
@@ -3947,18 +3999,84 @@ export function BoardManager(){
             }
         } catch (e) {}
 
+        const playerMonolithAreas = [];
+        try {
+            const currentUserId = typeof getUserId === 'function' ? getUserId() : null;
+            const meta = getMeta() || {};
+            const seenAnchors = new Set();
+            if (this.tiles) {
+                for (let t of this.tiles) {
+                    if (!t) continue;
+                    let gData = t.generatorData || (t.contains && t.contains.generatorData);
+                    if (!gData && this.currentLevel && this.currentBoard) {
+                        const tileKey = `${this.currentLevel.id}_${this.currentBoard.id}_${t.id}`;
+                        if (meta.activatedGenerators && meta.activatedGenerators[tileKey]) {
+                            gData = meta.activatedGenerators[tileKey];
+                        }
+                    }
+                    if (!gData || !gData.activated) continue;
+                    const ct = typeof t.contains === 'string' ? t.contains : (t.contains && t.contains.type);
+                    const k = String((gData && gData.key) || t.key || t.type || t.subtype || (t.contains && t.contains.subtype) || ct || t.building || (t.contains && t.contains.building) || '').toLowerCase();
+                    if (k.includes('domain_monolith') || k.includes('domain_node')) {
+                        const aId = t.vendorAnchorId ?? t.contains?.vendorAnchorId ?? t.id;
+                        if (seenAnchors.has(aId)) continue;
+                        seenAnchors.add(aId);
+
+                        const isHostile = t.affiliation === 'hostile' || t.contains?.affiliation === 'hostile' || t.isHostile || t.contains?.isHostile || (gData && gData.affiliation === 'hostile');
+                        let isOwner = false;
+                        if (isHostile) {
+                            isOwner = false;
+                        } else if (t.ownedByPlayer || t.contains?.ownedByPlayer || gData.ownedByPlayer) {
+                            isOwner = true;
+                        } else if (gData.ownerId && gData.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest' && gData.ownerId === currentUserId) {
+                            isOwner = true;
+                        } else if (!gData.ownerId) {
+                            isOwner = gData.owned !== false;
+                        }
+                        if (isOwner) {
+                            const [r, c] = this.getCoordinatesFromIndex(t.id);
+                            const elapsed = Math.max(0, Date.now() - (gData.activatedAt || Date.now()));
+                            let expansionMs = 12 * 60 * 60 * 1000;
+                            try {
+                                if (typeof getDomainExpansionIntervalMs === 'function') {
+                                    expansionMs = getDomainExpansionIntervalMs();
+                                }
+                            } catch (e) {}
+                            const calculatedRadius = 1 + Math.floor(elapsed / expansionMs);
+                            const radius = Math.min(16, calculatedRadius);
+                            const isSingle = k.includes('domain_node');
+                            playerMonolithAreas.push({
+                                minX: r,
+                                maxX: isSingle ? r : r + 1,
+                                minY: c,
+                                maxY: isSingle ? c : c + 1,
+                                radius
+                            });
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+
         let hasTerritorialLantern = false;
         try {
             const inv = (typeof this.getCurrentInventory === 'function' && this.getCurrentInventory()) || (getMeta()?.inventory) || [];
-            hasTerritorialLantern = inv.some(item => item && (
-                item.name === 'territorial lantern' ||
-                item.name === 'chemical lantern' ||
-                item.name === 'lantern' ||
-                item.type === 'lantern' ||
-                item._im_key === 'territorial_lantern' ||
-                item._im_key === 'chemical_lantern' ||
-                (typeof item.name === 'string' && item.name.toLowerCase().includes('lantern'))
-            ));
+            hasTerritorialLantern = inv.some(item => {
+                if (!item || typeof item !== 'object') return false;
+                const name = String(item.name || '').toLowerCase();
+                const key = String(item._im_key || item.key || item.id || item.icon || '').toLowerCase();
+                const type = String(item.type || '').toLowerCase();
+                return (
+                    name === 'territorial lantern' ||
+                    name === 'territory lantern' ||
+                    key === 'territorial_lantern' ||
+                    key === 'territory_lantern' ||
+                    type === 'territorial_lantern' ||
+                    type === 'territory_lantern' ||
+                    (name.includes('territor') && name.includes('lantern')) ||
+                    (key.includes('territor') && key.includes('lantern'))
+                );
+            });
         } catch(e) {}
         
         const tileClanMemo = new Map();
@@ -4094,6 +4212,25 @@ export function BoardManager(){
                     }
                 }
 
+                let inMonolithTerritory = e.territory === 'player' || (e.contains && e.contains.territory === 'player');
+                if (!inMonolithTerritory && playerMonolithAreas.length > 0) {
+                    for (const m of playerMonolithAreas) {
+                        let dx = 0;
+                        if (coords[0] < m.minX) dx = m.minX - coords[0];
+                        else if (coords[0] > m.maxX) dx = coords[0] - m.maxX;
+
+                        let dy = 0;
+                        if (coords[1] < m.minY) dy = m.minY - coords[1];
+                        else if (coords[1] > m.maxY) dy = coords[1] - m.maxY;
+
+                        if (Math.max(dx, dy) <= m.radius) {
+                            inMonolithTerritory = true;
+                            e.territory = 'player';
+                            break;
+                        }
+                    }
+                }
+
                 const inObsPlatformVision = observerPlatforms.length > 0 && observerPlatforms.some(op => {
                     if (!this.inSuperboard) {
                         return true;
@@ -4104,7 +4241,7 @@ export function BoardManager(){
                 });
 
                 const isVoid = this.isVoidTile(e);
-                const isRevealed = inLanternTerritory || inObsPlatformVision || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
+                const isRevealed = inMonolithTerritory || inLanternTerritory || inObsPlatformVision || revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)) || inBreadcrumbPassiveReveal;
 
                 if (isRevealed && !isVoid) {
 
@@ -4134,7 +4271,7 @@ export function BoardManager(){
                     e.image = this.getImageForContains(e.contains, e);
                     e.borders = this.normalizeFogBorders(persistedBorders);
 
-                    if ((inObsPlatformVision && !this.inSuperboard) || (observerPlatforms.length > 0 && !this.inSuperboard)) {
+                    if ((inObsPlatformVision && !this.inSuperboard) || (observerPlatforms.length > 0 && !this.inSuperboard) || inMonolithTerritory) {
                         e.partialObscured = false;
                     } else if (inBreadcrumbPassiveReveal && !(revealByDebugPygmies || inScoutedArea || inRatRevealArea || (manhattan <= fogRadius && visibleTileIds.has(e.id)))) {
                         e.partialObscured = true;

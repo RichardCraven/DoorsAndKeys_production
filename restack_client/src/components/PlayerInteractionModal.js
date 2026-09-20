@@ -40,144 +40,115 @@ export default function PlayerInteractionModal({
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.75)',
-        backdropFilter: 'blur(8px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px'
-      }}
+      className="ambush-popup-overlay"
+      style={{ zIndex: 9999 }}
       onClick={onClose}
     >
       <div
-        onClick={(e) => e.stopPropagation()}
+        className="ambush-popup-card"
         style={{
-          width: '100%',
-          maxWidth: '420px',
-          backgroundColor: '#0a192f',
-          border: '2px solid #64ffda',
-          borderRadius: '16px',
-          boxShadow: '0 0 35px rgba(100, 255, 218, 0.35), 0 10px 40px rgba(0,0,0,0.8)',
-          padding: '28px',
-          boxSizing: 'border-box',
-          textAlign: 'center',
-          color: '#e6f1ff',
-          fontFamily: "'Inter', sans-serif"
+          maxWidth: '440px',
+          padding: '30px 24px',
+          borderColor: 'rgba(212, 163, 89, 0.55)',
+          boxShadow: '0 20px 60px rgba(0, 0, 0, 0.95), 0 0 35px rgba(212, 163, 89, 0.2), inset 0 0 25px rgba(0, 0, 0, 0.8)'
         }}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* Peer Avatar & Badge Header */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '20px' }}>
+        {/* Metallic Corner Brackets */}
+        <div className="card-corner top-left" />
+        <div className="card-corner top-right" />
+        <div className="card-corner bottom-left" />
+        <div className="card-corner bottom-right" />
+
+        {/* Eyebrow */}
+        <div className="ambush-eyebrow">
+          <span className="glyph">◆</span> ENCOUNTER <span className="glyph">◆</span>
+        </div>
+
+        {/* Title */}
+        <h3
+          className="ambush-title"
+          style={{
+            color: '#f5dfa8',
+            textShadow: '0 0 15px rgba(229, 181, 79, 0.5)',
+            marginBottom: '4px'
+          }}
+        >
+          {username}
+        </h3>
+
+        {/* Diamond Divider */}
+        <div className="ambush-divider">
+          <div className="divider-line" />
+          <span className="divider-glyph">❖</span>
+          <div className="divider-line" />
+        </div>
+
+        {/* Peer Avatar */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '16px' }}>
           <div
             style={{
               width: '84px',
               height: '84px',
               borderRadius: '50%',
-              border: '3px solid #64ffda',
-              boxShadow: '0 0 20px rgba(100, 255, 218, 0.5)',
+              border: '2px solid rgba(212, 163, 89, 0.65)',
+              boxShadow: '0 0 25px rgba(229, 181, 79, 0.3), inset 0 0 12px rgba(0, 0, 0, 0.8)',
               backgroundImage: bgImageString,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
-              marginBottom: '12px'
+              marginBottom: '8px'
             }}
           />
-          <h3
-            style={{
-              fontSize: '22px',
-              fontWeight: 'bold',
-              color: '#ffffff',
-              margin: '0 0 4px 0',
-              letterSpacing: '0.5px'
-            }}
-          >
-            {username}
-          </h3>
-          <span style={{ color: '#64ffda', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '1px' }}>
-            {unitName}
+          <span style={{ color: '#d4a359', fontFamily: "'Cinzel', serif", fontSize: '12px', textTransform: 'uppercase', letterSpacing: '2px' }}>
+            ✦ {unitName} ✦
           </span>
         </div>
 
-        <p style={{ color: '#8892b0', fontSize: '14px', margin: '0 0 24px 0', lineHeight: '1.4' }}>
-          You stand face-to-face with <strong style={{ color: '#fff' }}>{username}</strong>. Choose an interaction:
-        </p>
+        <div className="ambush-subtitle" style={{ marginBottom: '20px' }}>
+          You encounter <span className="monster-highlight">{username}</span> across the dimensional weave. Choose an interaction:
+        </div>
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <button
+            type="button"
             onClick={onInviteChat}
+            className="ambush-fight-btn"
             style={{
               width: '100%',
-              padding: '14px 20px',
-              borderRadius: '10px',
-              backgroundColor: '#64ffda',
-              color: '#0a192f',
-              fontWeight: 'bold',
-              fontSize: '15px',
-              border: 'none',
-              cursor: 'pointer',
-              boxShadow: '0 0 15px rgba(100, 255, 218, 0.4)',
-              boxSizing: 'border-box',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              transition: 'transform 0.15s ease'
+              background: 'linear-gradient(180deg, #2a2016 0%, #151009 100%)',
+              border: '1px solid rgba(229, 181, 79, 0.7)',
+              color: '#f5dfa8',
+              boxShadow: '0 0 14px rgba(229, 181, 79, 0.25)'
             }}
-            onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-            onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1)')}
           >
-            💬 Invite to Chat
+            ✦ INITIATE COMMUNION / CHAT
           </button>
 
           <button
+            type="button"
             onClick={onInviteDuel}
+            className="ambush-fight-btn danger"
             style={{
-              width: '100%',
-              padding: '14px 20px',
-              borderRadius: '10px',
-              backgroundColor: 'rgba(255, 77, 77, 0.2)',
-              color: '#ff4d4d',
-              fontWeight: 'bold',
-              fontSize: '15px',
-              border: '2px solid rgba(255, 77, 77, 0.6)',
-              cursor: 'pointer',
-              boxShadow: '0 0 15px rgba(255, 77, 77, 0.2)',
-              boxSizing: 'border-box',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              transition: 'transform 0.15s ease'
+              width: '100%'
             }}
-            onMouseOver={(e) => (e.currentTarget.style.transform = 'scale(1.02)')}
-            onMouseOut={(e) => (e.currentTarget.style.transform = 'scale(1)')}
           >
-            ⚔️ Challenge to Duel
+            ⚔ CHALLENGE TO DUEL
           </button>
 
           <button
+            type="button"
             onClick={onClose}
+            className="ambush-fight-btn"
             style={{
               width: '100%',
-              padding: '12px 20px',
-              borderRadius: '10px',
-              backgroundColor: 'rgba(255, 255, 255, 0.05)',
-              color: '#8892b0',
-              fontWeight: '600',
-              fontSize: '14px',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              cursor: 'pointer',
-              marginTop: '4px',
-              boxSizing: 'border-box'
+              background: 'linear-gradient(180deg, #1f181c 0%, #100d0e 100%)',
+              border: '1px solid rgba(212, 163, 89, 0.35)',
+              color: '#c8bda8',
+              marginTop: '4px'
             }}
           >
-            Cancel
+            DEPART
           </button>
         </div>
       </div>

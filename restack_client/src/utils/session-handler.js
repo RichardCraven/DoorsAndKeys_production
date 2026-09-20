@@ -55,7 +55,7 @@ function sanitizeMeta(metadata){
     const safe = {};
     // Copy only small, commonly useful properties. Avoid large nested objects
     // like full dungeon boards, tile arrays, or other heavy structures.
-    const whitelistedKeys = ['skipIntro','dungeonId','boardIndex','tileIndex','crew','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','deathEnemyIndex','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp','mailbox','dungeonHistory','welcomeMailSent','leftExpanded','rightExpanded','hasEnteredFirstDungeon','hasSeenSidePanelsDelay','food','resolve','lastFoodExpiryCheck','pocketResources','pocketPlayerBuildings'];
+    const whitelistedKeys = ['skipIntro','dungeonId','boardIndex','tileIndex','crew','alternateCrew','lockedRoster','rosterLocked','dungeonEntered','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','deathEnemyIndex','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp','mailbox','dungeonHistory','welcomeMailSent','leftExpanded','rightExpanded','hasEnteredFirstDungeon','hasSeenSidePanelsDelay','food','resolve','lastFoodExpiryCheck','pocketResources','pocketPlayerBuildings'];
     for (const k of whitelistedKeys) {
         if (k in metadata) safe[k] = metadata[k];
     }
@@ -191,6 +191,18 @@ function resetDungeonInstanceMeta(meta = null, inventoryManager = null) {
     delete m.failedMonolithActivations;
     delete m.pocketPlayerBuildings;
     delete m.pocketResources;
+    delete m.discoveredGenerators;
+    delete m.discoveredPOIs;
+    delete m.discoveredVendors;
+    delete m.discoveredAlchemist;
+    delete m.minimapIndicators;
+    delete m.breadcrumbTrail;
+    delete m.activatedLoci;
+    delete m.activatedLocusRecords;
+    delete m.rosterLocked;
+    delete m.dungeonEntered;
+    delete m.lockedRoster;
+    delete m.alternateCrew;
 
     // Reset instance resources to clean initial state
     m.food = 55;
