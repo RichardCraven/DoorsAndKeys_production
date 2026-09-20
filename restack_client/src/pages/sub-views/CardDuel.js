@@ -1,6 +1,7 @@
 import React from 'react';
 import * as images from '../../utils/images';
 import '../../styles/CardDuel.css';
+import '../../styles/dungeon-board.scss';
 import { hasUserPerk } from '../../utils/user-perks';
 import { getMeta } from '../../utils/session-handler';
 import cardManager from '../../utils/card-manager';
@@ -624,8 +625,9 @@ export default class CardDuel extends React.Component {
     }
 
     addLog = (msg) => {
+        if (this._isMounted === false) return;
         this.setState(prev => ({
-            log: [...prev.log, msg]
+            log: [...(prev.log || []), msg]
         }));
     }
 
@@ -681,6 +683,51 @@ export default class CardDuel extends React.Component {
         this.advanceToNextTurn();
     }
 
+    // ─── Option D: CATACLYSM ───────────────────────────────────────────────────
+    // After turn 12, at the start of each reaper turn, all player units sitting in
+    // reaper territory (rows 0-1) take 1 automatic damage (back-lane burn).
+    applyCataclysmDamage = (grid, playerDiscard, reaperDiscard) => {
+        const { territory } = this.state;
+        const processedIds = new Set();
+        let burnCount = 0;
+        const updatedGrid = { ...grid };
+        const updatedPlayerDiscard = [...playerDiscard];
+
+        Object.entries(updatedGrid).forEach(([key, unit]) => {
+            if (!unit || unit.owner !== 'player' || unit.hp <= 0 || processedIds.has(unit.id)) return;
+            // Only burn units in reaper territory (rows 0-1)
+            if (territory[key] !== 'reaper') return;
+            processedIds.add(unit.id);
+            unit.hp -= 1;
+            burnCount++;
+            this.addLog(`🔥 CATACLYSM! Your ${unit.name} takes 1 burn damage in enemy territory (${unit.hp}/${unit.maxHp} HP remaining).`);
+            if (unit.hp <= 0) {
+                unit.hp = 0;
+                // Remove from grid
+                Object.keys(updatedGrid).forEach(k => {
+                    if (updatedGrid[k] && updatedGrid[k].id === unit.id) {
+                        delete updatedGrid[k];
+                    }
+                });
+                const resetUnit = {
+                    ...unit,
+                    hp: unit.maxHp || unit.startingHp || unit.cost || 1,
+                    anchorRow: undefined,
+                    anchorCol: undefined,
+                    occupiedKeys: undefined
+                };
+                updatedPlayerDiscard.push(resetUnit);
+                this.addLog(`☠️ CATACLYSM! Your ${unit.name} was consumed by the back-lane flames!`);
+            }
+        });
+
+        if (burnCount > 0) {
+            this.addLog(`🔥 Cataclysm: ${burnCount} of your unit(s) burned in reaper territory!`);
+        }
+
+        return { grid: updatedGrid, playerDiscard: updatedPlayerDiscard };
+    }
+
     advanceToNextTurn = () => {
         if (this.state.gameOver) return;
 
@@ -720,14 +767,26 @@ export default class CardDuel extends React.Component {
 
         this.cleanDeadUnitsFromGrid(updatedGrid);
 
+        // ─── Option D: Apply Cataclysm burn on Reaper turns after turn 12 ───
+        let updatedPlayerDiscard = [...this.state.playerDiscard];
+        let updatedReaperDiscard = [...this.state.reaperDiscard];
+        if (nextTurnOwner === 'reaper' && nextTurnNum >= 12) {
+            const catResult = this.applyCataclysmDamage(updatedGrid, updatedPlayerDiscard, updatedReaperDiscard);
+            Object.assign(updatedGrid, catResult.grid);
+            // Sync deletions from catResult.grid back to updatedGrid
+            Object.keys(updatedGrid).forEach(k => {
+                if (!catResult.grid[k]) delete updatedGrid[k];
+            });
+            updatedPlayerDiscard = catResult.playerDiscard;
+        }
+
         // Draw card for active player
         let updatedPlayerDeck = [...this.state.playerDeck];
         let updatedPlayerHand = [...this.state.playerHand];
-        let updatedPlayerDiscard = [...this.state.playerDiscard];
+        // Note: updatedPlayerDiscard and updatedReaperDiscard already declared above (Cataclysm block)
 
         let updatedReaperDeck = [...this.state.reaperDeck];
         let updatedReaperHand = [...this.state.reaperHand];
-        let updatedReaperDiscard = [...this.state.reaperDiscard];
 
         if (nextTurnOwner === 'player') {
             const res = this.drawCards('player', 1, updatedPlayerDeck, updatedPlayerDiscard, updatedPlayerHand);
@@ -821,15 +880,52 @@ export default class CardDuel extends React.Component {
 
             if (deck.length > 0) {
                 const drawn = deck.shift();
-                hand.push(drawn);
-                drawnCards.push(drawn);
+                const drawnCard = {
+                    ...drawn,
+                    isNewlyDealt: owner === 'player',
+                    dealtIndex: i
+                };
+                hand.push(drawnCard);
+                drawnCards.push(drawnCard);
             }
         }
 
         return { deck, discard, hand, drawnCards };
     }
 
-    // ─── Tactical Target Calculation ──────────────────────────────────────────
+    // ─── Tactical Target Calculation & Arc Paths ──────────────────────────────
+    calculateArcPath = (startX, startY, targetX, targetY) => {
+        const dx = targetX - startX;
+        const dy = targetY - startY;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1) return '';
+
+        const midX = (startX + targetX) / 2;
+        const midY = (startY + targetY) / 2;
+
+        let nx = -dy / dist;
+        let ny = dx / dist;
+
+        // Ensure the arc bows upward / outward in screen space (-Y is up)
+        if (ny > 0) {
+            nx = -nx;
+            ny = -ny;
+        } else if (ny === 0) {
+            // Pure vertical movement (dx === 0)
+            // Bow slightly right when moving up (North), slightly left when moving down (South)
+            nx = dy < 0 ? 0.75 : -0.75;
+            ny = -0.3;
+        }
+
+        // Distance-scaled bow curvature
+        const bow = Math.min(45, Math.max(18, dist * 0.22));
+
+        const ctrlX = midX + nx * bow;
+        const ctrlY = midY + ny * bow;
+
+        return `M ${startX} ${startY} Q ${ctrlX} ${ctrlY} ${targetX} ${targetY}`;
+    };
+
     getValidTargetTiles = (unit) => {
         if (!unit || unit.anchorRow === undefined) return { moves: [], attacks: [], heroAttack: false };
         const { grid, currentTurn, gameOver, isAiThinking } = this.state;
@@ -842,14 +938,20 @@ export default class CardDuel extends React.Component {
         const attacks = [];
         let heroAttack = false;
 
-        const isRanger = unit.isRanger || (unit.memberType && unit.memberType.toLowerCase().includes('ranger')) || unit.type === 'ranger';
+        const isRanger = !!(unit.isRanger || (unit.memberType && unit.memberType.toLowerCase().includes('ranger')) || unit.type === 'ranger');
+        const isWizard = !!(unit.isWizard || (unit.memberType && unit.memberType.toLowerCase().includes('wizard')) || unit.type === 'wizard' || (unit.name && unit.name.toLowerCase().includes('wizard')));
 
-        const offsets = [
+        const unitKeys = Array.isArray(unit.occupiedKeys) && unit.occupiedKeys.length > 0
+            ? unit.occupiedKeys
+            : [`${r}_${c}`];
+
+        // 1-space adjacent empty slots are valid moves
+        const moveOffsets = [
             [-1, 0], [1, 0], [0, -1], [0, 1],
             [-1, -1], [-1, 1], [1, -1], [1, 1]
         ];
 
-        offsets.forEach(([dr, dc]) => {
+        moveOffsets.forEach(([dr, dc]) => {
             const nr = r + dr;
             const nc = c + dc;
             if (nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4) {
@@ -857,22 +959,77 @@ export default class CardDuel extends React.Component {
                 const targetUnit = grid[key];
                 if (!targetUnit) {
                     moves.push(key);
-                } else if (targetUnit.owner !== unit.owner) {
-                    attacks.push(key);
                 }
             }
         });
 
-        // Ranger Ranged Ability: Can shoot over friendly unit 2 spaces away in column
-        if (isRanger) {
-            const forwardRow = unit.owner === 'player' ? r - 2 : r + 2;
-            if (forwardRow >= 0 && forwardRow <= 4) {
-                const rangedKey = `${forwardRow}_${c}`;
-                const targetUnit = grid[rangedKey];
-                if (targetUnit && targetUnit.owner !== unit.owner && !attacks.includes(rangedKey)) {
-                    attacks.push(rangedKey);
-                }
+        // Tactical Attack target offsets:
+        // Most units can only attack directly in front of them or to the side.
+        // Diagonal attacks are a special ability limited to the wizard.
+        const attackOffsets = [];
+        if (unit.owner === 'player') {
+            // Directly in front (row - 1)
+            attackOffsets.push([-1, 0]);
+            // To the side (left/right)
+            attackOffsets.push([0, -1], [0, 1]);
+            // Wizard special ability: attack diagonally (NE and NW)
+            if (isWizard) {
+                attackOffsets.push([-1, -1], [-1, 1]);
             }
+        } else {
+            // Directly in front for reaper (row + 1)
+            attackOffsets.push([1, 0]);
+            // To the side (left/right)
+            attackOffsets.push([0, -1], [0, 1]);
+            // Wizard special ability: attack diagonally (SE and SW)
+            if (isWizard) {
+                attackOffsets.push([1, -1], [1, 1]);
+            }
+        }
+
+        unitKeys.forEach(key => {
+            const [ur, uc] = key.split('_').map(Number);
+            attackOffsets.forEach(([dr, dc]) => {
+                const nr = ur + dr;
+                const nc = uc + dc;
+                if (nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4) {
+                    const targetKey = `${nr}_${nc}`;
+                    const targetUnit = grid[targetKey];
+                    if (targetUnit && targetUnit.owner !== unit.owner) {
+                        const targetKeys = Array.isArray(targetUnit.occupiedKeys) && targetUnit.occupiedKeys.length > 0
+                            ? targetUnit.occupiedKeys
+                            : [targetKey];
+                        targetKeys.forEach(tk => {
+                            if (!attacks.includes(tk)) attacks.push(tk);
+                        });
+                    }
+                }
+            });
+        });
+
+        // Ranger Ranged Ability: Can shoot over units to hit the nearest enemy in column
+        if (isRanger) {
+            unitKeys.forEach(key => {
+                const [ur, uc] = key.split('_').map(Number);
+                const step = unit.owner === 'player' ? -1 : 1;
+                for (let dist = 1; dist <= 4; dist++) {
+                    const checkR = ur + step * dist;
+                    if (checkR < 0 || checkR > 4) break;
+                    const checkKey = `${checkR}_${uc}`;
+                    const targetUnit = grid[checkKey];
+                    if (targetUnit) {
+                        if (targetUnit.owner !== unit.owner) {
+                            const targetKeys = Array.isArray(targetUnit.occupiedKeys) && targetUnit.occupiedKeys.length > 0
+                                ? targetUnit.occupiedKeys
+                                : [checkKey];
+                            targetKeys.forEach(tk => {
+                                if (!attacks.includes(tk)) attacks.push(tk);
+                            });
+                            break; // Stop at nearest enemy in column
+                        }
+                    }
+                }
+            });
         }
 
         if (unit.owner === 'player' && r === 0) {
@@ -1160,14 +1317,23 @@ export default class CardDuel extends React.Component {
                 ? u.occupiedKeys
                 : [`${r}_${c}`];
 
-            const offsets = [
-                [1, 0], [1, -1], [1, 1], [0, -1], [0, 1], [-1, 0], [-1, -1], [-1, 1]
+            const isWizard = !!(u.isWizard || (u.memberType && u.memberType.toLowerCase().includes('wizard')) || u.type === 'wizard' || (u.name && u.name.toLowerCase().includes('wizard')));
+
+            // Most units can only attack directly in front of them or to the side.
+            // Diagonal attacks are a special ability limited to the wizard.
+            const attackOffsets = [
+                [1, 0],   // Directly in front (row + 1)
+                [0, -1],  // Left side
+                [0, 1]    // Right side
             ];
+            if (isWizard) {
+                attackOffsets.push([1, -1], [1, 1]); // Diagonals
+            }
 
             let targetEnemy = null;
             for (const key of unitKeys) {
                 const [ur, uc] = key.split('_').map(Number);
-                for (const [dr, dc] of offsets) {
+                for (const [dr, dc] of attackOffsets) {
                     const nr = ur + dr;
                     const nc = uc + dc;
                     if (nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4) {
@@ -1189,13 +1355,66 @@ export default class CardDuel extends React.Component {
             } else if (u.anchorRow === 4) {
                 this.executeDirectHeroAttack(u);
             } else {
-                const forwardMoves = [
+                // ─── Option C: OVERRUN ───────────────────────────────────────
+                // If all forward tiles are blocked by player units, check if this
+                // reaper unit's ATK exceeds the blocker's current HP — if so,
+                // it Overruns: destroys the blocking unit and advances into the tile.
+                const forwardCandidates = [
                     [r + 1, c],
                     [r + 1, c - 1],
                     [r + 1, c + 1]
-                ].filter(([nr, nc]) => nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4 && !currentGrid[`${nr}_${nc}`]);
+                ].filter(([nr, nc]) => nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4);
 
-                if (forwardMoves.length > 0) {
+                const forwardMoves = forwardCandidates.filter(
+                    ([nr, nc]) => !currentGrid[`${nr}_${nc}`]
+                );
+
+                let overrunTarget = null;
+                let overrunTile = null;
+                if (forwardMoves.length === 0) {
+                    // All forward tiles are occupied — check for Overrun
+                    for (const [nr, nc] of forwardCandidates) {
+                        const blocker = currentGrid[`${nr}_${nc}`];
+                        if (blocker && blocker.owner === 'player' && u.atk > blocker.hp) {
+                            overrunTarget = blocker;
+                            overrunTile = [nr, nc];
+                            break;
+                        }
+                    }
+                }
+
+                if (overrunTarget && overrunTile) {
+                    const [targetRow, targetCol] = overrunTile;
+                    // Destroy the blocker
+                    Object.keys(currentGrid).forEach(k => {
+                        if (currentGrid[k] && currentGrid[k].id === overrunTarget.id) {
+                            delete currentGrid[k];
+                        }
+                    });
+                    const resetBlocker = {
+                        ...overrunTarget,
+                        hp: overrunTarget.maxHp || overrunTarget.startingHp || overrunTarget.cost || 1,
+                        anchorRow: undefined,
+                        anchorCol: undefined,
+                        occupiedKeys: undefined
+                    };
+                    currentPlayerDiscard.push(resetBlocker);
+                    this.addLog(`💥 OVERRUN! ${enemyName}'s ${u.name} crushed your ${overrunTarget.name} and advanced to Row ${targetRow + 1}, Lane ${targetCol + 1}!`);
+
+                    const oldRow = u.anchorRow;
+                    const oldCol = u.anchorCol;
+                    this.applyUnitMove(u, targetRow, targetCol, currentGrid, territory, 'reaper');
+                    u.hasActedThisTurn = true;
+
+                    let dir = 'up';
+                    if (targetRow < oldRow) dir = 'down';
+                    else if (targetRow > oldRow) dir = 'up';
+                    else if (targetCol < oldCol) dir = 'right';
+                    else if (targetCol > oldCol) dir = 'left';
+                    if (Array.isArray(u.occupiedKeys)) {
+                        u.occupiedKeys.forEach(k => { moveAnims[k] = dir; });
+                    }
+                } else if (forwardMoves.length > 0) {
                     const [targetRow, targetCol] = forwardMoves[0];
                     const oldRow = u.anchorRow;
                     const oldCol = u.anchorCol;
@@ -1291,8 +1510,11 @@ export default class CardDuel extends React.Component {
                 actionCardAnim: { card, type: 'inflate', owner: 'player' }
             }, () => {
                 setTimeout(() => {
-                    this.setState({ actionCardAnim: null });
-                }, 1300);
+                    if (this._isMounted !== false && this.state.playerHand) {
+                        const resetHand = this.state.playerHand.map(c => ({ ...c, isNewlyDealt: false }));
+                        this.setState({ actionCardAnim: null, playerHand: resetHand });
+                    }
+                }, 1400);
             });
             return;
         }
@@ -1479,6 +1701,16 @@ export default class CardDuel extends React.Component {
                 this.setState({ selectedBoardUnit: null });
                 return;
             }
+
+            // If clicking an enemy unit that cannot be attacked (e.g. diagonal for non-wizards)
+            if (targetUnit && targetUnit.owner !== selectedBoardUnit.owner) {
+                const isWiz = !!(selectedBoardUnit.isWizard || (selectedBoardUnit.memberType && selectedBoardUnit.memberType.toLowerCase().includes('wizard')) || selectedBoardUnit.type === 'wizard' || (selectedBoardUnit.name && selectedBoardUnit.name.toLowerCase().includes('wizard')));
+                const dr = Math.abs(r - selectedBoardUnit.anchorRow);
+                const dc = Math.abs(c - selectedBoardUnit.anchorCol);
+                if (dr === 1 && dc === 1 && !isWiz) {
+                    this.addLog(`⚠️ ${selectedBoardUnit.name} cannot attack diagonally. Diagonal attacks are limited to Wizards!`);
+                }
+            }
         }
 
         // Case 3: Player clicks a friendly unit on the board
@@ -1589,17 +1821,24 @@ export default class CardDuel extends React.Component {
                     const rotationDeg = offset * 6;
                     const translateYPx = Math.abs(offset) * 5;
 
+                    const finalTransform = isSelected
+                        ? `translateY(-30px) scale(1.15) rotate(0deg)`
+                        : `rotate(${rotationDeg}deg) translateY(${translateYPx}px)`;
+
+                    const isDealt = !!card.isNewlyDealt;
+                    const dealtDelay = (card.dealtIndex || 0) * 150;
+
                     return (
                         <div
                             key={card.id}
                             draggable={canAfford}
                             onDragStart={(e) => this.handleCardDragStart(e, card)}
                             onClick={() => this.handleSelectCardInHand(card)}
-                            className={`pe-fanned-card ${isSelected ? 'pe-fanned-card--selected' : ''} ${canAfford ? 'pe-fanned-card--playable' : 'pe-fanned-card--disabled'}`}
+                            className={`pe-fanned-card ${isSelected ? 'pe-fanned-card--selected' : ''} ${canAfford ? 'pe-fanned-card--playable' : 'pe-fanned-card--disabled'} ${isDealt ? 'pe-fanned-card--dealt' : ''}`}
                             style={{
-                                transform: isSelected
-                                    ? `translateY(-30px) scale(1.15) rotate(0deg)`
-                                    : `rotate(${rotationDeg}deg) translateY(${translateYPx}px)`,
+                                '--pe-card-transform': finalTransform,
+                                transform: finalTransform,
+                                animation: isDealt ? `pe-deal-card-from-left 0.65s cubic-bezier(0.16, 1, 0.3, 1) ${dealtDelay}ms both` : undefined,
                                 zIndex: isSelected ? 100 : idx + 10
                             }}
                         >
@@ -1629,7 +1868,7 @@ export default class CardDuel extends React.Component {
                                 <div className="pe-card-title">{card.name}</div>
                                 <div className="pe-card-badge">
                                     {card.type === 'action'
-                                        ? `ACTION • ${card.name.toUpperCase()}`
+                                        ? `ACTION • ${(card.name || '').toUpperCase()}`
                                         : ((card.isRanger || (card.memberType && card.memberType.toLowerCase().includes('ranger')))
                                             ? 'RANGER • RANGED'
                                             : ((card.isWizard || (card.memberType && card.memberType.toLowerCase().includes('wizard')))
@@ -1638,7 +1877,7 @@ export default class CardDuel extends React.Component {
                                                     ? 'SAGE • HEALER'
                                                     : ((card.isSummoner || (card.memberType && card.memberType.toLowerCase().includes('summoner')))
                                                         ? 'SUMMONER • IMP'
-                                                        : card.type.toUpperCase()))))}
+                                                        : (card.type ? String(card.type).toUpperCase() : 'UNIT')))))}
                                 </div>
                                 <div className="pe-card-stats-line">
                                     {card.type === 'action' ? (
@@ -1685,7 +1924,7 @@ export default class CardDuel extends React.Component {
     }
 
     renderGridNodes() {
-        const { grid, territory, selectedCard, selectedBoardUnit, attackAnim, reaperPlayAnim, gameOver } = this.state;
+        const { grid, territory, selectedCard, selectedBoardUnit, attackAnim, reaperPlayAnim, gameOver, currentTurn, isAiThinking } = this.state;
         const rows = [0, 1, 2, 3, 4];
         const cols = [0, 1, 2, 3, 4];
 
@@ -1809,6 +2048,9 @@ export default class CardDuel extends React.Component {
                                         const isSelectedUnit = selectedBoardUnit && selectedBoardUnit.id === unit.id;
                                         const isExhausted = unit.hasActedThisTurn;
                                         const isSummoningSickness = unit.summoningSickness;
+                                        const isUnitAttackTarget = unit && Array.isArray(unit.occupiedKeys)
+                                            ? unit.occupiedKeys.some(k => validTargets.attacks.includes(k))
+                                            : validTargets.attacks.includes(nodeKey);
 
                                         return (
                                             <div
@@ -1846,20 +2088,44 @@ export default class CardDuel extends React.Component {
                     </div>
                 ))}
 
-                {/* SVG Ability Overlay for Ranger curved jump-over arc and Wizard NE/NW diagonal arrows */}
-                {selectedCard && !gameOver && this.state.hoveredNodeKey && (() => {
-                    const [hR, hC] = this.state.hoveredNodeKey.split('_').map(Number);
-                    const isRanger = selectedCard.isRanger || (selectedCard.memberType && selectedCard.memberType.toLowerCase().includes('ranger'));
-                    const isWizard = selectedCard.isWizard || (selectedCard.memberType && selectedCard.memberType.toLowerCase().includes('wizard'));
+                {/* SVG Tactical & Ability Overlay: Card Hover Previews + Unit Move/Attack Arcing Arrows */}
+                {(() => {
+                    const isUnitReadyForAction = selectedBoardUnit &&
+                        selectedBoardUnit.owner === 'player' &&
+                        !selectedBoardUnit.summoningSickness &&
+                        !selectedBoardUnit.hasActedThisTurn &&
+                        currentTurn === 'player' &&
+                        !gameOver &&
+                        !isAiThinking;
 
-                    if (!isRanger && !isWizard) return null;
+                    const hasCardHoverAbility = selectedCard && !gameOver && this.state.hoveredNodeKey && (() => {
+                        const isRanger = selectedCard.isRanger || (selectedCard.memberType && selectedCard.memberType.toLowerCase().includes('ranger'));
+                        const isWizard = selectedCard.isWizard || (selectedCard.memberType && selectedCard.memberType.toLowerCase().includes('wizard'));
+                        return isRanger || isWizard;
+                    })();
 
-                    const startX = (hC + 0.5) * 100;
-                    const startY = (hR + 0.5) * 100;
+                    if (!isUnitReadyForAction && !hasCardHoverAbility) return null;
+
+                    const validTargets = isUnitReadyForAction ? this.getValidTargetTiles(selectedBoardUnit) : { moves: [], attacks: [], heroAttack: false };
+
+                    // Unit Center coordinates in 500x500 space
+                    const unitW = (selectedBoardUnit && selectedBoardUnit.width) || 1;
+                    const unitH = (selectedBoardUnit && selectedBoardUnit.height) || 1;
+                    const unitStartX = selectedBoardUnit ? (selectedBoardUnit.anchorCol + unitW / 2) * 100 : 0;
+                    const unitStartY = selectedBoardUnit ? (selectedBoardUnit.anchorRow + unitH / 2) * 100 : 0;
 
                     return (
-                        <svg className="pe-grid-ability-overlay-svg" viewBox="0 0 500 500">
+                        <svg className="pe-grid-ability-overlay-svg" viewBox="0 0 500 500" preserveAspectRatio="none">
                             <defs>
+                                <marker id="pe-move-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                                    <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#38bdf8" />
+                                </marker>
+                                <marker id="pe-attack-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                                    <path d="M 0 1 L 9 5 L 0 9 z" fill="#ef4444" />
+                                </marker>
+                                <marker id="pe-hero-attack-arrow" viewBox="0 0 10 10" refX="7" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+                                    <path d="M 0 1 L 9 5 L 0 9 z" fill="#f59e0b" />
+                                </marker>
                                 <marker id="ranger-arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                                     <path d="M 0 1 L 10 5 L 0 9 z" fill="#ffd700" />
                                 </marker>
@@ -1868,67 +2134,181 @@ export default class CardDuel extends React.Component {
                                 </marker>
                             </defs>
 
-                            {isRanger && (() => {
-                                const targetY = Math.max(20, (hR - 2 + 0.5) * 100);
-                                const targetX = startX;
-                                const controlX = startX - 45;
-                                const controlY = (startY + targetY) / 2;
+                            {/* Card Hover Preview Overlays (Ranger & Wizard) */}
+                            {hasCardHoverAbility && (() => {
+                                const [hR, hC] = this.state.hoveredNodeKey.split('_').map(Number);
+                                const isRanger = selectedCard.isRanger || (selectedCard.memberType && selectedCard.memberType.toLowerCase().includes('ranger'));
+                                const isWizard = selectedCard.isWizard || (selectedCard.memberType && selectedCard.memberType.toLowerCase().includes('wizard'));
+                                const startX = (hC + 0.5) * 100;
+                                const startY = (hR + 0.5) * 100;
 
                                 return (
-                                    <g key="ranger-overlay">
-                                        <path
-                                            d={`M ${startX} ${startY} Q ${controlX} ${controlY} ${targetX} ${targetY}`}
-                                            stroke="#ffd700"
-                                            strokeWidth="4"
-                                            strokeDasharray="8 5"
-                                            fill="none"
-                                            markerEnd="url(#ranger-arrow)"
-                                            style={{ filter: 'drop-shadow(0 0 6px rgba(255, 215, 0, 0.95))' }}
-                                        />
-                                        <circle cx={targetX} cy={targetY} r="18" stroke="#ffd700" strokeWidth="2.5" strokeDasharray="4 3" fill="rgba(255, 215, 0, 0.25)" />
-                                        <text x={targetX} y={Math.max(15, targetY - 24)} textAnchor="middle" fill="#ffd700" fontSize="12" fontWeight="bold" fontFamily="Cinzel, serif" style={{ filter: 'drop-shadow(0 2px 4px black)' }}>
-                                            🏹 SHOOTS OVER (1 ATK)
-                                        </text>
+                                    <g key="card-hover-abilities">
+                                        {isRanger && (() => {
+                                            const targetY = Math.max(20, (hR - 2 + 0.5) * 100);
+                                            const targetX = startX;
+                                            const controlX = startX - 45;
+                                            const controlY = (startY + targetY) / 2;
+                                            return (
+                                                <g key="ranger-overlay">
+                                                    <path
+                                                        d={`M ${startX} ${startY} Q ${controlX} ${controlY} ${targetX} ${targetY}`}
+                                                        stroke="#ffd700"
+                                                        strokeWidth="4"
+                                                        strokeDasharray="8 5"
+                                                        fill="none"
+                                                        markerEnd="url(#ranger-arrow)"
+                                                        style={{ filter: 'drop-shadow(0 0 6px rgba(255, 215, 0, 0.95))' }}
+                                                    />
+                                                    <circle cx={targetX} cy={targetY} r="18" stroke="#ffd700" strokeWidth="2.5" strokeDasharray="4 3" fill="rgba(255, 215, 0, 0.25)" />
+                                                    <text x={targetX} y={Math.max(15, targetY - 24)} textAnchor="middle" fill="#ffd700" fontSize="12" fontWeight="bold" fontFamily="Cinzel, serif" style={{ filter: 'drop-shadow(0 2px 4px black)' }}>
+                                                        🏹 SHOOTS OVER (1 ATK)
+                                                    </text>
+                                                </g>
+                                            );
+                                        })()}
+                                        {isWizard && (() => {
+                                            const nwX = (Math.max(0, hC - 1) + 0.5) * 100;
+                                            const nwY = (Math.max(0, hR - 1) + 0.5) * 100;
+                                            const neX = (Math.min(4, hC + 1) + 0.5) * 100;
+                                            const neY = (Math.max(0, hR - 1) + 0.5) * 100;
+                                            return (
+                                                <g key="wizard-overlay">
+                                                    <path
+                                                        d={`M ${startX} ${startY} L ${nwX} ${nwY}`}
+                                                        stroke="#a370f7"
+                                                        strokeWidth="4"
+                                                        strokeDasharray="7 4"
+                                                        fill="none"
+                                                        markerEnd="url(#wizard-arrow)"
+                                                        style={{ filter: 'drop-shadow(0 0 8px rgba(163, 112, 247, 0.95))' }}
+                                                    />
+                                                    <circle cx={nwX} cy={nwY} r="16" stroke="#a370f7" strokeWidth="2.5" strokeDasharray="4 3" fill="rgba(163, 112, 247, 0.3)" />
+                                                    <path
+                                                        d={`M ${startX} ${startY} L ${neX} ${neY}`}
+                                                        stroke="#a370f7"
+                                                        strokeWidth="4"
+                                                        strokeDasharray="7 4"
+                                                        fill="none"
+                                                        markerEnd="url(#wizard-arrow)"
+                                                        style={{ filter: 'drop-shadow(0 0 8px rgba(163, 112, 247, 0.95))' }}
+                                                    />
+                                                    <circle cx={neX} cy={neY} r="16" stroke="#a370f7" strokeWidth="2.5" strokeDasharray="4 3" fill="rgba(163, 112, 247, 0.3)" />
+                                                    <text x={startX} y={Math.max(15, startY - 24)} textAnchor="middle" fill="#e9d5ff" fontSize="12" fontWeight="bold" fontFamily="Cinzel, serif" style={{ filter: 'drop-shadow(0 2px 4px black)' }}>
+                                                        🔮 NE & NW DIAGONAL (2 ATK)
+                                                    </text>
+                                                </g>
+                                            );
+                                        })()}
                                     </g>
                                 );
                             })()}
 
-                            {isWizard && (() => {
-                                const nwX = (Math.max(0, hC - 1) + 0.5) * 100;
-                                const nwY = (Math.max(0, hR - 1) + 0.5) * 100;
-                                const neX = (Math.min(4, hC + 1) + 0.5) * 100;
-                                const neY = (Math.max(0, hR - 1) + 0.5) * 100;
+                            {/* Unit Action Arcing Arrows (Move & Attack) */}
+                            {isUnitReadyForAction && (
+                                <g key="tactical-unit-actions" className="pe-tactical-unit-actions-group">
+                                    {/* Source unit origin indicator ring */}
+                                    <circle
+                                        cx={unitStartX}
+                                        cy={unitStartY}
+                                        r="18"
+                                        stroke="rgba(255, 255, 255, 0.45)"
+                                        strokeWidth="2"
+                                        fill="none"
+                                        strokeDasharray="3 3"
+                                    />
 
-                                return (
-                                    <g key="wizard-overlay">
-                                        <path
-                                            d={`M ${startX} ${startY} L ${nwX} ${nwY}`}
-                                            stroke="#a370f7"
-                                            strokeWidth="4"
-                                            strokeDasharray="7 4"
-                                            fill="none"
-                                            markerEnd="url(#wizard-arrow)"
-                                            style={{ filter: 'drop-shadow(0 0 8px rgba(163, 112, 247, 0.95))' }}
-                                        />
-                                        <circle cx={nwX} cy={nwY} r="16" stroke="#a370f7" strokeWidth="2.5" strokeDasharray="4 3" fill="rgba(163, 112, 247, 0.3)" />
+                                    {/* Move destination arcing arrows & reticles */}
+                                    {validTargets.moves.map(nodeKey => {
+                                        const [tr, tc] = nodeKey.split('_').map(Number);
+                                        const targetX = (tc + 0.5) * 100;
+                                        const targetY = (tr + 0.5) * 100;
+                                        const pathD = this.calculateArcPath(unitStartX, unitStartY, targetX, targetY);
+                                        if (!pathD) return null;
 
-                                        <path
-                                            d={`M ${startX} ${startY} L ${neX} ${neY}`}
-                                            stroke="#a370f7"
-                                            strokeWidth="4"
-                                            strokeDasharray="7 4"
-                                            fill="none"
-                                            markerEnd="url(#wizard-arrow)"
-                                            style={{ filter: 'drop-shadow(0 0 8px rgba(163, 112, 247, 0.95))' }}
-                                        />
-                                        <circle cx={neX} cy={neY} r="16" stroke="#a370f7" strokeWidth="2.5" strokeDasharray="4 3" fill="rgba(163, 112, 247, 0.3)" />
+                                        return (
+                                            <g key={`move_arc_${nodeKey}`} className="pe-tactical-move-group">
+                                                <circle
+                                                    cx={targetX}
+                                                    cy={targetY}
+                                                    r="16"
+                                                    className="pe-tactical-target-reticle pe-tactical-target-reticle--move"
+                                                />
+                                                <path
+                                                    d={pathD}
+                                                    className="pe-tactical-arc pe-tactical-arc--move"
+                                                    markerEnd="url(#pe-move-arrow)"
+                                                />
+                                            </g>
+                                        );
+                                    })}
 
-                                        <text x={startX} y={Math.max(15, startY - 24)} textAnchor="middle" fill="#e9d5ff" fontSize="12" fontWeight="bold" fontFamily="Cinzel, serif" style={{ filter: 'drop-shadow(0 2px 4px black)' }}>
-                                            🔮 NE & NW DIAGONAL (2 ATK)
-                                        </text>
-                                    </g>
-                                );
-                            })()}
+                                    {/* Attack destination arcing arrows & reticles */}
+                                    {validTargets.attacks.map(nodeKey => {
+                                        const [tr, tc] = nodeKey.split('_').map(Number);
+                                        const targetX = (tc + 0.5) * 100;
+                                        const targetY = (tr + 0.5) * 100;
+                                        const pathD = this.calculateArcPath(unitStartX, unitStartY, targetX, targetY);
+                                        if (!pathD) return null;
+
+                                        return (
+                                            <g key={`attack_arc_${nodeKey}`} className="pe-tactical-attack-group">
+                                                <circle
+                                                    cx={targetX}
+                                                    cy={targetY}
+                                                    r="18"
+                                                    className="pe-tactical-target-reticle pe-tactical-target-reticle--attack"
+                                                />
+                                                {/* Crosshair accents on attack target */}
+                                                <line x1={targetX - 7} y1={targetY} x2={targetX + 7} y2={targetY} stroke="#ef4444" strokeWidth="1.5" />
+                                                <line x1={targetX} y1={targetY - 7} x2={targetX} y2={targetY + 7} stroke="#ef4444" strokeWidth="1.5" />
+                                                <path
+                                                    d={pathD}
+                                                    className="pe-tactical-arc pe-tactical-arc--attack"
+                                                    markerEnd="url(#pe-attack-arrow)"
+                                                />
+                                            </g>
+                                        );
+                                    })}
+
+                                    {/* Direct Hero Attack arcing arrow (Row 0) */}
+                                    {validTargets.heroAttack && (() => {
+                                        const targetX = unitStartX;
+                                        const targetY = 15;
+                                        const heroPathD = this.calculateArcPath(unitStartX, unitStartY, targetX, targetY);
+                                        return (
+                                            <g key="hero_attack_arc" className="pe-tactical-hero-attack-group">
+                                                <circle
+                                                    cx={targetX}
+                                                    cy={targetY}
+                                                    r="14"
+                                                    stroke="#f59e0b"
+                                                    strokeWidth="2.5"
+                                                    strokeDasharray="4 2"
+                                                    fill="rgba(245, 158, 11, 0.25)"
+                                                />
+                                                <path
+                                                    d={heroPathD}
+                                                    className="pe-tactical-arc pe-tactical-arc--hero"
+                                                    markerEnd="url(#pe-hero-attack-arrow)"
+                                                />
+                                                <text
+                                                    x={targetX}
+                                                    y={Math.max(12, targetY - 4)}
+                                                    textAnchor="middle"
+                                                    fill="#f59e0b"
+                                                    fontSize="10"
+                                                    fontWeight="bold"
+                                                    fontFamily="Cinzel, serif"
+                                                    style={{ filter: 'drop-shadow(0 2px 4px black)' }}
+                                                >
+                                                    ⚔ ATTACK HERO
+                                                </text>
+                                            </g>
+                                        );
+                                    })()}
+                                </g>
+                            )}
                         </svg>
                     );
                 })()}
@@ -2258,7 +2638,7 @@ export default class CardDuel extends React.Component {
                         <div className="pe-deck-modal-container" onClick={(e) => e.stopPropagation()}>
                             <div className="pe-deck-modal-header">
                                 <div className="pe-deck-modal-title">
-                                    <span>🎴</span> YOUR DECK ({this.state.fullPlayerDeck ? this.state.fullPlayerDeck.length : 0} CARDS)
+                                    <span style={{ color: '#d4a359', marginRight: '6px' }}>◆</span> YOUR DECK ({this.state.fullPlayerDeck ? this.state.fullPlayerDeck.length : 0} CARDS)
                                 </div>
                                 <button className="pe-deck-modal-close-btn" onClick={() => this.setState({ showDeckModal: false })}>
                                     ✕
@@ -2322,17 +2702,17 @@ export default class CardDuel extends React.Component {
                         <div className="pe-action-card-modal">
                             <div className="pe-action-card-art" style={this.state.actionCardAnim.card.art ? { backgroundImage: `url(${this.state.actionCardAnim.card.art})` } : {}}>
                                 {!this.state.actionCardAnim.card.art && (
-                                    this.state.actionCardAnim.type === 'overdrive' ? '⚡' : 
-                                    this.state.actionCardAnim.type === 'invest' ? '📈' :
-                                    this.state.actionCardAnim.type === 'inflate' ? '🎈' : '💀'
+                                    this.state.actionCardAnim.type === 'overdrive' ? '✦' : 
+                                    this.state.actionCardAnim.type === 'invest' ? '◆' :
+                                    this.state.actionCardAnim.type === 'inflate' ? '❖' : '☠'
                                 )}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <h2 className="pe-action-card-title">
-                                    {this.state.actionCardAnim.type === 'overdrive' ? '⚡ OVERDRIVE ACTIVATED ⚡' : 
-                                     this.state.actionCardAnim.type === 'invest' ? '📈 INVEST ACTIVATED 📈' :
-                                     this.state.actionCardAnim.type === 'inflate' ? '🎈 INFLATE ACTIVATED 🎈' :
-                                     '💥 REAP 💥'}
+                                    {this.state.actionCardAnim.type === 'overdrive' ? '✦ OVERDRIVE ACTIVATED ✦' : 
+                                     this.state.actionCardAnim.type === 'invest' ? '◆ INVEST ACTIVATED ◆' :
+                                     this.state.actionCardAnim.type === 'inflate' ? '❖ INFLATE ACTIVATED ❖' :
+                                     '☠ REAP ACTIVATED ☠'}
                                 </h2>
                                 <p className="pe-action-card-desc" style={{ margin: 0 }}>
                                     {this.state.actionCardAnim.type === 'overdrive'
@@ -2353,7 +2733,7 @@ export default class CardDuel extends React.Component {
                     <div className="pe-first-player-overlay">
                         <div className="pe-first-player-modal">
                             <div className="pe-first-player-spinner">
-                                <div className="pe-spinner-emblem">🎲</div>
+                                <div className="pe-spinner-emblem" style={{ color: '#d4a359', fontSize: '2rem' }}>❖</div>
                             </div>
                             {firstPlayerOverlay.phase === 'selecting' ? (
                                 <h2 className="pe-fp-title pe-fp-title--selecting">Choosing Starting Player...</h2>
@@ -2364,44 +2744,211 @@ export default class CardDuel extends React.Component {
                     </div>
                 )}
 
-                {/* Victory / Defeat Modal */}
+                {/* Victory / Defeat Modal (Esoteric Styling) */}
                 {gameOver && (
-                    <div className={`pe-end-screen ${gameOver === 'victory' ? 'pe-end--victory' : 'pe-end--defeat'}`}>
-                        <div className="pe-end-modal">
-                            <div className="pe-end-icon">
-                                {gameOver === 'victory' ? '✨' : '💀'}
+                    <div
+                        className="ambush-popup-overlay"
+                        style={{ zIndex: 100000 }}
+                    >
+                        <div
+                            className="ambush-popup-card"
+                            style={{
+                                maxWidth: '440px',
+                                borderColor: gameOver === 'victory' ? 'rgba(212, 163, 89, 0.6)' : 'rgba(239, 68, 68, 0.45)',
+                                boxShadow: gameOver === 'victory'
+                                    ? '0 16px 50px rgba(0, 0, 0, 0.9), 0 0 35px rgba(212, 163, 89, 0.25), inset 0 0 25px rgba(0, 0, 0, 0.7)'
+                                    : '0 16px 50px rgba(0, 0, 0, 0.9), 0 0 35px rgba(180, 30, 30, 0.35), inset 0 0 25px rgba(0, 0, 0, 0.7)'
+                            }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="card-corner top-left" />
+                            <div className="card-corner top-right" />
+                            <div className="card-corner bottom-left" />
+                            <div className="card-corner bottom-right" />
+
+                            <div className="ambush-eyebrow">
+                                <span className="glyph">◆</span> {gameOver === 'victory' ? 'DUEL CONQUERED' : 'TRIAL FAILED'} <span className="glyph">◆</span>
                             </div>
-                            <h2>{gameOver === 'victory' ? 'VICTORY!' : 'DEFEATED'}</h2>
-                            <p>
-                                {gameOver === 'victory'
-                                    ? 'You have won the duel!'
-                                    : 'Your crew\'s health was depleted in tactical duel combat.'}
-                            </p>
-                            <button
-                                className="pe-btn pe-btn--primary"
-                                onClick={() => this.props.onFinish && this.props.onFinish({ winner: gameOver === 'victory' ? 'player' : 'reaper' })}
+
+                            <h2
+                                className="ambush-title"
+                                style={{
+                                    color: gameOver === 'victory' ? '#f5dfa8' : '#fca5a5',
+                                    textShadow: gameOver === 'victory'
+                                        ? '0 0 15px rgba(229, 181, 79, 0.5)'
+                                        : '0 0 15px rgba(239, 68, 68, 0.6)'
+                                }}
                             >
-                                {gameOver === 'victory' ? 'Claim Victory' : 'Return'}
-                            </button>
+                                {gameOver === 'victory' ? 'VICTORY' : 'DEFEATED'}
+                            </h2>
+
+                            <div className="ambush-divider">
+                                <div className="divider-line" />
+                                <span className="divider-glyph">❖</span>
+                                <div className="divider-line" />
+                            </div>
+
+                            <div
+                                style={{
+                                    width: '76px',
+                                    height: '76px',
+                                    margin: '0 auto 16px',
+                                    borderRadius: '50%',
+                                    background: gameOver === 'victory'
+                                        ? 'radial-gradient(circle, #2a2012 0%, #0c0a06 100%)'
+                                        : 'radial-gradient(circle, #2a1215 0%, #0c090c 100%)',
+                                    border: gameOver === 'victory'
+                                        ? '1px solid rgba(212, 163, 89, 0.5)'
+                                        : '1px solid rgba(239, 68, 68, 0.4)',
+                                    boxShadow: gameOver === 'victory'
+                                        ? '0 0 25px rgba(229, 181, 79, 0.35), inset 0 0 12px rgba(0,0,0,0.8)'
+                                        : '0 0 25px rgba(220, 38, 38, 0.35), inset 0 0 12px rgba(0,0,0,0.8)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <span
+                                    style={{
+                                        fontSize: '2rem',
+                                        color: gameOver === 'victory' ? '#f5dfa8' : '#ef4444',
+                                        filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.8))'
+                                    }}
+                                >
+                                    {gameOver === 'victory' ? '⚔' : '☠'}
+                                </span>
+                            </div>
+
+                            <div className="ambush-subtitle" style={{ marginBottom: '20px' }}>
+                                {gameOver === 'victory'
+                                    ? 'You have dominated the battlefield and claimed victory in the duel.'
+                                    : "Your crew's vitality was depleted under relentless tactical pressure."}
+                                <br />
+                                <span
+                                    style={{
+                                        fontFamily: "'Cinzel', serif",
+                                        fontSize: '11px',
+                                        color: gameOver === 'victory' ? '#d4a359' : '#e05d5d',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '1.5px',
+                                        marginTop: '10px',
+                                        display: 'inline-block'
+                                    }}
+                                >
+                                    {gameOver === 'victory' ? '✦ Spoils of Combat Claimed ✦' : '✦ Regroup and Recover ✦'}
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+                                <button
+                                    type="button"
+                                    className="ambush-fight-btn"
+                                    onClick={() => this.props.onFinish && this.props.onFinish({ winner: gameOver === 'victory' ? 'player' : 'reaper' })}
+                                    style={{
+                                        minWidth: '180px',
+                                        background: gameOver === 'victory'
+                                            ? 'linear-gradient(180deg, #3d2a14 0%, #1c1409 100%)'
+                                            : 'linear-gradient(180deg, #3d1417 0%, #1a0a0c 100%)',
+                                        border: gameOver === 'victory'
+                                            ? '1px solid rgba(229, 181, 79, 0.7)'
+                                            : '1px solid rgba(239, 68, 68, 0.6)',
+                                        color: gameOver === 'victory' ? '#f5dfa8' : '#fca5a5',
+                                        boxShadow: gameOver === 'victory'
+                                            ? '0 0 16px rgba(229, 181, 79, 0.3)'
+                                            : '0 0 16px rgba(220, 38, 38, 0.3)'
+                                    }}
+                                >
+                                    {gameOver === 'victory' ? 'CLAIM VICTORY' : 'RETURN'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}
 
-                {/* Forfeit Modal */}
+                {/* Forfeit Modal (Esoteric Styling) */}
                 {this.state.showForfeitModal && (
-                    <div className="pe-riddle-backdrop" onClick={e => { if (e.target === e.currentTarget) this.setState({ showForfeitModal: false }); }}>
-                        <div className="pe-forfeit-modal">
-                            <div className="pe-forfeit-icon">🏳</div>
-                            <h2 className="pe-forfeit-title">Forfeit the Duel?</h2>
-                            <p className="pe-forfeit-body">
-                                Are you sure you want to forfeit this duel? Forfeiting will incur a 25% gold penalty and add a death marker to your crew.
-                            </p>
-                            <div className="pe-forfeit-btns">
-                                <button className="pe-btn pe-forfeit-cancel" onClick={() => this.setState({ showForfeitModal: false })}>
+                    <div
+                        className="ambush-popup-overlay"
+                        style={{ zIndex: 100000 }}
+                        onClick={e => { if (e.target === e.currentTarget) this.setState({ showForfeitModal: false }); }}
+                    >
+                        <div
+                            className="ambush-popup-card"
+                            style={{ maxWidth: '440px' }}
+                            onClick={e => e.stopPropagation()}
+                        >
+                            <div className="card-corner top-left" />
+                            <div className="card-corner top-right" />
+                            <div className="card-corner bottom-left" />
+                            <div className="card-corner bottom-right" />
+
+                            <div className="ambush-eyebrow">
+                                <span className="glyph">◆</span> SURRENDER DUEL <span className="glyph">◆</span>
+                            </div>
+
+                            <h2 className="ambush-title" style={{ color: '#f1e7d8' }}>
+                                FORFEIT THE DUEL?
+                            </h2>
+
+                            <div className="ambush-divider">
+                                <div className="divider-line" />
+                                <span className="divider-glyph">❖</span>
+                                <div className="divider-line" />
+                            </div>
+
+                            <div
+                                style={{
+                                    width: '74px',
+                                    height: '74px',
+                                    margin: '0 auto 16px',
+                                    borderRadius: '50%',
+                                    background: 'radial-gradient(circle, #2a1215 0%, #0c090c 100%)',
+                                    border: '1px solid rgba(212, 163, 89, 0.35)',
+                                    boxShadow: '0 0 20px rgba(180, 45, 30, 0.3), inset 0 0 12px rgba(0,0,0,0.8)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                }}
+                            >
+                                <span style={{ fontSize: '2.2rem', filter: 'drop-shadow(0 2px 8px rgba(0,0,0,0.8))' }}>🏳️</span>
+                            </div>
+
+                            <div className="ambush-subtitle" style={{ marginBottom: '16px' }}>
+                                Are you sure you want to forfeit this duel?
+                                <br />
+                                <span className="monster-highlight" style={{ display: 'inline-block', marginTop: '6px' }}>
+                                    Forfeiting will incur a 25% gold penalty and add a death marker to your crew.
+                                </span>
+                                <br />
+                                <span style={{ fontFamily: "'Cinzel', serif", fontSize: '11px', color: '#e05d5d', textTransform: 'uppercase', letterSpacing: '1.5px', marginTop: '10px', display: 'inline-block' }}>
+                                    ✦ Surrender cannot be undone ✦
+                                </span>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', marginTop: '16px' }}>
+                                <button
+                                    type="button"
+                                    onClick={() => this.setState({ showForfeitModal: false })}
+                                    className="ambush-fight-btn"
+                                    style={{
+                                        background: 'linear-gradient(180deg, #1f181c 0%, #100d0e 100%)',
+                                        border: '1px solid rgba(212, 163, 89, 0.35)',
+                                        color: '#bfa57b',
+                                        minWidth: '120px'
+                                    }}
+                                >
                                     Cancel
                                 </button>
                                 <button
-                                    className="pe-btn pe-forfeit-confirm"
+                                    type="button"
+                                    className="ambush-fight-btn"
+                                    style={{
+                                        background: 'linear-gradient(180deg, #6b1418 0%, #3a080a 100%)',
+                                        border: '1px solid #c0392b',
+                                        boxShadow: '0 0 15px rgba(192, 57, 43, 0.5), inset 0 0 8px rgba(255, 100, 100, 0.2)',
+                                        color: '#f8d7da',
+                                        minWidth: '120px'
+                                    }}
                                     onClick={() => {
                                         this.setState({ showForfeitModal: false });
                                         if (this.props.onFinish) this.props.onFinish({ winner: 'reaper', forfeited: true });

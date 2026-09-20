@@ -37,7 +37,8 @@ export function CrewManager() {
         'summoner',
         'ranger',
         'sage',
-        'soldier'
+        'soldier',
+        'glitterburn'
     ]
     this.crew = [];
 
@@ -892,6 +893,26 @@ export function CrewManager() {
             passives: ['magic_affinity'],
             weaknesses: ['crushing', 'blood_magic'],
             description: 'A conduit for unstable arcana who overwhelms enemies with elemental pressure by opening rifts and summoning minions.',
+            specialActions: [],
+            actionsTrayExpanded: false,
+            actionMenuTypeExpanded: false
+        },
+        {
+            image: 'glitterburn',
+            type: 'glitterburn',
+            class: 'spellcaster',
+            name: 'Glitterburn',
+            id: 9903,
+            disabled: true,
+            locked: true,
+            level: 1,
+            stats: { str: 4, int: 8, dex: 6, fort: 5, baseHp: 10, experience: 0 },
+            portrait: images['glitterburn_portrait'] || images['glitterburn'],
+            inventory: [],
+            skills: ['glitter_burst', 'pyro_spark', 'blinding_flash'],
+            passives: ['sparkling_aura'],
+            weaknesses: ['crushing', 'ice'],
+            description: 'A volatile pyromancer born under cosmic starlight, fusing chaotic magic with blinding ember sparks.',
             specialActions: [],
             actionsTrayExpanded: false,
             actionMenuTypeExpanded: false

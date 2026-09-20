@@ -148,6 +148,18 @@ class UserProfilePage extends React.Component{
     delete meta.activatedGenerators;
     delete meta.disabledOutposts;
     delete meta.failedMonolithActivations;
+    delete meta.discoveredGenerators;
+    delete meta.discoveredPOIs;
+    delete meta.discoveredVendors;
+    delete meta.discoveredAlchemist;
+    delete meta.minimapIndicators;
+    delete meta.breadcrumbTrail;
+    delete meta.activatedLoci;
+    delete meta.activatedLocusRecords;
+    delete meta.rosterLocked;
+    delete meta.dungeonEntered;
+    delete meta.lockedRoster;
+    delete meta.alternateCrew;
   };
 
   clearDungeon = async () => {

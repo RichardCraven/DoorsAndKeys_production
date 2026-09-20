@@ -75,7 +75,7 @@ export default function ReaperOfferModal({ visible, onAccept }) {
                         <img
                             src={portraitImg}
                             alt={deathEnemy.name}
-                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'scale(1.04)' }}
                         />
                     ) : (
                         <span style={{ fontSize: '40px', lineHeight: '100px' }} role="img" aria-label="skull">💀</span>

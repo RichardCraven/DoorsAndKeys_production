@@ -6,7 +6,7 @@ import { storeMeta, getMeta, getUserId, applyResolvePenalty } from './session-ha
 import { updateUserRequest, updateDungeonRequest } from './api-handler';
 import { clearBuildingStaminaPenalties } from './building-utils';
 
-export async function setUpCamp(component, maybeDuration) {
+export async function setUpCamp(component, maybeDuration, useResolveFallback = false) {
     let durationSeconds = 10;
     try { if (typeof maybeDuration === 'number') durationSeconds = maybeDuration; } catch(e){}
     try {
@@ -18,7 +18,7 @@ export async function setUpCamp(component, maybeDuration) {
 
         // --- Food cost check ---
         // Cost = sum of (5 * member.level) for each crew member + (10 * member.level) for each dead member
-        const crew = (component.props.crewManager && component.props.crewManager.crew) || [];
+        const crew = (component.props && component.props.crewManager && component.props.crewManager.crew) || [];
         let foodCost = crew.reduce((sum, m) => {
             const baseCost = 5 * (typeof m.level === 'number' ? m.level : 1);
             const reviveCost = m.dead ? 10 * (typeof m.level === 'number' ? m.level : 1) : 0;
@@ -110,25 +110,26 @@ export async function setUpCamp(component, maybeDuration) {
                     const setTimeoutFn = (component._setTimeout && typeof component._setTimeout === 'function') ? component._setTimeout : setTimeout;
                     setTimeoutFn(() => { try { component.setState({ campWarningMessage: null }); } catch(e){} }, 4500);
                 } catch(e) {}
-            } else {
-                const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
-                const penalty = applyResolvePenalty(2);
-                meta.resolve = Math.max(0, currentResolve - penalty);
-                storeMeta(meta);
+            } else if (useResolveFallback) {
+                // User chose to use Resolve instead of food!
+                meta.isResolveCamp = true;
+                foodCost = 0; // No food consumed
                 try {
-                    let msg = `Not enough food to camp (need ${foodCost}, have ${currentFood}). Resolve decreased by ${penalty}!`;
-                    if (endureMessage) {
-                        msg = `Not enough food to camp (${endureMessage}). Resolve decreased by ${penalty}!`;
-                    } else if (fortifyLevel > 0) {
-                        msg = `Not enough food to camp. Fortify on cooldown for another ${cooldownRemainingMin}m. Resolve decreased by ${penalty}!`;
-                    }
-                    component.setState({ campWarningMessage: msg });
-                    // auto-clear after 4.5s
+                    component.setState({ campWarningMessage: "Recuperating using Resolve — recovery rate reduced by 50%!" });
                     const setTimeoutFn = (component._setTimeout && typeof component._setTimeout === 'function') ? component._setTimeout : setTimeout;
                     setTimeoutFn(() => { try { component.setState({ campWarningMessage: null }); } catch(e){} }, 4500);
                 } catch(e) {}
-                try { if (component.props.saveUserData) component.props.saveUserData(); } catch (e) {}
-                return; // block camping
+            } else {
+                // Show esoteric modal asking user if they want to use Resolve instead of food
+                try {
+                    component.setState({
+                        showResolveCampModal: true,
+                        resolveCampFoodCost: foodCost,
+                        resolveCampCurrentFood: currentFood,
+                        pendingCampDuration: maybeDuration
+                    });
+                } catch (e) {}
+                return; // block camping until user decides
             }
         }
         // Deduct food cost
@@ -294,7 +295,11 @@ export function calculateCampResolveGain(component) {
     }
 
     const baseResolveGain = isPlayerInHut ? 30 : 15;
-    const totalGain = baseResolveGain - restlessPenalty + awakeRefreshedBonus + fortifyBonus + leaderFortifyBonus;
+    let totalGain = baseResolveGain - restlessPenalty + awakeRefreshedBonus + fortifyBonus + leaderFortifyBonus;
+    const meta = getMeta() || {};
+    if (meta.isResolveCamp) {
+        totalGain = Math.round(totalGain * 0.5);
+    }
     return { totalGain, isPlayerInHut, leaderAliveAtCampEnd, campLeader };
 }
 
@@ -330,6 +335,8 @@ export function startCampInterval(component) {
         if (elapsed > (meta.campElapsedSeconds || 0)) {
             const secondsToTick = elapsed - (meta.campElapsedSeconds || 0);
             
+            const isResolveCamp = !!meta.isResolveCamp;
+            const rateMultiplier = isResolveCamp ? 0.5 : 1.0;
             const crew = (component.props.crewManager && component.props.crewManager.crew) || [];
             const updatedCrew = crew.map(member => {
                 if (!member) return member;
@@ -339,7 +346,7 @@ export function startCampInterval(component) {
                 } else {
                     const fort = (member.stats && (typeof member.stats.fort === 'number' ? member.stats.fort : member.stats.fortitude)) || 3;
                     const maxHp = (member.stats && typeof member.stats.hp === 'number') ? member.stats.hp : member.hp || 0;
-                    const amountGained = fort * 0.3 * secondsToTick;
+                    const amountGained = fort * 0.3 * secondsToTick * rateMultiplier;
                     const newHp = Math.min(maxHp, (member.hp || 0) + amountGained);
                     return { ...member, hp: newHp };
                 }
@@ -394,6 +401,7 @@ export async function endCamp(component) {
         delete m.campElapsedSeconds;
         delete m.campTotalSeconds;
         delete m.isEndureCamp;
+        delete m.isResolveCamp;
         delete m.initialCampResolve;
         delete m.targetCampResolveGain;
         delete m.isPlayerInHutCamp;

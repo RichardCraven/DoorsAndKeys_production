@@ -625,6 +625,7 @@
 }
 
 .pe-tactical-grid {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -780,6 +781,22 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.7), 0 0 8px rgba(239, 68, 68, 0.4);
 }
 
+.pe-board-unit--attack-target {
+  border-color: #ef4444 !important;
+  box-shadow: inset 0 0 16px rgba(239, 68, 68, 0.4), 0 0 18px rgba(239, 68, 68, 0.7) !important;
+}
+
+.pe-board-unit--attack-target .pe-unit-portrait {
+  border-color: #ff4d4d !important;
+  box-shadow: 0 0 14px rgba(255, 77, 77, 0.95), 0 0 4px #ffffff !important;
+  animation: pe-pulse-attack-target 1s ease-in-out infinite alternate;
+}
+
+@keyframes pe-pulse-attack-target {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.12); }
+}
+
 .pe-unit-name {
   font-family: 'Cinzel', 'Outfit', sans-serif;
   font-size: 8.5px;
@@ -917,6 +934,29 @@
   transform: translateY(-35px) scale(1.15) rotate(0deg) !important;
   z-index: 250 !important;
   box-shadow: 0 16px 36px rgba(0,0,0,0.95), 0 0 20px rgba(201, 168, 76, 0.6);
+}
+
+/* Card Dealing Animation (from left side of container) */
+.pe-fanned-card--dealt {
+  will-change: transform, opacity;
+}
+
+@keyframes pe-deal-card-from-left {
+  0% {
+    opacity: 0;
+    transform: translateX(-480px) translateY(-60px) rotate(-35deg) scale(0.35);
+    box-shadow: -20px 20px 35px rgba(0, 0, 0, 0.95), 0 0 25px rgba(56, 189, 248, 0.85);
+    filter: brightness(1.5);
+  }
+  70% {
+    opacity: 1;
+    filter: brightness(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: var(--pe-card-transform);
+    filter: brightness(1);
+  }
 }
 
 /* ── Attack Lunge & Hit Impact Animations ──────────────────────── */
@@ -1345,8 +1385,7 @@
   padding: 20px;
 }
 
-.pe-end-modal,
-.pe-forfeit-modal {
+.pe-end-modal {
   background: rgba(15, 12, 25, 0.95);
   border: 1px solid rgba(212, 168, 68, 0.4);
   border-radius: 12px;
@@ -1386,38 +1425,10 @@
   margin-bottom: 32px;
 }
 
-.pe-end-icon,
-.pe-forfeit-icon {
+.pe-end-icon {
   font-size: 48px;
   margin-bottom: 16px;
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.4);
-}
-
-.pe-forfeit-title {
-  font-family: 'Cinzel', serif;
-  font-size: 18px;
-  color: var(--pe-gold);
-  margin-bottom: 10px;
-}
-
-.pe-forfeit-body {
-  font-size: 13px;
-  color: var(--pe-text-dim);
-  margin-bottom: 20px;
-}
-
-.pe-forfeit-btns {
-  display: flex;
-  gap: 12px;
-}
-
-.pe-forfeit-cancel {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-.pe-forfeit-confirm {
-  background: #c94040;
-  color: #fff;
 }
 
 /* Mobile Orbs default state: hidden on desktop */
@@ -2207,7 +2218,7 @@
   100% { transform: scale(1.02); opacity: 0.98; }
 }
 
-/* SVG Ability Overlay for Ranger jump-over arc and Wizard NE/NW diagonal arrows */
+/* SVG Ability Overlay for Ranger jump-over arc, Wizard NE/NW arrows, and Tactical Move/Attack Arcs */
 .pe-grid-ability-overlay-svg {
   position: absolute;
   top: 0;
@@ -2218,6 +2229,83 @@
   z-index: 45;
   overflow: visible;
 }
+
+/* Tactical Action Arcing Arrows (Move & Attack) */
+.pe-tactical-arc {
+  fill: none;
+  pointer-events: none;
+}
+
+.pe-tactical-arc--move {
+  stroke: #38bdf8;
+  stroke-width: 3.5;
+  stroke-dasharray: 8 5;
+  filter: drop-shadow(0 0 6px rgba(56, 189, 248, 0.95)) drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
+  animation: pe-tactical-dash-move 1s linear infinite;
+}
+
+.pe-tactical-arc--attack {
+  stroke: #ef4444;
+  stroke-width: 4;
+  stroke-dasharray: 9 4;
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.95)) drop-shadow(0 0 3px rgba(0, 0, 0, 0.9));
+  animation: pe-tactical-dash-attack 0.7s linear infinite;
+}
+
+.pe-tactical-arc--hero {
+  stroke: #f59e0b;
+  stroke-width: 4.5;
+  stroke-dasharray: 10 5;
+  filter: drop-shadow(0 0 10px rgba(245, 158, 11, 0.95)) drop-shadow(0 0 3px rgba(0, 0, 0, 0.9));
+  animation: pe-tactical-dash-hero 0.8s linear infinite;
+}
+
+@keyframes pe-tactical-dash-move {
+  from { stroke-dashoffset: 26; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes pe-tactical-dash-attack {
+  from { stroke-dashoffset: 26; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes pe-tactical-dash-hero {
+  from { stroke-dashoffset: 30; }
+  to { stroke-dashoffset: 0; }
+}
+
+.pe-tactical-target-reticle {
+  fill: none;
+  pointer-events: none;
+}
+
+.pe-tactical-target-reticle--move {
+  stroke: #38bdf8;
+  stroke-width: 2;
+  stroke-dasharray: 4 3;
+  fill: rgba(56, 189, 248, 0.15);
+  animation: pe-reticle-pulse-cyan 1.2s ease-in-out infinite alternate;
+}
+
+.pe-tactical-target-reticle--attack {
+  stroke: #ef4444;
+  stroke-width: 2.5;
+  stroke-dasharray: 5 3;
+  fill: rgba(239, 68, 68, 0.22);
+  animation: pe-reticle-pulse-red 0.9s ease-in-out infinite alternate;
+}
+
+@keyframes pe-reticle-pulse-cyan {
+  0% { stroke-opacity: 0.6; fill-opacity: 0.1; }
+  100% { stroke-opacity: 1; fill-opacity: 0.28; }
+}
+
+@keyframes pe-reticle-pulse-red {
+  0% { stroke-opacity: 0.7; fill-opacity: 0.15; }
+  100% { stroke-opacity: 1; fill-opacity: 0.35; }
+}
+
 
 /* ── ACTION CARD ANIMATION OVERLAY ────────────────────────────── */
 .pe-action-card-overlay {

@@ -2110,8 +2110,6 @@ export function CombatManagerRedux() {
             }
             const dx = Math.abs(cc.x - tc.x);
             const dy = Math.abs(cc.y - tc.y);
-            const dist = dx + dy; // Manhattan distance
-
             if (rangeType === 'close') {
                 const limit = RANGE_LIMITS['close'] || 1;
                 const ok = dx <= limit && dy <= limit;

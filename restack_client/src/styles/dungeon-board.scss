@@ -2566,7 +2566,105 @@
     }
 }
 
-/* ── Pocket Dimension Sub-Tile Entity Sprites (Fluid Micro-Grid) ── */
+/* ── Pocket Dimension Avatar Healing Floating Indicators ── */
+.avatar-heal-indicator {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    transform: translate(-50%, 0);
+    font-family: 'Cinzel', 'Cinzel Decorative', 'Trajan Pro', Georgia, serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: #4ade80;
+    text-shadow:
+        0 0 4px rgba(74, 222, 128, 0.9),
+        0 0 10px rgba(52, 211, 153, 0.85),
+        0 0 16px rgba(16, 185, 129, 0.65),
+        0 1px 3px rgba(0, 0, 0, 0.95);
+    pointer-events: none;
+    user-select: none;
+    white-space: nowrap;
+    z-index: 45;
+    animation: avatarHealFloatUp 1.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes avatarHealFloatUp {
+    0% {
+        transform: translate(-50%, 0) scale(0.75);
+        opacity: 0;
+    }
+    18% {
+        transform: translate(-50%, -10px) scale(1.2);
+        opacity: 1;
+    }
+    35% {
+        transform: translate(-50%, -18px) scale(1.05);
+        opacity: 1;
+    }
+    70% {
+        transform: translate(-50%, -36px) scale(1);
+        opacity: 0.9;
+    }
+    100% {
+        transform: translate(-50%, -52px) scale(0.85);
+        opacity: 0;
+    }
+}
+
+/* ── Avatar Directional Facing Indicator ── */
+.avatar-facing-indicator {
+    position: absolute;
+    inset: 0;
+    border-radius: 3px;
+    pointer-events: none;
+    z-index: 5;
+    animation: facingGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes facingGlow {
+    0%   { opacity: 0.55; }
+    100% { opacity: 1.0; }
+}
+
+/* ── Melee Range Ring (amber) ── */
+.melee-ring {
+    animation: rangeRingPulseMelee 3s ease-in-out infinite;
+}
+
+@keyframes rangeRingPulseMelee {
+    0%   { opacity: 0.55; box-shadow: 0 0 8px rgba(245,158,11,0.3), inset 0 0 8px rgba(245,158,11,0.05); }
+    50%  { opacity: 0.85; box-shadow: 0 0 18px rgba(245,158,11,0.55), inset 0 0 14px rgba(245,158,11,0.12); }
+    100% { opacity: 0.55; box-shadow: 0 0 8px rgba(245,158,11,0.3), inset 0 0 8px rgba(245,158,11,0.05); }
+}
+
+/* ── Weapon Swing Arc (cosmetic melee cone) ── */
+.weapon-swing-arc {
+    transform-origin: center center;
+    border-radius: 50%;
+    background: radial-gradient(circle at center, rgba(251,191,36,0.32) 0%, rgba(245,158,11,0.2) 45%, transparent 70%);
+    clip-path: polygon(50% 50%, 82% 5%, 100% 50%, 82% 95%);
+    animation: swingArcFade 0.5s ease-out forwards;
+}
+
+.weapon-swing-icon {
+    animation: swingIconPulse 0.5s ease-out forwards;
+}
+
+@keyframes swingArcFade {
+    0%   { opacity: 0;   transform: translate(-50%, -50%) rotate(calc(var(--base-rot, 0deg) - 40deg)); }
+    20%  { opacity: 1.0; }
+    80%  { opacity: 0.9; }
+    100% { opacity: 0;   transform: translate(-50%, -50%) rotate(calc(var(--base-rot, 0deg) + 40deg)); }
+}
+
+@keyframes swingIconPulse {
+    0%   { opacity: 0;   transform: translate(-50%, -50%) rotate(30deg) scale(0.9); }
+    25%  { opacity: 1.0; transform: translate(-50%, -50%) rotate(45deg) scale(1.2); }
+    75%  { opacity: 0.95; transform: translate(-50%, -50%) rotate(55deg) scale(1.1); }
+    100% { opacity: 0;   transform: translate(-50%, -50%) rotate(65deg) scale(0.9); }
+}
+
+
 .pocket-entity-sprite {
     will-change: transform;
     transition: transform 0.35s cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -3908,6 +4006,59 @@
     animation: playerGlide 0.15s cubic-bezier(0.2, 0.8, 0.2, 1) forwards !important;
 }
 
+/* ── Aggro Monster Pulsing Glow & Attack Lunge Animations ────────────── */
+@keyframes aggroMonsterPulse {
+    0% {
+        transform: scale(0.95);
+        filter: brightness(1.3) drop-shadow(0 0 14px rgba(255, 0, 0, 0.9));
+        opacity: 0.88;
+    }
+    100% {
+        transform: scale(1.12);
+        filter: brightness(2.0) drop-shadow(0 0 32px rgba(255, 0, 0, 1));
+        opacity: 1;
+    }
+}
+
+.monster-portrait-glow.aggro-monster-glow {
+    animation: aggroMonsterPulse 0.8s ease-in-out infinite alternate !important;
+}
+
+@keyframes aggroAttackLunge {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1);
+        filter: brightness(1.2);
+    }
+    45% {
+        transform: translate3d(calc(var(--aggro-attack-x, 0%) * 0.6), calc(var(--aggro-attack-y, 0%) * 0.6), 0) scale(1.25);
+        filter: brightness(1.9) drop-shadow(0 0 25px rgba(255, 0, 0, 1));
+    }
+    100% {
+        transform: translate3d(var(--aggro-attack-x, 0%), var(--aggro-attack-y, 0%), 0) scale(1.1);
+        filter: brightness(1.6) drop-shadow(0 0 20px rgba(255, 0, 0, 0.95));
+    }
+}
+
+.tile.aggro-attack-lunge .portrait,
+.tile.aggro-attack-lunge .monster-portrait-glow {
+    animation: aggroAttackLunge 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards !important;
+}
+
+.tile.aggro-attack-lunge {
+    z-index: 150 !important;
+}
+
+/* Foreground Z-Index for Tall Dungeon Litter (e.g. Fractured Monolith) & Structures extending upwards over units */
+.tile.foreground-zindex,
+.foreground-zindex {
+    z-index: 120 !important;
+}
+
+.tile.foreground-zindex .portrait {
+    z-index: 120 !important;
+}
+
+
 @keyframes pulseGlow {
     from {
         text-shadow: 0 0 10px rgba(255, 59, 48, 0.5), 0 0 2px rgba(255, 59, 48, 0.3);
@@ -3937,14 +4088,16 @@
     to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
 }
 
-/* Trap Popup */
+/* Trap Popup (Dark Esoteric Hazard) */
 .trap-popup-overlay {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(6, 4, 12, 0.93);
+    background: rgba(6, 5, 8, 0.88);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 9999;
     display: flex;
     align-items: center;
@@ -3959,26 +4112,30 @@
 }
 
 .trap-popup-card {
-    background: linear-gradient(135deg, #18120c 0%, #120d07 100%);
-    border: 1.5px solid rgba(230, 126, 34, 0.6);
-    box-shadow: 0 0 25px rgba(230, 126, 34, 0.25), inset 0 0 15px rgba(0, 0, 0, 0.5);
-    padding: 24px 28px;
-    color: white;
+    position: relative;
+    background: radial-gradient(circle at 50% 0%, rgba(65, 30, 10, 0.75) 0%, rgba(16, 12, 16, 0.98) 70%),
+                linear-gradient(180deg, #181114 0%, #0c090c 100%);
+    border: 1px solid rgba(212, 163, 89, 0.35);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.92),
+                0 0 35px rgba(230, 126, 34, 0.25),
+                inset 0 1px 0 rgba(255, 230, 180, 0.12),
+                inset 0 0 30px rgba(0, 0, 0, 0.75);
+    padding: 28px 24px 24px;
+    color: #f3eae0;
     text-align: center;
-    border-radius: 16px;
-    width: 420px;
+    border-radius: 12px;
+    width: 440px;
     max-width: 94%;
     max-height: calc(100vh - 24px);
     overflow-y: auto;
+    overflow-x: hidden;
     box-sizing: border-box;
     margin: auto;
     animation: smoothCardScaleIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
     will-change: transform, opacity;
-    position: relative;
     backface-visibility: hidden;
     transform: translate3d(0, 0, 0);
     -webkit-font-smoothing: antialiased;
-    font-family: 'Outfit', 'Inter', sans-serif;
 
     &::before {
         content: '';
@@ -3987,123 +4144,211 @@
         left: 0;
         right: 0;
         height: 3px;
-        background: linear-gradient(90deg, transparent, #e67e22, #f39c12, #e67e22, transparent);
+        background: linear-gradient(90deg, transparent, rgba(212, 163, 89, 0.7) 20%, #f39c12 50%, rgba(212, 163, 89, 0.7) 80%, transparent);
+        box-shadow: 0 0 12px rgba(243, 156, 18, 0.7);
+    }
+
+    .card-corner {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        border-color: rgba(212, 163, 89, 0.45);
+        pointer-events: none;
+
+        &.top-left {
+            top: 8px;
+            left: 8px;
+            border-top: 1px solid;
+            border-left: 1px solid;
+        }
+        &.top-right {
+            top: 8px;
+            right: 8px;
+            border-top: 1px solid;
+            border-right: 1px solid;
+        }
+        &.bottom-left {
+            bottom: 8px;
+            left: 8px;
+            border-bottom: 1px solid;
+            border-left: 1px solid;
+        }
+        &.bottom-right {
+            bottom: 8px;
+            right: 8px;
+            border-bottom: 1px solid;
+            border-right: 1px solid;
+        }
     }
 }
 
 .trap-title {
-    font-family: 'Cinzel Decorative', 'Cinzel', serif;
-    font-size: 1.75rem;
-    font-weight: 700;
+    font-family: 'Cinzel', serif !important;
+    font-size: 26px !important;
+    font-weight: 700 !important;
     text-transform: uppercase;
-    letter-spacing: 2px;
-    color: #f39c12;
-    text-shadow: 0 0 12px rgba(243, 156, 18, 0.45);
-    margin-bottom: 6px;
-    margin-top: 2px;
-    animation: pulseGlow 2s infinite alternate;
+    letter-spacing: 3px !important;
+    color: #f1e7d8 !important;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 24px rgba(230, 126, 34, 0.5) !important;
+    margin: 0 0 8px !important;
+    animation: none !important;
 }
 
 .trap-subtitle {
-    font-family: 'Outfit', 'Inter', sans-serif;
-    font-size: 0.95rem;
-    color: #c5bba8;
-    margin-bottom: 18px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px !important;
+    color: #d8cebe;
+    margin-bottom: 16px !important;
+    line-height: 1.5;
+
+    .monster-highlight {
+        color: #e5c158;
+        font-weight: 700;
+        text-shadow: 0 0 8px rgba(229, 193, 88, 0.35);
+    }
+}
+
+.trap-emblem-frame {
+    width: 68px;
+    height: 68px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #2a150c 0%, #0c090c 100%);
+    border: 1px solid rgba(212, 163, 89, 0.35);
+    box-shadow: 0 0 20px rgba(230, 126, 34, 0.3), inset 0 0 12px rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+
+    .trap-emblem-img {
+        width: 38px;
+        height: 38px;
+        object-fit: contain;
+        filter: drop-shadow(0 0 8px rgba(230, 126, 34, 0.6));
+    }
 }
 
 .trap-crew-results {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    margin-bottom: 20px;
-    max-height: 240px;
+    gap: 8px;
+    margin-bottom: 16px;
+    max-height: 220px;
     overflow-y: auto;
+    padding-right: 2px;
 }
 
 .trap-crew-row {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
     padding: 8px 12px;
-    border-radius: 8px;
+    border-radius: 6px;
     font-size: 0.9rem;
     font-family: 'Outfit', 'Inter', sans-serif;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
 
     &.saved {
-        background: rgba(46, 204, 113, 0.1);
-        border: 1px solid rgba(46, 204, 113, 0.22);
+        background: linear-gradient(90deg, rgba(46, 204, 113, 0.12) 0%, rgba(18, 28, 22, 0.4) 100%);
+        border: 1px solid rgba(46, 204, 113, 0.3);
     }
 
     &.hit {
-        background: rgba(231, 76, 60, 0.1);
-        border: 1px solid rgba(231, 76, 60, 0.22);
+        background: linear-gradient(90deg, rgba(231, 76, 60, 0.14) 0%, rgba(35, 14, 14, 0.4) 100%);
+        border: 1px solid rgba(231, 76, 60, 0.3);
     }
 }
 
 .trap-crew-name {
     font-family: 'Cinzel', serif;
-    font-weight: 600;
-    color: #eaeaea;
-    min-width: 100px;
+    font-weight: 700;
+    color: #f1e7d8;
+    min-width: 95px;
     text-align: left;
     letter-spacing: 0.5px;
+    font-size: 13px;
 }
 
 .trap-roll-info {
     font-family: 'Outfit', 'Inter', sans-serif;
-    color: #999;
-    font-size: 0.8rem;
+    color: #b5a895;
+    font-size: 12px;
     flex: 1;
     text-align: center;
 }
 
 .trap-result-label {
-    font-family: 'Outfit', 'Inter', sans-serif;
+    font-family: 'Cinzel', serif;
     font-weight: 700;
-    font-size: 0.85rem;
-    min-width: 80px;
+    font-size: 12px;
+    min-width: 75px;
     text-align: right;
+    letter-spacing: 0.5px;
 
     &.dodged {
-        color: #2ecc71;
+        color: #4ade80;
+        text-shadow: 0 0 8px rgba(74, 222, 128, 0.45);
     }
 
     &.damaged {
-        color: #e74c3c;
+        color: #f87171;
+        text-shadow: 0 0 8px rgba(248, 113, 113, 0.45);
     }
+}
+
+.trap-keen-eye-badge {
+    font-family: 'Cinzel', serif;
+    font-size: 11px;
+    color: #e5c158;
+    background: rgba(229, 193, 88, 0.08);
+    border: 1px solid rgba(229, 193, 88, 0.25);
+    border-radius: 4px;
+    padding: 5px 14px;
+    margin-bottom: 16px;
+    letter-spacing: 1px;
+    display: inline-block;
+    box-shadow: 0 0 10px rgba(229, 193, 88, 0.15);
 }
 
 .trap-dismiss-btn {
     font-family: 'Cinzel', serif;
-    background: rgba(230, 126, 34, 0.14);
-    border: 1px solid rgba(230, 126, 34, 0.45);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-    color: #e2cca6;
-    font-size: 0.95rem;
-    font-weight: 600;
-    letter-spacing: 1.5px;
-    padding: 8px 28px;
-    border-radius: 8px;
-    cursor: pointer;
-    display: inline-block;
-    transition: all 0.2s ease;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
     text-transform: uppercase;
+    padding: 11px 42px;
+    background: linear-gradient(180deg, #3d2414 0%, #1c1008 100%);
+    border: 1px solid rgba(230, 126, 34, 0.6);
+    color: #f1e2cd;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7), 0 0 16px rgba(230, 126, 34, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    transition: all 0.2s ease;
+    display: inline-block;
 
     &:hover {
-        background: rgba(230, 126, 34, 0.28);
-        border-color: rgba(230, 126, 34, 0.75);
+        background: linear-gradient(180deg, #543118 0%, #28160b 100%);
+        border-color: #f39c12;
         color: #ffffff;
-        box-shadow: 0 4px 12px rgba(230, 126, 34, 0.3);
+        box-shadow: 0 0 24px rgba(243, 156, 18, 0.5), 0 4px 16px rgba(0, 0, 0, 0.8);
         transform: translateY(-1px);
+    }
+
+    &:active {
+        transform: translateY(1px);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
     }
 }
 
 .trap-shortcut-hint {
-    font-family: 'Outfit', 'Inter', sans-serif;
-    margin-top: 8px;
-    font-size: 0.75rem;
-    color: #666;
-    letter-spacing: 0.5px;
+    margin-top: 10px;
+    font-family: 'Cinzel', serif;
+    font-size: 10px;
+    color: #8e8477;
+    text-transform: uppercase;
+    letter-spacing: 1px;
 }
 
 /* Trap tile indicator (Keen Eye reveal) */
@@ -6511,6 +6756,150 @@
     pointer-events: none;
     user-select: none;
 }
+
+/* Pocket Dimension Empty Space Destination Reticle */
+.pocket-destination-reticle {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    right: 2px;
+    bottom: 2px;
+    pointer-events: none;
+    z-index: 45;
+    animation: pocketReticleAppear 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+    &.fading-out {
+        animation: pocketReticleFadeOut 0.35s ease-out forwards;
+    }
+
+    .reticle-corner {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        box-sizing: border-box;
+
+        &.top-left {
+            top: 0;
+            left: 0;
+            border-top: 1.5px solid rgba(255, 255, 255, 0.8);
+            border-left: 1.5px solid rgba(255, 255, 255, 0.8);
+            box-shadow: -1px -1px 3px rgba(255, 255, 255, 0.35);
+        }
+
+        &.top-right {
+            top: 0;
+            right: 0;
+            border-top: 1.5px solid rgba(255, 255, 255, 0.8);
+            border-right: 1.5px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 1px -1px 3px rgba(255, 255, 255, 0.35);
+        }
+
+        &.bottom-left {
+            bottom: 0;
+            left: 0;
+            border-bottom: 1.5px solid rgba(255, 255, 255, 0.8);
+            border-left: 1.5px solid rgba(255, 255, 255, 0.8);
+            box-shadow: -1px 1px 3px rgba(255, 255, 255, 0.35);
+        }
+
+        &.bottom-right {
+            bottom: 0;
+            right: 0;
+            border-bottom: 1.5px solid rgba(255, 255, 255, 0.8);
+            border-right: 1.5px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 1px 1px 3px rgba(255, 255, 255, 0.35);
+        }
+    }
+}
+
+@keyframes pocketReticleAppear {
+    0% {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes pocketReticleFadeOut {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    100% {
+        opacity: 0;
+        transform: scale(1.05);
+    }
+}
+
+/* Active Spawn Point Portal (Enlarged & Spinning) */
+.spawn-point-spinning {
+    animation: spawnPointSpin 6s linear infinite !important;
+    transform-origin: center center !important;
+    filter: drop-shadow(0 0 10px rgba(192, 132, 252, 0.85)) drop-shadow(0 0 20px rgba(168, 85, 247, 0.5));
+}
+
+@keyframes spawnPointSpin {
+    0% {
+        transform: scale(2) rotate(0deg);
+    }
+    100% {
+        transform: scale(2) rotate(360deg);
+    }
+}
+
+/* ── Pocket Dimension Layered Healing Circle ── */
+.healing-circle-complex {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    user-select: none;
+
+    .healing-circle-base {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-size: 100% 100%;
+        background-position: center;
+        background-repeat: no-repeat;
+        pointer-events: none;
+        transition: filter 0.65s ease;
+    }
+
+    .healing-circle-shard {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-size: 100% 100%;
+        background-position: center;
+        background-repeat: no-repeat;
+        pointer-events: none;
+        will-change: transform, filter;
+    }
+
+    &.active {
+        .healing-circle-base {
+            filter: drop-shadow(0 0 8px rgba(52, 211, 153, 0.65)) brightness(1.05);
+        }
+    }
+
+    &.inert {
+        .healing-circle-base {
+            filter: none;
+        }
+    }
+}
+
+
 
 
 

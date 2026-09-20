@@ -649,6 +649,7 @@ import ranger_eyes_glow_green from '../assets/portraits/crew/rogue/ranger_eyes_g
 import ranger_eyes_glow_gold from '../assets/portraits/crew/rogue/ranger_eyes_glow_gold.png'
 import ranger_eyes_glow_red from '../assets/portraits/crew/rogue/ranger_eyes_glow_red.png'
 import barbarian_portrait from '../assets/portraits/crew/barbarian/barbarian_compressed.png'
+import glitterburn_portrait from '../assets/portraits/crew/glitterburn/glitterburn_compressed.png'
 
 import ogre_portrait from '../assets/portraits/monsters/ogre.png'
 import goblin_thief_portrait from '../assets/portraits/monsters/goblin_thief.png'
@@ -1269,8 +1270,13 @@ import pocket_rift_2 from '../assets/icons/buildings/pocket dimension/rift_2.png
 import pocket_tower_4 from '../assets/icons/buildings/pocket dimension/tower_4.png';
 import pocket_tower_5 from '../assets/icons/buildings/pocket dimension/tower_5.png';
 import pocket_blacksmith from '../assets/icons/buildings/pocket dimension/blacksmith.png';
-
-const healing_circle = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='none' stroke='%23ffffff' stroke-width='8'/></svg>";
+import healing_circle_complete from '../assets/icons/buildings/pocket dimension/healing circle/healing circle complete.png';
+import healing_circle_base from '../assets/icons/buildings/pocket dimension/healing circle/healing_circle_base_without_floating_objects.png';
+import healing_circle_shard_1 from '../assets/icons/buildings/pocket dimension/healing circle/healing_circle_floating_shard_1_far_left.png';
+import healing_circle_shard_2 from '../assets/icons/buildings/pocket dimension/healing circle/healing_circle_floating_shard_2_upper_left.png';
+import healing_circle_shard_3 from '../assets/icons/buildings/pocket dimension/healing circle/healing_circle_floating_shard_3_top_center.png';
+import healing_circle_shard_4 from '../assets/icons/buildings/pocket dimension/healing circle/healing_circle_floating_shard_4_upper_right.png';
+import healing_circle_shard_5 from '../assets/icons/buildings/pocket dimension/healing circle/healing_circle_floating_shard_5_far_right.png';
 
 // ── Terrain Assets ────────────────────────────────────────────────────────
 import grass_rocks_base from '../assets/icons/terrain/grass_rocks_base.png';
@@ -2237,6 +2243,8 @@ export {
     ranger_eyes_glow_red,
     barbarian_portrait,
     soldier_portrait,
+    glitterburn_portrait,
+    glitterburn_portrait as glitterburn,
 
     ogre_portrait,
     goblin_thief_portrait,
@@ -2889,8 +2897,32 @@ export {
     pocket_tower_4,
     pocket_tower_5,
     pocket_blacksmith,
-    healing_circle,
-    healing_circle as pocket_healing_circle,
+    healing_circle_complete,
+    healing_circle_base,
+    healing_circle_shard_1,
+    healing_circle_shard_2,
+    healing_circle_shard_3,
+    healing_circle_shard_4,
+    healing_circle_shard_5,
+    healing_circle_complete as healing_circle,
+    healing_circle_complete as pocket_healing_circle,
+
+    // Pocket Dimension World Structures / Generators
+    domain_monolith as pocket_domain_monolith,
+    dark_domain_monolith as pocket_dark_domain_monolith,
+    domain_node as pocket_domain_node,
+    dark_domain_node as pocket_dark_domain_node,
+    lumber_mill as pocket_sawmill,
+    lumber_mill as pocket_lumber_mill,
+    lumber_mill as sawmill,
+    lumber_mill as buildable_sawmill,
+    ore_mine as pocket_ore_mine,
+    ore_mine as pocket_mine,
+    slate_mine as pocket_slate_mine,
+    cultivation_vat as pocket_cultivation_vat,
+    dust_collector as pocket_dust_collector,
+    fungal_nursery as pocket_fungal_nursery,
+    larder as pocket_larder,
 
     // Terrain Assets
 
@@ -2926,7 +2958,8 @@ const portraitMap = {
     rogue: ranger_portrait || ranger,
     sage: sage_portrait || sage,
     engineer: engineer,
-    summoner: summoner
+    summoner: summoner,
+    glitterburn: glitterburn_portrait
 };
 
 export const getCrewPortraitBackground = (portraitUrl, classType) => {

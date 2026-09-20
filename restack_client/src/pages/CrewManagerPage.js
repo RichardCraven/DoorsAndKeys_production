@@ -196,7 +196,8 @@ class CrewManagerPage extends React.Component {
             selectedCrew: [],
             selectedCrewMember: null,
             navToLanding: false,
-            crewSlots: [null, null, null, null],
+            crewSlots: [null, null, null, null, null],
+            isRosterLocked: false,
             advancedUser: false,
             removalWarningModal: null
         }
@@ -204,21 +205,10 @@ class CrewManagerPage extends React.Component {
 
     timer = null
 
-    // onClickHandler = event => {
-    //     clearTimeout(this.timer);
-
-    //     if (event.detail === 1) {
-    //         this.timer = setTimeout(this.props.onClick, 200)
-    //     } else if (event.detail === 2) {
-    // ...existing code...
-    //         // this.props.onDoubleClick()
-    //     }
-    // }
-
     componentDidMount() {
         window.addEventListener('keydown', this.handleKeyDown);
-        let options = this.props.crewManager.adventurers || [];
-        const meta = getMeta();
+        let options = (this.props.crewManager && this.props.crewManager.adventurers) || [];
+        const meta = getMeta() || {};
         
         let infirmaryPatients = meta?.infirmary?.patients || [];
         let sageCommitted = meta?.infirmary?.sageCommitted || false;
@@ -229,25 +219,60 @@ class CrewManagerPage extends React.Component {
             return true;
         });
 
-        let selectedCrew = [];
-        if (meta && meta.crew && meta.crew.length) {
-            // Re-hydrate portrait from the live adventurers list so stale sessionStorage
-            // URLs (from a previous webpack build) don't cause blank portraits in the tray.
-            const adventurers = this.props.crewManager.adventurers || [];
-            meta.crew.forEach((e, i) => {
+        const isRosterLocked = !!(meta.rosterLocked || meta.dungeonEntered);
+        const lockedRosterIds = Array.isArray(meta.lockedRoster) ? meta.lockedRoster : null;
+
+        // If roster is locked for this dungeon instance, filter options so ONLY roster members are shown!
+        if (isRosterLocked) {
+            options = options.filter(opt => {
+                if (!opt) return false;
+                if (lockedRosterIds && lockedRosterIds.length > 0) {
+                    return lockedRosterIds.includes(opt.id);
+                }
+                const activeInMeta = Array.isArray(meta.crew) && meta.crew.some(c => c && c.id === opt.id);
+                const altInMeta = Array.isArray(meta.alternateCrew) && meta.alternateCrew.some(c => c && c.id === opt.id);
+                return activeInMeta || altInMeta;
+            });
+        }
+
+        let selectedCrew = [null, null, null, null, null];
+        const adventurers = (this.props.crewManager && this.props.crewManager.adventurers) || [];
+
+        // Re-hydrate active in-dungeon crew (slots 0-2)
+        if (meta && Array.isArray(meta.crew)) {
+            meta.crew.slice(0, 3).forEach((e, i) => {
+                if (!e) return;
                 const template = adventurers.find(a =>
                     (a.id && a.id === e.id) ||
                     (a.image && a.image === (e.image || e.type)) ||
                     (a.type && a.type === (e.type || e.image))
                 );
-                if (template) e.portrait = template.portrait;
+                if (template && !e.portrait) e.portrait = template.portrait;
                 selectedCrew[i] = e;
             });
         }
+
+        // Re-hydrate alternate crew (slots 3-4)
+        if (meta && Array.isArray(meta.alternateCrew)) {
+            meta.alternateCrew.slice(0, 2).forEach((e, i) => {
+                if (!e) return;
+                const template = adventurers.find(a =>
+                    (a.id && a.id === e.id) ||
+                    (a.image && a.image === (e.image || e.type)) ||
+                    (a.type && a.type === (e.type || e.image))
+                );
+                if (template && !e.portrait) e.portrait = template.portrait;
+                selectedCrew[3 + i] = e;
+            });
+        }
+
+        const firstSelected = selectedCrew.find(c => c !== null) || options[0] || null;
+
         this.setState({
             options,
             selectedCrew,
-            selectedCrewMember: selectedCrew[0]
+            selectedCrewMember: firstSelected,
+            isRosterLocked
         })
     }
 
@@ -290,30 +315,51 @@ class CrewManagerPage extends React.Component {
     }
     selectCrewMember = (event, crewMember) => {
         clearTimeout(this.timer);
+        if (crewMember && (crewMember.disabled || crewMember.locked)) {
+            this.setState({ selectedCrewMember: crewMember });
+            return;
+        }
         const savedMember = this.state.selectedCrew.find(c => c && (c.id === crewMember.id || c.name === crewMember.name));
         const memberToUse = savedMember || crewMember;
 
         if (event.detail === 1) {
             this.timer = setTimeout(() => this.singleClick(memberToUse), 200)
         } else if (event.detail === 2) {
-            let crew = this.state.selectedCrew;
-            if (crew.length === 3 && !this.state.advancedUser) return
-            if (!crew.includes(memberToUse)) crew.push(memberToUse)
-            this.setState({
-                selectedCrew: crew
-            })
+            if (this.state.isRosterLocked) return;
+            let crew = [...this.state.selectedCrew];
+            while (crew.length < 5) crew.push(null);
+            if (!crew.some(c => c && (c.id === memberToUse.id || c.name === memberToUse.name))) {
+                const emptyIdx = crew.findIndex(c => c === null);
+                if (emptyIdx !== -1) {
+                    crew[emptyIdx] = memberToUse;
+                    this.setState({ selectedCrew: crew });
+                }
+            }
         }
         this.setState({
             selectedCrewMember: memberToUse
         })
     }
-    addMember = (index) => {
-        let member = this.state.selectedCrewMember
-        let crew = this.state.selectedCrew;
-        if (!crew.includes(member)) crew.push(member)
-        this.setState({
-            selectedCrew: crew
-        })
+    addMember = (targetIndex) => {
+        if (this.state.isRosterLocked) return;
+        let member = this.state.selectedCrewMember;
+        if (!member || member.disabled || member.locked) return;
+        let crew = [...this.state.selectedCrew];
+        while (crew.length < 5) crew.push(null);
+
+        if (crew.some(c => c && (c.id === member.id || c.name === member.name))) return;
+
+        let insertIdx = (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex < 5) ? targetIndex : -1;
+        if (insertIdx === -1 || crew[insertIdx] !== null) {
+            insertIdx = crew.findIndex(c => c === null);
+        }
+
+        if (insertIdx !== -1 && insertIdx < 5) {
+            crew[insertIdx] = member;
+            this.setState({
+                selectedCrew: crew
+            });
+        }
     }
     getInProcessAction = (member) => {
         if (!member) return null;
@@ -362,12 +408,11 @@ class CrewManagerPage extends React.Component {
         const { index, member } = this.state.removalWarningModal;
         if (member) {
             const now = new Date();
-            // Clear in-process timers on the member object in the crew list
             if (Array.isArray(member.specialActions)) {
                 member.specialActions = member.specialActions.filter(a => {
                     if (!a || a.available) return true;
                     if (a.endDate && new Date(a.endDate) > now) {
-                        return false; // remove in-progress action
+                        return false;
                     }
                     return true;
                 });
@@ -376,7 +421,6 @@ class CrewManagerPage extends React.Component {
                 delete member.tattooImprinting;
             }
 
-            // Synchronize with options list (the pool) and live adventurers templates
             const targetId = member.id;
             if (this.props.crewManager && Array.isArray(this.props.crewManager.adventurers)) {
                 const adv = this.props.crewManager.adventurers.find(a => a.id === targetId);
@@ -396,7 +440,6 @@ class CrewManagerPage extends React.Component {
                 }
             }
 
-            // Also update in component options state
             if (Array.isArray(this.state.options)) {
                 const updatedOptions = this.state.options.map(o => {
                     if (o && o.id === targetId) {
@@ -426,14 +469,18 @@ class CrewManagerPage extends React.Component {
     }
 
     executeRemoveMember = (index) => {
+        if (this.state.isRosterLocked) return;
         let crew = [...this.state.selectedCrew];
-        crew.splice(index, 1);
+        if (index >= 0 && index < crew.length) {
+            crew[index] = null;
+        }
         this.setState({
             selectedCrew: crew
         });
     }
 
     removeMember = (index) => {
+        if (this.state.isRosterLocked) return;
         const member = this.state.selectedCrew[index];
         if (member) {
             const inProcessAction = this.getInProcessAction(member);
@@ -450,39 +497,32 @@ class CrewManagerPage extends React.Component {
         }
         this.executeRemoveMember(index);
     }
-    //   clearDungeon = () => {
-    //     console.log('clearing dungeon')
-    //     if(this.state.dungeon){
-    //       let user = getMeta();
-    //       user.dungeonId = null;
-    //       storeMeta(user);
-    //       setTimeout(()=>{
-    //         this.getDungeonDetails();
-    //       })
-    //     }
-    //   }
     submit = async () => {
-        const meta = getMeta();
-        let selectedCrew = this.state.selectedCrew.filter(e => e !== null);
+        const meta = getMeta() || {};
+        const rawCrew = [...this.state.selectedCrew];
 
-        // Ensure only the first member in the selected crew has isLeader set to true
-        selectedCrew.forEach((member, idx) => {
+        let activeInDungeon = rawCrew.slice(0, 3).filter(e => e !== null);
+        let alternates = rawCrew.slice(3, 5).filter(e => e !== null);
+
+        if (activeInDungeon.length === 0 && alternates.length > 0) {
+            activeInDungeon.push(alternates.shift());
+        }
+
+        activeInDungeon.forEach((member, idx) => {
             member.isLeader = (idx === 0);
         });
 
-        // Provide starting items
         const im = new InventoryManager();
         im.initializeItems();
         const allItems = im.allItems || {};
 
-        selectedCrew.forEach(member => {
+        [...activeInDungeon, ...alternates].forEach(member => {
             if (!member.inventory) member.inventory = [];
             if (member.inventory.length === 0) {
                 let itemKey = null;
                 const isBow = (k, item) => k.endsWith('_bow') || k === 'merklins_peacekeeper' || item.range === 'far';
 
                 if (member.type === 'soldier' || member.type === 'barbarian') {
-                    // Melee Fighter: swords/axes (no bows) and helms/shields
                     const pool = Object.keys(allItems).filter(k => {
                         const item = allItems[k];
                         if (!item || item.tier !== 1) return false;
@@ -492,7 +532,6 @@ class CrewManagerPage extends React.Component {
                     });
                     if (pool.length) itemKey = pool[Math.floor(Math.random() * pool.length)];
                 } else if (member.type === 'ranger') {
-                    // Ranger Fighter: bows only and helms/shields
                     const pool = Object.keys(allItems).filter(k => {
                         const item = allItems[k];
                         if (!item || item.tier !== 1) return false;
@@ -502,7 +541,6 @@ class CrewManagerPage extends React.Component {
                     });
                     if (pool.length) itemKey = pool[Math.floor(Math.random() * pool.length)];
                 } else if (['sage', 'wizard', 'monk', 'summoner', 'engineer'].includes(member.type)) {
-                    // Non-martial: amulets, masks, tabards, boots
                     const pool = Object.keys(allItems).filter(k => {
                         const item = allItems[k];
                         if (!item || item.tier !== 1) return false;
@@ -515,7 +553,6 @@ class CrewManagerPage extends React.Component {
                     const item = JSON.parse(JSON.stringify(allItems[itemKey]));
                     item.equippedBy = member.id;
 
-                    // Determine accurate equippedSlot
                     if (item.type === 'weapon') {
                         item.equippedSlot = 'right';
                     } else if (item.subtype === 'shield') {
@@ -529,7 +566,7 @@ class CrewManagerPage extends React.Component {
                     } else if (item.subtype === 'amulet' || item.subtype === 'charm') {
                         item.equippedSlot = 'ancillary-left';
                     } else {
-                        item.equippedSlot = 'right'; // fallback
+                        item.equippedSlot = 'right';
                     }
 
                     member.inventory.push(item);
@@ -537,17 +574,23 @@ class CrewManagerPage extends React.Component {
             }
         });
 
-        meta.crew = selectedCrew;
+        meta.crew = activeInDungeon;
+        meta.alternateCrew = alternates;
+        meta.lockedRoster = [...activeInDungeon, ...alternates].map(c => c.id);
+
         await updateUserRequest(getUserId(), meta);
         storeMeta(meta);
         this.goBack();
     }
     clear = () => {
-        const meta = getMeta();
+        if (this.state.isRosterLocked) return;
+        const meta = getMeta() || {};
         meta.crew = [];
+        meta.alternateCrew = [];
+        delete meta.lockedRoster;
         storeMeta(meta);
         this.setState({
-            selectedCrew: []
+            selectedCrew: [null, null, null, null, null]
         })
     }
     goBack = () => {
@@ -609,27 +652,50 @@ class CrewManagerPage extends React.Component {
                                 );
                                 const savedMember = this.state.selectedCrew.find(c => c && (c.id === e.id || c.name === e.name));
                                 const displayLevel = savedMember ? (savedMember.level || 1) : (e.level || 1);
+                                const isDisabled = !!(e.disabled || e.locked);
                                 return (
                                     <div
-                                        className={`portrait${isSelected ? ' selected' : ''}`}
+                                        className={`portrait${isSelected ? ' selected' : ''}${isDisabled ? ' disabled locked' : ''}`}
                                         key={i}
-                                        style={{ backgroundImage: getCrewPortraitBackground(e.portrait, e.type || e.image), position: 'relative' }}
+                                        style={{
+                                            backgroundImage: getCrewPortraitBackground(e.portrait, e.type || e.image),
+                                            position: 'relative',
+                                            cursor: isDisabled ? 'not-allowed' : 'pointer',
+                                            filter: isDisabled ? 'brightness(0.6) grayscale(0.2)' : 'none'
+                                        }}
                                         onClick={(event) => this.selectCrewMember(event, e)}
                                     >
+                                        {isDisabled && (
+                                            <div style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                right: 0,
+                                                bottom: 0,
+                                                backgroundColor: 'rgba(0, 0, 0, 0.45)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                borderRadius: '4px'
+                                            }}>
+                                                <span style={{ fontSize: '16px', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.8))' }}>🔒</span>
+                                            </div>
+                                        )}
                                         <span style={{
                                             position: 'absolute',
                                             bottom: '2px',
                                             right: '4px',
                                             background: 'rgba(0,0,0,0.85)',
-                                            color: '#f9b115',
+                                            color: isDisabled ? '#888888' : '#f9b115',
                                             padding: '1px 5px',
                                             borderRadius: '3px',
                                             fontSize: '9px',
                                             fontWeight: 'bold',
                                             fontFamily: 'Outfit, sans-serif',
-                                            border: '1px solid rgba(249,177,21,0.2)'
+                                            border: `1px solid ${isDisabled ? 'rgba(136,136,136,0.3)' : 'rgba(249,177,21,0.2)'}`,
+                                            zIndex: 2
                                         }}>
-                                            Lvl {displayLevel}
+                                            {isDisabled ? 'Locked' : `Lvl ${displayLevel}`}
                                         </span>
                                     </div>
                                 );
@@ -735,73 +801,153 @@ class CrewManagerPage extends React.Component {
                         <button>+</button>
                     </div> */}
                         </div>
-                        <div className="crew-tray" style={{ position: 'relative', alignItems: 'flex-end' }}>
-                            {this.state.crewSlots.map((slot, i) => {
-                                const member = this.state.selectedCrew[i];
-                                const isLeader = i === 0;
-                                const slotSize = isLeader ? '125px' : '101px';
-                                return (
-                                    <div
-                                        key={i}
-                                        className={`selected-crew-portrait-container ${i === 3 && !this.state.advancedUser ? 'closed' : ''}`}
-                                        style={{
-                                            width: slotSize,
-                                            height: slotSize,
-                                            ...(isLeader ? {
-                                                border: '1.5px solid #f9b115',
-                                                boxShadow: '0 0 12px rgba(249, 177, 21, 0.45)'
-                                            } : {})
-                                        }}
-                                    >
-                                        {isLeader && (
-                                            <div style={{
-                                                position: 'absolute',
-                                                top: '-26px',
-                                                left: '0',
-                                                right: '0',
-                                                textAlign: 'center',
-                                                fontSize: '11px',
-                                                fontWeight: 'bold',
-                                                color: '#f9b115',
-                                                fontFamily: "'Cinzel', serif",
-                                                letterSpacing: '0.1em',
-                                                textTransform: 'uppercase',
-                                                whiteSpace: 'nowrap',
-                                                pointerEvents: 'none'
-                                            }}>
-                                                Leader
-                                            </div>
-                                        )}
-                                        {(i === 3 && !this.state.advancedUser) === false && (
+                        {this.state.isRosterLocked && (
+                            <div style={{
+                                width: '100%',
+                                textAlign: 'center',
+                                padding: '6px 12px',
+                                marginBottom: '10px',
+                                background: 'rgba(255, 184, 48, 0.12)',
+                                border: '1px solid rgba(255, 184, 48, 0.35)',
+                                borderRadius: '6px',
+                                color: '#ffb830',
+                                fontSize: '12px',
+                                fontWeight: 'bold',
+                                fontFamily: "'Cinzel', serif",
+                                letterSpacing: '0.04em'
+                            }}>
+                                🔒 Dungeon Roster Locked — Unselected crew members hidden until dungeon is cleared or abandoned
+                            </div>
+                        )}
+                        <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', marginTop: '10px' }}>
+                            {/* In-Dungeon Group (Slots 0, 1, 2) */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#f9b115', fontFamily: "'Cinzel', serif", letterSpacing: '0.08em', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                    In-Dungeon Crew (3 Slots)
+                                </div>
+                                <div className="crew-tray" style={{ position: 'relative', alignItems: 'flex-end', gap: '8px' }}>
+                                    {[0, 1, 2].map((i) => {
+                                        const member = this.state.selectedCrew[i];
+                                        const isLeader = i === 0;
+                                        const slotSize = isLeader ? '125px' : '101px';
+                                        return (
                                             <div
-                                                className={`add-button ${member ? 'occupied' : (!this.state.selectedCrewMember ? 'disabled' : '')}`}
-                                                onClick={() => member ? this.removeMember(i) : this.addMember(i)}
+                                                key={i}
+                                                className="selected-crew-portrait-container"
+                                                style={{
+                                                    width: slotSize,
+                                                    height: slotSize,
+                                                    position: 'relative',
+                                                    ...(isLeader ? {
+                                                        border: '1.5px solid #f9b115',
+                                                        boxShadow: '0 0 12px rgba(249, 177, 21, 0.45)'
+                                                    } : {})
+                                                }}
                                             >
-                                                {member ? '\u2296' : '\u2295'}
+                                                {isLeader && (
+                                                    <div style={{
+                                                        position: 'absolute',
+                                                        top: '-26px',
+                                                        left: '0',
+                                                        right: '0',
+                                                        textAlign: 'center',
+                                                        fontSize: '11px',
+                                                        fontWeight: 'bold',
+                                                        color: '#f9b115',
+                                                        fontFamily: "'Cinzel', serif",
+                                                        letterSpacing: '0.1em',
+                                                        textTransform: 'uppercase',
+                                                        whiteSpace: 'nowrap',
+                                                        pointerEvents: 'none'
+                                                    }}>
+                                                        Leader
+                                                    </div>
+                                                )}
+                                                {!this.state.isRosterLocked && (
+                                                    <div
+                                                        className={`add-button ${member ? 'occupied' : (!this.state.selectedCrewMember || this.state.selectedCrewMember.disabled || this.state.selectedCrewMember.locked ? 'disabled' : '')}`}
+                                                        onClick={() => member ? this.removeMember(i) : this.addMember(i)}
+                                                    >
+                                                        {member ? '\u2296' : '\u2295'}
+                                                    </div>
+                                                )}
+                                                {member && (
+                                                    <div className="portrait" style={{ backgroundImage: getCrewPortraitBackground(member.portrait, member.type || member.image), position: 'relative', width: '100%', height: '100%' }}>
+                                                        <span style={{
+                                                            position: 'absolute',
+                                                            bottom: '2px',
+                                                            right: '4px',
+                                                            background: 'rgba(0,0,0,0.85)',
+                                                            color: '#f9b115',
+                                                            padding: '1px 5px',
+                                                            borderRadius: '3px',
+                                                            fontSize: '9px',
+                                                            fontWeight: 'bold',
+                                                            fontFamily: 'Outfit, sans-serif',
+                                                            border: '1px solid rgba(249,177,21,0.2)'
+                                                        }}>
+                                                            Lvl {member.level || 1}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                        {member && (
-                                            <div className="portrait" style={{ backgroundImage: getCrewPortraitBackground(member.portrait, member.type || member.image), position: 'relative', width: '100%', height: '100%' }}>
-                                                <span style={{
-                                                    position: 'absolute',
-                                                    bottom: '2px',
-                                                    right: '4px',
-                                                    background: 'rgba(0,0,0,0.85)',
-                                                    color: '#f9b115',
-                                                    padding: '1px 5px',
-                                                    borderRadius: '3px',
-                                                    fontSize: '9px',
-                                                    fontWeight: 'bold',
-                                                    fontFamily: 'Outfit, sans-serif',
-                                                    border: '1px solid rgba(249,177,21,0.2)'
-                                                }}>
-                                                    Lvl {member.level || 1}
-                                                </span>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Alternate Group (Slots 3, 4) */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#a8a29e', fontFamily: "'Cinzel', serif", letterSpacing: '0.08em', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                    Alternate Crew (2 Slots)
+                                </div>
+                                <div className="crew-tray" style={{ position: 'relative', alignItems: 'flex-end', gap: '8px' }}>
+                                    {[3, 4].map((i) => {
+                                        const member = this.state.selectedCrew[i];
+                                        const slotSize = '101px';
+                                        return (
+                                            <div
+                                                key={i}
+                                                className="selected-crew-portrait-container"
+                                                style={{
+                                                    width: slotSize,
+                                                    height: slotSize,
+                                                    position: 'relative',
+                                                    border: '1px dashed rgba(255, 255, 255, 0.25)'
+                                                }}
+                                            >
+                                                {!this.state.isRosterLocked && (
+                                                    <div
+                                                        className={`add-button ${member ? 'occupied' : (!this.state.selectedCrewMember || this.state.selectedCrewMember.disabled || this.state.selectedCrewMember.locked ? 'disabled' : '')}`}
+                                                        onClick={() => member ? this.removeMember(i) : this.addMember(i)}
+                                                    >
+                                                        {member ? '\u2296' : '\u2295'}
+                                                    </div>
+                                                )}
+                                                {member && (
+                                                    <div className="portrait" style={{ backgroundImage: getCrewPortraitBackground(member.portrait, member.type || member.image), position: 'relative', width: '100%', height: '100%' }}>
+                                                        <span style={{
+                                                            position: 'absolute',
+                                                            bottom: '2px',
+                                                            right: '4px',
+                                                            background: 'rgba(0,0,0,0.85)',
+                                                            color: '#f9b115',
+                                                            padding: '1px 5px',
+                                                            borderRadius: '3px',
+                                                            fontSize: '9px',
+                                                            fontWeight: 'bold',
+                                                            fontFamily: 'Outfit, sans-serif',
+                                                            border: '1px solid rgba(249,177,21,0.2)'
+                                                        }}>
+                                                            Lvl {member.level || 1}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div className="button-row-bottom-left">

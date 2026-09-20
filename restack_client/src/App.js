@@ -636,12 +636,11 @@ function App(props) {
           )} />
           <Route exact path="/intro" render={() => (
             !loggedIn ? <Redirect to="/login" /> :
-              <NarrativeSequence {...props} sequenceType={narrativeSequenceType} beginIntroSequence={beginIntroSequence} endIntroSequence={endIntroSequence} />
+              <NarrativeSequence {...props} sequenceType={narrativeSequenceType || 'intro'} beginIntroSequence={beginIntroSequence} endIntroSequence={endIntroSequence} />
           )} />
           <Route exact path="/death" render={() => (
             !loggedIn ? <Redirect to="/login" /> :
-              narrativeSequenceType !== 'death' ? <Redirect to="/landing" /> :
-                <NarrativeSequence {...props} sequenceType={narrativeSequenceType} beginDeathSequence={beginDeathSequence} endDeathSequence={endDeathSequence} />
+              <NarrativeSequence {...props} sequenceType="death" beginDeathSequence={beginDeathSequence} endDeathSequence={endDeathSequence} />
           )} />
           <Route exact path="/userProfilePage" render={() => (
             !loggedIn ? <Redirect to="/login" /> :
