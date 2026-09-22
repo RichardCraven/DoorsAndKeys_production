@@ -339,7 +339,7 @@ function hexToRgba(hex, alpha = 1) {
 }
 
 // Small subcomponent to render modal header + body based on modalType
-const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose, onDreamDenSelect }) => {
+const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose, onDreamDenSelect }) => {
     const [merchantStock, setMerchantStock] = React.useState([]);
     const [buybackStock, setBuybackStock] = React.useState([]);
     const [feedbackMsg, setFeedbackMsg] = React.useState('');
@@ -422,10 +422,10 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
         } else {
             setShowContent(true);
         }
-    }, [modalType]);
+    }, [modalType, showModal]);
 
     React.useEffect(() => {
-        if (modalType === 'Merchant' && inventoryManager) {
+        if (modalType === 'Merchant' && inventoryManager && showModal) {
             const stock = [];
             stock.push({ ...inventoryManager.allItems['minor_health_potion'], price: 20 });
             stock.push({ ...inventoryManager.allItems['major_health_potion'], price: 50 });
@@ -467,7 +467,7 @@ const ModalInner = ({ modalType, updates, crew, tileSize, handleMemberClickRitua
 
             setMerchantStock(stock);
         }
-    }, [modalType, inventoryManager]);
+    }, [modalType, showModal, inventoryManager]);
 
     const getItemSellPrice = (item) => {
         if (item.type === 'consumable') {
@@ -9737,6 +9737,12 @@ class DungeonPage extends React.Component {
                     this.handleDirectionalMove(nextDirection, { ...nextOptions, fromQueue: true });
                 }
             }, 120);
+        } else if (typeof this._superboardPathfindEndAction === 'function') {
+            const action = this._superboardPathfindEndAction;
+            this._superboardPathfindEndAction = null;
+            setTimeout(() => {
+                try { action(); } catch (e) { }
+            }, 50);
         }
     }
 
@@ -9932,6 +9938,35 @@ class DungeonPage extends React.Component {
                         this._movementRepeatInterval = null;
                     }
                     this.interactWithLocus(targetLocus);
+                    return;
+                }
+
+                let targetVendorTile = null;
+                const cType = (destTileObj && typeof destTileObj.contains === 'object' && destTileObj.contains !== null) ? destTileObj.contains.type : (destTileObj?.contains || null);
+                const cSub = (destTileObj && typeof destTileObj.contains === 'object' && destTileObj.contains !== null) ? (destTileObj.contains.subtype || destTileObj.contains.building || destTileObj.contains.name) : (destTileObj?.building || null);
+                const rawKey = String(cSub || cType || destTileObj?.image || '').toLowerCase();
+                const isVendorTile = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' ||
+                    ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)) ||
+                    (((destTileObj?.contains && typeof destTileObj.contains === 'object' && (destTileObj.contains.vendorGroupId || destTileObj.contains.vendorCell)) ||
+                    !!(destTileObj?.vendorGroupId || destTileObj?.vendorCell)) && ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)));
+
+                if (!hasPassageWallBetween && isVendorTile) {
+                    targetVendorTile = destTileObj;
+                }
+
+                if (targetVendorTile) {
+                    const vendorType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
+                                       (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
+                                       (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
+                    this._isMoving = false;
+                    this._processingQueuedMove = false;
+                    this._movementQueue = [];
+                    if (this._movementRepeatInterval) {
+                        clearInterval(this._movementRepeatInterval);
+                        this._movementRepeatInterval = null;
+                    }
+                    this.illuminateBuildingTile(targetVendorTile);
+                    this.triggerVendorEncounter(vendorType, targetVendorTile);
                     return;
                 }
 
@@ -26050,7 +26085,8 @@ class DungeonPage extends React.Component {
                     const cSub = (targetTileObj && typeof targetTileObj.contains === 'object' && targetTileObj.contains !== null) ? (targetTileObj.contains.subtype || targetTileObj.contains.building || targetTileObj.contains.name) : (targetTileObj?.building || null);
                     const rawKey = String(cSub || cType || targetTileObj?.image || '').toLowerCase();
 
-                    const isVendorInSb = rawKey.includes('dream_den') || rawKey.includes('dream den') || rawKey.includes('merchant') || rawKey.includes('alchemist') || rawKey.includes('fungal_nursery') || cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' || cSub === 'merchant' || cSub === 'alchemist' || (targetTileObj?.contains && typeof targetTileObj.contains === 'object' && (targetTileObj.contains.vendorGroupId || targetTileObj.contains.vendorCell));
+                    const isVendorInSb = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' || cSub === 'merchant' || cSub === 'alchemist' ||
+                        ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k));
                     const isDreamDen = isVendorInSb;
                     const isLocusInSb = targetTileObj && this.getIsLocusHelper(targetTileObj);
                     const largeBldg = superboard ? this.getLargeBuildingAtSuperboardCoord(superboard, clickedGx, clickedGy) : null;
@@ -26297,7 +26333,9 @@ class DungeonPage extends React.Component {
 
         const isVendorTileClick = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' ||
             ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)) ||
-            (actualTile?.contains && typeof actualTile.contains === 'object' && (actualTile.contains.vendorGroupId || actualTile.contains.vendorCell));
+            (((actualTile?.contains && typeof actualTile.contains === 'object' && (actualTile.contains.vendorGroupId || actualTile.contains.vendorCell)) ||
+            !!(actualTile?.vendorGroupId || actualTile?.vendorCell)) && ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)));
+
 
         if (isVendorTileClick) {
             const vendorType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
@@ -26311,16 +26349,27 @@ class DungeonPage extends React.Component {
             const tileRow = Math.floor(actualTileId / 15);
             const tileCol = actualTileId % 15;
 
+            const vCell = (typeof actualTile?.contains === 'object' && actualTile.contains?.vendorCell) || actualTile?.vendorCell;
             const vAnchor = (typeof actualTile?.contains === 'object' && (actualTile.contains?.vendorAnchorId ?? actualTile.contains?.structureAnchorId ?? actualTile.contains?.buildingAnchorId)) ?? actualTile?.vendorAnchorId ?? actualTile?.structureAnchorId;
             let anchorRow = tileRow;
             let anchorCol = tileCol;
             if (vAnchor !== undefined && vAnchor !== null) {
                 anchorRow = Math.floor(Number(vAnchor) / 15);
                 anchorCol = Number(vAnchor) % 15;
+            } else if (vCell === 'top_right') {
+                anchorCol = tileCol - 1;
+            } else if (vCell === 'bottom_left') {
+                anchorRow = tileRow - 1;
+            } else if (vCell === 'bottom_right') {
+                anchorRow = tileRow - 1;
+                anchorCol = tileCol - 1;
             }
 
-            const rowDist = Math.max(0, anchorRow - playerRow, playerRow - (anchorRow + 1));
-            const colDist = Math.max(0, anchorCol - playerCol, playerCol - (anchorCol + 1));
+            const isMultiCell = !!(vCell || actualTile?.contains?.vendorGroupId || actualTile?.vendorGroupId || actualTile?.contains?.isMultiTile || actualTile?.isMultiTile || actualTile?.contains?.isLarge || actualTile?.isLarge);
+            const boundSize = isMultiCell ? 1 : 0;
+
+            const rowDist = Math.max(0, anchorRow - playerRow, playerRow - (anchorRow + boundSize));
+            const colDist = Math.max(0, anchorCol - playerCol, playerCol - (anchorCol + boundSize));
             const isStructureAdjacent = Math.max(rowDist, colDist) <= 1;
 
             if (isStructureAdjacent || manhattanDist <= 1 || isAdjacent) {
@@ -26329,6 +26378,53 @@ class DungeonPage extends React.Component {
                 return;
             } else {
                 this.illuminateBuildingTile(actualTile || tile);
+                const vendorTileObj = actualTile || tile;
+
+                const goalCoords = [];
+                for (let br = 0; br <= boundSize; br++) {
+                    for (let bc = 0; bc <= boundSize; bc++) {
+                        const tr = anchorRow + br;
+                        const tc = anchorCol + bc;
+                        for (let dr = -1; dr <= 1; dr++) {
+                            for (let dc = -1; dc <= 1; dc++) {
+                                if (dr === 0 && dc === 0) continue;
+                                const nr = tr + dr;
+                                const nc = tc + dc;
+                                if (nr >= anchorRow && nr <= anchorRow + boundSize && nc >= anchorCol && nc <= anchorCol + boundSize) continue;
+                                if (nr >= 0 && nr < 15 && nc >= 0 && nc < 15) {
+                                    const nIdx = nr * 15 + nc;
+                                    const nTile = bm.tiles[nIdx];
+                                    if (nTile && !bm.isImpassableBuildingTile(nTile) && !bm.isVoidTile(nTile)) {
+                                        goalCoords.push([15 + nr, 15 + nc]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let bestPath = null;
+                for (const gCoord of goalCoords) {
+                    const p = bfsPathfind(startCoords, gCoord);
+                    if (p && (bestPath === null || p.length < bestPath.length)) {
+                        bestPath = p;
+                    }
+                }
+
+                if (bestPath && bestPath.length > 0) {
+                    if (this._pathfindStepTimeout) {
+                        clearTimeout(this._pathfindStepTimeout);
+                        this._pathfindStepTimeout = null;
+                    }
+                    this._superboardPathfindEndAction = () => {
+                        this.illuminateBuildingTile(vendorTileObj);
+                        this.triggerVendorEncounter(vendorType, vendorTileObj);
+                    };
+                    this._movementQueue = bestPath;
+                    this.processMovementQueue();
+                    return;
+                }
+
                 const vendorLabel = vendorType === 'alchemist' ? 'Alchemist' : vendorType === 'dream_den' ? 'Dream Den' : vendorType === 'fungal_nursery' ? 'Fungal Nursery' : 'Merchant';
                 this.displayMessage(`Move adjacent to the ${vendorLabel} to interact with it.`);
                 return;
@@ -26468,14 +26564,21 @@ class DungeonPage extends React.Component {
                     }
                 }
 
+                const subStr = typeof subtype === 'string' ? subtype : (typeof t.building === 'string' ? t.building : (t.contains && typeof t.contains === 'object' ? (t.contains.subtype || t.contains.building || t.contains.name || t.contains.type) : ''));
+                const rawBldgKey = String(subStr || t.image || '').toLowerCase();
+                const isVendor = type === 'vendor' || type === 'merchant' || type === 'alchemist' || type === 'dream den' || type === 'dream_den' ||
+                    ['merchant', 'alchemist', 'vendor', 'dream_den', 'fungal_nursery'].some(k => rawBldgKey.includes(k));
+
+                if (isVendor) {
+                    return true;
+                }
+
                 if (!isTarget) {
-                    const isVendor = type === 'vendor' || type === 'merchant' || type === 'alchemist' || type === 'dream den' || type === 'dream_den' ||
-                        ['merchant', 'alchemist', 'vendor', 'dream_den', 'fungal_nursery'].some(k => String(subtype || t.building || '').toLowerCase().includes(k));
-                    if (type === 'monster' || isVendor || type === 'narrative' || type === 'door' || type === 'way_up' || type === 'way_down' || type === 'spell' || t.isLoot) {
+                    if (type === 'monster' || type === 'narrative' || type === 'door' || type === 'way_up' || type === 'way_down' || type === 'spell' || t.isLoot) {
                         return true;
                     }
-                    const subtype = bm.getContainsSubtype(t.contains);
-                    if (type === 'item' && bm.isChest(subtype)) {
+                    const itemSubtype = bm.getContainsSubtype(t.contains);
+                    if (type === 'item' && bm.isChest(itemSubtype)) {
                         return true;
                     }
                 }
@@ -40143,7 +40246,7 @@ class DungeonPage extends React.Component {
                                         const ts = this.state.tileSize || 48;
                                         // Scale cone proportional to avatar's rendered size, not raw tileSize
                                         const avatarPx = this.state.inSuperboard ? ts * 0.65 : ts;
-                                        const conePx = avatarPx * 2.5;
+                                        const conePx = avatarPx * 2.6;
                                         const iconPx = avatarPx * 0.85;
                                         const glowRadius = Math.round(avatarPx * 0.08);
                                         return (
@@ -40174,7 +40277,7 @@ class DungeonPage extends React.Component {
                                                                 width: `${iconPx}px`,
                                                                 height: `${iconPx}px`,
                                                                 top: '50%',
-                                                                left: '72%',
+                                                                left: '84%',
                                                                 transform: 'translate(-50%, -50%)',
                                                                 pointerEvents: 'none',
                                                                 filter: `drop-shadow(0 0 ${glowRadius}px rgba(251,191,36,0.95)) drop-shadow(0 0 4px rgba(245,158,11,0.8))`,

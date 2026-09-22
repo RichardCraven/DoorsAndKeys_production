@@ -438,6 +438,13 @@ import opalveil from '../assets/icons/items/weapons/swords/opalveil.png'
 import titans_claw from '../assets/icons/items/weapons/swords/titans_claw.png'
 import entropy from '../assets/icons/items/weapons/swords/entropy.png'
 
+// monk weapons
+import monk_nunchaku from '../assets/icons/items/weapons/monk-weapons/nunchaku.png'
+import monk_katar from '../assets/icons/items/weapons/monk-weapons/katar.png'
+import monk_cestus from '../assets/icons/items/weapons/monk-weapons/cestus.png'
+import monk_quarterstaff from '../assets/icons/items/weapons/monk-weapons/quarterstaff.png'
+import monk_deer_horn_knives from '../assets/icons/items/weapons/monk-weapons/deer_horn_knives.png'
+
 // portals
 import closed_door from '../assets/icons/portals/closed_door.png';
 import open_door from '../assets/icons/portals/open_door.png';
@@ -2031,6 +2038,17 @@ export {
     opalveil,
     titans_claw,
     entropy,
+
+    monk_nunchaku,
+    monk_katar,
+    monk_cestus,
+    monk_quarterstaff,
+    monk_deer_horn_knives,
+    monk_nunchaku as nunchaku,
+    monk_katar as katar,
+    monk_cestus as cestus,
+    monk_quarterstaff as quarterstaff,
+    monk_deer_horn_knives as deer_horn_knives,
 
     closed_door,
     open_door,

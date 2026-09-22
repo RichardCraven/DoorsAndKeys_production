@@ -444,16 +444,13 @@ export function BoardManager(){
                         const multi2x2 = [
                             'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
                             'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort',
+                            'fungal_nursery', 'alchemist', 'merchant', 'dream_den', 'dream den',
                             'rift_embers', 'pocket_litter_rift_embers'
                         ];
                         const is2x2 = multi2x2.some(k => aKey.includes(k)) || aTile.isLarge || aTile.contains?.isLarge || aTile.isMultiTile || aTile.contains?.isMultiTile;
                         const aIsMulti = !!(is2x2 || (aRole === 'anchor') || aGroup);
 
                         if (aIsMulti && (!aRole || aRole === 'anchor' || aTile.contains?.vendorAnchorId === (cId + anchorOffset))) {
-                            const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'dream_den'];
-                            if (vendorKeys.some(k => aKey.includes(k))) {
-                                return false; // Vendor structure tiles are interactive vendors, not impassable building walls
-                            }
                             if (is2x2) {
                                 if (tileVendorGroup && aGroup && tileVendorGroup !== aGroup) {
                                     continue;
@@ -500,11 +497,6 @@ export function BoardManager(){
             return false;
         }
 
-        // Vendor structure tiles ('merchant', 'alchemist', 'fungal_nursery') are interactive vendors, not impassable building walls
-        if (sKey.includes('merchant') || sKey.includes('alchemist') || sKey.includes('fungal_nursery')) {
-            return false;
-        }
-
         // 'hut', 'buildable_hut', and 'healing_circle' are EXPLICITLY passable
         if (sKey.includes('hut') || sKey.includes('healing_circle')) {
             return false;
@@ -529,7 +521,17 @@ export function BoardManager(){
             return true;
         }
 
+        // Explicitly check for vendor buildings (merchant, alchemist, fungal nursery, dream den)
+        const isVendorBuilding = containsType === 'vendor' || containsType === 'merchant' || containsType === 'alchemist' || containsType === 'fungal_nursery' || containsType === 'dream_den' || containsType === 'dream den' ||
+            (typeof containsSubtype === 'string' && ['merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].includes(containsSubtype)) ||
+            ['merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].some(k => sKey.includes(k));
+
+        if (isVendorBuilding && !isDestroyed) {
+            return true;
+        }
+
         const buildingSubtypes = [
+            'merchant', 'pocket_merchant', 'alchemist', 'pocket_alchemist', 'vendor',
             'dream_den', 'dream den', 'buildable_dream_den', 'dream_den_under_construction',
             'outpost', 'buildable_outpost',
             'observer_platform', 'buildable_observer_platform',
@@ -1099,11 +1101,12 @@ export function BoardManager(){
             const is2x2Structure = !isSingleTile && (
                 sKey === 'healing_circle' || sKey === 'pocket_healing_circle' || sKey.includes('healing_circle') ||
                 sKey === 'domain_monolith' || sKey === 'dark_domain_monolith' || sKey === 'pocket_domain_monolith' || sKey === 'pocket_dark_domain_monolith' ||
-                sKey === 'war_camp' || sKey === 'war_fort' || sKey === 'alchemist' || sKey === 'merchant' ||
+                sKey === 'war_camp' || sKey === 'war_fort' ||
                 sKey === 'cultivation_vat' || sKey === 'pocket_cultivation_vat' || sKey === 'dust_collector' || sKey === 'pocket_dust_collector' ||
                 sKey === 'larder' || sKey === 'pocket_larder' || sKey === 'sawmill' || sKey === 'pocket_sawmill' || sKey === 'lumber_mill' || sKey === 'pocket_lumber_mill' ||
                 sKey === 'ore_mine' || sKey === 'pocket_ore_mine' || sKey === 'mine' || sKey === 'pocket_mine' || sKey === 'slate_mine' || sKey === 'pocket_slate_mine' ||
                 sKey === 'fungal_nursery' || sKey === 'pocket_fungal_nursery' || sKey === 'dream_den' || sKey === 'dream den' || sKey.includes('dream_den') || sKey.includes('dream den') || (sKey.includes('monolith') && !sKey.includes('shrine')) ||
+                sKey === 'merchant' || sKey === 'pocket_merchant' || sKey.includes('merchant') || sKey === 'alchemist' || sKey === 'pocket_alchemist' || sKey.includes('alchemist') ||
                 sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2')
             );
             if (is2x2Structure) {
