@@ -419,6 +419,39 @@ export default class CardDuel extends React.Component {
             desc: 'Draw 3 cards from your deck.'
         });
 
+        // Add Bloodbond Sentinel — on death, heals all surviving friendly units by its remaining HP
+        playerDeck.push({
+            id: `player_bloodbond_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Bloodbond Sentinel',
+            type: 'unit',
+            owner: 'player',
+            cost: 3,
+            atk: 2,
+            hp: 4,
+            maxHp: 4,
+            width: 1,
+            height: 1,
+            isBloodbond: true,
+            art: resolveImage(images.volcanic_rune) || resolveImage(images.soldier_portrait),
+            desc: 'When destroyed, heals all other friendly units by this unit\'s remaining HP.'
+        });
+
+        // Add Rift Strike — deals damage equal to the number of enemy units on the board (min 1)
+        playerDeck.push({
+            id: `player_rift_strike_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Rift Strike',
+            type: 'action',
+            actionType: 'rift_strike',
+            owner: 'player',
+            cost: 2,
+            atk: 0,
+            hp: 0,
+            width: 1,
+            height: 1,
+            art: resolveImage(images.shadow_rune) || resolveImage(images.volcanic_rune),
+            desc: 'Deals direct damage equal to the number of enemy units on the board (minimum 1).'
+        });
+
         // Add 1 Overdrive Action Card & 1 Reap Action Card to Reaper Deck
         reaperDeck.push({
             id: `reaper_overdrive_${Math.random().toString(36).substring(2, 7)}`,
@@ -478,6 +511,39 @@ export default class CardDuel extends React.Component {
             height: 1,
             art: resolveImage(images.shadow_rune) || resolveImage(images.earthen_rune),
             desc: 'Draw 3 cards from your deck.'
+        });
+
+        // Add Death Shroud — on death, heals all surviving reaper units by its remaining HP
+        reaperDeck.push({
+            id: `reaper_death_shroud_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Death Shroud',
+            type: 'unit',
+            owner: 'reaper',
+            cost: 3,
+            atk: 2,
+            hp: 4,
+            maxHp: 4,
+            width: 1,
+            height: 1,
+            isBloodbond: true,
+            art: resolveImage(images.reaper_card_back) || resolveImage(images.shadow_rune),
+            desc: 'When destroyed, heals all other friendly units by this unit\'s remaining HP.'
+        });
+
+        // Add Plague Wave — deals damage equal to the number of player units on the board (min 1)
+        reaperDeck.push({
+            id: `reaper_plague_wave_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Plague Wave',
+            type: 'action',
+            actionType: 'plague_wave',
+            owner: 'reaper',
+            cost: 2,
+            atk: 0,
+            hp: 0,
+            width: 1,
+            height: 1,
+            art: resolveImage(images.shadow_rune) || resolveImage(images.reaper_card_back),
+            desc: 'Deals direct damage equal to the number of player units on the board (minimum 1).'
         });
 
         // Add forged Echo Cards (1/1 unit cards identical to pygmies except for portrait and name)
@@ -1125,6 +1191,8 @@ export default class CardDuel extends React.Component {
         const defenderOwner = defender.owner === 'player' ? 'Your' : `${this.getEnemyName()}'s`;
 
         const atkDamage = attacker.atk || 1;
+        // Snapshot pre-death HP for Bloodbond healing (before applying damage)
+        const defenderHpBeforeDamage = defender.hp;
         defender.hp -= atkDamage;
 
         const attackAnim = {
@@ -1137,6 +1205,8 @@ export default class CardDuel extends React.Component {
         this.addLog(`⚔️ ${attackerOwner} ${attacker.name} (${attacker.atk} ATK) attacked ${defenderOwner} ${defender.name}!`);
 
         if (defender.hp <= 0) {
+            // The heal amount = HP the defender actually had (not overkill)
+            const bloodbondHeal = Math.max(0, defenderHpBeforeDamage);
             defender.hp = 0;
             this.addLog(`☠️ ${defenderOwner} ${defender.name} was defeated!`);
 
@@ -1154,15 +1224,38 @@ export default class CardDuel extends React.Component {
             };
             if (defender.owner === 'player') playerDiscard.push(resetDefender);
             else reaperDiscard.push(resetDefender);
+
+            // ─── Bloodbond: heal surviving friendly units on defender death ───
+            if (defender.isBloodbond && bloodbondHeal > 0) {
+                const processedIds = new Set();
+                Object.values(updatedGrid).forEach(unit => {
+                    if (unit && unit.owner === defender.owner && unit.id !== defender.id && !processedIds.has(unit.id)) {
+                        processedIds.add(unit.id);
+                        unit.hp = Math.min((unit.maxHp || unit.startingHp || 1), unit.hp + bloodbondHeal);
+                        // Sync all grid cells occupied by this multi-tile unit
+                        Object.keys(updatedGrid).forEach(k => {
+                            if (updatedGrid[k] && updatedGrid[k].id === unit.id) {
+                                updatedGrid[k] = unit;
+                            }
+                        });
+                    }
+                });
+                const allyCount = processedIds.size;
+                if (allyCount > 0) {
+                    this.addLog(`💚 BLOODBOND! ${defender.name}'s sacrifice healed ${allyCount} friendly unit${allyCount !== 1 ? 's' : ''} for ${bloodbondHeal} HP!`);
+                }
+            }
         } else {
             // Counter-Attack
             const counterDamage = defender.atk || 1;
+            const attackerHpBeforeCounter = attacker.hp;
             attacker.hp -= counterDamage;
             attackAnim.damageToAttacker = counterDamage;
 
             this.addLog(`🛡️ ${defenderOwner} ${defender.name} counter-attacked for ${counterDamage} damage! (${attackerOwner} ${attacker.name}: ${attacker.atk} - ${Math.max(0, attacker.hp)}/${attacker.maxHp} HP)`);
 
             if (attacker.hp <= 0) {
+                const attackerBloodbondHeal = Math.max(0, attackerHpBeforeCounter);
                 attacker.hp = 0;
                 this.addLog(`☠️ ${attackerOwner} ${attacker.name} was defeated in counter-attack!`);
 
@@ -1180,6 +1273,26 @@ export default class CardDuel extends React.Component {
                 };
                 if (attacker.owner === 'player') playerDiscard.push(resetAttacker);
                 else reaperDiscard.push(resetAttacker);
+
+                // ─── Bloodbond: heal surviving friendly units on attacker death ───
+                if (attacker.isBloodbond && attackerBloodbondHeal > 0) {
+                    const processedIds = new Set();
+                    Object.values(updatedGrid).forEach(unit => {
+                        if (unit && unit.owner === attacker.owner && unit.id !== attacker.id && !processedIds.has(unit.id)) {
+                            processedIds.add(unit.id);
+                            unit.hp = Math.min((unit.maxHp || unit.startingHp || 1), unit.hp + attackerBloodbondHeal);
+                            Object.keys(updatedGrid).forEach(k => {
+                                if (updatedGrid[k] && updatedGrid[k].id === unit.id) {
+                                    updatedGrid[k] = unit;
+                                }
+                            });
+                        }
+                    });
+                    const allyCount = processedIds.size;
+                    if (allyCount > 0) {
+                        this.addLog(`💚 BLOODBOND! ${attacker.name}'s sacrifice healed ${allyCount} friendly unit${allyCount !== 1 ? 's' : ''} for ${attackerBloodbondHeal} HP!`);
+                    }
+                }
             }
         }
 
@@ -1250,7 +1363,93 @@ export default class CardDuel extends React.Component {
         let currentPlayerDiscard = [...this.state.playerDiscard];
         const enemyName = this.getEnemyName();
 
+        // Step 0: Play action cards the reaper has in hand
+        let currentPlayerHP = this.state.playerHP;
+        let currentReaperHP = this.state.reaperHP;
+        let currentMaxSpirit = this.state.maxSpirit || 1;
+        let currentReaperBonus = this.state.reaperBonusAllowance || 0;
+        let currentReaperOverdrive = this.state.reaperOverdriveActive;
+        let currentReaperDeck = [...this.state.reaperDeck];
+        let currentReaperDiscard2 = [...this.state.reaperDiscard];
+        let currentReaperHand2 = [...currentHand];
+
+        for (let i = currentReaperHand2.length - 1; i >= 0; i--) {
+            const card = currentReaperHand2[i];
+            if (card.type !== 'action' || card.cost > currentReaperSpirit) continue;
+
+            if (card.actionType === 'overdrive') {
+                this.addLog(`💀 ${enemyName} activated OVERDRIVE! They will carry over unused Spirit.`);
+                currentReaperOverdrive = true;
+                currentReaperSpirit -= card.cost;
+                currentReaperHand2.splice(i, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+            } else if (card.actionType === 'invest') {
+                this.addLog(`💀 ${enemyName} activated INVEST! Their maximum Spirit increased by 1.`);
+                currentMaxSpirit = currentMaxSpirit + 1;
+                currentReaperBonus = currentReaperBonus + 1;
+                currentReaperSpirit -= card.cost;
+                currentReaperHand2.splice(i, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+            } else if (card.actionType === 'inflate') {
+                this.addLog(`💀 ${enemyName} activated INFLATE! They drew 3 cards.`);
+                const res = this.drawCards('reaper', 3, currentReaperDeck, currentReaperDiscard2, currentReaperHand2);
+                currentReaperDeck = res.deck;
+                currentReaperDiscard2 = res.discard;
+                currentReaperHand2 = res.hand;
+                // Remove the inflate card itself (drawCards doesn't remove it from hand)
+                const inflateIdx = currentReaperHand2.findIndex(c => c.id === card.id);
+                if (inflateIdx >= 0) currentReaperHand2.splice(inflateIdx, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+                currentReaperSpirit -= card.cost;
+            } else if (card.actionType === 'reap') {
+                currentPlayerHP = Math.max(0, currentPlayerHP - (card.atk || 3));
+                this.addLog(`☠️ ${enemyName} cast REAP! Dealt ${card.atk || 3} direct damage to you!`);
+                currentReaperSpirit -= card.cost;
+                currentReaperHand2.splice(i, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+            } else if (card.actionType === 'plague_wave') {
+                // Count unique player units currently on the board
+                const playerUnitIds = new Set();
+                Object.values(currentGrid).forEach(unit => {
+                    if (unit && unit.owner === 'player') playerUnitIds.add(unit.id);
+                });
+                const plagueDamage = Math.max(1, playerUnitIds.size);
+                currentPlayerHP = Math.max(0, currentPlayerHP - plagueDamage);
+                this.addLog(`☠️ ${enemyName} unleashed PLAGUE WAVE! ${playerUnitIds.size} of your units empowered the curse — dealt ${plagueDamage} direct damage to you!`);
+                currentReaperSpirit -= card.cost;
+                currentReaperHand2.splice(i, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+            }
+        }
+
+        // Persist action card outcomes to currentHand/currentDiscard for unit placement step
+        currentHand = currentReaperHand2;
+        currentDiscard = currentReaperDiscard2;
+
+        // Check game-over from action card damage
+        const actionGameOver = currentReaperHP <= 0 ? 'victory' : (currentPlayerHP <= 0 ? 'defeat' : null);
+        if (actionGameOver) {
+            this.setState({
+                playerHP: currentPlayerHP,
+                reaperHP: currentReaperHP,
+                reaperHand: currentHand,
+                reaperDiscard: currentDiscard,
+                reaperDeck: currentReaperDeck,
+                reaperBonusAllowance: currentReaperBonus,
+                maxSpirit: currentMaxSpirit,
+                reaperOverdriveActive: currentReaperOverdrive,
+                reaperSpirit: currentReaperSpirit,
+                gameOver: actionGameOver,
+                isAiThinking: false
+            }, () => {
+                if (actionGameOver === 'defeat') this.addLog(`💀 DEFEAT! Your crew health was depleted.`);
+                if (actionGameOver === 'victory') this.addLog(`✨ VICTORY! ${enemyName}'s health was shattered!`);
+            });
+            return;
+        }
+
         // Step 1: Play unit cards from hand into empty slots in Reaper territory
+
         for (let i = currentHand.length - 1; i >= 0; i--) {
             const card = currentHand[i];
             if (card.cost <= currentReaperSpirit && card.type !== 'action') {
@@ -1444,7 +1643,13 @@ export default class CardDuel extends React.Component {
             reaperHand: currentHand,
             reaperSpirit: currentReaperSpirit,
             reaperDiscard: currentDiscard,
+            reaperDeck: currentReaperDeck,
             playerDiscard: currentPlayerDiscard,
+            playerHP: currentPlayerHP,
+            reaperHP: currentReaperHP,
+            maxSpirit: currentMaxSpirit,
+            reaperBonusAllowance: currentReaperBonus,
+            reaperOverdriveActive: currentReaperOverdrive,
             isAiThinking: false,
             moveAnims
         }, () => {
@@ -1454,6 +1659,7 @@ export default class CardDuel extends React.Component {
             this.advanceToNextTurn();
         });
     }
+
 
     playPlayerActionCard = (card) => {
         if (card.cost > this.state.playerSpirit) return;
@@ -1518,7 +1724,38 @@ export default class CardDuel extends React.Component {
             });
             return;
         }
+
+        if (card.actionType === 'rift_strike') {
+            // Count unique reaper units currently on the board
+            const processedIds = new Set();
+            Object.values(this.state.grid).forEach(unit => {
+                if (unit && unit.owner === 'reaper') processedIds.add(unit.id);
+            });
+            const riftDamage = Math.max(1, processedIds.size);
+            const newReaperHP = Math.max(0, this.state.reaperHP - riftDamage);
+            const riftGameOver = newReaperHP <= 0 ? 'victory' : null;
+            this.addLog(`⚡ RIFT STRIKE! Tore through ${processedIds.size} enemy unit${processedIds.size !== 1 ? 's' : ''} on the field — dealt ${riftDamage} direct damage to ${this.getEnemyName()}!`);
+            this.setState({
+                playerSpirit: nextSpirit,
+                playerHand: nextHand,
+                playerDiscard: nextDiscard,
+                reaperHP: newReaperHP,
+                gameOver: riftGameOver || this.state.gameOver,
+                selectedCard: null,
+                actionCardAnim: { card, type: 'rift_strike', owner: 'player', damage: riftDamage }
+            }, () => {
+                if (riftGameOver === 'victory') {
+                    this.addLog(`✨ VICTORY! ${this.getEnemyName()}'s health was completely shattered by the Rift Strike!`);
+                }
+                setTimeout(() => {
+                    this.setState({ actionCardAnim: null });
+                }, 1300);
+            });
+            return;
+        }
+
     }
+
 
     // ─── Player Card Placement & Interaction Handlers ─────────────────────────
     handleSelectCardInHand = (card) => {
@@ -2702,16 +2939,20 @@ export default class CardDuel extends React.Component {
                         <div className="pe-action-card-modal">
                             <div className="pe-action-card-art" style={this.state.actionCardAnim.card.art ? { backgroundImage: `url(${this.state.actionCardAnim.card.art})` } : {}}>
                                 {!this.state.actionCardAnim.card.art && (
-                                    this.state.actionCardAnim.type === 'overdrive' ? '✦' : 
+                                    this.state.actionCardAnim.type === 'overdrive' ? '✦' :
                                     this.state.actionCardAnim.type === 'invest' ? '◆' :
-                                    this.state.actionCardAnim.type === 'inflate' ? '❖' : '☠'
+                                    this.state.actionCardAnim.type === 'inflate' ? '❖' :
+                                    this.state.actionCardAnim.type === 'rift_strike' ? '⚡' :
+                                    this.state.actionCardAnim.type === 'plague_wave' ? '☣' : '☠'
                                 )}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <h2 className="pe-action-card-title">
-                                    {this.state.actionCardAnim.type === 'overdrive' ? '✦ OVERDRIVE ACTIVATED ✦' : 
+                                    {this.state.actionCardAnim.type === 'overdrive' ? '✦ OVERDRIVE ACTIVATED ✦' :
                                      this.state.actionCardAnim.type === 'invest' ? '◆ INVEST ACTIVATED ◆' :
                                      this.state.actionCardAnim.type === 'inflate' ? '❖ INFLATE ACTIVATED ❖' :
+                                     this.state.actionCardAnim.type === 'rift_strike' ? '⚡ RIFT STRIKE ⚡' :
+                                     this.state.actionCardAnim.type === 'plague_wave' ? '☣ PLAGUE WAVE ☣' :
                                      '☠ REAP ACTIVATED ☠'}
                                 </h2>
                                 <p className="pe-action-card-desc" style={{ margin: 0 }}>
@@ -2721,12 +2962,17 @@ export default class CardDuel extends React.Component {
                                         ? (this.state.actionCardAnim.owner === 'player' ? 'Permanently increased your maximum Spirit allowance by 1!' : `${this.getEnemyName()} permanently increased maximum Spirit allowance by 1!`)
                                         : this.state.actionCardAnim.type === 'inflate'
                                         ? (this.state.actionCardAnim.owner === 'player' ? 'You drew 3 cards from your deck!' : `${this.getEnemyName()} drew 3 cards from their deck!`)
+                                        : this.state.actionCardAnim.type === 'rift_strike'
+                                        ? `Dealt ${this.state.actionCardAnim.damage} direct damage to ${this.getEnemyName()} — powered by their own swarm!`
+                                        : this.state.actionCardAnim.type === 'plague_wave'
+                                        ? `${this.getEnemyName()} dealt ${this.state.actionCardAnim.damage} direct damage to your crew — fed by your own forces!`
                                         : `Dealt ${this.state.actionCardAnim.damage} direct damage to your Health!`}
                                 </p>
                             </div>
                         </div>
                     </div>
                 )}
+
 
                 {/* First Player Choice Visual Overlay */}
                 {firstPlayerOverlay.active && (
