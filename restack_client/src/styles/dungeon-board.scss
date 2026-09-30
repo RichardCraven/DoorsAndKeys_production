@@ -436,7 +436,7 @@
         overflow-y: auto;
         overflow-x: hidden;
         height: 100%;
-        padding-top: 15px;
+        padding-top: 0px;
         border-left: 1px solid rgba(255, 255, 255, 0.15);
         z-index: 3;
         width: 240px;
@@ -448,6 +448,85 @@
             border-left: 1px solid rgba(255, 255, 255, 0.2);
         }
         position: absolute;
+
+        .sticky-right-panel-header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            width: 100%;
+            background: linear-gradient(180deg, rgba(16, 14, 22, 0.98) 0%, rgba(22, 19, 30, 0.94) 100%);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(229, 181, 79, 0.3);
+            padding: 10px 12px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
+
+            .sticky-header-top-row {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                width: 100%;
+            }
+
+            .sticky-header-dungeon-title {
+                color: #f5efe6;
+                font-family: 'Cinzel', serif, var(--font-primary, sans-serif);
+                font-size: 12px;
+                font-weight: 700;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+                text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                flex: 1;
+                min-width: 0;
+            }
+
+            .sticky-header-toggle-container {
+                display: inline-flex;
+                background: rgba(0, 0, 0, 0.45);
+                border: 1px solid rgba(229, 181, 79, 0.3);
+                border-radius: 6px;
+                padding: 2px;
+                gap: 2px;
+                flex-shrink: 0;
+            }
+
+            .sticky-header-toggle-btn {
+                background: transparent;
+                border: none;
+                color: rgba(245, 239, 230, 0.65);
+                font-size: 11px;
+                font-weight: 600;
+                padding: 3px 8px;
+                border-radius: 4px;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                transition: all 0.2s ease;
+                line-height: 1.2;
+
+                &:hover {
+                    color: #f5efe6;
+                    background: rgba(229, 181, 79, 0.15);
+                }
+
+                &.active {
+                    background: rgba(229, 181, 79, 0.25);
+                    color: #e5b54f;
+                    font-weight: 700;
+                    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+                    border: 1px solid rgba(229, 181, 79, 0.45);
+                }
+            }
+        }
         .icon-container{
             position: fixed;
             bottom: 10px;
@@ -1067,7 +1146,42 @@
                         stroke-linejoin: round;
                     }
                 }
+                // ── Leyline Conduit trail on minimap ──────────────────────
+                .leyline-trail-svg {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    pointer-events: none;
+                    z-index: 4;
+                    overflow: visible;
+
+                    .leyline-path-glow {
+                        fill: none;
+                        stroke: rgba(168, 85, 247, 0.5);
+                        stroke-width: 3.4;
+                        stroke-linecap: round;
+                        stroke-linejoin: round;
+                    }
+
+                    .leyline-path-core {
+                        fill: none;
+                        stroke-width: 1.8;
+                        stroke-linecap: round;
+                        stroke-linejoin: round;
+                        animation: leylinePulse 3s ease-in-out infinite alternate;
+                    }
+
+                    .leyline-node-dot {
+                        fill: #00f0ff;
+                        stroke: #ec4899;
+                        stroke-width: 0.8;
+                        filter: drop-shadow(0 0 2px #00f0ff);
+                    }
+                }
                 .minimap-indicator{
+
                     height: 2px;
                     width: 2px;
                     border-radius: 2px;
@@ -2528,41 +2642,42 @@
     pointer-events: none;
     z-index: -1;
     transition: width 0.25s ease, height 0.25s ease, border-color 0.25s ease;
+    animation: rangeRingRotate 18s linear infinite, rangeRingPulse 3.5s ease-in-out infinite;
 
     &.wizard-ring {
         border: 2px dashed #38bdf8;
         background: radial-gradient(circle, rgba(56, 189, 248, 0.08) 0%, rgba(56, 189, 248, 0.03) 70%, transparent 100%);
         box-shadow: 0 0 16px rgba(56, 189, 248, 0.45), inset 0 0 16px rgba(56, 189, 248, 0.18);
-        animation: rangeRingPulseWizard 3s ease-in-out infinite alternate;
     }
 
     &.ranger-ring {
         border: 2px dashed #4ade80;
         background: radial-gradient(circle, rgba(74, 222, 128, 0.08) 0%, rgba(74, 222, 128, 0.03) 70%, transparent 100%);
         box-shadow: 0 0 16px rgba(74, 222, 128, 0.45), inset 0 0 16px rgba(74, 222, 128, 0.18);
-        animation: rangeRingPulseRanger 3s ease-in-out infinite alternate;
+    }
+
+    &.melee-ring {
+        border: 2px dashed #f59e0b;
+        background: radial-gradient(circle, rgba(245, 158, 11, 0.08) 0%, rgba(245, 158, 11, 0.03) 70%, transparent 100%);
+        box-shadow: 0 0 16px rgba(245, 158, 11, 0.45), inset 0 0 16px rgba(245, 158, 11, 0.18);
     }
 }
 
-@keyframes rangeRingPulseWizard {
+@keyframes rangeRingRotate {
     0% {
-        box-shadow: 0 0 12px rgba(56, 189, 248, 0.35), inset 0 0 12px rgba(56, 189, 248, 0.12);
-        opacity: 0.85;
+        transform: translate(-50%, -50%) rotate(0deg);
     }
     100% {
-        box-shadow: 0 0 20px rgba(56, 189, 248, 0.6), inset 0 0 20px rgba(56, 189, 248, 0.25);
-        opacity: 1;
+        transform: translate(-50%, -50%) rotate(360deg);
     }
 }
 
-@keyframes rangeRingPulseRanger {
-    0% {
-        box-shadow: 0 0 12px rgba(74, 222, 128, 0.35), inset 0 0 12px rgba(74, 222, 128, 0.12);
-        opacity: 0.85;
+@keyframes rangeRingPulse {
+    0%, 100% {
+        opacity: 0.1;
     }
-    100% {
-        box-shadow: 0 0 20px rgba(74, 222, 128, 0.6), inset 0 0 20px rgba(74, 222, 128, 0.25);
-        opacity: 1;
+    50% {
+        opacity: 1.0;
     }
 }
 
@@ -2626,23 +2741,14 @@
     100% { opacity: 1.0; }
 }
 
-/* ── Melee Range Ring (amber) ── */
-.melee-ring {
-    animation: rangeRingPulseMelee 3s ease-in-out infinite;
-}
 
-@keyframes rangeRingPulseMelee {
-    0%   { opacity: 0.55; box-shadow: 0 0 8px rgba(245,158,11,0.3), inset 0 0 8px rgba(245,158,11,0.05); }
-    50%  { opacity: 0.85; box-shadow: 0 0 18px rgba(245,158,11,0.55), inset 0 0 14px rgba(245,158,11,0.12); }
-    100% { opacity: 0.55; box-shadow: 0 0 8px rgba(245,158,11,0.3), inset 0 0 8px rgba(245,158,11,0.05); }
-}
 
 /* ── Weapon Swing Arc (cosmetic melee cone) ── */
 .weapon-swing-arc {
     transform-origin: center center;
     border-radius: 50%;
-    background: radial-gradient(circle at center, rgba(251,191,36,0.32) 0%, rgba(245,158,11,0.2) 45%, transparent 70%);
-    clip-path: polygon(50% 50%, 82% 5%, 100% 50%, 82% 95%);
+    background: radial-gradient(circle at 70% 50%, rgba(251,191,36,0.48) 0%, rgba(245,158,11,0.28) 40%, rgba(245,158,11,0.08) 65%, transparent 85%);
+    clip-path: polygon(70% 50%, 89% 5%, 100% 50%, 89% 95%);
     animation: swingArcFade 0.5s ease-out forwards;
 }
 
@@ -4058,6 +4164,17 @@
     z-index: 120 !important;
 }
 
+/* Enlarged Archway rendered on top of all other tiles, floor textures, and structures */
+.tile.enlarged-arch-tile,
+.enlarged-arch-tile {
+    z-index: 300 !important;
+    overflow: visible !important;
+
+    .portrait {
+        z-index: 300 !important;
+    }
+}
+
 
 @keyframes pulseGlow {
     from {
@@ -4213,19 +4330,19 @@
     height: 68px;
     margin: 0 auto 16px;
     border-radius: 50%;
-    background: radial-gradient(circle, #2a150c 0%, #0c090c 100%);
-    border: 1px solid rgba(212, 163, 89, 0.35);
-    box-shadow: 0 0 20px rgba(230, 126, 34, 0.3), inset 0 0 12px rgba(0, 0, 0, 0.8);
+    background: radial-gradient(circle, #221c18 0%, #0d0b0b 100%);
+    border: 1px solid rgba(160, 130, 95, 0.3);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6), inset 0 0 12px rgba(0, 0, 0, 0.85);
     display: flex;
     align-items: center;
     justify-content: center;
     position: relative;
 
     .trap-emblem-img {
-        width: 38px;
-        height: 38px;
+        width: 40px;
+        height: 40px;
         object-fit: contain;
-        filter: drop-shadow(0 0 8px rgba(230, 126, 34, 0.6));
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.6));
     }
 }
 
@@ -4249,6 +4366,20 @@
     font-size: 0.9rem;
     font-family: 'Outfit', 'Inter', sans-serif;
     box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+    transition: background 0.25s ease, border-color 0.25s ease, transform 0.2s ease, box-shadow 0.2s ease;
+
+    &.pending {
+        background: rgba(18, 14, 13, 0.45);
+        border: 1px solid rgba(100, 90, 80, 0.2);
+        opacity: 0.65;
+    }
+
+    &.rolling {
+        background: linear-gradient(90deg, rgba(246, 211, 101, 0.08) 0%, rgba(35, 28, 18, 0.4) 100%);
+        border: 1px solid rgba(246, 211, 101, 0.45);
+        box-shadow: 0 0 12px rgba(246, 211, 101, 0.15), inset 0 0 10px rgba(0, 0, 0, 0.5);
+        transform: scale(1.01);
+    }
 
     &.saved {
         background: linear-gradient(90deg, rgba(46, 204, 113, 0.12) 0%, rgba(18, 28, 22, 0.4) 100%);
@@ -4279,6 +4410,34 @@
     text-align: center;
 }
 
+.trap-roll-slot {
+    display: inline-block;
+    min-width: 22px;
+    text-align: center;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    border-radius: 3px;
+    padding: 0 2px;
+    transition: color 0.15s ease;
+
+    &.rolling {
+        color: #f6d365;
+        text-shadow: 0 0 6px rgba(246, 211, 101, 0.6), 0 -1px 2px rgba(255, 255, 255, 0.4);
+        animation: slotReelTick 0.06s infinite alternate ease-in-out;
+    }
+
+    &.locked {
+        color: #ffffff;
+        text-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+        animation: slotLockIn 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+
+    &.pending {
+        color: #71685b;
+        letter-spacing: -1px;
+    }
+}
+
 .trap-result-label {
     font-family: 'Cinzel', serif;
     font-weight: 700;
@@ -4295,6 +4454,51 @@
     &.damaged {
         color: #f87171;
         text-shadow: 0 0 8px rgba(248, 113, 113, 0.45);
+    }
+
+    &.placeholder {
+        visibility: hidden;
+        user-select: none;
+    }
+}
+
+.trap-result-reveal {
+    animation: trapResultReveal 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slotReelTick {
+    0% {
+        transform: translateY(-1px);
+        filter: blur(0.3px);
+    }
+    100% {
+        transform: translateY(1px);
+        filter: blur(0px);
+    }
+}
+
+@keyframes slotLockIn {
+    0% {
+        transform: scale(1.35);
+        color: #ffeaa7;
+    }
+    100% {
+        transform: scale(1);
+        color: #ffffff;
+    }
+}
+
+@keyframes trapResultReveal {
+    0% {
+        opacity: 0;
+        transform: translateX(12px) scale(0.9);
+    }
+    70% {
+        transform: translateX(-2px) scale(1.04);
+    }
+    100% {
+        opacity: 1;
+        transform: translateX(0) scale(1);
     }
 }
 
@@ -6898,6 +7102,144 @@
         }
     }
 }
+
+@keyframes leylinePulse {
+    0% {
+        opacity: 0.82;
+        stroke-width: 1.5;
+    }
+    100% {
+        opacity: 1;
+        stroke-width: 2.1;
+    }
+}
+
+// ── Ranged Auto-Target Reticle Contracting Animation ──────────────────
+.ranged-auto-target-reticle {
+    position: absolute;
+    top: -4px;
+    left: -4px;
+    right: -4px;
+    bottom: -4px;
+    pointer-events: none;
+    z-index: 48;
+    animation: rangedAutoTargetGlowPulse 1.4s ease-in-out infinite alternate;
+
+    .reticle-corner {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        box-sizing: border-box;
+        will-change: transform, opacity;
+
+        &.top-left {
+            top: 0;
+            left: 0;
+            border-top: 2.5px solid #ef4444;
+            border-left: 2.5px solid #ef4444;
+            box-shadow: -1px -1px 5px rgba(239, 68, 68, 0.9);
+            animation: contractReticleTL 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        &.top-right {
+            top: 0;
+            right: 0;
+            border-top: 2.5px solid #ef4444;
+            border-right: 2.5px solid #ef4444;
+            box-shadow: 1px -1px 5px rgba(239, 68, 68, 0.9);
+            animation: contractReticleTR 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        &.bottom-left {
+            bottom: 0;
+            left: 0;
+            border-bottom: 2.5px solid #ef4444;
+            border-left: 2.5px solid #ef4444;
+            box-shadow: -1px 1px 5px rgba(239, 68, 68, 0.9);
+            animation: contractReticleBL 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        &.bottom-right {
+            bottom: 0;
+            right: 0;
+            border-bottom: 2.5px solid #ef4444;
+            border-right: 2.5px solid #ef4444;
+            box-shadow: 1px 1px 5px rgba(239, 68, 68, 0.9);
+            animation: contractReticleBR 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+    }
+}
+
+@keyframes contractReticleTL {
+    0% {
+        transform: translate(-16px, -16px) scale(1.6);
+        opacity: 0.1;
+    }
+    70% {
+        transform: translate(1px, 1px) scale(0.95);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(0, 0) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes contractReticleTR {
+    0% {
+        transform: translate(16px, -16px) scale(1.6);
+        opacity: 0.1;
+    }
+    70% {
+        transform: translate(-1px, 1px) scale(0.95);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(0, 0) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes contractReticleBL {
+    0% {
+        transform: translate(-16px, 16px) scale(1.6);
+        opacity: 0.1;
+    }
+    70% {
+        transform: translate(1px, -1px) scale(0.95);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(0, 0) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes contractReticleBR {
+    0% {
+        transform: translate(16px, 16px) scale(1.6);
+        opacity: 0.1;
+    }
+    70% {
+        transform: translate(-1px, -1px) scale(0.95);
+        opacity: 1;
+    }
+    100% {
+        transform: translate(0, 0) scale(1);
+        opacity: 1;
+    }
+}
+
+@keyframes rangedAutoTargetGlowPulse {
+    0% {
+        filter: drop-shadow(0 0 2px rgba(239, 68, 68, 0.6));
+    }
+    100% {
+        filter: drop-shadow(0 0 9px rgba(239, 68, 68, 1));
+    }
+}
+
+
 
 
 

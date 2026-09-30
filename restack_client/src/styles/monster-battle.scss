@@ -1325,6 +1325,24 @@
         }
     }
 
+    &.battle-summary-active,
+    .combat-grid-container.summary-active {
+        .unit-tile.dead,
+        .unit-tile[data-dead="true"],
+        .portrait.dead,
+        .monster-portrait.dead,
+        .fighter-portrait.dead,
+        .minion-portrait.dead,
+        .monsterDeadAnimation,
+        .fighterDeadAnimation,
+        .mummyDeadAnimation {
+            display: none !important;
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+    }
+
     .summary-overlay-container {
         position: fixed;
         inset: 0;
@@ -11504,5 +11522,23 @@
         height: 1px !important;
         max-height: 1px !important;
         min-height: 1px !important;
+    }
+}
+
+.combat-grid-container.summary-active,
+.mb-board.battle-summary-active {
+    .unit-tile.dead,
+    .unit-tile[data-dead="true"],
+    .portrait.dead,
+    .monster-portrait.dead,
+    .fighter-portrait.dead,
+    .minion-portrait.dead,
+    .monsterDeadAnimation,
+    .fighterDeadAnimation,
+    .mummyDeadAnimation {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
     }
 }

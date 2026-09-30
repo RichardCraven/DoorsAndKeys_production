@@ -52,10 +52,12 @@ function FloorCard({
     boardCells, activeMinimapIndex,
     playerSlabDot, boardDetailPlayerTile,
     boardDetailDiscoveryDots, boardDetailPathSegments,
+    boardDetailLeylineSegments = [],
     boardDetailEnemyTiles, boardDetailMarkers2D,
     slabVendorMarkers, boardHighlightImage,
 }) {
     const expanded = isCurrent && isZoomed;
+
 
     const handleClick = () => {
         if (isZoomed) {
@@ -130,6 +132,30 @@ function FloorCard({
                                 ))}
                             </svg>
                         )}
+
+                        {/* leyline path svg */}
+                        {boardDetailLeylineSegments && boardDetailLeylineSegments.length > 0 && (
+                            <svg
+                                className="mrx-leyline-svg"
+                                viewBox="0 0 100 100"
+                                preserveAspectRatio="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                            >
+                                <defs>
+                                    <linearGradient id="mrx-leyline-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stopColor="#00f0ff" />
+                                        <stop offset="25%" stopColor="#a855f7" />
+                                        <stop offset="50%" stopColor="#ec4899" />
+                                        <stop offset="75%" stopColor="#f59e0b" />
+                                        <stop offset="100%" stopColor="#10b981" />
+                                    </linearGradient>
+                                </defs>
+                                {boardDetailLeylineSegments.map((pts, i) => (
+                                    <polyline key={`ley_${i}`} points={pts} stroke="url(#mrx-leyline-grad)" className="mrx-leyline-line" />
+                                ))}
+                            </svg>
+                        )}
+
 
                         {/* enemy dots */}
                         {boardDetailEnemyTiles.map((m) => (
@@ -244,6 +270,7 @@ class MapRedux extends Component {
             boardDetailPlayerTile,
             boardDetailDiscoveryDots = [],
             boardDetailPathSegments = [],
+            boardDetailLeylineSegments = [],
             boardDetailEnemyTiles = [],
             boardDetailMarkers2D = [],
             slabVendorMarkers = [],
@@ -384,6 +411,7 @@ class MapRedux extends Component {
                                     boardDetailPlayerTile={isCurrent ? boardDetailPlayerTile : null}
                                     boardDetailDiscoveryDots={isCurrent ? boardDetailDiscoveryDots : []}
                                     boardDetailPathSegments={isCurrent ? boardDetailPathSegments : []}
+                                    boardDetailLeylineSegments={isCurrent ? boardDetailLeylineSegments : []}
                                     boardDetailEnemyTiles={isCurrent ? boardDetailEnemyTiles : []}
                                     boardDetailMarkers2D={isCurrent ? boardDetailMarkers2D : []}
                                     slabVendorMarkers={isCurrent ? slabVendorMarkers : []}

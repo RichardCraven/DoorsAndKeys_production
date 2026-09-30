@@ -83,6 +83,24 @@ export default class CardDuel extends React.Component {
             moveAnims: {},           // { [unitKey]: 'up' | 'down' | 'left' | 'right' }
             reaperPlayAnim: null,    // Card flight animation for Reaper play
 
+            // Player & Enemy Edge Tiles (Heart, Sword, Wall)
+            // Player: Heart col 2, Sword col 1, Wall col 3
+            // Enemy: Heart col 2, Sword col 3, Wall col 1
+            playerEdgeTiles: {
+                heart: { col: 2, hits: 0 },
+                sword: { col: 1, hits: 0, destroyed: false },
+                wall:  { col: 3, destroyed: false }
+            },
+            reaperEdgeTiles: {
+                heart: { col: 2, hits: 0 },
+                sword: { col: 3, hits: 0, destroyed: false },
+                wall:  { col: 1, destroyed: false }
+            },
+            selectedEdgeTileKey: null, // 'heart' | 'sword' | 'wall'
+            playerEdgeTileMovedThisTurn: false,
+            reaperEdgeTileMovedThisTurn: false,
+            edgeTileJumpAnim: null, // { owner: 'player'|'reaper', tileKey: 'heart'|'sword'|'wall', fromCol: 1, toCol: 3 }
+
             // UI Confirm Modals & Event Log
             showForfeitModal: false,
             showDeckModal: false,
@@ -385,7 +403,7 @@ export default class CardDuel extends React.Component {
             hp: 0,
             width: 1,
             height: 1,
-            art: resolveImage(images.volcanic_rune) || resolveImage(images.earthen_rune) || resolveImage(images.soldier_portrait),
+            art: resolveImage(images.arcane_overdrive) || resolveImage(images.overdrive) || resolveImage(images.card_overdrive) || resolveImage(images.volcanic_rune) || resolveImage(images.earthen_rune) || resolveImage(images.soldier_portrait),
             desc: 'Carries over all remaining unused Spirit in current turn to your next turn!'
         });
 
@@ -419,6 +437,39 @@ export default class CardDuel extends React.Component {
             desc: 'Draw 3 cards from your deck.'
         });
 
+        // Add Bloodbond Sentinel — on death, heals all surviving friendly units by its remaining HP
+        playerDeck.push({
+            id: `player_bloodbond_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Bloodbond Sentinel',
+            type: 'unit',
+            owner: 'player',
+            cost: 3,
+            atk: 2,
+            hp: 4,
+            maxHp: 4,
+            width: 1,
+            height: 1,
+            isBloodbond: true,
+            art: resolveImage(images.volcanic_rune) || resolveImage(images.soldier_portrait),
+            desc: 'When destroyed, heals all other friendly units by this unit\'s remaining HP.'
+        });
+
+        // Add Rift Strike — deals damage equal to the number of enemy units on the board (min 1)
+        playerDeck.push({
+            id: `player_rift_strike_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Rift Strike',
+            type: 'action',
+            actionType: 'rift_strike',
+            owner: 'player',
+            cost: 2,
+            atk: 0,
+            hp: 0,
+            width: 1,
+            height: 1,
+            art: resolveImage(images.arcane_rift_strike) || resolveImage(images.rift_strike) || resolveImage(images.card_rift_strike) || resolveImage(images.shadow_rune) || resolveImage(images.volcanic_rune),
+            desc: 'Deals direct damage equal to the number of enemy units on the board (minimum 1).'
+        });
+
         // Add 1 Overdrive Action Card & 1 Reap Action Card to Reaper Deck
         reaperDeck.push({
             id: `reaper_overdrive_${Math.random().toString(36).substring(2, 7)}`,
@@ -431,7 +482,7 @@ export default class CardDuel extends React.Component {
             hp: 0,
             width: 1,
             height: 1,
-            art: resolveImage(images.volcanic_rune) || resolveImage(images.earthen_rune) || resolveImage(images.soldier_portrait),
+            art: resolveImage(images.arcane_overdrive) || resolveImage(images.overdrive) || resolveImage(images.card_overdrive) || resolveImage(images.volcanic_rune) || resolveImage(images.earthen_rune) || resolveImage(images.soldier_portrait),
             desc: 'Carries over all remaining unused Spirit in current turn to next turn!'
         });
 
@@ -478,6 +529,39 @@ export default class CardDuel extends React.Component {
             height: 1,
             art: resolveImage(images.shadow_rune) || resolveImage(images.earthen_rune),
             desc: 'Draw 3 cards from your deck.'
+        });
+
+        // Add Death Shroud — on death, heals all surviving reaper units by its remaining HP
+        reaperDeck.push({
+            id: `reaper_death_shroud_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Death Shroud',
+            type: 'unit',
+            owner: 'reaper',
+            cost: 3,
+            atk: 2,
+            hp: 4,
+            maxHp: 4,
+            width: 1,
+            height: 1,
+            isBloodbond: true,
+            art: resolveImage(images.reaper_card_back) || resolveImage(images.shadow_rune),
+            desc: 'When destroyed, heals all other friendly units by this unit\'s remaining HP.'
+        });
+
+        // Add Plague Wave — deals damage equal to the number of player units on the board (min 1)
+        reaperDeck.push({
+            id: `reaper_plague_wave_${Math.random().toString(36).substring(2, 7)}`,
+            name: 'Plague Wave',
+            type: 'action',
+            actionType: 'plague_wave',
+            owner: 'reaper',
+            cost: 2,
+            atk: 0,
+            hp: 0,
+            width: 1,
+            height: 1,
+            art: resolveImage(images.shadow_rune) || resolveImage(images.reaper_card_back),
+            desc: 'Deals direct damage equal to the number of player units on the board (minimum 1).'
         });
 
         // Add forged Echo Cards (1/1 unit cards identical to pygmies except for portrait and name)
@@ -596,6 +680,20 @@ export default class CardDuel extends React.Component {
             territory: initialTerritory,
             selectedCard: null,
             selectedBoardUnit: null,
+            playerEdgeTiles: {
+                heart: { col: 2, hits: 0 },
+                sword: { col: 1, hits: 0, destroyed: false },
+                wall:  { col: 3, destroyed: false }
+            },
+            reaperEdgeTiles: {
+                heart: { col: 2, hits: 0 },
+                sword: { col: 3, hits: 0, destroyed: false },
+                wall:  { col: 1, destroyed: false }
+            },
+            selectedEdgeTileKey: null,
+            playerEdgeTileMovedThisTurn: false,
+            reaperEdgeTileMovedThisTurn: false,
+            edgeTileJumpAnim: null,
             log: [
                 '⚔️ Tactical Card Duel Started!',
                 '🎲 Randomly selecting the starting player...'
@@ -731,6 +829,8 @@ export default class CardDuel extends React.Component {
     advanceToNextTurn = () => {
         if (this.state.gameOver) return;
 
+        this.executeEndTurnSwordSwings();
+
         const enemyName = this.getEnemyName();
         const nextTurnNum = this.state.turnNumber + 1;
         const baseAllowance = Math.floor((nextTurnNum + 1) / 2);
@@ -840,6 +940,9 @@ export default class CardDuel extends React.Component {
             reaperDiscard: updatedReaperDiscard,
             selectedCard: null,
             selectedBoardUnit: null,
+            selectedEdgeTileKey: null,
+            playerEdgeTileMovedThisTurn: false,
+            reaperEdgeTileMovedThisTurn: false,
             grid: updatedGrid,
             isAiThinking: nextTurnOwner === 'reaper'
         }, () => {
@@ -952,13 +1055,16 @@ export default class CardDuel extends React.Component {
         ];
 
         moveOffsets.forEach(([dr, dc]) => {
-            const nr = r + dr;
-            const nc = c + dc;
-            if (nr >= 0 && nr <= 4 && nc >= 0 && nc <= 4) {
-                const key = `${nr}_${nc}`;
-                const targetUnit = grid[key];
-                if (!targetUnit) {
-                    moves.push(key);
+            const targetAnchorRow = r + dr;
+            const targetAnchorCol = c + dc;
+            if (this.canUnitMoveTo(unit, targetAnchorRow, targetAnchorCol, grid)) {
+                const w = unit.width || 1;
+                const h = unit.height || 1;
+                for (let mdr = 0; mdr < h; mdr++) {
+                    for (let mdc = 0; mdc < w; mdc++) {
+                        const subKey = `${targetAnchorRow + mdr}_${targetAnchorCol + mdc}`;
+                        if (!moves.includes(subKey)) moves.push(subKey);
+                    }
                 }
             }
         });
@@ -1041,6 +1147,34 @@ export default class CardDuel extends React.Component {
 
     // ─── Tactical Movement, Attack, and Hero Attack Actions ────────────────────
     executeTacticalMove = (unit, targetRow, targetCol) => {
+        if (!unit) return;
+        let destAnchorRow = targetRow;
+        let destAnchorCol = targetCol;
+        if (!this.canUnitMoveTo(unit, destAnchorRow, destAnchorCol, this.state.grid)) {
+            const w = unit.width || 1;
+            const h = unit.height || 1;
+            let foundValid = false;
+            for (let dr = 0; dr < h; dr++) {
+                for (let dc = 0; dc < w; dc++) {
+                    const candidateAnchorRow = targetRow - dr;
+                    const candidateAnchorCol = targetCol - dc;
+                    if (this.canUnitMoveTo(unit, candidateAnchorRow, candidateAnchorCol, this.state.grid)) {
+                        destAnchorRow = candidateAnchorRow;
+                        destAnchorCol = candidateAnchorCol;
+                        foundValid = true;
+                        break;
+                    }
+                }
+                if (foundValid) break;
+            }
+            if (!foundValid) {
+                this.addLog(`⚠️ ${unit.name} (${w}x${h}) cannot move there: all required destination tiles must be empty.`);
+                return;
+            }
+        }
+        targetRow = destAnchorRow;
+        targetCol = destAnchorCol;
+
         const oldRow = unit.anchorRow;
         const oldCol = unit.anchorCol;
 
@@ -1125,6 +1259,8 @@ export default class CardDuel extends React.Component {
         const defenderOwner = defender.owner === 'player' ? 'Your' : `${this.getEnemyName()}'s`;
 
         const atkDamage = attacker.atk || 1;
+        // Snapshot pre-death HP for Bloodbond healing (before applying damage)
+        const defenderHpBeforeDamage = defender.hp;
         defender.hp -= atkDamage;
 
         const attackAnim = {
@@ -1137,6 +1273,8 @@ export default class CardDuel extends React.Component {
         this.addLog(`⚔️ ${attackerOwner} ${attacker.name} (${attacker.atk} ATK) attacked ${defenderOwner} ${defender.name}!`);
 
         if (defender.hp <= 0) {
+            // The heal amount = HP the defender actually had (not overkill)
+            const bloodbondHeal = Math.max(0, defenderHpBeforeDamage);
             defender.hp = 0;
             this.addLog(`☠️ ${defenderOwner} ${defender.name} was defeated!`);
 
@@ -1154,15 +1292,38 @@ export default class CardDuel extends React.Component {
             };
             if (defender.owner === 'player') playerDiscard.push(resetDefender);
             else reaperDiscard.push(resetDefender);
+
+            // ─── Bloodbond: heal surviving friendly units on defender death ───
+            if (defender.isBloodbond && bloodbondHeal > 0) {
+                const processedIds = new Set();
+                Object.values(updatedGrid).forEach(unit => {
+                    if (unit && unit.owner === defender.owner && unit.id !== defender.id && !processedIds.has(unit.id)) {
+                        processedIds.add(unit.id);
+                        unit.hp = Math.min((unit.maxHp || unit.startingHp || 1), unit.hp + bloodbondHeal);
+                        // Sync all grid cells occupied by this multi-tile unit
+                        Object.keys(updatedGrid).forEach(k => {
+                            if (updatedGrid[k] && updatedGrid[k].id === unit.id) {
+                                updatedGrid[k] = unit;
+                            }
+                        });
+                    }
+                });
+                const allyCount = processedIds.size;
+                if (allyCount > 0) {
+                    this.addLog(`💚 BLOODBOND! ${defender.name}'s sacrifice healed ${allyCount} friendly unit${allyCount !== 1 ? 's' : ''} for ${bloodbondHeal} HP!`);
+                }
+            }
         } else {
             // Counter-Attack
             const counterDamage = defender.atk || 1;
+            const attackerHpBeforeCounter = attacker.hp;
             attacker.hp -= counterDamage;
             attackAnim.damageToAttacker = counterDamage;
 
             this.addLog(`🛡️ ${defenderOwner} ${defender.name} counter-attacked for ${counterDamage} damage! (${attackerOwner} ${attacker.name}: ${attacker.atk} - ${Math.max(0, attacker.hp)}/${attacker.maxHp} HP)`);
 
             if (attacker.hp <= 0) {
+                const attackerBloodbondHeal = Math.max(0, attackerHpBeforeCounter);
                 attacker.hp = 0;
                 this.addLog(`☠️ ${attackerOwner} ${attacker.name} was defeated in counter-attack!`);
 
@@ -1180,6 +1341,26 @@ export default class CardDuel extends React.Component {
                 };
                 if (attacker.owner === 'player') playerDiscard.push(resetAttacker);
                 else reaperDiscard.push(resetAttacker);
+
+                // ─── Bloodbond: heal surviving friendly units on attacker death ───
+                if (attacker.isBloodbond && attackerBloodbondHeal > 0) {
+                    const processedIds = new Set();
+                    Object.values(updatedGrid).forEach(unit => {
+                        if (unit && unit.owner === attacker.owner && unit.id !== attacker.id && !processedIds.has(unit.id)) {
+                            processedIds.add(unit.id);
+                            unit.hp = Math.min((unit.maxHp || unit.startingHp || 1), unit.hp + attackerBloodbondHeal);
+                            Object.keys(updatedGrid).forEach(k => {
+                                if (updatedGrid[k] && updatedGrid[k].id === unit.id) {
+                                    updatedGrid[k] = unit;
+                                }
+                            });
+                        }
+                    });
+                    const allyCount = processedIds.size;
+                    if (allyCount > 0) {
+                        this.addLog(`💚 BLOODBOND! ${attacker.name}'s sacrifice healed ${allyCount} friendly unit${allyCount !== 1 ? 's' : ''} for ${attackerBloodbondHeal} HP!`);
+                    }
+                }
             }
         }
 
@@ -1206,6 +1387,339 @@ export default class CardDuel extends React.Component {
         }
 
         return { updatedGrid, playerDiscard, reaperDiscard };
+    }
+
+    // ─── Edge Tiles Mechanics & Interactions (Heart, Wall, Sword) ───────────
+    handleEdgeTileClick = (owner, tileKey) => {
+        if (
+            owner !== 'player' ||
+            this.state.currentTurn !== 'player' ||
+            this.state.playerEdgeTileMovedThisTurn ||
+            this.state.isAiThinking ||
+            this.state.gameOver
+        ) return;
+
+        const tile = this.state.playerEdgeTiles[tileKey];
+        if (!tile || tile.destroyed) return;
+
+        if (this.state.selectedEdgeTileKey === tileKey) {
+            this.setState({ selectedEdgeTileKey: null });
+        } else {
+            this.setState({
+                selectedEdgeTileKey: tileKey,
+                selectedCard: null,
+                selectedBoardUnit: null
+            });
+        }
+    }
+
+    handleEdgeDockSlotClick = (owner, targetCol) => {
+        if (
+            owner !== 'player' ||
+            this.state.currentTurn !== 'player' ||
+            this.state.playerEdgeTileMovedThisTurn ||
+            !this.state.selectedEdgeTileKey ||
+            this.state.isAiThinking ||
+            this.state.gameOver
+        ) return;
+
+        const tileKey = this.state.selectedEdgeTileKey;
+        const currentTile = this.state.playerEdgeTiles[tileKey];
+        if (!currentTile || currentTile.destroyed) return;
+
+        const fromCol = currentTile.col;
+        const dist = Math.abs(targetCol - fromCol);
+        if (dist < 1 || dist > 2) return;
+
+        const isOccupied = Object.entries(this.state.playerEdgeTiles).some(([k, t]) =>
+            k !== tileKey && !t.destroyed && t.col === targetCol
+        );
+        if (isOccupied) return;
+
+        const updatedTiles = {
+            ...this.state.playerEdgeTiles,
+            [tileKey]: { ...currentTile, col: targetCol }
+        };
+
+        const label = tileKey.toUpperCase();
+        this.addLog(`✨ You moved your ${label} tile from Column ${fromCol + 1} to Column ${targetCol + 1}!`);
+
+        this.setState({
+            playerEdgeTiles: updatedTiles,
+            playerEdgeTileMovedThisTurn: true,
+            selectedEdgeTileKey: null,
+            edgeTileJumpAnim: { owner: 'player', tileKey, fromCol, toCol: targetCol }
+        });
+
+        if (this._edgeJumpTimer) clearTimeout(this._edgeJumpTimer);
+        this._edgeJumpTimer = setTimeout(() => {
+            this.setState({ edgeTileJumpAnim: null });
+        }, 500);
+    }
+
+    getSafeEdgeTiles(owner) {
+        const defaultPlayerTiles = {
+            heart: { col: 2, hits: 0, destroyed: false },
+            sword: { col: 1, hits: 0, destroyed: false },
+            wall: { col: 3, hits: 0, destroyed: false }
+        };
+        const defaultReaperTiles = {
+            heart: { col: 2, hits: 0, destroyed: false },
+            sword: { col: 3, hits: 0, destroyed: false },
+            wall: { col: 1, hits: 0, destroyed: false }
+        };
+        if (owner === 'player') {
+            const tiles = this.state.playerEdgeTiles || {};
+            return {
+                heart: { ...defaultPlayerTiles.heart, ...(tiles.heart || {}) },
+                sword: { ...defaultPlayerTiles.sword, ...(tiles.sword || {}) },
+                wall: { ...defaultPlayerTiles.wall, ...(tiles.wall || {}) }
+            };
+        } else {
+            const tiles = this.state.reaperEdgeTiles || {};
+            return {
+                heart: { ...defaultReaperTiles.heart, ...(tiles.heart || {}) },
+                sword: { ...defaultReaperTiles.sword, ...(tiles.sword || {}) },
+                wall: { ...defaultReaperTiles.wall, ...(tiles.wall || {}) }
+            };
+        }
+    }
+
+    executeReaperEdgeTileMove = () => {
+        if (this.state.reaperEdgeTileMovedThisTurn || this.state.gameOver) return;
+
+        const reaperEdgeTiles = this.getSafeEdgeTiles('reaper');
+        const grid = this.state.grid || {};
+        const enemyName = this.getEnemyName();
+
+        const row0Units = [];
+        Object.values(grid).forEach(u => {
+            if (u && u.owner === 'player' && u.hp > 0 && u.anchorRow === 0) {
+                row0Units.push(u);
+            }
+        });
+
+        let chosenKey = null;
+        let chosenTargetCol = null;
+
+        if (reaperEdgeTiles.wall && !reaperEdgeTiles.wall.destroyed && row0Units.length > 0) {
+            const wallCol = reaperEdgeTiles.wall.col;
+            for (const u of row0Units) {
+                const targetC = u.anchorCol;
+                const dist = Math.abs(targetC - wallCol);
+                if (dist >= 1 && dist <= 2) {
+                    const occ = Object.entries(reaperEdgeTiles).some(([k, t]) => k !== 'wall' && t && !t.destroyed && t.col === targetC);
+                    if (!occ) {
+                        chosenKey = 'wall';
+                        chosenTargetCol = targetC;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!chosenKey && reaperEdgeTiles.sword && !reaperEdgeTiles.sword.destroyed && row0Units.length > 0) {
+            const swordCol = reaperEdgeTiles.sword.col;
+            for (const u of row0Units) {
+                const targetC = u.anchorCol;
+                const dist = Math.abs(targetC - swordCol);
+                if (dist >= 1 && dist <= 2) {
+                    const occ = Object.entries(reaperEdgeTiles).some(([k, t]) => k !== 'sword' && t && !t.destroyed && t.col === targetC);
+                    if (!occ) {
+                        chosenKey = 'sword';
+                        chosenTargetCol = targetC;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!chosenKey && reaperEdgeTiles.heart && row0Units.some(u => u.anchorCol === reaperEdgeTiles.heart.col)) {
+            const heartCol = reaperEdgeTiles.heart.col;
+            for (let dc of [-2, -1, 1, 2]) {
+                const targetC = heartCol + dc;
+                if (targetC >= 0 && targetC <= 4) {
+                    const occ = Object.entries(reaperEdgeTiles).some(([k, t]) => k !== 'heart' && t && !t.destroyed && t.col === targetC);
+                    if (!occ) {
+                        chosenKey = 'heart';
+                        chosenTargetCol = targetC;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!chosenKey) {
+            const availableKeys = ['heart', 'sword', 'wall'].filter(k => reaperEdgeTiles[k] && !reaperEdgeTiles[k].destroyed);
+            const shuffledKeys = this.shuffleArray(availableKeys);
+            for (const k of shuffledKeys) {
+                const curCol = reaperEdgeTiles[k].col;
+                const validCols = [];
+                for (let c = 0; c < 5; c++) {
+                    const d = Math.abs(c - curCol);
+                    if (d >= 1 && d <= 2) {
+                        const occ = Object.entries(reaperEdgeTiles).some(([key, t]) => key !== k && t && !t.destroyed && t.col === c);
+                        if (!occ) validCols.push(c);
+                    }
+                }
+                if (validCols.length > 0) {
+                    chosenKey = k;
+                    chosenTargetCol = validCols[Math.floor(Math.random() * validCols.length)];
+                    break;
+                }
+            }
+        }
+
+        if (chosenKey && chosenTargetCol !== null) {
+            const fromCol = reaperEdgeTiles[chosenKey].col;
+            const updatedReaperTiles = {
+                ...reaperEdgeTiles,
+                [chosenKey]: { ...reaperEdgeTiles[chosenKey], col: chosenTargetCol }
+            };
+            this.addLog(`💀 ${enemyName} moved their ${chosenKey.toUpperCase()} tile to Column ${chosenTargetCol + 1}!`);
+            this.setState({
+                reaperEdgeTiles: updatedReaperTiles,
+                reaperEdgeTileMovedThisTurn: true,
+                edgeTileJumpAnim: { owner: 'reaper', tileKey: chosenKey, fromCol, toCol: chosenTargetCol }
+            });
+            setTimeout(() => this.setState({ edgeTileJumpAnim: null }), 500);
+        }
+    }
+
+    executeEndTurnSwordSwings = () => {
+        const playerEdgeTiles = this.getSafeEdgeTiles('player');
+        const reaperEdgeTiles = this.getSafeEdgeTiles('reaper');
+        const { grid, playerDiscard, reaperDiscard } = this.state;
+        const enemyName = this.getEnemyName();
+        let updatedGrid = { ...(grid || {}) };
+        let updatedPlayerDiscard = [...(playerDiscard || [])];
+        let updatedReaperDiscard = [...(reaperDiscard || [])];
+        let gridChanged = false;
+
+        if (playerEdgeTiles.sword && !playerEdgeTiles.sword.destroyed) {
+            const sCol = playerEdgeTiles.sword.col;
+            Object.values(updatedGrid).forEach(u => {
+                if (u && u.owner === 'reaper' && u.hp > 0 && u.anchorRow === 4) {
+                    const occupiesCol = (u.anchorCol <= sCol && sCol < u.anchorCol + (u.width || 1));
+                    if (occupiesCol) {
+                        u.hp -= 3;
+                        this.addLog(`⚔️ SWORD SWING! Your Sword struck ${enemyName}'s ${u.name} for 3 damage (${Math.max(0, u.hp)}/${u.maxHp} HP)!`);
+                        gridChanged = true;
+                        if (u.hp <= 0) {
+                            u.hp = 0;
+                            Object.keys(updatedGrid).forEach(k => {
+                                if (updatedGrid[k] && updatedGrid[k].id === u.id) delete updatedGrid[k];
+                            });
+                            updatedReaperDiscard.push(u);
+                            this.addLog(`☠️ Your Sword destroyed ${enemyName}'s ${u.name}!`);
+                        }
+                    }
+                }
+            });
+        }
+
+        if (reaperEdgeTiles.sword && !reaperEdgeTiles.sword.destroyed) {
+            const sCol = reaperEdgeTiles.sword.col;
+            Object.values(updatedGrid).forEach(u => {
+                if (u && u.owner === 'player' && u.hp > 0 && u.anchorRow === 0) {
+                    const occupiesCol = (u.anchorCol <= sCol && sCol < u.anchorCol + (u.width || 1));
+                    if (occupiesCol) {
+                        u.hp -= 3;
+                        this.addLog(`⚔️ SWORD SWING! ${enemyName}'s Sword struck your ${u.name} for 3 damage (${Math.max(0, u.hp)}/${u.maxHp} HP)!`);
+                        gridChanged = true;
+                        if (u.hp <= 0) {
+                            u.hp = 0;
+                            Object.keys(updatedGrid).forEach(k => {
+                                if (updatedGrid[k] && updatedGrid[k].id === u.id) delete updatedGrid[k];
+                            });
+                            updatedPlayerDiscard.push(u);
+                            this.addLog(`☠️ ${enemyName}'s Sword destroyed your ${u.name}!`);
+                        }
+                    }
+                }
+            });
+        }
+
+        if (gridChanged) {
+            this.setState({
+                grid: updatedGrid,
+                playerDiscard: updatedPlayerDiscard,
+                reaperDiscard: updatedReaperDiscard
+            });
+        }
+    }
+
+    executeDirectEdgeAttack = (attacker, targetCol) => {
+        const enemyName = this.getEnemyName();
+        const isPlayerAttacker = attacker.owner === 'player';
+        const targetTiles = this.getSafeEdgeTiles(isPlayerAttacker ? 'reaper' : 'player');
+
+        if (targetTiles.wall && !targetTiles.wall.destroyed) {
+            const wCol = targetTiles.wall.col;
+            const occupiesWallCol = (attacker.anchorCol <= wCol && wCol < attacker.anchorCol + (attacker.width || 1));
+            if (occupiesWallCol) {
+                this.addLog(`🛡️ ${isPlayerAttacker ? enemyName + "'s" : 'Your'} Wall blocked ${attacker.name}'s attack in Column ${wCol + 1}!`);
+                attacker.hasActedThisTurn = true;
+                this.setState({ selectedBoardUnit: null });
+                return;
+            }
+        }
+
+        if (targetTiles.heart && (targetTiles.heart.col === targetCol || (attacker.width > 1 && targetTiles.heart.col === targetCol + 1))) {
+            const newHits = (targetTiles.heart.hits || 0) + 1;
+            const updatedTiles = {
+                ...targetTiles,
+                heart: { ...targetTiles.heart, hits: newHits }
+            };
+            attacker.hasActedThisTurn = true;
+            const gameOver = newHits >= 3 ? (isPlayerAttacker ? 'victory' : 'defeat') : null;
+
+            if (isPlayerAttacker) {
+                this.addLog(`❤️ DIRECT ATTACK! Your ${attacker.name} struck ${enemyName}'s Heart! (${newHits}/3 hits taken)`);
+                this.setState({ reaperEdgeTiles: updatedTiles, gameOver, selectedBoardUnit: null }, () => {
+                    if (gameOver === 'victory') {
+                        this.addLog(`✨ VICTORY! ${enemyName}'s Heart took 3 hits and was destroyed!`);
+                    }
+                });
+            } else {
+                this.addLog(`💔 DIRECT ATTACK! ${enemyName}'s ${attacker.name} struck YOUR Heart! (${newHits}/3 hits taken)`);
+                this.setState({ playerEdgeTiles: updatedTiles, gameOver, selectedBoardUnit: null }, () => {
+                    if (gameOver === 'defeat') {
+                        this.addLog(`💀 DEFEAT! Your Heart took 3 hits and was destroyed.`);
+                    }
+                });
+            }
+            return;
+        }
+
+        if (targetTiles.sword && !targetTiles.sword.destroyed && (targetTiles.sword.col === targetCol || (attacker.width > 1 && targetTiles.sword.col === targetCol + 1))) {
+            const newHits = (targetTiles.sword.hits || 0) + 1;
+            const isDestroyed = newHits >= 3;
+            const updatedTiles = {
+                ...targetTiles,
+                sword: { ...targetTiles.sword, hits: newHits, destroyed: isDestroyed }
+            };
+            attacker.hasActedThisTurn = true;
+
+            if (isPlayerAttacker) {
+                if (isDestroyed) {
+                    this.addLog(`💥 DESTROYED! Your ${attacker.name} shattered ${enemyName}'s Sword tile!`);
+                } else {
+                    this.addLog(`⚔️ ATTACK! Your ${attacker.name} struck ${enemyName}'s Sword tile! (${newHits}/3 hits)`);
+                }
+                this.setState({ reaperEdgeTiles: updatedTiles, selectedBoardUnit: null });
+            } else {
+                if (isDestroyed) {
+                    this.addLog(`💥 DESTROYED! ${enemyName}'s ${attacker.name} shattered your Sword tile!`);
+                } else {
+                    this.addLog(`⚔️ ATTACK! ${enemyName}'s ${attacker.name} struck your Sword tile! (${newHits}/3 hits)`);
+                }
+                this.setState({ playerEdgeTiles: updatedTiles, selectedBoardUnit: null });
+            }
+            return;
+        }
+
+        this.executeDirectHeroAttack(attacker);
     }
 
     executeDirectHeroAttack = (attacker) => {
@@ -1242,6 +1756,8 @@ export default class CardDuel extends React.Component {
     executeReaperTurn = () => {
         if (this.state.gameOver) return;
 
+        this.executeReaperEdgeTileMove();
+
         const { reaperHand, grid, reaperSpirit, territory } = this.state;
         let currentGrid = { ...grid };
         let currentReaperSpirit = reaperSpirit;
@@ -1250,7 +1766,93 @@ export default class CardDuel extends React.Component {
         let currentPlayerDiscard = [...this.state.playerDiscard];
         const enemyName = this.getEnemyName();
 
+        // Step 0: Play action cards the reaper has in hand
+        let currentPlayerHP = this.state.playerHP;
+        let currentReaperHP = this.state.reaperHP;
+        let currentMaxSpirit = this.state.maxSpirit || 1;
+        let currentReaperBonus = this.state.reaperBonusAllowance || 0;
+        let currentReaperOverdrive = this.state.reaperOverdriveActive;
+        let currentReaperDeck = [...this.state.reaperDeck];
+        let currentReaperDiscard2 = [...this.state.reaperDiscard];
+        let currentReaperHand2 = [...currentHand];
+
+        for (let i = currentReaperHand2.length - 1; i >= 0; i--) {
+            const card = currentReaperHand2[i];
+            if (card.type !== 'action' || card.cost > currentReaperSpirit) continue;
+
+            if (card.actionType === 'overdrive') {
+                this.addLog(`💀 ${enemyName} activated OVERDRIVE! They will carry over unused Spirit.`);
+                currentReaperOverdrive = true;
+                currentReaperSpirit -= card.cost;
+                currentReaperHand2.splice(i, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+            } else if (card.actionType === 'invest') {
+                this.addLog(`💀 ${enemyName} activated INVEST! Their maximum Spirit increased by 1.`);
+                currentMaxSpirit = currentMaxSpirit + 1;
+                currentReaperBonus = currentReaperBonus + 1;
+                currentReaperSpirit -= card.cost;
+                currentReaperHand2.splice(i, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+            } else if (card.actionType === 'inflate') {
+                this.addLog(`💀 ${enemyName} activated INFLATE! They drew 3 cards.`);
+                const res = this.drawCards('reaper', 3, currentReaperDeck, currentReaperDiscard2, currentReaperHand2);
+                currentReaperDeck = res.deck;
+                currentReaperDiscard2 = res.discard;
+                currentReaperHand2 = res.hand;
+                // Remove the inflate card itself (drawCards doesn't remove it from hand)
+                const inflateIdx = currentReaperHand2.findIndex(c => c.id === card.id);
+                if (inflateIdx >= 0) currentReaperHand2.splice(inflateIdx, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+                currentReaperSpirit -= card.cost;
+            } else if (card.actionType === 'reap') {
+                currentPlayerHP = Math.max(0, currentPlayerHP - (card.atk || 3));
+                this.addLog(`☠️ ${enemyName} cast REAP! Dealt ${card.atk || 3} direct damage to you!`);
+                currentReaperSpirit -= card.cost;
+                currentReaperHand2.splice(i, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+            } else if (card.actionType === 'plague_wave') {
+                // Count unique player units currently on the board
+                const playerUnitIds = new Set();
+                Object.values(currentGrid).forEach(unit => {
+                    if (unit && unit.owner === 'player') playerUnitIds.add(unit.id);
+                });
+                const plagueDamage = Math.max(1, playerUnitIds.size);
+                currentPlayerHP = Math.max(0, currentPlayerHP - plagueDamage);
+                this.addLog(`☠️ ${enemyName} unleashed PLAGUE WAVE! ${playerUnitIds.size} of your units empowered the curse — dealt ${plagueDamage} direct damage to you!`);
+                currentReaperSpirit -= card.cost;
+                currentReaperHand2.splice(i, 1);
+                currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
+            }
+        }
+
+        // Persist action card outcomes to currentHand/currentDiscard for unit placement step
+        currentHand = currentReaperHand2;
+        currentDiscard = currentReaperDiscard2;
+
+        // Check game-over from action card damage
+        const actionGameOver = currentReaperHP <= 0 ? 'victory' : (currentPlayerHP <= 0 ? 'defeat' : null);
+        if (actionGameOver) {
+            this.setState({
+                playerHP: currentPlayerHP,
+                reaperHP: currentReaperHP,
+                reaperHand: currentHand,
+                reaperDiscard: currentDiscard,
+                reaperDeck: currentReaperDeck,
+                reaperBonusAllowance: currentReaperBonus,
+                maxSpirit: currentMaxSpirit,
+                reaperOverdriveActive: currentReaperOverdrive,
+                reaperSpirit: currentReaperSpirit,
+                gameOver: actionGameOver,
+                isAiThinking: false
+            }, () => {
+                if (actionGameOver === 'defeat') this.addLog(`💀 DEFEAT! Your crew health was depleted.`);
+                if (actionGameOver === 'victory') this.addLog(`✨ VICTORY! ${enemyName}'s health was shattered!`);
+            });
+            return;
+        }
+
         // Step 1: Play unit cards from hand into empty slots in Reaper territory
+
         for (let i = currentHand.length - 1; i >= 0; i--) {
             const card = currentHand[i];
             if (card.cost <= currentReaperSpirit && card.type !== 'action') {
@@ -1444,7 +2046,13 @@ export default class CardDuel extends React.Component {
             reaperHand: currentHand,
             reaperSpirit: currentReaperSpirit,
             reaperDiscard: currentDiscard,
+            reaperDeck: currentReaperDeck,
             playerDiscard: currentPlayerDiscard,
+            playerHP: currentPlayerHP,
+            reaperHP: currentReaperHP,
+            maxSpirit: currentMaxSpirit,
+            reaperBonusAllowance: currentReaperBonus,
+            reaperOverdriveActive: currentReaperOverdrive,
             isAiThinking: false,
             moveAnims
         }, () => {
@@ -1454,6 +2062,7 @@ export default class CardDuel extends React.Component {
             this.advanceToNextTurn();
         });
     }
+
 
     playPlayerActionCard = (card) => {
         if (card.cost > this.state.playerSpirit) return;
@@ -1518,7 +2127,38 @@ export default class CardDuel extends React.Component {
             });
             return;
         }
+
+        if (card.actionType === 'rift_strike') {
+            // Count unique reaper units currently on the board
+            const processedIds = new Set();
+            Object.values(this.state.grid).forEach(unit => {
+                if (unit && unit.owner === 'reaper') processedIds.add(unit.id);
+            });
+            const riftDamage = Math.max(1, processedIds.size);
+            const newReaperHP = Math.max(0, this.state.reaperHP - riftDamage);
+            const riftGameOver = newReaperHP <= 0 ? 'victory' : null;
+            this.addLog(`⚡ RIFT STRIKE! Tore through ${processedIds.size} enemy unit${processedIds.size !== 1 ? 's' : ''} on the field — dealt ${riftDamage} direct damage to ${this.getEnemyName()}!`);
+            this.setState({
+                playerSpirit: nextSpirit,
+                playerHand: nextHand,
+                playerDiscard: nextDiscard,
+                reaperHP: newReaperHP,
+                gameOver: riftGameOver || this.state.gameOver,
+                selectedCard: null,
+                actionCardAnim: { card, type: 'rift_strike', owner: 'player', damage: riftDamage }
+            }, () => {
+                if (riftGameOver === 'victory') {
+                    this.addLog(`✨ VICTORY! ${this.getEnemyName()}'s health was completely shattered by the Rift Strike!`);
+                }
+                setTimeout(() => {
+                    this.setState({ actionCardAnim: null });
+                }, 1300);
+            });
+            return;
+        }
+
     }
+
 
     // ─── Player Card Placement & Interaction Handlers ─────────────────────────
     handleSelectCardInHand = (card) => {
@@ -1923,6 +2563,139 @@ export default class CardDuel extends React.Component {
         );
     }
 
+    renderEdgeDock(owner) {
+        const isPlayer = owner === 'player';
+        const tiles = isPlayer ? this.state.playerEdgeTiles : this.state.reaperEdgeTiles;
+        const selectedKey = isPlayer ? this.state.selectedEdgeTileKey : null;
+        const jumpAnim = this.state.edgeTileJumpAnim;
+        const cols = [0, 1, 2, 3, 4];
+        const isCurrentTurn = this.state.currentTurn === 'player';
+        const hasMoved = isPlayer ? this.state.playerEdgeTileMovedThisTurn : this.state.reaperEdgeTileMovedThisTurn;
+        const selectedBoardUnit = this.state.selectedBoardUnit;
+
+        const getTileAtCol = (col) => {
+            for (const [key, t] of Object.entries(tiles || {})) {
+                if (t && !t.destroyed && t.col === col) {
+                    return { key, ...t };
+                }
+            }
+            return null;
+        };
+
+        const isSlotValidJump = (col) => {
+            if (!isPlayer || !selectedKey || hasMoved || !isCurrentTurn || this.state.isAiThinking || this.state.gameOver) return false;
+            const curTile = tiles[selectedKey];
+            if (!curTile || curTile.destroyed) return false;
+            const dist = Math.abs(col - curTile.col);
+            if (dist < 1 || dist > 2) return false;
+            const occupied = Object.entries(tiles).some(([k, t]) => k !== selectedKey && !t.destroyed && t.col === col);
+            return !occupied;
+        };
+
+        const canPlayerAttackEdgeSlot = (col) => {
+            if (isPlayer || !selectedBoardUnit || selectedBoardUnit.owner !== 'player' || selectedBoardUnit.anchorRow !== 0 || !isCurrentTurn || this.state.isAiThinking || this.state.gameOver) return false;
+            if (selectedBoardUnit.summoningSickness || selectedBoardUnit.hasActedThisTurn) return false;
+            const unitCol = selectedBoardUnit.anchorCol;
+            const unitWidth = selectedBoardUnit.width || 1;
+            return (col >= unitCol && col < unitCol + unitWidth);
+        };
+
+        return (
+            <div className={`pe-edge-dock pe-edge-dock--${isPlayer ? 'south' : 'north'}`}>
+                {cols.map(c => {
+                    const tile = getTileAtCol(c);
+                    const isValidJump = isSlotValidJump(c);
+                    const isAttackableEdgeSlot = canPlayerAttackEdgeSlot(c);
+
+                    let iconImg = null;
+                    if (tile) {
+                        if (tile.key === 'heart') iconImg = images.duel_heart_tile;
+                        else if (tile.key === 'wall') iconImg = images.duel_wall_tile;
+                        else if (tile.key === 'sword') iconImg = images.duel_sword_tile;
+                    }
+
+                    const isSelected = isPlayer && selectedKey && tile && tile.key === selectedKey;
+                    const isJumping = jumpAnim && jumpAnim.owner === owner && tile && tile.key === jumpAnim.tileKey;
+
+                    return (
+                        <div
+                            key={`dock_${owner}_col_${c}`}
+                            className={`pe-edge-dock-slot 
+                                ${isValidJump ? 'pe-edge-dock-slot--valid-jump' : ''}
+                                ${isSelected ? 'pe-edge-dock-slot--selected' : ''}
+                                ${isAttackableEdgeSlot ? 'pe-edge-dock-slot--attackable' : ''}
+                            `}
+                            onClick={() => {
+                                if (isAttackableEdgeSlot) {
+                                    this.executeDirectEdgeAttack(selectedBoardUnit, c);
+                                } else if (isValidJump) {
+                                    this.handleEdgeDockSlotClick(owner, c);
+                                } else if (tile && isPlayer) {
+                                    this.handleEdgeTileClick(owner, tile.key);
+                                }
+                            }}
+                        >
+                            {tile && (
+                                <div
+                                    className={`pe-edge-tile pe-edge-tile--${tile.key} ${isSelected ? 'pe-edge-tile--selected' : ''} ${isJumping ? 'pe-edge-tile--jumping' : ''}`}
+                                    style={iconImg ? { backgroundImage: `url(${iconImg})` } : {}}
+                                >
+                                    <div className="pe-edge-tile-header">
+                                        <span className="pe-edge-tile-name">{tile.key.toUpperCase()}</span>
+                                    </div>
+
+                                    {tile.key === 'heart' && (
+                                        <div className="pe-edge-hits-container" title={`${tile.hits}/3 Hits Taken`}>
+                                            <span className={`pe-hit-pip ${tile.hits >= 1 ? 'pe-hit-pip--taken' : ''}`}>❤️</span>
+                                            <span className={`pe-hit-pip ${tile.hits >= 2 ? 'pe-hit-pip--taken' : ''}`}>❤️</span>
+                                            <span className={`pe-hit-pip ${tile.hits >= 3 ? 'pe-hit-pip--taken' : ''}`}>❤️</span>
+                                        </div>
+                                    )}
+
+                                    {tile.key === 'sword' && (
+                                        <div className="pe-edge-hits-container" title={`${tile.hits}/3 Hits Taken`}>
+                                            <span className={`pe-hit-pip ${tile.hits >= 1 ? 'pe-hit-pip--taken' : ''}`}>⚔️</span>
+                                            <span className={`pe-hit-pip ${tile.hits >= 2 ? 'pe-hit-pip--taken' : ''}`}>⚔️</span>
+                                            <span className={`pe-hit-pip ${tile.hits >= 3 ? 'pe-hit-pip--taken' : ''}`}>⚔️</span>
+                                        </div>
+                                    )}
+
+                                    {tile.key === 'wall' && (
+                                        <div className="pe-edge-wall-badge">
+                                            🛡️ FORTIFIED
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {!tile && isValidJump && (
+                                <div className="pe-edge-jump-indicator">
+                                    <span>➔ MOVE</span>
+                                </div>
+                            )}
+
+                            {isAttackableEdgeSlot && (
+                                <div className="pe-edge-attack-badge">
+                                    ⚔️ ATTACK!
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    }
+
+    renderGridSection() {
+        return (
+            <div className="pe-grid-section-container">
+                {this.renderEdgeDock('reaper')}
+                {this.renderGridNodes()}
+                {this.renderEdgeDock('player')}
+            </div>
+        );
+    }
+
     renderGridNodes() {
         const { grid, territory, selectedCard, selectedBoardUnit, attackAnim, reaperPlayAnim, gameOver, currentTurn, isAiThinking } = this.state;
         const rows = [0, 1, 2, 3, 4];
@@ -1993,15 +2766,7 @@ export default class CardDuel extends React.Component {
                                             </div>
                                         </div>
                                     )}
-                                    {/* Row & Lane watermark */}
-                                    <div className="pe-node-coord-watermark">
-                                        R{r + 1}:L{c + 1}
-                                    </div>
 
-                                    {/* Territory Owner Indicator Tag */}
-                                    <div className={`pe-territory-tag pe-territory-tag--${tileTerritory}`}>
-                                        {tileTerritory === 'player' ? 'CREW' : (tileTerritory === 'reaper' ? this.getEnemyName().toUpperCase() : 'NEUTRAL')}
-                                    </div>
 
                                     {/* Damage Flash Overlays */}
                                     {isDefender && (
@@ -2484,8 +3249,8 @@ export default class CardDuel extends React.Component {
                                     );
                                 })()}
 
-                                {/* The 5x5 Tactical Board */}
-                                {this.renderGridNodes()}
+                                {/* The 5x5 Tactical Board with Edge Docks */}
+                                {this.renderGridSection()}
 
                                 {/* Lower-Right Corner: Crew Health Indicator */}
                                 <div className="pe-corner-health-orb pe-corner-health-orb--bottom-right">
@@ -2702,16 +3467,20 @@ export default class CardDuel extends React.Component {
                         <div className="pe-action-card-modal">
                             <div className="pe-action-card-art" style={this.state.actionCardAnim.card.art ? { backgroundImage: `url(${this.state.actionCardAnim.card.art})` } : {}}>
                                 {!this.state.actionCardAnim.card.art && (
-                                    this.state.actionCardAnim.type === 'overdrive' ? '✦' : 
+                                    this.state.actionCardAnim.type === 'overdrive' ? '✦' :
                                     this.state.actionCardAnim.type === 'invest' ? '◆' :
-                                    this.state.actionCardAnim.type === 'inflate' ? '❖' : '☠'
+                                    this.state.actionCardAnim.type === 'inflate' ? '❖' :
+                                    this.state.actionCardAnim.type === 'rift_strike' ? '⚡' :
+                                    this.state.actionCardAnim.type === 'plague_wave' ? '☣' : '☠'
                                 )}
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                 <h2 className="pe-action-card-title">
-                                    {this.state.actionCardAnim.type === 'overdrive' ? '✦ OVERDRIVE ACTIVATED ✦' : 
+                                    {this.state.actionCardAnim.type === 'overdrive' ? '✦ OVERDRIVE ACTIVATED ✦' :
                                      this.state.actionCardAnim.type === 'invest' ? '◆ INVEST ACTIVATED ◆' :
                                      this.state.actionCardAnim.type === 'inflate' ? '❖ INFLATE ACTIVATED ❖' :
+                                     this.state.actionCardAnim.type === 'rift_strike' ? '⚡ RIFT STRIKE ⚡' :
+                                     this.state.actionCardAnim.type === 'plague_wave' ? '☣ PLAGUE WAVE ☣' :
                                      '☠ REAP ACTIVATED ☠'}
                                 </h2>
                                 <p className="pe-action-card-desc" style={{ margin: 0 }}>
@@ -2721,12 +3490,17 @@ export default class CardDuel extends React.Component {
                                         ? (this.state.actionCardAnim.owner === 'player' ? 'Permanently increased your maximum Spirit allowance by 1!' : `${this.getEnemyName()} permanently increased maximum Spirit allowance by 1!`)
                                         : this.state.actionCardAnim.type === 'inflate'
                                         ? (this.state.actionCardAnim.owner === 'player' ? 'You drew 3 cards from your deck!' : `${this.getEnemyName()} drew 3 cards from their deck!`)
+                                        : this.state.actionCardAnim.type === 'rift_strike'
+                                        ? `Dealt ${this.state.actionCardAnim.damage} direct damage to ${this.getEnemyName()} — powered by their own swarm!`
+                                        : this.state.actionCardAnim.type === 'plague_wave'
+                                        ? `${this.getEnemyName()} dealt ${this.state.actionCardAnim.damage} direct damage to your crew — fed by your own forces!`
                                         : `Dealt ${this.state.actionCardAnim.damage} direct damage to your Health!`}
                                 </p>
                             </div>
                         </div>
                     </div>
                 )}
+
 
                 {/* First Player Choice Visual Overlay */}
                 {firstPlayerOverlay.active && (
@@ -2925,7 +3699,7 @@ export default class CardDuel extends React.Component {
                                 </span>
                             </div>
 
-                            <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', marginTop: '16px' }}>
+                            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', marginTop: '20px', padding: '0 24px 12px', boxSizing: 'border-box' }}>
                                 <button
                                     type="button"
                                     onClick={() => this.setState({ showForfeitModal: false })}
@@ -2934,7 +3708,8 @@ export default class CardDuel extends React.Component {
                                         background: 'linear-gradient(180deg, #1f181c 0%, #100d0e 100%)',
                                         border: '1px solid rgba(212, 163, 89, 0.35)',
                                         color: '#bfa57b',
-                                        minWidth: '120px'
+                                        minWidth: '110px',
+                                        padding: '10px 20px'
                                     }}
                                 >
                                     Cancel
@@ -2947,7 +3722,8 @@ export default class CardDuel extends React.Component {
                                         border: '1px solid #c0392b',
                                         boxShadow: '0 0 15px rgba(192, 57, 43, 0.5), inset 0 0 8px rgba(255, 100, 100, 0.2)',
                                         color: '#f8d7da',
-                                        minWidth: '120px'
+                                        minWidth: '110px',
+                                        padding: '10px 20px'
                                     }}
                                     onClick={() => {
                                         this.setState({ showForfeitModal: false });

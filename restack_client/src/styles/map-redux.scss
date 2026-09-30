@@ -492,6 +492,24 @@ $mrx-font:    'Inter', 'Segoe UI', sans-serif;
     stroke-linecap: round;
 }
 
+.mrx-leyline-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.mrx-leyline-line {
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    filter: drop-shadow(0 0 2px rgba(0, 240, 255, 0.7));
+}
+
+
 .mrx-player-dot {
     position: absolute;
     width: 8px;

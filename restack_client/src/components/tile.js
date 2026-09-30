@@ -1415,13 +1415,40 @@ function Tile(props) {
                          props.type === 'spawn_point' ||
                          (containsObj && (containsObj.type === 'spawn_point' || containsObj.subtype === 'spawn_point' || containsObj.building === 'spawn_point')) ||
                          (currentContains && (currentContains.type === 'spawn_point' || currentContains.subtype === 'spawn_point' || currentContains.building === 'spawn_point'));
+    const isArchTile = !!(
+        sKey.includes('archway') ||
+        sKey.includes('ruined_arch') ||
+        String(props.image || '').toLowerCase().includes('archway') ||
+        String(props.imageOverride || '').toLowerCase().includes('archway') ||
+        String(props.building || '').toLowerCase().includes('archway') ||
+        props.type === 'archway' ||
+        props.contains === 'archway' ||
+        currentContains === 'archway' ||
+        (containsObj && (
+            ['archway', 'ruined_arch'].includes(containsObj.subtype) ||
+            ['archway', 'ruined_arch'].includes(containsObj.building) ||
+            ['archway', 'ruined_arch'].includes(containsObj.type) ||
+            ['archway', 'ruined_arch'].includes(containsObj.key) ||
+            String(containsObj.image || '').toLowerCase().includes('archway')
+        )) ||
+        (currentContains && typeof currentContains === 'object' && (
+            ['archway', 'ruined_arch'].includes(currentContains.subtype) ||
+            ['archway', 'ruined_arch'].includes(currentContains.building) ||
+            ['archway', 'ruined_arch'].includes(currentContains.type) ||
+            ['archway', 'ruined_arch'].includes(currentContains.key) ||
+            String(currentContains.image || '').toLowerCase().includes('archway')
+        ))
+    );
+    const isOccupied = props.isPlayerOnTile || props.isPeerOnTile || props.isPlayerAdjacent;
+    const isArchEnlarged = isArchTile && (isOccupied || !!props.isEnlarged || !!containsObj?.isEnlarged || !!currentContains?.isEnlarged);
     const isEnlargeableStructure = isSpawnPoint ||
-                                   (containsObj && (['hut', 'archway'].includes(containsObj.subtype) || ['hut', 'archway'].includes(containsObj.building) || ['hut', 'archway'].includes(containsObj.type))) ||
-                                   (currentContains && (['hut', 'archway'].includes(currentContains.subtype) || ['hut', 'archway'].includes(currentContains.building) || ['hut', 'archway'].includes(currentContains.type))) ||
+                                   isArchTile ||
+                                   (containsObj && (['hut'].includes(containsObj.subtype) || ['hut'].includes(containsObj.building) || ['hut'].includes(containsObj.type))) ||
+                                   (currentContains && typeof currentContains === 'object' && (['hut'].includes(currentContains.subtype) || ['hut'].includes(currentContains.building) || ['hut'].includes(currentContains.type))) ||
                                    isBierTile;
+    const isEnlargedStructureActive = (isEnlargeableStructure && isOccupied) || isArchEnlarged;
     const isUnderConstruction = (props.contains && typeof props.contains.subtype === 'string' && props.contains.subtype.includes('_under_construction')) ||
                                 (currentContains && typeof currentContains.subtype === 'string' && currentContains.subtype.includes('_under_construction'));
-    const isOccupied = props.isPlayerOnTile || props.isPeerOnTile || props.isPlayerAdjacent;
 
     const isNearbyMonster = (() => {
         if (!isMonsterOrPygmyTile) return false;
@@ -1662,8 +1689,8 @@ function Tile(props) {
                     (props.type === 'inventory-tile' ? (props.isActiveInventory ? 'lightgreen' : 'transparent') : color))),
             fontSize: '0.7em',
             position: 'relative',
-            overflow: isPaletteTile ? 'hidden' : ((isAggroAttacking || isStructureTile || isAutomatonUnit || hasConvertingMonolith || hasConvertingTarget || isIlluminatedGlow || isBumpingAttack || isGliding || isSpawnFlashing || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || ((isEnlargeableStructure && isOccupied) || isUnderConstruction) || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || (props.upgradeProgress !== null && props.upgradeProgress !== undefined)) ? 'visible' : 'hidden'),
-            zIndex: isAggroAttacking ? 150 : (isDimensionDebrisOrLitter ? 120 : ((props.upgradeProgress !== null && props.upgradeProgress !== undefined) ? 60 : ((hasConvertingMonolith || hasConvertingTarget) ? 40 : (isBumpingAttack || isSpawnFlashing ? 100 : (isGliding ? 90 : (isAutomatonUnit ? 45 : (isStructureTile || isUnderConstruction ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 30 : 8) : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : ((isEnlargeableStructure && isOccupied) ? 5 : undefined))))))))))),
+            overflow: isPaletteTile ? 'hidden' : ((isArchEnlarged || isAggroAttacking || isStructureTile || isAutomatonUnit || hasConvertingMonolith || hasConvertingTarget || isIlluminatedGlow || isBumpingAttack || isGliding || isSpawnFlashing || isRevealedBySpiritSight || props.connectedEdge || (props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) || isEnlargedStructureActive || isUnderConstruction || (props.sabotageProgress !== null && props.sabotageProgress !== undefined) || (props.monolithActivationProgress !== null && props.monolithActivationProgress !== undefined) || (props.upgradeProgress !== null && props.upgradeProgress !== undefined) || props.isTargetedByRanged) ? 'visible' : 'hidden'),
+            zIndex: isArchEnlarged ? 300 : (props.isTargetedByRanged ? 50 : (isAggroAttacking ? 150 : (isDimensionDebrisOrLitter ? 120 : ((props.upgradeProgress !== null && props.upgradeProgress !== undefined) ? 60 : ((hasConvertingMonolith || hasConvertingTarget) ? 40 : (isBumpingAttack || isSpawnFlashing ? 100 : (isGliding ? 90 : (isAutomatonUnit ? 45 : (isStructureTile || isUnderConstruction ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 30 : 8) : (isRevealedBySpiritSight ? 15 : ((props.inscriptions && Object.values(props.inscriptions).some(v => !!v)) ? 10 : (isIlluminatedGlow ? ((!isVendorCell || getVendorCellRole() === 'anchor') ? 9 : 8) : (isEnlargedStructureActive ? 35 : undefined))))))))))))),
             boxShadow: isRevealedBySpiritSight ? 'inset 0 0 10px rgba(0, 243, 255, 0.6), 0 0 10px rgba(0, 243, 255, 0.6)' : undefined,
             border: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : vctBorder,
             borderLeft: isRevealedBySpiritSight ? '1px solid rgba(0, 243, 255, 0.8)' : (isBoardGridTile ? 'none' : (vctBorder ? undefined : (vendorBorderless || (props.borders && props.borders.left ? props.borders.left : ((props.type === 'palette-tile' && !props.hovered) ? '2px solid transparent' : 
@@ -1711,7 +1738,7 @@ function Tile(props) {
                 }
             }}
             onDragStart={(e) => e.preventDefault()}
-            className={`tile ${props.className || ''} ${props.type || ''} ${isAggroAttacking ? 'aggro-attack-lunge' : (isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : (isSpawnFlashing ? 'pygmy-spawn-flash' : ''))))} ${isDimensionDebrisOrLitter ? 'foreground-zindex' : ''}`.trim()}
+            className={`tile ${props.className || ''} ${props.type || ''} ${isArchEnlarged ? 'enlarged-arch-tile' : ''} ${isAggroAttacking ? 'aggro-attack-lunge' : (isBumpingAttack ? 'pygmy-bump-hit' : (isBumpedBack ? 'pygmy-bump-absorb' : (isGliding ? 'pygmy-glide' : (isSpawnFlashing ? 'pygmy-spawn-flash' : ''))))} ${isDimensionDebrisOrLitter ? 'foreground-zindex' : ''}`.trim()}
             data-tile-id={props.index}
         >
            {props.isMobileTouchHover && (
@@ -1726,10 +1753,10 @@ function Tile(props) {
 
            {edgeLines && (
                 <>
-                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, height: 2, backgroundColor: edgeLines.top, zIndex: 40, pointerEvents: 'none'}} />
-                    <div style={{position: 'absolute', top: 0, bottom: 0, left: 0, width: 2, backgroundColor: edgeLines.left, zIndex: 40, pointerEvents: 'none'}} />
-                    {edgeLines.right && <div style={{position: 'absolute', top: 0, bottom: 0, right: 0, width: 2, backgroundColor: edgeLines.right, zIndex: 40, pointerEvents: 'none'}} />}
-                    {edgeLines.bottom && <div style={{position: 'absolute', left: 0, right: 0, bottom: 0, height: 2, backgroundColor: edgeLines.bottom, zIndex: 40, pointerEvents: 'none'}} />}
+                    {edgeLines.top !== 'none' && edgeLines.top !== 'transparent' && <div style={{position: 'absolute', top: '-1px', left: 0, right: 0, height: 1, backgroundColor: edgeLines.top, zIndex: 40, pointerEvents: 'none'}} />}
+                    {edgeLines.left !== 'none' && edgeLines.left !== 'transparent' && <div style={{position: 'absolute', top: 0, bottom: 0, left: '-1px', width: 1, backgroundColor: edgeLines.left, zIndex: 40, pointerEvents: 'none'}} />}
+                    {edgeLines.right && edgeLines.right !== 'none' && edgeLines.right !== 'transparent' && <div style={{position: 'absolute', top: 0, bottom: 0, right: 0, width: 1, backgroundColor: edgeLines.right, zIndex: 40, pointerEvents: 'none'}} />}
+                    {edgeLines.bottom && edgeLines.bottom !== 'none' && edgeLines.bottom !== 'transparent' && <div style={{position: 'absolute', left: 0, right: 0, bottom: 0, height: 1, backgroundColor: edgeLines.bottom, zIndex: 40, pointerEvents: 'none'}} />}
                 </>
            )}
 
@@ -2735,7 +2762,7 @@ function Tile(props) {
 
                 const baseTransform = isPaletteTile ? 'none' : (isUnderConstruction 
                     ? `scale(${1.5 * obsScale * autoUnitScale}) rotate(${rotationDeg}deg)` 
-                    : (isEnlargeableStructure && isOccupied 
+                    : (isEnlargedStructureActive 
                         ? `scale(${2.0 * obsScale * autoUnitScale}) rotate(${rotationDeg}deg)` 
                         : (isLocusActiveOrAdjacent
                             ? `scale(${locusScale * autoUnitScale})`
@@ -2764,7 +2791,7 @@ function Tile(props) {
                              backgroundSize: isRiftEmbers ? (isPaletteTile ? 'contain' : '100% 100%') : ((isVendorCell || is2x2StructureSelf) ? (is3x3Structure ? '300% 300%' : '200% 200%') : ((isItemCell || isPaletteTile) ? 'contain' : '100% 100%')),
                              backgroundPosition: isRiftEmbers ? 'center' : ((isVendorCell || is2x2StructureSelf) ? vendorBackgroundPosition : ((isItemCell || isPaletteTile) ? 'center' : 'inherit')),
                              backgroundRepeat: 'no-repeat',
-                             zIndex: isDimensionDebrisOrLitter ? 120 : ((isVendorCell || is2x2StructureSelf) ? 40 : ((isEnlargeableStructure && isOccupied) ? 35 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex)))),
+                             zIndex: isArchEnlarged ? 300 : (isDimensionDebrisOrLitter ? 120 : ((isVendorCell || is2x2StructureSelf) ? 40 : (isEnlargedStructureActive ? 35 : (isLocusActiveOrAdjacent ? 35 : (isObsPlatform || isStructureTile || isUnderConstruction || isEncompassedByFriendlyDomain ? 30 : portraitZIndex))))),
                              opacity: ((color === 'black' || isDarkColor) || props.isFadingOut) ? 0 : 1,
                              transform: portraitTransform,
                              transformOrigin: isSpawnPoint ? 'center center' : (isRiftEmbers ? 'center center' : ((isBumpedBack && (isVendorCell || is2x2StructureSelf)) ? (() => {
@@ -2780,7 +2807,7 @@ function Tile(props) {
                                      case 'bottom_center': return '50% 0%';
                                      default: return 'center center';
                                  }
-                             })() : (((isEnlargeableStructure && isOccupied) || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent) ? 'bottom center' : 'center center'))),
+                             })() : ((isEnlargedStructureActive || isUnderConstruction || isObsPlatform || isLocusActiveOrAdjacent) ? 'bottom center' : 'center center'))),
                              transition: 'opacity 0.35s ease-in-out, transform 0.3s ease-in-out',
                              pointerEvents: 'none'
                         }} />
@@ -3916,7 +3943,7 @@ export function propsAreEqual(prevProps, nextProps) {
         'isDisabledOutpost', 'disabledUntil', 'inscriptions', 'debugMode',
         'isPlayerTile', 'isAdjacentLocus', 'isPlayerAdjacent', 'hasLivingSummoner', 'playerImgKey', 'playerFacing', 'cursor', 'isFadingOut',
         'ownedByPlayer', 'ownedByEnemy', 'isBumpingAttack', 'bumpVector', 'isGliding', 'glideVector', 'hoveredTileFootprint', 'isAutomated', 'isPaletteTile',
-        'isSpawnPoint', 'isTargetedByRanged'
+        'isSpawnPoint', 'isTargetedByRanged', 'isPeerOnTile', 'isEnlarged'
     ];
 
     for (let key of keysToCompare) {

@@ -410,6 +410,7 @@ class TowerSiege extends React.Component {
                             crew={this.props.crew}
                             combatManager={this.props.combatManager}
                             battleData={battleData}
+                            showSummaryPanel={showSummaryPanel}
                             tileSize={this.getTileSize()}
                             tileBorder={SIEGE_TILE_BORDER}
                             siegeCols={SIEGE_COLS}

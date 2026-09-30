@@ -47,8 +47,9 @@ export default function PlayerInteractionModal({
       <div
         className="ambush-popup-card"
         style={{
-          maxWidth: '440px',
-          padding: '30px 24px',
+          width: '520px',
+          maxWidth: '94vw',
+          padding: '30px 28px',
           borderColor: 'rgba(212, 163, 89, 0.55)',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.95), 0 0 35px rgba(212, 163, 89, 0.2), inset 0 0 25px rgba(0, 0, 0, 0.8)'
         }}
@@ -119,7 +120,10 @@ export default function PlayerInteractionModal({
               background: 'linear-gradient(180deg, #2a2016 0%, #151009 100%)',
               border: '1px solid rgba(229, 181, 79, 0.7)',
               color: '#f5dfa8',
-              boxShadow: '0 0 14px rgba(229, 181, 79, 0.25)'
+              boxShadow: '0 0 14px rgba(229, 181, 79, 0.25)',
+              whiteSpace: 'nowrap',
+              letterSpacing: '1.5px',
+              padding: '12px 20px'
             }}
           >
             ✦ INITIATE COMMUNION / CHAT
@@ -130,7 +134,10 @@ export default function PlayerInteractionModal({
             onClick={onInviteDuel}
             className="ambush-fight-btn danger"
             style={{
-              width: '100%'
+              width: '100%',
+              whiteSpace: 'nowrap',
+              letterSpacing: '1.5px',
+              padding: '12px 20px'
             }}
           >
             ⚔ CHALLENGE TO DUEL
@@ -145,7 +152,10 @@ export default function PlayerInteractionModal({
               background: 'linear-gradient(180deg, #1f181c 0%, #100d0e 100%)',
               border: '1px solid rgba(212, 163, 89, 0.35)',
               color: '#c8bda8',
-              marginTop: '4px'
+              marginTop: '4px',
+              whiteSpace: 'nowrap',
+              letterSpacing: '1.5px',
+              padding: '12px 20px'
             }}
           >
             DEPART

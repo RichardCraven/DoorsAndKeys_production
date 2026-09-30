@@ -189,6 +189,8 @@ const formatRosterSkillName = (e) => {
 class CrewManagerPage extends React.Component {
     constructor(props) {
         super(props)
+        const meta = getMeta() || {};
+        const isRosterLocked = !!(meta.rosterLocked || meta.dungeonEntered);
         this.state = {
             // dungeon: null,
             user: null,
@@ -197,7 +199,7 @@ class CrewManagerPage extends React.Component {
             selectedCrewMember: null,
             navToLanding: false,
             crewSlots: [null, null, null, null, null],
-            isRosterLocked: false,
+            isRosterLocked: isRosterLocked,
             advancedUser: false,
             removalWarningModal: null
         }
@@ -221,11 +223,13 @@ class CrewManagerPage extends React.Component {
 
         const isRosterLocked = !!(meta.rosterLocked || meta.dungeonEntered);
         const lockedRosterIds = Array.isArray(meta.lockedRoster) ? meta.lockedRoster : null;
+        const dischargedIds = Array.isArray(meta.infirmaryDischarged) ? meta.infirmaryDischarged : [];
 
         // If roster is locked for this dungeon instance, filter options so ONLY roster members are shown!
         if (isRosterLocked) {
-            options = options.filter(opt => {
+            let filteredOptions = options.filter(opt => {
                 if (!opt) return false;
+                if (dischargedIds.includes(opt.id)) return true;
                 if (lockedRosterIds && lockedRosterIds.length > 0) {
                     return lockedRosterIds.includes(opt.id);
                 }
@@ -233,6 +237,18 @@ class CrewManagerPage extends React.Component {
                 const altInMeta = Array.isArray(meta.alternateCrew) && meta.alternateCrew.some(c => c && c.id === opt.id);
                 return activeInMeta || altInMeta;
             });
+            if (filteredOptions.length === 0 && options.length > 0) {
+                filteredOptions = options;
+            }
+            options = filteredOptions;
+            if (Array.isArray(meta.lockedRoster)) {
+                options.forEach(opt => {
+                    if (opt && opt.id && !meta.lockedRoster.includes(opt.id)) {
+                        meta.lockedRoster.push(opt.id);
+                    }
+                });
+                storeMeta(meta);
+            }
         }
 
         let selectedCrew = [null, null, null, null, null];
@@ -313,6 +329,21 @@ class CrewManagerPage extends React.Component {
             selectedCrewMember: crewMember
         })
     }
+    doubleClickCrewMember = (crewMember) => {
+        if (!crewMember || crewMember.disabled || crewMember.locked) return;
+        const savedMember = this.state.selectedCrew.find(c => c && (c.id === crewMember.id || c.name === crewMember.name));
+        const memberToUse = savedMember || crewMember;
+
+        let crew = [...this.state.selectedCrew];
+        while (crew.length < 5) crew.push(null);
+        if (!crew.some(c => c && (c.id === memberToUse.id || c.name === memberToUse.name))) {
+            const emptyIdx = crew.findIndex(c => c === null);
+            if (emptyIdx !== -1) {
+                crew[emptyIdx] = memberToUse;
+                this.setState({ selectedCrew: crew, selectedCrewMember: memberToUse });
+            }
+        }
+    }
     selectCrewMember = (event, crewMember) => {
         clearTimeout(this.timer);
         if (crewMember && (crewMember.disabled || crewMember.locked)) {
@@ -323,25 +354,15 @@ class CrewManagerPage extends React.Component {
         const memberToUse = savedMember || crewMember;
 
         if (event.detail === 1) {
-            this.timer = setTimeout(() => this.singleClick(memberToUse), 200)
+            this.timer = setTimeout(() => this.singleClick(memberToUse), 200);
         } else if (event.detail === 2) {
-            if (this.state.isRosterLocked) return;
-            let crew = [...this.state.selectedCrew];
-            while (crew.length < 5) crew.push(null);
-            if (!crew.some(c => c && (c.id === memberToUse.id || c.name === memberToUse.name))) {
-                const emptyIdx = crew.findIndex(c => c === null);
-                if (emptyIdx !== -1) {
-                    crew[emptyIdx] = memberToUse;
-                    this.setState({ selectedCrew: crew });
-                }
-            }
+            this.doubleClickCrewMember(memberToUse);
         }
         this.setState({
             selectedCrewMember: memberToUse
-        })
+        });
     }
     addMember = (targetIndex) => {
-        if (this.state.isRosterLocked) return;
         let member = this.state.selectedCrewMember;
         if (!member || member.disabled || member.locked) return;
         let crew = [...this.state.selectedCrew];

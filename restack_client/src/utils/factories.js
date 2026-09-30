@@ -223,10 +223,18 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         targetAcquired: null,
     // Use dex when available, otherwise fall back to speed (monsters) or 1.
     // Use explicit numeric checks to avoid treating 0/undefined incorrectly.
-    movesPerTurnCycle: ( ((typeof fighter.stats.dex === 'number' && fighter.stats.dex > 0) ? fighter.stats.dex : ((typeof fighter.stats.speed === 'number' && fighter.stats.speed > 0) ? fighter.stats.speed : 1)) * SPEED_STAT_MULTIPLIER ) * 2,
-        movesLeft: 0,
-    // Compute moveCooldown from dex (fighters) or speed (monsters). Default to 1 to avoid NaN.
-    moveCooldown: 1 / ( (((typeof fighter.stats.dex === 'number' && fighter.stats.dex > 0) ? fighter.stats.dex : ((typeof fighter.stats.speed === 'number' && fighter.stats.speed > 0) ? fighter.stats.speed : 1)) * SPEED_STAT_MULTIPLIER) ) * 5000, // Higher dex/speed = lower cooldown
+    ...(() => {
+        const fDexOrSpeed = (fighter.stats && typeof fighter.stats.dex === 'number' && fighter.stats.dex > 0)
+            ? fighter.stats.dex
+            : ((fighter.stats && typeof fighter.stats.speed === 'number' && fighter.stats.speed > 0)
+                ? fighter.stats.speed
+                : ((typeof fighter.speed === 'number' && fighter.speed > 0) ? fighter.speed : 1));
+        return {
+            movesPerTurnCycle: fDexOrSpeed * SPEED_STAT_MULTIPLIER * 2,
+            movesLeft: 0,
+            moveCooldown: (1 / (fDexOrSpeed * SPEED_STAT_MULTIPLIER)) * 5000
+        };
+    })(),
         eras: [
             {
                 moved: false,

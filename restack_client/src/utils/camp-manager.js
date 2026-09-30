@@ -298,7 +298,8 @@ export function calculateCampResolveGain(component) {
     let totalGain = baseResolveGain - restlessPenalty + awakeRefreshedBonus + fortifyBonus + leaderFortifyBonus;
     const meta = getMeta() || {};
     if (meta.isResolveCamp) {
-        totalGain = Math.round(totalGain * 0.5);
+        const baseCost = leaderAliveAtCampEnd ? 15 : 20;
+        totalGain = -baseCost;
     }
     return { totalGain, isPlayerInHut, leaderAliveAtCampEnd, campLeader };
 }
@@ -340,17 +341,17 @@ export function startCampInterval(component) {
             const crew = (component.props.crewManager && component.props.crewManager.crew) || [];
             const updatedCrew = crew.map(member => {
                 if (!member) return member;
-                if (member.dead) {
-                    // Dead units stay dead until the end of camp
-                    return member;
-                } else {
-                    const fort = (member.stats && (typeof member.stats.fort === 'number' ? member.stats.fort : member.stats.fortitude)) || 3;
-                    const maxHp = (member.stats && typeof member.stats.hp === 'number') ? member.stats.hp : member.hp || 0;
-                    const amountGained = fort * 0.3 * secondsToTick * rateMultiplier;
-                    const newHp = Math.min(maxHp, (member.hp || 0) + amountGained);
-                    return { ...member, hp: newHp };
-                }
+                const fort = (member.stats && (typeof member.stats.fort === 'number' ? member.stats.fort : member.stats.fortitude)) || 3;
+                const maxHp = (member.stats && typeof member.stats.hp === 'number') ? member.stats.hp : member.hp || 10;
+                const amountGained = fort * 0.3 * secondsToTick * rateMultiplier;
+                const currentHp = member.dead ? 0 : (member.hp || 0);
+                const newHp = Math.min(maxHp, currentHp + amountGained);
+                const isAlive = newHp > 0;
+                return { ...member, hp: newHp, dead: !isAlive };
             });
+
+            // If any crew member is now alive and keysLocked was true, unlock keys and update selected member
+            const hasLivingCrew = updatedCrew.some(c => c && !c.dead && c.hp > 0);
 
             // Incrementally increase resolve as recuperation elapses
             const startResolve = typeof meta.initialCampResolve === 'number' ? meta.initialCampResolve : (typeof meta.resolve === 'number' ? meta.resolve : 100);
@@ -369,8 +370,15 @@ export function startCampInterval(component) {
 
             // Update UI State
             try {
-                const updatedSelected = updatedCrew.find(c => c.id === component.state.selectedCrewMember?.id) || component.state.selectedCrewMember;
-                component.setState({ selectedCrewMember: updatedSelected }, () => {
+                let updatedSelected = updatedCrew.find(c => c.id === component.state.selectedCrewMember?.id);
+                if (!updatedSelected || updatedSelected.dead) {
+                    updatedSelected = updatedCrew.find(c => c && !c.dead && c.hp > 0) || updatedCrew[0];
+                }
+                const stateUpdate = { selectedCrewMember: updatedSelected };
+                if (hasLivingCrew && component.state.keysLocked && !meta.camping) {
+                    stateUpdate.keysLocked = false;
+                }
+                component.setState(stateUpdate, () => {
                     try { component.forceUpdate(); } catch(e){}
                 });
             } catch(e) {

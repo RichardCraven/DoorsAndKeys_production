@@ -1078,11 +1078,17 @@ export function CombatManagerRedux() {
             if (m.stats && typeof m.stats.hp === 'number') {
                 m.stats = { ...m.stats, hp: m.stats.hp * 2 };
             }
-            if (typeof m.hp === 'number') {
-                m.hp = m.hp * 2;
-            }
-            if (typeof m.starting_hp === 'number') {
-                m.starting_hp = m.starting_hp * 2;
+            if (!m.inDungeonDamaged) {
+                if (typeof m.hp === 'number') {
+                    m.hp = m.hp * 2;
+                }
+                if (typeof m.starting_hp === 'number') {
+                    m.starting_hp = m.starting_hp * 2;
+                }
+            } else {
+                if (typeof m.starting_hp !== 'number' && m.stats?.hp) {
+                    m.starting_hp = m.stats.hp;
+                }
             }
         }
 
@@ -1104,7 +1110,8 @@ export function CombatManagerRedux() {
         monster.lordBadge = this.data.monster.lordBadge;
         monster.lordName = this.data.monster.lordName;
         monster.tier = this.data.monster.tier;
-        monster.maxEndurance = this.data.monster.stats.vitality || Math.round(20 + (this.data.monster.stats.def || 5) * 2);
+        const mStats = this.data.monster.stats || {};
+        monster.maxEndurance = mStats.vitality || Math.round(20 + (mStats.def || 5) * 2);
         monster.endurance = monster.maxEndurance;
         monster.enduranceFrozenRounds = 0;
         monster.cooldowns = {};

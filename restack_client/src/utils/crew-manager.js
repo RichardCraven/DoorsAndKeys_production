@@ -270,12 +270,30 @@ export function CrewManager() {
         this.crew.push(member)
     }
 
+    this._findMatchingCrewMember = (m) => {
+        if (!m || !Array.isArray(this.crew)) return null;
+        return this.crew.find(c => c && (
+            (c.id !== undefined && m.id !== undefined && String(c.id) === String(m.id)) ||
+            (c.name && m.name && String(c.name).toLowerCase() === String(m.name).toLowerCase()) ||
+            (c.type && m.type && c.type === m.type) ||
+            (c.image && m.type && c.image === m.type) ||
+            (c.type && m.image && c.type === m.image) ||
+            (c.image && m.image && c.image === m.image)
+        )) || null;
+    };
+
     this.addExperience = (memberArray, experienceValue) => {
+        if (!Array.isArray(memberArray)) return;
         memberArray.forEach(m => {
-            // const nextLevelExp = EXP_TABLE[m.level]
-            let member = this.crew.find(c => c.type === m.type)
-            member.stats.experience += experienceValue
-        })
+            if (!m) return;
+            let member = this._findMatchingCrewMember(m);
+            if (member) {
+                member.stats = member.stats || {};
+                member.stats.experience = (typeof member.stats.experience === 'number' ? member.stats.experience : 0) + experienceValue;
+            } else {
+                console.warn('addExperience: could not match crew member', m);
+            }
+        });
         // After awarding experience, immediately check for level-up so stats
         // and level are applied right away (not deferred to initializeCrew).
         try {
@@ -290,9 +308,10 @@ export function CrewManager() {
         // the authoritative crew member and apply level-ups repeatedly until
         // their experience no longer meets the next-level threshold. This
         // supports multi-level jumps from large XP awards.
+        if (!Array.isArray(memberArray)) return;
         memberArray.forEach(m => {
             try {
-                const member = this.crew.find(c => c && (c.type === m.type || c.id === m.id || c.name === m.name));
+                const member = this._findMatchingCrewMember(m);
                 if (!member || !member.stats) return;
                 // ensure tracking arrays exist
                 member._recentLevelGains = member._recentLevelGains || [];
@@ -482,7 +501,7 @@ export function CrewManager() {
 
         try {
             if (!crewMember) return 0;
-            let foundMember = this.crew.find(e => e && (e.name === crewMember.name || e.id === crewMember.id));
+            let foundMember = this._findMatchingCrewMember(crewMember);
             if (!foundMember || !foundMember.stats) return 0;
             const level = (typeof foundMember.level === 'number' && foundMember.level >= 0) ? foundMember.level : 0;
             const nextLevelExp = (typeof EXP_TABLE[level] !== 'undefined') ? EXP_TABLE[level] : EXP_TABLE[EXP_TABLE.length - 1];

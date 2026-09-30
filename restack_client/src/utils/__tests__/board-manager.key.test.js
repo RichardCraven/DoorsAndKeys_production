@@ -142,4 +142,40 @@ describe('BoardManager key normalization and pickup', () => {
     expect(gateTile2.contains).not.toBe('archway');
     expect(bm.messaging).toHaveBeenCalledWith(expect.stringContaining('Breacher already used on Level 1'));
   });
+
+  test('Closed gates block Fog of War vision past themselves even when player holds key', () => {
+    const bm = new BoardManager();
+    // 15x15 board
+    bm.tiles = new Array(225).fill(null).map((_, i) => ({
+      id: i,
+      contains: null,
+      color: 'black',
+      image: null
+    }));
+
+    // Player at tile 112 (row 7, col 7)
+    // Closed gate at tile 127 (row 8, col 7 - directly below player)
+    // Monster behind gate at tile 142 (row 9, col 7)
+    bm.tiles[127].contains = { type: 'gate', subtype: 'minor_gate' };
+    bm.tiles[142].contains = { type: 'monster', subtype: 'skeleton' };
+
+    // Player HAS minor key in inventory
+    bm.getCurrentInventory = jest.fn().mockReturnValue([
+      { name: 'minor key', type: 'key', subtype: 'minor_key', _im_key: 'minor_key' }
+    ]);
+
+    // Calculate reachable tiles from tile 112
+    const reachable = bm.getReachableTilesWithinSteps(112, 3);
+
+    // Closed gate tile (127) SHOULD be visible to the player
+    expect(reachable.has(127)).toBe(true);
+
+    // Monster tile behind closed gate (142) MUST NOT be visible
+    expect(reachable.has(142)).toBe(false);
+
+    // Also run handleFogOfWar and verify tile 142 stays black / hidden
+    bm.handleFogOfWar(bm.tiles[112]);
+    expect(bm.tiles[127].color).not.toBe('black'); // Gate tile is revealed
+    expect(bm.tiles[142].color).toBe('black');     // Tile past gate remains hidden in fog of war
+  });
 });

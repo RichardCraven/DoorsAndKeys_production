@@ -195,7 +195,7 @@ export function MonsterManager() {
             subtype: 'undead',
             key: 'skeleton',
             image_names: ['skeleton'],
-            monster_names: ['bones'],
+            monster_names: ['Skeleton', 'Skeletal Guard', 'Bonewalker'],
             lordName: 'Bonelord',
             stats: {
                 hp: 50,

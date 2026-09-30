@@ -46,8 +46,9 @@ export default function PvPChallengeModal({
       <div
         className="ambush-popup-card"
         style={{
-          maxWidth: '440px',
-          padding: '30px 24px',
+          width: '520px',
+          maxWidth: '94vw',
+          padding: '30px 28px',
           borderColor: 'rgba(212, 163, 89, 0.55)',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.95), 0 0 35px rgba(212, 163, 89, 0.2), inset 0 0 25px rgba(0, 0, 0, 0.8)'
         }}

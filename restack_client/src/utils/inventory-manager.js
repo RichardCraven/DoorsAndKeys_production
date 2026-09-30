@@ -317,6 +317,16 @@ export function InventoryManager() {
         'opalveil_sword',
         'titans_claw_sword',
         'entropy_sword',
+        'monk_cestus',
+        'monk_deer_horn_knives',
+        'monk_katar',
+        'monk_nunchaku',
+        'monk_quarterstaff',
+        'cestus',
+        'deer_horn_knives',
+        'katar',
+        'nunchaku',
+        'quarterstaff',
     ]);
     this.potions_names = [
         'minor_health_potion',
@@ -563,6 +573,16 @@ export function InventoryManager() {
         opalveil_sword: { damage: 170, icon: 'opalveil', type: 'weapon', subtype: 'cutting', tier: 3, name: 'opalveil', range: 'close', equippedBy: null, description: 'The opalveil does +170% atk [Tier 3]' },
         titans_claw_sword: { damage: 180, icon: 'titans_claw', type: 'weapon', subtype: 'cutting', tier: 3, name: 'titans_claw', range: 'close', equippedBy: null, description: 'The titans_claw does +180% atk [Tier 3]' },
         entropy_sword: { damage: 190, icon: 'entropy', type: 'weapon', subtype: 'cutting', tier: 3, name: 'entropy', range: 'close', equippedBy: null, description: 'The entropy does +190% atk [Tier 3]' },
+        monk_cestus: { damage: 35, icon: 'monk_cestus', type: 'weapon', subtype: 'striking', tier: 1, name: 'Cestus', range: 'close', equippedBy: null },
+        monk_deer_horn_knives: { damage: 40, icon: 'monk_deer_horn_knives', type: 'weapon', subtype: 'cutting', tier: 1, name: 'Deer Horn Knives', range: 'close', equippedBy: null },
+        monk_katar: { damage: 45, icon: 'monk_katar', type: 'weapon', subtype: 'piercing', tier: 1, name: 'Katar', range: 'close', equippedBy: null },
+        monk_nunchaku: { damage: 42, icon: 'monk_nunchaku', type: 'weapon', subtype: 'striking', tier: 1, name: 'Nunchaku', range: 'close', equippedBy: null },
+        monk_quarterstaff: { damage: 50, icon: 'monk_quarterstaff', type: 'weapon', subtype: 'bludgeoning', tier: 1, name: 'Quarterstaff', range: 'close', equippedBy: null },
+        cestus: { damage: 35, icon: 'monk_cestus', type: 'weapon', subtype: 'striking', tier: 1, name: 'Cestus', range: 'close', equippedBy: null },
+        deer_horn_knives: { damage: 40, icon: 'monk_deer_horn_knives', type: 'weapon', subtype: 'cutting', tier: 1, name: 'Deer Horn Knives', range: 'close', equippedBy: null },
+        katar: { damage: 45, icon: 'monk_katar', type: 'weapon', subtype: 'piercing', tier: 1, name: 'Katar', range: 'close', equippedBy: null },
+        nunchaku: { damage: 42, icon: 'monk_nunchaku', type: 'weapon', subtype: 'striking', tier: 1, name: 'Nunchaku', range: 'close', equippedBy: null },
+        quarterstaff: { damage: 50, icon: 'monk_quarterstaff', type: 'weapon', subtype: 'bludgeoning', tier: 1, name: 'Quarterstaff', range: 'close', equippedBy: null },
     }
     Object.values(this.weapons).forEach((weapon) => {
         if (!weapon || typeof weapon.damage !== 'number') return;
@@ -3065,6 +3085,8 @@ export function InventoryManager() {
         'shortsword_sword', 'cutlass_sword', 'gladius_sword', 'falchion_sword',
         'longsword_sword', 'broadsword_sword', 'golden_gladius_sword',
         'wyrmsbane_sword', 'katana_sword', 'claymore_sword', 'greatsword_sword',
+        'monk_cestus', 'monk_deer_horn_knives', 'monk_katar', 'monk_nunchaku', 'monk_quarterstaff',
+        'cestus', 'deer_horn_knives', 'katar', 'nunchaku', 'quarterstaff',
     ];
     this.TIER2_WEAPONS = [
         'razorfang_axe', 'stonebreaker_axe', 'mossreaper_axe', 'warcleaver_axe',

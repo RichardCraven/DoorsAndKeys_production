@@ -849,6 +849,7 @@ export default function SiegeCombatGrid(props) {
     const onFighterMouseDown = props.onFighterMouseDown || (() => {});
 
     const getLiveCombatant = (id) => (combatManager && typeof combatManager.getCombatant === 'function') ? combatManager.getCombatant(id) : null;
+    const showSummaryPanel = props.showSummaryPanel || false;
 
     // Determine whether a combatant should currently be visible
     const isVisible = (c) => {
@@ -904,6 +905,28 @@ export default function SiegeCombatGrid(props) {
     }, [battleData, combatManager]);
 
     React.useEffect(() => {
+        if (showSummaryPanel) {
+            if (deathTimeoutsRef.current) {
+                Object.values(deathTimeoutsRef.current).forEach(item => {
+                    if (item.timeout) clearTimeout(item.timeout);
+                    if (item.animId) cancelAnimationFrame(item.animId);
+                });
+                deathTimeoutsRef.current = {};
+            }
+            if (isMountedRef.current) {
+                setShowDeathAnimation({});
+                setMeltScales({});
+                const newFullyDead = {};
+                Object.values(battleData || {}).forEach(u => {
+                    if (u && (u.dead || (typeof u.hp === 'number' && u.hp <= 0))) {
+                        newFullyDead[u.id] = true;
+                    }
+                });
+                setFullyDead(prev => ({ ...prev, ...newFullyDead }));
+            }
+            return;
+        }
+
         const allUnits = Object.values(battleData);
         allUnits.forEach(unit => {
             if (!unit) return;
@@ -968,7 +991,7 @@ export default function SiegeCombatGrid(props) {
             }
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [battleData]);
+    }, [battleData, showSummaryPanel]);
 
     React.useEffect(() => {
         const timeouts = deathTimeoutsRef.current;
@@ -1304,12 +1327,20 @@ export default function SiegeCombatGrid(props) {
         const isFighter = crewIds.has(c.id) || c.isSiegeUnit || c.isSiegeArmy;
         if (!isFighter) return false;
         if (typeof c.inTrial === 'number') return false;
-        return !c.invisible && (!c.dead || (showDeathAnimation[c.id] && !fullyDead[c.id]));
+        const isFighterDead = !!(c.dead || (typeof c.hp === 'number' && c.hp <= 0));
+        if (showSummaryPanel && (isFighterDead || showDeathAnimation[c.id] || fullyDead[c.id])) {
+            return false;
+        }
+        return !c.invisible && (!isFighterDead || (showDeathAnimation[c.id] && !fullyDead[c.id]));
     });
 
     const renderFighter = (fighter) => {
         const details = getFighterDetails(fighter);
         const liveFighter = getLiveCombatant(fighter.id) || details || fighter;
+        const isFighterDead = !!(fighter.dead || details?.dead || (typeof fighter.hp === 'number' && fighter.hp <= 0) || (typeof liveFighter?.hp === 'number' && liveFighter?.hp <= 0));
+        if (showSummaryPanel && (isFighterDead || showDeathAnimation[fighter.id] || fullyDead[fighter.id])) {
+            return null;
+        }
         const isSiegeArmy = !!(fighter.isSiegeUnit || fighter.isSiegeArmy || details?.isSiegeUnit || details?.isSiegeArmy || liveFighter?.isSiegeUnit || liveFighter?.isSiegeArmy);
         const currentFacing = liveFighter?.facing || details?.facing || 'right';
         const needsFlip = isSiegeArmy ? (currentFacing === 'right') : (currentFacing === 'left');
@@ -2259,7 +2290,10 @@ export default function SiegeCombatGrid(props) {
     const renderMonsterUnit = (unit) => {
         const isMonster = unit.isMonster;
         const isMinion = unit.isMinion;
-        const isDead = unit.dead;
+        const isDead = !!(unit.dead || (typeof unit.hp === 'number' && unit.hp <= 0));
+        if (showSummaryPanel && (isDead || showDeathAnimation[unit.id] || fullyDead[unit.id])) {
+            return null;
+        }
         const shouldShow = !unit.invisible && (!isDead || unit.bifurcating || (showDeathAnimation[unit.id] && !fullyDead[unit.id]));
         if (!shouldShow) return null;
         if (!unit.coordinates) return null;

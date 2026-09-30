@@ -444,16 +444,13 @@ export function BoardManager(){
                         const multi2x2 = [
                             'ore_mine', 'slate_mine', 'sawmill', 'lumber_mill', 'larder', 'dust_collector',
                             'cultivation_vat', 'domain_monolith', 'dark_domain_monolith', 'war_camp', 'war_fort',
+                            'fungal_nursery', 'alchemist', 'merchant', 'dream_den', 'dream den',
                             'rift_embers', 'pocket_litter_rift_embers'
                         ];
                         const is2x2 = multi2x2.some(k => aKey.includes(k)) || aTile.isLarge || aTile.contains?.isLarge || aTile.isMultiTile || aTile.contains?.isMultiTile;
                         const aIsMulti = !!(is2x2 || (aRole === 'anchor') || aGroup);
 
                         if (aIsMulti && (!aRole || aRole === 'anchor' || aTile.contains?.vendorAnchorId === (cId + anchorOffset))) {
-                            const vendorKeys = ['fungal_nursery', 'alchemist', 'merchant', 'dream_den'];
-                            if (vendorKeys.some(k => aKey.includes(k))) {
-                                return false; // Vendor structure tiles are interactive vendors, not impassable building walls
-                            }
                             if (is2x2) {
                                 if (tileVendorGroup && aGroup && tileVendorGroup !== aGroup) {
                                     continue;
@@ -500,11 +497,6 @@ export function BoardManager(){
             return false;
         }
 
-        // Vendor structure tiles ('merchant', 'alchemist', 'fungal_nursery') are interactive vendors, not impassable building walls
-        if (sKey.includes('merchant') || sKey.includes('alchemist') || sKey.includes('fungal_nursery')) {
-            return false;
-        }
-
         // 'hut', 'buildable_hut', and 'healing_circle' are EXPLICITLY passable
         if (sKey.includes('hut') || sKey.includes('healing_circle')) {
             return false;
@@ -529,7 +521,17 @@ export function BoardManager(){
             return true;
         }
 
+        // Explicitly check for vendor buildings (merchant, alchemist, fungal nursery, dream den)
+        const isVendorBuilding = containsType === 'vendor' || containsType === 'merchant' || containsType === 'alchemist' || containsType === 'fungal_nursery' || containsType === 'dream_den' || containsType === 'dream den' ||
+            (typeof containsSubtype === 'string' && ['merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].includes(containsSubtype)) ||
+            ['merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].some(k => sKey.includes(k));
+
+        if (isVendorBuilding && !isDestroyed) {
+            return true;
+        }
+
         const buildingSubtypes = [
+            'merchant', 'pocket_merchant', 'alchemist', 'pocket_alchemist', 'vendor',
             'dream_den', 'dream den', 'buildable_dream_den', 'dream_den_under_construction',
             'outpost', 'buildable_outpost',
             'observer_platform', 'buildable_observer_platform',
@@ -623,6 +625,10 @@ export function BoardManager(){
         if (typeof imageType === 'string' && CLOSED_GATE_TYPES.includes(imageType)) return imageType;
 
         return null;
+    }
+
+    this.isClosedGateTile = (tile) => {
+        return !!this.getGateTypeFromTile(tile);
     }
 
     this.hasBreacherSkill = () => {
@@ -930,8 +936,8 @@ export function BoardManager(){
                 // Impassable buildings (outpost, etc.) are visible in fog of war, but block propagation past themselves.
                 if (this.isImpassableBuildingTile(tile)) return;
 
-                // Locked gates are visible but block propagation past themselves.
-                if (this.isLockedGateTile(tile)) return;
+                // Closed gates are visible in fog of war, but block propagation past themselves until opened.
+                if (this.isClosedGateTile(tile)) return;
 
                 queue.push({ idx: nextIdx, steps: steps + 1 });
             });
@@ -1099,11 +1105,12 @@ export function BoardManager(){
             const is2x2Structure = !isSingleTile && (
                 sKey === 'healing_circle' || sKey === 'pocket_healing_circle' || sKey.includes('healing_circle') ||
                 sKey === 'domain_monolith' || sKey === 'dark_domain_monolith' || sKey === 'pocket_domain_monolith' || sKey === 'pocket_dark_domain_monolith' ||
-                sKey === 'war_camp' || sKey === 'war_fort' || sKey === 'alchemist' || sKey === 'merchant' ||
+                sKey === 'war_camp' || sKey === 'war_fort' ||
                 sKey === 'cultivation_vat' || sKey === 'pocket_cultivation_vat' || sKey === 'dust_collector' || sKey === 'pocket_dust_collector' ||
                 sKey === 'larder' || sKey === 'pocket_larder' || sKey === 'sawmill' || sKey === 'pocket_sawmill' || sKey === 'lumber_mill' || sKey === 'pocket_lumber_mill' ||
                 sKey === 'ore_mine' || sKey === 'pocket_ore_mine' || sKey === 'mine' || sKey === 'pocket_mine' || sKey === 'slate_mine' || sKey === 'pocket_slate_mine' ||
                 sKey === 'fungal_nursery' || sKey === 'pocket_fungal_nursery' || sKey === 'dream_den' || sKey === 'dream den' || sKey.includes('dream_den') || sKey.includes('dream den') || (sKey.includes('monolith') && !sKey.includes('shrine')) ||
+                sKey === 'merchant' || sKey === 'pocket_merchant' || sKey.includes('merchant') || sKey === 'alchemist' || sKey === 'pocket_alchemist' || sKey.includes('alchemist') ||
                 sKey.includes('naked_trees_3') || sKey.includes('naked_trees_4') || sKey.includes('naked_mountains_2')
             );
             if (is2x2Structure) {
@@ -2502,9 +2509,9 @@ export function BoardManager(){
             } else if (raw && typeof raw === 'object') {
                 const cType = raw.type ? String(raw.type).toLowerCase() : '';
                 const cSubtype = raw.subtype ? String(raw.subtype) : '';
-                const isItemKind = ['item', 'key', 'rune', 'jewel', 'shard', 'consumable', 'weapon', 'armor', 'magical', 'potion'].includes(cType) ||
-                    cType.includes('key') || cType.includes('shard') || cType.includes('rune') ||
-                    cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune');
+                const isItemKind = ['item', 'key', 'rune', 'jewel', 'shard', 'consumable', 'weapon', 'armor', 'magical', 'potion', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'tablet'].includes(cType) ||
+                    cType.includes('key') || cType.includes('shard') || cType.includes('rune') || cType.includes('book') || cType.includes('tome') || cType.includes('grimoire') ||
+                    cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune') || cSubtype.includes('book') || cSubtype.includes('tome') || cSubtype.includes('grimoire') || cSubtype.includes('folio') || cSubtype.includes('manual');
 
                 if ((!raw.type || raw.type === null) && raw.subtype) {
                     if (this.monstersArr.includes(raw.subtype)) {
@@ -2516,10 +2523,10 @@ export function BoardManager(){
                     }
                 } else if (isItemKind) {
                     let actualSubtype = cSubtype;
-                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(actualSubtype)) {
+                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'magical', 'weapon', 'armor'].includes(actualSubtype)) {
                         actualSubtype = cType;
                     }
-                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(actualSubtype)) {
+                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'magical', 'weapon', 'armor'].includes(actualSubtype)) {
                         actualSubtype = 'minor_key';
                     }
                     destinationTile.contains = { type: 'item', subtype: actualSubtype };
@@ -2660,6 +2667,17 @@ export function BoardManager(){
             case 'jewel':
             case 'shard':
             case 'consumable':
+            case 'spellbook':
+            case 'book':
+            case 'tome':
+            case 'grimoire':
+            case 'folio':
+            case 'manual':
+            case 'engine':
+            case 'magical':
+            case 'weapon':
+            case 'armor':
+            case 'potion':
                 if (this.isChest(subtype)) {
                     const keyDetails = this.getRequiredKeyForChest(subtype);
                     if (keyDetails) {
@@ -2707,7 +2725,7 @@ export function BoardManager(){
                 } else {
                     // destinationTile.contains may be object; callers expect string contains
                     try {
-                        const itemKey = (subtype && !['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(subtype))
+                        const itemKey = (subtype && !['key', 'item', 'rune', 'jewel', 'shard', 'consumable', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'magical', 'weapon', 'armor', 'potion'].includes(subtype))
                             ? subtype
                             : (destinationTile.contains && typeof destinationTile.contains === 'object' ? (destinationTile.contains.subtype || destinationTile.contains.type) : destinationTile.contains);
                         const tileForCallback = Object.assign({}, destinationTile, { contains: itemKey });
@@ -3275,8 +3293,15 @@ export function BoardManager(){
             const peersMap = this.getPeerPlayers();
             if (!peersMap || peersMap.size === 0) return false;
 
-            const currentBoardIndex = this.playerTile?.boardIndex ?? 0;
-            const currentOrientation = this.currentOrientation === 'B' ? 'back' : 'front';
+            const currentBoardIndex = (this.playerTile?.boardIndex != null) ? this.playerTile.boardIndex : ((this.currentBoard?.id != null) ? this.currentBoard.id : 0);
+            const normOrient = (o) => {
+                if (!o) return 'front';
+                const s = String(o).toLowerCase().trim();
+                if (s === 'f' || s === 'front' || s === 'a' || s === '0') return 'front';
+                if (s === 'b' || s === 'back' || s === '1') return 'back';
+                return s;
+            };
+            const currentOrientation = normOrient(this.currentOrientation);
             const currentLevelId = this.currentLevel?.id ?? 0;
             const targetTileIndex = this.getIndexFromCoordinates(coords);
 
@@ -3285,7 +3310,7 @@ export function BoardManager(){
                 const loc = peer.location;
 
                 if (loc.levelId !== undefined && String(loc.levelId) !== String(currentLevelId)) continue;
-                if (loc.orientation && loc.orientation !== currentOrientation) continue;
+                if (loc.orientation && normOrient(loc.orientation) !== currentOrientation) continue;
                 if (loc.boardIndex !== undefined && Number(loc.boardIndex) !== Number(currentBoardIndex)) continue;
 
                 let pTileIdx = Number(loc.tileIndex);

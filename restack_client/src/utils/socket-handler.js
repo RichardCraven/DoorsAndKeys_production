@@ -8,7 +8,7 @@ class SocketHandler {
   }
 
   connect(userObj = {}) {
-    if (this.socket && this.socket.connected) {
+    if (this.socket) {
       return this.socket;
     }
 
@@ -140,7 +140,7 @@ class SocketHandler {
   sendInstanceChatMessage(text, senderName, senderUserId, instanceKey) {
     const dId = instanceKey || this.currentDungeonId;
     const payload = {
-      dungeonId: this.currentDungeonId,
+      dungeonId: this.currentDungeonId || dId,
       instanceId: dId,
       instanceKey: dId,
       text,

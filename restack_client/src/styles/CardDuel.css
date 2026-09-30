@@ -2345,6 +2345,12 @@
   box-shadow: 0 0 35px rgba(239, 68, 68, 0.7), inset 0 0 20px rgba(239, 68, 68, 0.3);
 }
 
+.pe-action-overlay--rift_strike .pe-action-card-modal {
+  background: radial-gradient(circle at center, rgba(168, 85, 247, 0.35) 0%, rgba(30, 10, 48, 0.95) 100%);
+  border: 2px solid #a855f7;
+  box-shadow: 0 0 35px rgba(168, 85, 247, 0.6), inset 0 0 20px rgba(168, 85, 247, 0.3);
+}
+
 .pe-action-card-art {
   width: 72px;
   height: 72px;
@@ -2369,6 +2375,11 @@
   box-shadow: 0 0 20px #f87171;
 }
 
+.pe-action-overlay--rift_strike .pe-action-card-art {
+  border-color: #c084fc;
+  box-shadow: 0 0 20px #a855f7;
+}
+
 .pe-action-card-title {
   font-family: 'Cinzel', serif;
   font-size: 20px;
@@ -2386,6 +2397,11 @@
 .pe-action-overlay--reap .pe-action-card-title {
   color: #fca5a5;
   text-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+}
+
+.pe-action-overlay--rift_strike .pe-action-card-title {
+  color: #e9d5ff;
+  text-shadow: 0 0 12px rgba(168, 85, 247, 0.8);
 }
 
 .pe-action-card-desc {
@@ -2671,5 +2687,178 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ─── Card Duel Player Edge Docks & Tiles ─── */
+.pe-grid-section-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.pe-edge-dock {
+  display: flex;
+  gap: 8px;
+  padding: 4px 12px;
+  justify-content: center;
+  align-items: center;
+}
+
+.pe-edge-dock--north {
+  margin-bottom: 4px;
+}
+
+.pe-edge-dock--south {
+  margin-top: 4px;
+}
+
+.pe-edge-dock-slot {
+  width: 82px;
+  height: 64px;
+  position: relative;
+  background: rgba(15, 10, 25, 0.4);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.pe-edge-dock-slot--valid-jump {
+  border: 1.5px dashed #f1c40f;
+  background: rgba(241, 196, 15, 0.15);
+  box-shadow: 0 0 10px rgba(241, 196, 15, 0.3);
+  cursor: pointer;
+}
+
+.pe-edge-dock-slot--selected {
+  border: 2px solid #e74c3c;
+  box-shadow: 0 0 12px rgba(231, 76, 60, 0.5);
+}
+
+.pe-edge-dock-slot--attackable {
+  border: 2px solid #e74c3c;
+  background: rgba(231, 76, 60, 0.2);
+  box-shadow: 0 0 14px rgba(231, 76, 60, 0.6);
+  cursor: pointer;
+}
+
+.pe-edge-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px;
+  border: 1px solid rgba(201, 168, 76, 0.5);
+  box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.7), 0 4px 10px rgba(0,0,0,0.5);
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pe-edge-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(241, 196, 15, 0.9);
+  box-shadow: 0 0 12px rgba(241, 196, 15, 0.4);
+}
+
+.pe-edge-tile--selected {
+  transform: scale(1.05);
+  border: 2px solid #f39c12;
+  box-shadow: 0 0 16px rgba(243, 156, 18, 0.7);
+}
+
+.pe-edge-tile--jumping {
+  animation: edge-tile-jump-arc 0.4s ease-out;
+}
+
+.pe-edge-tile-header {
+  background: rgba(0, 0, 0, 0.75);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.pe-edge-tile-name {
+  font-size: 9px;
+  font-weight: 700;
+  color: #f39c12;
+  letter-spacing: 0.5px;
+  text-shadow: 0 1px 2px #000;
+}
+
+.pe-edge-hits-container {
+  display: flex;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.75);
+  padding: 2px 5px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.pe-hit-pip {
+  font-size: 10px;
+  opacity: 0.3;
+  filter: grayscale(100%);
+  transition: all 0.2s ease;
+}
+
+.pe-hit-pip--taken {
+  opacity: 1;
+  filter: none;
+  transform: scale(1.15);
+}
+
+.pe-edge-wall-badge {
+  font-size: 8.5px;
+  font-weight: 700;
+  color: #3498db;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid #3498db;
+}
+
+.pe-edge-jump-indicator {
+  font-size: 10px;
+  font-weight: 700;
+  color: #f1c40f;
+  text-shadow: 0 0 4px #000;
+  text-align: center;
+}
+
+.pe-edge-attack-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  font-weight: 700;
+  color: #ff4d4d;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid #ff4d4d;
+  white-space: nowrap;
+  box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+  z-index: 5;
+}
+
+@keyframes edge-tile-jump-arc {
+  0% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-20px) scale(1.15); }
+  100% { transform: translateY(0) scale(1); }
+}
+
 
 

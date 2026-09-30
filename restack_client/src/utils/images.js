@@ -135,6 +135,8 @@ import arcane_temporal_rift from '../assets/graphics/card_duel/arcane/temporal_r
 import arcane_banish from '../assets/graphics/card_duel/arcane/banish.jpg'
 import arcane_smite from '../assets/graphics/card_duel/arcane/smite.jpg'
 import arcane_holy_nova from '../assets/graphics/card_duel/arcane/holy_nova.jpg'
+import arcane_rift_strike from '../assets/graphics/card_duel/arcane/rift_strike.jpg'
+import arcane_overdrive from '../assets/graphics/card_duel/arcane/overdrive.jpg'
 
 import reaper_reap from '../assets/graphics/card_duel/reaper/reaper_reap.jpg'
 import reaper_shroud from '../assets/graphics/card_duel/reaper/reaper_shroud.jpg'
@@ -437,6 +439,13 @@ import skymourne from '../assets/icons/items/weapons/swords/skymourne.png'
 import opalveil from '../assets/icons/items/weapons/swords/opalveil.png'
 import titans_claw from '../assets/icons/items/weapons/swords/titans_claw.png'
 import entropy from '../assets/icons/items/weapons/swords/entropy.png'
+
+// monk weapons
+import monk_nunchaku from '../assets/icons/items/weapons/monk-weapons/nunchaku.png'
+import monk_katar from '../assets/icons/items/weapons/monk-weapons/katar.png'
+import monk_cestus from '../assets/icons/items/weapons/monk-weapons/cestus.png'
+import monk_quarterstaff from '../assets/icons/items/weapons/monk-weapons/quarterstaff.png'
+import monk_deer_horn_knives from '../assets/icons/items/weapons/monk-weapons/deer_horn_knives.png'
 
 // portals
 import closed_door from '../assets/icons/portals/closed_door.png';
@@ -1032,6 +1041,9 @@ import litter_broken_crates from '../assets/gemini_images/litter_broken_crates.p
 import litter_broken_urns from '../assets/gemini_images/litter_broken_urns.png';
 import litter_battle_debris from '../assets/gemini_images/litter_battle_debris.png';
 import litter_iron_chains from '../assets/gemini_images/litter_iron_chains.png';
+import litter_melted_candles from '../assets/gemini_images/litter_melted_candles.png';
+import litter_scattered_coins from '../assets/gemini_images/litter_scattered_coins.png';
+import litter_shattered_potions from '../assets/gemini_images/litter_shattered_potions.png';
 import pocket_litter_mana_crystals from '../assets/gemini_images/pocket_litter_mana_crystals.png';
 import pocket_litter_ruined_arch from '../assets/gemini_images/pocket_litter_ruined_arch.png';
 import pocket_litter_broken_wagon from '../assets/gemini_images/pocket_litter_broken_wagon.png';
@@ -1044,6 +1056,9 @@ import pocket_litter_celestial_geode from '../assets/gemini_images/pocket_litter
 import chemical_lantern from '../assets/gemini_images/chemical_lantern.png';
 import territorial_lantern from '../assets/gemini_images/territorial_lantern.png';
 import spoiled_rations from '../assets/gemini_images/spoiled_rations.png';
+import duel_heart_tile from '../assets/gemini_images/duel_heart_tile.png';
+import duel_wall_tile from '../assets/gemini_images/duel_wall_tile.png';
+import duel_sword_tile from '../assets/gemini_images/duel_sword_tile.png';
 import automaton from '../assets/automatons/automaton.png';
 import codex from '../assets/icons/codex.png';
 
@@ -2032,6 +2047,17 @@ export {
     titans_claw,
     entropy,
 
+    monk_nunchaku,
+    monk_katar,
+    monk_cestus,
+    monk_quarterstaff,
+    monk_deer_horn_knives,
+    monk_nunchaku as nunchaku,
+    monk_katar as katar,
+    monk_cestus as cestus,
+    monk_quarterstaff as quarterstaff,
+    monk_deer_horn_knives as deer_horn_knives,
+
     closed_door,
     open_door,
     pit,
@@ -2364,6 +2390,12 @@ export {
     arcane_banish,
     arcane_smite,
     arcane_holy_nova,
+    arcane_rift_strike,
+    arcane_rift_strike as rift_strike,
+    arcane_rift_strike as card_rift_strike,
+    arcane_overdrive,
+    arcane_overdrive as overdrive,
+    arcane_overdrive as card_overdrive,
 
     reaper_reap,
     reaper_shroud,
@@ -2385,6 +2417,9 @@ export {
     the_principalities_portrait,
     the_principalities_portrait as the_principalities,
     the_principalities_portrait as eshu_portrait,
+    duel_heart_tile,
+    duel_wall_tile,
+    duel_sword_tile,
 
     glyph,
     glyph_inverted,
@@ -2863,6 +2898,9 @@ export {
     litter_broken_urns,
     litter_battle_debris,
     litter_iron_chains,
+    litter_melted_candles,
+    litter_scattered_coins,
+    litter_shattered_potions,
     pocket_litter_mana_crystals,
     pocket_litter_ruined_arch,
     pocket_litter_broken_wagon,
