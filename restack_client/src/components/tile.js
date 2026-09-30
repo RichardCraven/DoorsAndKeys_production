@@ -1266,7 +1266,7 @@ function Tile(props) {
     if (bottomIsShaded) fogShadows.push('inset 0 -8px 10px -2px rgba(0, 0, 0, 0.85)');
     if (leftIsShaded) fogShadows.push('inset 8px 0 10px -2px rgba(0, 0, 0, 0.85)');
     if (rightIsShaded) fogShadows.push('inset -8px 0 10px -2px rgba(0, 0, 0, 0.85)');
-    const isBuilderTile = !!(props.isBuilder || props.isMapmaker || props.disableFogShading || props.disableShading || props.type === 'palette-tile' || props.type === 'builder-tile');
+    const isBuilderTile = !!(props.isBuilder || props.isMapmaker || props.editMode || props.disableFogShading || props.disableShading || props.type === 'palette-tile' || props.type === 'builder-tile');
     const isDebugMode = !isBuilderTile && !props.inSuperboard && !!(props.debugMode || props.isDebugMode || (typeof window !== 'undefined' && window.debugMode === true));
     const fogEdgeBoxShadow = (isDebugMode && isBoardGridTile && !isBlackRenderedTile(currentContains, currentTileColor) && fogShadows.length > 0) ? fogShadows.join(', ') : 'none';
 
@@ -3157,9 +3157,11 @@ function Tile(props) {
            { ((props.contains && props.contains.type === 'obscured_space') || props.optionType === 'obscured space') && (
                 <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    backgroundImage: 'repeating-linear-gradient(45deg, #2d2b30 0, #2d2b30 2px, transparent 2px, transparent 8px)',
+                    backgroundColor: 'rgba(44, 38, 56, 0.95)',
+                    backgroundImage: 'repeating-linear-gradient(45deg, rgba(165, 145, 195, 0.45) 0, rgba(165, 145, 195, 0.45) 3px, rgba(30, 26, 38, 0.85) 3px, rgba(30, 26, 38, 0.85) 10px)',
+                    boxShadow: 'inset 0 0 0 1px rgba(165, 145, 195, 0.35), inset 0 0 8px rgba(0, 0, 0, 0.6)',
                     zIndex: 1,
-                    opacity: color === 'black' ? 0 : 0.7,
+                    opacity: (!isBuilderTile && (color === 'black' || isDarkColor || color === '#000000' || color === '#000')) ? 0 : 0.95,
                     pointerEvents: 'none',
                     transition: 'opacity 0.35s ease-in-out'
                 }} />

@@ -427,20 +427,58 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
 
     React.useEffect(() => {
         if (modalType === 'Merchant' && inventoryManager && showModal) {
-            const stock = [];
-            stock.push({ ...inventoryManager.allItems['minor_health_potion'], price: 20 });
-            stock.push({ ...inventoryManager.allItems['major_health_potion'], price: 50 });
-            stock.push({ ...inventoryManager.allItems["minor_key"], price: 100 });
-            if (inventoryManager.allItems['automaton']) {
-                stock.push({ ...inventoryManager.allItems['automaton'], _im_key: 'automaton', price: 1 });
-            } else {
-                stock.push({ name: 'automaton', icon: 'automaton', type: 'item', _im_key: 'automaton', price: 1, description: 'A mechanical construct capable of automating structures.' });
+            if ((!inventoryManager.allItems || Object.keys(inventoryManager.allItems).length === 0) && typeof inventoryManager.initializeItems === 'function') {
+                inventoryManager.initializeItems();
             }
+
+            const getItemDef = (key, fallbackObj) => {
+                const def = inventoryManager.allItems?.[key] || inventoryManager.consumables?.[key] || inventoryManager.misc?.[key] || inventoryManager.weapons?.[key] || inventoryManager.armor?.[key] || inventoryManager.magical?.[key];
+                if (def) return { ...def, _im_key: key };
+                return { ...fallbackObj, _im_key: key };
+            };
+
+            const stock = [];
+            stock.push({
+                ...getItemDef('minor_health_potion', {
+                    name: 'minor health potion',
+                    icon: 'minor_health_potion',
+                    type: 'consumable',
+                    description: 'Minor health potions replenish 15% total HP'
+                }),
+                price: 20
+            });
+            stock.push({
+                ...getItemDef('major_health_potion', {
+                    name: 'major health potion',
+                    icon: 'major_health_potion',
+                    type: 'consumable',
+                    description: 'Major health potions replenish 35% total HP'
+                }),
+                price: 50
+            });
+            stock.push({
+                ...getItemDef('minor_key', {
+                    name: 'minor key',
+                    icon: 'minor_key',
+                    type: 'key',
+                    description: 'Minor keys open locked dungeon doors'
+                }),
+                price: 100
+            });
+            stock.push({
+                ...getItemDef('automaton', {
+                    name: 'automaton',
+                    icon: 'automaton',
+                    type: 'item',
+                    description: 'A mechanical construct capable of automating structures.'
+                }),
+                price: 1
+            });
 
             const weaponKeys = Object.keys(inventoryManager.weapons || {});
             for (let i = 0; i < 2; i++) {
                 const rKey = weaponKeys[Math.floor(Math.random() * weaponKeys.length)];
-                const item = inventoryManager.allItems[rKey];
+                const item = inventoryManager.allItems?.[rKey] || inventoryManager.weapons?.[rKey];
                 if (item) {
                     stock.push({ ...item, _im_key: rKey, price: (item.tier === 2 ? 150 : item.tier === 3 ? 350 : 50) });
                 }
@@ -448,14 +486,14 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
 
             const armorKeys = Object.keys(inventoryManager.armor || {});
             const rArmorKey = armorKeys[Math.floor(Math.random() * armorKeys.length)];
-            const armorItem = inventoryManager.allItems[rArmorKey];
+            const armorItem = inventoryManager.allItems?.[rArmorKey] || inventoryManager.armor?.[rArmorKey];
             if (armorItem) {
                 stock.push({ ...armorItem, _im_key: rArmorKey, price: (armorItem.tier === 2 ? 120 : armorItem.tier === 3 ? 280 : 45) });
             }
 
             const magicalKeys = Object.keys(inventoryManager.magical || {});
             const rMagKey = magicalKeys[Math.floor(Math.random() * magicalKeys.length)];
-            const magItem = inventoryManager.allItems[rMagKey];
+            const magItem = inventoryManager.allItems?.[rMagKey] || inventoryManager.magical?.[rMagKey];
             if (magItem) {
                 stock.push({ ...magItem, _im_key: rMagKey, price: (magItem.tier === 2 ? 160 : magItem.tier === 3 ? 320 : 60) });
             }
@@ -4222,6 +4260,7 @@ class DungeonPage extends React.Component {
 
         const newMsg = {
             id: payload.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            senderSocketId: payload.senderSocketId,
             senderName: payload.senderName || (isSelf ? 'You' : 'Explorer'),
             senderUserId: payload.senderUserId,
             text: payload.text,
@@ -4233,7 +4272,18 @@ class DungeonPage extends React.Component {
         this.setState(prevState => {
             const instanceChatMap = { ...(prevState.instanceChatMap || {}) };
             const listToUpdate = instanceChatMap[currentInstance] || instanceChatMap[msgInstance] || [];
-            const exists = listToUpdate.some(m => m.id === newMsg.id || (m.isSelf && isSelf && m.text === newMsg.text && Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp)) < 2000));
+            const exists = listToUpdate.some(m => {
+                if (m.id && newMsg.id && m.id === newMsg.id) return true;
+                const isSameSender = (m.isSelf && isSelf) ||
+                    (m.senderSocketId && newMsg.senderSocketId && m.senderSocketId === newMsg.senderSocketId) ||
+                    (m.senderUserId && newMsg.senderUserId && String(m.senderUserId) === String(newMsg.senderUserId)) ||
+                    (m.senderName && newMsg.senderName && m.senderName === newMsg.senderName);
+                if (isSameSender && m.text === newMsg.text) {
+                    const timeDiff = Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp));
+                    if (isNaN(timeDiff) || timeDiff < 3000) return true;
+                }
+                return false;
+            });
             if (exists) return null;
 
             const nextList = [...listToUpdate, newMsg];
@@ -4259,6 +4309,7 @@ class DungeonPage extends React.Component {
 
         const optimisticMsg = {
             id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            senderSocketId: socketHandler.socket?.id,
             senderName: username,
             senderUserId: userId,
             text: trimmed,
@@ -4281,7 +4332,7 @@ class DungeonPage extends React.Component {
         });
 
         if (typeof socketHandler !== 'undefined' && socketHandler && typeof socketHandler.sendInstanceChatMessage === 'function') {
-            socketHandler.sendInstanceChatMessage(trimmed, username, userId, currentInstance);
+            socketHandler.sendInstanceChatMessage(trimmed, username, userId, currentInstance, optimisticMsg.id);
         }
     };
 
@@ -23017,8 +23068,15 @@ class DungeonPage extends React.Component {
                 if (cmd === 'key') {
                     try {
                         const im = this.props.inventoryManager;
-                        if (im && im.allItems && im.allItems['master_key']) {
-                            const masterKeyItem = { ...im.allItems['master_key'] };
+                        if (im) {
+                            if ((!im.allItems || Object.keys(im.allItems).length === 0) && typeof im.initializeItems === 'function') {
+                                im.initializeItems();
+                            }
+                            const masterKeyItem = im.allItems?.['master_key']
+                                ? { ...im.allItems['master_key'] }
+                                : im.misc?.['master_key']
+                                    ? { ...im.misc['master_key'] }
+                                    : { icon: 'master_key', type: 'key', name: 'master key', equippedBy: null, _im_key: 'master_key', description: 'Master key opens any locked door or gate.' };
                             im.addItem(masterKeyItem);
                             try {
                                 const meta = getMeta() || {};
@@ -23038,7 +23096,7 @@ class DungeonPage extends React.Component {
                             this.forceUpdate();
                             this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Spawned a Master Key in your inventory.'], devConsoleInput: '' }));
                         } else {
-                            this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Error: master_key definition not found'], devConsoleInput: '' }));
+                            this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, 'Error: Inventory manager not available'], devConsoleInput: '' }));
                         }
                     } catch (err) {
                         this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error: ${err && err.message ? err.message : err}`], devConsoleInput: '' }));

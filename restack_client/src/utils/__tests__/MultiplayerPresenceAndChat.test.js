@@ -80,6 +80,64 @@ describe('Multiplayer Sockets Presence & Instance Chat Suite', () => {
             expect(duplicate).toBe(false);
             expect(instanceChatMap[currentInstance].length).toBe(1);
         });
+
+        test('Deduplicates peer messages with identical sender and text within 3 seconds even if IDs differ', () => {
+            let instanceChatMap = {};
+            const currentInstance = 'dungeon_carcosa_4821';
+
+            const addMessage = (payload, isSelf = false) => {
+                const newMsg = {
+                    id: payload.id || `msg_${Date.now()}_${Math.random()}`,
+                    senderSocketId: payload.senderSocketId,
+                    senderName: payload.senderName || 'Explorer',
+                    senderUserId: payload.senderUserId,
+                    text: payload.text,
+                    timestamp: payload.timestamp || new Date().toISOString(),
+                    isSelf
+                };
+
+                const listToUpdate = instanceChatMap[currentInstance] || [];
+                const exists = listToUpdate.some(m => {
+                    if (m.id && newMsg.id && m.id === newMsg.id) return true;
+                    const isSameSender = (m.isSelf && isSelf) ||
+                        (m.senderSocketId && newMsg.senderSocketId && m.senderSocketId === newMsg.senderSocketId) ||
+                        (m.senderUserId && newMsg.senderUserId && String(m.senderUserId) === String(newMsg.senderUserId)) ||
+                        (m.senderName && newMsg.senderName && m.senderName === newMsg.senderName);
+                    if (isSameSender && m.text === newMsg.text) {
+                        const timeDiff = Math.abs(new Date(m.timestamp) - new Date(newMsg.timestamp));
+                        if (isNaN(timeDiff) || timeDiff < 3000) return true;
+                    }
+                    return false;
+                });
+                if (exists) return false;
+
+                instanceChatMap[currentInstance] = [...listToUpdate, newMsg];
+                return true;
+            };
+
+            const firstEvent = {
+                id: 'msg_event_1',
+                senderSocketId: 'socket_peer_99',
+                senderName: 'a',
+                text: 'lll',
+                timestamp: '2026-09-30T16:43:00.000Z'
+            };
+
+            const secondEvent = {
+                id: 'msg_event_2', // Different ID from another redundant emission
+                senderSocketId: 'socket_peer_99',
+                senderName: 'a',
+                text: 'lll',
+                timestamp: '2026-09-30T16:43:00.050Z' // 50ms later
+            };
+
+            expect(addMessage(firstEvent, false)).toBe(true);
+            expect(instanceChatMap[currentInstance].length).toBe(1);
+
+            // Redundant event with different ID should be rejected as duplicate
+            expect(addMessage(secondEvent, false)).toBe(false);
+            expect(instanceChatMap[currentInstance].length).toBe(1);
+        });
     });
 
     describe('3. Online Peer Count Badge', () => {

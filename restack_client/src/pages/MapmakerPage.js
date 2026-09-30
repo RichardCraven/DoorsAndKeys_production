@@ -1045,15 +1045,52 @@ class MapMakerPage extends React.Component {
       }
     }, 80);
   }
-  deleteDungeon = async () => {
+  deleteDungeon = async (skipConfirm = false) => {
     // deleteActiveDungeon
     const dungeon = this.state.loadedDungeon;
+    if (!dungeon) return;
+
+    if (!skipConfirm) {
+      const confirmMsg = "Are you sure you want to delete this? This can be restored from the backup for 24 hours, after which this will be permanent";
+      const confirmed = typeof window !== 'undefined' && typeof window.confirm === 'function'
+        ? window.confirm(confirmMsg)
+        : true;
+      if (!confirmed) return;
+    }
+
+    const dungeonId = dungeon.id || dungeon._id || (dungeon.name && (this.state.dungeons || []).find(d => d.name === dungeon.name)?.id);
+    const dungeonName = dungeon.name;
+
     console.log('delete dungeon ', dungeon);
-    console.log(dungeon.id);
-    await deleteDungeonRequest(dungeon.id)
-    console.log(`dungeon ${dungeon.id} deleted`);
-    this.setState({ loadedDungeon: null })
-    this.loadAllDungeons();
+    console.log('dungeonId to delete:', dungeonId);
+
+    if (dungeonId && !String(dungeonId).startsWith('temp-')) {
+      try {
+        await deleteDungeonRequest(dungeonId);
+      } catch (err) {
+        console.error('deleteDungeonRequest failed:', err);
+      }
+    }
+
+    // Immediately filter deleted dungeon out of state.dungeons
+    const updatedDungeons = (this.state.dungeons || []).filter(d => {
+      const id = d.id || d._id;
+      return (dungeonId ? id !== dungeonId : true) && (dungeonName ? d.name !== dungeonName : true);
+    });
+
+    this.setState({
+      loadedDungeon: null,
+      dungeons: updatedDungeons,
+      loadedPlane: null,
+      loadedBoard: null,
+      selectedThingTitle: this.state.selectedView === 'dungeon' ? '' : this.state.selectedThingTitle,
+      dungeonOverlayOn: false,
+      overlayData: null,
+      hasDungeonBackup: false,
+      backupTimestamp: null,
+      dungeonHasUnsavedChanges: false
+    });
+
     this.setLoadedDungeonDropdownValue('Dungeon Selector');
 
     // update user
@@ -1061,10 +1098,14 @@ class MapMakerPage extends React.Component {
     setEditorPreference('loadedDungeon', null);
     const meta = getMeta();
 
-    if (userId) updateUserRequest(userId, meta)
+    if (userId) updateUserRequest(userId, meta);
     storeMeta(meta);
 
-
+    await this.loadAllDungeons();
+    this.setLoadedDungeonDropdownValue('Dungeon Selector');
+    if (this._isMounted !== false) {
+      this.flashLeftReadout('Dungeon Deleted');
+    }
   }
   getUniqueDungeonInstances = (dungeons = []) => {
     return (Array.isArray(dungeons) ? dungeons : [])
@@ -6325,8 +6366,11 @@ class MapMakerPage extends React.Component {
   }
   loadDungeon = async (id) => {
     const val = await loadDungeonRequest(id)
-    let e = val.data[0];
+    let e = val && Array.isArray(val.data) ? val.data[0] : (val && val.data ? val.data : null);
+    if (!e || !e.content) return;
     let dungeon = JSON.parse(e.content);
+    dungeon.id = id || e._id;
+    dungeon._id = e._id || id;
     dungeon = this.props.mapMaker.formatDungeon(dungeon);
 
     // Fetch all boards and sync dynamically
@@ -6346,6 +6390,8 @@ class MapMakerPage extends React.Component {
 
     dungeon = this.validateDungeon(dungeon);
     dungeon = this.props.mapMaker.formatDungeon(dungeon);
+    dungeon.id = id || e._id;
+    dungeon._id = e._id || id;
 
     this.setState({
       loadedDungeon: dungeon,
