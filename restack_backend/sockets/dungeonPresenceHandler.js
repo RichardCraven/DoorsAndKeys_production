@@ -148,7 +148,6 @@ module.exports = function registerDungeonPresence(io, socket) {
     console.log(`[Sockets Chat] Broadcasting instance chat in room ${roomName} from ${outgoingPayload.senderName}: "${outgoingPayload.text}"`);
 
     socket.to(roomName).emit('dungeon:chat_message', outgoingPayload);
-    socket.to(roomName).emit('chat:message_received', outgoingPayload);
   };
 
   socket.on('dungeon:chat_message', (payload = {}) => {

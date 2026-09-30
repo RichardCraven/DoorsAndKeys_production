@@ -3181,6 +3181,9 @@ export function InventoryManager() {
     this.TIER2_POTION = 'major_health_potion';
     this.TIER3_POTION = 'grand_health_potion';
     this.TIER4_POTION = 'supreme_health_potion';
+
+    // Auto-populate allItems dictionary upon constructor instantiation
+    this.initializeItems();
 }
 
 // Create a singleton instance to provide tier pools

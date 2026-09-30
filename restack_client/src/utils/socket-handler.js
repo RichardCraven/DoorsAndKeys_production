@@ -137,9 +137,11 @@ class SocketHandler {
     }
   }
 
-  sendInstanceChatMessage(text, senderName, senderUserId, instanceKey) {
+  sendInstanceChatMessage(text, senderName, senderUserId, instanceKey, messageId) {
     const dId = instanceKey || this.currentDungeonId;
+    const msgId = messageId || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     const payload = {
+      id: msgId,
       dungeonId: this.currentDungeonId || dId,
       instanceId: dId,
       instanceKey: dId,
@@ -151,7 +153,6 @@ class SocketHandler {
     };
     if (this.socket) {
       this.emit('dungeon:chat_message', payload);
-      this.emit('chat:message_send', payload);
     }
     return payload;
   }

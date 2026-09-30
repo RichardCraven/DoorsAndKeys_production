@@ -467,9 +467,9 @@
 
             .sticky-header-top-row {
                 display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 8px;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 6px;
                 width: 100%;
             }
 
@@ -484,31 +484,34 @@
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
-                flex: 1;
-                min-width: 0;
+                width: 100%;
+                text-align: left;
             }
 
             .sticky-header-toggle-container {
-                display: inline-flex;
+                display: flex;
+                width: 100%;
                 background: rgba(0, 0, 0, 0.45);
                 border: 1px solid rgba(229, 181, 79, 0.3);
                 border-radius: 6px;
                 padding: 2px;
                 gap: 2px;
-                flex-shrink: 0;
+                box-sizing: border-box;
             }
 
             .sticky-header-toggle-btn {
+                flex: 1;
                 background: transparent;
                 border: none;
                 color: rgba(245, 239, 230, 0.65);
                 font-size: 11px;
                 font-weight: 600;
-                padding: 3px 8px;
+                padding: 4px 8px;
                 border-radius: 4px;
                 cursor: pointer;
                 display: inline-flex;
                 align-items: center;
+                justify-content: center;
                 gap: 4px;
                 transition: all 0.2s ease;
                 line-height: 1.2;
