@@ -258,7 +258,24 @@ const INTERACTABLES = [
         desc: 'Radiates territorial power, generating domain for your crew. When activated, the monolith surrounds itself with domain (up to 8 adjacent tiles). A 12-hour clock begins upon claiming. Every 12 hours, the domain expands to adjacent empty space (up to 16 tiles).\n\nDomain Value is the number of territory tiles you own in a contiguous area.\n• Level 1 Domain: 1-23 tiles. Growth period: 12 hours.\n• Level 2 Domain: >23 tiles. Growth period: 24 hours.\n• Level 3 Domain: >50 tiles. Growth period: 48 hours.\n• Level 4 Domain: >75 tiles. Growth period: 4 days.\n• Level 5 Domain: >100 tiles. Growth period: 8 days.\n• For each level of domain, you may place an additional outpost (e.g. Level 3 Domain = up to 3 outposts).\n• Non-contiguous domains are considered completely separate domains.\n\n**Overtaking Rules:**\n• If a Domain Monolith is claimed by another user, you can "Attempt to Overtake".\n• Overtaking duration takes 1 minute × the target domain\'s level.\n• Base success chance: 35%.\n• First failure reduces chance to 17.5%. Second failure reduces to 5%. Subsequent attempts are 1%.\n• Penalties reset after 24 hours × the target domain\'s level.\n• Upon success, the domain resets to a 1-tile radius under your control.',
         tags: ['domain', 'territory', 'monolith', 'building'],
     },
+    {
+        id: 'domain_node',
+        name: 'Domain Node',
+        icon: images.domain_monolith,
+        category: 'interactable',
+        desc: 'A compact 1×1 arcane terminal that anchors territorial domain in tighter dungeon corridors and chambers.\n\n• **Relay Substation**: Acts as a focal anchor for Leyline Conduits, extending your territorial network into new rooms and across boards.\n• **Network Grid**: Connecting a Domain Node to a Domain Monolith or to another Node forms a permanent conduit link, protecting the path and powering linked structures.',
+        tags: ['domain', 'territory', 'node', 'building', 'leyline'],
+    },
+    {
+        id: 'leyline_conduit',
+        name: 'Leyline Conduits & Domain Grid',
+        icon: images.domain_monolith,
+        category: 'interactable',
+        desc: 'Ancient subterranean veins of dormant arcane resonance running through the bedrock of the dungeon. By attuning to a Domain Monolith or Domain Node, your crew can actively channel and weave energetic Leyline Conduits across dungeon corridors.\n\n⚡ **How It Works:**\n• **Attunement**: Step onto any active player-owned Domain Monolith (2×2) or Domain Node (1×1) to attune your crew with Leyline Current.\n• **Tracing the Path**: As your crew moves through corridors, their footsteps weave a glowing, energized conduit trail along the stone floor.\n• **Closing the Circuit**: Reaching another Domain Node or looping back to a Monolith closes the circuit. This instantly claims the entire connecting path and enclosed space as Player Territory—bypassing the standard 12-hour domain expansion clock!\n\n🌐 **Cross-Board Network Flow:**\n• Leylines are not trapped within a single miniboard. When an energized conduit reaches a perimeter doorway or connecting passage, the energy flows seamlessly into the adjacent miniboard.\n• By weaving conduits across connecting paths, you can link all 9 miniboards of a dungeon floor into a single, unified Mega-Domain.\n\n🗺️ **Minimap Display:**\n• Active Leyline pathways radiate on the dungeon minimap as special multicolored, glowing conduits. This makes it effortless to see your power grid and navigate connected sectors at a glance.\n\n🛡️ **Tactical & Defensive Boons:**\n• **Anti-Pygmy Barrier**: Roaming Cave Pygmies and wandering horrors take massive barrier shock and cannot cross active leylines, locking down cleared sectors and keeping your party safe.\n• **Leyline Gliding (Fast Travel)**: Party members standing on an energized conduit can glide rapidly between connected nodes across boards.\n• **Severing Dark Corruption**: Tracing a conduit through corrupted territory severs the supply veins of Dark Domain Monoliths, purifying the area.\n• **Combat Mastery**: Engaging in combat (Card Duel or tactical battle) along active leylines grants Domain Advantage (+1 starting Spirit and bonus regeneration).',
+        tags: ['leyline', 'conduit', 'domain', 'territory', 'circuit', 'power', 'minimap', 'monolith', 'node'],
+    },
 ];
+
 
 // ── Monster descriptions ──────────────────────────────────────────────────────
 // Supplements data from MonsterManager with lore/tactical notes.

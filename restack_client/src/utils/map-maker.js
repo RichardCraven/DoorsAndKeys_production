@@ -209,6 +209,9 @@ export function MapMaker(props){
         { key: 'litter_broken_urns', name: 'Broken Urns', image: 'litter_broken_urns' },
         { key: 'litter_battle_debris', name: 'Battle Debris', image: 'litter_battle_debris' },
         { key: 'litter_iron_chains', name: 'Iron Chains', image: 'litter_iron_chains' },
+        { key: 'litter_melted_candles', name: 'Melted Candles', image: 'litter_melted_candles' },
+        { key: 'litter_scattered_coins', name: 'Scattered Coins', image: 'litter_scattered_coins' },
+        { key: 'litter_shattered_potions', name: 'Shattered Potions', image: 'litter_shattered_potions' },
     ];
 
     this.pocketLitterOptions = [

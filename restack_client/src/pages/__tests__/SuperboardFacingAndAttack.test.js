@@ -58,6 +58,17 @@ describe('Direction Facing, Range Rings, and Spacebar Attack', () => {
             expect(page.setState).toHaveBeenCalledWith({ playerFacing: 'right' });
         });
 
+        it('turns player facing in place without moving when Shift is held', () => {
+            const movePlayer = jest.fn();
+            page.props = { ...(page.props || {}), boardManager: { movePlayer } };
+            page.state = { ...page.state, playerFacing: 'down', inMonsterBattle: false, keysLocked: false };
+            page._isMoving = false;
+
+            page.handleDirectionalMove('left', { shiftKey: true });
+            expect(page.setState).toHaveBeenCalledWith({ playerFacing: 'left' });
+            expect(movePlayer).not.toHaveBeenCalled();
+        });
+
         it('updates playerFacing to down and up in handlePocketDirectionalMove', () => {
             page.state = {
                 ...page.state,
@@ -139,6 +150,37 @@ describe('Direction Facing, Range Rings, and Spacebar Attack', () => {
             jest.advanceTimersByTime(600);
             expect(page.state.swingArc).toBeNull();
             jest.useRealTimers();
+        });
+
+        it('deals damage to adjacent monster and updates status bar on melee attack', () => {
+            const targetTile = { id: 5, location: [1, 2], contains: { name: 'Goblin', hp: 30, maxHp: 30 } };
+            page.props = {
+                ...(page.props || {}),
+                boardManager: {
+                    playerTile: { location: [1, 1] },
+                    tiles: [targetTile],
+                    getIndexFromCoordinates: () => 0,
+                    removeDefeatedMonsterTile: jest.fn()
+                }
+            };
+            page.isMonsterObj = jest.fn(() => true);
+            page.displayMessage = jest.fn();
+            page.refreshTiles = jest.fn();
+            page.startMonsterPursuit = jest.fn();
+
+            page.state = {
+                ...page.state,
+                inSuperboard: false,
+                playerFacing: 'right',
+                targetedMonsterTileId: 5,
+                selectedCrewMember: { id: 'c1', type: 'monk', stats: { atk: 15 } }
+            };
+
+            page.handleSpacebarAttack();
+
+            expect(targetTile.contains.hp).toBe(15);
+            expect(page.displayMessage).toHaveBeenCalledWith(expect.stringContaining('15 damage to Goblin'));
+            expect(page.startMonsterPursuit).toHaveBeenCalledWith(targetTile);
         });
 
         it('triggers cosmetic melee swing arc in pocket dimension (superboard)', () => {

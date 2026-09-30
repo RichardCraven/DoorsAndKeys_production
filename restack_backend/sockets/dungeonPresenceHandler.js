@@ -6,7 +6,8 @@ module.exports = function registerDungeonPresence(io, socket) {
     const { dungeonId, dungeonName, userId, username, location, crewSummary } = payload;
     if (!dungeonId) return;
 
-    const roomName = `dungeon:${dungeonId}`;
+    const canonicalDungeonId = presenceService.resolveCanonicalDungeonKey(dungeonId, dungeonName);
+    const roomName = `dungeon:${canonicalDungeonId}`;
 
     // Leave any existing dungeon room first
     if (socket.currentDungeonRoom && socket.currentDungeonRoom !== roomName) {
@@ -24,7 +25,7 @@ module.exports = function registerDungeonPresence(io, socket) {
     socket.currentDungeonRoom = roomName;
 
     const playerState = presenceService.addPlayer(
-      dungeonId,
+      canonicalDungeonId,
       socket.id,
       userId || socket.userId,
       username || socket.username,
@@ -34,10 +35,10 @@ module.exports = function registerDungeonPresence(io, socket) {
     );
 
     // 1. Send snapshot of all current players and generator tile states in this dungeon to joining player
-    const allPlayersInDungeon = presenceService.getPlayersInDungeon(dungeonId);
-    const allTileStates = presenceService.getTileStatesInDungeon(dungeonId);
+    const allPlayersInDungeon = presenceService.getPlayersInDungeon(canonicalDungeonId);
+    const allTileStates = presenceService.getTileStatesInDungeon(canonicalDungeonId);
     socket.emit('dungeon:presence_snapshot', {
-      dungeonId,
+      dungeonId: canonicalDungeonId,
       players: allPlayersInDungeon,
       tileStates: allTileStates
     });
@@ -72,6 +73,8 @@ module.exports = function registerDungeonPresence(io, socket) {
       socket.to(roomName).emit('dungeon:player_moved', {
         userId: updateInfo.playerState.userId,
         socketId: socket.id,
+        username: updateInfo.playerState.username,
+        crewSummary: updateInfo.playerState.crewSummary,
         location: updateInfo.playerState.location
       });
     }
@@ -81,9 +84,10 @@ module.exports = function registerDungeonPresence(io, socket) {
     const { dungeonId, tileId, generatorData } = payload;
     if (!dungeonId || tileId === undefined || tileId === null) return;
 
-    presenceService.updateTileState(dungeonId, tileId, generatorData);
+    const canonicalDungeonId = presenceService.resolveCanonicalDungeonKey(dungeonId);
+    presenceService.updateTileState(canonicalDungeonId, tileId, generatorData);
 
-    const roomName = `dungeon:${dungeonId}`;
+    const roomName = `dungeon:${canonicalDungeonId}`;
     socket.to(roomName).emit('dungeon:tile_updated', payload);
   });
 
@@ -116,15 +120,52 @@ module.exports = function registerDungeonPresence(io, socket) {
     }
   });
 
+  const broadcastInstanceChat = (payload = {}) => {
+    const { text, dungeonId, instanceKey, instanceId, senderName, senderUserId } = payload;
+    if (!text || !text.trim()) return;
+
+    let rawDungeonId = dungeonId || instanceKey || instanceId;
+    const binding = presenceService.getPlayerBySocketId(socket.id);
+    if (!rawDungeonId && socket.currentDungeonRoom) {
+      rawDungeonId = socket.currentDungeonRoom.replace(/^dungeon:/, '');
+    }
+
+    const canonicalDungeonId = presenceService.resolveCanonicalDungeonKey(rawDungeonId, binding ? binding.dungeonName : null);
+    const roomName = `dungeon:${canonicalDungeonId}`;
+
+    const outgoingPayload = {
+      id: payload.id || `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      senderSocketId: socket.id,
+      senderUserId: senderUserId || socket.userId || (binding ? binding.userId : null),
+      senderName: senderName || socket.username || (binding ? binding.username : 'Explorer'),
+      text: text.trim(),
+      timestamp: payload.timestamp || new Date().toISOString(),
+      dungeonId: canonicalDungeonId,
+      instanceKey: instanceKey || `dungeon_${canonicalDungeonId}`,
+      isInstanceChat: true
+    };
+
+    console.log(`[Sockets Chat] Broadcasting instance chat in room ${roomName} from ${outgoingPayload.senderName}: "${outgoingPayload.text}"`);
+
+    socket.to(roomName).emit('dungeon:chat_message', outgoingPayload);
+    socket.to(roomName).emit('chat:message_received', outgoingPayload);
+  };
+
+  socket.on('dungeon:chat_message', (payload = {}) => {
+    broadcastInstanceChat(payload);
+  });
+
   socket.on('chat:message_send', (payload = {}) => {
-    const { targetSocketId, text, senderName } = payload;
-    if (targetSocketId && text) {
+    const { targetSocketId, text, senderName, isInstanceChat } = payload;
+    if (targetSocketId && text && !isInstanceChat) {
       io.to(targetSocketId).emit('chat:message_received', {
         senderSocketId: socket.id,
         senderName: senderName || socket.username || 'Peer Explorer',
         text,
         timestamp: new Date().toISOString()
       });
+    } else if (text) {
+      broadcastInstanceChat(payload);
     }
   });
 

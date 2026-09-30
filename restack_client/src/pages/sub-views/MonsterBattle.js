@@ -822,26 +822,39 @@ class MonsterBattle extends React.Component {
         try { if (this._audioManager) this._audioManager.purgeDynamicCache(); } catch (e) { }
     }
     monster = () => {
-        // console.log('monster: ', this.state.battleData[this.props.monster.id]);
-        return this.state.battleData[this.props.monster.id]
+        if (this.props.monster && this.props.monster.id && this.state.battleData && this.state.battleData[this.props.monster.id]) {
+            return this.state.battleData[this.props.monster.id];
+        }
+        if (this.state.battleData) {
+            const found = Object.values(this.state.battleData).find(c => c && (c.isMonster || c.type === 'monster' || c.isEnemy));
+            if (found) return found;
+        }
+        return null;
     }
     getFighterDetails = (propsRefFighter) => {
-        // console.log('monster: ', this.state.battleData[this.props.monster.id]);
-        return this.state.battleData[propsRefFighter.id]
+        if (!propsRefFighter || !propsRefFighter.id || !this.state.battleData) return null;
+        return this.state.battleData[propsRefFighter.id];
     }
     targetOf = (caller) => {
-        let c = this.state.battleData[caller.id],
-            target = c.targetId ? this.state.battleData[c.targetId] : null;
-        return target
+        if (!caller || !caller.id || !this.state.battleData) return null;
+        let c = this.state.battleData[caller.id];
+        let target = (c && c.targetId) ? this.state.battleData[c.targetId] : null;
+        return target;
     }
     monsterDirectionReversed = () => {
-        if (!this.monster()) return false
-        return this.monster()?.coordinates.x < this.targetOf(this.monster())?.coordinates.x
+        const m = this.monster();
+        if (!m) return false;
+        const target = this.targetOf(m);
+        if (!target || !m.coordinates || !target.coordinates) return false;
+        return m.coordinates.x < target.coordinates.x;
     }
     minionDirectionReversed = (minionReference) => {
-        const minion = this.state.battleData[minionReference.id]
-        if (!minion || !minion.targetId) return false
-        return minion?.coordinates?.x < this.targetOf(minion)?.coordinates.x
+        if (!minionReference || !minionReference.id || !this.state.battleData) return false;
+        const minion = this.state.battleData[minionReference.id];
+        if (!minion || !minion.targetId) return false;
+        const target = this.targetOf(minion);
+        if (!target || !minion.coordinates || !target.coordinates) return false;
+        return minion.coordinates.x < target.coordinates.x;
     }
     getHitAnimation = (combatant) => {
         if (!combatant || !combatant.wounded) return '';
@@ -3843,7 +3856,7 @@ class MonsterBattle extends React.Component {
         const cooldownRemainingAngle = `${Math.max(0, Math.min(360, (1 - (cooldownElapsedPct / 100)) * 360))}deg`;
 
         return (
-            <div className={`mb-board ${this.state.isMobileLandscape ? 'mobile-layout' : ''} ${this.state.greetingInProcess ? 'greeting-in-process' : ''} ${this.state.showCrosshair ? 'show-crosshair' : ''} ${this.state.acidBombMode ? 'acid-bomb-mode' : ''}`}>
+            <div className={`mb-board ${this.state.isMobileLandscape ? 'mobile-layout' : ''} ${this.state.greetingInProcess ? 'greeting-in-process' : ''} ${this.state.showCrosshair ? 'show-crosshair' : ''} ${this.state.acidBombMode ? 'acid-bomb-mode' : ''} ${this.state.showSummaryPanel ? 'battle-summary-active' : ''}`}>
                 {/* ── Skill-queue toast (mobile and desktop) ──────────────────── */}
                 {this.state.toastMsg && (
                     <div className={`skill-queue-toast${this.state.toastMsg.startsWith('⚡') ? ' ultimate-toast' : ''}`}>{this.state.toastMsg}</div>
@@ -4174,7 +4187,7 @@ class MonsterBattle extends React.Component {
                     </>
                 )}
                 {this.state.navToDeathScene && <Redirect to='/death' />}
-                <div className="combat-grid-container"
+                <div className={`combat-grid-container ${this.state.showSummaryPanel ? 'summary-active' : ''}`}
                     ref={this.boardContainerRef}
                     style={{
                         position: 'relative',
@@ -4189,7 +4202,7 @@ class MonsterBattle extends React.Component {
                     }}>
                     {this.state.showSummaryPanel && (() => {
                         const battleEntries = Object.values(this.state.battleData || {});
-                        const isVictory = !this.state.suppressSummaryPortraits && battleEntries.some(e => e && !e.dead && !e.isMonster && !e.isMinion);
+                        const isVictory = this.state.battleResult === 'win';
                         const headerText = isVictory ? "VICTORY" : "DEFEAT";
                         const headerClass = isVictory ? "victory-header" : "defeat-header";
 
@@ -4454,7 +4467,7 @@ class MonsterBattle extends React.Component {
                     </CModal>
 
                     {(() => {
-                        if (!this.state.message) return null;
+                        if (!this.state.message || this.state.showSummaryPanel) return null;
 
                         // Find the main monster (isMonster = true, not a minion)
                         const mainMonster = this.state.battleData && Object.values(this.state.battleData).find(c => c && c.isMonster && !c.isMinion);
@@ -4741,6 +4754,7 @@ class MonsterBattle extends React.Component {
                             crew={this.props.crew}
                             combatManager={this.props.combatManager}
                             battleData={this.state.battleData}
+                            showSummaryPanel={this.state.showSummaryPanel}
                             selectedFighter={this.state.selectedFighter}
                             selectedMonster={this.state.selectedMonster}
                             portraitHoveredId={this.state.portraitHoveredId}
@@ -4835,7 +4849,7 @@ class MonsterBattle extends React.Component {
                                 return { srcCx, srcCy, dstCx, dstCy, arcColor, d };
                             })() : null;
 
-                            if (!liveArc && !committedArc) return null;
+                            if (this.state.showSummaryPanel || (!liveArc && !committedArc)) return null;
 
                             return (
                                 <svg

@@ -9,11 +9,50 @@ const dungeonPresenceMap = new Map();
 const socketToDungeonMap = new Map();
 // dungeonTileStatesMap: dungeonId -> Map(tileId -> generatorData)
 const dungeonTileStatesMap = new Map();
+// dungeonAliases: alias -> canonicalKey
+const dungeonAliases = new Map();
+
+const cleanDungeonKey = (key) => {
+  if (!key) return '';
+  return String(key).trim().replace(/^dungeon:/, '').replace(/^dungeon_/, '');
+};
+
+const isGenericName = (name) => {
+  if (!name) return true;
+  const s = String(name).toLowerCase().trim();
+  return s === 'carcosa' || s === 'default_dungeon' || s === 'dungeon' || s === 'tutorial_dungeon';
+};
+
+const resolveCanonicalDungeonKey = (dungeonId, dungeonName = null) => {
+  const cleanId = cleanDungeonKey(dungeonId);
+  const cleanName = cleanDungeonKey(dungeonName);
+
+  if (!cleanId && !cleanName) return 'default_dungeon';
+
+  // Check existing aliases
+  let canonical = null;
+  if (cleanId && dungeonAliases.has(cleanId)) {
+    canonical = dungeonAliases.get(cleanId);
+  } else if (cleanName && !isGenericName(cleanName) && dungeonAliases.has(cleanName)) {
+    canonical = dungeonAliases.get(cleanName);
+  }
+
+  if (!canonical) {
+    // Canonical preference: cleanId if present, else cleanName
+    canonical = cleanId || cleanName;
+  }
+
+  // Register both aliases to this canonical
+  if (cleanId) dungeonAliases.set(cleanId, canonical);
+  if (cleanName && !isGenericName(cleanName)) dungeonAliases.set(cleanName, canonical);
+
+  return canonical;
+};
 
 const addPlayer = (dungeonId, socketId, userId, username, location, crewSummary = [], dungeonName = null) => {
   if (!dungeonId || !socketId) return null;
 
-  const dKey = String(dungeonId);
+  const dKey = resolveCanonicalDungeonKey(dungeonId, dungeonName);
   if (!dungeonPresenceMap.has(dKey)) {
     dungeonPresenceMap.set(dKey, new Map());
   }
@@ -75,7 +114,7 @@ const removePlayer = (socketId) => {
 };
 
 const getPlayersInDungeon = (dungeonId) => {
-  const dKey = String(dungeonId);
+  const dKey = resolveCanonicalDungeonKey(dungeonId);
   const dungeonRoom = dungeonPresenceMap.get(dKey);
   if (!dungeonRoom) return [];
   return Array.from(dungeonRoom.values());
@@ -115,7 +154,7 @@ const getAllPresenceSummary = () => {
 
 const updateTileState = (dungeonId, tileId, generatorData) => {
   if (!dungeonId || tileId === undefined || tileId === null) return;
-  const dKey = String(dungeonId);
+  const dKey = resolveCanonicalDungeonKey(dungeonId);
   if (!dungeonTileStatesMap.has(dKey)) {
     dungeonTileStatesMap.set(dKey, new Map());
   }
@@ -124,7 +163,7 @@ const updateTileState = (dungeonId, tileId, generatorData) => {
 };
 
 const getTileStatesInDungeon = (dungeonId) => {
-  const dKey = String(dungeonId);
+  const dKey = resolveCanonicalDungeonKey(dungeonId);
   const tileMap = dungeonTileStatesMap.get(dKey);
   if (!tileMap) return [];
   return Array.from(tileMap.values());
@@ -138,5 +177,7 @@ module.exports = {
   getPlayerBySocketId,
   getAllPresenceSummary,
   updateTileState,
-  getTileStatesInDungeon
+  getTileStatesInDungeon,
+  resolveCanonicalDungeonKey,
+  cleanDungeonKey
 };

@@ -21,7 +21,7 @@ import { useEffect } from 'react';
 import { updateUserRequest } from '../src/utils/api-handler'
 
 import { getAllUsersRequest } from './utils/api-handler';
-import { storeSessionData, getUserId, getUserName, getMeta } from './utils/session-handler';
+import { storeSessionData, clearSessionData, getUserId, getUserName, getMeta } from './utils/session-handler';
 import { useHistory } from "react-router";
 import gifOne from './assets/highres-gifs/gifOne.gif';
 import gifTwo from './assets/highres-gifs/gifTwo.gif';
@@ -88,7 +88,7 @@ function App(props) {
     transition: 'all 0.2s ease',
     outline: 'none'
   };
-  const [isAdmin, setIsAdmin] = useState(localStorage.getItem('isAdmin') === 'true' ? true : false)
+  const [isAdmin, setIsAdmin] = useState(((typeof sessionStorage !== 'undefined' && sessionStorage.getItem('isAdmin')) || (typeof localStorage !== 'undefined' && localStorage.getItem('isAdmin'))) === 'true')
   const [showCoordinates, setShowCoordinates] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [allUsers, setAllUsers] = useState([])
@@ -191,26 +191,26 @@ function App(props) {
 
   const logout = () => {
     saveUserData();
-    localStorage.clear()
-    refreshAllUsers()
-    setLoggedIn(false)
-    return <Redirect to="/login" />
+    clearSessionData();
+    refreshAllUsers();
+    setLoggedIn(false);
+    return <Redirect to="/login" />;
   }
   const loginFromRegister = (user) => {
     // ...existing code...
     // ...existing code...
     setTimeout(() => {
       // ...existing code...
-      storeSessionData(user._id, user.token, user.isAdmin, user.username, user.metadata)
-      setLoggedIn(true)
-      setIsAdmin(JSON.parse(localStorage.getItem('isAdmin') === 'true'))
-      navToLanding()
-    }, 500)
+      storeSessionData(user._id, user.token, user.isAdmin, user.username, user.metadata);
+      setLoggedIn(true);
+      setIsAdmin(String(user.isAdmin) === 'true');
+      navToLanding();
+    }, 500);
   }
   const navToLanding = () => {
     history.push({
       pathname: '/landing'
-    })
+    });
   }
   const login = (userCredentials) => {
     let validUser = null;
@@ -221,18 +221,18 @@ function App(props) {
       if (userCredentials.username === user.username && userCredentials.password === user.password) {
         validUser = user;
       }
-    })
+    });
     if (validUser) {
       console.log('Login success - validUser.username:', validUser.username);
       // setUser(validUser)
       setTimeout(() => {
-        storeSessionData(validUser._id, validUser.token, validUser.isAdmin, validUser.username, validUser.metadata)
-        setLoggedIn(true)
-        setIsAdmin(JSON.parse(localStorage.getItem('isAdmin') === 'true'))
+        storeSessionData(validUser._id, validUser.token, validUser.isAdmin, validUser.username, validUser.metadata);
+        setLoggedIn(true);
+        setIsAdmin(String(validUser.isAdmin) === 'true');
         history.push({
           pathname: '/landing'
-        })
-      })
+        });
+      });
       return true;
     } else {
       // ...existing code...

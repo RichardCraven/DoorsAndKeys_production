@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Redirect } from "react-router-dom";
 import { useHistory } from "react-router";
-import { getMeta, storeMeta, getUserId, getUserName, resetDungeonInstanceMeta } from '../utils/session-handler';
+import { getMeta, storeMeta, getUserId, getUserName, resetDungeonInstanceMeta, clearSessionData } from '../utils/session-handler';
 import { loadAllDungeonsRequest, deleteDungeonRequest, getAllUsersRequest, updateUserRequest, getActivePresenceRequest, sendFeedbackNotification, ensureServerWarm, isServerWarm } from '../utils/api-handler';
 
 
@@ -1122,7 +1122,7 @@ export default function LandingPage(props) {
   };
 
   const handleLogout = () => {
-    localStorage.clear();
+    clearSessionData();
     history.push('/login');
     window.location.reload();
   };
@@ -1177,7 +1177,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.6.12 BETA</span>
+          <span className="logo-subtitle">v 0.7.1 BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',

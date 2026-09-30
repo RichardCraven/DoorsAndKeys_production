@@ -627,6 +627,10 @@ export function BoardManager(){
         return null;
     }
 
+    this.isClosedGateTile = (tile) => {
+        return !!this.getGateTypeFromTile(tile);
+    }
+
     this.hasBreacherSkill = () => {
         let crew = [];
         try {
@@ -932,8 +936,8 @@ export function BoardManager(){
                 // Impassable buildings (outpost, etc.) are visible in fog of war, but block propagation past themselves.
                 if (this.isImpassableBuildingTile(tile)) return;
 
-                // Locked gates are visible but block propagation past themselves.
-                if (this.isLockedGateTile(tile)) return;
+                // Closed gates are visible in fog of war, but block propagation past themselves until opened.
+                if (this.isClosedGateTile(tile)) return;
 
                 queue.push({ idx: nextIdx, steps: steps + 1 });
             });
@@ -2505,9 +2509,9 @@ export function BoardManager(){
             } else if (raw && typeof raw === 'object') {
                 const cType = raw.type ? String(raw.type).toLowerCase() : '';
                 const cSubtype = raw.subtype ? String(raw.subtype) : '';
-                const isItemKind = ['item', 'key', 'rune', 'jewel', 'shard', 'consumable', 'weapon', 'armor', 'magical', 'potion'].includes(cType) ||
-                    cType.includes('key') || cType.includes('shard') || cType.includes('rune') ||
-                    cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune');
+                const isItemKind = ['item', 'key', 'rune', 'jewel', 'shard', 'consumable', 'weapon', 'armor', 'magical', 'potion', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'tablet'].includes(cType) ||
+                    cType.includes('key') || cType.includes('shard') || cType.includes('rune') || cType.includes('book') || cType.includes('tome') || cType.includes('grimoire') ||
+                    cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune') || cSubtype.includes('book') || cSubtype.includes('tome') || cSubtype.includes('grimoire') || cSubtype.includes('folio') || cSubtype.includes('manual');
 
                 if ((!raw.type || raw.type === null) && raw.subtype) {
                     if (this.monstersArr.includes(raw.subtype)) {
@@ -2519,10 +2523,10 @@ export function BoardManager(){
                     }
                 } else if (isItemKind) {
                     let actualSubtype = cSubtype;
-                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(actualSubtype)) {
+                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'magical', 'weapon', 'armor'].includes(actualSubtype)) {
                         actualSubtype = cType;
                     }
-                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(actualSubtype)) {
+                    if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'magical', 'weapon', 'armor'].includes(actualSubtype)) {
                         actualSubtype = 'minor_key';
                     }
                     destinationTile.contains = { type: 'item', subtype: actualSubtype };
@@ -2663,6 +2667,17 @@ export function BoardManager(){
             case 'jewel':
             case 'shard':
             case 'consumable':
+            case 'spellbook':
+            case 'book':
+            case 'tome':
+            case 'grimoire':
+            case 'folio':
+            case 'manual':
+            case 'engine':
+            case 'magical':
+            case 'weapon':
+            case 'armor':
+            case 'potion':
                 if (this.isChest(subtype)) {
                     const keyDetails = this.getRequiredKeyForChest(subtype);
                     if (keyDetails) {
@@ -2710,7 +2725,7 @@ export function BoardManager(){
                 } else {
                     // destinationTile.contains may be object; callers expect string contains
                     try {
-                        const itemKey = (subtype && !['key', 'item', 'rune', 'jewel', 'shard', 'consumable'].includes(subtype))
+                        const itemKey = (subtype && !['key', 'item', 'rune', 'jewel', 'shard', 'consumable', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'magical', 'weapon', 'armor', 'potion'].includes(subtype))
                             ? subtype
                             : (destinationTile.contains && typeof destinationTile.contains === 'object' ? (destinationTile.contains.subtype || destinationTile.contains.type) : destinationTile.contains);
                         const tileForCallback = Object.assign({}, destinationTile, { contains: itemKey });
@@ -3278,8 +3293,15 @@ export function BoardManager(){
             const peersMap = this.getPeerPlayers();
             if (!peersMap || peersMap.size === 0) return false;
 
-            const currentBoardIndex = this.playerTile?.boardIndex ?? 0;
-            const currentOrientation = this.currentOrientation === 'B' ? 'back' : 'front';
+            const currentBoardIndex = (this.playerTile?.boardIndex != null) ? this.playerTile.boardIndex : ((this.currentBoard?.id != null) ? this.currentBoard.id : 0);
+            const normOrient = (o) => {
+                if (!o) return 'front';
+                const s = String(o).toLowerCase().trim();
+                if (s === 'f' || s === 'front' || s === 'a' || s === '0') return 'front';
+                if (s === 'b' || s === 'back' || s === '1') return 'back';
+                return s;
+            };
+            const currentOrientation = normOrient(this.currentOrientation);
             const currentLevelId = this.currentLevel?.id ?? 0;
             const targetTileIndex = this.getIndexFromCoordinates(coords);
 
@@ -3288,7 +3310,7 @@ export function BoardManager(){
                 const loc = peer.location;
 
                 if (loc.levelId !== undefined && String(loc.levelId) !== String(currentLevelId)) continue;
-                if (loc.orientation && loc.orientation !== currentOrientation) continue;
+                if (loc.orientation && normOrient(loc.orientation) !== currentOrientation) continue;
                 if (loc.boardIndex !== undefined && Number(loc.boardIndex) !== Number(currentBoardIndex)) continue;
 
                 let pTileIdx = Number(loc.tileIndex);

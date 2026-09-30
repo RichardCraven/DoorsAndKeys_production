@@ -950,20 +950,62 @@ button{
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  height: 90vh;
-  width: 80vw;
+  height: 92vh;
+  width: 86vw;
+  max-width: 1320px;
   display: flex;
   justify-content: space-around;
   align-items: center;
   flex-direction: column;
   position: relative;
   margin: auto;
+  padding: 16px 20px;
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: radial-gradient(ellipse 95% 85% at 50% 30%, rgba(32, 20, 52, 0.75) 0%, rgba(18, 12, 30, 0.88) 45%, rgba(8, 6, 14, 0.96) 80%, #050408 100%);
+  border: 1px solid rgba(249, 177, 21, 0.2);
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.85), inset 0 0 90px rgba(0, 0, 0, 0.75), 0 0 40px rgba(168, 85, 247, 0.12);
+  overflow: hidden;
+
+  /* Esoteric Sacred Geometry Background Watermark */
+  &::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 780px;
+    height: 780px;
+    margin-top: -390px;
+    margin-left: -390px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'%3E%3Cg fill='none' stroke-width='1.2' opacity='0.8'%3E%3Ccircle cx='400' cy='400' r='360' stroke='%23f9b115' stroke-opacity='0.3' stroke-dasharray='8 6'/%3E%3Ccircle cx='400' cy='400' r='340' stroke='%23a855f7' stroke-opacity='0.25'/%3E%3Ccircle cx='400' cy='400' r='280' stroke='%23f9b115' stroke-opacity='0.2'/%3E%3Ccircle cx='400' cy='400' r='220' stroke='%23a855f7' stroke-opacity='0.22' stroke-dasharray='12 12'/%3E%3Ccircle cx='400' cy='400' r='140' stroke='%23f9b115' stroke-opacity='0.3'/%3E%3Cpolygon points='400,40 470,330 760,400 470,470 400,760 330,470 40,400 330,330' stroke='%23a855f7' stroke-opacity='0.2'/%3E%3Cpolygon points='654,146 470,330 654,654 470,470 146,654 330,470 146,146 330,330' stroke='%23f9b115' stroke-opacity='0.15'/%3E%3Cline x1='400' y1='20' x2='400' y2='780' stroke='%23f9b115' stroke-opacity='0.15' stroke-dasharray='4 8'/%3E%3Cline x1='20' y1='400' x2='780' y2='400' stroke='%23f9b115' stroke-opacity='0.15' stroke-dasharray='4 8'/%3E%3Cline x1='131' y1='131' x2='669' y2='669' stroke='%23a855f7' stroke-opacity='0.12' stroke-dasharray='4 8'/%3E%3Cline x1='669' y1='131' x2='131' y2='669' stroke='%23a855f7' stroke-opacity='0.12' stroke-dasharray='4 8'/%3E%3Ccircle cx='400' cy='40' r='5' fill='%23f9b115' fill-opacity='0.4'/%3E%3Ccircle cx='400' cy='760' r='5' fill='%23f9b115' fill-opacity='0.4'/%3E%3Ccircle cx='40' cy='400' r='5' fill='%23f9b115' fill-opacity='0.4'/%3E%3Ccircle cx='760' cy='400' r='5' fill='%23f9b115' fill-opacity='0.4'/%3E%3C/g%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    opacity: 0.065;
+    pointer-events: none;
+    z-index: 0;
+    animation: esotericRotate 160s linear infinite;
+  }
+
+  /* Pulsing Ambient Arcane Glow Overlay */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 38%, rgba(168, 85, 247, 0.09) 0%, rgba(249, 177, 21, 0.04) 45%, transparent 75%);
+    pointer-events: none;
+    z-index: 0;
+    animation: esotericPulse 9s ease-in-out infinite alternate;
+  }
+
   .content-container{
+    position: relative;
+    z-index: 1;
     height: 100%;
     width: 100%;
     display: flex;
     flex-direction: column;
-    padding-bottom: 20px;
+    padding-bottom: 40px;
     overflow-y: auto;
     .title{
       color: white;
@@ -1095,18 +1137,20 @@ button{
           .add-button{
             position: absolute;
             color: #8e8c8c;
-            top: -8px;
-            left: -16px;
-            font-size: 30px;
+            top: -6px;
+            left: -6px;
+            font-size: 22px;
+            z-index: 10;
             cursor: pointer;
             background-color: black;
-            border-radius: 3px;
-            height: 21px;
-            background-position: center;
-            background-size: 100% 100%;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            line-height: 1;
             display: flex;
             align-items: center;
-            cursor: pointer;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.6);
             &:hover{
               color: white;
             }
@@ -1381,8 +1425,8 @@ button{
 
     .button-row{
       position: absolute;
-      bottom: -33px;
-      right: 0;
+      bottom: 8px;
+      right: 16px;
       button {
         font-size: 11px;
         padding: 3px 8px;
@@ -1404,8 +1448,8 @@ button{
     }
     .button-row-bottom-left{
       position: absolute;
-      bottom: -33px;
-      left: 0;
+      bottom: 8px;
+      left: 16px;
       button {
         font-size: 11px;
         padding: 3px 8px;
@@ -2072,5 +2116,29 @@ canvas.spell-animation {
   100% {
     box-shadow: inset 0 0 18px rgba(52, 211, 153, 0.95), 0 0 16px rgba(255, 215, 0, 1);
     border-color: #34d399;
+  }
+}
+
+@keyframes esotericRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes esotericPulse {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 0.45;
+    transform: scale(0.97);
   }
 }

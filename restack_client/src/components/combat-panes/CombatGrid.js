@@ -762,10 +762,10 @@ const resolvePortrait = (portraitVal) => {
     return res;
 };
 
-const getCombatantPortrait = (unit, greetingInProcess, activeAnimations, showDeathAnimation, fullyDead) => {
+const getCombatantPortrait = (unit, greetingInProcess, activeAnimations, showDeathAnimation, fullyDead, showSummaryPanel = false) => {
     if (!unit) return '';
     const isUnitDead = !!(unit.dead || (typeof unit.hp === 'number' && unit.hp <= 0 && !unit.isVCT && !unit.isTrialIcon));
-    if (isUnitDead && fullyDead && fullyDead[unit.id]) {
+    if (isUnitDead && (((fullyDead && fullyDead[unit.id]) || showSummaryPanel))) {
         return '';
     }
     if (unit.stagedPortraits) {
@@ -879,6 +879,7 @@ export default function CombatGrid(props) {
         // Sandbox-style CSS animation events from AnimationManagerRedux
         activeAnimations = [],
         isPaused = false,
+        showSummaryPanel = false,
     } = props;
     const crewIds = new Set(crew.map(f => f.id));
     const hideBars = props.showBars === false || greetingInProcess;
@@ -966,6 +967,30 @@ export default function CombatGrid(props) {
     }, [battleData, combatManager]);
 
     React.useEffect(() => {
+        if (showSummaryPanel) {
+            // Cancel and clear all active death timeouts and animation frames immediately
+            if (deathTimeoutsRef.current) {
+                Object.values(deathTimeoutsRef.current).forEach(item => {
+                    if (item.timeout) clearTimeout(item.timeout);
+                    if (item.animId) cancelAnimationFrame(item.animId);
+                });
+                deathTimeoutsRef.current = {};
+            }
+            if (isMountedRef.current) {
+                setShowDeathAnimation({});
+                setMeltScales({});
+                const newFullyDead = {};
+                Object.values(battleData || {}).forEach(u => {
+                    if (u && (u.dead || (typeof u.hp === 'number' && u.hp <= 0) || deadUnitIdsRef.current.has(u.id))) {
+                        deadUnitIdsRef.current.add(u.id);
+                        newFullyDead[u.id] = true;
+                    }
+                });
+                setFullyDead(prev => ({ ...prev, ...newFullyDead }));
+            }
+            return;
+        }
+
         const allUnits = Object.values(battleData);
         allUnits.forEach(unit => {
             if (!unit) return;
@@ -1034,7 +1059,7 @@ export default function CombatGrid(props) {
             }
         });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [battleData]);
+    }, [battleData, showSummaryPanel]);
 
     React.useEffect(() => {
         const timeouts = deathTimeoutsRef.current;
@@ -1371,11 +1396,32 @@ export default function CombatGrid(props) {
         // Hide fighters who are currently in a Sphinx trial (off-board)
         const liveFighter = getLiveCombatant(f.id) || details || f;
         if (typeof liveFighter?.inTrial === 'number') return false;
-        return battleData[f.id] && !details?.invisible && (!details?.dead || (showDeathAnimation[f.id] && !fullyDead[f.id]));
+        const isFighterDead = !!(
+            details?.dead ||
+            battleData[f.id]?.dead ||
+            (typeof battleData[f.id]?.hp === 'number' && battleData[f.id]?.hp <= 0) ||
+            (typeof liveFighter?.hp === 'number' && liveFighter?.hp <= 0) ||
+            deadUnitIdsRef.current.has(f.id)
+        );
+        if (showSummaryPanel && (isFighterDead || showDeathAnimation[f.id] || fullyDead[f.id])) {
+            return false;
+        }
+        return battleData[f.id] && !details?.invisible && (!isFighterDead || (showDeathAnimation[f.id] && !fullyDead[f.id]));
     });
 
     const renderFighter = (fighter) => {
         const details = getFighterDetails(fighter);
+        const liveFighter = getLiveCombatant(fighter.id) || details || fighter;
+        const isFighterDead = !!(
+            details?.dead ||
+            battleData[fighter.id]?.dead ||
+            (typeof battleData[fighter.id]?.hp === 'number' && battleData[fighter.id]?.hp <= 0) ||
+            (typeof liveFighter?.hp === 'number' && liveFighter?.hp <= 0) ||
+            deadUnitIdsRef.current.has(fighter.id)
+        );
+        if (showSummaryPanel && (isFighterDead || showDeathAnimation[fighter.id] || fullyDead[fighter.id])) {
+            return null;
+        }
         const facingClass = details?.facing === 'left' ? 'reversed' : '';
         const verticalFacingClass = details?.facing === 'up' ? 'facing-up' : (details?.facing === 'down' ? 'facing-down' : '');
         const isTelep = isTeleporting(fighter.id);
@@ -1393,7 +1439,6 @@ export default function CombatGrid(props) {
             a.type === 'rift_pushback' && a.sourceUnitId === fighter.id
         );
 
-        const liveFighter = getLiveCombatant(fighter.id) || details || fighter;
         const berserkerBuffActive = Array.isArray(liveFighter.activeBuffs)
             && liveFighter.activeBuffs.some(b => b && ['barbarian_berserker', 'berserker'].includes((b.name || '').toLowerCase().replace(/\s+/g, '_')));
         const fighterSleepDebuff = Array.isArray(liveFighter.activeDebuffs)
@@ -1430,6 +1475,7 @@ export default function CombatGrid(props) {
         const unitTileClasses = [
             'unit-tile',
             'fighter-unit-tile',
+            isFighterDead ? 'dead' : '',
             fighter.isLeader ? 'leader-unit-tile' : '',
             isTelep ? 'teleporting' : '',
             details?.rocked ? 'rocked' : '',
@@ -1565,6 +1611,7 @@ export default function CombatGrid(props) {
                 key={fighter.id}
                 id={`unit-tile-${fighter.id}`}
                 className={unitTileClasses}
+                data-dead={isFighterDead ? 'true' : 'false'}
                 style={{
                     position: 'absolute',
                     transform: `translate3d(${xPos}px, ${yPos}px, 0px)`,
@@ -2080,7 +2127,7 @@ export default function CombatGrid(props) {
                         }}>
                             <div className="hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
                                 <div className="red-fill" style={{
-                                    width: hideBars ? '0%' : `${(getFighterDetails(fighter)?.hp / fighter.stats.hp) * 100}%`,
+                                    width: hideBars ? '0%' : `${(getFighterDetails(fighter)?.hp / (fighter.stats?.hp || fighter.starting_hp || 100)) * 100}%`,
                                     transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                 }} />
                             </div>
@@ -2353,6 +2400,9 @@ export default function CombatGrid(props) {
         const isMonster = unit.isMonster;
         const isMinion = unit.isMinion;
         const isDead = !!(unit.dead || (typeof unit.hp === 'number' && unit.hp <= 0 && !unit.isVCT && !unit.isTrialIcon) || deadUnitIdsRef.current.has(unit.id));
+        if (showSummaryPanel && (isDead || showDeathAnimation[unit.id] || fullyDead[unit.id])) {
+            return null;
+        }
         const shouldShow = !unit.invisible && (!isDead || unit.bifurcating || (showDeathAnimation[unit.id] && !fullyDead[unit.id]));
         if (!shouldShow) return null;
         if (!unit.coordinates) return null;
@@ -2437,6 +2487,7 @@ export default function CombatGrid(props) {
         const unitTileClasses = [
             'unit-tile',
             isMinion ? 'minion-unit-tile' : 'monster-unit-tile',
+            isDead ? 'dead' : '',
             isHuge ? 'huge-monster-unit-tile' : (isLarge ? 'large-monster-unit-tile' : ''),
             unit.rocked ? 'rocked' : '',
             unit.wounded ? 'hit' : '',
@@ -2509,6 +2560,7 @@ export default function CombatGrid(props) {
                 className={unitTileClasses}
                 data-monster-id={unit.id}
                 data-monster-name={unit.name || unit.type || ''}
+                data-dead={isDead ? 'true' : 'false'}
                 style={{
                     position: 'absolute',
                     transform: `translate3d(${leftPos}px, ${topPos}px, 0px)`,
@@ -2558,14 +2610,14 @@ export default function CombatGrid(props) {
                     }}
                 >
                     {(() => {
-                        const isWalkerUnit = unit.type === 'walker' || unit.key === 'walker' || (unit.name && String(unit.name).toLowerCase().includes('walker'));
-                        const isSobekUnit = unit.type === 'sobek' || unit.key === 'sobek' || (unit.name && String(unit.name).toLowerCase().includes('sobek'));
+                        const isWalkerUnit = unit.type === 'walker' || unit.key === 'walker' || unit.portrait === 'walker' || unit.portrait === 'walker_glowing_square' || (unit.name && String(unit.name).toLowerCase() === 'walker');
+                        const isSobekUnit = unit.type === 'sobek' || unit.key === 'sobek' || (unit.name && String(unit.name).toLowerCase() === 'sobek');
                         return (
                             <div
                                 className={portraitClasses}
                                 style={{
                                     backgroundImage: (isWalkerUnit || isSobekUnit) ? 'none' : (() => {
-                                        const url = getCombatantPortrait(unit, greetingInProcess, activeAnimations, showDeathAnimation, fullyDead);
+                                        const url = getCombatantPortrait(unit, greetingInProcess, activeAnimations, showDeathAnimation, fullyDead, showSummaryPanel);
                                         if (!url) {
                                             console.warn(`[PvP Diagnostic] renderMonsterUnit: unit id="${unit.id}" name="${unit.name}" has empty portrait URL`, unit);
                                             return 'none';

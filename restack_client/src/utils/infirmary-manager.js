@@ -44,6 +44,11 @@ export const updateInfirmary = () => {
                     }
                 }
             });
+            if (!Array.isArray(meta.infirmaryDischarged)) meta.infirmaryDischarged = [];
+            if (!meta.infirmaryDischarged.includes(p.id)) meta.infirmaryDischarged.push(p.id);
+            if ((meta.rosterLocked || meta.dungeonEntered) && Array.isArray(meta.lockedRoster)) {
+                if (!meta.lockedRoster.includes(p.id)) meta.lockedRoster.push(p.id);
+            }
         });
 
         // Remove fully healed patients from infirmary (auto-discharge)
@@ -77,9 +82,12 @@ export const commitToInfirmary = (member) => {
         infirmary.patients.push(JSON.parse(JSON.stringify(member)));
     }
     
-    // Remove from active crew if they are in it
+    // Remove from active or alternate crew if they are in it
     if (meta.crew) {
         meta.crew = meta.crew.filter(c => c.id !== member.id);
+    }
+    if (meta.alternateCrew) {
+        meta.alternateCrew = meta.alternateCrew.filter(c => c.id !== member.id);
     }
     
     infirmary.lastUpdateTs = Date.now();
@@ -109,6 +117,12 @@ export const dischargeFromInfirmary = (memberId) => {
     }
 
     infirmary.patients = infirmary.patients.filter(p => p.id !== memberId);
+
+    if (!Array.isArray(meta.infirmaryDischarged)) meta.infirmaryDischarged = [];
+    if (!meta.infirmaryDischarged.includes(memberId)) meta.infirmaryDischarged.push(memberId);
+    if ((meta.rosterLocked || meta.dungeonEntered) && Array.isArray(meta.lockedRoster)) {
+        if (!meta.lockedRoster.includes(memberId)) meta.lockedRoster.push(memberId);
+    }
 
     infirmary.lastUpdateTs = Date.now();
     meta.infirmary = infirmary;

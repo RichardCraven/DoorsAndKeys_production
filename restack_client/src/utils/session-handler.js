@@ -1,9 +1,69 @@
+function initSessionFromLocalIfNeeded() {
+    try {
+        if (typeof sessionStorage !== 'undefined' && typeof localStorage !== 'undefined') {
+            if (!sessionStorage.getItem('userId') && localStorage.getItem('userId')) {
+                const uid = localStorage.getItem('userId');
+                const uname = localStorage.getItem('userName');
+                const isAdmin = localStorage.getItem('isAdmin');
+                const token = localStorage.getItem('token');
+                const meta = localStorage.getItem('metadata');
+                if (uid) sessionStorage.setItem('userId', uid);
+                if (uname) sessionStorage.setItem('userName', uname);
+                if (isAdmin) sessionStorage.setItem('isAdmin', isAdmin);
+                if (token) sessionStorage.setItem('token', token);
+                if (meta) sessionStorage.setItem('metadata', meta);
+            }
+        }
+    } catch (e) {}
+}
+
+initSessionFromLocalIfNeeded();
+
 function storeSessionData(id, token, isAdmin, username, metadata){
-    localStorage.setItem('userId', id)
-    localStorage.setItem('userName', username)
-    localStorage.setItem('isAdmin', isAdmin.toString())
-    try { if (token) localStorage.setItem('token', token); } catch (e) {}
-    try { storeMeta(metadata); } catch (e) { try { localStorage.setItem('metadata', '{}'); } catch (ie) {} }
+    try {
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('userId', id);
+            sessionStorage.setItem('userName', username);
+            sessionStorage.setItem('isAdmin', (isAdmin || false).toString());
+            if (token) sessionStorage.setItem('token', token);
+        }
+    } catch (e) {}
+    try {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.setItem('userId', id);
+            localStorage.setItem('userName', username);
+            localStorage.setItem('isAdmin', (isAdmin || false).toString());
+            if (token) localStorage.setItem('token', token);
+        }
+    } catch (e) {}
+    try { storeMeta(metadata); } catch (e) {
+        try {
+            if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('metadata', '{}');
+            if (typeof localStorage !== 'undefined') localStorage.setItem('metadata', '{}');
+        } catch (ie) {}
+    }
+}
+
+function clearSessionData(){
+    _cachedMeta = null;
+    try {
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.removeItem('userId');
+            sessionStorage.removeItem('userName');
+            sessionStorage.removeItem('isAdmin');
+            sessionStorage.removeItem('token');
+            sessionStorage.removeItem('metadata');
+        }
+    } catch (e) {}
+    try {
+        if (typeof localStorage !== 'undefined') {
+            localStorage.removeItem('userId');
+            localStorage.removeItem('userName');
+            localStorage.removeItem('isAdmin');
+            localStorage.removeItem('token');
+            localStorage.removeItem('metadata');
+        }
+    } catch (e) {}
 }
 
 let _cachedMeta = null;
@@ -22,7 +82,8 @@ function storeMeta(metadata){
         }
         _cachedMeta = metaObject;
         const serialized = JSON.stringify(metaObject);
-        localStorage.setItem('metadata', serialized);
+        try { if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('metadata', serialized); } catch (e) {}
+        try { if (typeof localStorage !== 'undefined') localStorage.setItem('metadata', serialized); } catch (e) {}
         return;
     } catch (err) {
         // QuotaExceededError or circular structure could cause failure.
@@ -55,7 +116,7 @@ function sanitizeMeta(metadata){
     const safe = {};
     // Copy only small, commonly useful properties. Avoid large nested objects
     // like full dungeon boards, tile arrays, or other heavy structures.
-    const whitelistedKeys = ['skipIntro','dungeonId','boardIndex','tileIndex','crew','alternateCrew','lockedRoster','rosterLocked','dungeonEntered','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','deathEnemyIndex','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp','mailbox','dungeonHistory','welcomeMailSent','leftExpanded','rightExpanded','hasEnteredFirstDungeon','hasSeenSidePanelsDelay','food','resolve','lastFoodExpiryCheck','pocketResources','pocketPlayerBuildings'];
+    const whitelistedKeys = ['skipIntro','dungeonId','boardIndex','tileIndex','crew','alternateCrew','lockedRoster','rosterLocked','dungeonEntered','inventory','preferences','lastVisited','userNotes','visitedBoards','location','spawnPoint','selectedDungeon','deathTracker','deathEnemyIndex','respawnDate','itemRespawnDate','simulatorDefaults','combatSpeed','soulShards','echoCards','activeEchoCards','scroungeActive','scoutActive','suffix','region','fastMove','dungeonEntryTimestamp','mailbox','dungeonHistory','welcomeMailSent','leftExpanded','rightExpanded','hasEnteredFirstDungeon','hasSeenSidePanelsDelay','food','resolve','lastFoodExpiryCheck','pocketResources','pocketPlayerBuildings','infirmaryDischarged'];
     for (const k of whitelistedKeys) {
         if (k in metadata) safe[k] = metadata[k];
     }
@@ -100,7 +161,15 @@ function sanitizeMeta(metadata){
 }
 function getMeta(forceRefresh = false){
     if (_cachedMeta && !forceRefresh) return _cachedMeta;
-    const raw = localStorage.getItem('metadata');
+    let raw = null;
+    try {
+        if (typeof sessionStorage !== 'undefined') raw = sessionStorage.getItem('metadata');
+    } catch (e) {}
+    if (!raw) {
+        try {
+            if (typeof localStorage !== 'undefined') raw = localStorage.getItem('metadata');
+        } catch (e) {}
+    }
     if (raw) {
         try {
             let parsed = JSON.parse(raw);
@@ -111,7 +180,7 @@ function getMeta(forceRefresh = false){
             _cachedMeta = parsed;
             return parsed;
         } catch (e) {
-            console.warn('getMeta: failed to parse metadata from localStorage, returning minimal meta', e && e.message ? e.message : e);
+            console.warn('getMeta: failed to parse metadata, returning minimal meta', e && e.message ? e.message : e);
             _cachedMeta = { dungeonId: null, boardIndex: null, tileIndex: null, crew: null, inventory: null };
             return _cachedMeta;
         }
@@ -120,10 +189,32 @@ function getMeta(forceRefresh = false){
     return _cachedMeta;
 }
 function getUserId(){
-    return localStorage.getItem('userId')
+    try {
+        if (typeof sessionStorage !== 'undefined') {
+            const sid = sessionStorage.getItem('userId');
+            if (sid) return sid;
+        }
+    } catch (e) {}
+    try {
+        if (typeof localStorage !== 'undefined') {
+            return localStorage.getItem('userId');
+        }
+    } catch (e) {}
+    return null;
 }
 function getUserName(){
-    return localStorage.getItem('userName')
+    try {
+        if (typeof sessionStorage !== 'undefined') {
+            const sname = sessionStorage.getItem('userName');
+            if (sname) return sname;
+        }
+    } catch (e) {}
+    try {
+        if (typeof localStorage !== 'undefined') {
+            return localStorage.getItem('userName');
+        }
+    } catch (e) {}
+    return null;
 }
 function setEditorPreference(key, val){
     let meta = getMeta();
@@ -141,7 +232,8 @@ function setEditorPreference(key, val){
 }
 
 function setUserName(username){
-    localStorage.setItem('userName', username)
+    try { if (typeof sessionStorage !== 'undefined') sessionStorage.setItem('userName', username); } catch (e) {}
+    try { if (typeof localStorage !== 'undefined') localStorage.setItem('userName', username); } catch (e) {}
 }
 
 function getResolvePenaltyReduction() {
@@ -203,6 +295,7 @@ function resetDungeonInstanceMeta(meta = null, inventoryManager = null) {
     delete m.dungeonEntered;
     delete m.lockedRoster;
     delete m.alternateCrew;
+    delete m.infirmaryDischarged;
 
     // Reset instance resources to clean initial state
     m.food = 55;
@@ -249,4 +342,4 @@ function resetDungeonInstanceMeta(meta = null, inventoryManager = null) {
     return m;
 }
 
-export {storeSessionData, storeMeta, getMeta, getUserId, setEditorPreference, getUserName, setUserName, getResolvePenaltyReduction, applyResolvePenalty, resetDungeonInstanceMeta};
+export {storeSessionData, clearSessionData, storeMeta, getMeta, getUserId, setEditorPreference, getUserName, setUserName, getResolvePenaltyReduction, applyResolvePenalty, resetDungeonInstanceMeta};
