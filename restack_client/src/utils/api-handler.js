@@ -111,7 +111,14 @@ const updateUserRequest = async (userId, metadata, username, isAdmin) => {
       _pendingUserTimeouts.delete(userId);
       const payload = {};
       if (metadata !== undefined) {
-        payload.metadata = JSON.stringify(metadata);
+        let cleanMeta = metadata;
+        if (cleanMeta && typeof cleanMeta === 'object' && cleanMeta.selectedDungeon && typeof cleanMeta.selectedDungeon === 'object') {
+          cleanMeta = {
+            ...cleanMeta,
+            selectedDungeon: cleanMeta.selectedDungeon.name || cleanMeta.selectedDungeonTemplateName || 'DreamTower'
+          };
+        }
+        payload.metadata = JSON.stringify(cleanMeta);
       }
       if (username !== undefined) {
         payload.username = username;
@@ -362,7 +369,7 @@ const updateDungeonRequest = (id, dungeonObj) => {
 }
 const loadAllDungeonsRequest = async (id) => {
   await ensureServerWarm();
-  return axios.get(API_BASE + "/api/dungeons", { timeout: 15000 })
+  return axios.get(API_BASE + "/api/dungeons", { timeout: 45000 })
     .then(res=>{
       if(res.status === 200){
         return(res)

@@ -26,7 +26,7 @@ exports.create = (req, res, next) => {
 
 // READ Users
 exports.findAll = (req, res, next) => {
-  userSchema.find((error, data) => {
+  userSchema.find().lean().exec((error, data) => {
     if (error) {
       return next(error)
     } else {
@@ -40,7 +40,7 @@ exports.findOne = (req, res, next) => {
   if (!isValidId(req.params.id)) {
     return res.status(400).json({ error: 'Invalid user ID' });
   }
-  userSchema.find({'_id': req.params.id}, (error, data) => {
+  userSchema.find({'_id': req.params.id}).lean().exec((error, data) => {
     if (error) {
       return next(error)
     } else {
@@ -56,12 +56,12 @@ exports.update = (req, res, next) => {
   }
   userSchema.findOneAndUpdate({'_id': req.params.id}, {
     $set: req.body
-  }, (error, data) => {
+  }, { projection: { _id: 1, username: 1, isAdmin: 1 } }, (error, data) => {
     if (error) {
       console.log('error:', error)
       return next(error);
     } else {
-      res.json(data)
+      res.json({ success: true, _id: req.params.id, username: data ? data.username : undefined })
       console.log('User updated successfully !')
     }
   })

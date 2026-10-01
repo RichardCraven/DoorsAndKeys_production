@@ -99,7 +99,16 @@ app.get('/', (req, res) => {
 });
 
 app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', time: Date.now(), uptime: process.uptime() });
+    const isDbConnected = mongoose.connection && mongoose.connection.readyState === 1;
+    res.json({
+        status: 'ok',
+        time: Date.now(),
+        uptime: process.uptime(),
+        database: {
+            connected: isDbConnected,
+            readyState: mongoose.connection ? mongoose.connection.readyState : 0
+        }
+    });
 });
 
 

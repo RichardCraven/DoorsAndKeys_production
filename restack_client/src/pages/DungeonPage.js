@@ -29372,7 +29372,7 @@ class DungeonPage extends React.Component {
                 // board is null -- investigate
                 debugger
             }
-            meta.selectedDungeon = selectedDungeon;
+            meta.selectedDungeon = selectedDungeon ? (selectedDungeon.name || selectedDungeon.id || 'DreamTower') : null;
             meta.spawnPoint = spawnPoint;
             meta.location = {
                 boardIndex: spawnPoint.miniboardIndex,
