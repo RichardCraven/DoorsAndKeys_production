@@ -271,6 +271,13 @@ export function BoardManager(){
             if (contains.type === 'gate' && contains.subtype) {
                 return contains.subtype;
             }
+            if (contains.type) {
+                if ((this.monstersArr && this.monstersArr.includes(contains.type)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(contains.type))) return 'monster';
+                return contains.type;
+            }
+            if (contains.subtype) {
+                if ((this.monstersArr && this.monstersArr.includes(contains.subtype)) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(contains.subtype))) return 'monster';
+            }
             return contains.type;
         }
         // string legacy format
@@ -2462,7 +2469,12 @@ export function BoardManager(){
         if (!c) return false;
         const type = this.getContainsType(c);
         if (type === 'monster' || type === 'pygmies') return true;
-        return (typeof c === 'string' && (this.monstersArr.includes(c) || c === 'pygmies'));
+        if (typeof c === 'string' && (this.monstersArr.includes(c) || c === 'pygmies' || (this.knownMonsterKeys && this.knownMonsterKeys.includes(c)))) return true;
+        if (typeof c === 'object') {
+            const sub = c.subtype || c.type || c.key;
+            if (sub && (this.monstersArr.includes(sub) || sub === 'pygmies' || (this.knownMonsterKeys && this.knownMonsterKeys.includes(sub)))) return true;
+        }
+        return false;
     })
     this.handleInteraction = (destinationTile, options = {}) => {
         if (!destinationTile) return null;
@@ -2514,13 +2526,15 @@ export function BoardManager(){
                     cSubtype.includes('key') || cSubtype.includes('shard') || cSubtype.includes('rune') || cSubtype.includes('book') || cSubtype.includes('tome') || cSubtype.includes('grimoire') || cSubtype.includes('folio') || cSubtype.includes('manual');
 
                 if ((!raw.type || raw.type === null) && raw.subtype) {
-                    if (this.monstersArr.includes(raw.subtype)) {
-                        destinationTile.contains = { type: 'monster', subtype: raw.subtype };
+                    if (this.monstersArr.includes(raw.subtype) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(raw.subtype))) {
+                        destinationTile.contains = { ...raw, type: 'monster', subtype: raw.subtype };
                     } else if (isItemKind) {
-                        destinationTile.contains = { type: 'item', subtype: raw.subtype };
+                        destinationTile.contains = { ...raw, type: 'item', subtype: raw.subtype };
                     } else {
-                        destinationTile.contains = { type: raw.type || null, subtype: raw.subtype || null };
+                        destinationTile.contains = { ...raw, type: raw.type || null, subtype: raw.subtype || null };
                     }
+                } else if (this.monstersArr.includes(cType) || (this.knownMonsterKeys && this.knownMonsterKeys.includes(cType))) {
+                    destinationTile.contains = { ...raw, type: 'monster', subtype: raw.subtype || raw.type };
                 } else if (isItemKind) {
                     let actualSubtype = cSubtype;
                     if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'magical', 'weapon', 'armor'].includes(actualSubtype)) {
@@ -2529,7 +2543,7 @@ export function BoardManager(){
                     if (!actualSubtype || ['key', 'item', 'rune', 'jewel', 'shard', 'consumable', 'spellbook', 'book', 'tome', 'grimoire', 'folio', 'manual', 'engine', 'magical', 'weapon', 'armor'].includes(actualSubtype)) {
                         actualSubtype = 'minor_key';
                     }
-                    destinationTile.contains = { type: 'item', subtype: actualSubtype };
+                    destinationTile.contains = { ...raw, type: 'item', subtype: actualSubtype };
                 }
             }
         } catch (e) {
@@ -3512,7 +3526,7 @@ export function BoardManager(){
                 const subtype = this.getContainsSubtype(destinationTile.contains);
                 this.setMonster(subtype);
             } catch (e) { /* best-effort */ }
-            try { this.triggerMonsterBattle(true, destinationTile.id); } catch (e) { /* best-effort */ }
+            try { this.triggerMonsterBattle(true, destinationTile); } catch (e) { /* best-effort */ }
         }
         if (interaction === 'pygmies') {
             try {

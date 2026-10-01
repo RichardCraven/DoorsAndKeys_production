@@ -2350,15 +2350,27 @@ export function CombatManager() {
         // so the hit still registers and the hp <= 0 death check can fire correctly.
         if (!Number.isFinite(damage) || damage < 0) damage = 1;
 
-        // Determine attack type for weakness checks: prefer pendingAttack.type, but
-        // if this is a special use supplementalData.type when available.
-        const attackType = (caller.pendingAttack && caller.pendingAttack.type) || (supplementalData && supplementalData.type) || null;
+        // Determine attack type for weakness checks: prefer active ability damageType, then type.
+        const activeAbility = (supplementalData && typeof supplementalData === 'object' && supplementalData.id) ? supplementalData : (caller.pendingAttack || null);
+        const damageType = (activeAbility && activeAbility.damageType) || (caller.pendingAttack && caller.pendingAttack.type) || (supplementalData && supplementalData.type) || null;
 
         if (!caller.pendingAttack && !isSpecial) {
             console.log('HOW CAN YOU HIT WITH NO PENDING ATTACK??>', caller);
         } else {
-            if (attackType && Array.isArray(combatantHit.weaknesses) && combatantHit.weaknesses.includes(attackType)) {
-                damage += Math.floor(damage / 2);
+            if (damageType && Array.isArray(combatantHit.weaknesses)) {
+                const dt = String(damageType).toLowerCase();
+                const isWeak = combatantHit.weaknesses.some(w => {
+                    const wl = String(w || '').toLowerCase();
+                    return wl === dt ||
+                           (wl === 'crushing' && dt === 'blunt') || (wl === 'blunt' && dt === 'crushing') ||
+                           (wl === 'cutting' && dt === 'slashing') || (wl === 'slashing' && dt === 'cutting') ||
+                           (wl === 'electricity' && dt === 'lightning') || (wl === 'lightning' && dt === 'electricity') ||
+                           (wl === 'cold' && dt === 'ice') || (wl === 'ice' && dt === 'cold') ||
+                           (wl === 'physical' && ['slashing', 'piercing', 'blunt', 'cutting', 'crushing'].includes(dt));
+                });
+                if (isWeak) {
+                    damage += Math.floor(damage / 2);
+                }
             }
         }
         // Apply armor-based damage reduction via damageCheck
@@ -2596,8 +2608,20 @@ export function CombatManager() {
             damage,
             sourceDirection
         };
-        if (Array.isArray(target.weaknesses) && caller.pendingAttack && typeof caller.pendingAttack.type === 'string') {
-            if (target.weaknesses.includes(caller.pendingAttack.type)) {
+        const activeAbility2 = caller.pendingAttack || null;
+        const damageType2 = (activeAbility2 && activeAbility2.damageType) || (caller.pendingAttack && caller.pendingAttack.type) || null;
+        if (damageType2 && Array.isArray(target.weaknesses)) {
+            const dt = String(damageType2).toLowerCase();
+            const isWeak = target.weaknesses.some(w => {
+                const wl = String(w || '').toLowerCase();
+                return wl === dt ||
+                       (wl === 'crushing' && dt === 'blunt') || (wl === 'blunt' && dt === 'crushing') ||
+                       (wl === 'cutting' && dt === 'slashing') || (wl === 'slashing' && dt === 'cutting') ||
+                       (wl === 'electricity' && dt === 'lightning') || (wl === 'lightning' && dt === 'electricity') ||
+                       (wl === 'cold' && dt === 'ice') || (wl === 'ice' && dt === 'cold') ||
+                       (wl === 'physical' && ['slashing', 'piercing', 'blunt', 'cutting', 'crushing'].includes(dt));
+            });
+            if (isWeak) {
                 damage += Math.floor(damage / 2);
             }
         }

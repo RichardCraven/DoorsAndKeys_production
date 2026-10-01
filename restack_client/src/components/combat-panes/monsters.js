@@ -812,7 +812,7 @@ const MonstersCombatGrid = ({
                             {!battleData[monster.id]?.dead && (
                                 <div className="indicators-wrapper" style={{ display: 'flex', flexDirection: 'column-reverse', position: 'absolute', bottom: 0, left: 0, width: '100%', pointerEvents: 'none' }}>
                                     <div className="monster-hp-bar hp-bar" style={{ position: 'relative', height: '4px' }}>
-                                        <div className="red-fill" style={{ width: `${(battleData[monster.id]?.hp / battleData[monster.id]?.stats.hp) * 100}%` }}></div>
+                                        <div className="red-fill" style={{ width: `${(battleData[monster.id]?.hp / (battleData[monster.id]?.starting_hp || battleData[monster.id]?.stats?.hp || 1)) * 100}%` }}></div>
                                     </div>
                                     {!(battleData[monster.id]?.isFamiliar || (battleData[monster.id]?.type && String(battleData[monster.id]?.type).includes('familiar')) || (battleData[monster.id]?.type && String(battleData[monster.id]?.type).includes('spider'))) && (
                                         combatManager && combatManager.round !== undefined ? (
@@ -1076,7 +1076,7 @@ const MonstersCombatGrid = ({
                                 {!minion.dead && (
                                     <div className="indicators-wrapper" style={{ display: 'flex', flexDirection: 'column-reverse', position: 'absolute', bottom: 0, left: 0, width: '100%', pointerEvents: 'none' }}>
                                         <div className="monster-hp-bar hp-bar" style={{ position: 'relative', height: '4px' }}>
-                                            <div className="red-fill" style={{ width: `${(minion.hp / minion.stats.hp) * 100}%` }}></div>
+                                            <div className="red-fill" style={{ width: `${(minion.hp / (minion.starting_hp || minion.stats?.hp || 1)) * 100}%` }}></div>
                                         </div>
                                         {!(minion.isFamiliar || (minion.type && String(minion.type).includes('familiar')) || (minion.type && String(minion.type).includes('spider'))) && (
                                             combatManager && combatManager.round !== undefined ? (

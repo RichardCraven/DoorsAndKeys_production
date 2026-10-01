@@ -643,22 +643,33 @@ import viking2 from '../assets/icons/crew_icons/viking2.png'
 import viking3 from '../assets/icons/crew_icons/viking3.png'
 
 import monk_portrait from '../assets/portraits/crew/monk/monk_compressed.png'
+import monk_alt_portrait from '../assets/portraits/crew/monk/monk_alt_compressed.png'
 import monk_eyes_glow_white from '../assets/portraits/crew/monk/monk_eyes_glow_white.png'
 import monk_eyes_glow_blue from '../assets/portraits/crew/monk/monk_eyes_glow_blue.png'
 import monk_eyes_glow_green from '../assets/portraits/crew/monk/monk_eyes_glow_green.png'
 import monk_eyes_glow_gold from '../assets/portraits/crew/monk/monk_eyes_glow_gold.png'
 import monk_eyes_glow_red from '../assets/portraits/crew/monk/monk_eyes_glow_red.png'
 import sage_portrait from '../assets/portraits/crew/sage/sage_compressed.png'
+import sage_alt_portrait from '../assets/portraits/crew/sage/sage_alt_compressed.png'
+import sage_alt_grandmotherly_portrait from '../assets/portraits/crew/sage/sage_alt_grandmotherly_compressed.png'
+import sage_alt_shaved_portrait from '../assets/portraits/crew/sage/sage_alt_shaved_compressed.png'
 import wizard_portrait from '../assets/portraits/crew/wizard/wizard_compressed.png'
+import wizard_alt_portrait from '../assets/portraits/crew/wizard/wizard_alt_compressed.png'
 import soldier_portrait from '../assets/portraits/crew/soldier/soldier_compressed.png'
+import soldier_alt_portrait from '../assets/portraits/crew/soldier/soldier_alt_compressed.png'
 import ranger_portrait from '../assets/portraits/crew/rogue/rogue_compressed.png'
+import ranger_alt_portrait from '../assets/portraits/crew/rogue/ranger_alt_compressed.png'
 import ranger_eyes_glow_white from '../assets/portraits/crew/rogue/ranger_eyes_glow_white.png'
 import ranger_eyes_glow_blue from '../assets/portraits/crew/rogue/ranger_eyes_glow_blue.png'
 import ranger_eyes_glow_green from '../assets/portraits/crew/rogue/ranger_eyes_glow_green.png'
 import ranger_eyes_glow_gold from '../assets/portraits/crew/rogue/ranger_eyes_glow_gold.png'
 import ranger_eyes_glow_red from '../assets/portraits/crew/rogue/ranger_eyes_glow_red.png'
 import barbarian_portrait from '../assets/portraits/crew/barbarian/barbarian_compressed.png'
+import barbarian_alt_portrait from '../assets/portraits/crew/barbarian/barbarian_alt_compressed.png'
+import engineer_alt_portrait from '../assets/portraits/crew/engineer/engineer_alt_compressed.png'
+import summoner_alt_portrait from '../assets/portraits/crew/summoner/summoner_alt_compressed.png'
 import glitterburn_portrait from '../assets/portraits/crew/glitterburn/glitterburn_compressed.png'
+import glitterburn_alt_portrait from '../assets/portraits/crew/glitterburn/glitterburn_alt_compressed.png'
 
 import ogre_portrait from '../assets/portraits/monsters/ogre.png'
 import goblin_thief_portrait from '../assets/portraits/monsters/goblin_thief.png'
@@ -1086,6 +1097,7 @@ import savage_haul_barbarian from '../assets/icons/global skills/Barbarian/savag
 import bloodhound_barbarian from '../assets/icons/global skills/Barbarian/bloodhound.png';
 import endure_barbarian from '../assets/icons/global skills/Barbarian/endure.png';
 import swift_step_monk from '../assets/icons/global skills/Monk/swift step.png';
+import silent_awareness_monk from '../assets/icons/global skills/Monk/silent awareness.png';
 import pressure_points_monk from '../assets/icons/global skills/Monk/pressure points.png';
 import astral_map_monk from '../assets/icons/global skills/Monk/astral map.png';
 import spirit_sight_summoner from '../assets/icons/global skills/Summoner/spirit sight.png';
@@ -1093,6 +1105,11 @@ import plunder_summoner from '../assets/icons/global skills/Summoner/plunder.png
 import soul_tap_summoner from '../assets/icons/global skills/Summoner/sould tap.png';
 import soul_tithe_summoner from '../assets/icons/global skills/Summoner/soul tithe.png';
 import dark_pact_summoner from '../assets/icons/global skills/Summoner/dark pact.png';
+import healing_ground_sage from '../assets/icons/global skills/Sage/healing ground.png';
+import sing_sage from '../assets/icons/global skills/Sage/sing.png';
+import sneak_attack_ranger from '../assets/icons/global skills/Ranger/sneak attack.png';
+import spike_trap_ranger from '../assets/icons/global skills/Ranger/spike trap.png';
+import shield_soldier from '../assets/icons/global skills/Soldier/shield.png';
 
 
 //terrain
@@ -2254,23 +2271,51 @@ export {
     viking3,
 
     monk_portrait,
+    monk_alt_portrait,
     monk_eyes_glow_white,
     monk_eyes_glow_blue,
     monk_eyes_glow_green,
     monk_eyes_glow_gold,
     monk_eyes_glow_red,
     sage_portrait,
+    sage_alt_portrait,
+    sage_alt_grandmotherly_portrait,
+    sage_alt_shaved_portrait,
+    sage_alt_shaved_portrait as sage_alt_shaved,
     wizard_portrait,
+    wizard_alt_portrait,
     ranger_portrait,
+    ranger_alt_portrait,
     ranger_eyes_glow_white,
     ranger_eyes_glow_blue,
     ranger_eyes_glow_green,
     ranger_eyes_glow_gold,
     ranger_eyes_glow_red,
     barbarian_portrait,
+    barbarian_alt_portrait,
     soldier_portrait,
+    soldier_alt_portrait,
+    engineer_alt_portrait,
+    engineer_alt_portrait as engineer_alt,
+    summoner_alt_portrait,
+    summoner_alt_portrait as summoner_alt,
     glitterburn_portrait,
+    glitterburn_alt_portrait,
+    glitterburn_alt_portrait as glitterburn_alt,
     glitterburn_portrait as glitterburn,
+
+    healing_ground_sage,
+    healing_ground_sage as healing_ground,
+    sing_sage,
+    sing_sage as sing,
+    sneak_attack_ranger,
+    sneak_attack_ranger as sneak_attack,
+    spike_trap_ranger,
+    spike_trap_ranger as spike_trap,
+    shield_soldier,
+    shield_soldier as soldier_shield,
+    shield_soldier as shield,
+    breacher_soldier as breacher,
 
     ogre_portrait,
     goblin_thief_portrait,
@@ -2713,6 +2758,7 @@ export {
     bloodhound_barbarian,
     endure_barbarian,
     swift_step_monk,
+    silent_awareness_monk,
     pressure_points_monk,
     astral_map_monk,
     spirit_sight_summoner,
@@ -2989,24 +3035,42 @@ export {
 
 const portraitMap = {
     barbarian: barbarian_portrait || barbarian,
+    barbarian_alt: barbarian_alt_portrait,
     soldier: soldier_portrait || soldier,
+    soldier_alt: soldier_alt_portrait,
     monk: monk_portrait || monk,
+    monk_alt: monk_alt_portrait,
     wizard: wizard_portrait || wizard,
+    wizard_alt: wizard_alt_portrait,
     ranger: ranger_portrait || ranger,
+    ranger_alt: ranger_alt_portrait,
     rogue: ranger_portrait || ranger,
     sage: sage_portrait || sage,
+    sage_alt: sage_alt_portrait,
+    sage_alt_grandmotherly: sage_alt_grandmotherly_portrait,
+    sage_alt_shaved: sage_alt_shaved_portrait,
     engineer: engineer,
+    engineer_alt: engineer_alt_portrait,
     summoner: summoner,
-    glitterburn: glitterburn_portrait
+    summoner_alt: summoner_alt_portrait,
+    glitterburn: glitterburn_portrait,
+    glitterburn_alt: glitterburn_alt_portrait
 };
 
 export const getCrewPortraitBackground = (portraitUrl, classType) => {
+    if (portraitUrl) {
+        return typeof portraitUrl === 'string' && portraitUrl.startsWith('url(')
+            ? portraitUrl
+            : `url("${portraitUrl}")`;
+    }
     const key = (classType || '').toLowerCase().replace('-', '_');
     const fallback = portraitMap[key] || soldier_portrait || soldier || '';
-    if (portraitUrl && fallback && portraitUrl !== fallback) {
-        return `url("${portraitUrl}"), url("${fallback}")`;
+    if (fallback) {
+        return typeof fallback === 'string' && fallback.startsWith('url(')
+            ? fallback
+            : `url("${fallback}")`;
     }
-    return `url("${portraitUrl || fallback}")`;
+    return 'none';
 };
 
 

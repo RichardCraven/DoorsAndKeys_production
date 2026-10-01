@@ -64,10 +64,12 @@ const axes = [
     'drakebane_axe'
 ];
 
+export const STARTING_GOLD = 100;
+
 export function InventoryManager() {
     this.tiles = [];
     this.inventory = [];
-    this.gold = 0;
+    this.gold = STARTING_GOLD;
     this.shimmering_dust = 0;
     this.totems = 0;
 
@@ -1467,6 +1469,8 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'wand',
             power: 1,
+            charges: 5,
+            special: 'each combat skill has a 30% chance to skip the cooldown phase, a 20% chance to instantly gain 20% ultimate power, and (if it is a damage skill) a 15% chance to do double damage. If any of these effects trigger it uses a charge',
             description: 'Wand favored by mages, offering a blend of magical power and versatility.'
         },
         animus_wand: {
@@ -1477,6 +1481,8 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'wand',
             power: 1,
+            charges: 8,
+            special: 'each damage skill that successfully deals damage will deal x additional damage, where x is (2x the number of charges currently on this wand). each trigger uses a charge',
             description: 'Wand favored by animus, offering a blend of magical power and versatility.'
         },
         glyndas_wand: {
@@ -1487,7 +1493,9 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'wand',
             power: 1,
-            description: "Wand favored by Glynda, offering a blend of magical power and versatility."
+            charges: 4,
+            special: 'each combat skill that targets an enemy has a 50% chance to teleport them to the back line. this effect does not trigger until round 3 or later, and uses a charge',
+            description: "Wand favored by Glynda, who keeps her foes at a distance."
         },
         justicator_wand: {
             tier: 2,
@@ -1497,6 +1505,8 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'wand',
             power: 2,
+            charges: 2,
+            special: 'each combat skill that targets an enemy has a 30% chance to apply the sleep effect to them for 2 turns. If it does this uses a charge',
             description: 'Wand favored by justicators, offering a blend of magical power and justice.'
         },
         willowcaster: {
@@ -1507,6 +1517,8 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'wand',
             power: 2,
+            charges: 10,
+            special: 'each combat skill has a 15% chance to not trigger a cooldown step',
             description: 'Wand favored by willows, offering a blend of magical power and versatility.'
         },
         // staves
@@ -1518,6 +1530,7 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'staff',
             power: 1,
+            special: 'each combat skill has a 30% chance to not trigger a cooldown step',
             description: "Staff favored by archmages, offering a blend of magical power and wisdom."
         },
         enchanters_staff: {
@@ -1528,6 +1541,7 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'staff',
             power: 1,
+            special: 'each buff spell has a 30% chance to double the duration',
             description: "Staff favored by enchanters, offering a blend of magical power and enchantment."
         },
         imperial_mage_staff: {
@@ -1538,6 +1552,7 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'staff',
             power: 1,
+            special: 'each combat skill has a 25% chance to do double damage, and a 25% chance to instantly gain 25% power',
             description: "Staff favored by imperial mages, offering a blend of magical power and authority."
         },
         staff_of_espilon: {
@@ -1548,6 +1563,7 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'staff',
             power: 2,
+            special: 'each buff spell has a 25% chance to triple the duration and grant the recipient 25% hp shield',
             description: "Staff favored by Espilon, offering a blend of magical power and wisdom."
         },
         staff_of_marduk: {
@@ -1558,6 +1574,7 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'staff',
             power: 2,
+            special: 'each combat skill has a 50% chance to ignore armor and deal true damage',
             description: "Staff favored by Marduk, offering a blend of magical power and wisdom."
         },
         staff_of_omicron: {
@@ -1568,6 +1585,7 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'staff',
             power: 2,
+            special: 'each combat skill has a 15% chance to apply blinding speed to the user, and a 15% chance to completely refill the stamina of the user',
             description: "Staff favored by Omicron, offering a blend of magical power and wisdom."
         },
         staff_of_tomorrow: {
@@ -1578,6 +1596,7 @@ export function InventoryManager() {
             equippedBy: null,
             subtype: 'staff',
             power: 3,
+            special: 'each combat skill has a 20% chance to do triple damage (if it is a damage spell), and a 25% chance to instantly gain 50% power',
             description: "Staff favored by the seers of tomorrow, offering a blend of magical power and foresight."
         },
         //charms < charms can only be used once per battle
@@ -2860,7 +2879,7 @@ export function InventoryManager() {
         const itemsArray = Array.isArray(data) ? data : (data && Array.isArray(data.items) ? data.items : null);
         if (!data || itemsArray === null) {
             this.inventory = this.getStarterPack();
-            this.gold = 0;
+            this.gold = STARTING_GOLD;
             this.shimmering_dust = 0;
             this.totems = 0;
             this.wood = 0;
@@ -2891,7 +2910,7 @@ export function InventoryManager() {
                     return null;
                 }
             }).filter(v => v !== null);
-            this.gold = (data && typeof data.gold === 'number') ? data.gold : 0;
+            this.gold = (data && typeof data.gold === 'number') ? data.gold : STARTING_GOLD;
             this.shimmering_dust = (data && typeof data.shimmering_dust === 'number') ? data.shimmering_dust : 0;
             this.totems = (data && typeof data.totems === 'number') ? data.totems : 0;
             this.wood = (data && typeof data.wood === 'number') ? data.wood : 0;

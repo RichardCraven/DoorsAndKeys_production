@@ -26,12 +26,38 @@ export function getArcaneCards() {
     return ALL_CARDS.filter(c => c.type === 'arcane');
 }
 
+export function createEchoCardForMonster(monsterType) {
+    if (!monsterType) return null;
+    const formattedName = monsterType
+        .split('_')
+        .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ');
+    return {
+        id: `echo_${monsterType}`,
+        type: 'echo',
+        monsterType,
+        name: formattedName,
+        energyCost: 1,
+        effect: { type: 'damage', amount: 4 },
+        rarity: 'common',
+        text: `Echo of ${formattedName}. Deal 4 damage to the Reaper.`,
+        art: `${monsterType}_portrait`
+    };
+}
+
 export function getEchoCardForMonster(monsterType) {
-    return ALL_CARDS.find(c => c.type === 'echo' && c.monsterType === monsterType) || null;
+    if (!monsterType) return null;
+    return ALL_CARDS.find(c => c.type === 'echo' && c.monsterType === monsterType) || createEchoCardForMonster(monsterType);
 }
 
 export function getCard(id) {
-    return ALL_CARDS.find(c => c.id === id) || null;
+    if (!id) return null;
+    const found = ALL_CARDS.find(c => c.id === id);
+    if (found) return found;
+    if (typeof id === 'string' && id.startsWith('echo_')) {
+        return createEchoCardForMonster(id.slice(5));
+    }
+    return null;
 }
 
 // ─── Class ability definitions ────────────────────────────────────────────────
@@ -254,7 +280,21 @@ export function reaperStartingSoul(dungeonDepth) {
  */
 export function getForgeableEchos(soulShards) {
     const shards = soulShards || {};
-    return getEchoCards().map(card => ({
+    const echos = [...getEchoCards()];
+    const existingMonsterTypes = new Set(echos.map(e => e.monsterType));
+
+    // Append dynamic fallback cards for any monster types present in player's soulShards that aren't in cards.json
+    Object.keys(shards).forEach(mType => {
+        if (mType && !existingMonsterTypes.has(mType) && (shards[mType] || 0) > 0) {
+            const dynamicCard = createEchoCardForMonster(mType);
+            if (dynamicCard) {
+                echos.push(dynamicCard);
+                existingMonsterTypes.add(mType);
+            }
+        }
+    });
+
+    return echos.map(card => ({
         card,
         monsterType: card.monsterType,
         shardsHave: shards[card.monsterType] || 0,

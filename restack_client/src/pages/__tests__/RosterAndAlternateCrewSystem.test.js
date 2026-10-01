@@ -37,6 +37,26 @@ describe('Roster and Alternate Crew System', () => {
 
         const portraitContainers = container.querySelectorAll('.selected-crew-portrait-container');
         expect(portraitContainers.length).toBe(5);
+
+        // Leader slot (slot 0) is enlarged (125px) with Leader label
+        const leaderSlot = portraitContainers[0];
+        expect(leaderSlot.style.width).toBe('125px');
+        expect(leaderSlot.style.height).toBe('125px');
+        expect(leaderSlot.textContent).toContain('Leader');
+
+        // Remaining in-dungeon slots (1, 2) are standard 101px
+        expect(portraitContainers[1].style.width).toBe('101px');
+        expect(portraitContainers[2].style.width).toBe('101px');
+
+        // Verify In-Dungeon Crew text is placed to the right of the leader slot (not inside or wrapping slot 0)
+        const inDungeonTray = container.querySelector('.in-dungeon-crew-tray');
+        expect(inDungeonTray).toBeTruthy();
+        expect(inDungeonTray.children[0]).toBe(leaderSlot);
+        const slots1And2Group = inDungeonTray.children[1];
+        expect(slots1And2Group.textContent).toContain('In-Dungeon Crew (3 Slots)');
+        expect(slots1And2Group.contains(portraitContainers[1])).toBe(true);
+        expect(slots1And2Group.contains(portraitContainers[2])).toBe(true);
+        expect(slots1And2Group.contains(leaderSlot)).toBe(false);
     });
 
     test('Adding 5 members assigns first 3 to In-Dungeon crew and next 2 to Alternate crew', async () => {

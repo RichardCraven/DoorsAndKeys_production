@@ -29,6 +29,8 @@ Below is the complete inventory of sandbox combat animations, detailing their im
 | **Ranger** | **Notch Sub-Menu** | 4 absolute positioned buttons arranged in a fanned circular arc above the ability button. | **Low** | Rendered only in UI panel, not on grid. Safe. |
 | **Ranger** | **Arrow Projectiles** (Force, Ice, Celestial) | 60px length container with arrow shaft (`clipPath` tapered wedge) and arrowhead (CSS triangle). | **Medium** | Relies on `left`/`top` transitions which trigger layout paints. |
 | **Ranger** | **Poison Arrow Trail** | Spawns 8 sequential circles animated via `@keyframes dripAndFade` (translateY & scale). | **High** | **First Priority to Port.** Spawns 8 short-lived DOM elements *per arrow*. High frequency causes garbage collection spikes. |
+| **Global** | **Shielded** | Absorbs $X$ damage via `shieldAmount` before breaking. Styled with blue aura ring (`shielded.png`). | **Low** | Single status icon repaint. Extremely lightweight. |
+| **Global** | **Blinding Speed** | Grants +1 extra move and +1 extra attack/action per round (total 2 moves, 2 attacks). | **Low** | State-driven round modifier. Safe at any scale. |
 | **Ranger** | **Mark** | Dashed outer ring rotating via `spin` + solid crosshair lines. | **Low** | Simple CSS rotation. |
 | **Ranger** | **Execute** | Fires three 60px arrow projectiles in rapid sequence (0ms, 150ms, 300ms delays). | **Medium** | Spawns 3 concurrent moving arrows + up to 15 poison trail drips. |
 

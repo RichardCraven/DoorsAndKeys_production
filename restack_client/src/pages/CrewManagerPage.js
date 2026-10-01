@@ -10,6 +10,7 @@ import {
 } from '../utils/api-handler';
 import { InventoryManager } from '../utils/inventory-manager';
 import { getCrewPortraitBackground } from '../utils/images';
+import { getReflectedDescription } from '../utils/crew-manager';
 import '../styles/codex.scss';
 
 const renderPowerRatingsPanel = (crewMember) => {
@@ -263,7 +264,10 @@ class CrewManagerPage extends React.Component {
                     (a.image && a.image === (e.image || e.type)) ||
                     (a.type && a.type === (e.type || e.image))
                 );
-                if (template && !e.portrait) e.portrait = template.portrait;
+                if (template) {
+                    if (!e.portrait) e.portrait = template.portrait;
+                    if (!e.portraitOptions && template.portraitOptions) e.portraitOptions = template.portraitOptions;
+                }
                 selectedCrew[i] = e;
             });
         }
@@ -277,12 +281,43 @@ class CrewManagerPage extends React.Component {
                     (a.image && a.image === (e.image || e.type)) ||
                     (a.type && a.type === (e.type || e.image))
                 );
-                if (template && !e.portrait) e.portrait = template.portrait;
+                if (template) {
+                    if (!e.portrait) e.portrait = template.portrait;
+                    if (!e.portraitOptions && template.portraitOptions) e.portraitOptions = template.portraitOptions;
+                }
                 selectedCrew[3 + i] = e;
             });
         }
 
+        // Synchronize options with any saved members' portrait/variant
+        options = options.map(opt => {
+            const saved = [...selectedCrew].find(c => c && (c.id === opt.id || c.type === opt.type));
+            if (saved && opt.portraitOptions && opt.portraitOptions.length > 1) {
+                const matchVariant = opt.portraitOptions.find(p =>
+                    (saved.portrait && p.portrait === saved.portrait) ||
+                    (saved.image && p.image === saved.image) ||
+                    (saved.name && p.name && saved.name.toLowerCase() === p.name.toLowerCase())
+                );
+                if (matchVariant) {
+                    return {
+                        ...opt,
+                        portrait: matchVariant.portrait,
+                        image: matchVariant.image || opt.image,
+                        name: saved.name || matchVariant.name,
+                        portraitIndex: opt.portraitOptions.indexOf(matchVariant)
+                    };
+                }
+            }
+            return opt;
+        });
+
         const firstSelected = selectedCrew.find(c => c !== null) || options[0] || null;
+        if (firstSelected && !firstSelected.portraitOptions) {
+            const matchingAdv = adventurers.find(a => (a.id && a.id === firstSelected.id) || (a.type && a.type === firstSelected.type));
+            if (matchingAdv && matchingAdv.portraitOptions) {
+                firstSelected.portraitOptions = matchingAdv.portraitOptions;
+            }
+        }
 
         this.setState({
             options,
@@ -293,6 +328,7 @@ class CrewManagerPage extends React.Component {
     }
 
     componentWillUnmount() {
+        clearTimeout(this.timer);
         window.removeEventListener('keydown', this.handleKeyDown);
     }
 
@@ -325,18 +361,134 @@ class CrewManagerPage extends React.Component {
         // }
     }
     singleClick = (crewMember) => {
+        if (!crewMember) return;
+        const template = (this.props.crewManager && this.props.crewManager.adventurers && this.props.crewManager.adventurers.find(a => a.id === crewMember.id || a.type === crewMember.type));
+        if (template && template.portraitOptions && !crewMember.portraitOptions) {
+            crewMember.portraitOptions = template.portraitOptions;
+        }
         this.setState({
             selectedCrewMember: crewMember
         })
     }
+    toggleCrewMemberPortrait = (event, targetMember) => {
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        const member = targetMember || this.state.selectedCrewMember;
+        if (!member) return;
+
+        const { options, selectedCrew, selectedCrewMember } = this.state;
+        const adventurers = (this.props.crewManager && this.props.crewManager.adventurers) || [];
+        const template = adventurers.find(a => a.id === member.id || a.type === member.type);
+
+        const portraitOptions = member.portraitOptions || (template && template.portraitOptions);
+        if (!portraitOptions || portraitOptions.length <= 1) return;
+
+        // Determine current index
+        const currentPortrait = member.portrait;
+        let currentIndex = portraitOptions.findIndex(p => p.portrait === currentPortrait);
+        if (currentIndex === -1 && typeof member.portraitIndex === 'number') {
+            currentIndex = member.portraitIndex;
+        }
+        if (currentIndex === -1) {
+            currentIndex = 0;
+        }
+
+        const nextIndex = (currentIndex + 1) % portraitOptions.length;
+        const currentOpt = portraitOptions[currentIndex];
+        const nextOpt = portraitOptions[nextIndex];
+
+        const currentDefaultName = currentOpt ? (currentOpt.defaultName || currentOpt.name) : null;
+        const nextDefaultName = nextOpt ? (nextOpt.defaultName || nextOpt.name) : null;
+
+        const getUpdatedName = (existingName) => {
+            if (!existingName) return nextDefaultName || existingName;
+            if (currentDefaultName && existingName.trim().toLowerCase() === currentDefaultName.trim().toLowerCase()) {
+                return nextDefaultName || existingName;
+            }
+            return existingName;
+        };
+
+        // Update options array
+        const updatedOptions = options.map(o => {
+            if (o && (o.id === member.id || o.type === member.type)) {
+                const nextName = getUpdatedName(o.name);
+                return {
+                    ...o,
+                    portrait: nextOpt.portrait,
+                    image: nextOpt.image || o.image,
+                    portraitIndex: nextIndex,
+                    portraitOptions: portraitOptions,
+                    name: nextName,
+                    description: getReflectedDescription(o.description, nextName, o)
+                };
+            }
+            return o;
+        });
+
+        // Update selectedCrew (bottom tray) if this member is assigned
+        const updatedSelectedCrew = selectedCrew.map(c => {
+            if (c && (c.id === member.id || c.type === member.type)) {
+                const nextName = getUpdatedName(c.name);
+                return {
+                    ...c,
+                    portrait: nextOpt.portrait,
+                    image: nextOpt.image || c.image,
+                    portraitIndex: nextIndex,
+                    portraitOptions: portraitOptions,
+                    name: nextName,
+                    description: getReflectedDescription(c.description, nextName, c)
+                };
+            }
+            return c;
+        });
+
+        // Update selectedCrewMember
+        let updatedSelectedMember = selectedCrewMember;
+        if (selectedCrewMember && (selectedCrewMember.id === member.id || selectedCrewMember.type === member.type)) {
+            const nextName = getUpdatedName(selectedCrewMember.name);
+            updatedSelectedMember = {
+                ...selectedCrewMember,
+                portrait: nextOpt.portrait,
+                image: nextOpt.image || selectedCrewMember.image,
+                portraitIndex: nextIndex,
+                portraitOptions: portraitOptions,
+                name: nextName,
+                description: getReflectedDescription(selectedCrewMember.description, nextName, selectedCrewMember)
+            };
+        }
+
+        this.setState({
+            options: updatedOptions,
+            selectedCrew: updatedSelectedCrew,
+            selectedCrewMember: updatedSelectedMember
+        });
+
+        if (template) {
+            template.portrait = nextOpt.portrait;
+            template.image = nextOpt.image || template.image;
+            template.portraitIndex = nextIndex;
+            template.name = getUpdatedName(template.name);
+            template.description = getReflectedDescription(template.description, template.name, template);
+        }
+    };
     doubleClickCrewMember = (crewMember) => {
         if (!crewMember || crewMember.disabled || crewMember.locked) return;
-        const savedMember = this.state.selectedCrew.find(c => c && (c.id === crewMember.id || c.name === crewMember.name));
+        const savedMember = this.state.selectedCrew.find(c => c && (
+            (c.id && crewMember.id && c.id === crewMember.id) ||
+            (c.name && crewMember.name && c.name === crewMember.name) ||
+            (c.type && crewMember.type && c.type === crewMember.type)
+        ));
         const memberToUse = savedMember || crewMember;
 
         let crew = [...this.state.selectedCrew];
         while (crew.length < 5) crew.push(null);
-        if (!crew.some(c => c && (c.id === memberToUse.id || c.name === memberToUse.name))) {
+        if (!crew.some(c => c && (
+            (c.id && memberToUse.id && c.id === memberToUse.id) ||
+            (c.name && memberToUse.name && c.name === memberToUse.name) ||
+            (c.type && memberToUse.type && c.type === memberToUse.type)
+        ))) {
             const emptyIdx = crew.findIndex(c => c === null);
             if (emptyIdx !== -1) {
                 crew[emptyIdx] = memberToUse;
@@ -368,7 +520,11 @@ class CrewManagerPage extends React.Component {
         let crew = [...this.state.selectedCrew];
         while (crew.length < 5) crew.push(null);
 
-        if (crew.some(c => c && (c.id === member.id || c.name === member.name))) return;
+        if (crew.some(c => c && (
+            (c.id && member.id && c.id === member.id) ||
+            (c.name && member.name && c.name === member.name) ||
+            (c.type && member.type && c.type === member.type)
+        ))) return;
 
         let insertIdx = (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex < 5) ? targetIndex : -1;
         if (insertIdx === -1 || crew[insertIdx] !== null) {
@@ -625,18 +781,19 @@ class CrewManagerPage extends React.Component {
         if (!selectedCrewMember) return;
 
         const targetId = selectedCrewMember.id;
-        const updatedSelectedMember = { ...selectedCrewMember, name: newName };
+        const updatedDesc = getReflectedDescription(selectedCrewMember.description, newName, selectedCrewMember);
+        const updatedSelectedMember = { ...selectedCrewMember, name: newName, description: updatedDesc };
 
         const updatedSelectedCrew = selectedCrew.map(c => {
             if (c && (c.id === targetId || (c.type === selectedCrewMember.type && c.id === selectedCrewMember.id))) {
-                return { ...c, name: newName };
+                return { ...c, name: newName, description: updatedDesc };
             }
             return c;
         });
 
         const updatedOptions = options.map(o => {
             if (o && o.id === targetId) {
-                return { ...o, name: newName };
+                return { ...o, name: newName, description: updatedDesc };
             }
             return o;
         });
@@ -650,8 +807,87 @@ class CrewManagerPage extends React.Component {
         // Also update adventurers array in crewManager prop if available
         if (this.props.crewManager && Array.isArray(this.props.crewManager.adventurers)) {
             const adv = this.props.crewManager.adventurers.find(a => a.id === targetId);
-            if (adv) adv.name = newName;
+            if (adv) {
+                adv.name = newName;
+                adv.description = updatedDesc;
+            }
         }
+    };
+
+    renderCrewTraySlot = (i) => {
+        const member = this.state.selectedCrew[i];
+        const isLeader = i === 0;
+        const slotSize = isLeader ? '125px' : '101px';
+        return (
+            <div
+                key={i}
+                className="selected-crew-portrait-container"
+                style={{
+                    width: slotSize,
+                    height: slotSize,
+                    position: 'relative',
+                    ...(isLeader ? {
+                        border: '1.5px solid #f9b115',
+                        boxShadow: '0 0 12px rgba(249, 177, 21, 0.45)'
+                    } : (i >= 3 ? {
+                        border: '1px dashed rgba(255, 255, 255, 0.25)'
+                    } : {}))
+                }}
+            >
+                {isLeader && (
+                    <div style={{
+                        position: 'absolute',
+                        top: '-26px',
+                        left: '0',
+                        right: '0',
+                        textAlign: 'center',
+                        fontSize: '11px',
+                        fontWeight: 'bold',
+                        color: '#f9b115',
+                        fontFamily: "'Cinzel', serif",
+                        letterSpacing: '0.1em',
+                        textTransform: 'uppercase',
+                        whiteSpace: 'nowrap',
+                        pointerEvents: 'none'
+                    }}>
+                        Leader
+                    </div>
+                )}
+                {!this.state.isRosterLocked && (
+                    <div
+                        className={`add-button ${member ? 'occupied' : (!this.state.selectedCrewMember || this.state.selectedCrewMember.disabled || this.state.selectedCrewMember.locked ? 'disabled' : '')}`}
+                        onClick={() => member ? this.removeMember(i) : this.addMember(i)}
+                    >
+                        {member ? '\u2296' : '\u2295'}
+                    </div>
+                )}
+                {member && (
+                    <div
+                        className="portrait"
+                        data-name={member.name}
+                        data-type={member.type || member.image}
+                        title={member.name}
+                        style={{ backgroundImage: getCrewPortraitBackground(member.portrait, member.type || member.image), position: 'relative', width: '100%', height: '100%' }}
+                    >
+                        <span style={{
+                            position: 'absolute',
+                            bottom: '2px',
+                            right: '4px',
+                            background: 'rgba(0,0,0,0.85)',
+                            color: '#f9b115',
+                            padding: '1px 5px',
+                            borderRadius: '3px',
+                            fontSize: '9px',
+                            fontWeight: 'bold',
+                            fontFamily: 'Outfit, sans-serif',
+                            border: '1px solid rgba(249,177,21,0.2)'
+                        }}>
+                            Lvl {member.level || 1}
+                        </span>
+                    </div>
+                )}
+            </div>
+        );
     };
 
     render() {
@@ -669,20 +905,30 @@ class CrewManagerPage extends React.Component {
                         <div className="crew-options">
                             {this.state.options.map((e, i) => {
                                 const isSelected = this.state.selectedCrewMember && (
-                                    this.state.selectedCrewMember.id === e.id || this.state.selectedCrewMember.name === e.name
+                                    this.state.selectedCrewMember.id === e.id || this.state.selectedCrewMember.name === e.name || (this.state.selectedCrewMember.type && e.type && this.state.selectedCrewMember.type === e.type)
                                 );
-                                const savedMember = this.state.selectedCrew.find(c => c && (c.id === e.id || c.name === e.name));
+                                const savedMember = this.state.selectedCrew.find(c => c && (
+                                    (c.id && e.id && c.id === e.id) ||
+                                    (c.name && e.name && c.name === e.name) ||
+                                    (c.type && e.type && c.type === e.type)
+                                ));
                                 const displayLevel = savedMember ? (savedMember.level || 1) : (e.level || 1);
                                 const isDisabled = !!(e.disabled || e.locked);
+                                const isAssigned = !isDisabled && !!savedMember;
                                 return (
                                     <div
-                                        className={`portrait${isSelected ? ' selected' : ''}${isDisabled ? ' disabled locked' : ''}`}
+                                        className={`portrait${isSelected ? ' selected' : ''}${isDisabled ? ' disabled locked' : ''}${isAssigned ? ' assigned' : ''}`}
                                         key={i}
+                                        data-type={e.type || e.image}
+                                        data-name={e.name}
                                         style={{
                                             backgroundImage: getCrewPortraitBackground(e.portrait, e.type || e.image),
                                             position: 'relative',
                                             cursor: isDisabled ? 'not-allowed' : 'pointer',
-                                            filter: isDisabled ? 'brightness(0.6) grayscale(0.2)' : 'none'
+                                            filter: isDisabled
+                                                ? 'brightness(0.6) grayscale(0.2)'
+                                                : (isAssigned ? 'grayscale(1) brightness(0.4) contrast(0.85)' : undefined),
+                                            opacity: isAssigned ? 0.55 : 1
                                         }}
                                         onClick={(event) => this.selectCrewMember(event, e)}
                                     >
@@ -707,17 +953,26 @@ class CrewManagerPage extends React.Component {
                                             bottom: '2px',
                                             right: '4px',
                                             background: 'rgba(0,0,0,0.85)',
-                                            color: isDisabled ? '#888888' : '#f9b115',
+                                            color: isDisabled ? '#888888' : (isAssigned ? '#9ca3af' : '#f9b115'),
                                             padding: '1px 5px',
                                             borderRadius: '3px',
                                             fontSize: '9px',
                                             fontWeight: 'bold',
                                             fontFamily: 'Outfit, sans-serif',
-                                            border: `1px solid ${isDisabled ? 'rgba(136,136,136,0.3)' : 'rgba(249,177,21,0.2)'}`,
+                                            border: `1px solid ${isDisabled ? 'rgba(136,136,136,0.3)' : (isAssigned ? 'rgba(156,163,175,0.3)' : 'rgba(249,177,21,0.2)')}`,
                                             zIndex: 2
                                         }}>
                                             {isDisabled ? 'Locked' : `Lvl ${displayLevel}`}
                                         </span>
+                                        {e.portraitOptions && e.portraitOptions.length > 1 && !isDisabled && (
+                                            <button
+                                                className="crew-option-portrait-toggle"
+                                                onClick={(evt) => this.toggleCrewMemberPortrait(evt, e)}
+                                                title={`Switch portrait (${e.name})`}
+                                            >
+                                                ⇄
+                                            </button>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -729,18 +984,28 @@ class CrewManagerPage extends React.Component {
                                         className="giant-portrait"
                                         style={{
                                             backgroundImage: getCrewPortraitBackground(this.state.selectedCrewMember.portrait, this.state.selectedCrewMember.type || this.state.selectedCrewMember.image),
-                                            ...(this.state.selectedCrewMember.name === 'Sardonis' ? {
+                                            ...(this.state.selectedCrewMember.name === 'Sardonis' || this.state.selectedCrewMember.type === 'soldier' || this.state.selectedCrewMember.image === 'soldier' || this.state.selectedCrewMember.image === 'soldier_alt' ? {
                                                 backgroundSize: '90% 90%',
                                                 backgroundPosition: 'center'
                                             } : {
                                                 backgroundSize: '100% 100%',
                                                 backgroundPosition: 'center'
                                             }),
-                                            backgroundRepeat: 'no-repeat'
+                                            backgroundRepeat: 'no-repeat',
+                                            position: 'relative'
                                         }}
                                     >
                                         {/* <div className="add-button" onClick={()=>this.addMember()}>+</div> */}
                                     </div>
+                                    {this.state.selectedCrewMember.portraitOptions && this.state.selectedCrewMember.portraitOptions.length > 1 && (
+                                        <button
+                                            className="portrait-toggle-btn"
+                                            onClick={(evt) => this.toggleCrewMemberPortrait(evt, this.state.selectedCrewMember)}
+                                            title="Toggle alternate character portrait"
+                                        >
+                                            <span style={{ fontSize: '13px' }}>⇄</span> Switch Portrait
+                                        </button>
+                                    )}
                                 </div>
                             }
                             {this.state.selectedCrewMember && <div className="details-pane" style={{ marginRight: '15px' }}>
@@ -778,7 +1043,7 @@ class CrewManagerPage extends React.Component {
                                     </span>
                                 </div>
                                 <div className="description" style={{ marginTop: '8px', fontSize: '13px', color: '#ccc', lineHeight: '1.4', maxWidth: '200px' }}>
-                                    {this.state.selectedCrewMember.description}
+                                    {getReflectedDescription(this.state.selectedCrewMember.description, this.state.selectedCrewMember.name, this.state.selectedCrewMember)}
                                 </div>
                             </div>}
                             {this.state.selectedCrewMember && <div className="stats-pane" style={{ minWidth: '260px', marginRight: '15px' }}>
@@ -842,131 +1107,37 @@ class CrewManagerPage extends React.Component {
                         )}
                         <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-end', marginTop: '10px' }}>
                             {/* In-Dungeon Group (Slots 0, 1, 2) */}
-                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#f9b115', fontFamily: "'Cinzel', serif", letterSpacing: '0.08em', marginBottom: '4px', textTransform: 'uppercase' }}>
-                                    In-Dungeon Crew (3 Slots)
-                                </div>
-                                <div className="crew-tray" style={{ position: 'relative', alignItems: 'flex-end', gap: '8px' }}>
-                                    {[0, 1, 2].map((i) => {
-                                        const member = this.state.selectedCrew[i];
-                                        const isLeader = i === 0;
-                                        const slotSize = isLeader ? '125px' : '101px';
-                                        return (
-                                            <div
-                                                key={i}
-                                                className="selected-crew-portrait-container"
-                                                style={{
-                                                    width: slotSize,
-                                                    height: slotSize,
-                                                    position: 'relative',
-                                                    ...(isLeader ? {
-                                                        border: '1.5px solid #f9b115',
-                                                        boxShadow: '0 0 12px rgba(249, 177, 21, 0.45)'
-                                                    } : {})
-                                                }}
-                                            >
-                                                {isLeader && (
-                                                    <div style={{
-                                                        position: 'absolute',
-                                                        top: '-26px',
-                                                        left: '0',
-                                                        right: '0',
-                                                        textAlign: 'center',
-                                                        fontSize: '11px',
-                                                        fontWeight: 'bold',
-                                                        color: '#f9b115',
-                                                        fontFamily: "'Cinzel', serif",
-                                                        letterSpacing: '0.1em',
-                                                        textTransform: 'uppercase',
-                                                        whiteSpace: 'nowrap',
-                                                        pointerEvents: 'none'
-                                                    }}>
-                                                        Leader
-                                                    </div>
-                                                )}
-                                                {!this.state.isRosterLocked && (
-                                                    <div
-                                                        className={`add-button ${member ? 'occupied' : (!this.state.selectedCrewMember || this.state.selectedCrewMember.disabled || this.state.selectedCrewMember.locked ? 'disabled' : '')}`}
-                                                        onClick={() => member ? this.removeMember(i) : this.addMember(i)}
-                                                    >
-                                                        {member ? '\u2296' : '\u2295'}
-                                                    </div>
-                                                )}
-                                                {member && (
-                                                    <div className="portrait" style={{ backgroundImage: getCrewPortraitBackground(member.portrait, member.type || member.image), position: 'relative', width: '100%', height: '100%' }}>
-                                                        <span style={{
-                                                            position: 'absolute',
-                                                            bottom: '2px',
-                                                            right: '4px',
-                                                            background: 'rgba(0,0,0,0.85)',
-                                                            color: '#f9b115',
-                                                            padding: '1px 5px',
-                                                            borderRadius: '3px',
-                                                            fontSize: '9px',
-                                                            fontWeight: 'bold',
-                                                            fontFamily: 'Outfit, sans-serif',
-                                                            border: '1px solid rgba(249,177,21,0.2)'
-                                                        }}>
-                                                            Lvl {member.level || 1}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                            <div className="crew-tray in-dungeon-crew-tray" style={{ position: 'relative', display: 'flex', alignItems: 'flex-end', gap: '8px', height: 'auto', width: 'auto' }}>
+                                {/* Leader Slot (Slot 0) */}
+                                {this.renderCrewTraySlot(0)}
+
+                                {/* Slots 1 & 2 with In-Dungeon Crew text positioned strictly to the right of the enlarged leader slot */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <div style={{
+                                        fontSize: '11px',
+                                        fontWeight: 'bold',
+                                        color: '#f9b115',
+                                        fontFamily: "'Cinzel', serif",
+                                        letterSpacing: '0.08em',
+                                        marginBottom: '4px',
+                                        textTransform: 'uppercase',
+                                        whiteSpace: 'nowrap'
+                                    }}>
+                                        In-Dungeon Crew (3 Slots)
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '8px' }}>
+                                        {[1, 2].map((i) => this.renderCrewTraySlot(i))}
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Alternate Group (Slots 3, 4) */}
                             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#a8a29e', fontFamily: "'Cinzel', serif", letterSpacing: '0.08em', marginBottom: '4px', textTransform: 'uppercase' }}>
+                                <div style={{ fontSize: '11px', fontWeight: 'bold', color: '#a8a29e', fontFamily: "'Cinzel', serif", letterSpacing: '0.08em', marginBottom: '4px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
                                     Alternate Crew (2 Slots)
                                 </div>
-                                <div className="crew-tray" style={{ position: 'relative', alignItems: 'flex-end', gap: '8px' }}>
-                                    {[3, 4].map((i) => {
-                                        const member = this.state.selectedCrew[i];
-                                        const slotSize = '101px';
-                                        return (
-                                            <div
-                                                key={i}
-                                                className="selected-crew-portrait-container"
-                                                style={{
-                                                    width: slotSize,
-                                                    height: slotSize,
-                                                    position: 'relative',
-                                                    border: '1px dashed rgba(255, 255, 255, 0.25)'
-                                                }}
-                                            >
-                                                {!this.state.isRosterLocked && (
-                                                    <div
-                                                        className={`add-button ${member ? 'occupied' : (!this.state.selectedCrewMember || this.state.selectedCrewMember.disabled || this.state.selectedCrewMember.locked ? 'disabled' : '')}`}
-                                                        onClick={() => member ? this.removeMember(i) : this.addMember(i)}
-                                                    >
-                                                        {member ? '\u2296' : '\u2295'}
-                                                    </div>
-                                                )}
-                                                {member && (
-                                                    <div className="portrait" style={{ backgroundImage: getCrewPortraitBackground(member.portrait, member.type || member.image), position: 'relative', width: '100%', height: '100%' }}>
-                                                        <span style={{
-                                                            position: 'absolute',
-                                                            bottom: '2px',
-                                                            right: '4px',
-                                                            background: 'rgba(0,0,0,0.85)',
-                                                            color: '#f9b115',
-                                                            padding: '1px 5px',
-                                                            borderRadius: '3px',
-                                                            fontSize: '9px',
-                                                            fontWeight: 'bold',
-                                                            fontFamily: 'Outfit, sans-serif',
-                                                            border: '1px solid rgba(249,177,21,0.2)'
-                                                        }}>
-                                                            Lvl {member.level || 1}
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
+                                <div className="crew-tray alternate-crew-tray" style={{ position: 'relative', display: 'flex', alignItems: 'flex-end', gap: '8px', height: 'auto', width: 'auto' }}>
+                                    {[3, 4].map((i) => this.renderCrewTraySlot(i))}
                                 </div>
                             </div>
                         </div>

@@ -26,6 +26,126 @@ const EXP_TABLE = [
     1000000
 ]
 
+export const CLASS_BASE_LORE_TEMPLATES = {
+    sage: {
+        baseName: 'Loryastes',
+        template: 'Loryastes is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe'
+    },
+    wizard: {
+        baseName: 'Zildjikan',
+        template: "Hailing from the magister's college, Zildjikan was the dean of transmutation. A powerful magic user, he has been known to linger for long periods in the silent realm, searching for secret truths."
+    },
+    soldier: {
+        baseName: 'Sardonis',
+        template: "Once the captain of the royal army's legendary vangard battalion, Sardonis has a reputation for fair leadership and honor."
+    },
+    monk: {
+        baseName: 'Yu',
+        template: 'Yu was born into the dynastic order of the White Serpent, inheriting the secrets of absolute stillness and unyielding motion'
+    },
+    ranger: {
+        baseName: 'Dormund',
+        template: 'Dormund was born a slave, surviving and advancing through sheer cunning and a ruthless will'
+    },
+    barbarian: {
+        baseName: 'Ulaf',
+        template: "Ulaf is the son of the chieftan of the Rootsnarl Clan. He is on a journey to prove his mettle and one day take his father's place"
+    }
+};
+
+export const BASE_AND_ALT_CREW_NAMES = [
+    'Theodora (Ascetic)',
+    'Glitterburn',
+    'Loryastes',
+    'Zildjikan',
+    'Morrigan',
+    'Theodora',
+    'Sardonis',
+    'Morwenna',
+    'Dormund',
+    'Valeria',
+    'Ekatra',
+    'Icaron',
+    'Brinna',
+    'Vaelis',
+    'Hildr',
+    'Astra',
+    'Ulaf',
+    'Mei',
+    'Yu'
+];
+
+export function escapeRegExp(string) {
+    return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+export function replaceNameInText(text, targetName, newName) {
+    if (!text || !targetName || !newName || targetName === newName) return text;
+    const escaped = escapeRegExp(targetName);
+    const regex = new RegExp("(^|[^a-zA-Z0-9_])" + escaped + "(?![a-zA-Z0-9_])", "g");
+    return text.replace(regex, (match, prefix) => "" + prefix + newName);
+}
+
+export function getReflectedDescription(rawDesc, newName, crewMemberOrType) {
+    const name = typeof newName === 'string' ? newName.trim() : '';
+    if (!name) return rawDesc || '';
+
+    const type = String(
+        (crewMemberOrType && (crewMemberOrType.type || crewMemberOrType.image)) || crewMemberOrType || ''
+    ).toLowerCase();
+
+    let text = rawDesc;
+    if (!text && type && CLASS_BASE_LORE_TEMPLATES[type]) {
+        text = CLASS_BASE_LORE_TEMPLATES[type].template;
+    }
+    if (!text) return '';
+
+    // Gather candidate names to replace
+    const candidates = [...BASE_AND_ALT_CREW_NAMES];
+    if (crewMemberOrType && typeof crewMemberOrType === 'object') {
+        if (Array.isArray(crewMemberOrType.portraitOptions)) {
+            crewMemberOrType.portraitOptions.forEach(opt => {
+                if (opt.name) candidates.push(opt.name);
+                if (opt.defaultName) candidates.push(opt.defaultName);
+            });
+        }
+        if (crewMemberOrType.defaultName) candidates.push(crewMemberOrType.defaultName);
+        if (crewMemberOrType.previousName) candidates.push(crewMemberOrType.previousName);
+    }
+
+    // Deduplicate and sort descending by length
+    const uniqueCandidates = Array.from(new Set(candidates)).sort((a, b) => b.length - a.length);
+
+    let replaced = false;
+    for (const cand of uniqueCandidates) {
+        if (cand.toLowerCase() === name.toLowerCase()) {
+            const escaped = escapeRegExp(cand);
+            const regex = new RegExp("(^|[^a-zA-Z0-9_])" + escaped + "(?![a-zA-Z0-9_])");
+            if (regex.test(text)) {
+                replaced = true;
+                break;
+            }
+            continue;
+        }
+        const escaped = escapeRegExp(cand);
+        const regex = new RegExp("(^|[^a-zA-Z0-9_])" + escaped + "(?![a-zA-Z0-9_])");
+        if (regex.test(text)) {
+            text = replaceNameInText(text, cand, name);
+            replaced = true;
+            break;
+        }
+    }
+
+    // If no candidate was found but the class has a known base template, generate from base template
+    if (!replaced && type && CLASS_BASE_LORE_TEMPLATES[type]) {
+        const { baseName, template } = CLASS_BASE_LORE_TEMPLATES[type];
+        text = replaceNameInText(template, baseName, name);
+    }
+
+    return text;
+}
+
+
 export function CrewManager() {
     // this.tiles = [];
     this.memberTypes = [
@@ -108,6 +228,19 @@ export function CrewManager() {
                 member.skills = member.skills.filter(s => s !== 'sword_swing');
                 if (!Array.isArray(member.passives)) member.passives = [];
                 if (!member.passives.includes('master_builder')) member.passives.push('master_builder');
+            }
+
+            // Expedition skills default initialization
+            const defaultExpeditionSkills = {
+                sage: ['healing_ground', 'sing'],
+                ranger: ['sneak_attack', 'spike_trap'],
+                soldier: ['soldier_shield', 'breacher']
+            };
+            const mClass = (member.type || member.image || '').toLowerCase();
+            if (!Array.isArray(member.expeditionSkills) || member.expeditionSkills.length === 0) {
+                if (defaultExpeditionSkills[mClass]) {
+                    member.expeditionSkills = [...defaultExpeditionSkills[mClass]];
+                }
             }
 
             member.specialActions.forEach(a => {
@@ -194,7 +327,8 @@ export function CrewManager() {
         }
 
         // Attack
-        let atkCon = this.statConstituents.attack[member.type];
+        const resolvedType = (member.type && this.statConstituents.attack[member.type]) ? member.type : (member.image || member.type);
+        let atkCon = this.statConstituents.attack[resolvedType];
         if (!atkCon) atkCon = ['str'];
         if (atkCon.length === 2) {
             s.atk = combine(atkCon[0], atkCon[1]);
@@ -203,7 +337,7 @@ export function CrewManager() {
         }
 
         // Defense (rename will be 'def')
-        let defCon = this.statConstituents.defense[member.type];
+        let defCon = this.statConstituents.defense[resolvedType];
         if (!defCon) defCon = ['fort'];
         if (defCon.length === 2) {
             s.def = combine(defCon[0], defCon[1]);
@@ -272,14 +406,39 @@ export function CrewManager() {
 
     this._findMatchingCrewMember = (m) => {
         if (!m || !Array.isArray(this.crew)) return null;
-        return this.crew.find(c => c && (
-            (c.id !== undefined && m.id !== undefined && String(c.id) === String(m.id)) ||
-            (c.name && m.name && String(c.name).toLowerCase() === String(m.name).toLowerCase()) ||
-            (c.type && m.type && c.type === m.type) ||
-            (c.image && m.type && c.image === m.type) ||
-            (c.type && m.image && c.type === m.image) ||
-            (c.image && m.image && c.image === m.image)
-        )) || null;
+        const norm = (val) => String(val || '').trim().toLowerCase();
+        const mId = m.id !== undefined && m.id !== null ? String(m.id) : '';
+        const mName = norm(m.name);
+        const mType = norm(m.type);
+        const mClass = norm(m.class);
+        const mImage = norm(m.image);
+        const mHeroClass = norm(m.heroClass);
+        const mShrineClass = norm(m.shrineClass);
+
+        return this.crew.find(c => {
+            if (!c) return false;
+            const cId = c.id !== undefined && c.id !== null ? String(c.id) : '';
+            const cName = norm(c.name);
+            const cType = norm(c.type);
+            const cClass = norm(c.class);
+            const cImage = norm(c.image);
+            const cHeroClass = norm(c.heroClass);
+            const cShrineClass = norm(c.shrineClass);
+
+            if (cId && mId && cId === mId) return true;
+            if (cName && mName && cName === mName) return true;
+
+            const cKeys = [cType, cClass, cImage, cHeroClass, cShrineClass].filter(Boolean);
+            const mKeys = [mType, mClass, mImage, mHeroClass, mShrineClass].filter(Boolean);
+
+            for (let ck of cKeys) {
+                for (let mk of mKeys) {
+                    if (ck === mk) return true;
+                    if (ck.includes(mk) || mk.includes(ck)) return true;
+                }
+            }
+            return false;
+        }) || null;
     };
 
     this.addExperience = (memberArray, experienceValue) => {
@@ -289,13 +448,14 @@ export function CrewManager() {
             let member = this._findMatchingCrewMember(m);
             if (member) {
                 member.stats = member.stats || {};
-                member.stats.experience = (typeof member.stats.experience === 'number' ? member.stats.experience : 0) + experienceValue;
+                const currentLevel = (typeof member.level === 'number' && member.level >= 0) ? member.level : 1;
+                const minExpForLevel = currentLevel > 1 ? (EXP_TABLE[currentLevel - 1] || 0) : 0;
+                const curExp = Math.max(typeof member.stats.experience === 'number' ? member.stats.experience : 0, minExpForLevel);
+                member.stats.experience = curExp + experienceValue;
             } else {
                 console.warn('addExperience: could not match crew member', m);
             }
         });
-        // After awarding experience, immediately check for level-up so stats
-        // and level are applied right away (not deferred to initializeCrew).
         try {
             this.checkForLevelUp(memberArray);
         } catch (err) {
@@ -339,7 +499,9 @@ export function CrewManager() {
         // UI can show precise gains. Also set a `justLeveled` flag and record
         // the recent gains on the crew member for later display.
         const gains = {};
-        switch (crewMember.type) {
+        const rawType = String(crewMember.type || crewMember.image || crewMember.class || '').toLowerCase();
+        const effectiveType = (rawType.includes('wizard') || rawType.includes('zildjikan')) ? 'wizard' : (crewMember.type || crewMember.image);
+        switch (effectiveType) {
             case 'wizard':
                 crewMember.stats.int = (crewMember.stats.int || 0) + 1;
                 if (typeof crewMember.stats.baseInt === 'number') crewMember.stats.baseInt += 1;
@@ -498,15 +660,15 @@ export function CrewManager() {
     }
 
     this.calculateExpPercentage = (crewMember) => {
-
         try {
             if (!crewMember) return 0;
             let foundMember = this._findMatchingCrewMember(crewMember);
             if (!foundMember || !foundMember.stats) return 0;
-            const level = (typeof foundMember.level === 'number' && foundMember.level >= 0) ? foundMember.level : 0;
+            const level = (typeof foundMember.level === 'number' && foundMember.level >= 0) ? foundMember.level : 1;
             const nextLevelExp = (typeof EXP_TABLE[level] !== 'undefined') ? EXP_TABLE[level] : EXP_TABLE[EXP_TABLE.length - 1];
-            const prevLevelExp = level > 0 ? EXP_TABLE[level - 1] : 0;
-            const experience = typeof foundMember.stats.experience === 'number' ? foundMember.stats.experience : 0;
+            const prevLevelExp = level > 1 ? (EXP_TABLE[level - 1] || 0) : 0;
+            const rawExp = typeof foundMember.stats.experience === 'number' ? foundMember.stats.experience : 0;
+            const experience = Math.max(rawExp, prevLevelExp);
             const denom = (nextLevelExp - prevLevelExp) || 1;
             let percentage = Math.ceil(((experience - prevLevelExp) / denom) * 100);
             if (percentage > 100) percentage = 100;
@@ -772,8 +934,12 @@ export function CrewManager() {
             name: 'Zildjikan',
             id: 33344,
             level: 1,
-            stats: { str: 3, int: 7, dex: 5, fort: 7, baseHp: 10, experience: 0 },
+            stats: { str: 3, int: 7, dex: 5, fort: 7, baseHp: 18, experience: 0 },
             portrait: images['wizard_portrait'],
+            portraitOptions: [
+                { id: 'zildjikan', name: 'Zildjikan', defaultName: 'Zildjikan', portrait: images['wizard_portrait'], image: 'wizard' },
+                { id: 'morrigan', name: 'Morrigan', defaultName: 'Morrigan', portrait: images['wizard_alt_portrait'], image: 'wizard_alt' }
+            ],
             inventory: [],
             skills: ['magic_missile', 'fireball', 'ice_blast'],
             passives: ['magic_affinity', 'arcane_sense'],
@@ -791,11 +957,16 @@ export function CrewManager() {
             name: 'Sardonis',
             id: 123,
             level: 1,
-            stats: { str: 8, int: 5, dex: 6, fort: 7, baseHp: 11, experience: 0, attackSpeedMult: 2 },
+            stats: { str: 8, int: 5, dex: 6, fort: 7, baseHp: 42, experience: 0, attackSpeedMult: 2 },
             portrait: images['soldier_portrait'],
+            portraitOptions: [
+                { id: 'sardonis', name: 'Sardonis', defaultName: 'Sardonis', portrait: images['soldier_portrait'], image: 'soldier' },
+                { id: 'valeria', name: 'Valeria', defaultName: 'Valeria', portrait: images['soldier_alt_portrait'], image: 'soldier_alt' }
+            ],
             inventory: [],
             passives: ['inspiring_force', 'fortify'],
             skills: ['sword_swing', 'shield_slam', 'fist_of_honor', 'imbued_strike'],
+            expeditionSkills: ['soldier_shield', 'breacher'],
             weaknesses: ['ice', 'electricity', 'blood_magic'],
             description: "Once the captain of the royal army's legendary vangard battalion, Sardonis has a reputation for fair leadership and honor.",
             specialActions: [],
@@ -811,8 +982,12 @@ export function CrewManager() {
             name: 'Yu',
             id: 8080,
             level: 1,
-            stats: { str: 5, int: 6, dex: 7, fort: 7, baseHp: 10, experience: 0, attackSpeedMult: 2 },
+            stats: { str: 5, int: 6, dex: 7, fort: 7, baseHp: 34, experience: 0, attackSpeedMult: 2 },
             portrait: images['monk_portrait'],
+            portraitOptions: [
+                { id: 'yu', name: 'Yu', defaultName: 'Yu', portrait: images['monk_portrait'], image: 'monk' },
+                { id: 'mei', name: 'Mei', defaultName: 'Mei', portrait: images['monk_alt_portrait'], image: 'monk_alt' }
+            ],
             inventory: [],
             passives: ['diamond_skin', 'swift_step'],
             skills: ['monk_punch', 'monk_ethereal_speed', 'monk_meditate', 'monk_force_punch', 'monk_flurry', 'monk_twin_finger_authority'],
@@ -829,10 +1004,16 @@ export function CrewManager() {
             name: 'Loryastes',
             id: 456,
             level: 1,
-            stats: { str: 3, int: 7, dex: 5, fort: 7, baseHp: 10, experience: 0 },
+            stats: { str: 3, int: 7, dex: 5, fort: 7, baseHp: 20, experience: 0 },
             portrait: images['sage_portrait'],
+            portraitOptions: [
+                { id: 'loryastes', name: 'Loryastes', defaultName: 'Loryastes', portrait: images['sage_portrait'], image: 'sage' },
+                { id: 'theodora', name: 'Theodora', defaultName: 'Theodora', portrait: images['sage_alt_grandmotherly_portrait'] || images['sage_alt_portrait'], image: 'sage_alt' },
+                { id: 'theodora_ascetic', name: 'Theodora (Ascetic)', defaultName: 'Theodora (Ascetic)', portrait: images['sage_alt_shaved_portrait'] || images['sage_alt_shaved'], image: 'sage_alt_shaved' }
+            ],
             inventory: [],
             skills: ['heal', 'circle_of_protection'],
+            expeditionSkills: ['healing_ground', 'sing'],
             passives: ["owls_insight", "herbalism", "breadcrumbs"],
             weaknesses: ['fire', 'electricity', 'ice', 'blood_magic', 'crushing'],
             description: "Loryastes is the headmaster of Citadel library, chronicler of the histories of three monarchies, and a pupil of The Great Scribe",
@@ -847,10 +1028,15 @@ export function CrewManager() {
             name: 'Dormund',
             id: 789,
             level: 1,
-            stats: { str: 5, int: 5, dex: 6, fort: 3, baseHp: 10, experience: 0 },
+            stats: { str: 5, int: 5, dex: 6, fort: 3, baseHp: 32, experience: 0 },
             portrait: images['ranger_portrait'],
+            portraitOptions: [
+                { id: 'dormund', name: 'Dormund', defaultName: 'Dormund', portrait: images['ranger_portrait'], image: 'ranger' },
+                { id: 'ekatra', name: 'Ekatra', defaultName: 'Ekatra', portrait: images['ranger_alt_portrait'], image: 'ranger_alt' }
+            ],
             inventory: [],
             skills: ['loose', 'notch', 'mark'],
+            expeditionSkills: ['sneak_attack', 'spike_trap'],
             passives: ['nimble_dodge', 'eagle_eye', 'hunters_quarry'],
             weaknesses: ['ice', 'curse', 'crushing'],
             description: "Dormund was born a slave, surviving and advancing through sheer cunning and a ruthless will",
@@ -865,8 +1051,12 @@ export function CrewManager() {
             name: 'Ulaf',
             id: 8822,
             level: 1,
-            stats: { str: 8, int: 3, dex: 4, fort: 6, baseHp: 52, experience: 0, attackSpeedMult: 2 },
+            stats: { str: 8, int: 3, dex: 4, fort: 6, baseHp: 46, experience: 0, attackSpeedMult: 2 },
             portrait: images['barbarian_portrait'],
+            portraitOptions: [
+                { id: 'ulaf', name: 'Ulaf', defaultName: 'Ulaf', portrait: images['barbarian_portrait'], image: 'barbarian' },
+                { id: 'hildr', name: 'Hildr', defaultName: 'Hildr', portrait: images['barbarian_alt_portrait'], image: 'barbarian_alt' }
+            ],
             inventory: [],
             skills: ['sword_swing', 'barbarian_cleave', 'barbarian_berserker'],
             passives: ['fury', 'iron_gut'],
@@ -883,8 +1073,12 @@ export function CrewManager() {
             name: 'Icaron',
             id: 9901,
             level: 1,
-            stats: { str: 5, int: 6, dex: 7, fort: 6, baseHp: 10, experience: 0 },
+            stats: { str: 5, int: 6, dex: 7, fort: 6, baseHp: 22, experience: 0 },
             portrait: images['engineer'],
+            portraitOptions: [
+                { id: 'icaron', name: 'Icaron', defaultName: 'Icaron', portrait: images['engineer'], image: 'engineer' },
+                { id: 'brinna', name: 'Brinna', defaultName: 'Brinna', portrait: images['engineer_alt_portrait'] || images['engineer_alt'], image: 'engineer_alt' }
+            ],
             inventory: [],
             skills: ['build_turret', 'build_walker', 'build_wall', 'engineer_repair', 'sword_swing'],
             passives: ['master_builder', 'inspiring_force'],
@@ -901,8 +1095,12 @@ export function CrewManager() {
             name: 'Vaelis',
             id: 9902,
             level: 1,
-            stats: { str: 3, int: 8, dex: 5, fort: 6, baseHp: 10, experience: 0 },
+            stats: { str: 3, int: 8, dex: 5, fort: 6, baseHp: 20, experience: 0 },
             portrait: images['summoner'],
+            portraitOptions: [
+                { id: 'vaelis', name: 'Vaelis', defaultName: 'Vaelis', portrait: images['summoner'], image: 'summoner' },
+                { id: 'morwenna', name: 'Morwenna', defaultName: 'Morwenna', portrait: images['summoner_alt_portrait'] || images['summoner_alt'], image: 'summoner_alt' }
+            ],
             inventory: [],
             skills: [
                 'summon_skeleton',
@@ -925,8 +1123,12 @@ export function CrewManager() {
             disabled: true,
             locked: true,
             level: 1,
-            stats: { str: 4, int: 8, dex: 6, fort: 5, baseHp: 10, experience: 0 },
+            stats: { str: 4, int: 8, dex: 6, fort: 5, baseHp: 24, experience: 0 },
             portrait: images['glitterburn_portrait'] || images['glitterburn'],
+            portraitOptions: [
+                { id: 'glitterburn', name: 'Glitterburn', defaultName: 'Glitterburn', portrait: images['glitterburn_portrait'] || images['glitterburn'], image: 'glitterburn' },
+                { id: 'astra', name: 'Astra', defaultName: 'Astra', portrait: images['glitterburn_alt_portrait'] || images['glitterburn_alt'], image: 'glitterburn_alt' }
+            ],
             inventory: [],
             skills: ['glitter_burst', 'pyro_spark', 'blinding_flash'],
             passives: ['sparkling_aura'],

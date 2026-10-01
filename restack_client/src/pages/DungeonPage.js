@@ -2941,6 +2941,7 @@ class DungeonPage extends React.Component {
             inventoryHoverMatrix: {},
             crewHoverMatrix: {},
             selectedCrewMember: {},
+            flashingSkillSlot: null,
             showDebugLevelUpScreen: false,
             debugLevelUpQueue: [],
             pending: null,
@@ -2948,6 +2949,7 @@ class DungeonPage extends React.Component {
             isInventoryExpanded: false,
             activeInventoryItem: null,
             keysLocked: false,
+            isSneaking: false,
             portalTransitionClass: '',
             inMonsterBattle: false,
             instakillNextMonster: !!((getMeta() || {}).instakillNextMonster),
@@ -3385,6 +3387,13 @@ class DungeonPage extends React.Component {
             itemCleanup(null, meta.crew);
             if (this.props.inventoryManager && typeof this.props.inventoryManager.refreshWeaponStats === 'function') {
                 this.props.crewManager.crew.forEach(m => { if (m && Array.isArray(m.inventory)) m.inventory = this.props.inventoryManager.refreshWeaponStats(m.inventory); });
+            }
+            if (this.props.inventoryManager) {
+                if (meta && meta.inventory && typeof meta.inventory.gold === 'number') {
+                    this.props.inventoryManager.gold = meta.inventory.gold;
+                } else if (!this.props.inventoryManager.gold) {
+                    this.props.inventoryManager.gold = 100;
+                }
             }
             this.loadNewDungeon();
         } else {
@@ -8461,7 +8470,7 @@ class DungeonPage extends React.Component {
                             if (activeCombatTarget.homeStructureKey) {
                                 if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
                                 this._pocketStructureRespawns.push({
-                                    readyTime: Date.now() + 10000,
+                                    readyTime: Date.now() + this.getStructureRespawnDelay(activeCombatTarget.homeStructureKey),
                                     structureKey: activeCombatTarget.homeStructureKey,
                                     mbIdx,
                                     tIdx,
@@ -9819,6 +9828,46 @@ class DungeonPage extends React.Component {
         }, 600);
     };
 
+    // ─── SNEAK ────────────────────────────────────────────────────────────────
+    _toggleSneak = () => {
+        if (!this.state.isSneaking) {
+            // Activating sneak costs 3 resolve upfront
+            const meta = getMeta() || {};
+            const currentResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+            if (currentResolve < 3) {
+                this.displayMessage('\u26a0\ufe0f Not enough Resolve to sneak. (Need 3)');
+                return;
+            }
+            meta.resolve = currentResolve - 3;
+            try { storeMeta(meta); } catch (e) {}
+            this.setState({ isSneaking: true });
+            this.displayMessage('\ud83d\udd75\ufe0f Sneak mode activated! (Costs Resolve per tile. Press S to cancel.)');
+
+            // Break pygmy pursuit — clear patrol targets so they lose the player
+            try {
+                const bm = this.props.boardManager;
+                if (bm && bm.tiles) {
+                    bm.tiles.forEach(t => {
+                        if (!t || !t.contains) return;
+                        const cType = typeof t.contains === 'object' ? (t.contains.type || '') : '';
+                        if (cType === 'pygmies' || String(t.image || '').includes('pygm')) {
+                            if (typeof t.contains === 'object') {
+                                t.contains._patrolTarget = null;
+                                t.contains._recentHistory = [];
+                                t.contains._isChasing = false;
+                            }
+                        }
+                    });
+                }
+            } catch (e) {}
+        } else {
+            this.setState({ isSneaking: false });
+            this.displayMessage('\ud83d\udc64 Sneak mode deactivated.');
+        }
+    };
+    // ─────────────────────────────────────────────────────────────────────────
+
+
 
     enqueueDirectionalMove = (direction, options = {}) => {
         let dir = direction;
@@ -10042,6 +10091,28 @@ class DungeonPage extends React.Component {
 
             const playerMoved = bm.playerTile.location[0] !== originCoords[0] || bm.playerTile.location[1] !== originCoords[1];
 
+            // Sneak: deduct resolve per tile moved
+            if (playerMoved && this.state.isSneaking) {
+                try {
+                    const meta = getMeta() || {};
+                    const crew = (meta.crew || []);
+                    const hasLightFoot = crew.some(c => {
+                        const skills = (c && c.skills) || [];
+                        return skills.includes('ranger_light_foot') || skills.includes('monk_light_foot');
+                    });
+                    const sneakCost = hasLightFoot ? 2 : 3;
+                    const curResolve = typeof meta.resolve === 'number' ? meta.resolve : 0;
+                    if (curResolve < sneakCost) {
+                        // Auto-cancel sneak
+                        this.setState({ isSneaking: false });
+                        this.displayMessage('\u26a1 Sneak cancelled \u2014 not enough Resolve.');
+                    } else {
+                        meta.resolve = curResolve - sneakCost;
+                        try { storeMeta(meta); } catch (e) {}
+                    }
+                } catch (e) {}
+            }
+
             if (!playerMoved) {
                 if (fromQueue) {
                     this.resolveQueuedMovement(false);
@@ -10211,6 +10282,25 @@ class DungeonPage extends React.Component {
                         }
                     } catch (e) {
                         console.warn("Failed to check lastObscuredAmbushTime from localStorage:", e);
+                    }
+
+                    const selMember = this.state.selectedCrewMember || (this.props.crewManager?.crew || []).find(c => c && c.selected);
+                    const isMonk = selMember && (
+                        selMember.class === 'monk' ||
+                        selMember.shrineClass === 'monk' ||
+                        selMember.heroClass === 'monk' ||
+                        selMember.id === 'monk' ||
+                        (selMember.name && selMember.name.toLowerCase().includes('monk'))
+                    );
+                    const hasSilentAwareness = selMember && (
+                        (selMember.skills && selMember.skills.includes('silent_awareness')) ||
+                        (selMember.shrineSkills && selMember.shrineSkills.includes('silent_awareness')) ||
+                        (selMember.globalSkills && selMember.globalSkills.includes('silent_awareness')) ||
+                        isMonk
+                    );
+
+                    if (isMonk && hasSilentAwareness) {
+                        baseAmbushChance *= 0.5;
                     }
 
                     if (Math.random() < baseAmbushChance) {
@@ -10506,7 +10596,9 @@ class DungeonPage extends React.Component {
             const orient = orientMatch[1].toLowerCase();
             const px = xMatch ? parseInt(xMatch[1]) : (tileMatch ? parseInt(tileMatch[1]) % 15 : 7);
             const py = yMatch ? parseInt(yMatch[1]) : (tileMatch ? Math.floor(parseInt(tileMatch[1]) / 15) : 7);
-            const tIdx = tileMatch ? parseInt(tileMatch[1]) : (py * 15 + px);
+            const rawX = ((px % 15) + 15) % 15;
+            const rawY = ((py % 15) + 15) % 15;
+            const tIdx = tileMatch ? parseInt(tileMatch[1]) : (rawY * 15 + rawX);
 
             return {
                 levelId: lvlVal,
@@ -10528,14 +10620,17 @@ class DungeonPage extends React.Component {
             const px = parseInt(parts[3]);
             const py = parseInt(parts[4]);
             if ((typeof lvl === 'string' || !isNaN(lvl)) && (orient === 'front' || orient === 'back' || orient === 'f' || orient === 'b') && !isNaN(brd) && !isNaN(px) && !isNaN(py)) {
+                const rawX = ((px % 15) + 15) % 15;
+                const rawY = ((py % 15) + 15) % 15;
+                const tIdx = rawY * 15 + rawX;
                 return {
                     levelId: lvl,
                     orientation: orient,
                     boardIndex: brd,
                     x: px,
                     y: py,
-                    tileIndex: py * 15 + px,
-                    tileId: py * 15 + px
+                    tileIndex: tIdx,
+                    tileId: tIdx
                 };
             }
         }
@@ -10547,14 +10642,17 @@ class DungeonPage extends React.Component {
             const bm = this.props.boardManager;
             const px = parseInt(twoNums[1]);
             const py = parseInt(twoNums[2]);
+            const rawX = ((px % 15) + 15) % 15;
+            const rawY = ((py % 15) + 15) % 15;
+            const tIdx = rawY * 15 + rawX;
             return {
                 levelId: bm?.currentLevel?.id ?? (meta.location?.levelId ?? 0),
                 orientation: bm?.currentOrientation || (meta.location?.orientation || 'F'),
                 boardIndex: bm?.playerTile?.boardIndex ?? (meta.location?.boardIndex ?? 0),
                 x: px,
                 y: py,
-                tileIndex: py * 15 + px,
-                tileId: py * 15 + px
+                tileIndex: tIdx,
+                tileId: tIdx
             };
         }
 
@@ -10585,9 +10683,17 @@ class DungeonPage extends React.Component {
         if (!bm) return;
 
         const targetLevelId = coords.levelId !== undefined ? coords.levelId : (bm.currentLevel?.id ?? 0);
-        const targetMiniboardIndex = Number(coords.boardIndex !== undefined ? coords.boardIndex : 0);
+        let targetMiniboardIndex = Number(coords.boardIndex !== undefined ? coords.boardIndex : 0);
         const mappedOrientation = (coords.orientation === 'front' || coords.orientation === 'F' || coords.orientation === 'f') ? 'F' : 'B';
         const isSuperboardTarget = (targetLevelId === 'light' || targetLevelId === 'dark');
+
+        if (isSuperboardTarget && coords.x !== undefined && coords.y !== undefined) {
+            const numX = Number(coords.x);
+            const numY = Number(coords.y);
+            if (numX >= 15 || numY >= 15) {
+                targetMiniboardIndex = Math.floor(numY / 15) * 3 + Math.floor(numX / 15);
+            }
+        }
 
         bm.inSuperboard = isSuperboardTarget;
 
@@ -10613,17 +10719,11 @@ class DungeonPage extends React.Component {
         bm.currentOrientation = mappedOrientation;
         bm.tiles = [];
 
-        // Determine initial targetIdx from tileIndex/tileId or x/y coordinates
+        // Determine initial targetIdx from x/y coordinates or tileIndex/tileId
         let targetIdx = null;
-        if (coords.tileIndex !== undefined && coords.tileIndex !== null && !isNaN(Number(coords.tileIndex))) {
-            targetIdx = Number(coords.tileIndex);
-        } else if (coords.tileId !== undefined && coords.tileId !== null && !isNaN(Number(coords.tileId))) {
-            targetIdx = Number(coords.tileId);
-        } else if (coords.targetTileIdx !== undefined && coords.targetTileIdx !== null && !isNaN(Number(coords.targetTileIdx))) {
-            targetIdx = Number(coords.targetTileIdx);
-        } else if (coords.x !== undefined && coords.y !== undefined) {
-            const rawX = Number(coords.x) % 15;
-            const rawY = Number(coords.y) % 15;
+        if (coords.x !== undefined && coords.y !== undefined) {
+            const rawX = ((Number(coords.x) % 15) + 15) % 15;
+            const rawY = ((Number(coords.y) % 15) + 15) % 15;
             const idx1 = rawY * 15 + rawX;
             const idx2 = rawX * 15 + rawY;
             const plane = mappedOrientation === 'F' ? bm.currentLevel?.front : bm.currentLevel?.back;
@@ -10643,6 +10743,12 @@ class DungeonPage extends React.Component {
             } else {
                 targetIdx = idx1;
             }
+        } else if (coords.tileIndex !== undefined && coords.tileIndex !== null && !isNaN(Number(coords.tileIndex))) {
+            targetIdx = Number(coords.tileIndex);
+        } else if (coords.tileId !== undefined && coords.tileId !== null && !isNaN(Number(coords.tileId))) {
+            targetIdx = Number(coords.tileId);
+        } else if (coords.targetTileIdx !== undefined && coords.targetTileIdx !== null && !isNaN(Number(coords.targetTileIdx))) {
+            targetIdx = Number(coords.targetTileIdx);
         } else {
             targetIdx = 112;
         }
@@ -12044,6 +12150,7 @@ class DungeonPage extends React.Component {
         try { if (Array.isArray(this._timers)) { this._timers.forEach(t => clearTimeout(t)); this._timers = []; } } catch (e) { }
         try { if (Array.isArray(this._intervals)) { this._intervals.forEach(i => clearInterval(i)); this._intervals = []; } } catch (e) { }
         try { if (this._foodGoneBadTimer) { clearTimeout(this._foodGoneBadTimer); this._foodGoneBadTimer = null; } } catch (e) { }
+        try { if (this._skillFlashTimeout) { clearTimeout(this._skillFlashTimeout); this._skillFlashTimeout = null; } } catch (e) { }
         // Backwards compat: clear any direct references as well
         try { if (this.realTimeSpecialActionCheckInterval) { clearInterval(this.realTimeSpecialActionCheckInterval); } } catch (e) { }
         try { if (this.pygmiesInterval) { clearInterval(this.pygmiesInterval); this.pygmiesInterval = null; } } catch (e) { }
@@ -15015,7 +15122,7 @@ class DungeonPage extends React.Component {
                             // Attacking Pygmy dies from crew's counter-attack!
                             if (pygmy.homeStructureKey) {
                                 this._pocketStructureRespawns.push({
-                                    readyTime: now + 10000,
+                                    readyTime: now + this.getStructureRespawnDelay(pygmy.homeStructureKey),
                                     structureKey: pygmy.homeStructureKey,
                                     gx, gy,
                                     isAllied: false,
@@ -15264,7 +15371,7 @@ class DungeonPage extends React.Component {
                                 this.clearOrphanAutomatonConversions(superboard);
                             } else if (targetUnit.homeStructureKey) {
                                 this._pocketStructureRespawns.push({
-                                    readyTime: now + 10000,
+                                    readyTime: now + this.getStructureRespawnDelay(targetUnit.homeStructureKey),
                                     structureKey: targetUnit.homeStructureKey,
                                     gx: targetEnemyUnit.gx,
                                     gy: targetEnemyUnit.gy,
@@ -17487,6 +17594,9 @@ class DungeonPage extends React.Component {
         if (this._pygmiesMoving) return;
         this._pygmiesMoving = true;
 
+        // Sneak: player is hidden from pygmies — skip movement tick
+        if (this.state.isSneaking) return;
+
         try {
             if (this.state.inSuperboard) {
                 await this.tickPocketPygmies();
@@ -18104,9 +18214,11 @@ class DungeonPage extends React.Component {
     tickOutpostAttacks = () => {
         try {
             if (this._isMoving) return;
+            if (this.state.isSneaking) return;
 
             if (this.state.inSuperboard) {
                 const bm = this.props.boardManager;
+
                 const dungeonObj = this.state.dungeon || bm?.dungeon;
                 const effectiveSbType = this.state.superboardType || (typeof getMeta === 'function' && (getMeta() || {}).pocketDimension) || Object.keys(dungeonObj?.superboards || {})[0] || 'pocket_plains';
                 const superboard = dungeonObj?.superboards?.[effectiveSbType] || (dungeonObj?.superboards && Object.values(dungeonObj.superboards)[0]);
@@ -18279,7 +18391,7 @@ class DungeonPage extends React.Component {
                                         if (target.contains.homeStructureKey) {
                                             if (!this._pocketStructureRespawns) this._pocketStructureRespawns = [];
                                             this._pocketStructureRespawns.push({
-                                                readyTime: Date.now() + 10000,
+                                                readyTime: Date.now() + this.getStructureRespawnDelay(target.contains.homeStructureKey),
                                                 structureKey: target.contains.homeStructureKey,
                                                 mbIdx: target.mbIdx,
                                                 tIdx: target.tIdx,
@@ -18566,10 +18678,7 @@ class DungeonPage extends React.Component {
             const { playerFacing } = this.state;
             const crew = Array.isArray(this.props?.crewManager?.crew) ? this.props.crewManager.crew : [];
             const leader = crew.find(m => m && m.isLeader && !m.dead) || crew[0];
-            const selectedCrewMember = (this.state && this.state.selectedCrewMember && (this.state.selectedCrewMember.id || this.state.selectedCrewMember.name || this.state.selectedCrewMember.type || this.state.selectedCrewMember.image))
-                ? this.state.selectedCrewMember
-                : (crew.find(m => m && m.selected) || leader);
-
+            const selectedCrewMember = this.getSelectedCrewMember();
             if (!selectedCrewMember) return;
 
             const mType = String(
@@ -18585,18 +18694,20 @@ class DungeonPage extends React.Component {
             // Glitterburn has no spacebar attack yet
             if (mType.includes('glitterburn')) return;
 
-            // Only wizard and ranger require a targeted monster — summoner/sage get melee swings
-            const isRangedClass =
-                mType.includes('wizard')   || mType.includes('zildjikan') ||
-                mType.includes('ranger')   || mType.includes('dormund');
+            // Ranger & Wizard and any ranged unit can initiate ranged attacks
+            const isRangedClass = this.hasRangedWeaponEquipped() || this.isRangedMember(selectedCrewMember);
 
             if (isRangedClass) {
-                // Ranged/magic classes need a targeted monster in their range ring
-                if (this.state.targetedMonsterTileId == null || this.state.targetedMonsterTileId === undefined) {
-                    this.displayMessage('⚠️ No target in range.');
+                // If no target is currently set, attempt to acquire nearest target in range synchronously
+                let targetId = this.state.targetedMonsterTileId;
+                if (targetId == null || targetId === undefined) {
+                    targetId = this.checkRangedAutoTarget();
+                }
+                if (targetId != null && targetId !== undefined) {
+                    this.fireRangedAttack();
                     return;
                 }
-                this.fireRangedAttack();
+                this.displayMessage('⚠️ No target in range.');
                 return;
             }
 
@@ -18718,7 +18829,7 @@ class DungeonPage extends React.Component {
 
             if (typeof monsterObj === 'string') {
                 monsterObj = {
-                    type: statsInfo?.monsterType || monsterObj,
+                    type: 'monster',
                     subtype: statsInfo?.monsterType || monsterObj,
                     name: monsterName,
                     hp: maxHp,
@@ -18727,6 +18838,10 @@ class DungeonPage extends React.Component {
                 };
                 targetTile.contains = monsterObj;
             } else if (typeof monsterObj === 'object' && monsterObj) {
+                if (!monsterObj.type || monsterObj.type !== 'monster') {
+                    if (!monsterObj.subtype && monsterObj.type) monsterObj.subtype = monsterObj.type;
+                    monsterObj.type = 'monster';
+                }
                 if (typeof monsterObj.maxHp !== 'number') {
                     monsterObj.maxHp = maxHp;
                 }
@@ -18745,9 +18860,13 @@ class DungeonPage extends React.Component {
                 : (selectedCrewMember.attack || selectedCrewMember.power || selectedCrewMember.stats?.strength || 15);
             const damage = attackStat;
             monsterObj.hp = Math.max(0, monsterObj.hp - damage);
+            monsterObj.inDungeonDamaged = true;
             monsterObj.lastDamageTime = Date.now();
 
             const targetTileId = targetTile.id !== undefined ? targetTile.id : (tiles ? tiles.indexOf(targetTile) : null);
+            if (boardManager?.currentBoard?.tiles && targetTileId != null && boardManager.currentBoard.tiles[targetTileId]) {
+                boardManager.currentBoard.tiles[targetTileId].contains = targetTile.contains;
+            }
 
             if (monsterObj.hp <= 0) {
                 if (typeof this.displayMessage === 'function') {
@@ -19190,7 +19309,7 @@ class DungeonPage extends React.Component {
                 </div>
                 {!collapsed && (
                     <div className="section-content">
-                        <div className="portrait-wrapper">
+                        <div className={`portrait-wrapper ${this.state.isSneaking ? "is-sneaking" : ""}`}>
                             <div className="status-container">
                                 <div className="member-level-indicator">Lvl {this.state.selectedCrewMember.level}</div>
                             </div>
@@ -19309,6 +19428,7 @@ class DungeonPage extends React.Component {
                                 endure: { name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.' },
                                 swift_step: { name: 'Swift Step', desc: 'Movement animation 30% faster' },
                                 focused_rest: { name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' },
+                                silent_awareness: { name: 'Silent Awareness', desc: 'Cuts ambush chance in obscured spaces by 50% when Monk is selected.' },
                                 pressure_points: { name: 'Pressure Points', desc: '15% vendor discount once per vendor' },
                                 astral_map: { name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' },
                                 spirit_sight: { name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' },
@@ -20811,6 +20931,7 @@ class DungeonPage extends React.Component {
 
     renderStatusSummarySection = () => {
         const collapsed = this.isSectionCollapsed('status_summary');
+        const resourcesCollapsed = this.isSectionCollapsed('resources_submenu');
         const poppedOut = !!this.state.popoutResources;
         const isInPocket = !!this.state.inSuperboard;
         const { totalAtk, totalDef, food, foodLimit, isOverLimit, resolve, deaths, tooltip, incomeRates, gold, dust, wood, mushrooms, stone, slate, chemicals, unstableChem, stableChem } = this.getResourcesData();
@@ -20913,105 +21034,124 @@ class DungeonPage extends React.Component {
                                                 {food} / {foodLimit}
                                             </span>
                                         </div>
-                                        <div className="ql-row">
-                                            <span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span>
-                                            <span className="ql-value" style={{ color: '#ffd700' }}>
-                                                {incomeRates.gold > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.gold}</span>}
-                                                {gold}
+                                        <div
+                                            className="ql-submenu-header"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                this.toggleSectionCollapse('resources_submenu');
+                                            }}
+                                            title="Toggle secondary resources"
+                                        >
+                                            <span className="ql-label">
+                                                <span role="img" aria-label="resources">📦</span> Resources
+                                            </span>
+                                            <span className="ql-collapse-indicator">
+                                                {resourcesCollapsed ? '[+]' : '[-]'}
                                             </span>
                                         </div>
-                                        <div className="ql-row">
-                                            <span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span>
-                                            <span className="ql-value" style={{ color: '#b388ff' }}>
-                                                {incomeRates.shimmering_dust > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.shimmering_dust}</span>}
-                                                {dust}
-                                            </span>
-                                        </div>
-                                        <div className="ql-row">
-                                            <span className="ql-label"><span style={{
-                                                display: 'inline-block',
-                                                backgroundImage: `url(${images.wood})`,
-                                                backgroundSize: 'contain',
-                                                backgroundRepeat: 'no-repeat',
-                                                backgroundPosition: 'center',
-                                                width: '16px',
-                                                height: '16px',
-                                                verticalAlign: 'middle',
-                                                marginRight: '4px'
-                                            }} /> Wood</span>
-                                            <span className="ql-value" style={{ color: '#e0a96d' }}>
-                                                {incomeRates.wood > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.wood}</span>}
-                                                {wood}
-                                            </span>
-                                        </div>
-                                        <div className="ql-row">
-                                            <span className="ql-label"><span style={{
-                                                display: 'inline-block',
-                                                backgroundImage: `url(${images.mushroom1})`,
-                                                backgroundSize: 'contain',
-                                                backgroundRepeat: 'no-repeat',
-                                                backgroundPosition: 'center',
-                                                width: '16px',
-                                                height: '16px',
-                                                verticalAlign: 'middle',
-                                                marginRight: '4px'
-                                            }} /> Mushrooms</span>
-                                            <span className="ql-value" style={{ color: '#d488ff' }}>
-                                                {incomeRates.mushrooms > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.mushrooms}</span>}
-                                                {mushrooms}
-                                            </span>
-                                        </div>
-                                        <div className="ql-row">
-                                            <span className="ql-label"><span style={{
-                                                display: 'inline-block',
-                                                backgroundImage: `url(${images.stone})`,
-                                                backgroundSize: 'contain',
-                                                backgroundRepeat: 'no-repeat',
-                                                backgroundPosition: 'center',
-                                                width: '16px',
-                                                height: '16px',
-                                                verticalAlign: 'middle',
-                                                marginRight: '4px'
-                                            }} /> Stone</span>
-                                            <span className="ql-value" style={{ color: '#95a5a6' }}>
-                                                {incomeRates.stone > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.stone}</span>}
-                                                {stone}
-                                            </span>
-                                        </div>
-                                        <div className="ql-row">
-                                            <span className="ql-label"><span style={{
-                                                display: 'inline-block',
-                                                backgroundImage: `url(${images.slate})`,
-                                                backgroundSize: 'contain',
-                                                backgroundRepeat: 'no-repeat',
-                                                backgroundPosition: 'center',
-                                                width: '16px',
-                                                height: '16px',
-                                                verticalAlign: 'middle',
-                                                marginRight: '4px'
-                                            }} /> Slate</span>
-                                            <span className="ql-value" style={{ color: '#7f8c8d' }}>
-                                                {incomeRates.slate > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.slate}</span>}
-                                                {slate}
-                                            </span>
-                                        </div>
-                                        <div className="ql-row" title={`Chemicals: ${chemicals} (${unstableChem} unstable, ${stableChem} stable)`}>
-                                            <span className="ql-label"><span style={{
-                                                display: 'inline-block',
-                                                backgroundImage: `url(${images.chemical_lantern})`,
-                                                backgroundSize: 'contain',
-                                                backgroundRepeat: 'no-repeat',
-                                                backgroundPosition: 'center',
-                                                width: '16px',
-                                                height: '16px',
-                                                verticalAlign: 'middle',
-                                                marginRight: '4px'
-                                            }} /> Chemicals</span>
-                                            <span className="ql-value" style={{ color: '#2ecc71' }}>
-                                                {incomeRates.chemicals > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.chemicals}</span>}
-                                                {chemicals}
-                                            </span>
-                                        </div>
+                                        {!resourcesCollapsed && (
+                                            <div className="ql-submenu-content">
+                                                <div className="ql-row">
+                                                    <span className="ql-label"><span className="gold-emoji" role="img" aria-label="gold coin">🪙</span> Gold</span>
+                                                    <span className="ql-value" style={{ color: '#ffd700' }}>
+                                                        {incomeRates.gold > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.gold}</span>}
+                                                        {gold}
+                                                    </span>
+                                                </div>
+                                                <div className="ql-row">
+                                                    <span className="ql-label"><span role="img" aria-label="sparkles">✨</span> Dust</span>
+                                                    <span className="ql-value" style={{ color: '#b388ff' }}>
+                                                        {incomeRates.shimmering_dust > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.shimmering_dust}</span>}
+                                                        {dust}
+                                                    </span>
+                                                </div>
+                                                <div className="ql-row">
+                                                    <span className="ql-label"><span style={{
+                                                        display: 'inline-block',
+                                                        backgroundImage: `url(${images.wood})`,
+                                                        backgroundSize: 'contain',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundPosition: 'center',
+                                                        width: '16px',
+                                                        height: '16px',
+                                                        verticalAlign: 'middle',
+                                                        marginRight: '4px'
+                                                    }} /> Wood</span>
+                                                    <span className="ql-value" style={{ color: '#e0a96d' }}>
+                                                        {incomeRates.wood > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.wood}</span>}
+                                                        {wood}
+                                                    </span>
+                                                </div>
+                                                <div className="ql-row">
+                                                    <span className="ql-label"><span style={{
+                                                        display: 'inline-block',
+                                                        backgroundImage: `url(${images.mushroom1})`,
+                                                        backgroundSize: 'contain',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundPosition: 'center',
+                                                        width: '16px',
+                                                        height: '16px',
+                                                        verticalAlign: 'middle',
+                                                        marginRight: '4px'
+                                                    }} /> Mushrooms</span>
+                                                    <span className="ql-value" style={{ color: '#d488ff' }}>
+                                                        {incomeRates.mushrooms > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.mushrooms}</span>}
+                                                        {mushrooms}
+                                                    </span>
+                                                </div>
+                                                <div className="ql-row">
+                                                    <span className="ql-label"><span style={{
+                                                        display: 'inline-block',
+                                                        backgroundImage: `url(${images.stone})`,
+                                                        backgroundSize: 'contain',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundPosition: 'center',
+                                                        width: '16px',
+                                                        height: '16px',
+                                                        verticalAlign: 'middle',
+                                                        marginRight: '4px'
+                                                    }} /> Stone</span>
+                                                    <span className="ql-value" style={{ color: '#95a5a6' }}>
+                                                        {incomeRates.stone > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.stone}</span>}
+                                                        {stone}
+                                                    </span>
+                                                </div>
+                                                <div className="ql-row">
+                                                    <span className="ql-label"><span style={{
+                                                        display: 'inline-block',
+                                                        backgroundImage: `url(${images.slate})`,
+                                                        backgroundSize: 'contain',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundPosition: 'center',
+                                                        width: '16px',
+                                                        height: '16px',
+                                                        verticalAlign: 'middle',
+                                                        marginRight: '4px'
+                                                    }} /> Slate</span>
+                                                    <span className="ql-value" style={{ color: '#7f8c8d' }}>
+                                                        {incomeRates.slate > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.slate}</span>}
+                                                        {slate}
+                                                    </span>
+                                                </div>
+                                                <div className="ql-row" title={`Chemicals: ${chemicals} (${unstableChem} unstable, ${stableChem} stable)`}>
+                                                    <span className="ql-label"><span style={{
+                                                        display: 'inline-block',
+                                                        backgroundImage: `url(${images.chemical_lantern})`,
+                                                        backgroundSize: 'contain',
+                                                        backgroundRepeat: 'no-repeat',
+                                                        backgroundPosition: 'center',
+                                                        width: '16px',
+                                                        height: '16px',
+                                                        verticalAlign: 'middle',
+                                                        marginRight: '4px'
+                                                    }} /> Chemicals</span>
+                                                    <span className="ql-value" style={{ color: '#2ecc71' }}>
+                                                        {incomeRates.chemicals > 0 && <span style={{ color: '#2ecc71', marginRight: '6px', fontWeight: 'bold' }}>+{incomeRates.chemicals}</span>}
+                                                        {chemicals}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
                                     </React.Fragment>
                                 )}
                             </div>
@@ -21020,6 +21160,34 @@ class DungeonPage extends React.Component {
                 )}
             </div>
         );
+    };
+
+    getExpeditionConnectorLine = () => {
+        if (!this.state.selectedCrewMember) return null;
+        const member = this.state.selectedCrewMember;
+        const memberKey = (member.id != null) ? member.id : member.type;
+        const tileEl = this.crewTileWrapperRefs && (
+            this.crewTileWrapperRefs[memberKey] ||
+            this.crewTileWrapperRefs[member.id] ||
+            this.crewTileWrapperRefs[member.type]
+        );
+        const boxEl = this.expeditionSkillsBoxRef;
+        const containerEl = this.crewSectionContentRef;
+
+        if (!tileEl || !boxEl || !containerEl) return null;
+
+        const cRect = containerEl.getBoundingClientRect();
+        const tRect = tileEl.getBoundingClientRect();
+        const bRect = boxEl.getBoundingClientRect();
+
+        if (cRect.width === 0 || tRect.width === 0 || bRect.width === 0) return null;
+
+        const x1 = Math.round(tRect.left + tRect.width / 2 - cRect.left);
+        const y1 = Math.round(tRect.top + tRect.height / 2 - cRect.top);
+        const x2 = Math.round(Math.max(bRect.left - cRect.left + 14, Math.min(bRect.right - cRect.left - 14, x1)));
+        const y2 = Math.round(bRect.top - cRect.top);
+
+        return { x1, y1, x2, y2 };
     };
 
     renderCrewListSection = (options = {}) => {
@@ -21197,14 +21365,66 @@ class DungeonPage extends React.Component {
                             onDragEnd={this.handleDragEnd}
                             onClick={() => this.toggleSectionCollapse('crew_list')}
                         >
-                            Crew List {collapsed ? '[+]' : '[-]'}
+                            Crew {collapsed ? '[+]' : '[-]'}
                         </div>
                         {!collapsed && (
-                            <div className="section-content">
-                                <div className={`crew-tile-container crew-count-${rawCrew ? rawCrew.length : 0}`}>
+                            <div className="section-content" ref={el => { this.crewSectionContentRef = el; }} style={{ position: 'relative' }}>
+                                {(() => {
+                                    const coords = this.getExpeditionConnectorLine();
+                                    if (!coords) return null;
+                                    const { x1, y1, x2, y2 } = coords;
+                                    return (
+                                        <svg
+                                            className="expedition-skills-connector-svg"
+                                            style={{
+                                                position: 'absolute',
+                                                top: 0,
+                                                left: 0,
+                                                width: '100%',
+                                                height: '100%',
+                                                pointerEvents: 'none',
+                                                zIndex: 1,
+                                                overflow: 'visible'
+                                            }}
+                                        >
+                                            <defs>
+                                                <filter id="expedition-line-glow" x="-30%" y="-30%" width="160%" height="160%">
+                                                    <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur1" />
+                                                    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur2" />
+                                                    <feMerge>
+                                                        <feMergeNode in="blur2" />
+                                                        <feMergeNode in="blur1" />
+                                                        <feMergeNode in="SourceGraphic" />
+                                                    </feMerge>
+                                                </filter>
+                                            </defs>
+                                            {/* Outer glowing path */}
+                                            <path
+                                                d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`}
+                                                fill="none"
+                                                stroke="rgba(255, 215, 0, 0.5)"
+                                                strokeWidth="4"
+                                                filter="url(#expedition-line-glow)"
+                                            />
+                                            {/* Core bright path */}
+                                            <path
+                                                d={`M ${x1} ${y1} C ${x1} ${(y1 + y2) / 2}, ${x2} ${(y1 + y2) / 2}, ${x2} ${y2}`}
+                                                fill="none"
+                                                stroke="#ffd700"
+                                                strokeWidth="1.75"
+                                                strokeLinecap="round"
+                                            />
+                                            {/* Center node on selected crew portrait (rendered behind portrait) */}
+                                            <circle cx={x1} cy={y1} r="4" fill="#ffffff" stroke="#ffd700" strokeWidth="2" filter="url(#expedition-line-glow)" />
+                                            {/* Anchor node on top outline of expedition skills box */}
+                                            <circle cx={x2} cy={y2} r="3.5" fill="#ffd700" stroke="#ffffff" strokeWidth="1.5" />
+                                        </svg>
+                                    );
+                                })()}
+                                <div className={`crew-tile-container crew-count-${rawCrew ? rawCrew.length : 0}`} style={{ position: 'relative', zIndex: 5 }}>
                                     {rawCrew &&
                                         rawCrew.map((member, i) => {
-                                            const isSelectedTile = this.state.selectedCrewMember && this.state.selectedCrewMember.id === member.id;
+                                            const isSelectedTile = this.state.selectedCrewMember && (this.state.selectedCrewMember.id === member.id || this.state.selectedCrewMember.type === member.type);
                                             const isDetached = !!member.detached;
                                             const isDead = !!(member.dead || (typeof member.hp === 'number' && member.hp <= 0));
                                             let portraitUrl = member.portrait || member.image;
@@ -21216,8 +21436,19 @@ class DungeonPage extends React.Component {
                                             }
                                             const memberMaxHp = (member.stats && typeof member.stats.hp === 'number') ? member.stats.hp : (member.max_hp || member.starting_hp || 10);
                                             const memberCurHp = (typeof member.hp !== 'undefined' && !isNaN(member.hp)) ? Number(member.hp) : memberMaxHp;
-                                            return <div className="sub-container" key={i} style={{ position: 'relative' }}>
-                                                {this.state.crewHoverMatrix[i] && <div className="hover-message">{this.state.crewHoverMatrix[i]}</div>}
+                                            const memberKey = (member && member.id != null) ? member.id : ((member && member.type) ? member.type : i);
+                                            return <div
+                                                className="sub-container"
+                                                key={i}
+                                                ref={el => {
+                                                    if (!this.crewTileWrapperRefs) this.crewTileWrapperRefs = {};
+                                                    this.crewTileWrapperRefs[memberKey] = el;
+                                                    if (member && member.id != null) this.crewTileWrapperRefs[member.id] = el;
+                                                    if (member && member.type) this.crewTileWrapperRefs[member.type] = el;
+                                                }}
+                                                style={{ position: 'relative' }}
+                                            >
+                                                {this.state.crewHoverMatrix && this.state.crewHoverMatrix[i] && <div className="hover-message">{this.state.crewHoverMatrix[i]}</div>}
                                                 <Tile
                                                     key={i}
                                                     id={i}
@@ -21357,6 +21588,82 @@ class DungeonPage extends React.Component {
                                         })
                                     }
                                 </div>
+                                {(() => {
+                                    const selectedMember = this.state.selectedCrewMember;
+                                    const isSelected = !!selectedMember;
+                                    const activeSlotIdx = (selectedMember && typeof selectedMember.selectedExpeditionSkillSlot === 'number')
+                                        ? selectedMember.selectedExpeditionSkillSlot
+                                        : 0;
+                                    const slotSize = (this.state.tileSize && this.state.tileSize > 20) ? this.state.tileSize : 48;
+                                    return (
+                                        <div
+                                            className={`expedition-skills-container ${isSelected ? 'has-selected-member' : ''}`}
+                                            ref={el => { this.expeditionSkillsBoxRef = el; }}
+                                            style={{ position: 'relative', zIndex: 2 }}
+                                        >
+                                            <div className={`expedition-skills-header ${isSelected ? 'active-header' : ''}`}>
+                                                <span>Expedition Skills</span>
+                                            </div>
+                                            <div className="expedition-skills-slots">
+                                                {[0, 1, 2].map(slotIdx => {
+                                                    const isSlotSelected = isSelected && (slotIdx === activeSlotIdx);
+                                                    const isFlashing = this.state.flashingSkillSlot === slotIdx;
+                                                    const currentMember = selectedMember || this.state.selectedCrewMember;
+                                                    const defaultExpSkills = {
+                                                        sage: ['healing_ground', 'sing'],
+                                                        ranger: ['sneak_attack', 'spike_trap'],
+                                                        soldier: ['soldier_shield', 'breacher']
+                                                    };
+                                                    const memberClass = ((currentMember && (currentMember.type || currentMember.image)) || '').toLowerCase();
+                                                    const expSkills = (currentMember && Array.isArray(currentMember.expeditionSkills) && currentMember.expeditionSkills.length > 0)
+                                                        ? currentMember.expeditionSkills
+                                                        : (defaultExpSkills[memberClass] || []);
+
+                                                    const skillKey = expSkills[slotIdx];
+                                                    const skillDef = skillKey ? skillsMatrix[skillKey] : null;
+                                                    const skillIcon = skillDef ? skillDef.icon : (skillKey ? (images[skillKey] || images[`${skillKey}_${memberClass}`]) : null);
+                                                    const skillName = skillDef ? skillDef.name : (skillKey ? skillKey.replace(/_/g, ' ') : null);
+                                                    let slotTitle = skillName ? `${skillName} (Expedition Skill Slot ${slotIdx + 1}` : `Expedition Skill Slot ${slotIdx + 1}`;
+                                                    if (isSelected && isSlotSelected) {
+                                                        slotTitle += skillName ? ` - Selected - Press Shift+Space to trigger)` : ` - Selected - Press Shift+Space to trigger`;
+                                                    } else if (skillName) {
+                                                        slotTitle += `)`;
+                                                    }
+
+                                                    return (
+                                                        <div
+                                                            key={slotIdx}
+                                                            className={`expedition-skill-slot ${isSelected ? 'slot-active' : ''} ${isSlotSelected ? 'selected-slot' : ''} ${isFlashing ? 'skill-slot-flashing' : ''}`}
+                                                            style={{ width: slotSize, height: slotSize, cursor: isSelected ? 'pointer' : 'default', padding: 2, position: 'relative' }}
+                                                            title={slotTitle}
+                                                            onClick={() => {
+                                                                if (isSelected) {
+                                                                    this.selectExpeditionSkillSlot(slotIdx);
+                                                                }
+                                                            }}
+                                                        >
+                                                            {skillIcon ? (
+                                                                <img
+                                                                    src={skillIcon}
+                                                                    alt={skillName}
+                                                                    style={{
+                                                                        width: '100%',
+                                                                        height: '100%',
+                                                                        objectFit: 'contain',
+                                                                        borderRadius: '3px',
+                                                                        display: 'block'
+                                                                    }}
+                                                                />
+                                                            ) : (
+                                                                <div className="slot-plus">+</div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         )}
                     </div>
@@ -21471,6 +21778,14 @@ class DungeonPage extends React.Component {
                                     >
                                         <span><span role="img" aria-label="card">🃏</span> Card Scrimmage</span>
                                         <span className="hotkey-indicator">V</span>
+                                    </button>
+                                    <button
+                                        className={`quick-action-btn ${this.state.isSneaking ? 'active-sneak' : ''}`}
+                                        onClick={() => this._toggleSneak()}
+                                        title="Toggle Sneak mode (costs 3 resolve upfront, 3/move; hides from outposts & pygmies)"
+                                    >
+                                        <span><span role="img" aria-label="sneak">👤</span> {this.state.isSneaking ? 'Sneaking' : 'Sneak'}</span>
+                                        <span className="hotkey-indicator">S</span>
                                     </button>
                                     <button
                                         className="quick-action-btn"
@@ -22734,6 +23049,98 @@ class DungeonPage extends React.Component {
                 return;
             }
 
+            if (cmd === 'coordinates' || cmd === 'coords' || cmd === 'coord' || cmd === 'getcoords' || cmd === 'getcoordinates' || cmd === 'get-coords' || cmd === 'get-coordinates') {
+                try {
+                    const bm = this.props.boardManager;
+                    const meta = getMeta() || {};
+
+                    const normOrient = (o) => {
+                        if (!o) return 'front';
+                        const s = String(o).toLowerCase().trim();
+                        if (s === 'f' || s === 'front' || s === 'a' || s === '0') return 'front';
+                        if (s === 'b' || s === 'back' || s === '1') return 'back';
+                        return s;
+                    };
+
+                    let levelId = 0;
+                    let orientationStr = 'front';
+                    let boardIndex = 0;
+                    let px = 7;
+                    let py = 7;
+
+                    if (this.state.inSuperboard) {
+                        levelId = this.state.superboardType || 'light';
+                        orientationStr = 'front';
+                        if (this.state.superboardPlayerPos) {
+                            const curGx = Math.round(this.state.superboardPlayerPos.gx);
+                            const curGy = Math.round(this.state.superboardPlayerPos.gy);
+                            boardIndex = Math.floor(curGy / 15) * 3 + Math.floor(curGx / 15);
+                            px = ((curGx % 15) + 15) % 15;
+                            py = ((curGy % 15) + 15) % 15;
+                        } else if (bm?.playerTile?.location && Array.isArray(bm.playerTile.location)) {
+                            boardIndex = bm.playerTile.boardIndex ?? 0;
+                            py = bm.playerTile.location[0];
+                            px = bm.playerTile.location[1];
+                        }
+                    } else {
+                        levelId = bm?.currentLevel?.id ?? (meta.location?.levelId ?? 0);
+                        orientationStr = normOrient(bm?.currentOrientation || meta.location?.orientation);
+
+                        let resolvedBoardIndex = -1;
+                        if (Array.isArray(this.state.minimap)) {
+                            resolvedBoardIndex = this.state.minimap.findIndex(e => e && e.active);
+                        }
+                        if (resolvedBoardIndex === -1 && bm?.playerTile?.boardIndex != null) {
+                            resolvedBoardIndex = bm.playerTile.boardIndex;
+                        } else if (resolvedBoardIndex === -1 && bm?.currentBoard?.id != null) {
+                            resolvedBoardIndex = bm.currentBoard.id;
+                        } else if (resolvedBoardIndex === -1 && meta.location?.boardIndex != null) {
+                            resolvedBoardIndex = meta.location.boardIndex;
+                        }
+                        boardIndex = resolvedBoardIndex >= 0 ? resolvedBoardIndex : 0;
+
+                        if (bm?.playerTile?.location && Array.isArray(bm.playerTile.location)) {
+                            py = bm.playerTile.location[0];
+                            px = bm.playerTile.location[1];
+                        } else if (meta.location?.tileIndex != null) {
+                            py = Math.floor(meta.location.tileIndex / 15);
+                            px = meta.location.tileIndex % 15;
+                        } else if (meta.location?.x != null && meta.location?.y != null) {
+                            px = meta.location.x;
+                            py = meta.location.y;
+                        }
+                    }
+
+                    const coordStr = `level:${levelId},orientation:${orientationStr},board:${boardIndex},x:${px},y:${py}`;
+                    const teleCmdStr = `tele ${coordStr}`;
+
+                    try {
+                        if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                            navigator.clipboard.writeText(coordStr).catch(() => {});
+                        }
+                    } catch (e) { }
+
+                    this.setState(prev => ({
+                        devConsoleOutput: [
+                            ...prev.devConsoleOutput,
+                            `> ${raw}`,
+                            `Coordinates:`,
+                            coordStr,
+                            `tele ${coordStr}`
+                        ],
+                        devConsoleInput: ''
+                    }));
+                } catch (err) {
+                    this.setState(prev => ({
+                        devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error getting coordinates: ${err && err.message ? err.message : err}`],
+                        devConsoleInput: ''
+                    }));
+                }
+                try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
+                e.preventDefault();
+                return;
+            }
+
             if (cmd === 'exit' || cmd === 'exit-pocket' || cmd === 'exitpocket') {
                 if (this.state.inSuperboard) {
                     this.setState(prev => ({
@@ -22786,6 +23193,97 @@ class DungeonPage extends React.Component {
                     }
                 } catch (err) {
                     this.setState(prev => ({ devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error: ${err && err.message ? err.message : err}`], devConsoleInput: '' }));
+                }
+                try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
+                e.preventDefault();
+                return;
+            }
+
+            const maxSkillsMatch = cmd.match(/^([a-z0-9_-]+)\s+max\s+skills?$/i) || cmd.match(/^max\s+skills?\s+([a-z0-9_-]+)$/i);
+            if (maxSkillsMatch) {
+                try {
+                    const clsTarget = maxSkillsMatch[1].toLowerCase().trim();
+                    const crewList = (this.props.crewManager && Array.isArray(this.props.crewManager.crew))
+                        ? this.props.crewManager.crew
+                        : (Array.isArray(this.state.crew) ? this.state.crew : []);
+
+                    const matchingMembers = crewList.filter(m => {
+                        if (!m) return false;
+                        const mType = (m.type || m.class || m.image || m.shrineClass || m.heroClass || m.name || '').toLowerCase();
+                        return mType === clsTarget || mType.includes(clsTarget) || clsTarget.includes(mType);
+                    });
+
+                    if (matchingMembers.length === 0) {
+                        this.setState(prev => ({
+                            devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error: No crew member matching class "${clsTarget}" found in crew.`],
+                            devConsoleInput: ''
+                        }));
+                    } else {
+                        const classSkillKeys = Object.keys(skillsMatrix).filter(key => {
+                            const sk = skillsMatrix[key];
+                            if (!sk) return false;
+                            const skClass = (sk.class || '').toLowerCase();
+                            if (skClass === clsTarget) return true;
+                            if (key.toLowerCase().startsWith(clsTarget + '_')) return true;
+                            return false;
+                        });
+
+                        matchingMembers.forEach(member => {
+                            if (!Array.isArray(member.skills)) member.skills = [];
+                            if (!Array.isArray(member.globalSkills)) member.globalSkills = [];
+                            if (!Array.isArray(member.passives)) member.passives = [];
+                            if (!Array.isArray(member.shrineSkills)) member.shrineSkills = [];
+
+                            classSkillKeys.forEach(skKey => {
+                                const skDef = skillsMatrix[skKey];
+                                if (!member.skills.includes(skKey)) {
+                                    member.skills.push(skKey);
+                                }
+                                const hasGS = member.globalSkills.some(g => (typeof g === 'string' ? g : g.key) === skKey);
+                                if (!hasGS) {
+                                    member.globalSkills.push({ key: skKey, level: 1 });
+                                }
+                                if (skDef && (skDef.isPassive || skDef.type === 'passive' || skDef.treePath === 'global')) {
+                                    if (!member.passives.includes(skKey)) {
+                                        member.passives.push(skKey);
+                                    }
+                                }
+                                if (!member.shrineSkills.includes(skKey)) {
+                                    member.shrineSkills.push(skKey);
+                                }
+                            });
+                        });
+
+                        const meta = getMeta() || {};
+                        if (Array.isArray(meta.crew)) {
+                            meta.crew = meta.crew.map(cm => {
+                                const updated = matchingMembers.find(m => m && (m.id === cm.id || m.type === cm.type));
+                                return updated ? { ...updated } : cm;
+                            });
+                            storeMeta(meta);
+                            try { updateUserRequest(getUserId(), meta).catch(() => { }); } catch (e) { }
+                        }
+                        try { if (typeof this.props.saveUserData === 'function') this.props.saveUserData(); } catch (e) { }
+
+                        if (this.state.selectedCrewMember) {
+                            const updatedSel = matchingMembers.find(m => m && (m.id === this.state.selectedCrewMember.id || m.type === this.state.selectedCrewMember.type));
+                            if (updatedSel) {
+                                this.setState({ selectedCrewMember: { ...updatedSel } });
+                            }
+                        }
+                        this.forceUpdate();
+
+                        const names = matchingMembers.map(m => m.name || m.type || clsTarget).join(', ');
+                        this.setState(prev => ({
+                            devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Maxed skills for ${names}: unlocked ${classSkillKeys.length} skills (tier 1 each).`],
+                            devConsoleInput: ''
+                        }));
+                    }
+                } catch (err) {
+                    this.setState(prev => ({
+                        devConsoleOutput: [...prev.devConsoleOutput, `> ${raw}`, `Error: ${err && err.message ? err.message : err}`],
+                        devConsoleInput: ''
+                    }));
                 }
                 try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
                 e.preventDefault();
@@ -23054,6 +23552,7 @@ class DungeonPage extends React.Component {
                         'reagents — add 1 of each reagent type to inventory',
                         'lvl up / level up — level up the currently selected crew member',
                         'exit / exit-pocket — exit the pocket dimension back to spawn point',
+                        'coordinates / coords — output player avatar coordinates for tele command',
                         'tele <coordinates> — teleport to coordinates (copied from mapmaker)',
                         'tele / teleport / tele... / teleport... — open stored coordinates teleport modal',
                         'time — output the dungeon\'s current universal PST time',
@@ -23398,8 +23897,9 @@ class DungeonPage extends React.Component {
             // keep focus
             try { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); } catch (err) { }
             e.preventDefault();
-        } else if (e.key === 'Escape') {
+        } else if (e.key === 'Escape' || e.key === '\\' || e.code === 'Backslash') {
             // close console
+            e.preventDefault();
             this.setState({ devConsoleOpen: false });
         }
     }
@@ -24558,10 +25058,32 @@ class DungeonPage extends React.Component {
             let minionsObj = null;
             if (bool) {
                 const bm = this.props.boardManager || this.boardManager;
-                if (bm && bm.tiles) {
+                if (bm) {
                     let tile = null;
-                    if (typeof tileId === 'number') tile = bm.tiles[tileId];
-                    else if (typeof tileId === 'object' && tileId) tile = tileId;
+                    if (typeof tileId === 'number') {
+                        tile = (bm.tiles && bm.tiles.find(t => t && t.id === tileId)) || (bm.tiles ? bm.tiles[tileId] : null);
+                    } else if (typeof tileId === 'object' && tileId) {
+                        tile = tileId;
+                    } else if (typeof tileId === 'string') {
+                        if (bm.tiles) {
+                            tile = bm.tiles.find(t => t && (t.id === tileId || String(t.id) === String(tileId))) || bm.tiles[tileId] || null;
+                        }
+                        if (!tile && this.state.inSuperboard) {
+                            const dungeon = this.state.dungeon;
+                            const superboardType = this.state.superboardType || 'home';
+                            const superboard = dungeon?.superboards?.[superboardType];
+                            if (superboard && superboard.miniboards && tileId.includes('_')) {
+                                const [tGx, tGy] = tileId.split('_').map(Number);
+                                const mbX = Math.floor(tGx / 15);
+                                const mbY = Math.floor(tGy / 15);
+                                const mbIdx = mbY * 3 + mbX;
+                                const lX = tGx % 15;
+                                const lY = tGy % 15;
+                                const tIdx = lY * 15 + lX;
+                                tile = superboard.miniboards?.[mbIdx]?.tiles?.[tIdx] || null;
+                            }
+                        }
+                    }
                     if (tile && tile.contains) {
                         let containsVal = tile.contains;
                         let monsterType = null;
@@ -24576,7 +25098,7 @@ class DungeonPage extends React.Component {
                         if (monsterType && mm && typeof mm.getMonster === 'function') {
                             const fullMonster = mm.getMonster(monsterType);
                             if (fullMonster) {
-                                monsterObj = fullMonster;
+                                monsterObj = { ...fullMonster };
                                 if (typeof containsVal === 'object' && typeof containsVal.hp === 'number') {
                                     monsterObj.hp = containsVal.hp;
                                     if (typeof containsVal.maxHp === 'number') {
@@ -24610,27 +25132,55 @@ class DungeonPage extends React.Component {
 
                         if (!monsterObj || !monsterObj.portrait) {
                             if (this.state.monster && this.state.monster.portrait) {
-                                monsterObj = this.state.monster;
+                                monsterObj = { ...this.state.monster };
                             } else if (!monsterObj) {
-                                monsterObj = typeof containsVal === 'object' ? containsVal : { type: monsterType || 'monster', id: monsterType || 'monster', name: monsterType || 'Monster' };
+                                monsterObj = typeof containsVal === 'object' ? { ...containsVal } : { type: monsterType || 'monster', id: monsterType || 'monster', name: monsterType || 'Monster' };
                             }
                         }
 
                         if (monsterObj && typeof containsVal === 'object') {
-                            if (typeof containsVal.hp === 'number') {
+                            const statsInfo = this.resolveMonsterTileStats(tile);
+                            const maxHp = containsVal.maxHp || containsVal.starting_hp || statsInfo?.maxHp || monsterObj.hp || 100;
+
+                            monsterObj.starting_hp = maxHp;
+                            monsterObj.maxHp = maxHp;
+
+                            if (typeof containsVal.hp === 'number' && containsVal.hp < maxHp) {
+                                monsterObj.hp = containsVal.hp;
+                                monsterObj.inDungeonDamaged = true;
+                            } else if (typeof containsVal.hp === 'number') {
                                 monsterObj.hp = containsVal.hp;
                             }
-                            if (typeof containsVal.maxHp === 'number') {
-                                monsterObj.starting_hp = containsVal.maxHp;
-                                if (typeof containsVal.hp === 'number' && containsVal.hp < containsVal.maxHp) {
-                                    monsterObj.inDungeonDamaged = true;
-                                }
+                            if (containsVal.inDungeonDamaged) {
+                                monsterObj.inDungeonDamaged = true;
                             }
                             if (typeof containsVal.isLord === 'boolean') {
                                 monsterObj.isLord = containsVal.isLord;
                             }
                         }
+
+                        if (monsterObj) {
+                            monsterObj.id = (typeof containsVal === 'object' && containsVal.id) || monsterObj.id || monsterObj.key || monsterObj.type || monsterType || 'monster_1';
+                        }
                     }
+                }
+            }
+            if (bool && this.state.isSneaking && tileId !== 'pvp_match') {
+                const selectedMember = this.state.selectedCrewMember || (this.props.crewManager && this.props.crewManager.crew && this.props.crewManager.crew[0]);
+                const playerDex = Number((selectedMember && selectedMember.stats && (selectedMember.stats.dex || selectedMember.stats.dexterity)) || selectedMember?.dex || selectedMember?.dexterity || 10);
+                const mStats = monsterObj?.stats || {};
+                const monsterInt = Number(mStats.int || mStats.intelligence || monsterObj?.int || monsterObj?.intelligence || 10);
+                const roll = Math.floor(Math.random() * 20) + 1;
+                const totalPlayerCheck = playerDex + roll;
+                const dc = monsterInt + 8;
+                const monsterName = monsterObj?.name || 'monster';
+
+                if (totalPlayerCheck >= dc) {
+                    this.displayMessage();
+                    return;
+                } else {
+                    this.displayMessage();
+                    this.setState({ isSneaking: false });
                 }
             }
             if (bool) {
@@ -24798,9 +25348,53 @@ class DungeonPage extends React.Component {
         return false;
     };
 
+    getSelectedCrewMember = () => {
+        const meta = getMeta() || {};
+        const crew = (this.state && Array.isArray(this.state.crew) && this.state.crew.length > 0)
+            ? this.state.crew
+            : (this.props.crewManager && Array.isArray(this.props.crewManager.crew) && this.props.crewManager.crew.length > 0)
+                ? this.props.crewManager.crew
+                : (Array.isArray(this.props.crew) && this.props.crew.length > 0)
+                    ? this.props.crew
+                    : (Array.isArray(meta.crew) && meta.crew.length > 0)
+                        ? meta.crew
+                        : [];
+
+        const sel = this.state && this.state.selectedCrewMember;
+        if (sel && typeof sel === 'object' && (sel.type || sel.role || sel.class || sel.name || sel.id)) {
+            return sel;
+        }
+
+        const selectedInCrew = crew.find(c => c && (c.selected || c.isLeader));
+        if (selectedInCrew) return selectedInCrew;
+
+        return crew[0] || null;
+    };
+
+    isRangedMember = (m) => {
+        if (!m || typeof m !== 'object') return false;
+        const mType = String(
+            m.type || m.role || m.class || m.image || m.portrait || m.name || m.id || m.key || ''
+        ).toLowerCase();
+        const bgLower = String(this.state?.activeAvatarBg || '').toLowerCase();
+
+        const RANGED_KEYWORDS = ['wizard', 'zildjikan', 'ranger', 'dormund', 'archer', 'rogue', 'hunter', 'trapper', 'scout'];
+        if (RANGED_KEYWORDS.some(kw => mType.includes(kw) || bgLower.includes(kw))) {
+            return true;
+        }
+        if (Array.isArray(m.inventory)) {
+            return m.inventory.some(item => item && (
+                item.isRanged || item.ranged || item.category === 'ranged' || item.weaponType === 'ranged' ||
+                (item.type === 'weapon' && (item.equippedSlot || item.equippedBy || item.equipped) &&
+                 typeof item.name === 'string' && /bow|crossbow|slingshot|rifle|musket|gun|javelin|throwing|wand|staff|orb/i.test(item.name))
+            ));
+        }
+        return false;
+    };
+
     getRangedVisionRange = () => {
         const crew = this.state.crew || (this.props.crewManager && this.props.crewManager.crew) || this.props.crew || [];
-        const selectedMember = this.state.selectedCrewMember || crew.find(c => c && (c.selected || c.isLeader)) || crew[0];
+        const selectedMember = this.getSelectedCrewMember();
         const mType = String(
             selectedMember?.type || selectedMember?.role || selectedMember?.class ||
             selectedMember?.image || selectedMember?.portrait || selectedMember?.name || ''
@@ -24808,44 +25402,25 @@ class DungeonPage extends React.Component {
         const bgLower = String(this.state.activeAvatarBg || '').toLowerCase();
 
         if (mType.includes('wizard') || mType.includes('zildjikan') || bgLower.includes('wizard') || bgLower.includes('zildjikan')) return 2;
-        if (mType.includes('ranger') || mType.includes('dormund') || mType.includes('archer') || bgLower.includes('ranger') || bgLower.includes('dormund')) return 4;
+        if (mType.includes('ranger') || mType.includes('dormund') || mType.includes('archer') || mType.includes('rogue') || mType.includes('hunter') || bgLower.includes('ranger') || bgLower.includes('dormund')) return 4;
 
         for (let member of crew) {
             if (!member) continue;
             const t = String(member.type || member.role || member.class || member.image || member.portrait || member.name || '').toLowerCase();
-            if (t.includes('ranger') || t.includes('dormund') || t.includes('archer')) return 4;
+            if (t.includes('ranger') || t.includes('dormund') || t.includes('archer') || t.includes('rogue')) return 4;
         }
         if (this.state.equippedRangedWeapon || this.state.hasRangedWeapon) return 4;
         return 2;
     };
 
     hasRangedWeaponEquipped = () => {
-        if (this.state.equippedRangedWeapon) return true;
-        if (this.state.hasRangedWeapon) return true;
-        const meta = getMeta() || {};
-        const crew = this.state.crew || (this.props.crewManager && this.props.crewManager.crew) || this.props.crew || meta.crew || [];
-        const selectedMember = this.state.selectedCrewMember || crew.find(c => c && (c.selected || c.isLeader)) || crew[0];
-        const bgLower = String(this.state.activeAvatarBg || '').toLowerCase();
+        if (this.state?.equippedRangedWeapon) return true;
+        if (this.state?.hasRangedWeapon) return true;
+        const selectedMember = this.getSelectedCrewMember();
+        if (this.isRangedMember(selectedMember)) return true;
 
-        const isRangedMember = (m) => {
-            if (!m) return false;
-            const mType = String(
-                m.type || m.role || m.class || m.image || m.portrait || m.name || ''
-            ).toLowerCase();
-            if (mType.includes('wizard') || mType.includes('zildjikan') || mType.includes('ranger') || mType.includes('dormund') || mType.includes('archer') || bgLower.includes('ranger') || bgLower.includes('dormund') || bgLower.includes('wizard') || bgLower.includes('zildjikan')) {
-                return true;
-            }
-            if (Array.isArray(m.inventory)) {
-                return m.inventory.some(item => item && (
-                    item.isRanged || item.ranged || item.category === 'ranged' || item.weaponType === 'ranged' ||
-                    (item.type === 'weapon' && (item.equippedSlot || item.equippedBy) &&
-                     typeof item.name === 'string' && /bow|crossbow|slingshot|rifle|musket|gun|javelin|throwing|wand|staff|orb/i.test(item.name))
-                ));
-            }
-            return false;
-        };
-
-        return isRangedMember(selectedMember);
+        const crew = this.state?.crew || (this.props.crewManager && this.props.crewManager.crew) || [];
+        return crew.some(m => this.isRangedMember(m));
     };
 
     resolveMonsterTileStats = (targetTile) => {
@@ -24888,36 +25463,79 @@ class DungeonPage extends React.Component {
             monsterName = String(monsterType).split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         }
 
-        let baseHp = 50;
+        let isPygmyUnit = false;
+        if (typeof containsVal === 'object' && containsVal) {
+            if (containsVal.isPocketPygmy || containsVal.subtype === 'pocket_pygmy' || containsVal.type === 'pygmies' || containsVal.type === 'pygmy' || containsVal.isPygmy) {
+                isPygmyUnit = true;
+            }
+        } else if (typeof containsVal === 'string' && containsVal.toLowerCase().includes('pygmy')) {
+            isPygmyUnit = true;
+        }
+
+        let baseHp = isPygmyUnit ? 15 : 50;
         if (def?.stats && typeof def.stats.hp === 'number') {
             baseHp = def.stats.hp;
         } else if (def && typeof def.hp === 'number') {
             baseHp = def.hp;
         } else if (typeof containsVal === 'object' && typeof containsVal.maxHp === 'number') {
             baseHp = containsVal.maxHp;
+        } else if (typeof containsVal === 'object' && typeof containsVal.hp === 'number' && isPygmyUnit) {
+            baseHp = containsVal.hp;
         }
 
         const tier = def?.tier || (typeof containsVal === 'object' && typeof containsVal.tier === 'number' ? containsVal.tier : 1);
         let maxHp = baseHp;
         if (typeof containsVal === 'object' && typeof containsVal.maxHp === 'number') {
             maxHp = containsVal.maxHp;
+        } else if (isPygmyUnit) {
+            maxHp = baseHp;
         } else if (!def?.isShrineGuardian && (tier === 1 || tier === 2)) {
             maxHp = baseHp * 2;
         }
 
         return {
-            monsterType: monsterType || 'monster',
-            monsterName,
+            monsterType: monsterType || (isPygmyUnit ? 'pocket_pygmy' : 'monster'),
+            monsterName: isPygmyUnit ? (monsterName === 'Monster' ? 'Cave Pygmy' : monsterName) : monsterName,
             def,
             maxHp,
             tier
         };
     };
 
+    getStructureRespawnDelay = (structureKey) => {
+        const key = String(structureKey || '').toLowerCase();
+        if (key.includes('earthen_fort')) return 60000; // 60 seconds respawn time for earthen forts
+        if (key.includes('war_camp')) return 45000;
+        if (key.includes('war_fort')) return 60000;
+        return 60000;
+    };
+
     isMonsterObj = (tile, containsObj) => {
-        if (this.props.boardManager && typeof this.props.boardManager.isMonster === 'function' && tile && this.props.boardManager.isMonster(tile)) return true;
         if (!tile && !containsObj) return false;
         const cObj = containsObj || (tile && tile.contains);
+
+        const isNarrativeTile = !!(
+            tile?.originalMarker === 'narrative' ||
+            tile?.image === 'narrative' ||
+            tile?.imageOverride === 'narrative' ||
+            tile?.type === 'narrative' ||
+            (typeof cObj === 'string' && (cObj === 'narrative' || cObj === 'narrative_visited' || cObj.includes('narrative'))) ||
+            (cObj && typeof cObj === 'object' && (cObj.type === 'narrative' || cObj.type === 'narrative_visited' || cObj.originalMarker === 'narrative' || cObj.image === 'narrative'))
+        );
+
+        const containsLivingUnit = !!(
+            cObj && typeof cObj === 'object' && (
+                cObj.isPocketPygmy || cObj.subtype === 'pocket_pygmy' || cObj.type === 'pygmies' || cObj.type === 'pygmy' || cObj.isPygmy ||
+                cObj.isAutomaton || cObj.subtype === 'automaton' || cObj.type === 'automaton' ||
+                cObj.isWalker || cObj.subtype === 'walker' || cObj.type === 'monster' || cObj.isMonster === true
+            )
+        );
+
+        if (isNarrativeTile && !containsLivingUnit) {
+            return false;
+        }
+
+        if (this.props.boardManager && typeof this.props.boardManager.isMonster === 'function' && tile && this.props.boardManager.isMonster(tile)) return true;
         if (tile && (tile.type === 'monster-tile' || tile.isMonster === true)) return true;
         if (!cObj) return false;
 
@@ -24930,18 +25548,22 @@ class DungeonPage extends React.Component {
                 return !isTileAllied;
             }
             const mm = this.props.monsterManager || defaultMonsterManager;
-            return !!(mm?.monsters?.[cObj] || mm?.monsters?.[str] || defaultMonsterManager.monsters?.[cObj] || defaultMonsterManager.monsters?.[str] || str.includes('monster') || str.includes('goblin') || str.includes('vampire') || str.includes('witch') || str.includes('cyclops') || str.includes('wraith') || str.includes('ogre') || str.includes('demon') || str.includes('dragon') || str.includes('thief') || str.includes('warchief') || str.includes('skeleton') || str.includes('orc') || str.includes('rat'));
+            const isRat = (str === 'rat' || str.startsWith('rat_') || str.endsWith('_rat') || str.includes('giant_rat') || (str.includes('rat') && !str.includes('narrative')));
+            return !!(mm?.monsters?.[cObj] || mm?.monsters?.[str] || defaultMonsterManager.monsters?.[cObj] || defaultMonsterManager.monsters?.[str] || str.includes('monster') || str.includes('goblin') || str.includes('vampire') || str.includes('witch') || str.includes('cyclops') || str.includes('wraith') || str.includes('ogre') || str.includes('demon') || str.includes('dragon') || str.includes('thief') || str.includes('warchief') || str.includes('skeleton') || str.includes('orc') || isRat || str.includes('pygmy'));
         }
         if (typeof cObj === 'object') {
             const isAllied = !!(cObj.isAllied || cObj.faction === 'player' || cObj.placedBy === 'player' || cObj.affiliation === 'friendly' || isTileAllied);
             if (isAllied) return false;
             if (cObj.isAutomaton || cObj.subtype === 'automaton' || cObj.type === 'automaton') return true;
+            if (cObj.isPocketPygmy || cObj.subtype === 'pocket_pygmy' || cObj.type === 'pygmies' || cObj.type === 'pygmy' || cObj.isPygmy || cObj.isWalker || cObj.subtype === 'walker') return true;
             if (cObj.type === 'monster' || cObj.isMonster === true || cObj.isEnemy === true || cObj.aggro === true) return true;
             const sub = cObj.subtype || cObj.type || cObj.key || cObj.name || cObj.monster;
             if (!sub || sub === 'empty_space' || sub === 'building' || sub === 'void' || sub === 'path') return false;
             const subStr = String(sub).toLowerCase();
+            if (subStr === 'narrative' || subStr === 'narrative_visited' || subStr.includes('narrative')) return false;
             const mm = this.props.monsterManager || defaultMonsterManager;
-            return !!(mm?.monsters?.[subStr] || defaultMonsterManager.monsters?.[subStr] || subStr.includes('monster') || subStr.includes('goblin') || subStr.includes('vampire') || subStr.includes('witch') || subStr.includes('cyclops') || subStr.includes('wraith') || subStr.includes('ogre') || subStr.includes('demon') || subStr.includes('dragon') || subStr.includes('thief') || subStr.includes('warchief') || subStr.includes('skeleton') || subStr.includes('orc') || subStr.includes('rat'));
+            const isRat = (subStr === 'rat' || subStr.startsWith('rat_') || subStr.endsWith('_rat') || subStr.includes('giant_rat') || (subStr.includes('rat') && !subStr.includes('narrative')));
+            return !!(mm?.monsters?.[subStr] || defaultMonsterManager.monsters?.[subStr] || subStr.includes('monster') || subStr.includes('goblin') || subStr.includes('vampire') || subStr.includes('witch') || subStr.includes('cyclops') || subStr.includes('wraith') || subStr.includes('ogre') || subStr.includes('demon') || subStr.includes('dragon') || subStr.includes('thief') || subStr.includes('warchief') || subStr.includes('skeleton') || subStr.includes('orc') || isRat || subStr.includes('pygmy'));
         }
         return false;
     };
@@ -24967,7 +25589,7 @@ class DungeonPage extends React.Component {
         }
 
         const maxRange = this.getRangedVisionRange();
-        const minDistSq = 4; // Ranged targeting starts at distance 2 (distSq >= 4), leaving distance 1 for melee
+        const minDistSq = 1; // Ranged targeting starts at distance 1 (distSq >= 1) allowing targeting of both adjacent and distant monsters
 
         const inRangeMonsterTileIds = [];
         let closestMonsterTileId = null;
@@ -25160,12 +25782,11 @@ class DungeonPage extends React.Component {
             return;
         }
 
-        const crew = this.state.crew || (this.props.crewManager && this.props.crewManager.crew) || [];
-        const attacker = this.state.selectedCrewMember || crew.find(c => c && (c.selected || c.isLeader)) || crew[0] || {};
+        const attacker = this.getSelectedCrewMember() || {};
         const attackerType = String(attacker.type || attacker.role || attacker.class || attacker.image || attacker.portrait || attacker.name || '').toLowerCase();
 
         let projectileType = 'magic_missile';
-        if (attackerType.includes('ranger') || attackerType.includes('dormund') || attackerType.includes('archer')) {
+        if (attackerType.includes('ranger') || attackerType.includes('dormund') || attackerType.includes('archer') || attackerType.includes('rogue') || attackerType.includes('hunter')) {
             projectileType = 'arrow';
         } else if (attackerType.includes('wizard') || attackerType.includes('zildjikan')) {
             projectileType = 'magic_missile';
@@ -25190,7 +25811,7 @@ class DungeonPage extends React.Component {
 
             if (typeof monsterObj === 'string') {
                 monsterObj = {
-                    type: statsInfo?.monsterType || monsterObj,
+                    type: 'monster',
                     subtype: statsInfo?.monsterType || monsterObj,
                     name: monsterName,
                     hp: maxHp,
@@ -25199,6 +25820,10 @@ class DungeonPage extends React.Component {
                 };
                 targetTile.contains = monsterObj;
             } else if (typeof monsterObj === 'object' && monsterObj) {
+                if (!monsterObj.type || monsterObj.type !== 'monster') {
+                    if (!monsterObj.subtype && monsterObj.type) monsterObj.subtype = monsterObj.type;
+                    monsterObj.type = 'monster';
+                }
                 if (typeof monsterObj.maxHp !== 'number') {
                     monsterObj.maxHp = maxHp;
                 }
@@ -25217,7 +25842,12 @@ class DungeonPage extends React.Component {
                 : (attacker.attack || attacker.power || 15);
             const damage = attackStat;
             monsterObj.hp = Math.max(0, monsterObj.hp - damage);
+            monsterObj.inDungeonDamaged = true;
             monsterObj.lastDamageTime = Date.now();
+
+            if (boardManager?.currentBoard?.tiles && targetTileId != null && boardManager.currentBoard.tiles[targetTileId]) {
+                boardManager.currentBoard.tiles[targetTileId].contains = targetTile.contains;
+            }
 
             if (monsterObj.hp <= 0) {
                 if (typeof this.displayMessage === 'function') {
@@ -25327,10 +25957,28 @@ class DungeonPage extends React.Component {
                 if (currentTile.hp !== undefined) delete currentTile.hp;
                 if (currentTile.maxHp !== undefined) delete currentTile.maxHp;
 
+                // Ensure vacated tile is restored as a clean passable floor tile, not a void space
+                currentTile.isVoid = false;
+                if (currentTile.type === 'void') currentTile.type = 'empty_space';
+                if (currentTile.original === 'void') delete currentTile.original;
+                try { delete currentTile.terrain; } catch (e) {}
+
+                const isValidFloorColor = (c) => c && c !== 'black' && c !== 'white' && c !== 'null';
+                const boardColor = boardManager.currentBoard && boardManager.currentBoard.tiles && boardManager.currentBoard.tiles[currentTile.id] && boardManager.currentBoard.tiles[currentTile.id].color;
+                currentTile.color = isValidFloorColor(boardColor) ? boardColor : (isValidFloorColor(currentTile.color) ? currentTile.color : '#6b6057');
+
                 if (boardManager.currentBoard && boardManager.currentBoard.tiles) {
                     if (boardManager.currentBoard.tiles[currentTile.id]) {
                         boardManager.currentBoard.tiles[currentTile.id].contains = null;
                         boardManager.currentBoard.tiles[currentTile.id].image = null;
+                        boardManager.currentBoard.tiles[currentTile.id].isVoid = false;
+                        if (boardManager.currentBoard.tiles[currentTile.id].type === 'void') {
+                            boardManager.currentBoard.tiles[currentTile.id].type = 'empty_space';
+                        }
+                        if (boardManager.currentBoard.tiles[currentTile.id].original === 'void') {
+                            delete boardManager.currentBoard.tiles[currentTile.id].original;
+                        }
+                        boardManager.currentBoard.tiles[currentTile.id].color = currentTile.color;
                         if (boardManager.currentBoard.tiles[currentTile.id].icon) {
                             boardManager.currentBoard.tiles[currentTile.id].icon = null;
                         }
@@ -25576,15 +26224,19 @@ class DungeonPage extends React.Component {
         Object.keys(soulShards).forEach((monsterType) => {
             const count = soulShards[monsterType];
             if (count > 0) {
+                const formattedName = monsterType
+                    .split('_')
+                    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+                    .join(' ');
                 for (let i = 0; i < count; i++) {
                     inv.push({
                         id: `soul_shard_${monsterType}_${i}`,
-                        name: `${monsterType.charAt(0).toUpperCase() + monsterType.slice(1)} Shard`,
+                        name: `${formattedName} Shard`,
                         type: 'soul_shard',
                         monsterType: monsterType,
                         count: count,
                         icon: images['sould_shards'] || 'sould_shards',
-                        description: `A soul shard of a ${monsterType}. Collect 3 to forge an Echo Card at the The Duel camp station.`
+                        description: `A soul shard of a ${formattedName.toLowerCase()}. Collect 3 to forge an Echo Card at the Duel camp station.`
                     });
                 }
             }
@@ -26094,11 +26746,7 @@ class DungeonPage extends React.Component {
             ArrowUp: 'up',
             ArrowDown: 'down',
             ArrowLeft: 'left',
-            ArrowRight: 'right',
-            w: 'up', W: 'up',
-            a: 'left', A: 'left',
-            s: 'down', S: 'down',
-            d: 'right', D: 'right'
+            ArrowRight: 'right'
         };
         const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
         const targetTag = (event.target && event.target.tagName) ? event.target.tagName.toLowerCase() : '';
@@ -26232,7 +26880,7 @@ class DungeonPage extends React.Component {
         );
 
         if (isInputFocused || isAnyModalOpen) {
-            if (!isModifierHeld && (dirMap[key] || ['b', 'B', 'z', 'Z', 'i', 'I', 'c', 'C', 'q', 'Q', 'm', 'M', 'r', 'R', '1', 'x', 'X'].includes(key))) {
+            if (!isModifierHeld && (dirMap[key] || ['b', 'B', 'z', 'Z', 'i', 'I', 'c', 'C', 'q', 'Q', 'm', 'M', 'r', 'R', '`', '~', '1', '2', '3', 'x', 'X', 's', 'S'].includes(key))) {
                 return;
             }
         }
@@ -26302,9 +26950,11 @@ class DungeonPage extends React.Component {
             return;
         }
 
-        // Toggle dev console with Shift+Enter or Shift+Space OR Recenter Pocket Dimension with Space
+        // Toggle dev console with '\' (Backslash) or Shift+Enter OR Recenter Pocket Dimension with Space
         try {
-            if ((event.code === 'Enter' || event.key === 'Enter' || event.key === 'Return') && event.shiftKey) {
+            if ((((event.code === 'Enter' || event.key === 'Enter' || event.key === 'Return') && event.shiftKey) ||
+                 ((event.key === '\\' || event.code === 'Backslash') && !event.metaKey && !event.ctrlKey && !event.altKey)) &&
+                !isInputFocused && activeTag !== 'input' && activeTag !== 'textarea') {
                 event.preventDefault();
                 this.setState(prev => ({ devConsoleOpen: !prev.devConsoleOpen }), () => {
                     if (this.state.devConsoleOpen) {
@@ -26326,12 +26976,7 @@ class DungeonPage extends React.Component {
                 }
                 if (event.shiftKey) {
                     event.preventDefault();
-                    this.setState(prev => ({ devConsoleOpen: !prev.devConsoleOpen }), () => {
-                        if (this.state.devConsoleOpen) {
-                            // focus input after open
-                            try { setTimeout(() => { if (this.devConsoleInputRef.current) this.devConsoleInputRef.current.focus(); }, 0); } catch (e) { }
-                        }
-                    });
+                    this.triggerSelectedExpeditionSkill();
                     return;
                 } else if (this.hasRangedWeaponEquipped() && this.state.targetedMonsterTileId !== null && this.state.targetedMonsterTileId !== undefined && !isInputFocused && !isAnyModalOpen && !this.state.inMonsterBattle) {
                     event.preventDefault();
@@ -26375,8 +27020,17 @@ class DungeonPage extends React.Component {
                 return;
             }
         } catch (e) { }
+
+        // Sneak toggle hotkey: S (no modifier, not in combat, not superboard)
+        try {
+            if ((key === 's' || key === 'S') && !isModifierHeld && !isInputFocused && !isAnyModalOpen && !this.state.inMonsterBattle && !this.state.inTowerSiege && !this.state.keysLocked && !this.state.inSuperboard) {
+                event.preventDefault();
+                this._toggleSneak();
+                return;
+            }
+        } catch (e) { }
         // Allow global 'i' to toggle MonsterBattle inventory when a battle is active
-        // If the developer console is open, disable all hotkeys here (except Shift+Space
+        // If the developer console is open, disable all hotkeys here (except Backslash / Shift+Enter
         // which is handled above). This prevents typed commands like 'revive' from
         // being intercepted by global shortcuts (e.g. 'i' toggling inventory).
         try {
@@ -26489,12 +27143,22 @@ class DungeonPage extends React.Component {
                     return;
                 }
             }
-            // '1' — Toggle show/hide side panels in the dungeon
-            if ((maybeKey === '1') && !this.state.inMonsterBattle && !isInPocketDimension && !event.metaKey && !event.ctrlKey) {
+            // '`' (Tilde / Backtick) — Toggle show/hide side panels in the dungeon
+            if ((maybeKey === '`' || maybeKey === '~' || event.code === 'Backquote') && !this.state.inMonsterBattle && !isInPocketDimension && !event.metaKey && !event.ctrlKey) {
                 const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
                 if (activeTag !== 'input' && activeTag !== 'textarea') {
                     event.preventDefault();
                     this.toggleBothSidePanels();
+                    return;
+                }
+            }
+            // '1', '2', '3' — Select Expedition Skill slot 1, 2, or 3 for active crew member
+            if ((maybeKey === '1' || maybeKey === '2' || maybeKey === '3') && !this.state.inMonsterBattle && !isInPocketDimension && !event.metaKey && !event.ctrlKey) {
+                const activeTag = document.activeElement ? document.activeElement.tagName.toLowerCase() : '';
+                if (activeTag !== 'input' && activeTag !== 'textarea') {
+                    event.preventDefault();
+                    const slotIndex = parseInt(maybeKey, 10) - 1;
+                    this.selectExpeditionSkillSlot(slotIndex);
                     return;
                 }
             }
@@ -26562,9 +27226,6 @@ class DungeonPage extends React.Component {
             this.checkWhichSideOfBoard();
         }
         switch (key) {
-            case '1':
-                this.toggleFullscreen();
-                break;
             case 'Space':
 
                 break;
@@ -27667,6 +28328,14 @@ class DungeonPage extends React.Component {
             this.props.saveUserData();
         }
         val = member.data;
+        if (foundMember) {
+            if (typeof foundMember.selectedExpeditionSkillSlot !== 'number') {
+                foundMember.selectedExpeditionSkillSlot = (val && typeof val.selectedExpeditionSkillSlot === 'number') ? val.selectedExpeditionSkillSlot : 0;
+            }
+            if (val) {
+                val.selectedExpeditionSkillSlot = foundMember.selectedExpeditionSkillSlot;
+            }
+        }
         const expanded = foundMember ? (Array.isArray(foundMember.actionMenuTypeExpanded) ? foundMember.actionMenuTypeExpanded : (foundMember.actionMenuTypeExpanded ? [foundMember.actionMenuTypeExpanded] : [])) : [];
 
         this.setState({
@@ -27724,7 +28393,12 @@ class DungeonPage extends React.Component {
         // clear selection on all crew
         crew.forEach(c => { if (c) c.selected = false; });
         const foundMember = pool[nextIndex];
-        if (foundMember) foundMember.selected = true;
+        if (foundMember) {
+            foundMember.selected = true;
+            if (typeof foundMember.selectedExpeditionSkillSlot !== 'number') {
+                foundMember.selectedExpeditionSkillSlot = 0;
+            }
+        }
 
 
         // persist selection to meta so other parts of the app see it
@@ -28584,6 +29258,14 @@ class DungeonPage extends React.Component {
             delete meta.activatedLoci;
             delete meta.activatedLocusRecords;
             meta.dungeonId = matchedDungeon.id;
+            if (this.props.inventoryManager && typeof this.props.inventoryManager.initializeItems === 'function') {
+                this.props.inventoryManager.initializeItems(meta.inventory || null);
+                if (typeof this.props.inventoryManager.gold !== 'number' || this.props.inventoryManager.gold === 0) {
+                    if (!meta.inventory || typeof meta.inventory.gold !== 'number') {
+                        this.props.inventoryManager.gold = 100;
+                    }
+                }
+            }
             storeMeta(meta);
 
             // Re-route to load this existing dungeon
@@ -28638,7 +29320,17 @@ class DungeonPage extends React.Component {
         }
 
 
-        this.props.inventoryManager.initializeItems()
+        if (this.props.inventoryManager && typeof this.props.inventoryManager.initializeItems === 'function') {
+            this.props.inventoryManager.initializeItems(meta.inventory || null);
+            if (typeof this.props.inventoryManager.gold !== 'number' || this.props.inventoryManager.gold === 0) {
+                if (!meta.inventory || typeof meta.inventory.gold !== 'number') {
+                    this.props.inventoryManager.gold = 100;
+                }
+            }
+            meta.inventory = meta.inventory || {};
+            meta.inventory.gold = this.props.inventoryManager.gold;
+            storeMeta(meta);
+        }
 
         // ── Sage starting reagents ─────────────────────────────────────────────
         // If the crew includes a Sage, seed the inventory with one of each
@@ -29802,6 +30494,262 @@ class DungeonPage extends React.Component {
             await updateUserRequest(getUserId(), meta);
         } catch (e) { }
     }
+    selectExpeditionSkillSlot = (slotIdx) => {
+        const selectedMember = this.state.selectedCrewMember;
+        if (!selectedMember) return;
+        const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew) && this.props.crewManager.crew.length > 0)
+            ? this.props.crewManager.crew
+            : (this.state.crew || []);
+
+        const targetId = selectedMember.id;
+        const targetType = selectedMember.type;
+        const memberInCrew = crew.find(c => c && ((targetId && c.id === targetId) || (targetType && c.type === targetType)));
+        if (memberInCrew) {
+            memberInCrew.selectedExpeditionSkillSlot = slotIdx;
+        }
+        selectedMember.selectedExpeditionSkillSlot = slotIdx;
+
+        try {
+            const meta = getMeta() || {};
+            meta.crew = crew;
+            storeMeta(meta);
+            if (this.props.saveUserData) this.props.saveUserData();
+        } catch (e) { }
+
+        this.setState({
+            selectedCrewMember: { ...selectedMember, selectedExpeditionSkillSlot: slotIdx }
+        });
+    }
+
+    triggerSelectedExpeditionSkill = () => {
+        const selectedMember = this.state.selectedCrewMember;
+        const slotIdx = (selectedMember && typeof selectedMember.selectedExpeditionSkillSlot === 'number')
+            ? selectedMember.selectedExpeditionSkillSlot
+            : 0;
+
+        if (this._skillFlashTimeout) clearTimeout(this._skillFlashTimeout);
+        this.setState({
+            flashingSkillSlot: slotIdx
+        }, () => {
+            this._skillFlashTimeout = setTimeout(() => {
+                this.setState({ flashingSkillSlot: null });
+            }, 450);
+        });
+
+        const memberName = selectedMember ? (selectedMember.name || selectedMember.type || 'Crew member') : 'Crew member';
+        this.displayMessage(`⚡ ${memberName} triggered Expedition Skill Slot ${slotIdx + 1}!`);
+    }
+
+    renderBoardHudRow = () => {
+        return (
+            <div className={`board-hud-row ${this.state.inSuperboard ? 'superboard-hud-row' : ''}`}>
+                <div className="respawn-message-container" style={{ display: 'flex', alignItems: 'center', gap: this.state.inSuperboard ? 8 : 12 }}>
+                    {this.state.showSaveIndicator && (
+                        <div
+                            className={`hud-timer-item hud-save-indicator ${this.state.saveIndicatorText === 'Save Failed' ? 'save-failed' : this.state.saveIndicatorText === 'Saving...' ? 'saving' : 'saved'}`}
+                        >
+                            {this.state.saveIndicatorText === 'Saving...' && (
+                                <svg className="save-spinner" viewBox="0 0 24 24" style={{ width: '13px', height: '13px', animation: 'save-spin 1s linear infinite' }}>
+                                    <circle cx="12" cy="12" r="10" stroke="rgba(255, 255, 255, 0.2)" strokeWidth="3" fill="none" />
+                                    <path d="M12 2 C 6.48 2 2 6.48 2 12" stroke="#4dabf7" strokeWidth="3" strokeLinecap="round" fill="none" />
+                                </svg>
+                            )}
+                            {(this.state.saveIndicatorText === 'Saved' || this.state.saveIndicatorText === 'Saved!') && (
+                                <svg viewBox="0 0 24 24" style={{ width: '13px', height: '13px' }}>
+                                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="#40c057" />
+                                </svg>
+                            )}
+                            {this.state.saveIndicatorText === 'Save Failed' && (
+                                <svg viewBox="0 0 24 24" style={{ width: '13px', height: '13px' }}>
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="#fa5252" />
+                                </svg>
+                            )}
+                            <div className="save-indicator-label">
+                                {this.state.saveIndicatorText}
+                            </div>
+                        </div>
+                    )}
+                    {this.state.inSuperboard ? (() => {
+                        const rawFreeWill = typeof this.state.pocketFreeWill === 'number' ? this.state.pocketFreeWill : ((getMeta() || {}).freeWill || 50);
+                        const rawInfluence = typeof this.getPlayerInfluenceScore === 'function' ? this.getPlayerInfluenceScore() : 0;
+                        const clampedFreeWill = Math.max(0, Math.min(200, Math.round(rawFreeWill)));
+                        const clampedInfluence = Math.max(0, Math.min(500, Math.round(rawInfluence)));
+                        const freeWillPct = Math.min(100, Math.max(0, (clampedFreeWill / 200) * 100));
+                        const influencePct = Math.min(100, Math.max(0, (clampedInfluence / 500) * 100));
+
+                        return (
+                            <React.Fragment>
+                                {/* Free Will Horizontal Meter (0 - 200) */}
+                                <div
+                                    className="hud-meter-item meter-free-will"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        background: 'rgba(15, 23, 42, 0.85)',
+                                        border: '1px solid rgba(56, 189, 248, 0.4)',
+                                        borderRadius: '8px',
+                                        padding: '2px 7px',
+                                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.45)',
+                                        cursor: 'help',
+                                        pointerEvents: 'auto'
+                                    }}
+                                    title={`Free Will: ${clampedFreeWill} / 200`}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, color: '#38bdf8', whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontSize: '12px' }}>🕊️</span>
+                                        <span>Free Will</span>
+                                    </div>
+                                    <div style={{
+                                        width: '65px',
+                                        height: '8px',
+                                        background: 'rgba(0, 0, 0, 0.65)',
+                                        borderRadius: '4px',
+                                        overflow: 'hidden',
+                                        border: '1px solid rgba(56, 189, 248, 0.25)',
+                                        position: 'relative'
+                                    }}>
+                                        <div style={{
+                                            width: `${freeWillPct}%`,
+                                            height: '100%',
+                                            background: 'linear-gradient(90deg, #0284c7 0%, #38bdf8 100%)',
+                                            borderRadius: '3px',
+                                            boxShadow: '0 0 6px rgba(56, 189, 248, 0.6)',
+                                            transition: 'width 0.3s ease'
+                                        }} />
+                                    </div>
+                                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#e0f2fe', fontFamily: 'monospace', minWidth: '40px', textAlign: 'right' }}>
+                                        {clampedFreeWill}/200
+                                    </div>
+                                </div>
+
+                                {/* Influence Horizontal Meter (0 - 500) */}
+                                <div
+                                    className="hud-meter-item meter-influence"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 6,
+                                        background: 'rgba(24, 15, 38, 0.85)',
+                                        border: '1px solid rgba(168, 85, 247, 0.4)',
+                                        borderRadius: '8px',
+                                        padding: '2px 7px',
+                                        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.45)',
+                                        cursor: 'help',
+                                        pointerEvents: 'auto'
+                                    }}
+                                    title={`Influence: ${clampedInfluence} / 500`}
+                                >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, color: '#c084fc', whiteSpace: 'nowrap' }}>
+                                        <span style={{ fontSize: '12px' }}>🔮</span>
+                                        <span>Influence</span>
+                                    </div>
+                                    <div style={{
+                                        width: '65px',
+                                        height: '8px',
+                                        background: 'rgba(0, 0, 0, 0.65)',
+                                        borderRadius: '4px',
+                                        overflow: 'hidden',
+                                        border: '1px solid rgba(168, 85, 247, 0.25)',
+                                        position: 'relative'
+                                    }}>
+                                        <div style={{
+                                            width: `${influencePct}%`,
+                                            height: '100%',
+                                            background: 'linear-gradient(90deg, #7c3aed 0%, #a855f7 100%)',
+                                            borderRadius: '3px',
+                                            boxShadow: '0 0 6px rgba(168, 85, 247, 0.6)',
+                                            transition: 'width 0.3s ease'
+                                        }} />
+                                    </div>
+                                    <div style={{ fontSize: '11px', fontWeight: 700, color: '#f3e8ff', fontFamily: 'monospace', minWidth: '40px', textAlign: 'right' }}>
+                                        {clampedInfluence}/500
+                                    </div>
+                                </div>
+                            </React.Fragment>
+                        );
+                    })() : (
+                        <React.Fragment>
+                            <div
+                                className="hud-timer-item"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
+                                title="Monster Respawn Timer — Time remaining until defeated dungeon monsters respawn on the map"
+                            >
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff3333', boxShadow: '0 0 6px rgba(255, 51, 51, 0.7)' }}></div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.timeToRespawn || 'Active'}</div>
+                            </div>
+                            <div
+                                className="hud-timer-item"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
+                                title="Item & Loot Respawn Timer — Time remaining until gathered items, chests, and resources respawn"
+                            >
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffd700', boxShadow: '0 0 6px rgba(255, 215, 0, 0.7)' }}></div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.itemTimeToRespawn || 'Active'}</div>
+                            </div>
+                            <div
+                                className="hud-timer-item"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
+                                title="Dungeon Relock Timer — Time remaining until doors, gates, and locks reset across the dungeon (12-hour PST cycle)"
+                            >
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffffff', boxShadow: '0 0 6px rgba(255, 255, 255, 0.7)' }}></div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.relockTimeToRespawn || 'Active'}</div>
+                            </div>
+                        </React.Fragment>
+                    )}
+                    {this.state.inSuperboard && this.state.pocketLanternActive && (
+                        <div
+                            className="hud-timer-item lantern-fuel-item"
+                            style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                background: 'rgba(30, 20, 10, 0.85)',
+                                border: '1px solid #f59e0b',
+                                borderRadius: '12px',
+                                padding: '2px 8px',
+                                cursor: 'help',
+                                pointerEvents: 'auto',
+                                boxShadow: this.state.pocketLanternFlickering ? '0 0 10px #f59e0b, inset 0 0 6px #ef4444' : '0 0 8px rgba(245, 158, 11, 0.4)'
+                            }}
+                            title="Chemical Lantern Active — Extends pocket dimension vision radius by 2 tiles. Consumes 1 chemical per second."
+                        >
+                            <span style={{ fontSize: 13, filter: 'drop-shadow(0 0 3px #f59e0b)' }}>🏮</span>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: this.state.pocketLanternFlickering ? '#ef4444' : '#fef08a' }}>
+                                {this.state.pocketLanternFlickering ? 'Flickering...' : `${this.state.pocketLanternFuel}s`}
+                            </div>
+                        </div>
+                    )}
+                    {this.state.inSuperboard && (
+                        <button
+                            className={`pocket-zoom-toggle-btn ${this.state.pocketZoomIn ? 'zoomed-in' : ''}`}
+                            onClick={() => (typeof this.togglePocketZoom === 'function' ? this.togglePocketZoom() : null)}
+                            title={this.state.pocketZoomIn ? "Zoom Out to 15x15 Overview (Hotkey: Z)" : "Zoom In (Hotkey: Z)"}
+                        >
+                            <span className="zoom-icon">{this.state.pocketZoomIn ? '🔍' : '🔎'}</span>
+                            <span>{this.state.pocketZoomIn ? 'Zoom Out' : 'Zoom In'}</span>
+                            <span className="zoom-badge">{this.state.pocketZoomIn ? '1.5x' : '1.0x'}</span>
+                        </button>
+                    )}
+                </div>
+                <div
+                    className="message-container"
+                    style={{
+                        opacity: this.state.showMessage ? 1 : 0,
+                        transition: 'opacity 0.5s',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        justifyContent: this.state.inSuperboard ? 'flex-start' : 'center',
+                        paddingLeft: this.state.inSuperboard ? '10px' : 0
+                    }}
+                >
+                    {this.state.messageToDisplay}
+                </div>
+                {this.state.popoutResources && typeof this.renderPoppedOutResourcesTopBar === 'function' && this.renderPoppedOutResourcesTopBar()}
+            </div>
+        );
+    }
+
     toggleActionsTray = () => {
         const newVal = !this.state.actionsTrayExpanded
 
@@ -30126,6 +31074,8 @@ class DungeonPage extends React.Component {
         this.setState({
             keysLocked: false,
             inMonsterBattle: false,
+            isPvPMode: false,
+            opponentCrew: null,
             showUserLevelUpModal: getPendingUserPerkLevels() > 0
         }, () => {
             this.checkPocketDimensionVictory();
@@ -37601,6 +38551,18 @@ class DungeonPage extends React.Component {
                             this.openCardDuel('combat_loss');
                         });
                     }}
+                    onSpare={() => {
+                        this.setState({ showReaperOfferModal: false }, () => {
+                            try {
+                                const deathEnemy = getCurrentDeathEnemy();
+                                const enemyName = deathEnemy?.name || 'The Principalities';
+                                this.setState({
+                                    toastMessage: `${enemyName} spared your crew out of curiosity! No death marker added.`
+                                });
+                            } catch (e) { }
+                            this.battleOver('respawn');
+                        });
+                    }}
                 />
 
                 {/* No Codex Entry popup */}
@@ -37642,7 +38604,7 @@ class DungeonPage extends React.Component {
                         soldier: [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open a Minor Key gate once per level' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
                         wizard: [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
                         barbarian: [{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.' }],
-                        monk: [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
+                        monk: [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'silent_awareness', name: 'Silent Awareness', desc: 'Cuts ambush chance in obscured spaces by 50% when Monk is selected' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
                         summoner: [{ key: 'spirit_sight', name: 'Spirit Sight', desc: 'Narrative tiles and shrines glow through fog' }, { key: 'plunder', name: 'Plunder', desc: 'Open a chest a second time once per run' }, { key: 'soul_tap', name: 'Soul Tap', desc: 'Transfers accumulated power of fallen friendly units to the Summoner' }, { key: 'soul_tithe', name: 'Soul Tithe', desc: '+1 Shimmering Dust per combat victory' }, { key: 'dark_pact', name: 'Dark Pact', desc: 'Trade Shimmering Dust at vendors (1 Dust = 25g)' }],
                     };
                     const availableSkills = globalSkillsByClass[sd.shrineClass] || [];
@@ -40000,14 +40962,26 @@ class DungeonPage extends React.Component {
                         crewMember={this.state.selectedSkillTreeCrewMember}
                         initialTab={this.state.skillTreeInitialTab || 'character'}
                         onClose={this.handleCloseSkillTree}
-                        onUpdateCrewMember={() => this.forceUpdate()}
+                        onUpdateCrewMember={(updated) => {
+                            if (updated) {
+                                this.setState(prev => ({
+                                    selectedCrewMember: prev.selectedCrewMember && (prev.selectedCrewMember.id === updated.id || prev.selectedCrewMember.type === updated.type)
+                                        ? { ...prev.selectedCrewMember, ...updated }
+                                        : prev.selectedCrewMember,
+                                    selectedSkillTreeCrewMember: { ...updated },
+                                    crew: prev.crew ? prev.crew.map(c => (c.id === updated.id || c.type === updated.type) ? { ...c, ...updated } : c) : prev.crew
+                                }));
+                            } else {
+                                this.forceUpdate();
+                            }
+                        }}
                     />
                 )}
                 {/* <ExpositionPane></ExpositionPane> */}
                 {this.props.boardManager.currentOrientation === 'B' && <div className="dark-mask"></div>}
                 {!(this.state.isMobileLandscape && (this.state.inMonsterBattle || this.state.inTowerSiege)) && (
                     <div className={`left-side-panel ${(this.state.leftPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`}>
-                        <div className="expand-collapse-button icon-container" onClick={this.toggleLeftSidePanel}>
+                        <div className="expand-collapse-button icon-container" onClick={this.toggleLeftSidePanel} title="Toggle Side Panel (Hotkey: `)">
                             <CIcon icon={cilCaretRight} className={`expand-icon ${(this.state.leftPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`} size="sm" />
                         </div>
                         {this.state.selectedCrewMember && this.state.selectedCrewMember.name && (
@@ -40020,7 +40994,7 @@ class DungeonPage extends React.Component {
                         )}
                     </div>
                 )}
-                {/* Dev console panel (toggled with Shift+Space) */}
+                {/* Dev console panel (toggled with \ or Shift+Enter) */}
                 {this.state.devConsoleOpen && (
                     <div className="dev-console">
                         <div className="dev-console-inner">
@@ -40060,7 +41034,7 @@ class DungeonPage extends React.Component {
                         ) : (
                             this.renderPanelSections('right')
                         )}
-                        <div className="expand-collapse-button icon-container" onClick={this.toggleRightSidePanel}>
+                        <div className="expand-collapse-button icon-container" onClick={this.toggleRightSidePanel} title="Toggle Side Panel (Hotkey: `)">
                             <CIcon icon={cilCaretLeft} className={`expand-icon ${(this.state.rightPanelExpanded && !this.state.isTutorialMode) ? 'expanded' : ''}`} size="sm" />
                         </div>
                     </div>
@@ -40070,186 +41044,7 @@ class DungeonPage extends React.Component {
                     opacity: this.state.tiles.length > 0 ? 1 : 0,
                     transition: 'opacity 1s'
                 }} className={`center-board-wrapper ${this.state.minimapPlaceMapMarkerStarted ? 'show-map-marker-cursor' : ''}`}>
-                    <div className={`board-hud-row ${this.state.inSuperboard ? 'superboard-hud-row' : ''}`}>
-                        <div className="respawn-message-container" style={{ display: 'flex', alignItems: 'center', gap: this.state.inSuperboard ? 8 : 12 }}>
-                            {this.state.inSuperboard ? (() => {
-                                const rawFreeWill = typeof this.state.pocketFreeWill === 'number' ? this.state.pocketFreeWill : ((getMeta() || {}).freeWill || 50);
-                                const rawInfluence = this.getPlayerInfluenceScore();
-                                const clampedFreeWill = Math.max(0, Math.min(200, Math.round(rawFreeWill)));
-                                const clampedInfluence = Math.max(0, Math.min(500, Math.round(rawInfluence)));
-                                const freeWillPct = Math.min(100, Math.max(0, (clampedFreeWill / 200) * 100));
-                                const influencePct = Math.min(100, Math.max(0, (clampedInfluence / 500) * 100));
-
-                                return (
-                                    <React.Fragment>
-                                        {/* Free Will Horizontal Meter (0 - 200) */}
-                                        <div
-                                            className="hud-meter-item meter-free-will"
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                background: 'rgba(15, 23, 42, 0.85)',
-                                                border: '1px solid rgba(56, 189, 248, 0.4)',
-                                                borderRadius: '8px',
-                                                padding: '2px 7px',
-                                                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.45)',
-                                                cursor: 'help',
-                                                pointerEvents: 'auto'
-                                            }}
-                                            title={`Free Will: ${clampedFreeWill} / 200`}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, color: '#38bdf8', whiteSpace: 'nowrap' }}>
-                                                <span style={{ fontSize: '12px' }}>🕊️</span>
-                                                <span>Free Will</span>
-                                            </div>
-                                            <div style={{
-                                                width: '65px',
-                                                height: '8px',
-                                                background: 'rgba(0, 0, 0, 0.65)',
-                                                borderRadius: '4px',
-                                                overflow: 'hidden',
-                                                border: '1px solid rgba(56, 189, 248, 0.25)',
-                                                position: 'relative'
-                                            }}>
-                                                <div style={{
-                                                    width: `${freeWillPct}%`,
-                                                    height: '100%',
-                                                    background: 'linear-gradient(90deg, #0284c7 0%, #38bdf8 100%)',
-                                                    borderRadius: '3px',
-                                                    boxShadow: '0 0 6px rgba(56, 189, 248, 0.6)',
-                                                    transition: 'width 0.3s ease'
-                                                }} />
-                                            </div>
-                                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#e0f2fe', fontFamily: 'monospace', minWidth: '40px', textAlign: 'right' }}>
-                                                {clampedFreeWill}/200
-                                            </div>
-                                        </div>
-
-                                        {/* Influence Horizontal Meter (0 - 500) */}
-                                        <div
-                                            className="hud-meter-item meter-influence"
-                                            style={{
-                                                display: 'flex',
-                                                alignItems: 'center',
-                                                gap: 6,
-                                                background: 'rgba(24, 15, 38, 0.85)',
-                                                border: '1px solid rgba(168, 85, 247, 0.4)',
-                                                borderRadius: '8px',
-                                                padding: '2px 7px',
-                                                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.45)',
-                                                cursor: 'help',
-                                                pointerEvents: 'auto'
-                                            }}
-                                            title={`Influence: ${clampedInfluence} / 500`}
-                                        >
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '11px', fontWeight: 700, color: '#c084fc', whiteSpace: 'nowrap' }}>
-                                                <span style={{ fontSize: '12px' }}>🔮</span>
-                                                <span>Influence</span>
-                                            </div>
-                                            <div style={{
-                                                width: '65px',
-                                                height: '8px',
-                                                background: 'rgba(0, 0, 0, 0.65)',
-                                                borderRadius: '4px',
-                                                overflow: 'hidden',
-                                                border: '1px solid rgba(168, 85, 247, 0.25)',
-                                                position: 'relative'
-                                            }}>
-                                                <div style={{
-                                                    width: `${influencePct}%`,
-                                                    height: '100%',
-                                                    background: 'linear-gradient(90deg, #7c3aed 0%, #a855f7 100%)',
-                                                    borderRadius: '3px',
-                                                    boxShadow: '0 0 6px rgba(168, 85, 247, 0.6)',
-                                                    transition: 'width 0.3s ease'
-                                                }} />
-                                            </div>
-                                            <div style={{ fontSize: '11px', fontWeight: 700, color: '#f3e8ff', fontFamily: 'monospace', minWidth: '40px', textAlign: 'right' }}>
-                                                {clampedInfluence}/500
-                                            </div>
-                                        </div>
-                                    </React.Fragment>
-                                );
-                            })() : (
-                                <React.Fragment>
-                                    <div
-                                        className="hud-timer-item"
-                                        style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
-                                        title="Monster Respawn Timer — Time remaining until defeated dungeon monsters respawn on the map"
-                                    >
-                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff3333', boxShadow: '0 0 6px rgba(255, 51, 51, 0.7)' }}></div>
-                                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.timeToRespawn || 'Active'}</div>
-                                    </div>
-                                    <div
-                                        className="hud-timer-item"
-                                        style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
-                                        title="Item & Loot Respawn Timer — Time remaining until gathered items, chests, and resources respawn"
-                                    >
-                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffd700', boxShadow: '0 0 6px rgba(255, 215, 0, 0.7)' }}></div>
-                                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.itemTimeToRespawn || 'Active'}</div>
-                                    </div>
-                                    <div
-                                        className="hud-timer-item"
-                                        style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
-                                        title="Dungeon Relock Timer — Time remaining until doors, gates, and locks reset across the dungeon (12-hour PST cycle)"
-                                    >
-                                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffffff', boxShadow: '0 0 6px rgba(255, 255, 255, 0.7)' }}></div>
-                                        <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.relockTimeToRespawn || 'Active'}</div>
-                                    </div>
-                                </React.Fragment>
-                            )}
-                            {this.state.inSuperboard && this.state.pocketLanternActive && (
-                                <div
-                                    className="hud-timer-item lantern-fuel-item"
-                                    style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 6,
-                                        background: 'rgba(30, 20, 10, 0.85)',
-                                        border: '1px solid #f59e0b',
-                                        borderRadius: '12px',
-                                        padding: '2px 8px',
-                                        cursor: 'help',
-                                        pointerEvents: 'auto',
-                                        boxShadow: this.state.pocketLanternFlickering ? '0 0 10px #f59e0b, inset 0 0 6px #ef4444' : '0 0 8px rgba(245, 158, 11, 0.4)'
-                                    }}
-                                    title="Chemical Lantern Active — Extends pocket dimension vision radius by 2 tiles. Consumes 1 chemical per second."
-                                >
-                                    <span style={{ fontSize: 13, filter: 'drop-shadow(0 0 3px #f59e0b)' }}>🏮</span>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: this.state.pocketLanternFlickering ? '#ef4444' : '#fef08a' }}>
-                                        {this.state.pocketLanternFlickering ? 'Flickering...' : `${this.state.pocketLanternFuel}s`}
-                                    </div>
-                                </div>
-                            )}
-                            {this.state.inSuperboard && (
-                                <button
-                                    className={`pocket-zoom-toggle-btn ${this.state.pocketZoomIn ? 'zoomed-in' : ''}`}
-                                    onClick={() => this.togglePocketZoom()}
-                                    title={this.state.pocketZoomIn ? "Zoom Out to 15x15 Overview (Hotkey: Z)" : "Zoom In (Hotkey: Z)"}
-                                >
-                                    <span className="zoom-icon">{this.state.pocketZoomIn ? '🔍' : '🔎'}</span>
-                                    <span>{this.state.pocketZoomIn ? 'Zoom Out' : 'Zoom In'}</span>
-                                    <span className="zoom-badge">{this.state.pocketZoomIn ? '1.5x' : '1.0x'}</span>
-                                </button>
-                            )}
-                        </div>
-                        <div
-                            className="message-container"
-                            style={{
-                                opacity: this.state.showMessage ? 1 : 0,
-                                transition: 'opacity 0.5s',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                justifyContent: this.state.inSuperboard ? 'flex-start' : 'center',
-                                paddingLeft: this.state.inSuperboard ? '10px' : 0
-                            }}
-                        >
-                            {this.state.messageToDisplay}
-                        </div>
-                        {this.state.popoutResources && this.renderPoppedOutResourcesTopBar()}
-                    </div>
+                    {this.renderBoardHudRow()}
                     <div className={this.state.inSuperboard ? "pocket-zoom-viewport" : ""} style={{
                         position: 'relative',
                         width: this.state.boardSize + 'px',
@@ -40915,7 +41710,7 @@ class DungeonPage extends React.Component {
                             return (
                                 <div
                                     ref={this.playerFloatRef}
-                                    className={`floating-player ${this.state.isAvatarDamaged ? 'damaged' : ''} ${this.state.isPlayerGliding ? 'player-glide' : ''} ${isFloatCamping ? 'recuperating' : ''}`.trim()}
+                                    className={`floating-player ${this.state.isSneaking ? "is-sneaking " : ""}${this.state.isAvatarDamaged ? 'damaged' : ''} ${this.state.isPlayerGliding ? 'player-glide' : ''} ${isFloatCamping ? 'recuperating' : ''}`.trim()}
                                     onClick={(e) => {
                                         e.stopPropagation();
                                         if (Date.now() - (this._lastTouchHandledTime || 0) < 400) return;
@@ -42094,23 +42889,33 @@ class DungeonPage extends React.Component {
 
                     const isInPocket = !!(this.state.inSuperboard || this.state.isInPocketDimension);
                     let isOwner = (() => {
-                        if (isPlacedByPlayer) return true;
                         const currentUserName = typeof getUserName === 'function' ? getUserName() : null;
+                        const ownerDisplayName = gData.ownerName || gData.placedByName || tile.ownerName || tile.contains?.ownerName || tile.contains?.placedByName || gData.claimedByName || tile.claimedByName;
                         const cAff = tile.affiliation || tile.contains?.affiliation || gData.affiliation || (tile.generatorData && tile.generatorData.affiliation);
                         const tileIsHostile = cAff === 'hostile' || cAff === 'enemy' || tile.isHostile || tile.contains?.isHostile || gData.isHostile || (tile.generatorData && tile.generatorData.isHostile) || (tile.contains && (tile.contains.faction === 'hostile' || tile.contains.faction === 'enemy')) || tile.faction === 'hostile' || tile.faction === 'enemy' || gData?.ownerName === 'Enemy' || gData?.ownerId === 'enemy' || tile.placedBy === 'enemy' || tile.contains?.placedBy === 'enemy';
                         if (tileIsHostile) return false;
-                        if (cAff === 'player' || tile.affiliation === 'player' || tile.contains?.affiliation === 'player' || gData.affiliation === 'player') return true;
+
+                        if (gData.ownedByPlayer === false) return false;
                         if (gData.ownerId && gData.ownerId !== 'guest' && currentUserId && currentUserId !== 'guest') {
-                            return gData.ownerId === currentUserId;
+                            if (gData.ownerId !== currentUserId) return false;
                         }
-                        if (gData.ownerSocketId && mySocketId) {
-                            return gData.ownerSocketId === mySocketId;
-                        }
-                        if (gData.ownerName && currentUserName && gData.ownerName !== currentUserName && gData.ownerName !== 'Explorer') {
+                        if (gData.ownerSocketId && mySocketId && gData.ownerSocketId !== mySocketId) {
                             return false;
                         }
+                        if (ownerDisplayName && currentUserName && ownerDisplayName !== currentUserName && ownerDisplayName !== 'Explorer' && ownerDisplayName !== 'Player') {
+                            return false;
+                        }
+                        if (ownerDisplayName && !currentUserName && ownerDisplayName !== 'Explorer' && ownerDisplayName !== 'Player') {
+                            return false;
+                        }
+
+                        if (isPlacedByPlayer) return true;
+                        if (cAff === 'player' || tile.affiliation === 'player' || tile.contains?.affiliation === 'player' || gData.affiliation === 'player') return true;
+                        if (gData.ownerId && currentUserId && gData.ownerId === currentUserId) return true;
+                        if (gData.ownerSocketId && mySocketId && gData.ownerSocketId === mySocketId) return true;
+                        if (ownerDisplayName && currentUserName && ownerDisplayName === currentUserName) return true;
                         if (gData.ownedByPlayer !== undefined) return !!gData.ownedByPlayer;
-                        if (gData.ownerId || gData.ownerSocketId) return false;
+                        if (gData.ownerId || gData.ownerSocketId || (gData.ownerName && gData.ownerName !== 'Explorer')) return false;
                         if (def.key === 'outpost' || def.key === 'outpost_under_construction' || def.key === 'wall' || def.key === 'wall_under_construction' || def.key === 'earthen_fort' || def.key === 'war_camp' || def.key === 'war_fort') {
                             return gData.owned === true || gData.ownedByPlayer === true;
                         }
@@ -44708,49 +45513,6 @@ class DungeonPage extends React.Component {
                     }
                 }
             `}</style>
-                <div
-                    style={{
-                        position: 'fixed',
-                        top: '20px',
-                        right: '20px',
-                        zIndex: 999999,
-                        pointerEvents: 'none',
-                        opacity: this.state.showSaveIndicator ? 1 : 0,
-                        transform: this.state.showSaveIndicator ? 'translateY(0) scale(1)' : 'translateY(-20px) scale(0.95)',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        backgroundColor: 'rgba(20, 20, 20, 0.9)',
-                        backdropFilter: 'blur(8px)',
-                        WebkitBackdropFilter: 'blur(8px)',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        borderRadius: '12px',
-                        padding: '10px 18px',
-                        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        fontFamily: 'Outfit, Inter, sans-serif'
-                    }}
-                >
-                    {this.state.saveIndicatorText === 'Saving...' && (
-                        <svg className="save-spinner" viewBox="0 0 24 24" style={{ width: '18px', height: '18px', animation: 'save-spin 1s linear infinite' }}>
-                            <circle cx="12" cy="12" r="10" stroke="rgba(255, 255, 255, 0.2)" strokeWidth="3" fill="none" />
-                            <path d="M12 2 C 6.48 2 2 6.48 2 12" stroke="#4dabf7" strokeWidth="3" strokeLinecap="round" fill="none" />
-                        </svg>
-                    )}
-                    {this.state.saveIndicatorText === 'Saved' && (
-                        <svg viewBox="0 0 24 24" style={{ width: '18px', height: '18px' }}>
-                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" fill="#40c057" />
-                        </svg>
-                    )}
-                    {this.state.saveIndicatorText === 'Save Failed' && (
-                        <svg viewBox="0 0 24 24" style={{ width: '18px', height: '18px' }}>
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" fill="#fa5252" />
-                        </svg>
-                    )}
-                    <span style={{ fontSize: '14px', fontWeight: '500', color: '#f8f9fa', letterSpacing: '0.2px' }}>
-                        {this.state.saveIndicatorText}
-                    </span>
-                </div>
                 <PerformanceOverlay
                     visible={this.state.showPerformanceOverlay}
                     onClose={() => this.setState({ showPerformanceOverlay: false })}

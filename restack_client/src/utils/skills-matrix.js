@@ -121,6 +121,7 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 100,
         type: 'damage projectile',
+        damageType: 'piercing',
         projectiles: 1,
         ultimate: {
             projectiles: 5,
@@ -155,7 +156,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 300,
-        type: 'damage projectile'
+        type: 'damage projectile',
+        damageType: 'piercing'
     },
     burst_shot: {
         class: 'ranger',
@@ -169,7 +171,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'piercing'
     },
     burst_attack: {
         class: 'ranger',
@@ -183,7 +186,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'piercing'
     },
     ensnare: {
         class: 'ranger',
@@ -214,8 +218,78 @@ const skillsMatrix = {
         type: 'passive',
         isPassive: true
     },
+    ranger_light_foot: {
+        class: 'ranger',
+        id: 'ranger_light_foot',
+        tier: 1,
+        name: 'Light Foot',
+        desc: 'Reduces Sneak movement cost to 2 Resolve per tile (from 3).',
+        icon: images.eye_inverted || images.avatar,
+        cooldown: 0,
+        type: 'passive',
+        treePath: 'global',
+        isPassive: true,
+        knownByDefault: false
+    },
+    ranger_shadow_step: {
+        class: 'ranger',
+        id: 'ranger_shadow_step',
+        tier: 2,
+        name: 'Shadow Step',
+        desc: 'Allows sneaking past monsters with enhanced stealth.',
+        icon: images.eye_inverted || images.avatar,
+        cooldown: 0,
+        type: 'passive',
+        treePath: 'global',
+        isPassive: true,
+        knownByDefault: false
+    },
+    sneak_attack: {
+        class: 'ranger',
+        id: 'sneak_attack',
+        name: 'Sneak Attack',
+        desc: 'Strikes silently from ambush.',
+        icon: images.sneak_attack_ranger || images.sneak_attack,
+        cooldown: 0,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
+    spike_trap: {
+        class: 'ranger',
+        id: 'spike_trap',
+        name: 'Spike Trap',
+        desc: 'Lays a hidden puncture trap.',
+        icon: images.spike_trap_ranger || images.spike_trap,
+        cooldown: 0,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
 
     // === SAGE ===
+    healing_ground: {
+        class: 'sage',
+        id: 'healing_ground',
+        name: 'Healing Ground',
+        desc: 'Creates a sanctuary of continuous restoration.',
+        icon: images.healing_ground_sage || images.healing_ground,
+        cooldown: 0,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
+    sing: {
+        class: 'sage',
+        id: 'sing',
+        name: 'Sing',
+        desc: 'Chants sacred hymns to soothe and bolster allies.',
+        icon: images.sing_sage || images.sing,
+        cooldown: 0,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
     herbalism: {
         class: 'sage',
         id: 'herbalism',
@@ -435,6 +509,17 @@ const skillsMatrix = {
     },
 
     // === SOLDIER ===
+    soldier_shield: {
+        class: 'soldier',
+        id: 'soldier_shield',
+        name: 'Shield Guard',
+        desc: 'Raises heavy armor plating to deflect physical force.',
+        icon: images.shield_soldier || images.shield,
+        cooldown: 0,
+        type: 'utility',
+        treePath: 'global',
+        knownByDefault: true
+    },
     fortify: {
         class: 'soldier',
         id: 'fortify',
@@ -526,7 +611,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'slashing'
     },
     shield_wall: {
         class: 'soldier',
@@ -555,6 +641,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'blunt',
         effect: { type: 'stun', chance: 100, duration: 1 },
         ultimate: {
             flatDamage: 20,
@@ -599,6 +686,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'blunt',
         effect: { type: 'stun', chance: 80, duration: 2 }
     },
     imbued_strike: {
@@ -614,6 +702,7 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         type: 'damage',
+        damageType: 'arcane',
         atkPercentage: 200
     },
     one_man_army: {
@@ -738,6 +827,7 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 100,
         type: 'damage projectile',
+        damageType: 'fire',
         flatDamage: 15
     },
     ice_blast: {
@@ -754,6 +844,7 @@ const skillsMatrix = {
         range: 'medium',
         atkPercentage: 100,
         type: 'debuff damage projectile',
+        damageType: 'ice',
         flatDamage: 10,
         effect: { type: 'frozen', chance: 80, duration: 'short' }
     },
@@ -771,6 +862,7 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 10,
         type: 'damage projectile',
+        damageType: 'arcane',
         flatDamage: 5,
         projectiles: 3,
         ultimate: {
@@ -792,6 +884,7 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'lightning',
         flatDamage: 22,
         ultimate: {
             flatDamage: 45,
@@ -814,6 +907,7 @@ const skillsMatrix = {
         range: 'medium',
         atkPercentage: 100,
         type: 'debuff damage projectile',
+        damageType: 'acid',
         flatDamage: 12,
         effect: { type: 'poison', chance: 100, duration: 'short' }
     },
@@ -830,6 +924,7 @@ const skillsMatrix = {
         range: 'medium',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'arcane',
         flatDamage: 30
     },
     sleep: {
@@ -861,6 +956,7 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'arcane',
         flatDamage: 40
     },
     vortex: {
@@ -943,7 +1039,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'slashing'
     },
     barbarian_cleave: {
         class: 'barbarian',
@@ -959,6 +1056,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'slashing',
         effect: { type: 'bleed', chance: 100, duration: 'short' },
         ultimate: {
             atkPercentage: 300,
@@ -979,7 +1077,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'medium',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'slashing'
     },
     barbarian_berserker: {
         class: 'barbarian',
@@ -1016,6 +1115,7 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'blunt',
         effect: { type: 'stun', chance: 100, duration: 'short' }
     },
     barbarian_whirlwind: {
@@ -1030,7 +1130,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'slashing'
     },
 
 
@@ -1048,6 +1149,19 @@ const skillsMatrix = {
         isPassive: true,
         knownByDefault: true
     },
+    monk_light_foot: {
+        class: 'monk',
+        id: 'monk_light_foot',
+        tier: 1,
+        name: 'Light Foot',
+        desc: 'Reduces Sneak movement cost to 2 Resolve per tile (from 3).',
+        icon: images.swift_step_monk || images.avatar,
+        cooldown: 0,
+        type: 'passive',
+        treePath: 'global',
+        isPassive: true,
+        knownByDefault: false
+    },
     focused_rest: {
         class: 'monk',
         id: 'focused_rest',
@@ -1055,6 +1169,19 @@ const skillsMatrix = {
         name: 'Focused Rest',
         desc: 'Camping duration -30% (same healing).',
         icon: images.camp,
+        cooldown: 0,
+        type: 'passive',
+        treePath: 'global',
+        isPassive: true,
+        knownByDefault: false
+    },
+    silent_awareness: {
+        class: 'monk',
+        id: 'silent_awareness',
+        tier: 2,
+        name: 'Silent Awareness',
+        desc: 'Cuts ambush chance in obscured spaces by 50% when Monk is selected.',
+        icon: images.silent_awareness_monk,
         cooldown: 0,
         type: 'passive',
         treePath: 'global',
@@ -1127,7 +1254,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'medium',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'arcane'
     },
     monk_force_punch_flurry: {
         class: 'monk',
@@ -1141,7 +1269,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'blunt'
     },
     monk_third_eye: {
         class: 'monk',
@@ -1170,6 +1299,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage/debuff',
+        damageType: 'blunt',
         mentalityDebuff: true,
         power: 45,
         effect: { type: 'twin_finger_stun', duration: '3-rounds', atkReductionPercent: 20 }
@@ -1221,7 +1351,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'blunt'
     },
     monk_force_punch: {
         class: 'monk',
@@ -1236,7 +1367,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'blunt'
     },
     monk_flurry: {
         class: 'monk',
@@ -1251,7 +1383,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'blunt'
     },
     monk_punch: {
         class: 'monk',
@@ -1267,6 +1400,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'blunt',
         ultimate: {
             flatDamage: 80,
             effect: {
@@ -1538,7 +1672,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'slashing'
     },
     goblin_bite: {
         id: 'goblin_bite',
@@ -1551,6 +1686,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'piercing',
         effect: { type: 'bleed', chance: 100, duration: 'short' }
     },
     feed_the_masses: {
@@ -1575,7 +1711,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'slashing'
     },
     sword_swing: {
         id: 'sword_swing',
@@ -1588,7 +1725,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'slashing'
     },
     wrench_strike: {
         class: 'engineer',
@@ -1602,7 +1740,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'blunt'
     },
     bite: {
         id: 'bite',
@@ -1615,6 +1754,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'piercing',
         effect: { type: 'bleed', chance: 40, duration: 'short' }
     },
     regenerate: {
@@ -1655,6 +1795,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 200,
         type: 'damage',
+        damageType: 'piercing',
         effect: { type: 'bleed', chance: 70, duration: 'short' }
     },
     despair: {
@@ -1702,7 +1843,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'arcane'
     },
     // Mummy
     induce_fear: {
@@ -1743,6 +1885,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'blunt',
         effect: { type: 'stun', chance: 100, duration: 'short' }
     },
     head_butt: {
@@ -1755,7 +1898,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'blunt'
     },
     // Gorgon
     snake_strike: {
@@ -1769,6 +1913,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 125,
         type: 'damage',
+        damageType: 'poison',
         effect: { type: 'poison', chance: 75, duration: 'medium' }
     },
     petrify: {
@@ -1796,6 +1941,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'piercing',
         flatDamage: 15,
         effect: { type: 'bleed', chance: 100, duration: 'medium' }
     },
@@ -1835,6 +1981,7 @@ const skillsMatrix = {
         range: 'medium',
         atkPercentage: 100,
         type: 'damage/debuff',
+        damageType: 'dark',
         effect: { type: 'stun', chance: 10, duration: 'long' }
     },
     // Djinn
@@ -1874,6 +2021,7 @@ const skillsMatrix = {
         duration: 'short',
         range: 'far',
         type: 'debuff damage',
+        damageType: 'dark',
         flatDamage: 10,
         atkPercentage: 120,
         effect: { type: 'instant_death', chance: 15 }
@@ -1974,6 +2122,7 @@ const skillsMatrix = {
         initialCooldown: 2,
         range: 'medium',
         type: 'damage',
+        damageType: 'dark',
         atkPercentage: 115,
         flatBonus: 8,
         effect: { type: 'fear', chance: 40, duration: 'medium' }
@@ -1997,6 +2146,7 @@ const skillsMatrix = {
         cooldown: 4,
         range: 'close',
         type: 'damage',
+        damageType: 'slashing',
         atkPercentage: 100,
         effect: { type: 'stun', chance: 20, duration: 'short' }
     },
@@ -2025,6 +2175,7 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'arcane',
         initialCooldown: 3
     },
     spiderweb: {
@@ -2157,6 +2308,7 @@ const skillsMatrix = {
         range: 'medium',
         atkPercentage: 100,
         type: 'damage',
+        damageType: 'fire',
         flatDamage: 25
     },
     rake: {
@@ -2168,7 +2320,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 100,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'slashing'
     },
     silence: {
         id: 'silence',
@@ -2190,6 +2343,7 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         type: 'damage',
+        damageType: 'piercing',
         atkPercentage: 200,
         effect: { type: 'bleed', chance: 60, duration: 'medium' }
     },
@@ -2254,7 +2408,8 @@ const skillsMatrix = {
         initialCooldown: 2,
         duration: 'instant',
         range: 'medium',
-        type: 'damage'
+        type: 'damage',
+        damageType: 'arcane'
     },
     meteors: {
         id: 'meteors',
@@ -2265,7 +2420,8 @@ const skillsMatrix = {
         initialCooldown: 4,
         duration: 'instant',
         range: 'far',
-        type: 'damage'
+        type: 'damage',
+        damageType: 'fire'
     },
     entropic_kindred: {
         id: 'entropic_kindred',
@@ -2289,7 +2445,8 @@ const skillsMatrix = {
         initialCooldown: 3,
         duration: 'instant',
         range: 'all',
-        type: 'damage'
+        type: 'damage',
+        damageType: 'dark'
     },
     hagigah_spineskin: {
         id: 'hagigah_spineskin',
@@ -2325,7 +2482,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'far',
         atkPercentage: 125,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'lightning'
     },
     mind_swap: {
         id: 'mind_swap',
@@ -2349,6 +2507,7 @@ const skillsMatrix = {
         range: 'far',
         atkPercentage: 80,
         type: 'damage',
+        damageType: 'arcane',
         mentalityCheck: true
     },
     invisibility: {
@@ -2372,6 +2531,7 @@ const skillsMatrix = {
         range: 'close',
         atkPercentage: 150,
         type: 'damage',
+        damageType: 'dark',
         effect: { type: 'drain', duration: 'instant' }
     },
     void_rake: {
@@ -2384,7 +2544,8 @@ const skillsMatrix = {
         duration: 'instant',
         range: 'close',
         atkPercentage: 200,
-        type: 'damage'
+        type: 'damage',
+        damageType: 'dark'
     },
     eldritch_wind: {
         id: 'eldritch_wind',
@@ -2492,6 +2653,7 @@ const skillsMatrix = {
         cooldown: 1,
         initialCooldown: 0,
         type: 'ranged_damage',
+        damageType: 'piercing',
         flatDamage: 10,
         range: 'far' // acts as global in _basicAttack fallback or custom logic
     },
@@ -2503,6 +2665,7 @@ const skillsMatrix = {
         cooldown: 0,
         initialCooldown: 0,
         type: 'melee_whirlwind_effect',
+        damageType: 'slashing',
         flatDamage: 10,
         range: 'close'
     }

@@ -116,6 +116,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
         huge: fighter.huge,
         key: fighter.key || fighter.type,
         FIGHT_INTERVAL: FIGHT_INTERVAL,
+        isOpponent: !!fighter.isOpponent,
         // Safe fallbacks if fighter.stats is missing or incomplete
         ...(() => {
             const fStats = fighter.stats || {};
@@ -136,7 +137,7 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                     dex: (typeof fStats.dex === 'number') ? fStats.dex : (typeof fighter.dex === 'number' ? fighter.dex : 10),
                     int: (typeof fStats.int === 'number') ? fStats.int : (typeof fighter.int === 'number' ? fighter.int : 10),
                     def: (typeof fStats.def === 'number') ? fStats.def : (typeof fighter.def === 'number' ? fighter.def : 5),
-                    hp: fHp,
+                    hp: fStartingHp,
                     atk: fAtk,
                     speed: (typeof fStats.speed === 'number') ? fStats.speed : ((typeof fStats.dex === 'number') ? fStats.dex : ((typeof fighter.speed === 'number') ? fighter.speed : 1)),
                     willpower: (typeof fStats.willpower === 'number') ? fStats.willpower : fighter.willpower

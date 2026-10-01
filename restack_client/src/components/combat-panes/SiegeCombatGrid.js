@@ -2018,7 +2018,7 @@ export default function SiegeCombatGrid(props) {
                         }}>
                             <div className="hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '1px' }}>
                                 <div className="red-fill" style={{
-                                    width: hideBars ? '0%' : `${(getFighterDetails(fighter)?.hp / fighter.stats.hp) * 100}%`,
+                                    width: hideBars ? '0%' : `${(getFighterDetails(fighter)?.hp / (fighter.starting_hp || fighter.stats?.hp || 100)) * 100}%`,
                                     transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                 }} />
                             </div>
@@ -3092,7 +3092,7 @@ export default function SiegeCombatGrid(props) {
                     }}>
                         <div className="monster-hp-bar hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '1px' }}>
                             <div className="red-fill" style={{
-                                width: hideBars ? '0%' : `${(unit.hp / (unit.stats?.hp || unit.starting_hp || 1)) * 100}%`,
+                                width: hideBars ? '0%' : `${(unit.hp / (unit.starting_hp || unit.stats?.hp || 1)) * 100}%`,
                                 transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                             }} />
                         </div>

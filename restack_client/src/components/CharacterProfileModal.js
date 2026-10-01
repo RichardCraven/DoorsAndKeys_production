@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import SkillTree from './SkillTree';
 import * as images from '../utils/images';
 import { getMeta, storeMeta } from '../utils/session-handler';
+import { getReflectedDescription } from '../utils/crew-manager';
 import './CharacterProfileModal.css';
 
 const DEFAULT_CLASS_LORE = {
@@ -62,19 +63,25 @@ const CharacterProfileModal = ({
     health: 100
   };
 
-  const description = crewMember.description || DEFAULT_CLASS_LORE[uType] || 'A heroic adventurer equipped for dungeon exploration.';
+  const rawDescription = crewMember.description || DEFAULT_CLASS_LORE[uType] || 'A heroic adventurer equipped for dungeon exploration.';
+  const description = getReflectedDescription(rawDescription, crewMember.name, crewMember);
 
   const handleSaveName = () => {
     const trimmed = editNameVal.trim();
     if (trimmed && crewMember) {
       const oldName = crewMember.name;
       crewMember.name = trimmed;
+      crewMember.previousName = oldName;
+      crewMember.description = getReflectedDescription(rawDescription, trimmed, crewMember);
       setIsEditingName(false);
       try {
         const meta = getMeta() || {};
         if (Array.isArray(meta.crew)) {
           const match = meta.crew.find(c => (c.id && crewMember.id && c.id === crewMember.id) || c.name === oldName);
-          if (match) match.name = trimmed;
+          if (match) {
+            match.name = trimmed;
+            match.description = crewMember.description;
+          }
           storeMeta(meta);
         }
       } catch (e) { }

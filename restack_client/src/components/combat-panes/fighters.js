@@ -204,6 +204,27 @@ export default function FightersCombatGrid(props) {
                                     }}
                                     ref={el => { portraitWrapperRefs.current[fighter.id] = el }}
                                     >
+                                        {/* PvP soft blue/green glow behind portrait */}
+                                        {(props.isPvP || props.isPvPMode || props.combatManager?.data?.isPvP || props.combatManager?.data?.isPvPMode) && !details?.dead && (
+                                            <div
+                                                className="pvp-player-glow"
+                                                data-testid="pvp-player-glow"
+                                                style={{
+                                                    position: 'absolute',
+                                                    top: '-10px',
+                                                    left: '-10px',
+                                                    width: '120px',
+                                                    height: '120px',
+                                                    borderRadius: '50%',
+                                                    background: 'radial-gradient(circle, rgba(33, 230, 193, 0.75) 0%, rgba(0, 191, 255, 0.45) 50%, transparent 75%)',
+                                                    boxShadow: '0 0 25px 8px rgba(33, 230, 193, 0.6), 0 0 45px 16px rgba(0, 191, 255, 0.35)',
+                                                    filter: 'blur(4px)',
+                                                    zIndex: 290,
+                                                    pointerEvents: 'none',
+                                                    animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'
+                                                }}
+                                            />
+                                        )}
                                         {/* Effect Icons Overlay */}
                                         <div style={{
                                             position: 'absolute',

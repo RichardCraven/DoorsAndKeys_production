@@ -1124,10 +1124,19 @@ class CrewManagerPage extends React.Component {
                             <div className="crew-options">
                                 {this.state.options.map((e, i) => {
                                     const isSelected = this.state.selectedCrewMember && (
-                                        this.state.selectedCrewMember.id === e.id || this.state.selectedCrewMember.name === e.name
+                                        this.state.selectedCrewMember.id === e.id || this.state.selectedCrewMember.name === e.name || (this.state.selectedCrewMember.type && e.type && this.state.selectedCrewMember.type === e.type)
                                     );
-                                    return <ProgressiveBgImage className={`portrait${isSelected ? ' selected' : ''}`} key={i}
+                                    const isAssigned = this.state.selectedCrew.some(c => c && (
+                                        (c.id && e.id && c.id === e.id) ||
+                                        (c.name && e.name && c.name === e.name) ||
+                                        (c.type && e.type && c.type === e.type)
+                                    ));
+                                    return <ProgressiveBgImage className={`portrait${isSelected ? ' selected' : ''}${isAssigned ? ' assigned' : ''}`} key={i}
                                         src={e.portrait}
+                                        style={{
+                                            filter: isAssigned ? 'grayscale(1) brightness(0.4) contrast(0.85)' : undefined,
+                                            opacity: isAssigned ? 0.55 : 1
+                                        }}
                                         onClick={(event) => this.selectCrewMember(event, e)}
                                     />
                                 }

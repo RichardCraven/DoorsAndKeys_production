@@ -7,6 +7,7 @@ import * as images from './images';
 import { getMeta, storeMeta, applyResolvePenalty } from './session-handler';
 import { BATTLE_TACTICS } from './spells-table';
 import { MonsterManager } from './monster-manager';
+import { applyShieldedEffect, applyBlindingSpeedEffect } from './combat-effects';
 const MAX_LANES = 6;
 
 
@@ -715,7 +716,7 @@ export function CombatManagerRedux() {
                 if (this.data.monster.stats && typeof this.data.monster.stats.hp === 'number') {
                     this.data.monster.stats.hp = Math.floor(this.data.monster.stats.hp * 1.5);
                 }
-                if (typeof this.data.monster.hp === 'number') {
+                if (typeof this.data.monster.hp === 'number' && !this.data.monster.inDungeonDamaged) {
                     this.data.monster.hp = Math.floor(this.data.monster.hp * 1.5);
                 }
                 if (typeof this.data.monster.starting_hp === 'number') {
@@ -1008,6 +1009,8 @@ export function CombatManagerRedux() {
                     isMainMonster: false,
                     isLarge: false,
                     isHuge: false,
+                    size: 1,
+                    scale: 1,
                     isOpponent: true,
                     portrait: portraitName,
                     type: typeName,
@@ -1023,9 +1026,12 @@ export function CombatManagerRedux() {
                 fighter.isMainMonster = false;
                 fighter.isLarge = false;
                 fighter.isHuge = false;
+                fighter.size = 1;
+                fighter.scale = 1;
                 fighter.isOpponent = true;
                 fighter.portrait = portraitName;
                 fighter.type = typeName;
+                fighter.facing = e.facing || 'left';
                 fighter.maxEndurance = e.stats?.vitality || 30;
                 fighter.endurance = fighter.maxEndurance;
                 fighter.enduranceFrozenRounds = 0;
@@ -1051,6 +1057,9 @@ export function CombatManagerRedux() {
         const m = { ...this.data.monster };
         m.isMonster = true; // Mark as monster early so isLarge/isHuge sizing evaluates correctly for VCT occupied lanes
         m.isMainMonster = true;
+        if (!m.id) {
+            m.id = m.key || m.type || 'monster_1';
+        }
         this.data.monster = m;
         const isHuge = !m.isShrineGuardian && (
             (typeof m.huge === 'boolean' && m.huge === true)
@@ -1863,8 +1872,11 @@ export function CombatManagerRedux() {
     };
 
 
-    this.damageCheck = (caller, target, rawDamage, isMagical = false) => {
+    this.damageCheck = (caller, target, rawDamage, isMagical = false, overrideAbility = null) => {
         if (!target || typeof rawDamage !== 'number' || rawDamage <= 0) return rawDamage || 0;
+
+        const activeAbility = overrideAbility || (caller && caller.activeAbility) || (caller && caller.pendingAttack) || null;
+        const damageType = activeAbility && activeAbility.damageType ? activeAbility.damageType : (isMagical ? 'arcane' : 'slashing');
 
         // Apply Queens Amulet (adjacent allies get +15% attack damage)
         const callerIsMonster = caller && !!caller.isMonster;
@@ -1887,14 +1899,14 @@ export function CombatManagerRedux() {
         if (caller && this._getEquippedAmulet) {
             // Darkarrow Amulet (+5% ranged attack damage)
             const hasDarkarrow = this._getEquippedAmulet(caller, 'darkarrow_amulet');
-            const isRanged = caller.activeAbility && caller.activeAbility.range && caller.activeAbility.range !== 'close' && caller.activeAbility.range !== 'self';
+            const isRanged = activeAbility && activeAbility.range && activeAbility.range !== 'close' && activeAbility.range !== 'self';
             if (hasDarkarrow && isRanged) {
                 rawDamage = Math.round(rawDamage * 1.05);
             }
 
             // Ruby Amulet (+5% melee damage)
             const hasRuby = this._getEquippedAmulet(caller, 'ruby_amulet');
-            const isMelee = !caller.activeAbility || !caller.activeAbility.range || caller.activeAbility.range === 'close';
+            const isMelee = !activeAbility || !activeAbility.range || activeAbility.range === 'close';
             if (hasRuby && isMelee) {
                 rawDamage = Math.round(rawDamage * 1.05);
             }
@@ -1904,21 +1916,103 @@ export function CombatManagerRedux() {
             if (hasAcorn && target && (target.type === 'beast' || target.subtype === 'beast' || target.type === 'plant' || target.subtype === 'plant')) {
                 rawDamage = Math.round(rawDamage * 1.05);
             }
-        }
 
-        // Apply target's passive resistance amulets
-        if (target && this._getEquippedAmulet) {
-            // Elemental Amulet (5% resistance to fire, cold, lightning/elemental)
-            const hasElemental = this._getEquippedAmulet(target, 'elemental_amulet');
-            const isElemental = isMagical || (caller && caller.activeAbility && ['fire', 'cold', 'ice', 'lightning', 'storm', 'ember'].some(word => (caller.activeAbility.id || caller.activeAbility.name || '').toLowerCase().includes(word)));
-            if (hasElemental && isElemental) {
-                rawDamage = Math.round(rawDamage * 0.95);
+            // Imperial Mage Staff (25% chance to do double damage)
+            if (this._hasEquippedItem(caller, 'imperial_mage_staff') && Math.random() < 0.25) {
+                rawDamage = Math.round(rawDamage * 2);
+                this.appendCombatLog(`${this.getCombatantLogName(caller)}'s Imperial Mage Staff doubles damage!`);
             }
 
-            // Silver Amulet (5% resistance to piercing, slashing, blunt/physical)
-            const hasSilver = this._getEquippedAmulet(target, 'silver_amulet');
-            if (hasSilver && !isMagical && !(caller && caller.activeAbility && ['fire', 'cold', 'ice', 'lightning', 'storm', 'ember'].some(word => (caller.activeAbility.id || caller.activeAbility.name || '').toLowerCase().includes(word)))) {
-                rawDamage = Math.round(rawDamage * 0.95);
+            // Staff of Tomorrow (20% chance to do triple damage)
+            if (this._hasEquippedItem(caller, 'staff_of_tomorrow') && Math.random() < 0.20 && rawDamage > 0) {
+                rawDamage = Math.round(rawDamage * 3);
+                this.appendCombatLog(`${this.getCombatantLogName(caller)}'s Staff of Tomorrow TRIPLES damage!`);
+            }
+        }
+
+        // Apply caller's equipped wands damage effects
+        if (caller && this._getEquippedWand) {
+            // Animus Wand: deals x extra damage where x is (2 * currentCharges), consumes 1 charge
+            const animusWand = this._getEquippedWand(caller, 'animus_wand');
+            if (animusWand && typeof animusWand.currentCharges === 'number' && animusWand.currentCharges > 0 && rawDamage > 0) {
+                const extraDmg = 2 * animusWand.currentCharges;
+                if (this._useWandCharge(caller, animusWand)) {
+                    rawDamage += extraDmg;
+                    this.appendCombatLog(`${this.getCombatantLogName(caller)}'s Animus Wand adds +${extraDmg} extra damage! [${animusWand.currentCharges} charges remaining]`);
+                }
+            }
+
+            // Cloudfire Wand: 15% chance to do double damage on damage skills, consumes 1 charge
+            const cloudfireWand = this._getEquippedWand(caller, 'cloudfire_wand');
+            const isDamageSkill = activeAbility && (activeAbility.damageType || (activeAbility.type && activeAbility.type.includes('damage')) || activeAbility.flatDamage > 0 || activeAbility.atkPercentage > 0);
+            if (cloudfireWand && isDamageSkill && (typeof cloudfireWand.currentCharges !== 'number' || cloudfireWand.currentCharges > 0) && rawDamage > 0) {
+                if (Math.random() < 0.15 && this._useWandCharge(caller, cloudfireWand)) {
+                    rawDamage = Math.round(rawDamage * 2);
+                    this.appendCombatLog(`${this.getCombatantLogName(caller)}'s Cloudfire Wand DOUBLES damage! [${cloudfireWand.currentCharges} charges remaining]`);
+                }
+            }
+        }
+
+        // === INHERENT WEAKNESS MULTIPLIER AUDIT ===
+        if (target && (target.weaknesses || target.weakness)) {
+            const rawList = Array.isArray(target.weaknesses)
+                ? target.weaknesses
+                : (typeof target.weakness === 'string' ? [target.weakness] : []);
+            const weaknesses = rawList.map(w => (w || '').toLowerCase());
+            
+            const isWeak = weaknesses.some(w => {
+                if (!w) return false;
+                if (damageType && w === damageType.toLowerCase()) return true;
+                if (damageType && ((w === 'crushing' && damageType === 'blunt') || (w === 'blunt' && damageType === 'crushing'))) return true;
+                if (damageType && ((w === 'cutting' && damageType === 'slashing') || (w === 'slashing' && damageType === 'cutting'))) return true;
+                if (damageType && ((w === 'electricity' && damageType === 'lightning') || (w === 'lightning' && damageType === 'electricity'))) return true;
+                if (damageType && ((w === 'cold' && damageType === 'ice') || (w === 'ice' && damageType === 'cold'))) return true;
+                if (w === 'physical' && ['slashing', 'piercing', 'blunt', 'cutting', 'crushing'].includes(damageType)) return true;
+                if (w === 'holy' && (damageType === 'holy' || (activeAbility && activeAbility.id === 'holy_light'))) return true;
+                if (w === 'psionic' && (damageType === 'psionic' || (activeAbility && (activeAbility.mentalityCheck || activeAbility.mentalityDebuff)))) return true;
+                return false;
+            });
+
+            if (isWeak) {
+                rawDamage = Math.round(rawDamage * 1.25);
+            }
+        }
+
+        // Apply target's passive resistance amulets & nature/trait resistance
+        if (target) {
+            if (this._getEquippedAmulet) {
+                // Elemental Amulet (5% resistance to fire, cold, lightning/elemental)
+                const hasElemental = this._getEquippedAmulet(target, 'elemental_amulet');
+                const isElementalType = ['fire', 'ice', 'cold', 'lightning', 'electricity', 'acid', 'arcane'].includes(damageType);
+                const isElemental = isMagical || isElementalType || (activeAbility && ['fire', 'cold', 'ice', 'lightning', 'storm', 'ember'].some(word => (activeAbility.id || activeAbility.name || '').toLowerCase().includes(word)));
+                if (hasElemental && isElemental) {
+                    rawDamage = Math.round(rawDamage * 0.95);
+                }
+
+                // Silver Amulet (5% resistance to piercing, slashing, blunt/physical)
+                const hasSilver = this._getEquippedAmulet(target, 'silver_amulet');
+                const isPhysicalType = ['piercing', 'slashing', 'blunt', 'crushing', 'cutting', 'physical'].includes(damageType);
+                if (hasSilver && !isMagical && (isPhysicalType || !(activeAbility && ['fire', 'cold', 'ice', 'lightning', 'storm', 'ember'].some(word => (activeAbility.id || activeAbility.name || '').toLowerCase().includes(word))))) {
+                    rawDamage = Math.round(rawDamage * 0.95);
+                }
+            }
+
+            // Nature Resistance (10% mitigation for poison/acid/nature)
+            if (damageType === 'poison' || damageType === 'acid') {
+                const hasNatureRes = target.natureResistance || (Array.isArray(target.bonuses) && target.bonuses.some(b => typeof b === 'string' && b.includes('Nature Resistance')));
+                if (hasNatureRes) {
+                    rawDamage = Math.round(rawDamage * 0.90);
+                }
+            }
+
+            // Flat physical or magic resistance traits
+            const isPhysicalType = ['piercing', 'slashing', 'blunt', 'crushing', 'cutting', 'physical'].includes(damageType);
+            const physBonus = (target.stats && target.stats.physicalResistance) || (target.physicalResistance || 0);
+            const magBonus = (target.stats && target.stats.magicResistance) || (target.magicResistance || 0);
+            if (!isMagical && isPhysicalType && physBonus > 0) {
+                rawDamage = Math.max(1, rawDamage - physBonus);
+            } else if (isMagical && magBonus > 0) {
+                rawDamage = Math.max(1, rawDamage - magBonus);
             }
         }
 
@@ -1973,8 +2067,15 @@ export function CombatManagerRedux() {
             targetDef += 5;
         }
 
-        const naturalArmor = targetDef * 4 * copMultiplier;
-        const totalArmor = Math.min(equippedArmor + naturalArmor, 200);
+        // Staff of Marduk: 50% chance to ignore armor and deal true damage
+        let ignoreArmor = false;
+        if (caller && this._hasEquippedItem && this._hasEquippedItem(caller, 'staff_of_marduk') && Math.random() < 0.50) {
+            ignoreArmor = true;
+            this.appendCombatLog(`${this.getCombatantLogName(caller)}'s Staff of Marduk ignores armor, dealing true damage!`);
+        }
+
+        const naturalArmor = ignoreArmor ? 0 : targetDef * 4 * copMultiplier;
+        const totalArmor = ignoreArmor ? 0 : Math.min(equippedArmor + naturalArmor, 200);
 
         let finalDamage = damage;
         if (totalArmor > 0) {
@@ -3467,8 +3568,27 @@ export function CombatManagerRedux() {
         });
     };
 
-    this._applyBuff = (unit, buffDef, name, durationRounds) => {
+    this._applyBuff = (unit, buffDef, name, durationRounds, caster) => {
+        if (!unit) return;
         if (!unit.activeBuffs) unit.activeBuffs = [];
+
+        // Check caster staff specials on buff spells
+        if (caster && this._hasEquippedItem) {
+            // Enchanter's Staff: 30% chance to double duration
+            if (this._hasEquippedItem(caster, 'enchanters_staff') && Math.random() < 0.30) {
+                durationRounds = durationRounds * 2;
+                this.appendCombatLog(`${this.getCombatantLogName(caster)}'s Enchanter's Staff doubles the duration of ${name}!`);
+            }
+            // Staff of Espilon: 25% chance to triple duration + grant recipient 25% HP shield
+            if (this._hasEquippedItem(caster, 'staff_of_espilon') && Math.random() < 0.25) {
+                durationRounds = durationRounds * 3;
+                const maxHp = unit.starting_hp || unit.stats?.hp || 100;
+                const shieldAmt = Math.round(maxHp * 0.25);
+                applyShieldedEffect(unit, shieldAmt, durationRounds);
+                this.appendCombatLog(`${this.getCombatantLogName(caster)}'s Staff of Espilon triples duration of ${name} and grants a ${shieldAmt} HP shield to ${this.getCombatantLogName(unit)}!`);
+            }
+        }
+
         const durationMs = getStatusDurationMs(unit, durationRounds);
         const now = Date.now();
         const existing = unit.activeBuffs.find(b => b.name === name);
@@ -5725,6 +5845,8 @@ export function CombatManagerRedux() {
         const enemies = Object.values(this.combatants).filter(c => c && !c.dead && !!c.isMonster !== !!unit.isMonster);
         const adjacentEnemy = enemies.find(e => this.targetInRange(unit, e, 'close'));
         if (adjacentEnemy) {
+            unit.isCleaving = Date.now();
+            unit.attacking = true;
             this.useAbility(unit, pick, adjacentEnemy);
             return;
         }
@@ -5732,6 +5854,8 @@ export function CombatManagerRedux() {
         this.acquireTarget(unit, true);
         const target = this.combatants[unit.targetId];
         if (target && this.targetInRange(unit, target, 'close')) {
+            unit.isCleaving = Date.now();
+            unit.attacking = true;
             this.useAbility(unit, pick, target);
         }
     };
@@ -8220,6 +8344,40 @@ export function CombatManagerRedux() {
         );
     };
 
+    this._hasEquippedItem = (unit, itemKey) => {
+        if (!unit || !Array.isArray(unit.inventory)) return false;
+        const normKey = String(itemKey || '').toLowerCase();
+        return unit.inventory.some(i => {
+            if (!i) return false;
+            const k = String(i.key || i.icon || i.id || i.name || '').toLowerCase().replace(/\s+/g, '_');
+            const isMatch = (k === normKey || k.includes(normKey));
+            const isEquipped = i.equipped === true || i.equippedBy === unit.id || !!i.equippedSlot;
+            return isMatch && isEquipped;
+        });
+    };
+
+    this._getEquippedWand = (unit, itemKey) => {
+        if (!unit || !Array.isArray(unit.inventory)) return null;
+        const normKey = String(itemKey || '').toLowerCase();
+        return unit.inventory.find(i => {
+            if (!i) return false;
+            const k = String(i.key || i.icon || i.id || i.name || '').toLowerCase().replace(/\s+/g, '_');
+            const isMatch = (k === normKey || k.includes(normKey));
+            const isEquipped = i.equipped === true || i.equippedBy === unit.id || !!i.equippedSlot;
+            return isMatch && isEquipped;
+        }) || null;
+    };
+
+    this._useWandCharge = (unit, wandItem) => {
+        if (!wandItem) return false;
+        if (typeof wandItem.currentCharges !== 'number') {
+            wandItem.currentCharges = typeof wandItem.charges === 'number' ? wandItem.charges : 5;
+        }
+        if (wandItem.currentCharges <= 0) return false;
+        wandItem.currentCharges--;
+        return true;
+    };
+
     this._processCriticalStrike = (attacker, target, damage, isRanged) => {
         if (!attacker || !target || damage <= 0) return { damage, isCrit: false };
 
@@ -8374,7 +8532,35 @@ export function CombatManagerRedux() {
         if (!unit.cooldowns) unit.cooldowns = {};
         let cooldownRounds = rounds;
         const normalized = key.replace(/\s+/g, '_').toLowerCase();
-        
+
+        // Check for Archmage's Staff (30% chance to not trigger a cooldown step)
+        const hasArchmageStaff = this._hasEquippedItem && this._hasEquippedItem(unit, 'archmages_staff');
+        if (hasArchmageStaff && Math.random() < 0.30) {
+            unit.cooldowns[normalized] = 0;
+            this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Archmage's Staff prevents the cooldown of ${key}!`);
+            return;
+        }
+
+        // Check for Willowcaster Wand (15% chance to not trigger a cooldown step)
+        const willowcasterWand = this._getEquippedWand && this._getEquippedWand(unit, 'willowcaster');
+        if (willowcasterWand && (typeof willowcasterWand.currentCharges !== 'number' || willowcasterWand.currentCharges > 0)) {
+            if (Math.random() < 0.15 && this._useWandCharge(unit, willowcasterWand)) {
+                unit.cooldowns[normalized] = 0;
+                this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Willowcaster prevents the cooldown of ${key}! [${willowcasterWand.currentCharges} charges remaining]`);
+                return;
+            }
+        }
+
+        // Check for Cloudfire Wand (30% chance to skip cooldown phase)
+        const cloudfireWand = this._getEquippedWand && this._getEquippedWand(unit, 'cloudfire_wand');
+        if (cloudfireWand && (typeof cloudfireWand.currentCharges !== 'number' || cloudfireWand.currentCharges > 0)) {
+            if (Math.random() < 0.30 && this._useWandCharge(unit, cloudfireWand)) {
+                unit.cooldowns[normalized] = 0;
+                this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Cloudfire Wand skips the cooldown of ${key}! [${cloudfireWand.currentCharges} charges remaining]`);
+                return;
+            }
+        }
+
         // Check for Enchantress Amulet (reduces cooldown by 1)
         const hasEnchantress = this._getEquippedAmulet(unit, 'enchantress_amulet');
         if (hasEnchantress) {
@@ -8800,6 +8986,75 @@ export function CombatManagerRedux() {
         if (unit && typeof unit.inTrial === 'number') {
             this.appendCombatLog(`${this.getCombatantLogName(unit)} is in a Sphinx trial and cannot act!`);
             return;
+        }
+
+        // ── Wand & Staff specials triggers on skill use ───────────────────────
+        if (unit && this._getEquippedWand) {
+            // Cloudfire Wand: 20% chance to gain 20% ultimate power
+            const cloudfireWand = this._getEquippedWand(unit, 'cloudfire_wand');
+            if (cloudfireWand && (typeof cloudfireWand.currentCharges !== 'number' || cloudfireWand.currentCharges > 0)) {
+                if (Math.random() < 0.20 && this._useWandCharge(unit, cloudfireWand)) {
+                    unit.power = Math.min(100, (unit.power || 0) + 20);
+                    this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Cloudfire Wand grants +20% ultimate power! [${cloudfireWand.currentCharges} charges remaining]`);
+                }
+            }
+
+            // Glynda's Wand: 50% chance to teleport target enemy to back line in round 3 or later
+            const isEnemyTarget = target && (!!unit.isMonster !== !!target.isMonster);
+            const currentRound = (typeof this.round === 'number' ? this.round : (typeof this.roundNumber === 'number' ? this.roundNumber : (this.eraIndex ? this.eraIndex + 1 : 1)));
+            if (isEnemyTarget && currentRound >= 3) {
+                const glyndasWand = this._getEquippedWand(unit, 'glyndas_wand');
+                if (glyndasWand && (typeof glyndasWand.currentCharges !== 'number' || glyndasWand.currentCharges > 0)) {
+                    if (Math.random() < 0.50 && this._useWandCharge(unit, glyndasWand)) {
+                        const backX = target.isMonster ? MAX_DEPTH : 0;
+                        target.coordinates = { x: backX, y: target.coordinates.y };
+                        if (typeof this.updateUnitCoordinates === 'function') {
+                            this.updateUnitCoordinates(target, backX, target.coordinates.y);
+                        }
+                        this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Glynda's Wand teleports ${this.getCombatantLogName(target)} to the back line! [${glyndasWand.currentCharges} charges remaining]`);
+                    }
+                }
+            }
+
+            // Justicator Wand: 30% chance to apply sleep effect for 2 turns to targeted enemy
+            if (isEnemyTarget) {
+                const justicatorWand = this._getEquippedWand(unit, 'justicator_wand');
+                if (justicatorWand && (typeof justicatorWand.currentCharges !== 'number' || justicatorWand.currentCharges > 0)) {
+                    if (Math.random() < 0.30 && this._useWandCharge(unit, justicatorWand)) {
+                        if (typeof this._applyDebuff === 'function') {
+                            this._applyDebuff(target, { decrease_stats: { stats: [] } }, 'Sleep', 2);
+                        }
+                        target.asleep = true;
+                        target.sleepRounds = 2;
+                        this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Justicator Wand puts ${this.getCombatantLogName(target)} to sleep for 2 turns! [${justicatorWand.currentCharges} charges remaining]`);
+                    }
+                }
+            }
+        }
+
+        if (unit && this._hasEquippedItem) {
+            // Imperial Mage Staff: 25% chance to instantly gain 25% power
+            if (this._hasEquippedItem(unit, 'imperial_mage_staff') && Math.random() < 0.25) {
+                unit.power = Math.min(100, (unit.power || 0) + 25);
+                this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Imperial Mage Staff grants +25% power!`);
+            }
+            // Staff of Tomorrow: 25% chance to instantly gain 50% power
+            if (this._hasEquippedItem(unit, 'staff_of_tomorrow') && Math.random() < 0.25) {
+                unit.power = Math.min(100, (unit.power || 0) + 50);
+                this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Staff of Tomorrow grants +50% power!`);
+            }
+            // Staff of Omicron: 15% chance to apply blinding speed, 15% chance to completely refill stamina
+            if (this._hasEquippedItem(unit, 'staff_of_omicron')) {
+                if (Math.random() < 0.15) {
+                    applyBlindingSpeedEffect(unit, 3);
+                    this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Staff of Omicron grants Blinding Speed!`);
+                }
+                if (Math.random() < 0.15) {
+                    unit.endurance = unit.maxEndurance || 100;
+                    unit.stamina = unit.maxStamina || 100;
+                    this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Staff of Omicron completely refills stamina!`);
+                }
+            }
         }
 
         const _aid = ability.id || ability.key || (ability.name && ability.name.replace(/\s+/g, '_').toLowerCase()) || 'ability';
