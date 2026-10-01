@@ -813,8 +813,41 @@ export default function LandingPage(props) {
     return { found: false };
   };
 
+  const isFetchingDungeonsRef = useRef(false);
+
+  const refreshPresenceOnly = async () => {
+    try {
+      const presenceRes = await getActivePresenceRequest();
+      if (presenceRes && presenceRes.data) {
+        const presenceMap = presenceRes.data;
+        setActivePresenceMap(presenceMap);
+        setValidDungeons((prev) => {
+          if (!prev || prev.length === 0) return prev;
+          const updated = [...prev];
+          updated.sort((a, b) => {
+            const aOnline = getDungeonOnlineCount(a, presenceMap, allDungeons);
+            const bOnline = getDungeonOnlineCount(b, presenceMap, allDungeons);
+            if (aOnline !== bOnline) {
+              return bOnline - aOnline;
+            }
+            return (a.name || '').localeCompare(b.name || '');
+          });
+          return updated;
+        });
+      }
+    } catch (err) {}
+  };
+
   const refreshValidDungeons = async () => {
-    const res = await loadAllDungeonsRequest();
+    if (isFetchingDungeonsRef.current) return;
+    isFetchingDungeonsRef.current = true;
+    let res;
+    try {
+      res = await loadAllDungeonsRequest();
+    } catch (err) {
+      isFetchingDungeonsRef.current = false;
+      return;
+    }
     let presenceMap = {};
     try {
       const presenceRes = await getActivePresenceRequest();
@@ -823,6 +856,8 @@ export default function LandingPage(props) {
         setActivePresenceMap(presenceRes.data);
       }
     } catch (err) {
+    } finally {
+      isFetchingDungeonsRef.current = false;
     }
     const all = (res?.data || []).map((row) => {
       if (!row || !row.content) return null;
@@ -966,7 +1001,7 @@ export default function LandingPage(props) {
 
     const interval = setInterval(() => {
       if (isServerWarm()) {
-        refreshValidDungeons();
+        refreshPresenceOnly();
       }
     }, 10000);
     return () => {

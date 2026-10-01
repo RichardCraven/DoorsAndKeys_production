@@ -20,7 +20,7 @@ exports.create = (req, res, next) => {
 }
 
 exports.findAll = (req, res, next) => {
-  dungeonSchema.find((error, data) => {
+  dungeonSchema.find().lean().exec((error, data) => {
     if (error) {
       return next(error)
     } else {
