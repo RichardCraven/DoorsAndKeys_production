@@ -182,4 +182,57 @@ describe('Aggro Monster Dungeon System', () => {
         expect(triggered).toBe(false);
         expect(instance.triggerMonsterBattle).not.toHaveBeenCalled();
     });
+
+    test('startMonsterPursuit restores vacated tile as non-void floor space when monster tile moves', () => {
+        const instance = new DungeonPage({});
+        instance.triggerMonsterBattle = jest.fn();
+        instance.refreshTiles = jest.fn();
+
+        const tiles = Array(225).fill(null).map((_, idx) => ({
+            id: idx,
+            color: '#6b6057',
+            contains: null,
+            isVoid: false,
+            type: 'empty_space'
+        }));
+
+        // Player at (10, 10) = index 160
+        const pIdx = 10 * 15 + 10;
+        // Monster at (5, 5) = index 80 (originally had template type: 'void')
+        const mIdx = 5 * 15 + 5;
+        tiles[mIdx] = {
+            id: mIdx,
+            color: '#6b6057',
+            type: 'void',
+            original: 'void',
+            isVoid: true,
+            contains: { type: 'monster', subtype: 'skeleton' },
+            image: 'skeleton'
+        };
+
+        const mockBm = {
+            playerTile: { location: [10, 10] },
+            tiles: tiles,
+            currentBoard: { tiles: { [mIdx]: { id: mIdx, color: '#6b6057', type: 'void', isVoid: true, contains: tiles[mIdx].contains } } },
+            getIndexFromCoordinates: ([r, c]) => r * 15 + c,
+            refreshTiles: jest.fn()
+        };
+
+        instance.props = { boardManager: mockBm };
+        instance.boardManager = mockBm;
+        instance.state = { inMonsterBattle: false, keysLocked: false };
+
+        instance.startMonsterPursuit(tiles[mIdx]);
+
+        // Advance timer 450ms for first step pursuit
+        jest.advanceTimersByTime(450);
+
+        // Vacated tile (mIdx) must be restored as non-void floor tile
+        const vacatedTile = tiles[mIdx];
+        expect(vacatedTile.contains).toBeNull();
+        expect(vacatedTile.isVoid).toBe(false);
+        expect(vacatedTile.type).toBe('empty_space');
+        expect(vacatedTile.original).toBeUndefined();
+        expect(vacatedTile.color).not.toBe('black');
+    });
 });

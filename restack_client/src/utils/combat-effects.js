@@ -236,6 +236,150 @@ export function clearPsionicBurnEffect(target) {
     target.psionicBurn_eras = 0;
 }
 
+// ── Shielded ──────────────────────────────────────────────────────────────────
+/**
+ * Applies the "shielded" effect to a combatant.
+ * Absorbs X amount of incoming damage before breaking and allowing damage through.
+ * @param {object} target - The combatant object
+ * @param {number} amount - Amount of damage the shield can absorb
+ * @param {number} [duration=1] - Duration in eras
+ * @param {function} [broadcastDataUpdate] - Optional callback
+ */
+export function applyShieldedEffect(target, amount, duration, broadcastDataUpdate) {
+    if (!target || target.hp <= 0) return false;
+    const shieldVal = (typeof amount === 'number' && amount > 0) ? amount : 50;
+    target.shielded = true;
+    target.shieldAmount = shieldVal;
+    target.shieldMax = Math.max(target.shieldMax || 0, shieldVal);
+    target.shielded_eras = duration || 1;
+    if (typeof broadcastDataUpdate === 'function') broadcastDataUpdate();
+    return true;
+}
+
+/**
+ * Clears the "shielded" effect from a combatant.
+ * @param {object} target - The combatant object
+ */
+export function clearShieldedEffect(target) {
+    if (!target) return;
+    target.shielded = false;
+    target.shieldAmount = 0;
+    target.shieldMax = 0;
+    target.shielded_eras = 0;
+}
+
+/**
+ * Absorbs incoming damage using the target's active shield if present.
+ * Reduces shieldAmount by incoming damage. If damage exceeds shieldAmount,
+ * the shield breaks (cleared) and remaining damage is returned.
+ * @param {object} target - The combatant object taking damage
+ * @param {number} damage - The incoming damage amount
+ * @returns {{ remainingDamage: number, absorbed: number, shieldBroken: boolean }}
+ */
+export function absorbShieldedDamage(target, damage) {
+    if (!target || !target.shielded || typeof target.shieldAmount !== 'number' || target.shieldAmount <= 0) {
+        return { remainingDamage: Math.max(0, damage || 0), absorbed: 0, shieldBroken: false };
+    }
+
+    const incoming = Math.max(0, damage || 0);
+    if (incoming === 0) {
+        return { remainingDamage: 0, absorbed: 0, shieldBroken: false };
+    }
+
+    if (incoming <= target.shieldAmount) {
+        target.shieldAmount -= incoming;
+        const absorbed = incoming;
+        let shieldBroken = false;
+        if (target.shieldAmount <= 0) {
+            clearShieldedEffect(target);
+            shieldBroken = true;
+        }
+        return { remainingDamage: 0, absorbed, shieldBroken };
+    } else {
+        const absorbed = target.shieldAmount;
+        const remainingDamage = incoming - absorbed;
+        clearShieldedEffect(target);
+        return { remainingDamage, absorbed, shieldBroken: true };
+    }
+}
+
+// ── Blinding Speed ────────────────────────────────────────────────────────────
+/**
+ * Applies the "blinding speed" effect to a combatant.
+ * Allows the unit to move an additional time and attack an additional time per round
+ * (boosting standard 1 move / 1 attack per round to 2 moves / 2 attacks per round).
+ * @param {object} target - The combatant object
+ * @param {number} [duration=1] - Duration in eras
+ * @param {function} [broadcastDataUpdate] - Optional callback
+ */
+export function applyBlindingSpeedEffect(target, duration, broadcastDataUpdate) {
+    if (!target || target.hp <= 0) return false;
+    target.blindingSpeed = true;
+    target.blindingSpeed_eras = duration || 1;
+    if (typeof broadcastDataUpdate === 'function') broadcastDataUpdate();
+    return true;
+}
+
+/**
+ * Clears the "blinding speed" effect from a combatant.
+ * @param {object} target - The combatant object
+ */
+export function clearBlindingSpeedEffect(target) {
+    if (!target) return;
+    target.blindingSpeed = false;
+    target.blindingSpeed_eras = 0;
+}
+
+/**
+ * Gets maximum allowed moves per round for a combatant, accounting for blinding speed.
+ * Default base is 1 move per round.
+ * @param {object} target - The combatant object
+ * @returns {number}
+ */
+export function getMaxMovesPerRound(target) {
+    if (!target) return 1;
+    const baseMoves = (typeof target.maxMovesPerRound === 'number') ? target.maxMovesPerRound : 1;
+    const bonus = target.blindingSpeed ? 1 : 0;
+    return baseMoves + bonus;
+}
+
+/**
+ * Gets maximum allowed attacks/actions per round for a combatant, accounting for blinding speed.
+ * Default base is 1 attack/action per round.
+ * @param {object} target - The combatant object
+ * @returns {number}
+ */
+export function getMaxActionsPerRound(target) {
+    if (!target) return 1;
+    const baseActions = (typeof target.maxActionsPerRound === 'number') ? target.maxActionsPerRound : 1;
+    const bonus = target.blindingSpeed ? 1 : 0;
+    return baseActions + bonus;
+}
+
+/**
+ * Checks whether a unit can execute another move in the current round based on blinding speed.
+ * @param {object} target - The combatant object
+ * @returns {boolean}
+ */
+export function canUnitMoveWithBlindingSpeed(target) {
+    if (!target || target.dead || target.hp <= 0) return false;
+    const movesTaken = target.movesTakenThisRound || 0;
+    return movesTaken < getMaxMovesPerRound(target);
+}
+
+/**
+ * Checks whether a unit can execute another attack in the current round based on blinding speed.
+ * @param {object} target - The combatant object
+ * @returns {boolean}
+ */
+export function canUnitAttackWithBlindingSpeed(target) {
+    if (!target || target.dead || target.hp <= 0) return false;
+    const actionsTaken = target.actionsTakenThisRound || 0;
+    return actionsTaken < getMaxActionsPerRound(target);
+}
+
+
+
 // ══════════════════════════════════════════════════════════════════════════════
 // MENTALITY DEBUFF SYSTEM
 // Contested willpower resolution for mind-affecting skills.
@@ -647,6 +791,16 @@ export function applyAttackEffect(target, effect, broadcastDataUpdate, isCrit, c
         case 'psionic_burn':
             applied = applyPsionicBurnEffect(target, resolvedDur, broadcastDataUpdate);
             appliedLabel = 'causes psionic burn';
+            break;
+        case 'shielded':
+        case 'shield':
+            applied = applyShieldedEffect(target, effect.shieldAmount || effect.amount || 50, resolvedDur, broadcastDataUpdate);
+            appliedLabel = 'grants shield';
+            break;
+        case 'blinding_speed':
+        case 'blinding speed':
+            applied = applyBlindingSpeedEffect(target, resolvedDur, broadcastDataUpdate);
+            appliedLabel = 'grants blinding speed';
             break;
         // Mentality debuff types routed through standard path when no caster is provided
         // (fallback — shouldn't normally happen for these types)

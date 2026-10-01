@@ -312,7 +312,7 @@ function resetDungeonInstanceMeta(meta = null, inventoryManager = null) {
                 return !resourceKeys.some(rk => k === rk || k.includes(rk));
             });
         }
-        inventoryManager.gold = 0;
+        inventoryManager.gold = 100;
         inventoryManager.shimmering_dust = 0;
         inventoryManager.totems = 0;
         inventoryManager.wood = 0;
@@ -329,13 +329,24 @@ function resetDungeonInstanceMeta(meta = null, inventoryManager = null) {
                 return !resourceKeys.some(rk => k === rk || k.includes(rk));
             });
         }
-        m.inventory.gold = 0;
+        m.inventory.gold = 100;
         m.inventory.shimmering_dust = 0;
         m.inventory.totems = 0;
         m.inventory.wood = 0;
         m.inventory.stone = 0;
         m.inventory.slate = 0;
         m.inventory.mushrooms = 0;
+    } else {
+        m.inventory = {
+            items: [],
+            gold: 100,
+            shimmering_dust: 0,
+            totems: 0,
+            wood: 0,
+            stone: 0,
+            slate: 0,
+            mushrooms: 0
+        };
     }
 
     storeMeta(m);

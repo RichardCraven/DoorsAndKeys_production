@@ -46,9 +46,9 @@ export default function PvPChallengeModal({
       <div
         className="ambush-popup-card"
         style={{
-          width: '520px',
-          maxWidth: '94vw',
-          padding: '30px 28px',
+          width: '580px',
+          maxWidth: '92vw',
+          padding: '32px 36px 28px',
           borderColor: 'rgba(212, 163, 89, 0.55)',
           boxShadow: '0 20px 60px rgba(0, 0, 0, 0.95), 0 0 35px rgba(212, 163, 89, 0.2), inset 0 0 25px rgba(0, 0, 0, 0.8)'
         }}
@@ -139,7 +139,7 @@ export default function PvPChallengeModal({
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: 'flex', gap: '14px', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: '14px', justifyContent: 'center', width: '100%', maxWidth: '420px', margin: '0 auto' }}>
           {isIncoming ? (
             <>
               <button
@@ -148,10 +148,13 @@ export default function PvPChallengeModal({
                 className="ambush-fight-btn"
                 style={{
                   flex: 1,
+                  boxSizing: 'border-box',
                   background: 'linear-gradient(180deg, #3d2a14 0%, #1c1409 100%)',
                   border: '1px solid rgba(229, 181, 79, 0.7)',
                   color: '#f5dfa8',
-                  boxShadow: '0 0 16px rgba(229, 181, 79, 0.35)'
+                  boxShadow: '0 0 16px rgba(229, 181, 79, 0.35)',
+                  padding: '11px 20px',
+                  fontSize: '14px'
                 }}
               >
                 ACCEPT DUEL
@@ -161,7 +164,10 @@ export default function PvPChallengeModal({
                 onClick={onDecline}
                 className="ambush-fight-btn danger"
                 style={{
-                  flex: 1
+                  flex: 1,
+                  boxSizing: 'border-box',
+                  padding: '11px 20px',
+                  fontSize: '14px'
                 }}
               >
                 DECLINE
@@ -174,9 +180,13 @@ export default function PvPChallengeModal({
               className="ambush-fight-btn"
               style={{
                 width: '100%',
+                maxWidth: '380px',
+                boxSizing: 'border-box',
                 background: 'linear-gradient(180deg, #1f181c 0%, #100d0e 100%)',
                 border: '1px solid rgba(212, 163, 89, 0.35)',
-                color: '#c8bda8'
+                color: '#c8bda8',
+                padding: '11px 20px',
+                fontSize: '14px'
               }}
             >
               CANCEL CHALLENGE

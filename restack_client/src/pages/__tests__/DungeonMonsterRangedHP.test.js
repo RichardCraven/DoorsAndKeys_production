@@ -221,6 +221,46 @@ describe('Dungeon Monster HP, Ranged Attack Cooldown & Combat Handoff', () => {
       expect(monsterFighter.starting_hp).toBe(76);
       // hp should NOT be doubled to 92; it should remain 46!
       expect(monsterFighter.hp).toBe(46);
+      expect(monsterFighter.stats.hp).toBe(76);
+
+      // Health bar width calculation should reflect 46 / 76 (~60.5%), NOT 100%
+      const hpBarRatio = monsterFighter.hp / (monsterFighter.starting_hp || monsterFighter.stats?.hp || 1);
+      expect(hpBarRatio).toBeCloseTo(46 / 76, 3);
+      expect(hpBarRatio).toBeLessThan(1.0);
+    });
+
+    it('does not multiply damaged monster HP by 1.5 when monster is a Lord', () => {
+      const combatMonster = {
+        id: 'lord_goblin',
+        type: 'goblin',
+        name: 'Goblin Lord',
+        isLord: true,
+        tier: 1,
+        hp: 40,
+        starting_hp: 76,
+        inDungeonDamaged: true,
+        stats: { hp: 76, vitality: 30, atk: 10, def: 5, str: 10, int: 5, dex: 5, fort: 5 }
+      };
+
+      const cm = new CombatManagerRedux();
+      cm.initializeCombat({
+        crew: [
+          { id: 'soldier_1', type: 'soldier', stats: { hp: 100, vitality: 50, atk: 10, def: 5, str: 10, int: 5, dex: 5, fort: 5 } }
+        ],
+        monster: combatMonster,
+        minions: []
+      });
+
+      const monsterFighter = cm.combatants['lord_goblin'];
+      expect(monsterFighter).toBeDefined();
+      // Damaged HP must remain 40, not boosted to 60!
+      expect(monsterFighter.hp).toBe(40);
+      // Max HP is boosted by 50% from 76 to 114
+      expect(monsterFighter.starting_hp).toBe(114);
+
+      // Health bar should reflect 40 / 114 (~35.1%)
+      const hpBarRatio = monsterFighter.hp / (monsterFighter.starting_hp || monsterFighter.stats?.hp || 1);
+      expect(hpBarRatio).toBeCloseTo(40 / 114, 3);
     });
   });
 });

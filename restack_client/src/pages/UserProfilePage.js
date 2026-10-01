@@ -118,7 +118,7 @@ class UserProfilePage extends React.Component{
           return !resourceKeys.some(rk => k === rk || k.includes(rk));
         });
       }
-      this.props.inventoryManager.gold = 0;
+      this.props.inventoryManager.gold = 100;
       this.props.inventoryManager.shimmering_dust = 0;
       this.props.inventoryManager.totems = 0;
       this.props.inventoryManager.wood = 0;
@@ -136,7 +136,7 @@ class UserProfilePage extends React.Component{
             const k = String(item._im_key || item.id || item.name || item.type || item.subtype || '').toLowerCase();
             return !resourceKeys.some(rk => k === rk || k.includes(rk));
           }),
-      gold: 0,
+      gold: 100,
       shimmering_dust: 0,
       totems: 0,
       wood: 0,

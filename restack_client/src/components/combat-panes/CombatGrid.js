@@ -830,12 +830,10 @@ const getCombatantPortrait = (unit, greetingInProcess, activeAnimations, showDea
     const isOpponentUnit = (unit) => {
         if (!unit) return false;
         if (unit.isOpponent === true) return true;
-        if (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.includes('pvp_'))) return true;
+        if (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.includes('pvp_') || unit.id.includes('pvp'))) return true;
         return false;
     };
-    if (isOpponentUnit(unit) || unit.isOpponent) {
-        console.log(`[PvP Diagnostic] getCombatantPortrait for opponent [${unit.id}]: name="${unit.name}", targetKey="${targetKey}", resolvedUrl="${finalUrl}"`);
-    }
+
     if (!finalUrl && process.env.NODE_ENV !== 'production') {
         console.warn(`[PvP Diagnostic] Unit "${unit.name || unit.id}" has no valid portrait URL (targetKey="${targetKey}")`, unit);
     }
@@ -874,7 +872,7 @@ export default function CombatGrid(props) {
         getHitAnimation,
         teleportingFighterId,
         fearCastingActive,
-        greetingInProcess,
+        greetingInProcess: rawGreetingInProcess,
         SHOW_MONSTER_IDS = false,
         // Sandbox-style CSS animation events from AnimationManagerRedux
         activeAnimations = [],
@@ -882,12 +880,17 @@ export default function CombatGrid(props) {
         showSummaryPanel = false,
     } = props;
     const crewIds = new Set(crew.map(f => f.id));
+    const isPvP = !!(props.isPvP || props.isPvPMode || combatManager?.data?.isPvP || combatManager?.data?.isPvPMode || combatManager?.isPvP || combatManager?.isPvPMode);
+    const greetingInProcess = isPvP ? false : props.greetingInProcess;
     const hideBars = props.showBars === false || greetingInProcess;
 
     const isOpponentUnit = (unit) => {
         if (!unit) return false;
+        if (isPvP) return true;
         if (unit.isOpponent === true) return true;
-        if (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.includes('pvp_'))) return true;
+        if (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.includes('pvp_') || unit.id.includes('pvp'))) return true;
+        if (Array.isArray(props.opponentCrew) && props.opponentCrew.some(o => o && o.id === unit.id)) return true;
+        if (Array.isArray(combatManager?.data?.opponentCrew) && combatManager.data.opponentCrew.some(o => o && o.id === unit.id)) return true;
         return false;
     };
 
@@ -1755,9 +1758,40 @@ export default function CombatGrid(props) {
                             }
                         }}
                     >
-                        {(fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') && (
-                            <WalkerAnimatedUnit isMoving={true} />
+                        {/* PvP soft blue/green glow for player units */}
+                        {isPvP && !details?.dead && (
+                            <div
+                                className="pvp-player-glow"
+                                data-testid="pvp-player-glow"
+                                style={{
+                                    position: 'absolute',
+                                    top: '-10px',
+                                    left: '-10px',
+                                    width: '120px',
+                                    height: '120px',
+                                    borderRadius: '50%',
+                                    background: 'radial-gradient(circle, rgba(33, 230, 193, 0.75) 0%, rgba(0, 191, 255, 0.45) 50%, transparent 75%)',
+                                    boxShadow: '0 0 25px 8px rgba(33, 230, 193, 0.6), 0 0 45px 16px rgba(0, 191, 255, 0.35)',
+                                    filter: 'blur(4px)',
+                                    zIndex: 0,
+                                    pointerEvents: 'none',
+                                    animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'
+                                }}
+                            />
                         )}
+                        {(() => {
+                            const isWalkerAttacking = !!(
+                                fighter.attacking || 
+                                details?.attacking || 
+                                liveFighter?.attacking || 
+                                (fighter.isCleaving && Date.now() - fighter.isCleaving < 1000) ||
+                                (liveFighter?.isCleaving && Date.now() - liveFighter.isCleaving < 1000) ||
+                                (liveFighter?.activeAbility && (liveFighter.activeAbility.id === 'walker_cleave' || liveFighter.activeAbility === 'walker_cleave'))
+                            );
+                            return (fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') && (
+                                <WalkerAnimatedUnit isMoving={true} isAttacking={isWalkerAttacking} />
+                            );
+                        })()}
                         {(fighter.type === 'sobek' || fighter.key === 'sobek' || fighter.name === 'Sobek') && (
                             <SobekAnimatedUnit isMoving={true} />
                         )}
@@ -2127,7 +2161,7 @@ export default function CombatGrid(props) {
                         }}>
                             <div className="hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
                                 <div className="red-fill" style={{
-                                    width: hideBars ? '0%' : `${(getFighterDetails(fighter)?.hp / (fighter.stats?.hp || fighter.starting_hp || 100)) * 100}%`,
+                                    width: hideBars ? '0%' : `${(getFighterDetails(fighter)?.hp / (fighter.starting_hp || fighter.stats?.hp || 100)) * 100}%`,
                                     transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                                 }} />
                             </div>
@@ -2412,8 +2446,9 @@ export default function CombatGrid(props) {
         const yPos = tilePos(unit.coordinates.y);
         const isTelep = isTeleporting(unit.id);
 
-        const isHuge = checkHuge(unit);
-        const isLarge = checkLarge(unit);
+        const isOpponent = isOpponentUnit(unit);
+        const isHuge = !isOpponent && checkHuge(unit);
+        const isLarge = !isOpponent && checkLarge(unit);
         const width = isHuge 
             ? TILE_SIZE * 3 + (SHOW_TILE_BORDERS ? 4 : 0) 
             : (isLarge ? TILE_SIZE * 2 + (SHOW_TILE_BORDERS ? 2 : 0) : TILE_SIZE);
@@ -2428,8 +2463,8 @@ export default function CombatGrid(props) {
             ? -TILE_SIZE * 2 - (SHOW_TILE_BORDERS ? 4 : 0) 
             : (isLarge ? -TILE_SIZE - (SHOW_TILE_BORDERS ? 2 : 0) : 0);
 
-        const isMainMonster = !isOpponentUnit(unit) && (unit.isMainMonster || (isMonster && !isMinion));
-        const showEnlarged = greetingInProcess && isMainMonster && !props.isMobileLandscape && !isDead;
+        const isMainMonster = !isOpponent && (unit.isMainMonster || (isMonster && !isMinion));
+        const showEnlarged = !isOpponent && greetingInProcess && isMainMonster && !props.isMobileLandscape && !isDead;
         const numCols = props.numColumns || combatManager?.numColumns || 8;
         const boardWidth = numCols * TILE_SIZE + (SHOW_TILE_BORDERS ? numCols * 2 : 0);
 
@@ -2476,8 +2511,8 @@ export default function CombatGrid(props) {
         }
         const isSpawningMinion = isMinion && !isDead && !isFamiliar && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
 
-        const isPCUnit = unit.isOpponent || (!unit.isMonster && !unit.isMinion) || isPCUnitType(unit.type || unit.portrait || unit.image);
-        const currentFacing = unit.facing || (isOpponentUnit(unit) || (unit.coordinates && unit.coordinates.x >= 4) ? 'left' : (isPCUnit ? 'right' : 'left'));
+        const isPCUnit = isOpponent || unit.isOpponent || (!unit.isMonster && !unit.isMinion) || isPCUnitType(unit.type || unit.portrait || unit.image);
+        const currentFacing = unit.facing || (isOpponent || (unit.coordinates && unit.coordinates.x >= 4) ? 'left' : (isPCUnit ? 'right' : 'left'));
         const isArchaicFamiliar = unit.type === 'archaic_familiar' || unit.key === 'archaic_familiar' || (unit.name && String(unit.name).toLowerCase().includes('archaic familiar'));
         const needFlip = isArchaicFamiliar
             ? (!isPCUnit && !unit.isMinion)
@@ -2486,9 +2521,9 @@ export default function CombatGrid(props) {
         // All state classes go on unit-tile — not on any full-width wrapper
         const unitTileClasses = [
             'unit-tile',
-            isMinion ? 'minion-unit-tile' : 'monster-unit-tile',
+            isOpponent ? 'opponent-unit-tile fighter-unit-tile' : (isMinion ? 'minion-unit-tile' : 'monster-unit-tile'),
             isDead ? 'dead' : '',
-            isHuge ? 'huge-monster-unit-tile' : (isLarge ? 'large-monster-unit-tile' : ''),
+            (!isOpponent && isHuge) ? 'huge-monster-unit-tile' : ((!isOpponent && isLarge) ? 'large-monster-unit-tile' : ''),
             unit.rocked ? 'rocked' : '',
             unit.wounded ? 'hit' : '',
             unit.wounded ? hitAnim : '',
@@ -2501,12 +2536,12 @@ export default function CombatGrid(props) {
 
         const portraitClasses = [
             'portrait',
-            isMinion ? 'minion-portrait' : 'monster-portrait',
-            isHuge ? 'huge-portrait' : (isLarge ? 'large-portrait' : ''),
-            showEnlarged ? 'enlarged' : '',
+            isOpponent ? 'fighter-portrait opponent-portrait' : (isMinion ? 'minion-portrait' : 'monster-portrait'),
+            (!isOpponent && isHuge) ? 'huge-portrait' : ((!isOpponent && isLarge) ? 'large-portrait' : ''),
+            (!isOpponent && showEnlarged) ? 'enlarged' : '',
             unit.active ? 'active' : '',
             portraitHoveredId === unit.id ? 'hover-linked-target' : '',
-            unit.bifurcating ? 'bifurcatingAnimation' : (isDead ? (unit.type === 'mummy' || unit.key === 'mummy' || isLarge || isHuge ? 'dead mummyDeadAnimation' : 'dead monsterDeadAnimation') : ''),
+            unit.bifurcating ? 'bifurcatingAnimation' : (isDead ? (unit.type === 'mummy' || unit.key === 'mummy' || (!isOpponent && (isLarge || isHuge)) ? 'dead mummyDeadAnimation' : 'dead monsterDeadAnimation') : ''),
             unit.isBifurcateSmall ? 'bifurcate-copy' : '',
             unit.isBifurcateCopy ? 'bifurcate-copy-spawning' : '',
             unit.missed ? (needFlip ? 'missed-reversed' : 'missed') : '',
@@ -2580,6 +2615,31 @@ export default function CombatGrid(props) {
             >
 
                 {renderEffectIcons(unit)}
+                {/* PvP Portrait Glow: Red for Opponent units, Soft Blue/Green for Player units */}
+                {isPvP && !isDead && (
+                    <div
+                        className={isOpponent ? 'pvp-opponent-glow' : 'pvp-player-glow'}
+                        data-testid={isOpponent ? 'pvp-opponent-glow' : 'pvp-player-glow'}
+                        style={{
+                            position: 'absolute',
+                            top: '-10px',
+                            left: '-10px',
+                            width: `${width + 20}px`,
+                            height: `${height + 20}px`,
+                            borderRadius: '50%',
+                            background: isOpponent
+                                ? 'radial-gradient(circle, rgba(255, 45, 85, 0.8) 0%, rgba(220, 20, 60, 0.5) 50%, transparent 75%)'
+                                : 'radial-gradient(circle, rgba(33, 230, 193, 0.75) 0%, rgba(0, 191, 255, 0.45) 50%, transparent 75%)',
+                            boxShadow: isOpponent
+                                ? '0 0 25px 8px rgba(255, 45, 85, 0.65), 0 0 45px 16px rgba(220, 20, 60, 0.4)'
+                                : '0 0 25px 8px rgba(33, 230, 193, 0.6), 0 0 45px 16px rgba(0, 191, 255, 0.35)',
+                            filter: 'blur(4px)',
+                            zIndex: 0,
+                            pointerEvents: 'none',
+                            animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'
+                        }}
+                    />
+                )}
                 <div
                     className="portrait-relative-container"
                     onMouseEnter={() => portraitHovered(unit.id)}
@@ -2631,14 +2691,16 @@ export default function CombatGrid(props) {
                                     position: 'relative',
                                     width: '100%',
                                     height: '100%',
-                                    transform: showEnlarged
-                                        ? `scale(1.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)`
-                                        : ((isLarge || isHuge)
-                                            ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px) ${(greetingInProcess && !props.isMobileLandscape && !isDead) ? 'scale(1.2)' : ''}`.trim() || 'none'
-                                            : (unit.isUpsideDown 
-                                                ? 'rotate(180deg)' 
-                                                : (unit.type === 'spider_minion' ? `scale(0.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)` : undefined))),
-                                    transformOrigin: showEnlarged ? 'right center' : 'bottom',
+                                    transform: isOpponent
+                                        ? `${unit.isUpsideDown ? 'rotate(180deg) ' : ''}${needFlip ? 'scaleX(-1)' : 'scaleX(1)'}${unit.facing === 'up' ? (needFlip ? ' rotate(45deg)' : ' rotate(-45deg)') : unit.facing === 'down' ? (needFlip ? ' rotate(-45deg)' : ' rotate(45deg)') : ''}`.trim()
+                                        : (showEnlarged
+                                            ? `scale(1.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)`
+                                            : ((isLarge || isHuge)
+                                                ? `${unit.isUpsideDown ? 'rotate(180deg)' : ''} perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px) ${(greetingInProcess && !props.isMobileLandscape && !isDead) ? 'scale(1.2)' : ''}`.trim() || 'none'
+                                                : (unit.isUpsideDown 
+                                                    ? 'rotate(180deg)' 
+                                                    : (unit.type === 'spider_minion' ? `scale(0.5) perspective(400px) rotateY(${needFlip ? -15 : 15}deg) translateX(${needFlip ? -3 : 3}px)` : undefined)))),
+                                    transformOrigin: isOpponent ? 'center center' : (showEnlarged ? 'right center' : 'bottom'),
                                     boxShadow: unit.isSinisterReflection ? '0 0 15px rgba(220, 20, 60, 0.8), inset 0 0 10px rgba(220, 20, 60, 0.5)' : undefined,
                                     borderRadius: '0',
                                     transition: 'filter 0.25s ease-in-out, transform 0.5s ease-in-out, transform-origin 0.5s ease-in-out',
@@ -2664,7 +2726,16 @@ export default function CombatGrid(props) {
                                     }
                                 }}
                             >
-                                {isWalkerUnit && <WalkerAnimatedUnit isMoving={true} />}
+                                {(() => {
+                                    const isWalkerAttacking = !!(
+                                        unit.attacking || 
+                                        liveMonster?.attacking || 
+                                        (unit.isCleaving && Date.now() - unit.isCleaving < 1000) ||
+                                        (liveMonster?.isCleaving && Date.now() - liveMonster.isCleaving < 1000) ||
+                                        (liveMonster?.activeAbility && (liveMonster.activeAbility.id === 'walker_cleave' || liveMonster.activeAbility === 'walker_cleave'))
+                                    );
+                                    return isWalkerUnit && <WalkerAnimatedUnit isMoving={true} isAttacking={isWalkerAttacking} />;
+                                })()}
                                 {isSobekUnit && <SobekAnimatedUnit isMoving={true} />}
                                 {unit.isLord && unit.lordBadge && (
                                     <div 
@@ -3219,7 +3290,7 @@ export default function CombatGrid(props) {
                     }}>
                         <div className="monster-hp-bar hp-bar" style={{ position: 'relative', bottom: 'auto', top: 'auto', height: '4px' }}>
                             <div className="red-fill" style={{
-                                width: hideBars ? '0%' : `${(unit.hp / (unit.stats?.hp || unit.starting_hp || 1)) * 100}%`,
+                                width: hideBars ? '0%' : `${(unit.hp / (unit.starting_hp || unit.stats?.hp || 1)) * 100}%`,
                                 transition: 'width 1.2s cubic-bezier(0.15, 0.85, 0.35, 1)'
                             }} />
                         </div>

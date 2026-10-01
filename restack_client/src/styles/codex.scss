@@ -99,6 +99,13 @@
   border-radius: 50%;
   width: 32px;
   height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
+  line-height: 1;
   font-size: 14px;
   cursor: pointer;
   display: flex;

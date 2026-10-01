@@ -724,6 +724,9 @@ class MonsterBattle extends React.Component {
         if (prevProps.paused !== this.props.paused && this.props.combatManager && typeof this.props.combatManager.pauseCombat === 'function') {
             this.props.combatManager.pauseCombat(!!this.props.paused);
         }
+        if ((this.props.isPvP || this.props.isPvPMode) && this.state.greetingInProcess) {
+            this.setState({ greetingInProcess: false });
+        }
 
         // When the summary panel appears, schedule clearing of any
         // `justLeveled` flags recorded on crew members so the arrow and
@@ -4785,6 +4788,9 @@ class MonsterBattle extends React.Component {
                             TILE_SIZE={currentTileSize}
                             SHOW_TILE_BORDERS={SHOW_TILE_BORDERS}
                             isMobileLandscape={this.state.isMobileLandscape}
+                            isPvP={!!(this.props.isPvP || this.props.isPvPMode)}
+                            isPvPMode={!!(this.props.isPvP || this.props.isPvPMode)}
+                            opponentCrew={this.props.opponentCrew}
                         />
 
                         {/* ── Manual Input drag arc SVG overlay ──────────────────────── */}
@@ -5777,7 +5783,7 @@ class MonsterBattle extends React.Component {
                                 <div className="interaction-header">Target</div>
                                 <div className="interaction-tooltip"> </div>
                                 <div className="interaction-tile-container">
-                                    {this.state.selectedFighter && this.state.selectedFighter.name !== 'Loryastes' && Object.values(this.state.battleData).filter(e => (e.isMonster || e.isMinion) && !e.dead && !e.invisible && !e.isVCT).map((a) => {
+                                    {this.state.selectedFighter && this.state.selectedFighter.type !== 'sage' && this.state.selectedFighter.image !== 'sage' && this.state.selectedFighter.name !== 'Loryastes' && Object.values(this.state.battleData).filter(e => (e.isMonster || e.isMinion) && !e.dead && !e.invisible && !e.isVCT).map((a) => {
                                         return <div key={a.id} className='interaction-tile-wrapper'>
                                             <div
                                                 style={{ backgroundImage: "url(" + a.portrait + ")", cursor: this.state.showCrosshair ? 'crosshair' : '' }}
@@ -5789,7 +5795,7 @@ class MonsterBattle extends React.Component {
                                         </div>
                                     })}
 
-                                    {this.state.selectedFighter && this.state.selectedFighter.name === 'Loryastes' && Object.values(this.state.battleData).filter(e => !e.isMonster && !e.isMinion && e.name !== 'Loryastes' && !e.dead && !e.invisible).map((a) => {
+                                    {this.state.selectedFighter && (this.state.selectedFighter.type === 'sage' || this.state.selectedFighter.image === 'sage' || this.state.selectedFighter.name === 'Loryastes') && Object.values(this.state.battleData).filter(e => !e.isMonster && !e.isMinion && e.id !== this.state.selectedFighter.id && e.name !== this.state.selectedFighter.name && !e.dead && !e.invisible).map((a) => {
                                         return <div
                                             key={a.id}
                                             style={{ backgroundImage: "url(" + a.portrait + ")", cursor: this.state.showCrosshair ? 'crosshair' : '' }}

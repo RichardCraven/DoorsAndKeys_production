@@ -11,6 +11,7 @@ import { getCrewPortraitBackground } from '../utils/images';
 import { LANDING_REDUX_CSS } from '../styles/landing-redux-css';
 import InfirmaryModal from '../components/InfirmaryModal';
 import { getInfirmary } from '../utils/infirmary-manager';
+import { getReflectedDescription } from '../utils/crew-manager';
 
 const DEFAULT_CLASS_LORE = {
   summoner: 'A conduit for unstable arcana who overwhelms enemies with elemental pressure by opening rifts and summoning minions.',
@@ -744,6 +745,7 @@ export default function LandingPage(props) {
   const [showWarning, setShowWarning] = useState(false)
   const [validDungeons, setValidDungeons] = useState([])
   const [activePresenceMap, setActivePresenceMap] = useState({})
+  const [allDungeons, setAllDungeons] = useState([])
   const [showDungeonPicker, setShowDungeonPicker] = useState(false)
   const [selectedDungeonTemplateId, setSelectedDungeonTemplateId] = useState(null)
   const [pendingDungeonSelection, setPendingDungeonSelection] = useState(null)
@@ -840,7 +842,16 @@ export default function LandingPage(props) {
       const spawnDiag = findSpawnPointDiagnostic(d);
       return d.valid === true && spawnDiag.found && isUnderInstanceLimit;
     });
+    setAllDungeons(all);
     const baseValidOnly = validOnly.filter((d) => !isInstanceDungeonName(d.name));
+    baseValidOnly.sort((a, b) => {
+      const aOnline = getDungeonOnlineCount(a, presenceMap, all);
+      const bOnline = getDungeonOnlineCount(b, presenceMap, all);
+      if (aOnline !== bOnline) {
+        return bOnline - aOnline;
+      }
+      return (a.name || '').localeCompare(b.name || '');
+    });
     setValidDungeons(baseValidOnly);
 
     if (Object.keys(presenceMap).length > 0) {
@@ -1177,7 +1188,7 @@ export default function LandingPage(props) {
       <header className="landing-header">
         <div className="header-logo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="logo-title">Dream Tower</span>
-          <span className="logo-subtitle">v 0.7.2  BETA</span>
+          <span className="logo-subtitle">v 0.8.1  BETA</span>
           {serverWarming && (
             <span style={{
               marginLeft: '8px',
@@ -2173,8 +2184,9 @@ export default function LandingPage(props) {
               <div className="dungeon-selector-group" ref={dungeonPickerRef}>
                 <span className="selector-label">Target Dungeon</span>
                 {(() => {
+                  const allDung = (Array.isArray(allDungeons) && allDungeons.length > 0) ? allDungeons : validDungeons;
                   const selectedDungeonObj = validDungeons.find((d) => d.id === selectedDungeonTemplateId);
-                  const selectedOnlineCount = selectedDungeonObj ? getDungeonOnlineCount(selectedDungeonObj, activePresenceMap, validDungeons) : 0;
+                  const selectedOnlineCount = selectedDungeonObj ? getDungeonOnlineCount(selectedDungeonObj, activePresenceMap, allDung) : 0;
                   const selectedDungeonName = getMeta()?.selectedDungeonTemplateName || selectedDungeonObj?.name || 'Select a Dungeon...';
 
                   return (
@@ -2222,43 +2234,55 @@ export default function LandingPage(props) {
 
                 {showDungeonPicker && (
                   <div className="custom-select-menu">
-                    {validDungeons.map((d) => {
-                      const totalOnline = getDungeonOnlineCount(d, activePresenceMap, validDungeons);
-                      const isActive = totalOnline > 0;
+                    {(() => {
+                      const allDung = (Array.isArray(allDungeons) && allDungeons.length > 0) ? allDungeons : validDungeons;
+                      const sortedDungeons = [...validDungeons].sort((a, b) => {
+                        const aOnline = getDungeonOnlineCount(a, activePresenceMap, allDung);
+                        const bOnline = getDungeonOnlineCount(b, activePresenceMap, allDung);
+                        if (aOnline !== bOnline) {
+                          return bOnline - aOnline; // higher online count first
+                        }
+                        return (a.name || '').localeCompare(b.name || '');
+                      });
 
-                      return (
-                        <div
-                          key={d.id}
-                          className={`menu-item ${selectedDungeonTemplateId === d.id ? 'active' : ''}`}
-                          onClick={() => selectDungeonTemplate(d)}
-                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '12px' }}
-                        >
-                          <span>{d.name}</span>
-                          {isActive && (
-                            <span
-                              style={{
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                gap: '6px',
-                                fontSize: '11px',
-                                color: '#10b981',
-                                fontWeight: 'bold'
-                              }}
-                              title={`${totalOnline} player(s) active in live instance`}
-                            >
-                              <span style={{
-                                width: '9px',
-                                height: '9px',
-                                borderRadius: '50%',
-                                backgroundColor: '#10b981',
-                                boxShadow: '0 0 10px #10b981'
-                              }} />
-                              {totalOnline} online
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
+                      return sortedDungeons.map((d) => {
+                        const totalOnline = getDungeonOnlineCount(d, activePresenceMap, allDung);
+                        const isActive = totalOnline > 0;
+
+                        return (
+                          <div
+                            key={d.id}
+                            className={`menu-item ${selectedDungeonTemplateId === d.id ? 'active' : ''}`}
+                            onClick={() => selectDungeonTemplate(d)}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingRight: '12px' }}
+                          >
+                            <span>{d.name}</span>
+                            {isActive && (
+                              <span
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px',
+                                  fontSize: '11px',
+                                  color: '#10b981',
+                                  fontWeight: 'bold'
+                                }}
+                                title={`${totalOnline} player(s) active in live instance`}
+                              >
+                                <span style={{
+                                  width: '9px',
+                                  height: '9px',
+                                  borderRadius: '50%',
+                                  backgroundColor: '#10b981',
+                                  boxShadow: '0 0 10px #10b981'
+                                }} />
+                                {totalOnline} online
+                              </span>
+                            )}
+                          </div>
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </div>
@@ -2897,7 +2921,7 @@ export default function LandingPage(props) {
           baseHp: showcaseUnit.stats?.baseHp ?? defaultStats.baseHp
         };
 
-        const description = showcaseUnit.description || DEFAULT_CLASS_LORE[uType] || 'A heroic adventurer equipped for dungeon exploration.';
+        const description = getReflectedDescription(showcaseUnit.description || DEFAULT_CLASS_LORE[uType] || 'A heroic adventurer equipped for dungeon exploration.', showcaseUnit.name, showcaseUnit);
         const rawSkills = Array.isArray(showcaseUnit.skills) && showcaseUnit.skills.length > 0 ? showcaseUnit.skills : (DEFAULT_CLASS_SKILLS[uType] || []);
         const rawPassives = Array.isArray(showcaseUnit.passives) ? showcaseUnit.passives : [];
         const allSkillKeys = Array.from(new Set([...rawSkills, ...rawPassives]));

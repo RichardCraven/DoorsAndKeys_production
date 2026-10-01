@@ -198,6 +198,138 @@
     "art": "precipice_guardian_portrait"
   },
   {
+    "id": "echo_goblin_thief",
+    "type": "echo",
+    "monsterType": "goblin_thief",
+    "name": "Goblin Thief",
+    "energyCost": 0,
+    "effect": { "type": "damage", "amount": 5 },
+    "rarity": "common",
+    "text": "Quick strike from the shadows. Free to play. Deal 5 damage to the Reaper.",
+    "art": "goblin_thief_portrait"
+  },
+  {
+    "id": "echo_goblin_warrior",
+    "type": "echo",
+    "monsterType": "goblin_warrior",
+    "name": "Goblin Warrior",
+    "energyCost": 1,
+    "effect": { "type": "damage", "amount": 4 },
+    "rarity": "common",
+    "text": "Sword swing. Deal 4 damage to the Reaper.",
+    "art": "goblin_warrior_portrait"
+  },
+  {
+    "id": "echo_goblin_chef",
+    "type": "echo",
+    "monsterType": "goblin_chef",
+    "name": "Goblin Chef",
+    "energyCost": 1,
+    "effect": { "type": "heal", "amount": 3 },
+    "rarity": "common",
+    "text": "Hearty stew. Restore 3 Soul.",
+    "art": "goblin_chef_portrait"
+  },
+  {
+    "id": "echo_goblin_warchief",
+    "type": "echo",
+    "monsterType": "goblin_warchief",
+    "name": "Goblin Warchief",
+    "energyCost": 2,
+    "effect": { "type": "damage", "amount": 7 },
+    "rarity": "uncommon",
+    "text": "Brutal cleave. Deal 7 damage to the Reaper.",
+    "art": "goblin_warchief_portrait"
+  },
+  {
+    "id": "echo_blalok",
+    "type": "echo",
+    "monsterType": "blalok",
+    "name": "Blalok",
+    "energyCost": 1,
+    "effect": { "type": "damage", "amount": 4 },
+    "rarity": "uncommon",
+    "text": "Aberrant lash. Deal 4 damage to the Reaper.",
+    "art": "blalok"
+  },
+  {
+    "id": "echo_shade",
+    "type": "echo",
+    "monsterType": "shade",
+    "name": "Shade",
+    "energyCost": 1,
+    "effect": { "type": "dodge_all", "turns": 1 },
+    "rarity": "uncommon",
+    "text": "Mantle of darkness. Dodge all Reaper damage this turn.",
+    "art": "shade"
+  },
+  {
+    "id": "echo_basilisk_cultists",
+    "type": "echo",
+    "monsterType": "basilisk_cultists",
+    "name": "Basilisk Cultists",
+    "energyCost": 2,
+    "effect": { "type": "weaken_reaper", "energyLoss": 1 },
+    "rarity": "uncommon",
+    "text": "Dark chant. Reduce the Reaper's Energy by 1 on their next turn.",
+    "art": "basilisk_cultists_portrait"
+  },
+  {
+    "id": "echo_high_priest_of_the_basilisk",
+    "type": "echo",
+    "monsterType": "high_priest_of_the_basilisk",
+    "name": "High Priest of the Basilisk",
+    "energyCost": 2,
+    "effect": { "type": "piercing_damage", "amount": 5 },
+    "rarity": "rare",
+    "text": "Petrifying gaze. Deal 5 piercing damage that bypasses defenses.",
+    "art": "high_priest_of_the_basilisk_portrait"
+  },
+  {
+    "id": "echo_goat_demon",
+    "type": "echo",
+    "monsterType": "goat_demon",
+    "name": "Goat Demon",
+    "energyCost": 2,
+    "effect": { "type": "damage_and_shield", "damage": 5, "shield": 2 },
+    "rarity": "uncommon",
+    "text": "Demonic rush. Deal 5 damage and reduce Reaper's next attack by 2.",
+    "art": "goat_demon_portrait"
+  },
+  {
+    "id": "echo_cyclops",
+    "type": "echo",
+    "monsterType": "cyclops",
+    "name": "Cyclops",
+    "energyCost": 2,
+    "effect": { "type": "damage", "amount": 6 },
+    "rarity": "uncommon",
+    "text": "Crushing blow. Deal 6 damage to the Reaper.",
+    "art": "cyclops_portrait"
+  },
+  {
+    "id": "echo_qlippoth",
+    "type": "echo",
+    "monsterType": "qlippoth",
+    "name": "Qlippoth",
+    "energyCost": 2,
+    "effect": { "type": "lifesteal", "damage": 4, "heal": 2 },
+    "rarity": "rare",
+    "text": "Corrupting siphon. Deal 4 damage and restore 2 Soul.",
+    "art": "qlippoth"
+  },
+  {
+    "id": "echo_eidolon",
+    "type": "echo",
+    "monsterType": "eidolon",
+    "name": "Eidolon",
+    "energyCost": 3,
+    "effect": { "type": "stun_reaper", "turns": 1 },
+    "rarity": "rare",
+    "text": "Spectral rift. The Reaper skips their next turn.",
+    "art": "eidolon"
+  },
+  {
     "id": "reaper_reap",
     "type": "reaper_card",
     "name": "Reap",

@@ -123,10 +123,11 @@ export default function CardForge({ crew, meta, onClose, onSave, highlightMonste
                             {forgeables.map(entry => {
                                 const alreadyForged = forgedState.includes(entry.card.id);
                                 const portraitKey   = entry.card.art;
-                                const portrait      = images[portraitKey] || null;
+                                const portrait      = images[portraitKey] || images[`${entry.monsterType}_portrait`] || images[entry.monsterType] || null;
                                 const have          = shardsState[entry.monsterType] || 0;
                                 const pct           = Math.min(1, have / 3);
                                 const isHighlighted = highlightMonsterType && entry.monsterType === highlightMonsterType;
+                                const displayName   = entry.card.name || entry.monsterType.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
                                 return (
                                     <div
                                         key={entry.card.id}
@@ -140,7 +141,7 @@ export default function CardForge({ crew, meta, onClose, onSave, highlightMonste
                                             {alreadyForged && <div className="pf-forge-checkmark">✓</div>}
                                         </div>
                                         <div className="pf-forge-info">
-                                            <div className="pf-forge-name">{entry.card.name || entry.monsterType.replace(/_/g, ' ')}</div>
+                                            <div className="pf-forge-name">{displayName}</div>
                                             {/* Shard progress bar */}
                                             <div className="pf-shard-row">
                                                 <div className="pf-shard-bar-bg">

@@ -333,6 +333,27 @@
         }
     }
 
+    .portrait.opponent-portrait {
+        width: 100px;
+        height: 100px;
+        aspect-ratio: 1/1;
+        border-radius: 100px;
+        background-size: 100% 100%;
+        background-repeat: no-repeat;
+        background-position: center;
+        position: absolute;
+        top: 0;
+        left: 0;
+        cursor: pointer;
+        --portrait-base-scale: 1;
+        transform-origin: center center;
+        z-index: 1;
+
+        &.dead {
+            opacity: 0.4;
+        }
+    }
+
     .portrait.monster-portrait {
         width: 100px;
         height: 100px;
