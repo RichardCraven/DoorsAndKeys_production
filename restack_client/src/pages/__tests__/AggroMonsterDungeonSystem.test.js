@@ -235,4 +235,118 @@ describe('Aggro Monster Dungeon System', () => {
         expect(vacatedTile.original).toBeUndefined();
         expect(vacatedTile.color).not.toBe('black');
     });
+
+    test('Aggro On toggle renders in renderTogglesSection and handleToggleAggroOn updates state and storage', () => {
+        const instance = new DungeonPage({});
+        instance.isSectionCollapsed = jest.fn(() => false);
+        instance.checkAggroMonsters = jest.fn();
+        instance.forceUpdate = jest.fn();
+
+        expect(instance.state.aggroOn).toBe(false);
+
+        const { container } = render(<div>{instance.renderTogglesSection()}</div>);
+        const toggleEl = container.querySelector('.aggro-on-toggle-inline');
+        expect(toggleEl).not.toBeNull();
+        expect(toggleEl.textContent).toContain('OFF');
+
+        // Trigger toggle
+        instance.handleToggleAggroOn();
+        expect(instance.state.aggroOn).toBe(true);
+        expect(instance.checkAggroMonsters).toHaveBeenCalled();
+        expect(localStorage.getItem('aggroOn')).toBe('true');
+
+        // Toggle back OFF
+        instance.handleToggleAggroOn();
+        expect(instance.state.aggroOn).toBe(false);
+        expect(localStorage.getItem('aggroOn')).toBe('false');
+    });
+
+    test('isAggroMonsterObj defaults ALL monsters in-dungeon to aggro: true when aggroOn is true', () => {
+        const instance = new DungeonPage({});
+        const regularGoblinTile = {
+            id: 15,
+            color: '#6b6057',
+            contains: { type: 'monster', subtype: 'goblin' }
+        };
+
+        // When aggroOn is false, standard goblin is not aggro
+        instance.state = { aggroOn: false };
+        expect(instance.isAggroMonsterObj(regularGoblinTile.contains, regularGoblinTile)).toBe(false);
+
+        // When aggroOn is true, ALL in-dungeon monsters default to aggro: true
+        instance.state = { aggroOn: true };
+        expect(instance.isAggroMonsterObj(regularGoblinTile.contains, regularGoblinTile)).toBe(true);
+
+        // Non-monster tiles remain false even with aggroOn: true
+        const floorTile = { id: 16, color: '#6b6057', contains: null };
+        expect(instance.isAggroMonsterObj(floorTile.contains, floorTile)).toBe(false);
+    });
+
+    test('Tile component renders aggro-monster-glow for standard monsters when aggroOn is passed', () => {
+        const standardMonsterContains = { type: 'monster', subtype: 'goblin_warrior', aggro: false };
+
+        // Without aggroOn: no aggro glow
+        const { container: c1 } = render(
+            <Tile
+                id={20}
+                color="red"
+                contains={standardMonsterContains}
+                type="monster-tile"
+                aggroOn={false}
+            />
+        );
+        const glowEl1 = c1.querySelector('.monster-portrait-glow');
+        if (glowEl1) {
+            expect(glowEl1.className).not.toContain('aggro-monster-glow');
+        }
+
+        // With aggroOn={true}: renders crimson pulsing aggro-monster-glow
+        const { container: c2 } = render(
+            <Tile
+                id={21}
+                color="red"
+                contains={standardMonsterContains}
+                type="monster-tile"
+                aggroOn={true}
+            />
+        );
+        const glowEl2 = c2.querySelector('.monster-portrait-glow');
+        expect(glowEl2).not.toBeNull();
+        expect(glowEl2.className).toContain('aggro-monster-glow');
+    });
+
+    test('checkAggroMonsters triggers pursuit for monsters within radius 4 when aggroOn is true', () => {
+        const instance = new DungeonPage({});
+        instance.triggerMonsterBattle = jest.fn();
+        instance.startMonsterPursuit = jest.fn();
+
+        const pRow = 5;
+        const pCol = 5;
+        const tiles = Array(225).fill(null).map((_, idx) => ({ id: idx, color: '#6b6057', contains: null }));
+
+        // Place a regular goblin 3 tiles away (Row 5, Col 8) -> within radius 4
+        const mRow = 5;
+        const mCol = 8;
+        const mIdx = mRow * 15 + mCol;
+        tiles[mIdx].contains = { type: 'monster', subtype: 'goblin' };
+
+        instance.props = {
+            boardManager: {
+                playerTile: { location: [pRow, pCol] },
+                tiles: tiles,
+                getIndexFromCoordinates: ([r, c]) => r * 15 + c,
+                refreshTiles: jest.fn()
+            }
+        };
+
+        // When aggroOn is false, no pursuit is triggered
+        instance.state = { aggroOn: false, inMonsterBattle: false, keysLocked: false };
+        instance.checkAggroMonsters();
+        expect(instance.startMonsterPursuit).not.toHaveBeenCalled();
+
+        // When aggroOn is true, startMonsterPursuit is triggered for the monster in radius
+        instance.state = { aggroOn: true, inMonsterBattle: false, keysLocked: false };
+        instance.checkAggroMonsters();
+        expect(instance.startMonsterPursuit).toHaveBeenCalledWith(tiles[mIdx]);
+    });
 });

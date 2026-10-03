@@ -140,7 +140,9 @@ export function createFighter(fighter, callbacks, FIGHT_INTERVAL) {
                     hp: fStartingHp,
                     atk: fAtk,
                     speed: (typeof fStats.speed === 'number') ? fStats.speed : ((typeof fStats.dex === 'number') ? fStats.dex : ((typeof fighter.speed === 'number') ? fighter.speed : 1)),
-                    willpower: (typeof fStats.willpower === 'number') ? fStats.willpower : fighter.willpower
+                    willpower: (typeof fStats.willpower === 'number') ? fStats.willpower : fighter.willpower,
+                    timeDebt: (typeof fStats.timeDebt === 'number') ? fStats.timeDebt : 0,
+                    timeDebtUpdatedAt: fStats.timeDebtUpdatedAt
                 }
             };
         })(),

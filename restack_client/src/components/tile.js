@@ -1482,6 +1482,7 @@ function Tile(props) {
 
     const mmRef = props.monsterManager || defaultMonsterManager;
     const isAggroMonster = isMonsterOrPygmyTile && !!(
+        props.aggroOn ||
         (containsObj && (containsObj.aggro === true || containsObj.isAggro === true)) ||
         (currentContains && typeof currentContains === 'object' && (currentContains.aggro === true || currentContains.isAggro === true)) ||
         props.aggro === true ||

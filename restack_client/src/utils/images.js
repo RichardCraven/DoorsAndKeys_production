@@ -670,6 +670,10 @@ import engineer_alt_portrait from '../assets/portraits/crew/engineer/engineer_al
 import summoner_alt_portrait from '../assets/portraits/crew/summoner/summoner_alt_compressed.png'
 import glitterburn_portrait from '../assets/portraits/crew/glitterburn/glitterburn_compressed.png'
 import glitterburn_alt_portrait from '../assets/portraits/crew/glitterburn/glitterburn_alt_compressed.png'
+import hollow_portrait from '../assets/portraits/crew/hollow/hollow_compressed.png'
+import hollow_alt_portrait from '../assets/portraits/crew/hollow/hollow_alt_compressed.png'
+import horologist_portrait from '../assets/portraits/crew/horologist/horologist_compressed.png'
+import horologist_alt_portrait from '../assets/portraits/crew/horologist/horologist_alt_compressed.png'
 
 import ogre_portrait from '../assets/portraits/monsters/ogre.png'
 import goblin_thief_portrait from '../assets/portraits/monsters/goblin_thief.png'
@@ -2303,6 +2307,14 @@ export {
     glitterburn_alt_portrait,
     glitterburn_alt_portrait as glitterburn_alt,
     glitterburn_portrait as glitterburn,
+    hollow_portrait,
+    hollow_alt_portrait,
+    hollow_alt_portrait as hollow_alt,
+    hollow_portrait as hollow,
+    horologist_portrait,
+    horologist_alt_portrait,
+    horologist_alt_portrait as horologist_alt,
+    horologist_portrait as horologist,
 
     healing_ground_sage,
     healing_ground_sage as healing_ground,
@@ -3054,7 +3066,11 @@ const portraitMap = {
     summoner: summoner,
     summoner_alt: summoner_alt_portrait,
     glitterburn: glitterburn_portrait,
-    glitterburn_alt: glitterburn_alt_portrait
+    glitterburn_alt: glitterburn_alt_portrait,
+    hollow: hollow_portrait,
+    hollow_alt: hollow_alt_portrait,
+    horologist: horologist_portrait,
+    horologist_alt: horologist_alt_portrait
 };
 
 export const getCrewPortraitBackground = (portraitUrl, classType) => {

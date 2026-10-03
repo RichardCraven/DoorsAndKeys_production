@@ -50,8 +50,46 @@ export const CLASS_BASE_LORE_TEMPLATES = {
     barbarian: {
         baseName: 'Ulaf',
         template: "Ulaf is the son of the chieftan of the Rootsnarl Clan. He is on a journey to prove his mettle and one day take his father's place"
+    },
+    hollow: {
+        baseName: 'Valok',
+        template: 'Valok is a wanderer caught between the living realm and the eternal dark, resurrected by the dungeon itself to walk its haunted corridors.'
+    },
+    horologist: {
+        baseName: 'Seren',
+        template: 'Seren was an apprentice of the Guild of Escapements until she stole the Master Mainspring. Every second she spends is borrowed, and something is coming to collect.'
     }
 };
+
+// ── Ledger of Hours (Horologist time debt) ─────────────────────────────────
+const HOUR_MS = 60 * 60 * 1000;
+
+// Debt cap scales with level: 4h + 1h per level.
+export function getTimeDebtCap(level) {
+    const lvl = (typeof level === 'number' && level > 0) ? level : 1;
+    return (4 + lvl) * HOUR_MS;
+}
+
+// Debt is stored as a snapshot { timeDebt, timeDebtUpdatedAt } and repaid lazily
+// in real time, so no background timer is needed. `rate` lets callers apply
+// faster repayment (e.g. 2x while camping).
+export function getEffectiveTimeDebt(stats, now = Date.now(), rate = 1) {
+    if (!stats || typeof stats.timeDebt !== 'number' || stats.timeDebt <= 0) return 0;
+    const updatedAt = typeof stats.timeDebtUpdatedAt === 'number' ? stats.timeDebtUpdatedAt : now;
+    const elapsed = Math.max(0, now - updatedAt);
+    return Math.max(0, stats.timeDebt - elapsed * rate);
+}
+
+// 0: none, 1: cooldowns +1 in combat, 2: + faster resolve decay, 3: + Debt Collector hunts the party.
+export function computeTemporalStrainTier(debtMs, level) {
+    const cap = getTimeDebtCap(level);
+    if (!debtMs || debtMs <= 0) return 0;
+    const ratio = debtMs / cap;
+    if (ratio > 0.75) return 3;
+    if (ratio > 0.50) return 2;
+    if (ratio >= 0.25) return 1;
+    return 0;
+}
 
 export const BASE_AND_ALT_CREW_NAMES = [
     'Theodora (Ascetic)',
@@ -72,7 +110,11 @@ export const BASE_AND_ALT_CREW_NAMES = [
     'Astra',
     'Ulaf',
     'Mei',
-    'Yu'
+    'Yu',
+    'Valok',
+    'Mira',
+    'Seren',
+    'Odran'
 ];
 
 export function escapeRegExp(string) {
@@ -158,7 +200,9 @@ export function CrewManager() {
         'ranger',
         'sage',
         'soldier',
-        'glitterburn'
+        'glitterburn',
+        'hollow',
+        'horologist'
     ]
     this.crew = [];
 
@@ -234,7 +278,8 @@ export function CrewManager() {
             const defaultExpeditionSkills = {
                 sage: ['healing_ground', 'sing'],
                 ranger: ['sneak_attack', 'spike_trap'],
-                soldier: ['soldier_shield', 'breacher']
+                soldier: ['soldier_shield', 'breacher'],
+                horologist: ['rewind_step', 'stopwatch']
             };
             const mClass = (member.type || member.image || '').toLowerCase();
             if (!Array.isArray(member.expeditionSkills) || member.expeditionSkills.length === 0) {
@@ -293,7 +338,9 @@ export function CrewManager() {
             engineer: ['dex', 'int'],
             summoner: ['int'],
             ranger: ['dex', 'str'],
-            sage: ['fort']
+            sage: ['fort'],
+            hollow: ['dex', 'int'],
+            horologist: ['int', 'dex']
         },
         defense: {
             monk: ['dex'],
@@ -303,7 +350,9 @@ export function CrewManager() {
             engineer: ['dex', 'fort'],
             summoner: ['int', 'fort'],
             ranger: ['str', 'fort'],
-            sage: ['str', 'fort']
+            sage: ['str', 'fort'],
+            hollow: ['dex', 'fort'],
+            horologist: ['dex', 'int']
         },
         hp: { all: ['fort'] },
         energy: { all: ['fort'] },
@@ -518,6 +567,11 @@ export function CrewManager() {
                 gains.dex = 1;
                 break;
             case 'ranger':
+                crewMember.stats.dex = (crewMember.stats.dex || 0) + 1;
+                if (typeof crewMember.stats.baseDex === 'number') crewMember.stats.baseDex += 1;
+                gains.dex = 1;
+                break;
+            case 'horologist':
                 crewMember.stats.dex = (crewMember.stats.dex || 0) + 1;
                 if (typeof crewMember.stats.baseDex === 'number') crewMember.stats.baseDex += 1;
                 gains.dex = 1;
@@ -920,10 +974,83 @@ export function CrewManager() {
                 });
             }
                 break;
+            case 'borrow_time':
+                // actionSubtype: { targetMember, actionIndex }
+                this.borrowTime(member, actionSubtype && actionSubtype.targetMember, actionSubtype && actionSubtype.actionIndex);
+                break;
             default:
                 break;
         }
     }
+
+    // ── Ledger of Hours ──────────────────────────────────────────────────────
+    this.getTimeDebt = (member, now = Date.now()) => getEffectiveTimeDebt(member && member.stats, now);
+
+    this.getTemporalStrainTier = (member, now = Date.now()) =>
+        computeTemporalStrainTier(this.getTimeDebt(member, now), member && member.level);
+
+    // Fold real-time repayment into the stored snapshot.
+    this._settleTimeDebt = (member, now = Date.now()) => {
+        if (!member || !member.stats) return 0;
+        const debt = getEffectiveTimeDebt(member.stats, now);
+        member.stats.timeDebt = debt;
+        member.stats.timeDebtUpdatedAt = now;
+        return debt;
+    };
+
+    // Borrow time so that targetMember.specialActions[actionIndex] completes now.
+    // The remaining time is added to the Horologist's debt. Returns a result
+    // object so the UI can explain refusals.
+    this.borrowTime = (horologist, targetMember, actionIndex, now = Date.now()) => {
+        const type = String((horologist && (horologist.type || horologist.image)) || '').toLowerCase();
+        if (!type.startsWith('horologist')) return { ok: false, reason: 'not_horologist' };
+        if (!targetMember || !Array.isArray(targetMember.specialActions)) return { ok: false, reason: 'no_target' };
+        const action = targetMember.specialActions[actionIndex];
+        if (!action) return { ok: false, reason: 'no_action' };
+        const remaining = new Date(action.endDate).getTime() - now;
+        if (!(remaining > 0) || action.available) return { ok: false, reason: 'already_complete' };
+
+        const debt = this._settleTimeDebt(horologist, now);
+        const cap = getTimeDebtCap(horologist.level);
+        if (debt + remaining > cap) {
+            return { ok: false, reason: 'over_cap', debt, cap, remaining };
+        }
+
+        horologist.stats.timeDebt = debt + remaining;
+        horologist.stats.timeDebtUpdatedAt = now;
+        action.endDate = new Date(now);
+        action.available = true;
+        action.borrowedBy = horologist.id;
+        return {
+            ok: true,
+            borrowedMs: remaining,
+            debt: horologist.stats.timeDebt,
+            cap,
+            strainTier: computeTemporalStrainTier(horologist.stats.timeDebt, horologist.level)
+        };
+    };
+
+    // Called when the party defeats the Debt Collector.
+    this.clearTimeDebt = (horologist, now = Date.now()) => {
+        if (!horologist || !horologist.stats) return;
+        horologist.stats.timeDebt = 0;
+        horologist.stats.timeDebtUpdatedAt = now;
+    };
+
+    // Called when the party loses to the Debt Collector: every in-progress
+    // crew preparation resets to 0% (its full duration starts again).
+    this.resetAllPreparations = (now = Date.now()) => {
+        (this.crew || []).forEach(m => {
+            (m.specialActions || []).forEach(a => {
+                if (a.available) return;
+                const start = new Date(a.startDate).getTime();
+                const end = new Date(a.endDate).getTime();
+                const duration = (end > start) ? end - start : 0;
+                a.startDate = new Date(now);
+                a.endDate = new Date(now + duration);
+            });
+        });
+    };
 
     this.adventurers = [
         // All fighter objects now use the new, less redundant structure
@@ -1134,6 +1261,51 @@ export function CrewManager() {
             passives: ['sparkling_aura'],
             weaknesses: ['crushing', 'ice'],
             description: 'A volatile pyromancer born under cosmic starlight, fusing chaotic magic with blinding ember sparks.',
+            specialActions: [],
+            actionsTrayExpanded: false,
+            actionMenuTypeExpanded: false
+        },
+        {
+            image: 'hollow',
+            type: 'hollow',
+            class: 'spellcaster',
+            name: 'Valok',
+            id: 9904,
+            level: 1,
+            stats: { str: 3, int: 7, dex: 7, fort: 4, baseHp: 22, experience: 0 },
+            portrait: images['hollow_portrait'],
+            portraitOptions: [
+                { id: 'valok', name: 'Valok', defaultName: 'Valok', portrait: images['hollow_portrait'], image: 'hollow' },
+                { id: 'mira', name: 'Mira', defaultName: 'Mira', portrait: images['hollow_alt_portrait'], image: 'hollow_alt' }
+            ],
+            inventory: [],
+            skills: ['void_touch', 'death_grasp'],
+            passives: ['undying_presence', 'dungeon_sense'],
+            weaknesses: ['fire', 'electricity', 'crushing'],
+            description: 'A wanderer caught between the living realm and the eternal dark, resurrected by the dungeon itself to walk its haunted corridors.',
+            specialActions: [],
+            actionsTrayExpanded: false,
+            actionMenuTypeExpanded: false
+        },
+        {
+            image: 'horologist',
+            type: 'horologist',
+            class: 'spellcaster',
+            name: 'Seren',
+            id: 9905,
+            level: 1,
+            stats: { str: 3, int: 7, dex: 7, fort: 4, baseHp: 20, experience: 0, timeDebt: 0 },
+            portrait: images['horologist_portrait'],
+            portraitOptions: [
+                { id: 'seren', name: 'Seren', defaultName: 'Seren', portrait: images['horologist_portrait'], image: 'horologist' },
+                { id: 'odran', name: 'Odran', defaultName: 'Odran', portrait: images['horologist_alt_portrait'], image: 'horologist_alt' }
+            ],
+            inventory: [],
+            skills: ['set_anchor', 'recall', 'future_echo'],
+            expeditionSkills: ['rewind_step', 'stopwatch'],
+            passives: ['clockwork_heart', 'ledger_of_hours'],
+            weaknesses: ['psionic', 'crushing', 'electricity'],
+            description: 'Seren was an apprentice of the Guild of Escapements until she stole the Master Mainspring. Every second she spends is borrowed, and something is coming to collect.',
             specialActions: [],
             actionsTrayExpanded: false,
             actionMenuTypeExpanded: false

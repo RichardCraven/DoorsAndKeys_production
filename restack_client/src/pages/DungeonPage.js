@@ -2909,6 +2909,7 @@ class DungeonPage extends React.Component {
             showReaperOfferModal: false,
             showTrophiesModal: false,
             showPerformanceOverlay: false,
+            aggroOn: (typeof initMeta.aggroOn === 'boolean') ? initMeta.aggroOn : (typeof localStorage !== 'undefined' && localStorage.getItem('aggroOn') === 'true'),
             trapVisionEnabled: initialTrapVision,
             isLoadingDungeon: true,
             currentLoadingGif: (() => {
@@ -19198,6 +19199,35 @@ class DungeonPage extends React.Component {
         }
     };
 
+    handleToggleAggroOn = () => {
+        const nextMode = !this.state.aggroOn;
+        this.state.aggroOn = nextMode;
+        this.setState({ aggroOn: nextMode });
+        if (nextMode) {
+            this.checkAggroMonsters();
+        }
+        let meta = getMeta() || {};
+        meta.aggroOn = nextMode;
+        storeMeta(meta);
+        if (typeof localStorage !== 'undefined') {
+            try { localStorage.setItem('aggroOn', String(nextMode)); } catch (e) {}
+        }
+        if (!nextMode && this.props.boardManager && this.props.boardManager.tiles) {
+            this.props.boardManager.tiles.forEach(t => {
+                if (t && t.isPursuing && !this.isAggroMonsterObj(t.contains, t)) {
+                    if (t.pursuitInterval) clearInterval(t.pursuitInterval);
+                    t.isPursuing = false;
+                }
+            });
+        }
+        if (this.props.boardManager && typeof this.props.boardManager.refreshTiles === 'function') {
+            try { this.props.boardManager.refreshTiles(); } catch (e) {}
+        }
+        if (typeof this.forceUpdate === 'function') {
+            try { this.forceUpdate(); } catch (e) {}
+        }
+    };
+
     handleToggleDebugMode = () => {
         const nextMode = !this.state.debugMode;
         this.setState({ debugMode: nextMode });
@@ -21910,6 +21940,50 @@ class DungeonPage extends React.Component {
                                         position: 'absolute',
                                         top: '2px',
                                         left: this.state.trapVisionEnabled ? '18px' : '2px',
+                                        transition: 'left 0.25s ease'
+                                    }} />
+                                </div>
+                            </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#ccc', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Aggro On</span>
+                            <div
+                                className="aggro-on-toggle-inline"
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    background: 'rgba(0, 0, 0, 0.3)',
+                                    border: this.state.aggroOn ? '1px solid #ff3333' : '1px solid rgba(255, 255, 255, 0.25)',
+                                    boxShadow: this.state.aggroOn ? '0 0 10px rgba(255, 51, 51, 0.35)' : 'none',
+                                    borderRadius: '20px',
+                                    padding: '4px 12px',
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                    transition: 'all 0.25s ease'
+                                }}
+                                onClick={this.handleToggleAggroOn}
+                                title="Toggle Aggro On (All in-dungeon monsters default to aggro: true and pursue within radius)"
+                            >
+                                <span style={{ fontSize: '11px', fontWeight: 'bold', color: this.state.aggroOn ? '#ff3333' : '#ccc', letterSpacing: '0.5px' }}>
+                                    {this.state.aggroOn ? 'ON' : 'OFF'}
+                                </span>
+                                <div style={{
+                                    width: '32px',
+                                    height: '16px',
+                                    borderRadius: '9px',
+                                    background: this.state.aggroOn ? '#ff3333' : '#444',
+                                    position: 'relative',
+                                    transition: 'background 0.25s ease'
+                                }}>
+                                    <div style={{
+                                        width: '12px',
+                                        height: '12px',
+                                        borderRadius: '50%',
+                                        background: '#fff',
+                                        position: 'absolute',
+                                        top: '2px',
+                                        left: this.state.aggroOn ? '18px' : '2px',
                                         transition: 'left 0.25s ease'
                                     }} />
                                 </div>
@@ -25224,6 +25298,7 @@ class DungeonPage extends React.Component {
 
     isAggroMonsterObj = (containsObj, tile) => {
         if (!containsObj && !tile) return false;
+        if (this.state && this.state.aggroOn && this.isMonsterObj(tile, containsObj)) return true;
         if (tile && (tile.aggro === true || tile.isAggro === true)) return true;
         if (containsObj) {
             if (typeof containsObj === 'object') {
@@ -25271,6 +25346,8 @@ class DungeonPage extends React.Component {
         if (this.state.inMonsterBattle || this.state.inTowerSiege || this._isAggroAttacking || this.state.keysLocked) {
             return false;
         }
+
+        const AGGRO_RADIUS = 4;
 
         if (this.state.inSuperboard && this.state.superboardPlayerPos && this.state.dungeon && this.state.superboardType) {
             const { superboardPlayerPos, dungeon, superboardType } = this.state;
@@ -25335,13 +25412,39 @@ class DungeonPage extends React.Component {
                 const mIdx = bm.getIndexFromCoordinates([mRow, mCol]);
                 const mTile = bm.tiles && bm.tiles[mIdx];
                 if (!mTile) continue;
-                if (mTile.color === 'black') continue; // Hidden in fog of war
+                if (mTile.color === 'black' || mTile.fog === true) continue; // Hidden in fog of war
 
                 if (this.isAggroMonsterObj(mTile.contains, mTile)) {
                     const attackRow = pRow - mRow;
                     const attackCol = pCol - mCol;
                     this.triggerAggroMonsterAttack(mTile, attackRow, attackCol);
                     return true;
+                }
+            }
+
+            // Radius check for pursuit: if monsters are within AGGRO_RADIUS (and not orthogonally adjacent)
+            for (let dRow = -AGGRO_RADIUS; dRow <= AGGRO_RADIUS; dRow++) {
+                for (let dCol = -AGGRO_RADIUS; dCol <= AGGRO_RADIUS; dCol++) {
+                    if (dRow === 0 && dCol === 0) continue;
+                    if (Math.abs(dRow) + Math.abs(dCol) === 1) continue; // Orthogonal adjacency already handled above
+
+                    const mRow = pRow + dRow;
+                    const mCol = pCol + dCol;
+                    if (mRow < 0 || mRow >= 30 || mCol < 0 || mCol >= 30) continue;
+
+                    const mIdx = bm.getIndexFromCoordinates([mRow, mCol]);
+                    const mTile = bm.tiles && bm.tiles[mIdx];
+                    if (!mTile) continue;
+                    if (mTile.color === 'black' || mTile.fog === true) continue; // Hidden in fog of war
+
+                    if (this.isAggroMonsterObj(mTile.contains, mTile)) {
+                        const mObj = mTile.contains;
+                        const radius = (typeof mObj === 'object' && mObj?.aggroRadius) || AGGRO_RADIUS;
+                        const dist = Math.max(Math.abs(dRow), Math.abs(dCol));
+                        if (dist <= radius && !mTile.isPursuing) {
+                            this.startMonsterPursuit(mTile);
+                        }
+                    }
                 }
             }
         }
@@ -41098,6 +41201,7 @@ class DungeonPage extends React.Component {
                                     handleHover={this.handleOverlayHover}
                                     type={'overlay-tile'}
                                     passThrough={!this.state.minimapPlaceMapMarkerStarted}
+                                    aggroOn={!!this.state.aggroOn}
                                     handleClick={(e) => this.handleOverlayClick}
                                     // For overlay tiles we want the background color to reflect overlay state (e.g. edge indicator)
                                     backgroundColor={(tile.color && tile.color !== 'null' && tile.color !== 'black' && !String(tile.color).includes('ff0000')) ? tile.color : (this.state.overlayHoveredTileId === i && this.state.minimapPlaceMapMarkerStarted ? 'rgba(100, 100, 38, 0.272)' : 'transparent')}
@@ -41448,6 +41552,7 @@ class DungeonPage extends React.Component {
                                         partialObscured={!!tile.partialObscured}
                                         trapRevealed={!!tile.trapRevealed}
                                         trapVisionEnabled={!!this.state.trapVisionEnabled}
+                                        aggroOn={!!this.state.aggroOn}
                                         hasTrap={!!tile.hasTrap}
                                         insidePerfectSquareDomain={!!tile.insidePerfectSquareDomain}
                                         illuminated={
