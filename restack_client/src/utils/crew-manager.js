@@ -327,6 +327,10 @@ export function CrewManager() {
                 }
                 // compute derived/substats from base stats
                 try { this.computeDerivedStats(member); } catch (e) { console.warn('computeDerivedStats failed', e, member); }
+                // Ensure initial levelHistory snapshot is preserved
+                if (!Array.isArray(member.levelHistory) || member.levelHistory.length === 0) {
+                    try { this.recordLevelSnapshot(member, member.level || 1); } catch (e) { }
+                }
                 this.crew.push(member)
             } else {
                 console.warn('initializeCrew: REJECTED member — image:', member.image, 'type:', member.type, 'name:', member.name, 'full object:', JSON.stringify(member).slice(0, 300));
@@ -617,6 +621,12 @@ export function CrewManager() {
                 gains.fort = 1;
                 break;
         }
+        // Ensure levelHistory has a snapshot of the unit prior to this level-up being applied
+        const curLvl = (typeof crewMember.level === 'number' && crewMember.level > 0) ? crewMember.level : 1;
+        if (!Array.isArray(crewMember.levelHistory) || !crewMember.levelHistory.some(h => h && h.level === curLvl)) {
+            try { this.recordLevelSnapshot(crewMember, curLvl); } catch (e) { }
+        }
+
         crewMember.level = (typeof crewMember.level === 'number' ? crewMember.level : 0) + 1;
         // mark and record recent gains for UI consumption
         crewMember.justLeveled = true;
@@ -644,6 +654,7 @@ export function CrewManager() {
         }
 
         try { this.computeDerivedStats(crewMember); } catch (e) { console.warn('levelUp: computeDerivedStats failed', e, crewMember); }
+        try { this.recordLevelSnapshot(crewMember, crewMember.level); } catch (e) { }
         return gains;
     }
 
@@ -672,6 +683,129 @@ export function CrewManager() {
             console.warn('clearAllLevelFlags failed', err);
         }
     }
+
+    /**
+     * Record a snapshot of a crew member's state at a given level.
+     * Stored in crewMember.levelHistory as an array of level snapshots.
+     */
+    this.recordLevelSnapshot = (crewMember, level) => {
+        if (!crewMember) return null;
+        const lvl = typeof level === 'number' ? level : (crewMember.level || 1);
+        if (!Array.isArray(crewMember.levelHistory)) {
+            crewMember.levelHistory = [];
+        }
+        const snapshot = {
+            level: lvl,
+            stats: JSON.parse(JSON.stringify(crewMember.stats || {})),
+            skills: Array.isArray(crewMember.skills) ? [...crewMember.skills] : [],
+            passives: Array.isArray(crewMember.passives) ? [...crewMember.passives] : [],
+            perks: Array.isArray(crewMember.perks) ? [...crewMember.perks] : [],
+            knownRituals: Array.isArray(crewMember.knownRituals) ? [...crewMember.knownRituals] : [],
+            knownTattoos: Array.isArray(crewMember.knownTattoos) ? [...crewMember.knownTattoos] : [],
+            tattoos: Array.isArray(crewMember.tattoos) ? JSON.parse(JSON.stringify(crewMember.tattoos)) : [],
+            expeditionSkills: Array.isArray(crewMember.expeditionSkills) ? [...crewMember.expeditionSkills] : [],
+            timestamp: Date.now()
+        };
+        const existingIndex = crewMember.levelHistory.findIndex(h => h && h.level === lvl);
+        if (existingIndex >= 0) {
+            crewMember.levelHistory[existingIndex] = snapshot;
+        } else {
+            crewMember.levelHistory.push(snapshot);
+            crewMember.levelHistory.sort((a, b) => a.level - b.level);
+        }
+        return snapshot;
+    };
+
+    /**
+     * Set a crew member back to 1/2 their current level (rounded down, minimum 1).
+     * Restores stats and perks from their levelHistory entry, loses all items, and restores hp.
+     */
+    this.rollbackCrewMemberToHalfLevel = (crewMember) => {
+        if (!crewMember) return;
+        const curLvl = (typeof crewMember.level === 'number' && crewMember.level > 0) ? crewMember.level : 1;
+        const targetLevel = Math.max(1, Math.floor(curLvl / 2));
+
+        let snapshot = null;
+        if (Array.isArray(crewMember.levelHistory)) {
+            snapshot = crewMember.levelHistory.find(h => h && h.level === targetLevel);
+            if (!snapshot) {
+                // Fallback: highest entry <= targetLevel
+                const candidates = crewMember.levelHistory.filter(h => h && h.level <= targetLevel).sort((a, b) => b.level - a.level);
+                if (candidates.length > 0) snapshot = candidates[0];
+            }
+        }
+
+        // Fallback to base template in adventurers if no snapshot found
+        if (!snapshot && Array.isArray(this.adventurers)) {
+            const template = this.adventurers.find(a => (a.id && a.id === crewMember.id) || a.type === crewMember.type || a.image === crewMember.image);
+            if (template) {
+                snapshot = {
+                    level: 1,
+                    stats: JSON.parse(JSON.stringify(template.stats || {})),
+                    skills: Array.isArray(template.skills) ? [...template.skills] : [],
+                    passives: Array.isArray(template.passives) ? [...template.passives] : [],
+                    perks: Array.isArray(template.perks) ? [...template.perks] : [],
+                    knownRituals: Array.isArray(template.knownRituals) ? [...template.knownRituals] : [],
+                    knownTattoos: Array.isArray(template.knownTattoos) ? [...template.knownTattoos] : [],
+                    tattoos: Array.isArray(template.tattoos) ? JSON.parse(JSON.stringify(template.tattoos)) : [],
+                    expeditionSkills: Array.isArray(template.expeditionSkills) ? [...template.expeditionSkills] : []
+                };
+            }
+        }
+
+        crewMember.level = targetLevel;
+        if (snapshot && snapshot.stats) {
+            crewMember.stats = JSON.parse(JSON.stringify(snapshot.stats));
+        }
+        crewMember.stats = crewMember.stats || {};
+        crewMember.stats.experience = (typeof EXP_TABLE[targetLevel - 1] === 'number') ? EXP_TABLE[targetLevel - 1] : 0;
+
+        if (snapshot) {
+            crewMember.skills = Array.isArray(snapshot.skills) ? [...snapshot.skills] : (crewMember.skills || []);
+            crewMember.passives = Array.isArray(snapshot.passives) ? [...snapshot.passives] : (crewMember.passives || []);
+            crewMember.perks = Array.isArray(snapshot.perks) ? [...snapshot.perks] : [];
+            if (snapshot.knownRituals) crewMember.knownRituals = [...snapshot.knownRituals];
+            if (snapshot.knownTattoos) crewMember.knownTattoos = [...snapshot.knownTattoos];
+            if (snapshot.tattoos) crewMember.tattoos = JSON.parse(JSON.stringify(snapshot.tattoos));
+            if (snapshot.expeditionSkills) crewMember.expeditionSkills = [...snapshot.expeditionSkills];
+        }
+
+        // All items are lost
+        crewMember.inventory = [];
+
+        // Reset health & status
+        crewMember.dead = false;
+        crewMember.hp = crewMember.stats.maxHp || crewMember.stats.baseHp || 10;
+        delete crewMember.deathTrackers;
+
+        crewMember.justLeveled = false;
+        crewMember._recentLevelGains = [];
+        crewMember.pendingLevelUpPicks = [];
+
+        try { this.computeDerivedStats(crewMember); } catch (e) { }
+
+        // Prune future history above targetLevel
+        if (Array.isArray(crewMember.levelHistory)) {
+            crewMember.levelHistory = crewMember.levelHistory.filter(h => h && h.level <= targetLevel);
+        }
+
+        // Sync with template in this.adventurers
+        if (Array.isArray(this.adventurers)) {
+            const adv = this.adventurers.find(a => (a.id && a.id === crewMember.id) || (a.type && a.type === crewMember.type));
+            if (adv && adv !== crewMember) {
+                adv.level = crewMember.level;
+                adv.stats = JSON.parse(JSON.stringify(crewMember.stats));
+                adv.skills = [...crewMember.skills];
+                adv.passives = [...crewMember.passives];
+                adv.perks = [...(crewMember.perks || [])];
+                adv.inventory = [];
+                adv.hp = crewMember.hp;
+                adv.dead = false;
+                adv.levelHistory = Array.isArray(crewMember.levelHistory) ? JSON.parse(JSON.stringify(crewMember.levelHistory)) : [];
+                try { this.computeDerivedStats(adv); } catch (e) { }
+            }
+        }
+    };
 
     /**
      * applyLevelUpChoices — called by LevelUpScreen when player confirms picks.
@@ -721,6 +855,22 @@ export function CrewManager() {
             }
             try { this.computeDerivedStats(crewMember); } catch (e) {
                 console.warn('applyLevelUpChoices: computeDerivedStats failed', e);
+            }
+            // Update levelHistory snapshot to capture chosen stat bonuses and perks
+            try { this.recordLevelSnapshot(crewMember, crewMember.level); } catch (e) { }
+
+            // Sync to matching adventurer in this.adventurers
+            if (Array.isArray(this.adventurers)) {
+                const adv = this.adventurers.find(a => (a.id && a.id === crewMember.id) || (a.type && a.type === crewMember.type));
+                if (adv && adv !== crewMember) {
+                    adv.level = crewMember.level;
+                    adv.stats = JSON.parse(JSON.stringify(crewMember.stats));
+                    adv.skills = [...crewMember.skills];
+                    adv.passives = [...crewMember.passives];
+                    adv.perks = [...(crewMember.perks || [])];
+                    adv.levelHistory = Array.isArray(crewMember.levelHistory) ? JSON.parse(JSON.stringify(crewMember.levelHistory)) : [];
+                    try { this.computeDerivedStats(adv); } catch (e) { }
+                }
             }
         } catch (err) {
             console.warn('applyLevelUpChoices failed', err);
@@ -1406,5 +1556,14 @@ export function CrewManager() {
             actionsTrayExpanded: false,
             actionMenuTypeExpanded: false
         },
-    ]
+    ];
+
+    // Ensure all base adventurer templates have an initial level 1 snapshot
+    try {
+        this.adventurers.forEach(adv => {
+            if (adv && (!Array.isArray(adv.levelHistory) || adv.levelHistory.length === 0)) {
+                this.recordLevelSnapshot(adv, adv.level || 1);
+            }
+        });
+    } catch (e) { }
 }

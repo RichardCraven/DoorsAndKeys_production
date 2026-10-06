@@ -411,6 +411,11 @@ class LevelUpScreen extends Component {
             crewMember.pendingLevelUpPicks = crewMember.pendingLevelUpPicks.filter(lvl => lvl !== entry.toLevel);
         }
 
+        // Record completed level snapshot to history
+        if (this.props.crewManager && typeof this.props.crewManager.recordLevelSnapshot === 'function') {
+            try { this.props.crewManager.recordLevelSnapshot(crewMember, entry.toLevel); } catch (e) { }
+        }
+
         // Persist to meta
         try {
             const meta = getMeta() || {};

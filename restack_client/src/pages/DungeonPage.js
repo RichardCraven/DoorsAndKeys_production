@@ -340,7 +340,7 @@ function hexToRgba(hex, alpha = 1) {
 }
 
 // Small subcomponent to render modal header + body based on modalType
-const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose, onDreamDenSelect }) => {
+const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose, onDreamDenSelect, onSpawnPygmy }) => {
     const [merchantStock, setMerchantStock] = React.useState([]);
     const [buybackStock, setBuybackStock] = React.useState([]);
     const [feedbackMsg, setFeedbackMsg] = React.useState('');
@@ -1583,6 +1583,51 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
                             </button>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {modalType === 'War Camp' && (
+                <div className="war-camp-screen" style={{
+                    padding: '30px',
+                    textAlign: 'center',
+                    background: 'rgba(20, 18, 24, 0.95)',
+                    border: '1px solid #d4a844',
+                    borderRadius: '8px',
+                    color: '#f0ede5',
+                    fontFamily: "'Cinzel', serif"
+                }}>
+                    <h2 style={{ color: '#e5b54f', margin: '0 0 16px 0', fontSize: '2rem', letterSpacing: '2px' }}>War Camp</h2>
+                    <p style={{ color: '#a7a3b3', margin: '0 0 24px 0', fontSize: '1.05rem', lineHeight: 1.6 }}>
+                        Recruit a loyal Pygmy Companion to assist your party. The Pygmy will follow your steps across the board, but will not travel off the board and departs after your next combat encounter or rest.
+                    </p>
+                    <div style={{ marginBottom: '24px', fontSize: '1.1rem' }}>
+                        <span>Available Dust: <strong style={{ color: '#b388ff' }}>✦ {inventoryManager?.shimmering_dust || 0}</strong></span>
+                    </div>
+                    <button
+                        className="c-btn"
+                        disabled={(inventoryManager?.shimmering_dust || 0) < 5}
+                        style={{
+                            background: (inventoryManager?.shimmering_dust || 0) >= 5 ? 'rgba(212, 168, 68, 0.2)' : 'rgba(50, 50, 50, 0.3)',
+                            color: (inventoryManager?.shimmering_dust || 0) >= 5 ? '#fcd34d' : '#7e6b99',
+                            border: (inventoryManager?.shimmering_dust || 0) >= 5 ? '1px solid #d4a844' : '1px solid #555',
+                            padding: '12px 28px',
+                            fontSize: '1rem',
+                            borderRadius: '4px',
+                            cursor: (inventoryManager?.shimmering_dust || 0) >= 5 ? 'pointer' : 'not-allowed',
+                            fontFamily: '"Cinzel", serif',
+                            letterSpacing: '1.5px',
+                            transition: 'all 0.3s ease'
+                        }}
+                        onClick={() => {
+                            if ((inventoryManager?.shimmering_dust || 0) >= 5) {
+                                inventoryManager.shimmering_dust -= 5;
+                                if (typeof onSpawnPygmy === 'function') onSpawnPygmy();
+                                if (typeof onClose === 'function') onClose();
+                            }
+                        }}
+                    >
+                        {(inventoryManager?.shimmering_dust || 0) >= 5 ? 'Spawn Pygmy Companion (5 Dust)' : 'Insufficient Dust (Needs 5 ✦)'}
+                    </button>
                 </div>
             )}
 
@@ -2939,6 +2984,7 @@ class DungeonPage extends React.Component {
         }
 
         this.state = {
+            activePygmyCompanion: null,
             generatorUpgradeState: null,
             pocketInfluence: 0,
             pocketFreeWill: 50,
@@ -3721,17 +3767,53 @@ class DungeonPage extends React.Component {
         delete meta.disabledOutposts;
         delete meta.failedMonolithActivations;
         delete meta.activatedLoci;
-        delete meta.activatedLocusRecords;
-        if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
-            this.props.crewManager.crew.forEach(c => {
-                if (c) {
-                    c.hp = c.starting_hp || (c.stats ? c.stats.hp : 10);
-                    c.dead = false;
-                }
+        // Roll back crew members that were on the roster in this session where they died
+        const sessionRosterMembers = [];
+        const seenRosterIds = new Set();
+        const addSessionMember = (m) => {
+            if (!m) return;
+            const mid = m.id || m.name || m.type;
+            if (mid && !seenRosterIds.has(mid)) {
+                seenRosterIds.add(mid);
+                sessionRosterMembers.push(m);
+            }
+        };
+
+        if (Array.isArray(meta.crew)) meta.crew.forEach(addSessionMember);
+        if (Array.isArray(meta.alternateCrew)) meta.alternateCrew.forEach(addSessionMember);
+        if (Array.isArray(meta.lockedRoster) && this.props.crewManager && Array.isArray(this.props.crewManager.adventurers)) {
+            meta.lockedRoster.forEach(id => {
+                const adv = this.props.crewManager.adventurers.find(a => a && a.id === id);
+                if (adv) addSessionMember(adv);
             });
-            meta.crew = this.props.crewManager.crew;
-            this.props.crewManager.initializeCrew(meta.crew);
         }
+        if (this.props.crewManager && Array.isArray(this.props.crewManager.crew)) {
+            this.props.crewManager.crew.forEach(addSessionMember);
+        }
+
+        sessionRosterMembers.forEach(member => {
+            if (this.props.crewManager && typeof this.props.crewManager.rollbackCrewMemberToHalfLevel === 'function') {
+                this.props.crewManager.rollbackCrewMemberToHalfLevel(member);
+            }
+        });
+
+        // Clear active crew and session roster locks
+        meta.crew = [];
+        meta.alternateCrew = [];
+        delete meta.lockedRoster;
+        delete meta.rosterLocked;
+        delete meta.dungeonEntered;
+        if (this.props.crewManager) {
+            this.props.crewManager.crew = [];
+        }
+
+        // Clear selected dungeon
+        meta.dungeonId = null;
+        meta.location = null;
+        meta.selectedDungeon = null;
+        delete meta.selectedDungeonTemplateId;
+        delete meta.selectedDungeonTemplateName;
+
         meta.deathTracker = 0;
         storeMeta(meta);
 
@@ -6408,6 +6490,21 @@ class DungeonPage extends React.Component {
         }
 
         return null;
+    };
+
+    handleSpawnPygmyCompanion = () => {
+        const bm = this.props.boardManager;
+        const playerLoc = bm?.playerTile?.location ? [...bm.playerTile.location] : [0, 0];
+        const currentBoardIndex = bm?.boardIndex || 0;
+        this.setState({
+            activePygmyCompanion: {
+                id: 'pygmy_companion',
+                name: 'Pygmy Companion',
+                location: playerLoc,
+                boardIndex: currentBoardIndex
+            }
+        });
+        this.displayMessage('A friendly Pygmy Companion has joined your party!');
     };
 
     enterSuperboardPocketDimension = (type) => {
@@ -10466,7 +10563,13 @@ class DungeonPage extends React.Component {
                             const updated = (meta.crew || []).find(c => c && c.id === this.state.selectedCrewMember.id);
                             return updated ? { selectedCrewMember: { ...updated } } : {};
                         } catch (e) { return {}; }
-                    })() : {})
+                    })() : {}),
+                    ...(playerMoved && this.state.activePygmyCompanion ? {
+                        activePygmyCompanion: this.state.activePygmyCompanion.boardIndex === (bm.boardIndex || 0) ? {
+                            ...this.state.activePygmyCompanion,
+                            location: originCoords
+                        } : null
+                    } : {})
                 }, () => {
                     this.checkMobileViewportCentering(bm.playerTile.location);
                     this.sendLocationSocketUpdate(bm.playerTile.location);
@@ -10522,7 +10625,13 @@ class DungeonPage extends React.Component {
                         const updated = (meta.crew || []).find(c => c && c.id === this.state.selectedCrewMember.id);
                         return updated ? { selectedCrewMember: { ...updated } } : {};
                     } catch (e) { return {}; }
-                })() : {})
+                })() : {}),
+                ...(playerMoved && this.state.activePygmyCompanion ? {
+                    activePygmyCompanion: this.state.activePygmyCompanion.boardIndex === (bm.boardIndex || 0) ? {
+                        ...this.state.activePygmyCompanion,
+                        location: originCoords
+                    } : null
+                } : {})
             }, () => {
                 if (ambushTriggered) {
                     this.ambushTimeout = setTimeout(() => {
@@ -18896,7 +19005,7 @@ class DungeonPage extends React.Component {
             }
 
             const arcId = Date.now();
-            this.setState({ swingArc: { id: arcId, facing: playerFacing || 'right', weaponIcon: weaponIconSrc } });
+            this.setState({ swingArc: { id: arcId, facing: playerFacing || 'right', weaponIcon: weaponIconSrc, isMonk: isMonkClass } });
             setTimeout(() => {
                 this.setState(prev => (prev.swingArc && prev.swingArc.id === arcId) ? { swingArc: null } : null);
             }, 500);
@@ -25270,6 +25379,7 @@ class DungeonPage extends React.Component {
         }
         if (bool) {
             this.reduxCombatManager = new CombatManagerRedux();
+            this.setState({ activePygmyCompanion: null });
         } else {
             this.reduxCombatManager = null;
         }
@@ -31266,6 +31376,7 @@ class DungeonPage extends React.Component {
 
     // Delegates camping start to CampManager
     setUpCamp = async (maybeDuration, useResolveFallback = false) => {
+        this.setState({ activePygmyCompanion: null });
         const res = await CampManager.setUpCamp(this, maybeDuration, useResolveFallback);
         if (this.props.boardManager && this.props.boardManager.playerTile && this.props.boardManager.playerTile.location) {
             this.updateFloatingPlayerPosition(this.props.boardManager.playerTile.location);
@@ -33004,7 +33115,9 @@ class DungeonPage extends React.Component {
     triggerVendorEncounter = (vendorType, tile) => {
         const normalized = String(vendorType || '').toLowerCase();
         let modalType = 'Merchant';
-        if (normalized === 'alchemist') {
+        if (normalized === 'war_camp' || normalized === 'war camp') {
+            modalType = 'War Camp';
+        } else if (normalized === 'alchemist') {
             modalType = 'Alchemist';
             try {
                 const meta = getMeta() || {};
@@ -33329,7 +33442,7 @@ class DungeonPage extends React.Component {
 
         const combinedStr = `${cType} ${cSub} ${vGroup} ${anchorSub} ${anchorGroup}`;
 
-        const vendorKeys = ['alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
+        const vendorKeys = ['war_camp', 'war camp', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
         const isVendor = vendorKeys.some(k => combinedStr.includes(k)) || !!vCell || vAnchorId !== null || !!vGroup;
 
         if (!isVendor) {
@@ -33337,7 +33450,9 @@ class DungeonPage extends React.Component {
         }
 
         let vendorType = 'merchant';
-        if (combinedStr.includes('alchemist')) {
+        if (combinedStr.includes('war_camp') || combinedStr.includes('war camp')) {
+            vendorType = 'war_camp';
+        } else if (combinedStr.includes('alchemist')) {
             vendorType = 'alchemist';
         } else if (combinedStr.includes('fungal_nursery')) {
             vendorType = 'fungal_nursery';
@@ -39375,7 +39490,7 @@ class DungeonPage extends React.Component {
                         </div>
                     );
                 })()}
-                <CModal className={this.state.modalType === 'PrepComplete' ? 'prep-complete-modal' : this.state.modalType === 'RitualComplete' ? 'ritual-complete-modal' : this.state.modalType === 'Magic' ? 'ritual-encounter-modal' : this.state.modalType === 'FoodComplete' ? 'food-complete-modal' : this.state.modalType === 'Merchant' ? 'merchant-modal' : this.state.modalType === 'Alchemist' ? 'alchemist-modal' : this.state.modalType === 'Dream Den' ? 'dream-den-modal' : this.state.modalType === 'SharpenBladesDetails' ? 'sharpen-blades-details-modal' : ''} alignment="center" visible={this.state.showModal} onClose={() => this.onUpdateModalClosed()}>
+                <CModal className={this.state.modalType === 'PrepComplete' ? 'prep-complete-modal' : this.state.modalType === 'RitualComplete' ? 'ritual-complete-modal' : this.state.modalType === 'Magic' ? 'ritual-encounter-modal' : this.state.modalType === 'FoodComplete' ? 'food-complete-modal' : this.state.modalType === 'Merchant' ? 'merchant-modal' : this.state.modalType === 'Alchemist' ? 'alchemist-modal' : this.state.modalType === 'Dream Den' ? 'dream-den-modal' : this.state.modalType === 'War Camp' ? 'war-camp-modal' : this.state.modalType === 'SharpenBladesDetails' ? 'sharpen-blades-details-modal' : ''} alignment="center" visible={this.state.showModal} onClose={() => this.onUpdateModalClosed()}>
                     {this.state.modalType === 'Merchant' && (
                         <div className="merchant-modal-bg" style={{
                             position: 'absolute',
@@ -39412,7 +39527,7 @@ class DungeonPage extends React.Component {
                             pointerEvents: 'none'
                         }} />
                     )}
-                    {(this.state.modalType === 'Merchant' || this.state.modalType === 'Alchemist' || this.state.modalType === 'Dream Den') && (
+                    {(this.state.modalType === 'Merchant' || this.state.modalType === 'Alchemist' || this.state.modalType === 'Dream Den' || this.state.modalType === 'War Camp') && (
                         <CModalHeader closeButton={false} style={{ position: 'relative', zIndex: 2 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', position: 'relative', zIndex: 2 }}>
                                 <CModalTitle>{this.state.modalType}</CModalTitle>
@@ -39464,6 +39579,7 @@ class DungeonPage extends React.Component {
                             this.onUpdateModalClosed();
                             this.enterSuperboardPocketDimension(type);
                         }}
+                        onSpawnPygmy={() => this.handleSpawnPygmyCompanion()}
                     />
                 </CModal>
                 {/* Inscription popup */}
@@ -42555,17 +42671,61 @@ class DungeonPage extends React.Component {
                                             {ind.text || '+3'}
                                         </div>
                                     ))}
-                                    {/* Weapon swing arc — cosmetic melee attack cone */}
+                                    {/* Weapon swing arc / Monk linear punch attack animation */}
                                     {this.state.swingArc && (() => {
-                                        const { facing, weaponIcon } = this.state.swingArc;
+                                        const { facing, weaponIcon, isMonk } = this.state.swingArc;
                                         const rotMap = { right: 0, down: 90, left: 180, up: 270 };
                                         const baseRot = rotMap[facing] ?? 0;
                                         const ts = this.state.tileSize || 48;
-                                        // Scale cone proportional to avatar's rendered size, not raw tileSize
                                         const avatarPx = this.state.inSuperboard ? ts * 0.65 : ts;
                                         const conePx = avatarPx * 2.6;
                                         const iconPx = avatarPx * 0.85;
                                         const glowRadius = Math.round(avatarPx * 0.08);
+                                        const iconSrc = this.resolveWeaponIconSrc(weaponIcon);
+                                        if (!iconSrc) return null;
+
+                                        if (isMonk) {
+                                            return (
+                                                <div
+                                                    key={this.state.swingArc.id}
+                                                    className="monk-punch-straight"
+                                                    style={{
+                                                        position: 'absolute',
+                                                        top: '50%',
+                                                        left: '50%',
+                                                        width: `${avatarPx}px`,
+                                                        height: `${avatarPx}px`,
+                                                        pointerEvents: 'none',
+                                                        zIndex: 30,
+                                                        '--base-rot': `${baseRot}deg`,
+                                                    }}
+                                                >
+                                                    <img
+                                                        src={iconSrc}
+                                                        alt="punch"
+                                                        className="monk-punch-icon"
+                                                        style={{
+                                                            position: 'absolute',
+                                                            width: `${iconPx}px`,
+                                                            height: `${iconPx}px`,
+                                                            top: '50%',
+                                                            left: '50%',
+                                                            pointerEvents: 'none',
+                                                            filter: `drop-shadow(0 0 ${glowRadius}px rgba(251,191,36,0.95)) drop-shadow(0 0 4px rgba(245,158,11,0.8))`,
+                                                        }}
+                                                        onError={(e) => {
+                                                            const fb = (images.monk_punch && images.monk_punch.default) || images.monk_punch || (images.fist_punch && images.fist_punch.default) || images.fist_punch;
+                                                            if (fb && e.target.src !== fb) {
+                                                                e.target.src = fb;
+                                                            } else {
+                                                                e.target.style.display = 'none';
+                                                            }
+                                                        }}
+                                                    />
+                                                </div>
+                                            );
+                                        }
+
                                         return (
                                             <div
                                                 key={this.state.swingArc.id}
@@ -42581,38 +42741,70 @@ class DungeonPage extends React.Component {
                                                     '--base-rot': `${baseRot}deg`,
                                                 }}
                                             >
-                                                {(() => {
-                                                    const iconSrc = this.resolveWeaponIconSrc(weaponIcon);
-                                                    if (!iconSrc) return null;
-                                                    return (
-                                                        <img
-                                                            src={iconSrc}
-                                                            alt="weapon"
-                                                            className="weapon-swing-icon"
-                                                            style={{
-                                                                position: 'absolute',
-                                                                width: `${iconPx}px`,
-                                                                height: `${iconPx}px`,
-                                                                top: '50%',
-                                                                left: '84%',
-                                                                transform: 'translate(-50%, -50%)',
-                                                                pointerEvents: 'none',
-                                                                filter: `drop-shadow(0 0 ${glowRadius}px rgba(251,191,36,0.95)) drop-shadow(0 0 4px rgba(245,158,11,0.8))`,
-                                                            }}
-                                                            onError={(e) => {
-                                                                const fb = (images.sword_upright && images.sword_upright.default) || images.sword_upright || (images.sword && images.sword.default) || images.sword;
-                                                                if (fb && e.target.src !== fb) {
-                                                                    e.target.src = fb;
-                                                                } else {
-                                                                    e.target.style.display = 'none';
-                                                                }
-                                                            }}
-                                                        />
-                                                    );
-                                                })()}
+                                                <img
+                                                    src={iconSrc}
+                                                    alt="weapon"
+                                                    className="weapon-swing-icon"
+                                                    style={{
+                                                        position: 'absolute',
+                                                        width: `${iconPx}px`,
+                                                        height: `${iconPx}px`,
+                                                        top: '50%',
+                                                        left: '84%',
+                                                        transform: 'translate(-50%, -50%)',
+                                                        pointerEvents: 'none',
+                                                        filter: `drop-shadow(0 0 ${glowRadius}px rgba(251,191,36,0.95)) drop-shadow(0 0 4px rgba(245,158,11,0.8))`,
+                                                    }}
+                                                    onError={(e) => {
+                                                        const fb = (images.sword_upright && images.sword_upright.default) || images.sword_upright || (images.sword && images.sword.default) || images.sword;
+                                                        if (fb && e.target.src !== fb) {
+                                                            e.target.src = fb;
+                                                        } else {
+                                                            e.target.style.display = 'none';
+                                                        }
+                                                    }}
+                                                />
                                             </div>
                                         );
                                     })()}
+                                </div>
+                            );
+                        })()}
+
+                        {/* ── Pygmy Companion Floating Sprite Overlay ── */}
+                        {this.state.activePygmyCompanion && this.state.activePygmyCompanion.boardIndex === (this.props.boardManager?.boardIndex || 0) && (() => {
+                            const pygmyLoc = this.state.activePygmyCompanion.location;
+                            const floatStyle = this.getFloatingPlayerStyle(pygmyLoc);
+                            if (!floatStyle) return null;
+                            const ts = this.state.inSuperboard ? (this.state.tileSize * 0.65) : this.state.tileSize;
+                            const pygmyImg = (images.pygmy && images.pygmy.default) || images.pygmy || (images.woodland_individual && images.woodland_individual.default) || images.woodland_individual || (images.pygmies && images.pygmies.default) || images.pygmies;
+                            return (
+                                <div
+                                    key="pygmy_companion_float"
+                                    className="floating-pygmy-companion"
+                                    style={{
+                                        position: 'absolute',
+                                        left: floatStyle.left,
+                                        top: floatStyle.top,
+                                        width: `${ts}px`,
+                                        height: `${ts}px`,
+                                        pointerEvents: 'none',
+                                        transform: floatStyle.transform,
+                                        zIndex: 24,
+                                        transition: 'left 0.22s cubic-bezier(0.22, 0.61, 0.36, 1), top 0.22s cubic-bezier(0.22, 0.61, 0.36, 1)',
+                                        filter: 'drop-shadow(0 0 6px rgba(168, 85, 247, 0.75)) drop-shadow(0 0 10px rgba(147, 51, 234, 0.5))'
+                                    }}
+                                >
+                                    <div
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                            backgroundImage: `url(${pygmyImg})`,
+                                            backgroundSize: 'contain',
+                                            backgroundRepeat: 'no-repeat',
+                                            backgroundPosition: 'center',
+                                        }}
+                                    />
                                 </div>
                             );
                         })()}
