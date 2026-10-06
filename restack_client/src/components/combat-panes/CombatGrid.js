@@ -8,7 +8,6 @@
  *       .portrait + overlays
  */
 import React from 'react';
-import WebGLParticleCanvas from './WebGLParticleCanvas';
 import * as images from '../../utils/images';
 import Overlay from '../Overlay';
 import { runesData } from '../../utils/rune-data';
@@ -1672,6 +1671,27 @@ export default function CombatGrid(props) {
                         transition: 'opacity 0.25s ease-in-out'
                     }}
                 >
+                    {/* PvP soft blue/green glow for player units (positioned behind portrait) */}
+                    {isPvP && !details?.dead && (
+                        <div
+                            className="pvp-player-glow"
+                            data-testid="pvp-player-glow"
+                            style={{
+                                position: 'absolute',
+                                top: '-10px',
+                                left: '-10px',
+                                width: '120px',
+                                height: '120px',
+                                borderRadius: '50%',
+                                background: 'radial-gradient(circle, rgba(33, 230, 193, 0.55) 0%, rgba(0, 191, 255, 0.08) 40%, transparent 65%)',
+                                boxShadow: '0 0 16px 4px rgba(33, 230, 193, 0.45), 0 0 28px 6px rgba(0, 191, 255, 0.03)',
+                                filter: 'blur(3px)',
+                                zIndex: 0,
+                                pointerEvents: 'none',
+                                animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'
+                            }}
+                        />
+                    )}
                     {isUltimateCasting && (
                         <div
                             className="ultimate-portrait-aura"
@@ -1765,27 +1785,6 @@ export default function CombatGrid(props) {
                             }
                         }}
                     >
-                        {/* PvP soft blue/green glow for player units */}
-                        {isPvP && !details?.dead && (
-                            <div
-                                className="pvp-player-glow"
-                                data-testid="pvp-player-glow"
-                                style={{
-                                    position: 'absolute',
-                                    top: '-10px',
-                                    left: '-10px',
-                                    width: '120px',
-                                    height: '120px',
-                                    borderRadius: '50%',
-                                    background: 'radial-gradient(circle, rgba(33, 230, 193, 0.75) 0%, rgba(0, 191, 255, 0.45) 50%, transparent 75%)',
-                                    boxShadow: '0 0 25px 8px rgba(33, 230, 193, 0.6), 0 0 45px 16px rgba(0, 191, 255, 0.35)',
-                                    filter: 'blur(4px)',
-                                    zIndex: 0,
-                                    pointerEvents: 'none',
-                                    animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'
-                                }}
-                            />
-                        )}
                         {(() => {
                             const isWalkerAttacking = !!(
                                 fighter.attacking || 
@@ -2637,12 +2636,12 @@ export default function CombatGrid(props) {
                             height: `${height + 20}px`,
                             borderRadius: '50%',
                             background: isOpponent
-                                ? 'radial-gradient(circle, rgba(255, 45, 85, 0.8) 0%, rgba(220, 20, 60, 0.5) 50%, transparent 75%)'
-                                : 'radial-gradient(circle, rgba(33, 230, 193, 0.75) 0%, rgba(0, 191, 255, 0.45) 50%, transparent 75%)',
+                                ? 'radial-gradient(circle, rgba(255, 45, 85, 0.6) 0%, rgba(220, 20, 60, 0.08) 40%, transparent 65%)'
+                                : 'radial-gradient(circle, rgba(33, 230, 193, 0.55) 0%, rgba(0, 191, 255, 0.08) 40%, transparent 65%)',
                             boxShadow: isOpponent
-                                ? '0 0 25px 8px rgba(255, 45, 85, 0.65), 0 0 45px 16px rgba(220, 20, 60, 0.4)'
-                                : '0 0 25px 8px rgba(33, 230, 193, 0.6), 0 0 45px 16px rgba(0, 191, 255, 0.35)',
-                            filter: 'blur(4px)',
+                                ? '0 0 16px 4px rgba(255, 45, 85, 0.5), 0 0 28px 6px rgba(220, 20, 60, 0.03)'
+                                : '0 0 16px 4px rgba(33, 230, 193, 0.45), 0 0 28px 6px rgba(0, 191, 255, 0.03)',
+                            filter: 'blur(3px)',
                             zIndex: 0,
                             pointerEvents: 'none',
                             animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'
@@ -7986,7 +7985,6 @@ export default function CombatGrid(props) {
                 </defs>
             </svg>
             {renderDestinationTrajectoriesAndReticles()}
-            <WebGLParticleCanvas activeAnimations={activeAnimations} boardWidth={boardWidth} boardHeight={600} />
             {/* Fighters */}
             {activeCrew.map(renderFighter)}
             {renderRiftPortal()}

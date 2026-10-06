@@ -1491,6 +1491,7 @@ const cave_pygmies = cave_squad;
 const save_pygmies = cave_squad;
 const woodland_pygmies = woodland_warband;
 const pygmies = woodland_warband;
+const pygmy = woodland_individual;
 
 const cave_pygmy_group = cave_group;
 const woodland_pygmy_group = woodland_group;
@@ -2952,6 +2953,7 @@ export {
     cave_pygmies,
     woodland_pygmies,
     pygmies,
+    pygmy,
     cave_pygmy_group,
     woodland_pygmy_group,
     mud_pygmy_group,

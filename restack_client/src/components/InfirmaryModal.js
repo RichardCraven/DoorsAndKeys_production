@@ -67,7 +67,18 @@ export default function InfirmaryModal({ onClose, crewManager }) {
     const allUnits = Array.from(unitMap.values());
     const availableSage = allUnits.find(u => (u.type === 'sage' || u.class === 'sage' || u.characterClass === 'sage'));
     const assignedSage = infirmary.assignedSage || availableSage;
-    const horologist = allUnits.find(u => (u.type === 'horologist' || u.class === 'horologist' || u.image === 'horologist'));
+    const activeCrew = (crewManager && Array.isArray(crewManager.crew) && crewManager.crew.length > 0)
+        ? crewManager.crew
+        : ((meta && Array.isArray(meta.crew)) ? meta.crew : []);
+    const isHorologist = (u) => u && (u.type === 'horologist' || u.class === 'horologist' || u.characterClass === 'horologist' || u.image === 'horologist');
+    const isLive = (u) => {
+        if (!u) return false;
+        if (u.dead) return false;
+        const hp = typeof u.hp === 'number' ? u.hp : (u.stats?.hp || u.starting_hp || 100);
+        return hp > 0;
+    };
+    const liveHorologistInCrew = activeCrew.find(u => isHorologist(u) && isLive(u));
+    const horologist = liveHorologistInCrew;
     
     return (
         <div className="infirmary-modal-overlay" style={{

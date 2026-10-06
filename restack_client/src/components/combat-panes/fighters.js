@@ -216,9 +216,9 @@ export default function FightersCombatGrid(props) {
                                                     width: '120px',
                                                     height: '120px',
                                                     borderRadius: '50%',
-                                                    background: 'radial-gradient(circle, rgba(33, 230, 193, 0.75) 0%, rgba(0, 191, 255, 0.45) 50%, transparent 75%)',
-                                                    boxShadow: '0 0 25px 8px rgba(33, 230, 193, 0.6), 0 0 45px 16px rgba(0, 191, 255, 0.35)',
-                                                    filter: 'blur(4px)',
+                                                    background: 'radial-gradient(circle, rgba(33, 230, 193, 0.55) 0%, rgba(0, 191, 255, 0.08) 40%, transparent 65%)',
+                                                    boxShadow: '0 0 16px 4px rgba(33, 230, 193, 0.45), 0 0 28px 6px rgba(0, 191, 255, 0.03)',
+                                                    filter: 'blur(3px)',
                                                     zIndex: 290,
                                                     pointerEvents: 'none',
                                                     animation: 'pvpGlowPulse 2.5s ease-in-out infinite alternate'

@@ -641,7 +641,7 @@ export default class CardDuel extends React.Component {
         const firstPlayerName = firstPlayerKey === 'player' ? 'YOU GO FIRST!' : `${enemyName.toUpperCase()} GOES FIRST!`;
 
         const basePlayerHp = hasUserPerk('card_duel_hp') ? 25 : 20;
-        const autoWin = hasUserPerk('reaper_auto_win') && Math.random() < 0.10;
+        const autoWin = hasUserPerk('reaper_auto_win') && Math.random() < 0.50;
 
         this.setState({
             playerHP: basePlayerHp,
@@ -833,9 +833,9 @@ export default class CardDuel extends React.Component {
 
         const enemyName = this.getEnemyName();
         const nextTurnNum = this.state.turnNumber + 1;
-        const baseAllowance = Math.floor((nextTurnNum + 1) / 2);
-        const playerSpiritAllowance = baseAllowance + (this.state.playerBonusAllowance || 0);
-        const reaperSpiritAllowance = baseAllowance + (this.state.reaperBonusAllowance || 0);
+        const baseAllowance = Math.min(10, Math.floor((nextTurnNum + 1) / 2));
+        const playerSpiritAllowance = Math.min(10, baseAllowance + (this.state.playerBonusAllowance || 0));
+        const reaperSpiritAllowance = Math.min(10, baseAllowance + (this.state.reaperBonusAllowance || 0));
         
         let playerCarried = this.state.playerCarriedSpirit || 0;
         let reaperCarried = this.state.reaperCarriedSpirit || 0;
@@ -907,16 +907,16 @@ export default class CardDuel extends React.Component {
         let reaperSpiritForTurn = this.state.reaperSpirit;
 
         if (nextTurnOwner === 'player') {
-            playerSpiritForTurn = playerSpiritAllowance;
+            playerSpiritForTurn = Math.min(10, playerSpiritAllowance);
             if (playerCarried > 0) {
-                playerSpiritForTurn += playerCarried;
+                playerSpiritForTurn = Math.min(10, playerSpiritForTurn + playerCarried);
                 this.addLog(`⚡ OVERDRIVE SURGE! Carried over +${playerCarried} Spirit!`);
                 playerCarried = 0;
             }
         } else if (nextTurnOwner === 'reaper') {
-            reaperSpiritForTurn = reaperSpiritAllowance;
+            reaperSpiritForTurn = Math.min(10, reaperSpiritAllowance);
             if (reaperCarried > 0) {
-                reaperSpiritForTurn += reaperCarried;
+                reaperSpiritForTurn = Math.min(10, reaperSpiritForTurn + reaperCarried);
                 this.addLog(`⚡ ${enemyName.toUpperCase()} OVERDRIVE SURGE! Carried over +${reaperCarried} Spirit!`);
                 reaperCarried = 0;
             }
@@ -925,9 +925,9 @@ export default class CardDuel extends React.Component {
         this.setState({
             turnNumber: nextTurnNum,
             currentTurn: nextTurnOwner,
-            playerSpirit: playerSpiritForTurn,
-            reaperSpirit: reaperSpiritForTurn,
-            maxSpirit: playerSpiritAllowance,
+            playerSpirit: Math.min(10, playerSpiritForTurn),
+            reaperSpirit: Math.min(10, reaperSpiritForTurn),
+            maxSpirit: Math.min(10, playerSpiritAllowance),
             playerOverdriveActive: false,
             reaperOverdriveActive: false,
             playerCarriedSpirit: playerCarried,
@@ -1043,6 +1043,7 @@ export default class CardDuel extends React.Component {
 
         const isRanger = !!(unit.isRanger || (unit.memberType && unit.memberType.toLowerCase().includes('ranger')) || unit.type === 'ranger');
         const isWizard = !!(unit.isWizard || (unit.memberType && unit.memberType.toLowerCase().includes('wizard')) || unit.type === 'wizard' || (unit.name && unit.name.toLowerCase().includes('wizard')));
+        const isRegularPygmy = (unit.type === 'pygmy' || (unit.name && unit.name.toLowerCase().includes('pygmy'))) && (unit.width || 1) === 1 && (unit.height || 1) === 1;
 
         const unitKeys = Array.isArray(unit.occupiedKeys) && unit.occupiedKeys.length > 0
             ? unit.occupiedKeys
@@ -1071,13 +1072,16 @@ export default class CardDuel extends React.Component {
 
         // Tactical Attack target offsets:
         // Most units can only attack directly in front of them or to the side.
+        // Regular 1-tile pygmy units can only attack forward, not to the side.
         // Diagonal attacks are a special ability limited to the wizard.
         const attackOffsets = [];
         if (unit.owner === 'player') {
             // Directly in front (row - 1)
             attackOffsets.push([-1, 0]);
-            // To the side (left/right)
-            attackOffsets.push([0, -1], [0, 1]);
+            // To the side (left/right) - regular 1 tile pygmy units cannot attack to the side
+            if (!isRegularPygmy) {
+                attackOffsets.push([0, -1], [0, 1]);
+            }
             // Wizard special ability: attack diagonally (NE and NW)
             if (isWizard) {
                 attackOffsets.push([-1, -1], [-1, 1]);
@@ -1085,8 +1089,10 @@ export default class CardDuel extends React.Component {
         } else {
             // Directly in front for reaper (row + 1)
             attackOffsets.push([1, 0]);
-            // To the side (left/right)
-            attackOffsets.push([0, -1], [0, 1]);
+            // To the side (left/right) - regular 1 tile pygmy units cannot attack to the side
+            if (!isRegularPygmy) {
+                attackOffsets.push([0, -1], [0, 1]);
+            }
             // Wizard special ability: attack diagonally (SE and SW)
             if (isWizard) {
                 attackOffsets.push([1, -1], [1, 1]);
@@ -1788,7 +1794,7 @@ export default class CardDuel extends React.Component {
                 currentReaperDiscard2.push({ ...card, hp: card.maxHp || 0 });
             } else if (card.actionType === 'invest') {
                 this.addLog(`💀 ${enemyName} activated INVEST! Their maximum Spirit increased by 1.`);
-                currentMaxSpirit = currentMaxSpirit + 1;
+                currentMaxSpirit = Math.min(10, currentMaxSpirit + 1);
                 currentReaperBonus = currentReaperBonus + 1;
                 currentReaperSpirit -= card.cost;
                 currentReaperHand2.splice(i, 1);
@@ -1920,14 +1926,17 @@ export default class CardDuel extends React.Component {
                 : [`${r}_${c}`];
 
             const isWizard = !!(u.isWizard || (u.memberType && u.memberType.toLowerCase().includes('wizard')) || u.type === 'wizard' || (u.name && u.name.toLowerCase().includes('wizard')));
+            const isRegularPygmy = (u.type === 'pygmy' || (u.name && u.name.toLowerCase().includes('pygmy'))) && (u.width || 1) === 1 && (u.height || 1) === 1;
 
             // Most units can only attack directly in front of them or to the side.
+            // Regular 1-tile pygmy units can only attack forward, not to the side.
             // Diagonal attacks are a special ability limited to the wizard.
             const attackOffsets = [
-                [1, 0],   // Directly in front (row + 1)
-                [0, -1],  // Left side
-                [0, 1]    // Right side
+                [1, 0]   // Directly in front (row + 1)
             ];
+            if (!isRegularPygmy) {
+                attackOffsets.push([0, -1], [0, 1]); // Left and right side
+            }
             if (isWizard) {
                 attackOffsets.push([1, -1], [1, 1]); // Diagonals
             }
@@ -2090,7 +2099,7 @@ export default class CardDuel extends React.Component {
 
         if (card.actionType === 'invest') {
             this.addLog(`📈 INVEST ACTIVATED! Maximum Spirit allowance permanently increased by 1.`);
-            const newMaxSpirit = (this.state.maxSpirit || 1) + 1;
+            const newMaxSpirit = Math.min(10, (this.state.maxSpirit || 1) + 1);
             this.setState({
                 playerSpirit: nextSpirit,
                 playerHand: nextHand,
@@ -2342,13 +2351,16 @@ export default class CardDuel extends React.Component {
                 return;
             }
 
-            // If clicking an enemy unit that cannot be attacked (e.g. diagonal for non-wizards)
+            // If clicking an enemy unit that cannot be attacked (e.g. diagonal for non-wizards or sideways for regular 1-tile pygmies)
             if (targetUnit && targetUnit.owner !== selectedBoardUnit.owner) {
                 const isWiz = !!(selectedBoardUnit.isWizard || (selectedBoardUnit.memberType && selectedBoardUnit.memberType.toLowerCase().includes('wizard')) || selectedBoardUnit.type === 'wizard' || (selectedBoardUnit.name && selectedBoardUnit.name.toLowerCase().includes('wizard')));
+                const isRegularPygmy = (selectedBoardUnit.type === 'pygmy' || (selectedBoardUnit.name && selectedBoardUnit.name.toLowerCase().includes('pygmy'))) && (selectedBoardUnit.width || 1) === 1 && (selectedBoardUnit.height || 1) === 1;
                 const dr = Math.abs(r - selectedBoardUnit.anchorRow);
                 const dc = Math.abs(c - selectedBoardUnit.anchorCol);
                 if (dr === 1 && dc === 1 && !isWiz) {
                     this.addLog(`⚠️ ${selectedBoardUnit.name} cannot attack diagonally. Diagonal attacks are limited to Wizards!`);
+                } else if (dr === 0 && dc === 1 && isRegularPygmy) {
+                    this.addLog(`⚠️ ${selectedBoardUnit.name} can only attack forward, not to the side!`);
                 }
             }
         }
