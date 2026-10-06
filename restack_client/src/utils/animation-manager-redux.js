@@ -33,6 +33,7 @@ import {
   food,
   soul_tap_summoner
 } from './images';
+import { combatClock } from './combat-clock';
 
 export class AnimationManagerRedux {
   constructor() {
@@ -81,11 +82,11 @@ export class AnimationManagerRedux {
    */
   _delay(fn, ms) {
     const delayId = ++this._delayIdCounter;
-    const handle = setTimeout(() => {
+    const handle = combatClock.setTimeout(() => {
       this._pendingDelays.delete(delayId);
       fn();
     }, ms);
-    this._pendingDelays.set(delayId, { handle, fn, remaining: ms, startedAt: Date.now() });
+    this._pendingDelays.set(delayId, { handle, fn, remaining: ms, startedAt: combatClock.now() });
     return delayId;
   }
 
@@ -93,10 +94,10 @@ export class AnimationManagerRedux {
   pause() {
     if (this.isPaused) return;
     this.isPaused = true;
-    this._pausedAt = Date.now();
+    this._pausedAt = combatClock.now();
     this._pendingDelays.forEach((entry, delayId) => {
-      clearTimeout(entry.handle);
-      const elapsed = Date.now() - entry.startedAt;
+      combatClock.clearTimeout(entry.handle);
+      const elapsed = combatClock.now() - entry.startedAt;
       entry.remaining = Math.max(0, entry.remaining - elapsed);
     });
   }
@@ -108,19 +109,19 @@ export class AnimationManagerRedux {
     this._pausedAt = null;
     this._pendingDelays.forEach((entry, delayId) => {
       const { fn, remaining } = entry;
-      const handle = setTimeout(() => {
+      const handle = combatClock.setTimeout(() => {
         this._pendingDelays.delete(delayId);
         fn();
       }, remaining);
       entry.handle = handle;
-      entry.startedAt = Date.now();
+      entry.startedAt = combatClock.now();
       entry.remaining = remaining;
     });
   }
 
   /** Emit an animation event and auto-remove it after duration */
   _emit(anim) {
-    const id = `anim_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const id = `anim_${combatClock.now()}_${Math.random().toString(36).substr(2, 5)}`;
     const entry = { id, sourceUnitId: this._currentSourceUnitId, abilityName: this._currentAbilityName, ...anim };
     this.activeAnimations = [...this.activeAnimations, entry];
     if (this.onAnimationEvent) this.onAnimationEvent([...this.activeAnimations]);

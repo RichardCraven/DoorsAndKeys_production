@@ -9,6 +9,8 @@ import { BATTLE_TACTICS } from './spells-table';
 import { MonsterManager } from './monster-manager';
 import { applyShieldedEffect, applyBlindingSpeedEffect } from './combat-effects';
 import { computeTemporalStrainTier, getEffectiveTimeDebt } from './crew-manager';
+import { combatClock } from './combat-clock';
+import { combatRng } from './combat-rng';
 const MAX_LANES = 6;
 
 
@@ -135,7 +137,7 @@ export function CombatManagerRedux() {
         if (unit.endurance > 0) return;
 
         const exhaustionDuration = getDurationRounds('short');
-        const now = Date.now();
+        const now = combatClock.now();
         unit.exhausted = true;
         unit.asleep = true;
         unit.sleepRounds = Math.max(unit.sleepRounds || 0, exhaustionDuration);
@@ -187,7 +189,7 @@ export function CombatManagerRedux() {
 
         if (val === true) {
             // Record when we paused so we can freeze the effect-icon sweep
-            this.pauseStartTimestamp = Date.now();
+            this.pauseStartTimestamp = combatClock.now();
             if (this.animManagerRedux && typeof this.animManagerRedux.pause === 'function') {
                 this.animManagerRedux.pause();
             }
@@ -197,7 +199,7 @@ export function CombatManagerRedux() {
             }
             if (this.pauseStartTimestamp) {
                 // Shift all time-based endTimeMs fields forward by the paused duration
-                const pausedDuration = Date.now() - this.pauseStartTimestamp;
+                const pausedDuration = combatClock.now() - this.pauseStartTimestamp;
                 const END_TIME_KEYS = [
                     'sleepEndTimeMs', 'stunnedEndTimeMs', 'frozenEndTimeMs', 'fearEndTimeMs',
                     'ensnaredEndTimeMs', 'markedEndTimeMs', 'hexEndTimeMs',
@@ -234,7 +236,7 @@ export function CombatManagerRedux() {
         setMaxDepth(7);
         this.numColumns = 8;
         this.entropicKindredActive = false;
-        if (this.roundTimerInterval) clearInterval(this.roundTimerInterval);
+        if (this.roundTimerInterval) combatClock.clearInterval(this.roundTimerInterval);
         this.combatPaused = false;
         this.combatOver = false;
         this.combatLog = [];
@@ -617,7 +619,7 @@ export function CombatManagerRedux() {
         }
 
         const greetingMsg = monster.greetings && monster.greetings[0] ? monster.greetings[0] : "Prepare to battle!";
-        const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+        const delay = (ms) => new Promise(resolve => combatClock.setTimeout(resolve, ms));
 
         Promise.resolve().then(async () => {
             // --- Stage 1: Main Monster Greeting Stage ---
@@ -697,7 +699,7 @@ export function CombatManagerRedux() {
         // Lord Badges & Minion Spawning logic
         if (this.data.monster && !this.data.monster.isShrineGuardian && this.data.monster.tier <= 3) {
             // 15% chance to be a Lord, or if explicitly predefined as Lord (for tests/custom)
-            const roll = Math.random();
+            const roll = combatRng.random();
             const isLord = (typeof this.data.monster.isLord === 'boolean') 
                 ? this.data.monster.isLord 
                 : (process.env.NODE_ENV !== 'test' && roll < 0.15);
@@ -706,7 +708,7 @@ export function CombatManagerRedux() {
                 this.data.monster.isLord = true;
                 if (!this.data.monster.lordBadge) {
                     const badges = ['arcolic', 'mascali', 'quarine', 'rubedo', 'vermine'];
-                    this.data.monster.lordBadge = badges[Math.floor(Math.random() * badges.length)];
+                    this.data.monster.lordBadge = badges[Math.floor(combatRng.random() * badges.length)];
                 }
                 
                 // Mutate the name to "<lordName> of <badge type>" if lordName is defined, otherwise "<monster name> lord of <badge type>"
@@ -758,7 +760,7 @@ export function CombatManagerRedux() {
                         return tier === lowestTier;
                     });
                     if (lowestTierMinions.length > 0) {
-                        const template = lowestTierMinions[Math.floor(Math.random() * lowestTierMinions.length)];
+                        const template = lowestTierMinions[Math.floor(combatRng.random() * lowestTierMinions.length)];
                         const additionalMinion = { ...template };
                         if (additionalMinion.stats) additionalMinion.stats = { ...additionalMinion.stats };
                         
@@ -795,7 +797,7 @@ export function CombatManagerRedux() {
             acquireTarget: this.acquireTarget,
             chooseAttackType: () => { },
             hitsTarget: () => true,
-            pickRandom: (arr) => arr[Math.floor(Math.random() * arr.length)],
+            pickRandom: (arr) => arr[Math.floor(combatRng.random() * arr.length)],
             missesTarget: () => false,
             hitCheck: this.hitCheck,
             damageCheck: this.damageCheck,
@@ -894,7 +896,7 @@ export function CombatManagerRedux() {
             // Check for building stamina penalty (lasts 1 hour or next battle, whichever comes first)
             let startingEndurance = fighter.maxEndurance;
             if (e.buildingStaminaPenalty) {
-                const now = Date.now();
+                const now = combatClock.now();
                 const { penaltyPct, expiresAt } = e.buildingStaminaPenalty;
                 if (now <= expiresAt && typeof penaltyPct === 'number' && penaltyPct > 0) {
                     const penaltyRatio = Math.min(0.99, penaltyPct / 100);
@@ -986,7 +988,7 @@ export function CombatManagerRedux() {
                 if (lureAction && gbCombatant) {
                     this.glitterTraps = this.glitterTraps || [];
                     this.glitterTraps.push({
-                        id: `snare_prep_${Date.now()}`,
+                        id: `snare_prep_${combatClock.now()}`,
                         casterId: gbCombatant.id,
                         x: 4,
                         y: 3,
@@ -1586,9 +1588,9 @@ export function CombatManagerRedux() {
                 || (typeof target.scale === 'number' && target.scale === 3)
             );
             if (targetIsHuge) {
-                return forceBoost ? Math.random() >= 0.50 : Math.random() >= 0.90; // 50% fail if forced, else 90%
+                return forceBoost ? combatRng.random() >= 0.50 : combatRng.random() >= 0.90; // 50% fail if forced, else 90%
             }
-            return forceBoost ? true : Math.random() >= 0.70; // 0% fail if forced, else 70%
+            return forceBoost ? true : combatRng.random() >= 0.70; // 0% fail if forced, else 70%
         }
         return true;
     };
@@ -1744,9 +1746,9 @@ export function CombatManagerRedux() {
                 this._movementFacingTimeouts = {};
             }
             if (this._movementFacingTimeouts[unit.id]) {
-                clearTimeout(this._movementFacingTimeouts[unit.id]);
+                combatClock.clearTimeout(this._movementFacingTimeouts[unit.id]);
             }
-            this._movementFacingTimeouts[unit.id] = setTimeout(() => {
+            this._movementFacingTimeouts[unit.id] = combatClock.setTimeout(() => {
                 const liveUnit = this.combatants[unit.id];
                 if (liveUnit && !liveUnit.dead) {
                     liveUnit.facing = 'right';
@@ -1761,9 +1763,9 @@ export function CombatManagerRedux() {
                 this._movementFacingTimeouts = {};
             }
             if (this._movementFacingTimeouts[unit.id]) {
-                clearTimeout(this._movementFacingTimeouts[unit.id]);
+                combatClock.clearTimeout(this._movementFacingTimeouts[unit.id]);
             }
-            this._movementFacingTimeouts[unit.id] = setTimeout(() => {
+            this._movementFacingTimeouts[unit.id] = combatClock.setTimeout(() => {
                 const liveUnit = this.combatants[unit.id];
                 if (liveUnit && !liveUnit.dead) {
                     liveUnit.facing = 'left';
@@ -1791,12 +1793,13 @@ export function CombatManagerRedux() {
         }
     };
 
-    this.hitCheck = (caller, target) => {
+    // Natural hit roll. Public hitCheck (below) lets the sandbox force the outcome via combatRng.
+    this._hitCheckNatural = (caller, target) => {
         if (!target || !caller) return true;
 
         let baseMissChance = 0;
         let missChance = 0;
-        const roll = Math.random() * 100;
+        const roll = combatRng.random() * 100;
         let isHit = false;
         let casterWits = 8;
         let targetWP = 5;
@@ -1872,7 +1875,7 @@ export function CombatManagerRedux() {
             }
             // Beholder invisibility: 40% flat dodge chance
             if (target.beholderInvisible && typeof target.beholderDodgeBonus === 'number') {
-                if (Math.random() < target.beholderDodgeBonus) {
+                if (combatRng.random() < target.beholderDodgeBonus) {
                     return false; // dodged due to invisibility
                 }
             }
@@ -1909,6 +1912,7 @@ export function CombatManagerRedux() {
 
         return isHit;
     };
+    this.hitCheck = (caller, target) => combatRng.resolveForced('hit', this._hitCheckNatural(caller, target));
 
 
     this.damageCheck = (caller, target, rawDamage, isMagical = false, overrideAbility = null) => {
@@ -1957,13 +1961,13 @@ export function CombatManagerRedux() {
             }
 
             // Imperial Mage Staff (25% chance to do double damage)
-            if (this._hasEquippedItem(caller, 'imperial_mage_staff') && Math.random() < 0.25) {
+            if (this._hasEquippedItem(caller, 'imperial_mage_staff') && combatRng.random() < 0.25) {
                 rawDamage = Math.round(rawDamage * 2);
                 this.appendCombatLog(`${this.getCombatantLogName(caller)}'s Imperial Mage Staff doubles damage!`);
             }
 
             // Staff of Tomorrow (20% chance to do triple damage)
-            if (this._hasEquippedItem(caller, 'staff_of_tomorrow') && Math.random() < 0.20 && rawDamage > 0) {
+            if (this._hasEquippedItem(caller, 'staff_of_tomorrow') && combatRng.random() < 0.20 && rawDamage > 0) {
                 rawDamage = Math.round(rawDamage * 3);
                 this.appendCombatLog(`${this.getCombatantLogName(caller)}'s Staff of Tomorrow TRIPLES damage!`);
             }
@@ -1985,7 +1989,7 @@ export function CombatManagerRedux() {
             const cloudfireWand = this._getEquippedWand(caller, 'cloudfire_wand');
             const isDamageSkill = activeAbility && (activeAbility.damageType || (activeAbility.type && activeAbility.type.includes('damage')) || activeAbility.flatDamage > 0 || activeAbility.atkPercentage > 0);
             if (cloudfireWand && isDamageSkill && (typeof cloudfireWand.currentCharges !== 'number' || cloudfireWand.currentCharges > 0) && rawDamage > 0) {
-                if (Math.random() < 0.15 && this._useWandCharge(caller, cloudfireWand)) {
+                if (combatRng.random() < 0.15 && this._useWandCharge(caller, cloudfireWand)) {
                     rawDamage = Math.round(rawDamage * 2);
                     this.appendCombatLog(`${this.getCombatantLogName(caller)}'s Cloudfire Wand DOUBLES damage! [${cloudfireWand.currentCharges} charges remaining]`);
                 }
@@ -2108,7 +2112,7 @@ export function CombatManagerRedux() {
 
         // Staff of Marduk: 50% chance to ignore armor and deal true damage
         let ignoreArmor = false;
-        if (caller && this._hasEquippedItem && this._hasEquippedItem(caller, 'staff_of_marduk') && Math.random() < 0.50) {
+        if (caller && this._hasEquippedItem && this._hasEquippedItem(caller, 'staff_of_marduk') && combatRng.random() < 0.50) {
             ignoreArmor = true;
             this.appendCombatLog(`${this.getCombatantLogName(caller)}'s Staff of Marduk ignores armor, dealing true damage!`);
         }
@@ -2223,7 +2227,7 @@ export function CombatManagerRedux() {
     this.checkShrinerConcentrationDamage = (attacker, target, damage) => {
         if (!target || !target.isConcentrating || damage <= 0) return;
         if (attacker && attacker.isShrineGuardian) {
-            const roll = Math.random();
+            const roll = combatRng.random();
             if (roll < 0.33) {
                 this.concentrationProgress = Math.max(0, (this.concentrationProgress || 0) * 0.5);
                 this.appendCombatLog(`⚡ Guardian hit! ${this.getCombatantLogName(target)}'s concentration level reduced by 50%!`);
@@ -2435,7 +2439,7 @@ export function CombatManagerRedux() {
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             }
             // Delay actual cleanup so the 2.5s death animation plays out
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 if (this.combatOver && Object.keys(this.combatants).length === 0) return; // already reset
                 const sphinx = this._getSphinx();
                 if (sphinx) {
@@ -2458,7 +2462,7 @@ export function CombatManagerRedux() {
             return;
         }
         target.dead = true;
-        target.deathTimestamp = Date.now();
+        target.deathTimestamp = combatClock.now();
         if (target.mimicryActive) {
             target.mimicryActive = false;
         }
@@ -2498,7 +2502,7 @@ export function CombatManagerRedux() {
 
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
 
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 if (this.combatOver && Object.keys(this.combatants).length === 0) return; // already reset
                 this._endTrials(target, 'Sphinx was defeated');
                 this.combatOverCheck();
@@ -2600,7 +2604,7 @@ export function CombatManagerRedux() {
             } catch (e) { /* audio errors must never crash combat */ }
         }
 
-        setTimeout(() => {
+        combatClock.setTimeout(() => {
             const live = this.combatants[target.id];
             if (live && live.dead) {
                 this.removeCombatant(target.id);
@@ -2624,7 +2628,7 @@ export function CombatManagerRedux() {
 
         combatant.reassembleUsed = true;
 
-        if (Math.random() > 0.50) {
+        if (combatRng.random() > 0.50) {
             return false;
         }
 
@@ -2632,7 +2636,7 @@ export function CombatManagerRedux() {
         combatant.bonesRoundsLeft = 4;
         combatant.bonesTotalRounds = 4;
         combatant.bonesTotalDurationMs = getDurationMsFromRounds(4);
-        combatant.bonesEndTimeMs = Date.now() + combatant.bonesTotalDurationMs;
+        combatant.bonesEndTimeMs = combatClock.now() + combatant.bonesTotalDurationMs;
         combatant.bonesMaxHp = 10;
         combatant.originalPortrait = combatant.portrait;
         combatant.portrait = images.bones;
@@ -2852,7 +2856,7 @@ export function CombatManagerRedux() {
         siegeLog(`[SiegeCombat] processRoundTurns starting. Active units in speed order:`, activeUnits.map(u => ({ id: u.id, name: u.name, speed: (u.stats && (u.stats.speed || u.stats.dex)) || u.speed || 1, hp: u.hp, stunned: u.stunned, asleep: u.asleep })));
 
         activeUnits.forEach((unit, index) => {
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 try {
                     siegeLog(`[SiegeCombat] Starting turn for ${unit.name || unit.id} (stunned: ${unit.stunned}, asleep: ${unit.asleep}, hp: ${unit.hp})`);
                     // Clear damage indicators from previous turns to avoid stale accumulation
@@ -2878,7 +2882,7 @@ export function CombatManagerRedux() {
                             
                             unit.damageIndicators = unit.damageIndicators || [];
                             unit.damageIndicators.push({
-                                id: Date.now() + Math.random() + 200,
+                                id: combatClock.now() + Math.random() + 200,
                                 value: `-${decay} STAM`,
                                 type: 'damage'
                             });
@@ -2925,7 +2929,7 @@ export function CombatManagerRedux() {
 
                     // --- SHADOW ARMOR DISPEL CHECK ---
                     if (unit.type === 'wraith' && unit.specials && unit.specials.some(s => s && (s === 'shadow_armor' || s.id === 'shadow_armor' || s.key === 'shadow_armor'))) {
-                        const roll = Math.random();
+                        const roll = combatRng.random();
                         const rollSuccess = roll <= 0.35;
                         const hadDebuffs = (unit.activeDebuffs && unit.activeDebuffs.length > 0) || unit.poisoned || unit.bleed || unit.frozen || unit.stunned || unit.feared || unit.asleep || unit.ensnared || unit.marked;
                         if (rollSuccess) {
@@ -2972,7 +2976,7 @@ export function CombatManagerRedux() {
                         }
 
                         // Roll 50% chance to swap sides
-                        if (Math.random() < 0.50) {
+                        if (combatRng.random() < 0.50) {
                             unit.madnessSwapped = true;
                             unit._madnessOriginalIsMonster = (unit.isMonster === true);
                             unit._madnessOriginalIsMinion = (unit.isMinion === true);
@@ -2989,7 +2993,7 @@ export function CombatManagerRedux() {
                         }
 
                         // Roll 25% chance to self-harm
-                        if (Math.random() < 0.25) {
+                        if (combatRng.random() < 0.25) {
                             const selfDamage = Math.max(1, Math.floor(((unit.stats && unit.stats.atk) || 10) * 0.5));
                             unit.hp -= selfDamage;
                             this.appendCombatLog(`${this.getCombatantLogName(unit)} hurts itself in its Madness for ${selfDamage} damage!`);
@@ -3095,7 +3099,7 @@ export function CombatManagerRedux() {
                         // Inspired units are immune to resolve breaks
                         const isInspired = unit.inspiredActive ||
                             (unit.activeBuffs && unit.activeBuffs.some(b => b.name === 'Inspire'));
-                        if (!isInspired && resolve < 20 && Math.random() < 0.10) {
+                        if (!isInspired && resolve < 20 && combatRng.random() < 0.10) {
                             this.appendCombatLog(`${this.getCombatantLogName(unit)}'s resolve is broken! They refuse to act this turn.`);
                             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
                             return;
@@ -3192,7 +3196,7 @@ export function CombatManagerRedux() {
                         this.appendCombatLog(`${this.getCombatantLogName(unit)} is inside Invigorate circle — stamina restored by ${regenAmt}.`);
                         unit.damageIndicators = unit.damageIndicators || [];
                         unit.damageIndicators.push({
-                            id: Date.now() + Math.random() + 99,
+                            id: combatClock.now() + Math.random() + 99,
                             value: `+${regenAmt} STAM`,
                             type: 'heal'
                         });
@@ -3210,7 +3214,7 @@ export function CombatManagerRedux() {
             unit.hp = Math.min(unit.starting_hp || unit.stats.hp || 100, unit.hp + healAmt);
             unit.damageIndicators = unit.damageIndicators || [];
             unit.damageIndicators.push({
-                id: Date.now() + Math.random(),
+                id: combatClock.now() + Math.random(),
                 value: `+${healAmt}`,
                 source: 'Emerald Amulet',
                 type: 'heal'
@@ -3233,7 +3237,7 @@ export function CombatManagerRedux() {
             unit.hp = Math.min(unit.starting_hp || unit.hp, unit.hp + healAmt);
             unit.damageIndicators = unit.damageIndicators || [];
             unit.damageIndicators.push({
-                id: Date.now() + Math.random(),
+                id: combatClock.now() + Math.random(),
                 value: `+${healAmt}`,
                 source: 'Regenerate',
                 type: 'heal'
@@ -3258,8 +3262,8 @@ export function CombatManagerRedux() {
                 if (debuff.name === 'Dominated') {
                     const casterWP = debuff.casterWillpower !== undefined ? debuff.casterWillpower : 20;
                     const targetWP = (unit.stats && (unit.stats.willpower !== undefined ? unit.stats.willpower : unit.stats.int)) || 5;
-                    const casterRoll = casterWP + Math.floor(Math.random() * 10) + 1;
-                    const targetRoll = targetWP + Math.floor(Math.random() * 10) + 1;
+                    const casterRoll = casterWP + Math.floor(combatRng.random() * 10) + 1;
+                    const targetRoll = targetWP + Math.floor(combatRng.random() * 10) + 1;
                     if (targetRoll > casterRoll) {
                         this.appendCombatLog(
                             `${this.getCombatantLogName(unit)} passes willpower check (Roll ${targetRoll} vs ${casterRoll}) and breaks free from Domination!`
@@ -3487,7 +3491,7 @@ export function CombatManagerRedux() {
             unit.hp = Math.max(0, unit.hp - finalDmg);
             unit.damageIndicators = unit.damageIndicators || [];
             unit.damageIndicators.push({
-                id: Date.now() + Math.random(),
+                id: combatClock.now() + Math.random(),
                 value: `-${finalDmg}`,
                 source: 'Paradox Engine',
                 type: 'damage'
@@ -3501,7 +3505,7 @@ export function CombatManagerRedux() {
                 }
             } else if (unit.paradoxEngineRounds <= 0) {
                 const targetWillpower = unit.stats.willpower !== undefined ? unit.stats.willpower : (unit.stats.int || 10);
-                const targetRoll = targetWillpower + Math.floor(Math.random() * 20) + 1;
+                const targetRoll = targetWillpower + Math.floor(combatRng.random() * 20) + 1;
                 const pass = targetRoll >= 15;
                 if (pass) {
                     unit.paradoxEngineActive = false;
@@ -3531,7 +3535,7 @@ export function CombatManagerRedux() {
             unit.hp = Math.max(0, unit.hp - poisonDmg);
             unit.damageIndicators = unit.damageIndicators || [];
             unit.damageIndicators.push({
-                id: Date.now() + Math.random(),
+                id: combatClock.now() + Math.random(),
                 value: `-${poisonDmg}`,
                 source: 'Poison',
                 type: 'damage'
@@ -3563,7 +3567,7 @@ export function CombatManagerRedux() {
             unit.hp = Math.max(0, unit.hp - tickDmg);
             unit.damageIndicators = unit.damageIndicators || [];
             unit.damageIndicators.push({
-                id: Date.now() + Math.random(),
+                id: combatClock.now() + Math.random(),
                 value: `-${tickDmg}`,
                 source: 'Bleed',
                 type: 'damage'
@@ -3575,12 +3579,12 @@ export function CombatManagerRedux() {
 
             // Second 1/2 round tick (scheduled halfway through the round duration)
             const halfRoundMs = (this.roundDurationMs || 1000) / 2;
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 if (this.combatPaused || this.combatOver || unit.dead || unit.hp <= 0) return;
                 unit.hp = Math.max(0, unit.hp - tickDmg);
                 unit.damageIndicators = unit.damageIndicators || [];
                 unit.damageIndicators.push({
-                    id: Date.now() + Math.random(),
+                    id: combatClock.now() + Math.random(),
                     value: `-${tickDmg}`,
                     source: 'Bleed',
                     type: 'damage'
@@ -3619,12 +3623,12 @@ export function CombatManagerRedux() {
         // Check caster staff specials on buff spells
         if (caster && this._hasEquippedItem) {
             // Enchanter's Staff: 30% chance to double duration
-            if (this._hasEquippedItem(caster, 'enchanters_staff') && Math.random() < 0.30) {
+            if (this._hasEquippedItem(caster, 'enchanters_staff') && combatRng.random() < 0.30) {
                 durationRounds = durationRounds * 2;
                 this.appendCombatLog(`${this.getCombatantLogName(caster)}'s Enchanter's Staff doubles the duration of ${name}!`);
             }
             // Staff of Espilon: 25% chance to triple duration + grant recipient 25% HP shield
-            if (this._hasEquippedItem(caster, 'staff_of_espilon') && Math.random() < 0.25) {
+            if (this._hasEquippedItem(caster, 'staff_of_espilon') && combatRng.random() < 0.25) {
                 durationRounds = durationRounds * 3;
                 const maxHp = unit.starting_hp || unit.stats?.hp || 100;
                 const shieldAmt = Math.round(maxHp * 0.25);
@@ -3634,7 +3638,7 @@ export function CombatManagerRedux() {
         }
 
         const durationMs = getStatusDurationMs(unit, durationRounds);
-        const now = Date.now();
+        const now = combatClock.now();
         const existing = unit.activeBuffs.find(b => b.name === name);
         if (existing) {
             existing.roundsLeft += durationRounds;
@@ -3714,7 +3718,7 @@ export function CombatManagerRedux() {
         }
         if (!unit.activeDebuffs) unit.activeDebuffs = [];
         const durationMs = getStatusDurationMs(unit, durationRounds);
-        const now = Date.now();
+        const now = combatClock.now();
         const existing = unit.activeDebuffs.find(d => d.name === name);
         if (existing) {
             if (name === 'bleed') {
@@ -4417,7 +4421,7 @@ export function CombatManagerRedux() {
             }
 
             // Add small random jitter so ready melee skills (sword_swing, bite, claw_strike) get variety
-            score += Math.random() * 2;
+            score += combatRng.random() * 2;
 
             if (score > bestScore) {
                 bestScore = score;
@@ -4462,7 +4466,7 @@ export function CombatManagerRedux() {
                         this.appendCombatLog(`${this.getCombatantLogName(unit)} projects to safety in the corner (${targetCorner.x},${targetCorner.y}).`);
                         this.useAbility(unit, pick, target);
                         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
-                        setTimeout(() => {
+                        combatClock.setTimeout(() => {
                             if (this.combatants[unit.id]) {
                                 this.combatants[unit.id].astralProjectionActive = false;
                                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
@@ -4506,7 +4510,7 @@ export function CombatManagerRedux() {
                 unit.etherealSpeedRoundsLeft = dur;
                 unit.etherealSpeedTotalRounds = dur;
                 unit.etherealSpeedTotalDurationMs = durMs;
-                unit.etherealSpeedEndTimeMs = Date.now() + durMs;
+                unit.etherealSpeedEndTimeMs = combatClock.now() + durMs;
                 this.appendCombatLog(`${this.getCombatantLogName(unit)} activates Ethereal Speed — glowing with power!`);
                 this._setCooldown(unit, 'monk_ethereal_speed', pick.cooldown || 15);
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
@@ -4551,7 +4555,7 @@ export function CombatManagerRedux() {
                 unit.astralBeingRoundsLeft = dur;
                 unit.astralBeingTotalRounds = dur;
                 unit.astralBeingTotalDurationMs = durMs;
-                unit.astralBeingEndTimeMs = Date.now() + durMs;
+                unit.astralBeingEndTimeMs = combatClock.now() + durMs;
                 this.appendCombatLog(`${this.getCombatantLogName(unit)} enters Astral Being mode.`);
                 this._setCooldown(unit, 'monk_astral_focus', pick.cooldown || 60);
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
@@ -4590,7 +4594,7 @@ export function CombatManagerRedux() {
                 unit.thirdEyeRoundsLeft = dur;
                 unit.thirdEyeTotalRounds = dur;
                 unit.thirdEyeTotalDurationMs = durMs;
-                unit.thirdEyeEndTimeMs = Date.now() + durMs;
+                unit.thirdEyeEndTimeMs = combatClock.now() + durMs;
                 this.appendCombatLog(`${this.getCombatantLogName(unit)} activates Third Eye — evasion doubled.`);
                 this._setCooldown(unit, 'monk_third_eye', pick.cooldown || 15);
                 if (!unit.astralSkills) unit.astralSkills = {};
@@ -4656,7 +4660,7 @@ export function CombatManagerRedux() {
             }
         }
         // Shuffle and find first unoccupied tile
-        offsets.sort(() => Math.random() - 0.5);
+        offsets.sort(() => combatRng.random() - 0.5);
         for (const { dx, dy } of offsets) {
             const nx = unit.coordinates.x + dx;
             const ny = unit.coordinates.y + dy;
@@ -4673,7 +4677,7 @@ export function CombatManagerRedux() {
         }
 
         // Clear astral projection flag after the CSS slide completes (~1.3s)
-        setTimeout(() => {
+        combatClock.setTimeout(() => {
             if (this.combatants[unit.id]) {
                 this.combatants[unit.id].astralProjectionActive = false;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
@@ -4719,7 +4723,7 @@ export function CombatManagerRedux() {
                 unit.shieldWallRoundsLeft = durationRounds;
                 unit.shieldWallTotalRounds = durationRounds;
                 unit.shieldWallTotalDurationMs = durMs;
-                unit.shieldWallEndTimeMs = Date.now() + durMs;
+                unit.shieldWallEndTimeMs = combatClock.now() + durMs;
                 this.appendCombatLog(`${this.getCombatantLogName(unit)} erects Shield Wall!`);
                 this.rebuildActiveShieldWalls();
                 this._setCooldown(unit, 'shield_wall', pick.cooldown || 15);
@@ -4978,7 +4982,7 @@ export function CombatManagerRedux() {
                     const healAmount = Math.abs(typeof pick.flatDamage === 'number' ? pick.flatDamage : -30);
                     woundedAlly.hp = Math.min(woundedAlly.starting_hp || woundedAlly.hp, woundedAlly.hp + healAmount);
                     woundedAlly.damageIndicators = woundedAlly.damageIndicators || [];
-                    woundedAlly.damageIndicators.push({ id: Date.now() + Math.random(), value: `+${healAmount}`, source: 'Healing Hands', type: 'heal' });
+                    woundedAlly.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `+${healAmount}`, source: 'Healing Hands', type: 'heal' });
                     this.appendCombatLog(`${this.getCombatantLogName(unit)} uses Healing Hands on ${this.getCombatantLogName(woundedAlly)} for +${healAmount} HP.`);
                     this._setCooldown(unit, 'heal', typeof pick.cooldown === 'number' ? pick.cooldown : 4);
                     unit.actionsTakenThisRound += 1;
@@ -5020,7 +5024,7 @@ export function CombatManagerRedux() {
                     unit.actionsTakenThisRound += 1;
 
                     targetWithDebuffs.dispelPulse = true;
-                    setTimeout(() => {
+                    combatClock.setTimeout(() => {
                         targetWithDebuffs.dispelPulse = false;
                         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
                     }, 550);
@@ -5442,7 +5446,7 @@ export function CombatManagerRedux() {
                     c.weaknessRevealedTotalRounds = dur;
                     c.weaknessRevealedStackDuration = dur;
                     c.weaknessRevealedTotalDurationMs = durMs;
-                    c.weaknessRevealedEndTimeMs = Date.now() + durMs;
+                    c.weaknessRevealedEndTimeMs = combatClock.now() + durMs;
                     this.appendCombatLog(`${this.getCombatantLogName(unit)} perceives ${this.getCombatantLogName(c)} — weakness exposed!`);
                 });
                 this._setCooldown(unit, 'perceive', pick.cooldown || 12);
@@ -5556,7 +5560,7 @@ export function CombatManagerRedux() {
                     const pick = this.resolveSpecial(unit, 'ensnare');
                     if (pick) {
                         this.useAbility(unit, pick, ensnareTarget);
-                        if (ensnareTarget.type === 'dragon' && Math.random() < 0.5) {
+                        if (ensnareTarget.type === 'dragon' && combatRng.random() < 0.5) {
                             this.appendCombatLog(`${this.getCombatantLogName(ensnareTarget)} resists Ensnare! (Dragon CC Immunity)`);
                         } else {
                             ensnareTarget.ensnared = true;
@@ -5566,7 +5570,7 @@ export function CombatManagerRedux() {
                             ensnareTarget.ensnaredStackDuration = ensnareTarget.ensnaredRounds;
                             const durMs = getDurationMsFromRounds(ensnareTarget.ensnaredRounds);
                             ensnareTarget.ensnaredTotalDurationMs = durMs;
-                            ensnareTarget.ensnaredEndTimeMs = Date.now() + durMs;
+                            ensnareTarget.ensnaredEndTimeMs = combatClock.now() + durMs;
                         }
                         this._setCooldown(unit, 'ensnare', pick.cooldown || 6);
                         unit.targetId = ensnareTarget.id;
@@ -5594,7 +5598,7 @@ export function CombatManagerRedux() {
                     target.markedStackDuration = target.markedRounds;
                     const durMs = getDurationMsFromRounds(target.markedRounds);
                     target.markedTotalDurationMs = durMs;
-                    target.markedEndTimeMs = Date.now() + durMs;
+                    target.markedEndTimeMs = combatClock.now() + durMs;
                     this._setCooldown(unit, 'mark', pick.cooldown || 4);
                     return;
                 }
@@ -5769,7 +5773,7 @@ export function CombatManagerRedux() {
                     }
                 }
                 const portalPos = candidateTiles.length > 0
-                    ? candidateTiles[Math.floor(Math.random() * candidateTiles.length)]
+                    ? candidateTiles[Math.floor(combatRng.random() * candidateTiles.length)]
                     : { x: Math.min(MAX_DEPTH, unit.coordinates.x + 2), y: unit.coordinates.y };
 
                 unit.riftPortalActive = true;
@@ -5920,7 +5924,7 @@ export function CombatManagerRedux() {
         const enemies = Object.values(this.combatants).filter(c => c && !c.dead && !!c.isMonster !== !!unit.isMonster);
         const adjacentEnemy = enemies.find(e => this.targetInRange(unit, e, 'close'));
         if (adjacentEnemy) {
-            unit.isCleaving = Date.now();
+            unit.isCleaving = combatClock.now();
             unit.attacking = true;
             this.useAbility(unit, pick, adjacentEnemy);
             return;
@@ -5929,7 +5933,7 @@ export function CombatManagerRedux() {
         this.acquireTarget(unit, true);
         const target = this.combatants[unit.targetId];
         if (target && this.targetInRange(unit, target, 'close')) {
-            unit.isCleaving = Date.now();
+            unit.isCleaving = combatClock.now();
             unit.attacking = true;
             this.useAbility(unit, pick, target);
         }
@@ -6149,7 +6153,7 @@ export function CombatManagerRedux() {
             return;
         }
 
-        const constructId = `construct_${abilityKey}_${Date.now()}`;
+        const constructId = `construct_${abilityKey}_${combatClock.now()}`;
         const isTurret = abilityKey === 'build_turret';
         
         let stats = { hp: 30, atk: 10, def: 5, speed: isTurret ? 0 : 1 };
@@ -6195,11 +6199,11 @@ export function CombatManagerRedux() {
 
         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
 
-        setTimeout(() => {
+        combatClock.setTimeout(() => {
             newConstruct.invisible = false;
             newConstruct.fadingIn = true;
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 newConstruct.fadingIn = false;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             }, 500);
@@ -6270,7 +6274,7 @@ export function CombatManagerRedux() {
             return;
         }
 
-        const wallBaseId = `wall_${Date.now()}`;
+        const wallBaseId = `wall_${combatClock.now()}`;
         const tiles = [{ x: freePair.x, y: freePair.y1 }, { x: freePair.x, y: freePair.y2 }];
 
         tiles.forEach((t, i) => {
@@ -6407,7 +6411,7 @@ export function CombatManagerRedux() {
         let minionId;
         let minionType;
         if (abilityKey === 'summon_familiar') {
-            minionId = `minion_archaic_familiar_${Date.now()}`;
+            minionId = `minion_archaic_familiar_${combatClock.now()}`;
             minionType = 'archaic_familiar';
             const mm = new MonsterManager();
             const template = mm.monsters['archaic_familiar'];
@@ -6457,7 +6461,7 @@ export function CombatManagerRedux() {
             };
         } else {
             minionType = abilityKey.replace('summon_', '').replace('_army', '');
-            minionId = `minion_${minionType}_${Date.now()}`;
+            minionId = `minion_${minionType}_${combatClock.now()}`;
             const hpBase = 5 + Math.round((unit.stats.int || 5) * 2);
 
             let finalHp = hpBase;
@@ -6573,11 +6577,11 @@ export function CombatManagerRedux() {
         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
 
         const summonDelayMs = abilityKey === 'summon_familiar' ? 1400 : 1200;
-        setTimeout(() => {
+        combatClock.setTimeout(() => {
             newMinion.invisible = false;
             newMinion.fadingIn = true;
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 newMinion.fadingIn = false;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             }, 500);
@@ -6611,7 +6615,7 @@ export function CombatManagerRedux() {
             const blocked = this.isTileOccupied(nx, ny);
             if (blocked) continue;
 
-            const copyId = `minion_${source.type}_copy_${Date.now()}_${spawned}`;
+            const copyId = `minion_${source.type}_copy_${combatClock.now()}_${spawned}`;
             const copy = { ...clone(source), id: copyId, coordinates: { x: nx, y: ny } };
             copy.summonedBy = unit.id;
             copy.cooldowns = {};
@@ -6635,11 +6639,11 @@ export function CombatManagerRedux() {
 
             // Stagger fade-in of duplicated copy
             const currentCopy = copy;
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 currentCopy.invisible = false;
                 currentCopy.fadingIn = true;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
-                setTimeout(() => {
+                combatClock.setTimeout(() => {
                     currentCopy.fadingIn = false;
                     if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
                 }, 500);
@@ -6842,7 +6846,7 @@ export function CombatManagerRedux() {
             failChance = failChance * (1 - mentalityResist / 100);
         }
 
-        return Math.random() < failChance; // true = fail = sent to trial
+        return combatRng.random() < failChance; // true = fail = sent to trial
     };
 
     this._endSageCircles = (sageUnit, reason) => {
@@ -6992,7 +6996,7 @@ export function CombatManagerRedux() {
         }
 
         // Pick a random fighter
-        const targetFighter = liveFighters[Math.floor(Math.random() * liveFighters.length)];
+        const targetFighter = liveFighters[Math.floor(combatRng.random() * liveFighters.length)];
         const trialsIcon = this.combatants['trials_icon'];
         const srcCoords = trialsIcon && trialsIcon.coordinates
             ? { x: trialsIcon.coordinates.x + 0.5, y: trialsIcon.coordinates.y + 0.5 }
@@ -7005,7 +7009,7 @@ export function CombatManagerRedux() {
         }
 
         // After 1s (beam travel), resolve willpower check
-        setTimeout(() => {
+        combatClock.setTimeout(() => {
             if (!this.combatants['trials_icon'] || this.combatants['trials_icon'].dead) {
                 // Trial ended/destroyed in the meantime, abort sending target
                 return;
@@ -7251,14 +7255,14 @@ export function CombatManagerRedux() {
             const dy = targetY - u.coordinates.y;
             let moves = [];
             if (Math.abs(dx) >= Math.abs(dy)) {
-                const stepY = Math.sign(dy) || (Math.random() < 0.5 ? 1 : -1);
+                const stepY = Math.sign(dy) || (combatRng.random() < 0.5 ? 1 : -1);
                 moves = [
                     { x: u.coordinates.x + Math.sign(dx), y: u.coordinates.y },
                     { x: u.coordinates.x, y: u.coordinates.y + stepY },
                     { x: u.coordinates.x, y: u.coordinates.y - stepY }
                 ];
             } else {
-                const stepX = Math.sign(dx) || (Math.random() < 0.5 ? 1 : -1);
+                const stepX = Math.sign(dx) || (combatRng.random() < 0.5 ? 1 : -1);
                 moves = [
                     { x: u.coordinates.x, y: u.coordinates.y + Math.sign(dy) },
                     { x: u.coordinates.x + stepX, y: u.coordinates.y },
@@ -7483,7 +7487,7 @@ export function CombatManagerRedux() {
                         const delayMs = process.env.NODE_ENV === 'test' ? 0 : 1000;
                         const placeMeat = () => {
                             this.meatTiles = this.meatTiles || [];
-                            const meatId = `meat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                            const meatId = `meat_${combatClock.now()}_${Math.random().toString(36).substr(2, 5)}`;
                             this.meatTiles.push({ id: meatId, x: targetTile.x, y: targetTile.y, createdBy: unit.id });
 
                             // Check if any unit is standing on that tile right now
@@ -7495,7 +7499,7 @@ export function CombatManagerRedux() {
                         };
 
                         if (delayMs > 0) {
-                            setTimeout(placeMeat, delayMs);
+                            combatClock.setTimeout(placeMeat, delayMs);
                         } else {
                             placeMeat();
                         }
@@ -7694,7 +7698,7 @@ export function CombatManagerRedux() {
                 return unitIsEnemy && !c.dominated;
             });
             if (possibleTargets.length > 0) {
-                const randomTarget = possibleTargets[Math.floor(Math.random() * possibleTargets.length)];
+                const randomTarget = possibleTargets[Math.floor(combatRng.random() * possibleTargets.length)];
                 target = randomTarget;
                 unit.targetId = randomTarget.id;
             }
@@ -7765,7 +7769,7 @@ export function CombatManagerRedux() {
                 ['summoner', 'wizard', 'sage'].includes(c.type)
             );
             if (magicUsers.length > 0) {
-                const silenceTarget = magicUsers[Math.floor(Math.random() * magicUsers.length)];
+                const silenceTarget = magicUsers[Math.floor(combatRng.random() * magicUsers.length)];
                 this.useAbility(unit, silenceSpec, silenceTarget);
                 return;
             }
@@ -7942,7 +7946,7 @@ export function CombatManagerRedux() {
                     this.useAbility(unit, crimsonSightSpec, unit);
 
                     // Bat Fly (Delay to let Crimson Sight animation resolve, ~1550ms)
-                    setTimeout(() => {
+                    combatClock.setTimeout(() => {
                         if (unit.dead || (targetSquishy && targetSquishy.dead)) return;
                         unit.batFlyCustomDest = bestDest;
                         unit.actionsTakenThisRound = 0;
@@ -7950,7 +7954,7 @@ export function CombatManagerRedux() {
                         unit.targetId = targetSquishy.id;
 
                         // Bite / Claw (Delay to let Bat Fly animation resolve, ~1250ms)
-                        setTimeout(() => {
+                        combatClock.setTimeout(() => {
                             if (unit.dead || (targetSquishy && targetSquishy.dead)) return;
                             unit.actionsTakenThisRound = 0;
                             this.useAbility(unit, strikeSpec, targetSquishy);
@@ -8002,7 +8006,7 @@ export function CombatManagerRedux() {
                     unit.targetId = targetSquishy.id;
 
                     // Bite / Claw (Delay to let Bat Fly animation resolve, ~1250ms)
-                    setTimeout(() => {
+                    combatClock.setTimeout(() => {
                         if (unit.dead || (targetSquishy && targetSquishy.dead)) return;
                         unit.actionsTakenThisRound = 0;
                         this.useAbility(unit, strikeSpec, targetSquishy);
@@ -8158,7 +8162,7 @@ export function CombatManagerRedux() {
                 }
             }
             if (adjacentCells.length > 0) {
-                const spawnCoord = adjacentCells[Math.floor(Math.random() * adjacentCells.length)];
+                const spawnCoord = adjacentCells[Math.floor(combatRng.random() * adjacentCells.length)];
                 const eggTarget = { id: 'egg_vct', coordinates: spawnCoord, name: 'Egg Spot', dead: false, isVCT: true };
                 this.useAbility(unit, layEggsSpec, eggTarget);
                 return;
@@ -8253,7 +8257,7 @@ export function CombatManagerRedux() {
         }
 
         // 2. Minor Magic Missile: 33% chance if ready and target is at far range
-        if (mmReady && this.targetInRange(unit, target, 'far') && Math.random() < 0.33) {
+        if (mmReady && this.targetInRange(unit, target, 'far') && combatRng.random() < 0.33) {
             this.useAbility(unit, mmSpec, target);
             return;
         }
@@ -8374,13 +8378,13 @@ export function CombatManagerRedux() {
         }
 
         // 6. Mind Swap — use when 2+ PCs present (repositions them strategically)
-        if (mindSwapReady && pcUnitsOnBoard.length >= 2 && this.targetInRange(unit, target, 'far') && Math.random() < 0.5) {
+        if (mindSwapReady && pcUnitsOnBoard.length >= 2 && this.targetInRange(unit, target, 'far') && combatRng.random() < 0.5) {
             this.useAbility(unit, mindSwapSpec, target);
             return;
         }
 
         // 7. Greater Magic Missile at range
-        if (gmmReady && this.targetInRange(unit, target, 'far') && Math.random() < 0.6) {
+        if (gmmReady && this.targetInRange(unit, target, 'far') && combatRng.random() < 0.6) {
             this.useAbility(unit, gmmSpec, target);
             return;
         }
@@ -8467,7 +8471,7 @@ export function CombatManagerRedux() {
         if (hasDarkarrow && isRanged) critChance += 0.05;
 
         // 2. Roll for critical hit
-        const isCrit = Math.random() < critChance;
+        const isCrit = combatRng.resolveForced('crit', combatRng.random() < critChance);
         if (!isCrit) return { damage, isCrit: false };
 
         // 3. Calculate critical strike damage multiplier
@@ -8491,7 +8495,7 @@ export function CombatManagerRedux() {
         // 4. Trigger on-crit amulet effects
         // Yaga's Amulet (hex)
         const hasYaga = this._getEquippedAmulet(attacker, 'yaga_amulet');
-        if (hasYaga && Math.random() < 0.25) {
+        if (hasYaga && combatRng.random() < 0.25) {
             this.appendCombatLog(`${this.getCombatantLogName(attacker)}'s Yaga's Amulet hexes ${this.getCombatantLogName(target)}!`);
             this._applyDebuff(target, {
                 decrease_stats: {
@@ -8505,7 +8509,7 @@ export function CombatManagerRedux() {
 
         // Necrotic Amulet (poison)
         const hasNecrotic = this._getEquippedAmulet(attacker, 'necrotic_amulet');
-        if (hasNecrotic && Math.random() < 0.25) {
+        if (hasNecrotic && combatRng.random() < 0.25) {
             const hasVoidward = this._getEquippedAmulet(target, 'voidward_amulet');
             if (hasVoidward) {
                 this.appendCombatLog(`${this.getCombatantLogName(target)} resists poison! (Voidward Amulet)`);
@@ -8519,7 +8523,7 @@ export function CombatManagerRedux() {
 
         // Celestial Amulet (holy explosion)
         const hasCelestial = this._getEquippedAmulet(attacker, 'celestial_amulet');
-        if (hasCelestial && Math.random() < 0.25) {
+        if (hasCelestial && combatRng.random() < 0.25) {
             this.appendCombatLog(`${this.getCombatantLogName(attacker)}'s Celestial Amulet triggers a holy explosion!`);
             Object.values(this.combatants).forEach(c => {
                 if (!c || c.dead || c.isVCT) return;
@@ -8533,7 +8537,7 @@ export function CombatManagerRedux() {
                     this.appendCombatLog(`Holy explosion deals 25 splash damage to ${this.getCombatantLogName(c)}.`);
                     c.damageIndicators = c.damageIndicators || [];
                     c.damageIndicators.push({
-                        id: Date.now() + Math.random(),
+                        id: combatClock.now() + Math.random(),
                         value: `-25`,
                         source: 'Celestial Amulet',
                         type: 'damage'
@@ -8578,7 +8582,7 @@ export function CombatManagerRedux() {
                                 this.appendCombatLog(`${this.getCombatantLogName(c)}'s health fell below 30%! Bloodvial Amulet restores 50 HP.`);
                                 c.damageIndicators = c.damageIndicators || [];
                                 c.damageIndicators.push({
-                                    id: Date.now() + Math.random(),
+                                    id: combatClock.now() + Math.random(),
                                     value: `+50`,
                                     source: 'Bloodvial Amulet',
                                     type: 'heal'
@@ -8611,7 +8615,7 @@ export function CombatManagerRedux() {
 
         // Check for Archmage's Staff (30% chance to not trigger a cooldown step)
         const hasArchmageStaff = this._hasEquippedItem && this._hasEquippedItem(unit, 'archmages_staff');
-        if (hasArchmageStaff && Math.random() < 0.30) {
+        if (hasArchmageStaff && combatRng.random() < 0.30) {
             unit.cooldowns[normalized] = 0;
             this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Archmage's Staff prevents the cooldown of ${key}!`);
             return;
@@ -8620,7 +8624,7 @@ export function CombatManagerRedux() {
         // Check for Willowcaster Wand (15% chance to not trigger a cooldown step)
         const willowcasterWand = this._getEquippedWand && this._getEquippedWand(unit, 'willowcaster');
         if (willowcasterWand && (typeof willowcasterWand.currentCharges !== 'number' || willowcasterWand.currentCharges > 0)) {
-            if (Math.random() < 0.15 && this._useWandCharge(unit, willowcasterWand)) {
+            if (combatRng.random() < 0.15 && this._useWandCharge(unit, willowcasterWand)) {
                 unit.cooldowns[normalized] = 0;
                 this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Willowcaster prevents the cooldown of ${key}! [${willowcasterWand.currentCharges} charges remaining]`);
                 return;
@@ -8630,7 +8634,7 @@ export function CombatManagerRedux() {
         // Check for Cloudfire Wand (30% chance to skip cooldown phase)
         const cloudfireWand = this._getEquippedWand && this._getEquippedWand(unit, 'cloudfire_wand');
         if (cloudfireWand && (typeof cloudfireWand.currentCharges !== 'number' || cloudfireWand.currentCharges > 0)) {
-            if (Math.random() < 0.30 && this._useWandCharge(unit, cloudfireWand)) {
+            if (combatRng.random() < 0.30 && this._useWandCharge(unit, cloudfireWand)) {
                 unit.cooldowns[normalized] = 0;
                 this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Cloudfire Wand skips the cooldown of ${key}! [${cloudfireWand.currentCharges} charges remaining]`);
                 return;
@@ -8645,7 +8649,7 @@ export function CombatManagerRedux() {
 
         // Check for Dimensional Amulet (30% chance to reset)
         const hasDimensional = this._getEquippedAmulet(unit, 'dimensional_amulet');
-        if (hasDimensional && Math.random() < 0.30) {
+        if (hasDimensional && combatRng.random() < 0.30) {
             unit.cooldowns[normalized] = 0;
             this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Dimensional Amulet immediately resets the cooldown of ${key}!`);
         } else {
@@ -8783,7 +8787,7 @@ export function CombatManagerRedux() {
         const coords = { ...egg.coordinates };
         const id = egg.id;
         delete this.combatants[id];
-        const hatchlingId = `hatchling_${Date.now()}`;
+        const hatchlingId = `hatchling_${combatClock.now()}`;
         const hpBase = 80;
         const newMinion = {
             id: hatchlingId,
@@ -8871,7 +8875,7 @@ export function CombatManagerRedux() {
 
         target.damageIndicators = target.damageIndicators || [];
         target.damageIndicators.push({
-            id: Date.now() + Math.random(),
+            id: combatClock.now() + Math.random(),
             value: `-${damage}`,
             source: 'Spider Minion',
             type: 'damage'
@@ -8884,7 +8888,7 @@ export function CombatManagerRedux() {
         target.ensnaredStackDuration = Math.max(target.ensnaredStackDuration || 0, 2);
         const durMs = 2 * (this.roundDurationMs || 2000);
         target.ensnaredTotalDurationMs = Math.max(target.ensnaredTotalDurationMs || 0, durMs);
-        target.ensnaredEndTimeMs = Math.max(target.ensnaredEndTimeMs || 0, Date.now() + durMs);
+        target.ensnaredEndTimeMs = Math.max(target.ensnaredEndTimeMs || 0, combatClock.now() + durMs);
         this._applyDebuff(target, null, 'ensnared', 2);
 
         if (inWeb) {
@@ -8911,7 +8915,7 @@ export function CombatManagerRedux() {
 
         const witchAtk = spawner.stats?.atk || 10;
         const index = spawner.spidersSpawnedCount;
-        const spiderId = `spider_minion_${Date.now()}_${index}_${Math.floor(Math.random() * 1000)}`;
+        const spiderId = `spider_minion_${combatClock.now()}_${index}_${Math.floor(Math.random() * 1000)}`;
 
         // Find a free adjacent tile to spawn the spider. If none is free, fallback to spawner coordinates.
         const adjacent = [
@@ -8980,7 +8984,7 @@ export function CombatManagerRedux() {
         if (this.animManagerRedux && typeof this.animManagerRedux.triggerBombardStrike === 'function') {
             this.animManagerRedux.triggerBombardStrike(targetCoords, pb.isMeteors, pb.casterId);
         }
-        setTimeout(() => {
+        combatClock.setTimeout(() => {
             if (this.combatOver) return;
             const casterAtk = caster ? (caster.stats.atk || 20) : 20;
             const baseDamage = pb.isMeteors ? Math.round(casterAtk * 1.2) : 35;
@@ -9004,7 +9008,7 @@ export function CombatManagerRedux() {
                                 }
                                 c.damageIndicators = c.damageIndicators || [];
                                 c.damageIndicators.push({
-                                    id: Date.now() + Math.random(),
+                                    id: combatClock.now() + Math.random(),
                                     value: `-${finalDmg}`,
                                     source: skillName,
                                     type: 'damage'
@@ -9072,7 +9076,7 @@ export function CombatManagerRedux() {
     this._getTemporalStrainTier = (unit) => {
         if (!unit || unit.isMonster || !unit.stats) return 0;
         if (typeof unit.stats.timeDebt !== 'number' || unit.stats.timeDebt <= 0) return 0;
-        const debt = getEffectiveTimeDebt(unit.stats, Date.now());
+        const debt = getEffectiveTimeDebt(unit.stats, combatClock.now());
         return computeTemporalStrainTier(debt, unit.level || unit.stats.level || 1);
     };
 
@@ -9139,7 +9143,7 @@ export function CombatManagerRedux() {
         target.hp = Math.max(0, target.hp - dmg);
         if (typeof this.wakeSleepingTarget === 'function') this.wakeSleepingTarget(target, label);
         target.damageIndicators = target.damageIndicators || [];
-        target.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${dmg}`, source: label, type: 'damage' });
+        target.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${dmg}`, source: label, type: 'damage' });
         if (target.hp <= 0) this.targetKilled(target);
         return dmg;
     };
@@ -9152,7 +9156,7 @@ export function CombatManagerRedux() {
         const healed = target.hp - before;
         if (healed > 0) {
             target.damageIndicators = target.damageIndicators || [];
-            target.damageIndicators.push({ id: Date.now() + Math.random(), value: `+${healed}`, source: label, type: 'heal' });
+            target.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `+${healed}`, source: label, type: 'heal' });
         }
         return healed;
     };
@@ -9166,7 +9170,7 @@ export function CombatManagerRedux() {
         if (ability.forceMaxDelay) delay = maxDelay;
         delay = Math.max(1, Math.min(maxDelay, Math.round(delay)));
         const echo = {
-            id: `echo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            id: `echo_${combatClock.now()}_${Math.random().toString(36).slice(2, 7)}`,
             casterId: caster.id,
             targetId: target.id,
             lastKnown: target.coordinates ? { ...target.coordinates } : null,
@@ -9230,7 +9234,7 @@ export function CombatManagerRedux() {
             if (old) this.appendCombatLog(`${this.getCombatantLogName(caster)}'s anchor on ${this.getCombatantLogName(old)} unwinds.`);
         }
         const anchor = {
-            id: `anchor_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            id: `anchor_${combatClock.now()}_${Math.random().toString(36).slice(2, 7)}`,
             casterId: caster.id,
             targetId: target.id,
             roundsActive: 0,
@@ -9277,7 +9281,7 @@ export function CombatManagerRedux() {
                 const lost = target.hp - snap.hp;
                 target.hp = snap.hp;
                 target.damageIndicators = target.damageIndicators || [];
-                target.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${lost}`, source: 'Recall', type: 'damage' });
+                target.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${lost}`, source: 'Recall', type: 'damage' });
                 if (target.hp <= 0) this.targetKilled(target);
             }
             if (Array.isArray(target.activeBuffs)) {
@@ -9511,7 +9515,7 @@ export function CombatManagerRedux() {
         if (!target || target.dead || target.hp <= 0) return;
         target.dazzled = Math.min(5, (target.dazzled || 0) + stacks);
         target.damageIndicators = target.damageIndicators || [];
-        target.damageIndicators.push({ id: Date.now() + Math.random(), value: `✨ Dazzled!`, source: 'Glitterburn', type: 'status' });
+        target.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `✨ Dazzled!`, source: 'Glitterburn', type: 'status' });
     };
 
     this._applyGlitterburnDamage = (caster, target, raw, label, ability = null) => {
@@ -9521,7 +9525,7 @@ export function CombatManagerRedux() {
         target.hp = Math.max(0, target.hp - dmg);
         if (typeof this.wakeSleepingTarget === 'function') this.wakeSleepingTarget(target, label);
         target.damageIndicators = target.damageIndicators || [];
-        target.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${dmg}`, source: label, type: 'damage' });
+        target.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${dmg}`, source: label, type: 'damage' });
         if (target.hp <= 0) {
             this.targetKilled(target);
             if (caster && (this._unitHasSkillKey(caster, 'pyrotechnic_chain') || (Array.isArray(caster.passives) && caster.passives.includes('pyrotechnic_chain')))) {
@@ -9578,7 +9582,7 @@ export function CombatManagerRedux() {
         } else if (abilityId === 'prism_snare') {
             const targetCoords = (target && target.coordinates) || target;
             const snare = {
-                id: `snare_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                id: `snare_${combatClock.now()}_${Math.random().toString(36).slice(2, 7)}`,
                 casterId: caster.id,
                 x: targetCoords.x,
                 y: targetCoords.y,
@@ -9604,7 +9608,7 @@ export function CombatManagerRedux() {
                 }
             }
             if (!freeTile) freeTile = { ...origin };
-            const decoyId = `decoy_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+            const decoyId = `decoy_${combatClock.now()}_${Math.random().toString(36).slice(2, 7)}`;
             const hp = (20 + 5 * (caster.level || 1)) * (caster._hasMirrorDecoyPrep ? 2 : 1);
             const decoy = {
                 id: decoyId,
@@ -9636,7 +9640,7 @@ export function CombatManagerRedux() {
         } else if (abilityId === 'supernova_core') {
             const targetCoords = (target && target.coordinates) || target;
             const core = {
-                id: `supernova_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                id: `supernova_${combatClock.now()}_${Math.random().toString(36).slice(2, 7)}`,
                 casterId: caster.id,
                 x: targetCoords.x,
                 y: targetCoords.y,
@@ -9870,7 +9874,7 @@ export function CombatManagerRedux() {
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
 
             const animDurationMs = (normAbilityId.includes('magic_missile')) ? 2200 : 2000;
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 if (unit) unit.ultimateCasting = false;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             }, animDurationMs);
@@ -9886,7 +9890,7 @@ export function CombatManagerRedux() {
             // Cloudfire Wand: 20% chance to gain 20% ultimate power
             const cloudfireWand = this._getEquippedWand(unit, 'cloudfire_wand');
             if (cloudfireWand && (typeof cloudfireWand.currentCharges !== 'number' || cloudfireWand.currentCharges > 0)) {
-                if (Math.random() < 0.20 && this._useWandCharge(unit, cloudfireWand)) {
+                if (combatRng.random() < 0.20 && this._useWandCharge(unit, cloudfireWand)) {
                     unit.power = Math.min(100, (unit.power || 0) + 20);
                     this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Cloudfire Wand grants +20% ultimate power! [${cloudfireWand.currentCharges} charges remaining]`);
                 }
@@ -9898,7 +9902,7 @@ export function CombatManagerRedux() {
             if (isEnemyTarget && currentRound >= 3) {
                 const glyndasWand = this._getEquippedWand(unit, 'glyndas_wand');
                 if (glyndasWand && (typeof glyndasWand.currentCharges !== 'number' || glyndasWand.currentCharges > 0)) {
-                    if (Math.random() < 0.50 && this._useWandCharge(unit, glyndasWand)) {
+                    if (combatRng.random() < 0.50 && this._useWandCharge(unit, glyndasWand)) {
                         const backX = target.isMonster ? MAX_DEPTH : 0;
                         target.coordinates = { x: backX, y: target.coordinates.y };
                         if (typeof this.updateUnitCoordinates === 'function') {
@@ -9913,7 +9917,7 @@ export function CombatManagerRedux() {
             if (isEnemyTarget) {
                 const justicatorWand = this._getEquippedWand(unit, 'justicator_wand');
                 if (justicatorWand && (typeof justicatorWand.currentCharges !== 'number' || justicatorWand.currentCharges > 0)) {
-                    if (Math.random() < 0.30 && this._useWandCharge(unit, justicatorWand)) {
+                    if (combatRng.random() < 0.30 && this._useWandCharge(unit, justicatorWand)) {
                         if (typeof this._applyDebuff === 'function') {
                             this._applyDebuff(target, { decrease_stats: { stats: [] } }, 'Sleep', 2);
                         }
@@ -9927,22 +9931,22 @@ export function CombatManagerRedux() {
 
         if (unit && this._hasEquippedItem) {
             // Imperial Mage Staff: 25% chance to instantly gain 25% power
-            if (this._hasEquippedItem(unit, 'imperial_mage_staff') && Math.random() < 0.25) {
+            if (this._hasEquippedItem(unit, 'imperial_mage_staff') && combatRng.random() < 0.25) {
                 unit.power = Math.min(100, (unit.power || 0) + 25);
                 this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Imperial Mage Staff grants +25% power!`);
             }
             // Staff of Tomorrow: 25% chance to instantly gain 50% power
-            if (this._hasEquippedItem(unit, 'staff_of_tomorrow') && Math.random() < 0.25) {
+            if (this._hasEquippedItem(unit, 'staff_of_tomorrow') && combatRng.random() < 0.25) {
                 unit.power = Math.min(100, (unit.power || 0) + 50);
                 this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Staff of Tomorrow grants +50% power!`);
             }
             // Staff of Omicron: 15% chance to apply blinding speed, 15% chance to completely refill stamina
             if (this._hasEquippedItem(unit, 'staff_of_omicron')) {
-                if (Math.random() < 0.15) {
+                if (combatRng.random() < 0.15) {
                     applyBlindingSpeedEffect(unit, 3);
                     this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Staff of Omicron grants Blinding Speed!`);
                 }
-                if (Math.random() < 0.15) {
+                if (combatRng.random() < 0.15) {
                     unit.endurance = unit.maxEndurance || 100;
                     unit.stamina = unit.maxStamina || 100;
                     this.appendCombatLog(`${this.getCombatantLogName(unit)}'s Staff of Omicron completely refills stamina!`);
@@ -10059,7 +10063,7 @@ export function CombatManagerRedux() {
         ].includes(abilityId);
         if (abilityId === 'notch') {
             unit.arrowNotched = true;
-            unit.notchedArrowType = ['force', 'ice', 'poison', 'celestial'][Math.floor(Math.random() * 4)];
+            unit.notchedArrowType = ['force', 'ice', 'poison', 'celestial'][Math.floor(combatRng.random() * 4)];
         }
         const isBasicAttack = unit.attacks && unit.attacks.some(a => (typeof a === 'string' ? a : a.id) === abilityId);
         if (unit.silenced && !isBasicAttack && abilityId !== 'meditate' && abilityId !== 'monk_meditate') {
@@ -10069,7 +10073,7 @@ export function CombatManagerRedux() {
         if (unit && !unit.isMonster && !isBasicAttack) {
             const meta = getMeta();
             const resolve = (meta && typeof meta.resolve === 'number') ? meta.resolve : 100;
-            if (resolve >= 20 && resolve <= 39 && Math.random() < 0.05) {
+            if (resolve >= 20 && resolve <= 39 && combatRng.random() < 0.05) {
                 const basicAttackKey = (unit.attacks && unit.attacks[0]) || 'slash';
                 const basicAttack = this.resolveSpecial(unit.attacks, basicAttackKey) || attacksMatrix[basicAttackKey] || { id: basicAttackKey, name: basicAttackKey, range: 'close', type: 'damage' };
                 this.appendCombatLog(`${this.getCombatantLogName(unit)} is shaken and refuses to use ${ability.name || abilityId}! They use ${basicAttack.name || basicAttackKey} instead.`);
@@ -10082,7 +10086,7 @@ export function CombatManagerRedux() {
         if (typeof this.updateData === 'function') {
             this.updateData(clone(this.combatants));
         }
-        setTimeout(() => {
+        combatClock.setTimeout(() => {
             unit.attacking = false;
             unit.activeAbility = null;
             if (typeof this.updateData === 'function') {
@@ -10215,7 +10219,7 @@ export function CombatManagerRedux() {
                     repairTarget.hp = Math.min(maxHp, repairTarget.hp + repairAmt);
                     repairTarget.damageIndicators = repairTarget.damageIndicators || [];
                     repairTarget.damageIndicators.push({
-                        id: Date.now() + Math.random(),
+                        id: combatClock.now() + Math.random(),
                         value: `+${repairAmt}`,
                         source: 'Repair',
                         type: 'heal'
@@ -10258,14 +10262,14 @@ export function CombatManagerRedux() {
             if (drain > 0) {
                 unit.hp = Math.max(1, unit.hp - drain);
                 unit.damageIndicators = unit.damageIndicators || [];
-                unit.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${drain}`, source: 'Sacrificial Mending', type: 'damage' });
+                unit.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${drain}`, source: 'Sacrificial Mending', type: 'damage' });
             }
             // Grant those HP to the target ally
             const healedHp = Math.min(drain, (target.starting_hp || target.hp) - target.hp);
             if (healedHp > 0) {
                 target.hp = Math.min(target.starting_hp || target.hp, target.hp + healedHp);
                 target.damageIndicators = target.damageIndicators || [];
-                target.damageIndicators.push({ id: Date.now() + Math.random() + 0.1, value: `+${healedHp}`, source: 'Sacrificial Mending', type: 'heal' });
+                target.damageIndicators.push({ id: combatClock.now() + Math.random() + 0.1, value: `+${healedHp}`, source: 'Sacrificial Mending', type: 'heal' });
             }
             // Immediately trigger Regenerate on the recipient (override any existing cooldown)
             target.regenerating = true;
@@ -10293,7 +10297,7 @@ export function CombatManagerRedux() {
                 target.hp = Math.min(maxHp, target.hp + healedHp);
                 target.damageIndicators = target.damageIndicators || [];
                 target.damageIndicators.push({
-                    id: Date.now() + Math.random(),
+                    id: combatClock.now() + Math.random(),
                     value: `+${healedHp}`,
                     source: 'Healing Hands',
                     type: 'heal'
@@ -10326,7 +10330,7 @@ export function CombatManagerRedux() {
             this.appendCombatLog(`${this.getCombatantLogName(unit)} casts Direct Dispel on ${this.getCombatantLogName(target)}, removing all debuffs.`);
             
             target.dispelPulse = true;
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 target.dispelPulse = false;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             }, 550);
@@ -10374,7 +10378,7 @@ export function CombatManagerRedux() {
             // Phase 2: trigger pushback at the same moment the sweep line visually starts (80% into round)
             const sweepDelay = Math.round(dur * 0.8);
             const sweepDuration = Math.round(dur * 0.25);
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 if (this.combatOver) return;
                 const pushedNames = [];
                 const resistedNames = [];
@@ -10466,7 +10470,7 @@ export function CombatManagerRedux() {
                     
                     if (!Array.isArray(c.damageIndicators)) c.damageIndicators = [];
                     c.damageIndicators.push({
-                        id: Date.now() + Math.random(),
+                        id: combatClock.now() + Math.random(),
                         value: `+${healAmount}`,
                         source: 'Eldritch Wind',
                         type: 'heal'
@@ -10501,8 +10505,8 @@ export function CombatManagerRedux() {
 
             const casterInt = unit.stats.int || 15;
             const targetWillpower = target.stats.willpower !== undefined ? target.stats.willpower : (target.stats.int || 10);
-            const targetRoll = targetWillpower + Math.floor(Math.random() * 20) + 1;
-            const casterRoll = casterInt + Math.floor(Math.random() * 20) + 1;
+            const targetRoll = targetWillpower + Math.floor(combatRng.random() * 20) + 1;
+            const casterRoll = casterInt + Math.floor(combatRng.random() * 20) + 1;
             const targetSucceeds = targetRoll >= casterRoll;
 
             if (targetSucceeds) {
@@ -10602,7 +10606,7 @@ export function CombatManagerRedux() {
                 return;
             }
 
-            const sphereId = `darkness_sphere_${Date.now()}`;
+            const sphereId = `darkness_sphere_${combatClock.now()}`;
             const newSphere = {
                 id: sphereId,
                 type: 'darkness_sphere',
@@ -10634,11 +10638,11 @@ export function CombatManagerRedux() {
 
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
 
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 newSphere.invisible = false;
                 newSphere.fadingIn = true;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
-                setTimeout(() => {
+                combatClock.setTimeout(() => {
                     newSphere.fadingIn = false;
                     if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
                 }, 500);
@@ -10706,9 +10710,9 @@ export function CombatManagerRedux() {
                 c.hp = Math.max(0, c.hp - dmg);
                 this.checkShrinerConcentrationDamage(unit, c, dmg);
                 if (!Array.isArray(c.damageIndicators)) c.damageIndicators = [];
-                const indId = Date.now() + Math.random();
+                const indId = combatClock.now() + Math.random();
                 c.damageIndicators.push({ id: indId, value: `-${dmg}`, source: 'Destitution' });
-                setTimeout(() => {
+                combatClock.setTimeout(() => {
                     const idx = c.damageIndicators ? c.damageIndicators.findIndex(e => e && e.id === indId) : -1;
                     if (idx !== -1) c.damageIndicators.splice(idx, 1);
                     if (typeof this.broadcastDataUpdate === 'function') this.broadcastDataUpdate();
@@ -10753,11 +10757,11 @@ export function CombatManagerRedux() {
                 return;
             }
 
-            const count = 1 + Math.floor(Math.random() * maxSkulls); // 1 or 2
-            const shuffled = cornerCandidates.sort(() => Math.random() - 0.5).slice(0, count);
+            const count = 1 + Math.floor(combatRng.random() * maxSkulls); // 1 or 2
+            const shuffled = cornerCandidates.sort(() => combatRng.random() - 0.5).slice(0, count);
 
             shuffled.forEach((tile, idx) => {
-                const skullId = `flaming_skull_${Date.now()}_${idx}`;
+                const skullId = `flaming_skull_${combatClock.now()}_${idx}`;
                 const skull = {
                     id: skullId,
                     type: 'flaming_skull',
@@ -10782,7 +10786,7 @@ export function CombatManagerRedux() {
                 if (this.animManagerRedux && typeof this.animManagerRedux.triggerSummon === 'function') {
                     this.animManagerRedux.triggerSummon(tile, 'flaming_skull', images['hagigah_summon_skulls']);
                 }
-                setTimeout(() => {
+                combatClock.setTimeout(() => {
                     skull.fadingIn = false;
                     if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
                 }, 600);
@@ -10842,8 +10846,8 @@ export function CombatManagerRedux() {
             const summonerINT = (unit.stats && unit.stats.int) || 8;
             const minionWP = (target.stats && (target.stats.willpower || target.stats.int)) || 5;
             // Roll: summoner INT + 1d10 vs minion WP + 1d10
-            const attackRoll = summonerINT + Math.floor(Math.random() * 10) + 1;
-            const defenseRoll = minionWP + Math.floor(Math.random() * 10) + 1;
+            const attackRoll = summonerINT + Math.floor(combatRng.random() * 10) + 1;
+            const defenseRoll = minionWP + Math.floor(combatRng.random() * 10) + 1;
             const success = attackRoll > defenseRoll;
             if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
                 this.animManagerRedux.triggerAbility(unit.coordinates, target.coordinates, 'dominate_minion', false, null, unit.id);
@@ -10978,7 +10982,7 @@ export function CombatManagerRedux() {
 
             // ── Delay damage/log until projectile arrives (700 ms travel time) ─
             const OVERLOAD_TRAVEL_MS = 700;
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 if (hit) {
                     if (this.isFamiliarUnit(target)) return;
                     const maxStamina = target.maxEndurance || 50;
@@ -11000,14 +11004,14 @@ export function CombatManagerRedux() {
 
                         target.damageIndicators = target.damageIndicators || [];
                         target.damageIndicators.push({
-                            id: Date.now() + Math.random() + 80,
+                            id: combatClock.now() + Math.random() + 80,
                             value: `-${hpDmg}`,
                             source: 'Overload',
                             type: 'damage'
                         });
                         if (staminaDmg > 0) {
                             target.damageIndicators.push({
-                                id: Date.now() + Math.random() + 90,
+                                id: combatClock.now() + Math.random() + 90,
                                 value: `-${staminaDmg} Stamina`,
                                 source: 'Overload',
                                 type: 'debuff'
@@ -11023,7 +11027,7 @@ export function CombatManagerRedux() {
                         target.hp = Math.max(0, target.hp - finalDmg);
                         target.damageIndicators = target.damageIndicators || [];
                         target.damageIndicators.push({
-                            id: Date.now() + Math.random() + 80,
+                            id: combatClock.now() + Math.random() + 80,
                             value: `-${finalDmg}`,
                             source: 'Overload',
                             type: 'damage'
@@ -11090,7 +11094,7 @@ export function CombatManagerRedux() {
                 return;
             }
 
-            const tempId = `__bif_temp_${Date.now()}`;
+            const tempId = `__bif_temp_${combatClock.now()}`;
             this.combatants[tempId] = { dead: false, coordinates: coords1 };
             const coords2 = findSpawnCoords(unit);
             delete this.combatants[tempId];
@@ -11153,7 +11157,7 @@ export function CombatManagerRedux() {
             this._setCombatantOccupiedCoords(copy1);
             this._setCombatantOccupiedCoords(copy2);
 
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 copy1.fadingIn = false;
                 copy2.fadingIn = false;
                 if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
@@ -11185,7 +11189,7 @@ export function CombatManagerRedux() {
                     if (finalDmg > 0) this.wakeSleepingTarget(c, 'Stomp');
                     c.damageIndicators = c.damageIndicators || [];
                     c.damageIndicators.push({
-                        id: Date.now() + Math.random(),
+                        id: combatClock.now() + Math.random(),
                         value: `-${finalDmg}`,
                         source: 'Stomp',
                         type: 'damage'
@@ -11196,7 +11200,7 @@ export function CombatManagerRedux() {
                     c.stunnedRounds = Math.max(c.stunnedRounds || 0, dur);
                     this._applyDebuff(c, null, 'Stunned', dur);
                     c.damageIndicators.push({
-                        id: Date.now() + Math.random() + 10,
+                        id: combatClock.now() + Math.random() + 10,
                         value: 'STUNNED!',
                         source: 'Stomp',
                         type: 'crit'
@@ -11238,7 +11242,7 @@ export function CombatManagerRedux() {
                     if (finalDmg > 0) this.wakeSleepingTarget(c, 'Whirlwind');
                     c.damageIndicators = c.damageIndicators || [];
                     c.damageIndicators.push({
-                        id: Date.now() + Math.random(),
+                        id: combatClock.now() + Math.random(),
                         value: `-${finalDmg}`,
                         source: 'Whirlwind',
                         type: 'damage'
@@ -11334,7 +11338,7 @@ export function CombatManagerRedux() {
         }
 
         if (abilityId === 'lay_eggs') {
-            const eggId = `dragon_egg_${Date.now()}`;
+            const eggId = `dragon_egg_${combatClock.now()}`;
             const hpBase = 50;
 
             // Find a free tile around target.coordinates. If target.coordinates is free, use it.
@@ -11472,7 +11476,7 @@ export function CombatManagerRedux() {
             this.appendCombatLog(`${this.getCombatantLogName(unit)} summons a Spider Nest behind her!`);
 
             // Spawn the spiders spawner behind the Witch
-            const spawnerId = `spiders_spawner_${Date.now()}`;
+            const spawnerId = `spiders_spawner_${combatClock.now()}`;
             const spawner = {
                 id: spawnerId,
                 type: 'spiders_spawner',
@@ -11523,7 +11527,7 @@ export function CombatManagerRedux() {
 
             this.activeWebs = this.activeWebs || [];
             this.activeWebs.push({
-                id: `web_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+                id: `web_${combatClock.now()}_${Math.floor(Math.random() * 1000)}`,
                 x: center.x,
                 y: center.y,
                 roundsLeft: 3
@@ -11538,7 +11542,7 @@ export function CombatManagerRedux() {
             target.ensnaredStackDuration = dur;
             const durMs = getDurationMsFromRounds(dur);
             target.ensnaredTotalDurationMs = durMs;
-            target.ensnaredEndTimeMs = Date.now() + durMs;
+            target.ensnaredEndTimeMs = combatClock.now() + durMs;
             this._applyDebuff(target, null, 'ensnared', dur);
             this.appendCombatLog(`${this.getCombatantLogName(target)} is ensnared by the spiderweb!`);
 
@@ -11591,8 +11595,8 @@ export function CombatManagerRedux() {
                     // Contested mentality check
                     const casterVal = (unit.stats && (unit.stats.willpower !== undefined ? unit.stats.willpower : (unit.stats.wits || unit.stats.int))) || 15;
                     const targetVal = (c.stats && (c.stats.willpower !== undefined ? c.stats.willpower : (c.stats.wits || c.stats.int))) || 10;
-                    const casterRoll = casterVal + Math.floor(Math.random() * 10) + 1;
-                    const targetRoll = targetVal + Math.floor(Math.random() * 10) + 1;
+                    const casterRoll = casterVal + Math.floor(combatRng.random() * 10) + 1;
+                    const targetRoll = targetVal + Math.floor(combatRng.random() * 10) + 1;
 
                     // Apply mentalityResist from tabards (if any)
                     let mentalityResist = 0;
@@ -11604,7 +11608,7 @@ export function CombatManagerRedux() {
                         }
                     } catch (e) {}
 
-                    const rollPassed = targetRoll > casterRoll || (mentalityResist > 0 && Math.random() * 100 < mentalityResist);
+                    const rollPassed = targetRoll > casterRoll || (mentalityResist > 0 && combatRng.random() * 100 < mentalityResist);
 
                     if (rollPassed) {
                         this.appendCombatLog(`${this.getCombatantLogName(c)} resists Madness! (Roll ${targetRoll} vs ${casterRoll})`);
@@ -11617,7 +11621,7 @@ export function CombatManagerRedux() {
                         this._applyDebuff(c, null, 'Madness', dur);
                         c.damageIndicators = c.damageIndicators || [];
                         c.damageIndicators.push({
-                            id: Date.now() + Math.random(),
+                            id: combatClock.now() + Math.random(),
                             value: 'MADNESS!',
                             source: 'Madness',
                             type: 'debuff'
@@ -11691,7 +11695,7 @@ export function CombatManagerRedux() {
                     }
                 }
             }
-            const shuffled = [...candidates].sort(() => 0.5 - Math.random());
+            const shuffled = [...candidates].sort(() => 0.5 - combatRng.random());
             const strike1 = shuffled[0] || center;
             const strike2 = shuffled[1] || strike1;
             const strike3 = shuffled[2] || strike2;
@@ -11764,7 +11768,7 @@ export function CombatManagerRedux() {
                     }
                 }
             }
-            const shuffled = [...candidates].sort(() => 0.5 - Math.random());
+            const shuffled = [...candidates].sort(() => 0.5 - combatRng.random());
             const strike1 = shuffled[0] || center;
             const strike2 = shuffled[1] || strike1;
             const strike3 = shuffled[2] || strike2;
@@ -11808,7 +11812,7 @@ export function CombatManagerRedux() {
                         if (finalDmg > 0) this.wakeSleepingTarget(c, 'Blue Dragon Breath');
                         c.damageIndicators = c.damageIndicators || [];
                         c.damageIndicators.push({
-                            id: Date.now() + Math.random(),
+                            id: combatClock.now() + Math.random(),
                             value: `-${finalDmg}`,
                             source: 'Blue Dragon Breath',
                             type: 'damage'
@@ -11832,7 +11836,7 @@ export function CombatManagerRedux() {
                 this.triggerBoardEvent('induce_fear', { duration: 1800 });
             }
             const dur = getDurationRounds(ability.duration || 'short') || 2;
-            const now = Date.now();
+            const now = combatClock.now();
             const targetCoords = target.coordinates;
 
             Object.values(this.combatants).forEach(c => {
@@ -11841,7 +11845,7 @@ export function CombatManagerRedux() {
                 if (isEnemy) {
                     const distToTarget = Math.abs(c.coordinates.x - targetCoords.x) + Math.abs(c.coordinates.y - targetCoords.y);
                     if (c.id === target.id || distToTarget <= 1) {
-                        if (c.type === 'dragon' && Math.random() < 0.5) {
+                        if (c.type === 'dragon' && combatRng.random() < 0.5) {
                             this.appendCombatLog(`${this.getCombatantLogName(c)} resists Induce Fear! (Dragon CC Immunity)`);
                         } else if (c.berserkerActive) {
                             this.appendCombatLog(`${this.getCombatantLogName(c)} is IMMUNE to fear while in Berserker rage!`);
@@ -11894,7 +11898,7 @@ export function CombatManagerRedux() {
                     c.endurance = Math.max(0, (c.endurance || 0) - drainAmt);
                     c.damageIndicators = c.damageIndicators || [];
                     c.damageIndicators.push({
-                        id: Date.now() + Math.random(),
+                        id: combatClock.now() + Math.random(),
                         value: `-${drainAmt} Stamina`,
                         source: 'Despair',
                         type: 'debuff'
@@ -11989,7 +11993,7 @@ export function CombatManagerRedux() {
             const healAmt = Math.round((unit.starting_hp || unit.hp || 100) * 0.25);
             unit.hp = Math.min(unit.starting_hp || unit.hp, unit.hp + healAmt);
             unit.damageIndicators = unit.damageIndicators || [];
-            unit.damageIndicators.push({ id: Date.now() + Math.random(), value: `+${healAmt}`, source: 'Meditate', type: 'heal' });
+            unit.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `+${healAmt}`, source: 'Meditate', type: 'heal' });
             this.appendCombatLog(`${this.getCombatantLogName(unit)} meditates, restoring stamina to full and +${healAmt} HP.`);
         }
 
@@ -12050,9 +12054,9 @@ export function CombatManagerRedux() {
             target.hp = Math.max(0, target.hp - drainAmt);
             unit.hp = Math.min(unit.starting_hp || unit.hp, unit.hp + drainAmt);
             target.damageIndicators = target.damageIndicators || [];
-            target.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${drainAmt}`, source: 'Soul Suck', type: 'damage' });
+            target.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${drainAmt}`, source: 'Soul Suck', type: 'damage' });
             unit.damageIndicators = unit.damageIndicators || [];
-            unit.damageIndicators.push({ id: Date.now() + Math.random(), value: `+${drainAmt}`, source: 'Soul Suck', type: 'heal' });
+            unit.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `+${drainAmt}`, source: 'Soul Suck', type: 'heal' });
             this.appendCombatLog(`${this.getCombatantLogName(unit)} sucks the soul of ${this.getCombatantLogName(target)} for ${drainAmt} drain.`);
             if (target.hp <= 0) {
                 this.targetKilled(target);
@@ -12070,7 +12074,7 @@ export function CombatManagerRedux() {
         }
         const isRangedProj = ability.range && ability.range !== 'close' && ability.range !== 'self' && abilityId !== 'inspire' && ability.type !== 'summon';
         const isSpellOrProj = isMagicalAbility || isRangedProj;
-        const negatedByBarrier = !!(target && target.arcaneBarrierActive && target.id !== unit.id && ability.range !== 'self' && isSpellOrProj && Math.random() < 0.5);
+        const negatedByBarrier = !!(target && target.arcaneBarrierActive && target.id !== unit.id && ability.range !== 'self' && isSpellOrProj && combatRng.random() < 0.5);
 
         if (negatedByBarrier) {
             this.appendCombatLog(`${this.getCombatantLogName(target)}'s Arcane Barrier negated ${this.getCombatantLogName(unit)}'s ${ability.name || abilityId}!`);
@@ -12230,7 +12234,7 @@ export function CombatManagerRedux() {
             unit.etherealSpeedRoundsLeft = selfBuffDuration;
             unit.etherealSpeedTotalRounds = selfBuffDuration;
             unit.etherealSpeedTotalDurationMs = selfBuffDurationMs;
-            unit.etherealSpeedEndTimeMs = Date.now() + selfBuffDurationMs;
+            unit.etherealSpeedEndTimeMs = combatClock.now() + selfBuffDurationMs;
         }
         if (abilityId === 'monk_astral_focus') {
             this._applyBuff(unit, { increase_stats: { stats: [] } }, 'astral_being', selfBuffDuration);
@@ -12238,14 +12242,14 @@ export function CombatManagerRedux() {
             unit.astralBeingRoundsLeft = selfBuffDuration;
             unit.astralBeingTotalRounds = selfBuffDuration;
             unit.astralBeingTotalDurationMs = selfBuffDurationMs;
-            unit.astralBeingEndTimeMs = Date.now() + selfBuffDurationMs;
+            unit.astralBeingEndTimeMs = combatClock.now() + selfBuffDurationMs;
         }
         if (abilityId === 'monk_third_eye') {
             unit.thirdEyeActive = true;
             unit.thirdEyeRoundsLeft = selfBuffDuration;
             unit.thirdEyeTotalRounds = selfBuffDuration;
             unit.thirdEyeTotalDurationMs = selfBuffDurationMs;
-            unit.thirdEyeEndTimeMs = Date.now() + selfBuffDurationMs;
+            unit.thirdEyeEndTimeMs = combatClock.now() + selfBuffDurationMs;
         }
         if (abilityId === 'arcane_barrier') {
             this._applyBuff(unit, { increase_stats: { stats: [] } }, 'Arcane Barrier', selfBuffDuration);
@@ -12253,7 +12257,7 @@ export function CombatManagerRedux() {
             unit.arcaneBarrierRoundsLeft = selfBuffDuration;
             unit.arcaneBarrierTotalRounds = selfBuffDuration;
             unit.arcaneBarrierTotalDurationMs = selfBuffDurationMs;
-            unit.arcaneBarrierEndTimeMs = Date.now() + selfBuffDurationMs;
+            unit.arcaneBarrierEndTimeMs = combatClock.now() + selfBuffDurationMs;
             this.appendCombatLog(`${this.getCombatantLogName(unit)} is shielded by an Arcane Barrier!`);
         }
 
@@ -12276,7 +12280,7 @@ export function CombatManagerRedux() {
             const heal = Math.round((unit.starting_hp || unit.hp) * (regenPct / 100));
             unit.hp = Math.min(unit.starting_hp || unit.hp, unit.hp + heal);
             unit.damageIndicators = unit.damageIndicators || [];
-            unit.damageIndicators.push({ id: Date.now() + Math.random(), value: `+${heal}`, source: ability.name, type: 'heal' });
+            unit.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `+${heal}`, source: ability.name, type: 'heal' });
             this.appendCombatLog(`${this.getCombatantLogName(unit)} heals for ${heal} (${ability.name}).`);
             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
             return;
@@ -12295,7 +12299,7 @@ export function CombatManagerRedux() {
                 c.hp = Math.max(0, c.hp - splash);
                 this.wakeSleepingTarget(c, ability.name || this.getCombatActionName(ability));
                 c.damageIndicators = c.damageIndicators || [];
-                c.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${splash}`, source: ability.name, type: 'damage' });
+                c.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${splash}`, source: ability.name, type: 'damage' });
                 totalHits++;
                 if (c.hp <= 0) this.targetKilled(c);
             });
@@ -12337,7 +12341,7 @@ export function CombatManagerRedux() {
                     const isRanged = ability.range && ability.range !== 'close' && ability.range !== 'self';
                     const isVampire = unit.type === 'vampire' || unit.key === 'vampire' || unit.id === 'vampire';
                     const hasCrimsonSight = unit.activeBuffs && unit.activeBuffs.some(b => b.name === 'Crimson Sight');
-                    if (isVampire && hasCrimsonSight && Math.random() < 0.5) {
+                    if (isVampire && hasCrimsonSight && combatRng.random() < 0.5) {
                         finalDmg = finalDmg * 2;
                         this.appendCombatLog(`${this.getCombatantLogName(unit)} crits for DOUBLE damage from Crimson Sight!`);
                     } else if (this._processCriticalStrike) {
@@ -12348,7 +12352,7 @@ export function CombatManagerRedux() {
                     this.checkShrinerConcentrationDamage(unit, c, finalDmg);
                     if (finalDmg > 0) this.wakeSleepingTarget(c, ability.name || this.getCombatActionName(ability));
                     c.damageIndicators = c.damageIndicators || [];
-                    c.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${finalDmg}`, source: ability.name, type: 'damage' });
+                    c.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${finalDmg}`, source: ability.name, type: 'damage' });
                     totalHits++;
                     if (c.hp <= 0) this.targetKilled(c);
                 }
@@ -12408,7 +12412,7 @@ export function CombatManagerRedux() {
                 }
 
                 // 2. Apply damage when the beam reaches the target (at the end of the link duration)
-                setTimeout(() => {
+                combatClock.setTimeout(() => {
                     actualHitCoords.push({ x: targetCoord.x, y: targetCoord.y });
 
                     if (c.dead || c.hp <= 0) {
@@ -12427,7 +12431,7 @@ export function CombatManagerRedux() {
                         this.wakeSleepingTarget(c, ability.name || 'Chainbolt');
                         c.damageIndicators = c.damageIndicators || [];
                         c.damageIndicators.push({
-                            id: Date.now() + Math.random() + currentIdx,
+                            id: combatClock.now() + Math.random() + currentIdx,
                             value: `-${finalDmg}`,
                             source: 'Chainbolt',
                             type: 'damage'
@@ -12481,7 +12485,7 @@ export function CombatManagerRedux() {
                 return;
             }
             // Freeze the targets for 1 round (takes 1 round of time)
-            const now = Date.now();
+            const now = combatClock.now();
             swapTarget1.stunned = true;
             swapTarget1.stunnedRounds = 1;
             swapTarget1.stunnedTotalRounds = 1;
@@ -12502,7 +12506,7 @@ export function CombatManagerRedux() {
             if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
                 // First beam takes 350ms to reach target 1 and dissipate
                 this.animManagerRedux.triggerAbility(unit.coordinates, swapTarget1.coordinates, 'mind_swap', false, null, unit.id, null, 350);
-                setTimeout(() => {
+                combatClock.setTimeout(() => {
                     if (swapTarget1 && swapTarget2 && !swapTarget1.dead && !swapTarget2.dead) {
                         this.animManagerRedux.triggerAbility(
                             swapTarget1.coordinates, 
@@ -12514,7 +12518,7 @@ export function CombatManagerRedux() {
                 }, 350); // Start second beam the instant the first beam finishes dissipating
                 
                 // Actual coordinate swap happens after the second beam lands (at 1000ms)
-                setTimeout(() => {
+                combatClock.setTimeout(() => {
                     if (swapTarget1 && swapTarget2 && !swapTarget1.dead && !swapTarget2.dead) {
                         const currentCoord1 = { ...swapTarget1.coordinates };
                         const currentCoord2 = { ...swapTarget2.coordinates };
@@ -12545,7 +12549,7 @@ export function CombatManagerRedux() {
                 this.checkShrinerConcentrationDamage && this.checkShrinerConcentrationDamage(unit, target, finalDmg);
                 this.wakeSleepingTarget(target, 'Displacement Ray');
                 target.damageIndicators = target.damageIndicators || [];
-                target.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${finalDmg}`, source: 'Displacement Ray', type: 'damage' });
+                target.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${finalDmg}`, source: 'Displacement Ray', type: 'damage' });
                 // Push target to a random unoccupied corner
                 const corners = [
                     { x: 0, y: 0 },
@@ -12554,7 +12558,7 @@ export function CombatManagerRedux() {
                     { x: (this.maxDepth || 10) - 1, y: (this.maxLanes || 4) - 1 }
                 ];
                 // Shuffle corners
-                corners.sort(() => Math.random() - 0.5);
+                corners.sort(() => combatRng.random() - 0.5);
                 let selectedCorner = null;
                 for (const corner of corners) {
                     if (this.canFitAt && this.canFitAt(target, corner.x, corner.y)) {
@@ -12570,11 +12574,11 @@ export function CombatManagerRedux() {
                         // First part of the ray from Beholder to target
                         this.animManagerRedux.triggerAbility(unit.coordinates, targetOrigCoord, 'displacement_ray', false, null, unit.id, null, rayDuration);
                         // Second part of the ray from target to corner
-                        setTimeout(() => {
+                        combatClock.setTimeout(() => {
                             this.animManagerRedux.triggerAbility(targetOrigCoord, selectedCorner, 'displacement_ray', false, null, unit.id, null, rayDuration);
                         }, rayDuration);
                         // Finally teleport them
-                        setTimeout(() => {
+                        combatClock.setTimeout(() => {
                             this.updateUnitCoordinates(target, selectedCorner.x, selectedCorner.y);
                             this.appendCombatLog(`${this.getCombatantLogName(unit)} teleports ${this.getCombatantLogName(target)} to the corner!`);
                             if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
@@ -12603,7 +12607,7 @@ export function CombatManagerRedux() {
             unit.beholderDodgeBonus = 0.4; // 40% dodge chance while invisible
             this._applyBuff(unit, { increase_stats: { stats: [] } }, 'Invisible', durRounds);
             unit.damageIndicators = unit.damageIndicators || [];
-            unit.damageIndicators.push({ id: Date.now() + Math.random(), value: 'INVISIBLE!', source: 'Invisibility', type: 'buff' });
+            unit.damageIndicators.push({ id: combatClock.now() + Math.random(), value: 'INVISIBLE!', source: 'Invisibility', type: 'buff' });
             this.appendCombatLog(`${this.getCombatantLogName(unit)} vanishes from sight! (Invisible for ${durRounds} rounds, 40% dodge)`);
 
             // Clear target for all units currently targeting the Beholder (unless Eagle Eye)
@@ -12719,7 +12723,7 @@ export function CombatManagerRedux() {
                 }
                 const isVampire = unit.type === 'vampire' || unit.key === 'vampire' || unit.id === 'vampire';
                 const hasCrimsonSight = unit.activeBuffs && unit.activeBuffs.some(b => b.name === 'Crimson Sight');
-                if (isVampire && hasCrimsonSight && Math.random() < 0.5) {
+                if (isVampire && hasCrimsonSight && combatRng.random() < 0.5) {
                     finalDmg = finalDmg * 2;
                     this.appendCombatLog(`${this.getCombatantLogName(unit)} crits for DOUBLE damage from Crimson Sight!`);
                 } else if (this._processCriticalStrike) {
@@ -12740,12 +12744,12 @@ export function CombatManagerRedux() {
                             const dy = target.coordinates.y - c.coordinates.y;
                             return Math.sqrt(dx * dx + dy * dy) < 1.9;
                         });
-                        if (sameTeamSage && Math.random() < 0.5) {
+                        if (sameTeamSage && combatRng.random() < 0.5) {
                             // Reflect: damage hits the attacker instead
                             unit.hp = Math.max(0, unit.hp - finalDmg);
                             unit.damageIndicators = unit.damageIndicators || [];
                             unit.damageIndicators.push({
-                                id: Date.now() + Math.random() + h,
+                                id: combatClock.now() + Math.random() + h,
                                 value: `-${finalDmg}`,
                                 source: 'Deflected!',
                                 type: 'damage'
@@ -12762,7 +12766,7 @@ export function CombatManagerRedux() {
                     if (finalDmg > 0) {
                         target.damageIndicators = target.damageIndicators || [];
                         target.damageIndicators.push({
-                            id: Date.now() + Math.random() + h,
+                            id: combatClock.now() + Math.random() + h,
                             value: `-${finalDmg}`,
                             source: ability.name,
                             type: 'damage'
@@ -12786,7 +12790,7 @@ export function CombatManagerRedux() {
                         const healAmt = 10;
                         unit.hp = Math.min(unit.starting_hp || unit.hp, unit.hp + healAmt);
                         unit.damageIndicators = unit.damageIndicators || [];
-                        unit.damageIndicators.push({ id: Date.now() + Math.random() + 50, value: `+${healAmt}`, source: 'Vampiric Bite', type: 'heal' });
+                        unit.damageIndicators.push({ id: combatClock.now() + Math.random() + 50, value: `+${healAmt}`, source: 'Vampiric Bite', type: 'heal' });
                         this.appendCombatLog(`${this.getCombatantLogName(unit)} heals for ${healAmt} from Vampiric Bite.`);
                     }
 
@@ -12796,7 +12800,7 @@ export function CombatManagerRedux() {
                         if (staminaDmg > 0) {
                             target.damageIndicators = target.damageIndicators || [];
                             target.damageIndicators.push({
-                                id: Date.now() + Math.random() + 80,
+                                id: combatClock.now() + Math.random() + 80,
                                 value: `-${staminaDmg} Stamina`,
                                 source: 'Voidbite',
                                 type: 'debuff'
@@ -12814,7 +12818,7 @@ export function CombatManagerRedux() {
                         if (staminaDmg > 0) {
                             target.damageIndicators = target.damageIndicators || [];
                             target.damageIndicators.push({
-                                id: Date.now() + Math.random() + 80,
+                                id: combatClock.now() + Math.random() + 80,
                                 value: `-${staminaDmg} Stamina`,
                                 source: ability.name || 'Energy Drain',
                                 type: 'debuff'
@@ -12829,7 +12833,7 @@ export function CombatManagerRedux() {
                             unit.hp = Math.min(unit.starting_hp || unit.hp, unit.hp + healAmt);
                             unit.damageIndicators = unit.damageIndicators || [];
                             unit.damageIndicators.push({
-                                id: Date.now() + Math.random() + 50,
+                                id: combatClock.now() + Math.random() + 50,
                                 value: `+${healAmt}`,
                                 source: ability.name || 'Energy Drain',
                                 type: 'heal'
@@ -12870,7 +12874,7 @@ export function CombatManagerRedux() {
                         target.stunnedRounds = Math.max(target.stunnedRounds || 0, dur);
                         this._applyDebuff(target, null, 'Stunned', dur);
                         target.damageIndicators.push({
-                            id: Date.now() + Math.random() + 20,
+                            id: combatClock.now() + Math.random() + 20,
                             value: 'STUNNED!',
                             source: 'Headbutt',
                             type: 'crit'
@@ -12895,7 +12899,7 @@ export function CombatManagerRedux() {
                         const markBonus = 15;
                         target.hp = Math.max(0, target.hp - markBonus);
                         target.damageIndicators.push({
-                            id: Date.now() + Math.random() + 99,
+                            id: combatClock.now() + Math.random() + 99,
                             value: `+${markBonus}`,
                             source: 'Mark detonated',
                             type: 'crit'
@@ -12913,13 +12917,13 @@ export function CombatManagerRedux() {
                         target.hexRounds = dur;
                         target.hexTotalRounds = dur;
                         target.hexTotalDurationMs = durMs;
-                        target.hexEndTimeMs = Date.now() + durMs;
+                        target.hexEndTimeMs = combatClock.now() + durMs;
                         this._applyDebuff(target, { decrease_stats: { stats: [{ stat: 'atk', amount: 2 }] } }, 'Hexed', dur);
                         this.appendCombatLog(`${this.getCombatantLogName(target)} is HEXED!`);
                     }
 
                     if (abilityId === 'polymorph') {
-                        if (target.type === 'dragon' && Math.random() < 0.5) {
+                        if (target.type === 'dragon' && combatRng.random() < 0.5) {
                             this.appendCombatLog(`${this.getCombatantLogName(target)} resists Polymorph! (Dragon CC Immunity)`);
                         } else {
                             const dur = getDurationRounds(ability.duration || 'long');
@@ -12957,7 +12961,7 @@ export function CombatManagerRedux() {
                                 mainEntity.hp = Math.max(0, mainEntity.hp - splashDamage);
                                 this.wakeSleepingTarget(mainEntity, `${ability.name || this.getCombatActionName(ability)} splash`);
                                 mainEntity.damageIndicators = mainEntity.damageIndicators || [];
-                                mainEntity.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${splashDamage}`, source: `${ability.name} splash`, type: 'damage' });
+                                mainEntity.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${splashDamage}`, source: `${ability.name} splash`, type: 'damage' });
                                 if (mainEntity.hp <= 0) this.targetKilled(mainEntity);
                             }
                         });
@@ -13012,7 +13016,7 @@ export function CombatManagerRedux() {
                         }
                     }
 
-                    if (arrowType === 'celestial' && hitsSucceeded > 0 && Math.random() < 0.5) {
+                    if (arrowType === 'celestial' && hitsSucceeded > 0 && combatRng.random() < 0.5) {
                         this.appendCombatLog(`${this.getCombatantLogName(unit)}'s celestial arrow triggers a holy explosion!`);
                         const splashTargets = Object.values(this.combatants).filter(c => {
                             if (!c || c.dead || c.id === target.id) return false;
@@ -13027,18 +13031,18 @@ export function CombatManagerRedux() {
                             c.hp = Math.max(0, c.hp - splashDamage);
                             this.wakeSleepingTarget(c, 'Celestial Explosion');
                             c.damageIndicators = c.damageIndicators || [];
-                            c.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${splashDamage}`, source: 'Celestial Explosion', type: 'damage' });
+                            c.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${splashDamage}`, source: 'Celestial Explosion', type: 'damage' });
                             if (c.hp <= 0) this.targetKilled(c);
                         });
                         if (typeof this.addAnimation === 'function') {
-                            this.addAnimation({ type: 'celestial_arrow_hit', x: target.coordinates.x, y: target.coordinates.y, id: Date.now() });
+                            this.addAnimation({ type: 'celestial_arrow_hit', x: target.coordinates.x, y: target.coordinates.y, id: combatClock.now() });
                         }
                     }
                     // Process side effects (stun, frozen, ensnared, fear, poison, bleed, sleep)
                     const localEffects = [...effects];
                     if (unit.newMoonBuff && isMeleeAbility) {
                         const chance = unit.newMoonFearChance || 40;
-                        if (Math.random() * 100 <= chance) {
+                        if (combatRng.random() * 100 <= chance) {
                             localEffects.push({ type: 'fear', duration: 'short' });
                         }
                     }
@@ -13054,7 +13058,7 @@ export function CombatManagerRedux() {
                         const chance = typeof eff.chance === 'number' ? eff.chance : 100;
                         let rollSuccess = false;
                         if (eff.type === 'instant_death') {
-                            const roll = Math.random() * 100;
+                            const roll = combatRng.random() * 100;
                             rollSuccess = roll <= chance;
                             if (rollSuccess) {
                                 this.appendCombatLog(`${this.getCombatantLogName(target)} was instantly slain by Death Missile!`);
@@ -13062,11 +13066,11 @@ export function CombatManagerRedux() {
                                 this.appendCombatLog(`${this.getCombatantLogName(target)} survived Death Missile's instant death check (${chance}% chance).`);
                             }
                         } else {
-                            rollSuccess = Math.random() * 100 <= chance;
+                            rollSuccess = combatRng.random() * 100 <= chance;
                         }
                         if (rollSuccess) {
                             if (target.type === 'dragon' && ['frozen', 'stun', 'sleep', 'fear', 'ensnared', 'polymorph'].includes(eff.type)) {
-                                if (Math.random() < 0.5) {
+                                if (combatRng.random() < 0.5) {
                                     this.appendCombatLog(`${this.getCombatantLogName(target)} resists ${formatCombatText(eff.type)}! (Dragon CC Immunity)`);
                                     return;
                                 }
@@ -13082,7 +13086,7 @@ export function CombatManagerRedux() {
                                         mentalityResist = equippedTabard.mentalityResist;
                                     }
                                 } catch (e) { }
-                                if (mentalityResist > 0 && Math.random() * 100 < mentalityResist) {
+                                if (mentalityResist > 0 && combatRng.random() * 100 < mentalityResist) {
                                     this.appendCombatLog(`${this.getCombatantLogName(target)} resists the ${eff.type}! (Mentality Resistance)`);
                                     return;
                                 }
@@ -13090,33 +13094,33 @@ export function CombatManagerRedux() {
                             // Fortitude resistance check for applicable effects
                             if (eff.type === 'poison' && targetFort > 0) {
                                 const resistChance = targetFort * 3; // 3% per fort point
-                                if (Math.random() * 100 < resistChance) {
+                                if (combatRng.random() * 100 < resistChance) {
                                     this.appendCombatLog(`${this.getCombatantLogName(target)} resists the poison! (Fortitude)`);
                                     return;
                                 }
                             }
                             if (eff.type === 'stun' && targetFort > 0) {
                                 const resistChance = targetFort * 2; // 2% per fort point
-                                if (Math.random() * 100 < resistChance) {
+                                if (combatRng.random() * 100 < resistChance) {
                                     this.appendCombatLog(`${this.getCombatantLogName(target)} resists the stun! (Fortitude)`);
                                     return;
                                 }
                             }
                             if (eff.type === 'sleep' && targetFort > 0) {
                                 const resistChance = targetFort * 2; // 2% per fort point
-                                if (Math.random() * 100 < resistChance) {
+                                if (combatRng.random() * 100 < resistChance) {
                                     this.appendCombatLog(`${this.getCombatantLogName(target)} resists sleep! (Fortitude)`);
                                     return;
                                 }
                             }
                             const dur = getDurationRounds(eff.duration || 'short');
-                            const now = Date.now();
+                            const now = combatClock.now();
                             if (eff.type === 'double-strike' || eff.type === 'double_strike') {
                                 const extraDmg = Math.max(1, Math.round((lastFinalDmg || rawDamage || 10) * 0.8));
                                 target.hp = Math.max(0, target.hp - extraDmg);
                                 target.damageIndicators = target.damageIndicators || [];
                                 target.damageIndicators.push({
-                                    id: Date.now() + Math.random() + 77,
+                                    id: combatClock.now() + Math.random() + 77,
                                     value: `-${extraDmg}`,
                                     source: 'Double Strike',
                                     type: 'damage'
@@ -13327,8 +13331,8 @@ export function CombatManagerRedux() {
 
         if (abilityId === 'rake') {
             performHit(0);
-            if (Math.random() < 0.50) {
-                setTimeout(() => {
+            if (combatRng.random() < 0.50) {
+                combatClock.setTimeout(() => {
                     if (target && !target.dead && target.hp > 0 && unit && !unit.dead && unit.hp > 0) {
                         const isTargetLarge = target.isLarge
                             || target.size === 2
@@ -13347,22 +13351,22 @@ export function CombatManagerRedux() {
         } else if (abilityId === 'loose' || abilityId === 'deadeye_shot' || abilityId === 'execute') {
             for (let i = 0; i < hitCount; i++) {
                 const hitDelay = (hitCount > 1) ? (367 + (i * 333)) : 700;
-                setTimeout(() => performHit(i), hitDelay);
+                combatClock.setTimeout(() => performHit(i), hitDelay);
             }
         } else if (abilityId === 'burst_shot' || abilityId === 'burst_attack') {
-            setTimeout(() => performHit(0), 700);
-            setTimeout(() => performHit(1), 950);
-            setTimeout(() => performHit(2), 1200);
+            combatClock.setTimeout(() => performHit(0), 700);
+            combatClock.setTimeout(() => performHit(1), 950);
+            combatClock.setTimeout(() => performHit(2), 1200);
         } else if (abilityId === 'ice_blast' || abilityId === 'acid_blast') {
-            setTimeout(() => performHit(0), 600);
+            combatClock.setTimeout(() => performHit(0), 600);
         } else if (abilityId === 'fireball') {
-            setTimeout(() => performHit(0), 900);
+            combatClock.setTimeout(() => performHit(0), 900);
         } else if (isMagicMissile) {
             const count = (isUltimateActivation || ability.isUltimate) ? 7 : ((abilityId === 'greater_magic_missile') ? 5 : (abilityId === 'minor_magic_missile' ? 1 : 3));
             for (let i = 0; i < count; i++) {
-                setTimeout(() => performHit(i), 400 + i * 200);
+                combatClock.setTimeout(() => performHit(i), 400 + i * 200);
             }
-            setTimeout(() => {
+            combatClock.setTimeout(() => {
                 if (mmResults && mmResults.length > 0) {
                     const casterName = this.getCombatantLogName(unit);
                     const targetName = this.getCombatantLogName(target);
@@ -13403,14 +13407,14 @@ export function CombatManagerRedux() {
 
     this._fireEagleEyeArrows = (ranger, target) => {
         const arrowTypes = ['force', 'ice', 'poison', 'celestial'];
-        const firstArrow = arrowTypes[Math.floor(Math.random() * arrowTypes.length)];
-        const secondArrow = arrowTypes[Math.floor(Math.random() * arrowTypes.length)];
+        const firstArrow = arrowTypes[Math.floor(combatRng.random() * arrowTypes.length)];
+        const secondArrow = arrowTypes[Math.floor(combatRng.random() * arrowTypes.length)];
 
         // Fire first arrow immediately
         this._fireSingleEagleEyeArrow(ranger, target, firstArrow);
 
         // Fire second arrow after 300ms delay
-        setTimeout(() => {
+        combatClock.setTimeout(() => {
             if (!target || target.dead || target.hp <= 0) return;
             if (!ranger || ranger.dead || ranger.hp <= 0) return;
             this._fireSingleEagleEyeArrow(ranger, target, secondArrow);
@@ -13428,7 +13432,7 @@ export function CombatManagerRedux() {
             this.animManagerRedux.triggerAbility(sourceCoords, targetCoords, 'loose', isTargetLarge, targetTiles, ranger.id, arrowType);
         }
 
-        setTimeout(() => {
+        combatClock.setTimeout(() => {
             if (!target || target.dead || target.hp <= 0) return;
 
             const hit = this.hitCheck(ranger, target);
@@ -13444,29 +13448,29 @@ export function CombatManagerRedux() {
 
                 if (finalDmg > 0) {
                     const hasCod = target.activeBuffs && target.activeBuffs.some(b => b.name === 'circle_of_deflection');
-                    if (hasCod && Math.random() < 0.5) {
+                    if (hasCod && combatRng.random() < 0.5) {
                         ranger.hp = Math.max(0, ranger.hp - finalDmg);
                         ranger.damageIndicators = ranger.damageIndicators || [];
-                        ranger.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${finalDmg}`, source: 'Reflected Arrow', type: 'damage' });
+                        ranger.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${finalDmg}`, source: 'Reflected Arrow', type: 'damage' });
                         this.appendCombatLog(`Eagle Eye arrow reflected! ${this.getCombatantLogName(ranger)} takes ${finalDmg} damage.`);
                         if (ranger.hp <= 0) this.targetKilled(ranger);
                     } else {
                         target.hp = Math.max(0, target.hp - finalDmg);
                         this.wakeSleepingTarget(target, 'Eagle Eye');
                         target.damageIndicators = target.damageIndicators || [];
-                        target.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${finalDmg}`, source: 'Eagle Eye', type: 'damage' });
+                        target.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${finalDmg}`, source: 'Eagle Eye', type: 'damage' });
                         this.appendCombatLog(`${this.getCombatantLogName(ranger)}'s Eagle Eye passive fires a ${arrowType} arrow and hits ${this.getCombatantLogName(target)} for ${finalDmg} damage!`);
                         if (target.hp <= 0) this.targetKilled(target);
                     }
                 }
 
                 if (target.hp > 0 && !target.dead) {
-                    const now = Date.now();
+                    const now = combatClock.now();
                     const hasVoidward = this._getEquippedAmulet && this._getEquippedAmulet(target, 'voidward_amulet');
                     if (hasVoidward && (arrowType === 'ice' || arrowType === 'poison')) {
                         this.appendCombatLog(`${this.getCombatantLogName(target)} is immune to ${arrowType} arrow effect! (Voidward Amulet)`);
                     } else if (arrowType === 'ice') {
-                        if (target.type === 'dragon' && Math.random() < 0.5) {
+                        if (target.type === 'dragon' && combatRng.random() < 0.5) {
                             this.appendCombatLog(`${this.getCombatantLogName(target)} resists the ice arrow freeze! (Dragon CC Immunity)`);
                         } else {
                             const dur = getDurationRounds('short');
@@ -13508,7 +13512,7 @@ export function CombatManagerRedux() {
                             }
                         }
                     }
-                    if (arrowType === 'celestial' && Math.random() < 0.5) {
+                    if (arrowType === 'celestial' && combatRng.random() < 0.5) {
                         this.appendCombatLog(`${this.getCombatantLogName(ranger)}'s celestial arrow triggers a holy explosion!`);
                         const splashTargets = Object.values(this.combatants).filter(c => {
                             if (!c || c.dead || c.id === target.id) return false;
@@ -13523,11 +13527,11 @@ export function CombatManagerRedux() {
                             c.hp = Math.max(0, c.hp - splashDamage);
                             this.wakeSleepingTarget(c, 'Celestial Explosion');
                             c.damageIndicators = c.damageIndicators || [];
-                            c.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${splashDamage}`, source: 'Celestial Explosion', type: 'damage' });
+                            c.damageIndicators.push({ id: combatClock.now() + Math.random(), value: `-${splashDamage}`, source: 'Celestial Explosion', type: 'damage' });
                             if (c.hp <= 0) this.targetKilled(c);
                         });
                         if (typeof this.addAnimation === 'function') {
-                            this.addAnimation({ type: 'celestial_arrow_hit', x: target.coordinates.x, y: target.coordinates.y, id: Date.now() });
+                            this.addAnimation({ type: 'celestial_arrow_hit', x: target.coordinates.x, y: target.coordinates.y, id: combatClock.now() });
                         }
                     }
                 }
@@ -13810,7 +13814,7 @@ export function CombatManagerRedux() {
         if (moved) {
             const intelTier = this.getUnitIntelligenceTier(unit);
             if (intelTier === 'dumb' && crossesShieldWall(unit.coordinates, moved)) {
-                if (Math.random() < 0.5) {
+                if (combatRng.random() < 0.5) {
                     this.appendCombatLog(`${this.getCombatantLogName(unit)} mindlessly charges the Shield Wall and gets blocked!`);
                     return;
                 } else {
@@ -13821,7 +13825,7 @@ export function CombatManagerRedux() {
                         { x: unit.coordinates.x, y: unit.coordinates.y - 1 }
                     ].filter(n => this.canFitAt(unit, n.x, n.y) && !crossesShieldWall(unit.coordinates, n));
                     if (neighbors.length > 0) {
-                        const randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        const randomNeighbor = neighbors[Math.floor(combatRng.random() * neighbors.length)];
                         this.updateUnitCoordinates(unit, randomNeighbor.x, randomNeighbor.y);
                         unit.movesTakenThisRound += 1;
                         this.applyEnduranceCost(unit, this.MOVE_ENDURANCE_COST, 'move');
@@ -13856,7 +13860,7 @@ export function CombatManagerRedux() {
         if (moved) {
             const intelTier = this.getUnitIntelligenceTier(unit);
             if (intelTier === 'dumb' && crossesShieldWall(unit.coordinates, moved)) {
-                if (Math.random() < 0.5) {
+                if (combatRng.random() < 0.5) {
                     this.appendCombatLog(`${this.getCombatantLogName(unit)} mindlessly charges the Shield Wall and gets blocked!`);
                     return;
                 } else {
@@ -13867,7 +13871,7 @@ export function CombatManagerRedux() {
                         { x: unit.coordinates.x, y: unit.coordinates.y - 1 }
                     ].filter(n => this.canFitAt(unit, n.x, n.y) && !crossesShieldWall(unit.coordinates, n));
                     if (neighbors.length > 0) {
-                        const randomNeighbor = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        const randomNeighbor = neighbors[Math.floor(combatRng.random() * neighbors.length)];
                         this.updateUnitCoordinates(unit, randomNeighbor.x, randomNeighbor.y);
                         unit.movesTakenThisRound += 1;
                         this.applyEnduranceCost(unit, this.MOVE_ENDURANCE_COST, 'move');
@@ -14081,7 +14085,7 @@ export function CombatManagerRedux() {
                 // Add indicators
                 target.damageIndicators = target.damageIndicators || [];
                 target.damageIndicators.push({
-                    id: Date.now() + Math.random(),
+                    id: combatClock.now() + Math.random(),
                     value: `-${finalDmg}`,
                     source: 'Soul Suck',
                     type: 'damage'
@@ -14089,21 +14093,21 @@ export function CombatManagerRedux() {
 
                 unit.damageIndicators = unit.damageIndicators || [];
                 unit.damageIndicators.push({
-                    id: Date.now() + Math.random(),
+                    id: combatClock.now() + Math.random(),
                     value: `+${finalDmg}`,
                     source: 'Soul Suck',
                     type: 'heal'
                 });
 
                 // Stun chance: 5%
-                if (Math.random() < 0.05) {
-                    if (target.type === 'dragon' && Math.random() < 0.5) {
+                if (combatRng.random() < 0.05) {
+                    if (target.type === 'dragon' && combatRng.random() < 0.5) {
                         this.appendCombatLog(`${this.getCombatantLogName(target)} resists the Soul Suck stun! (Dragon CC Immunity)`);
                     } else {
                         target.stunned = true;
                         target.stunnedRounds = Math.max(target.stunnedRounds || 0, 1);
                         const durMs = getDurationMsFromRounds(1);
-                        target.stunnedEndTimeMs = target.stunnedEndTimeMs && target.stunnedEndTimeMs > Date.now() ? target.stunnedEndTimeMs + durMs : Date.now() + durMs;
+                        target.stunnedEndTimeMs = target.stunnedEndTimeMs && target.stunnedEndTimeMs > combatClock.now() ? target.stunnedEndTimeMs + durMs : combatClock.now() + durMs;
                         this.appendCombatLog(`${this.getCombatantLogName(target)} is STUNNED by Soul Suck!`);
                     }
                 }
@@ -14153,12 +14157,12 @@ export function CombatManagerRedux() {
     };
 
     this.startRoundTimer = () => {
-        if (this.roundTimerInterval) clearInterval(this.roundTimerInterval);
+        if (this.roundTimerInterval) combatClock.clearInterval(this.roundTimerInterval);
 
-        let lastTickTime = Date.now();
+        let lastTickTime = combatClock.now();
         this.roundTimeElapsedMs = 0;
-        this.roundTimerInterval = setInterval(() => {
-            const now = Date.now();
+        this.roundTimerInterval = combatClock.setInterval(() => {
+            const now = combatClock.now();
 
             if (this.combatPaused || this.combatOver || Object.keys(this.combatants).length === 0) {
                 // Update lastTickTime while paused so deltaMs stays correct on resume
@@ -14232,10 +14236,10 @@ export function CombatManagerRedux() {
                         const dy = Math.abs(c.coordinates.y - gd.coordinates.y);
                         if (dx <= 1 && dy <= 1) {
                             if (c.berserkerActive) return;
-                            if (Math.random() < 0.20) {
+                            if (combatRng.random() < 0.20) {
                                 const dur = 2; // short duration
                                 const durMs = dur * this.roundDurationMs;
-                                const now = Date.now();
+                                const now = combatClock.now();
 
                                 c.stunned = true;
                                 c.stunnedRounds = dur;
@@ -14272,7 +14276,7 @@ export function CombatManagerRedux() {
                     c.fadingOut = true;
                     this.appendCombatLog(`The Sphere of Darkness fades away.`);
                     if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
-                    setTimeout(() => {
+                    combatClock.setTimeout(() => {
                         delete this.combatants[c.id];
                         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
                     }, 500);
@@ -14285,7 +14289,7 @@ export function CombatManagerRedux() {
                             enemy.hp = Math.max(0, enemy.hp - 5);
                             enemy.damageIndicators = enemy.damageIndicators || [];
                             enemy.damageIndicators.push({
-                                id: Date.now() + Math.random(),
+                                id: combatClock.now() + Math.random(),
                                 value: '-5',
                                 source: 'Darkness Sphere',
                                 type: 'damage'
@@ -14410,11 +14414,11 @@ export function CombatManagerRedux() {
         this.powerBoostTiles = this.powerBoostTiles.filter(tile => {
             const age = this.round - tile.roundSpawned;
             if (age <= 2) return true;   // keep for first 2 rounds unconditionally
-            return Math.random() >= 0.5; // 50% chance to survive each subsequent round
+            return combatRng.random() >= 0.5; // 50% chance to survive each subsequent round
         });
 
         // Spawn: 20% chance to add a new PBT on an unoccupied tile
-        if (Math.random() < 0.20) {
+        if (combatRng.random() < 0.20) {
             const numCols = this._numBoardColumns || 8;
             const numRows = this._maxRows || 6;
 
@@ -14437,8 +14441,8 @@ export function CombatManagerRedux() {
                 }
             }
             if (freeTiles.length > 0) {
-                const chosen = freeTiles[Math.floor(Math.random() * freeTiles.length)];
-                this.powerBoostTiles.push({ id: Date.now() + Math.random(), x: chosen.x, y: chosen.y, roundSpawned: this.round });
+                const chosen = freeTiles[Math.floor(combatRng.random() * freeTiles.length)];
+                this.powerBoostTiles.push({ id: combatClock.now() + Math.random(), x: chosen.x, y: chosen.y, roundSpawned: this.round });
                 this.appendCombatLog(`✨ A Power Boost Tile appears at (${chosen.x},${chosen.y})!`);
             }
         }
@@ -14506,15 +14510,15 @@ export function CombatManagerRedux() {
                             unit.hp = Math.min(maxHp, unit.hp + healAmount);
                             this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} consumes meat and recovers ${healAmount} HP! (${unit.hp}/${maxHp})`);
                             unit.damageIndicators = unit.damageIndicators || [];
-                            const indId = Date.now() + Math.random();
+                            const indId = combatClock.now() + Math.random();
                             unit.damageIndicators.push({
                                 id: indId,
                                 value: `+${healAmount}`,
                                 source: 'Meat',
                                 type: 'heal',
-                                timestamp: Date.now()
+                                timestamp: combatClock.now()
                             });
-                            setTimeout(() => {
+                            combatClock.setTimeout(() => {
                                 if (Array.isArray(unit.damageIndicators)) {
                                     const idx = unit.damageIndicators.findIndex(e => e && e.id === indId);
                                     if (idx !== -1) unit.damageIndicators.splice(idx, 1);
@@ -14650,7 +14654,7 @@ export function CombatManagerRedux() {
             this._movementFacingTimeouts = {};
         }
         if (this.roundTimerInterval) {
-            clearInterval(this.roundTimerInterval);
+            combatClock.clearInterval(this.roundTimerInterval);
             this.roundTimerInterval = null;
         }
         this.combatOver = true;
@@ -14867,7 +14871,7 @@ export function CombatManagerRedux() {
         if (!user) return;
 
         user.consumableFlash = {
-            timestamp: Date.now(),
+            timestamp: combatClock.now(),
             iconKey: item.icon || item.iconUrl || 'minor_health_potion'
         };
 
@@ -14949,7 +14953,7 @@ export function CombatManagerRedux() {
             if (healAmount > 0) {
                 user.hp = Math.min(user.starting_hp, user.hp + healAmount);
                 // Add damage indicator (as healing)
-                const indicatorId = Date.now() + Math.random();
+                const indicatorId = combatClock.now() + Math.random();
                 const vctId = `${user.id}_VCT`;
                 const indicatorRecipient = this.combatants[vctId] || user;
                 if (indicatorRecipient.damageIndicators) {
@@ -14958,7 +14962,7 @@ export function CombatManagerRedux() {
                         value: `+${healAmount}`,
                         source: 'Item',
                         type: 'heal',
-                        timestamp: Date.now()
+                        timestamp: combatClock.now()
                     });
                 }
             }
@@ -15042,7 +15046,7 @@ export function CombatManagerRedux() {
                     const healthGain = Math.ceil(user.starting_hp * 0.01 * item.amount);
                     user.hp += healthGain;
                     if (user.hp > user.starting_hp) user.hp = user.starting_hp;
-                    const indicatorId = Date.now() + Math.random();
+                    const indicatorId = combatClock.now() + Math.random();
                     const vctId = `${user.id}_VCT`;
                     const indicatorRecipient = this.combatants[vctId] || user;
                     if (indicatorRecipient.damageIndicators) {
@@ -15051,7 +15055,7 @@ export function CombatManagerRedux() {
                             value: `+${healthGain}`,
                             source: 'Item',
                             type: 'heal',
-                            timestamp: Date.now()
+                            timestamp: combatClock.now()
                         });
                     }
                     break;

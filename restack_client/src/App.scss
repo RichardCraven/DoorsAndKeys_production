@@ -2304,3 +2304,44 @@ canvas.spell-animation {
     transform: scale(0.97);
   }
 }
+
+@keyframes destinationPulse {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.98);
+  }
+  100% {
+    opacity: 1.0;
+    transform: scale(1.02);
+  }
+}
+
+/* ── 2.5D Isometric Tabletop Perspective Mode ── */
+.is-25d-perspective {
+  perspective: 1200px;
+  perspective-origin: 50% 30%;
+  transform-style: preserve-3d;
+
+  .mb-board-container,
+  .combat-units-layer {
+    transform-style: preserve-3d;
+    transform: rotateX(24deg) rotateZ(-3deg);
+    transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+  }
+
+  /* Inverse billboarding for unit tiles, portraits, HP bars & floating indicators */
+  .unit-tile,
+  .monster-unit-tile,
+  .vct-unit-tile,
+  .hp-bar,
+  .endurance-bar,
+  .damage-indicator-container {
+    transform-style: preserve-3d;
+    .portrait,
+    .giant-portrait,
+    .monster-portrait {
+      transform: rotateX(-24deg) rotateZ(3deg) !important;
+      transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+  }
+}

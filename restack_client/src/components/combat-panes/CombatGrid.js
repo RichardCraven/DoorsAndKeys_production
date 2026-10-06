@@ -8,11 +8,14 @@
  *       .portrait + overlays
  */
 import React from 'react';
+import WebGLParticleCanvas from './WebGLParticleCanvas';
 import * as images from '../../utils/images';
 import Overlay from '../Overlay';
 import { runesData } from '../../utils/rune-data';
 import WalkerAnimatedUnit from '../WalkerAnimatedUnit';
 import SobekAnimatedUnit from '../SobekAnimatedUnit';
+import { combatClock } from '../../utils/combat-clock';
+import { useCombatClockPlayback } from '../../utils/use-combat-clock-playback';
 
 
 const TILE_SIZE = 100;
@@ -28,13 +31,13 @@ function FamiliarSummonRuneAnimation({ animKey, tgtPx, runeKey = 'archaic' }) {
     const [phase, setPhase] = React.useState(1);
 
     React.useEffect(() => {
-        const t1 = setTimeout(() => setPhase(2), 400);  // Step 2: replace base icon with 5 assembled shards
-        const t2 = setTimeout(() => setPhase(3), 520);  // Step 3: shards move outward to disassembled state
-        const t3 = setTimeout(() => setPhase(4), 1150); // Step 4: shards fade out
+        const t1 = combatClock.setTimeout(() => setPhase(2), 400);  // Step 2: replace base icon with 5 assembled shards
+        const t2 = combatClock.setTimeout(() => setPhase(3), 520);  // Step 3: shards move outward to disassembled state
+        const t3 = combatClock.setTimeout(() => setPhase(4), 1150); // Step 4: shards fade out
         return () => {
-            clearTimeout(t1);
-            clearTimeout(t2);
-            clearTimeout(t3);
+            combatClock.clearTimeout(t1);
+            combatClock.clearTimeout(t2);
+            combatClock.clearTimeout(t3);
         };
     }, []);
 
@@ -776,8 +779,8 @@ const getCombatantPortrait = (unit, greetingInProcess, activeAnimations, showDea
         if (unit.dead) {
             const deathList = Array.isArray(sp.death) ? sp.death : (Array.isArray(sp.deathStages) ? sp.deathStages : null);
             if (deathList && deathList.length > 0) {
-                const deathStart = unit.deathTimestamp || unit.deathStartTime || (unit._deathStartTime = unit._deathStartTime || Date.now());
-                const elapsed = Date.now() - deathStart;
+                const deathStart = unit.deathTimestamp || unit.deathStartTime || (unit._deathStartTime = unit._deathStartTime || combatClock.now());
+                const elapsed = combatClock.now() - deathStart;
                 const frameDuration = 320;
                 const frameIdx = Math.min(deathList.length - 1, Math.floor(elapsed / frameDuration));
                 return resolvePortrait(deathList[frameIdx]);
@@ -926,6 +929,10 @@ export default function CombatGrid(props) {
 
     const getLiveCombatant = (id) => (combatManager && typeof combatManager.getCombatant === 'function') ? combatManager.getCombatant(id) : null;
 
+    // ── Combat clock playback (sandbox slow-mo / pause; no-op in real time) ───
+    const clockPlaybackRootRef = React.useRef(null);
+    useCombatClockPlayback(clockPlaybackRootRef);
+
     // ── Mounted check Ref ─────────────────────────────────────────────────────
     const isMountedRef = React.useRef(true);
     React.useEffect(() => {
@@ -957,7 +964,7 @@ export default function CombatGrid(props) {
         const hasActiveEffects = Object.values(battleData).some(unit => {
             if (!unit || unit.dead) return false;
             const effs = getActiveEffects(unit, combatManager);
-            return effs.some(eff => eff.endTimeMs && eff.endTimeMs > Date.now());
+            return effs.some(eff => eff.endTimeMs && eff.endTimeMs > combatClock.now());
         });
 
         if (hasActiveEffects) {
@@ -974,7 +981,7 @@ export default function CombatGrid(props) {
             // Cancel and clear all active death timeouts and animation frames immediately
             if (deathTimeoutsRef.current) {
                 Object.values(deathTimeoutsRef.current).forEach(item => {
-                    if (item.timeout) clearTimeout(item.timeout);
+                    if (item.timeout) combatClock.clearTimeout(item.timeout);
                     if (item.animId) cancelAnimationFrame(item.animId);
                 });
                 deathTimeoutsRef.current = {};
@@ -1027,10 +1034,10 @@ export default function CombatGrid(props) {
                 animId = requestAnimationFrame(animate);
 
                 if (deathTimeoutsRef.current[id]) {
-                    if (deathTimeoutsRef.current[id].timeout) clearTimeout(deathTimeoutsRef.current[id].timeout);
+                    if (deathTimeoutsRef.current[id].timeout) combatClock.clearTimeout(deathTimeoutsRef.current[id].timeout);
                     if (deathTimeoutsRef.current[id].animId) cancelAnimationFrame(deathTimeoutsRef.current[id].animId);
                 }
-                const t = setTimeout(() => {
+                const t = combatClock.setTimeout(() => {
                     if (isMountedRef.current) {
                         setFullyDead(prev => { if (!prev[id]) return { ...prev, [id]: true }; return prev; });
                         setShowDeathAnimation(prev => ({ ...prev, [id]: false }));
@@ -1046,7 +1053,7 @@ export default function CombatGrid(props) {
             } else if (!isUnitDead && !deadUnitIdsRef.current.has(unit.id) && (showDeathAnimation[unit.id] || fullyDead[unit.id])) {
                 if (deathTimeoutsRef.current[unit.id]) {
                     const item = deathTimeoutsRef.current[unit.id];
-                    if (item.timeout) clearTimeout(item.timeout);
+                    if (item.timeout) combatClock.clearTimeout(item.timeout);
                     if (item.animId) cancelAnimationFrame(item.animId);
                     delete deathTimeoutsRef.current[unit.id];
                 }
@@ -1069,7 +1076,7 @@ export default function CombatGrid(props) {
         return () => {
             if (timeouts) {
                 Object.values(timeouts).forEach(item => {
-                    if (item.timeout) clearTimeout(item.timeout);
+                    if (item.timeout) combatClock.clearTimeout(item.timeout);
                     if (item.animId) cancelAnimationFrame(item.animId);
                 });
             }
@@ -1096,7 +1103,7 @@ export default function CombatGrid(props) {
                         return { ...e, id: stableId };
                     })
                     .filter(e => e && !processedIndicatorsRef.current.has(e.id))
-                    .map(e => e.timestamp ? e : { ...e, timestamp: Date.now() });
+                    .map(e => e.timestamp ? e : { ...e, timestamp: combatClock.now() });
                 if (newIndicators.length === 0) return prev;
 
                 newIndicators.forEach(e => processedIndicatorsRef.current.add(e.id));
@@ -1124,7 +1131,7 @@ export default function CombatGrid(props) {
                 if (!indicatorQueues[id] || indicatorQueues[id].length === 0) return;
                 const visibleArr = visibleDamageIndicators[id] || [];
                 const lastTimestamp = visibleArr.length > 0 ? Math.max(...visibleArr.map(e => e.timestamp)) : 0;
-                const timeDiff = Date.now() - lastTimestamp;
+                const timeDiff = combatClock.now() - lastTimestamp;
 
                 if (visibleArr.length === 0 || timeDiff >= STAGGER_DELAY) {
                     const [next, ...rest] = indicatorQueues[id];
@@ -1153,7 +1160,7 @@ export default function CombatGrid(props) {
                     });
                     setIndicatorQueues(prev => ({ ...prev, [id]: rest }));
                     if (!indicatorTimeouts.current[next.id]) {
-                        indicatorTimeouts.current[next.id] = setTimeout(() => {
+                        indicatorTimeouts.current[next.id] = combatClock.setTimeout(() => {
                             setVisibleDamageIndicators(current => {
                                 const arr = (current[id] || []).filter(e => e.id !== next.id);
                                 return { ...current, [id]: arr };
@@ -1174,14 +1181,14 @@ export default function CombatGrid(props) {
             });
 
             if (nextCheckDelay !== null) {
-                activeTimeout = setTimeout(processQueues, nextCheckDelay);
+                activeTimeout = combatClock.setTimeout(processQueues, nextCheckDelay);
             }
         };
 
         processQueues();
 
         return () => {
-            if (activeTimeout) clearTimeout(activeTimeout);
+            if (activeTimeout) combatClock.clearTimeout(activeTimeout);
         };
     }, [indicatorQueues, visibleDamageIndicators, battleData]);
 
@@ -1217,9 +1224,9 @@ export default function CombatGrid(props) {
                 prevConsumableFlashRef.current[fighter.id] = flashTs;
                 setConsumableFlashes(prev => ({ ...prev, [fighter.id]: details.consumableFlash.iconKey }));
                 if (consumableTimeoutsRef.current[fighter.id]) {
-                    clearTimeout(consumableTimeoutsRef.current[fighter.id]);
+                    combatClock.clearTimeout(consumableTimeoutsRef.current[fighter.id]);
                 }
-                consumableTimeoutsRef.current[fighter.id] = setTimeout(() => {
+                consumableTimeoutsRef.current[fighter.id] = combatClock.setTimeout(() => {
                     setConsumableFlashes(prev => ({ ...prev, [fighter.id]: null }));
                     delete consumableTimeoutsRef.current[fighter.id];
                 }, 1500);
@@ -1249,7 +1256,7 @@ export default function CombatGrid(props) {
                     // When paused, freeze the sweep at the moment combat was paused
                     const now = (combatManager?.combatPaused && combatManager?.pauseStartTimestamp)
                         ? combatManager.pauseStartTimestamp
-                        : Date.now();
+                        : combatClock.now();
                     const timeLeftMs = eff.endTimeMs - now;
                     preciseRoundsLeft = Math.max(0, (timeLeftMs / eff.totalDurationMs) * total);
                 } else {
@@ -1784,8 +1791,8 @@ export default function CombatGrid(props) {
                                 fighter.attacking || 
                                 details?.attacking || 
                                 liveFighter?.attacking || 
-                                (fighter.isCleaving && Date.now() - fighter.isCleaving < 1000) ||
-                                (liveFighter?.isCleaving && Date.now() - liveFighter.isCleaving < 1000) ||
+                                (fighter.isCleaving && combatClock.now() - fighter.isCleaving < 1000) ||
+                                (liveFighter?.isCleaving && combatClock.now() - liveFighter.isCleaving < 1000) ||
                                 (liveFighter?.activeAbility && (liveFighter.activeAbility.id === 'walker_cleave' || liveFighter.activeAbility === 'walker_cleave'))
                             );
                             return (fighter.type === 'walker' || fighter.portrait === 'walker' || fighter.portrait === 'walker_glowing_square' || fighter.name === 'Walker' || fighter.type === 'turret' || fighter.portrait === 'turret') && (
@@ -2508,10 +2515,10 @@ export default function CombatGrid(props) {
         const isFamiliar = unit.isFamiliar || unit.type === 'archaic_familiar' || (unit.type && String(unit.type).includes('familiar')) || (unit.key && String(unit.key).includes('familiar'));
         if (isMinion && !isDead && !isFamiliar) {
             if (!minionSpawnTimesRef.current[unit.id]) {
-                minionSpawnTimesRef.current[unit.id] = Date.now();
+                minionSpawnTimesRef.current[unit.id] = combatClock.now();
             }
         }
-        const isSpawningMinion = isMinion && !isDead && !isFamiliar && (Date.now() - (minionSpawnTimesRef.current[unit.id] || Date.now()) < 2000);
+        const isSpawningMinion = isMinion && !isDead && !isFamiliar && (combatClock.now() - (minionSpawnTimesRef.current[unit.id] || combatClock.now()) < 2000);
 
         const isPCUnit = isOpponent || unit.isOpponent || (!unit.isMonster && !unit.isMinion) || isPCUnitType(unit.type || unit.portrait || unit.image);
         const currentFacing = unit.facing || (isOpponent || (unit.coordinates && unit.coordinates.x >= 4) ? 'left' : (isPCUnit ? 'right' : 'left'));
@@ -2732,8 +2739,8 @@ export default function CombatGrid(props) {
                                     const isWalkerAttacking = !!(
                                         unit.attacking || 
                                         liveMonster?.attacking || 
-                                        (unit.isCleaving && Date.now() - unit.isCleaving < 1000) ||
-                                        (liveMonster?.isCleaving && Date.now() - liveMonster.isCleaving < 1000) ||
+                                        (unit.isCleaving && combatClock.now() - unit.isCleaving < 1000) ||
+                                        (liveMonster?.isCleaving && combatClock.now() - liveMonster.isCleaving < 1000) ||
                                         (liveMonster?.activeAbility && (liveMonster.activeAbility.id === 'walker_cleave' || liveMonster.activeAbility === 'walker_cleave'))
                                     );
                                     return isWalkerUnit && <WalkerAnimatedUnit isMoving={true} isAttacking={isWalkerAttacking} />;
@@ -7877,8 +7884,97 @@ export default function CombatGrid(props) {
 
     // ── Main render ───────────────────────────────────────────────────────────
     const activePaused = isPaused || (combatManager && combatManager.combatPaused);
+    const renderDestinationTrajectoriesAndReticles = () => {
+        return (
+            <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 250, overflow: 'visible' }}>
+                {activeCrew.map(fighter => {
+                    const details = getFighterDetails(fighter) || fighter;
+                    const liveFighter = getLiveCombatant(fighter.id) || details || fighter;
+                    if (!liveFighter || liveFighter.dead || !liveFighter.manualDestination) return null;
+                    const dest = liveFighter.manualDestination;
+                    const src = liveFighter.coordinates;
+                    if (!dest || typeof dest.x !== 'number' || typeof dest.y !== 'number' || !src) return null;
+
+                    const destX = tilePos(dest.x);
+                    const destY = tilePos(dest.y);
+                    const srcX = tilePos(src.x) + TILE_SIZE / 2;
+                    const srcY = tilePos(src.y) + TILE_SIZE / 2;
+                    const tgtX = destX + TILE_SIZE / 2;
+                    const tgtY = destY + TILE_SIZE / 2;
+
+                    const gridDist = Math.max(Math.abs(dest.x - src.x), Math.abs(dest.y - src.y));
+                    const isFar = gridDist > 1;
+
+                    const midX = (srcX + tgtX) / 2;
+                    const midY = (srcY + tgtY) / 2 - Math.min(60, gridDist * 15);
+
+                    const isSelected = selectedFighter?.id === fighter.id;
+                    const strokeColor = isSelected ? '#f9b115' : 'rgba(192, 132, 252, 0.85)';
+                    const shadowColor = isSelected ? 'rgba(249, 177, 21, 0.7)' : 'rgba(192, 132, 252, 0.6)';
+
+                    return (
+                        <React.Fragment key={`dest_path_${fighter.id}`}>
+                            {/* Tile Perimeter Highlight */}
+                            <div
+                                style={{
+                                    position: 'absolute',
+                                    left: `${destX}px`,
+                                    top: `${destY}px`,
+                                    width: `${TILE_SIZE}px`,
+                                    height: `${TILE_SIZE}px`,
+                                    boxSizing: 'border-box',
+                                    border: `3px solid ${strokeColor}`,
+                                    borderRadius: '10px',
+                                    boxShadow: `0 0 15px ${shadowColor}, inset 0 0 10px ${shadowColor}`,
+                                    animation: 'destinationPulse 1.2s ease-in-out infinite alternate',
+                                    pointerEvents: 'none',
+                                    zIndex: 255
+                                }}
+                            />
+                            {/* Arced Dashed Trajectory Line (Rendered if destination > 1 tile away) */}
+                            {isFar && (
+                                <svg
+                                    style={{
+                                        position: 'absolute',
+                                        top: 0,
+                                        left: 0,
+                                        width: '100%',
+                                        height: '100%',
+                                        pointerEvents: 'none',
+                                        overflow: 'visible',
+                                        zIndex: 254
+                                    }}
+                                >
+                                    <path
+                                        d={`M ${srcX} ${srcY} Q ${midX} ${midY} ${tgtX} ${tgtY}`}
+                                        fill="none"
+                                        stroke={strokeColor}
+                                        strokeWidth="3.5"
+                                        strokeDasharray="8 6"
+                                        strokeLinecap="round"
+                                        style={{
+                                            filter: `drop-shadow(0 0 6px ${shadowColor})`
+                                        }}
+                                    />
+                                    {/* Destination Endpoint Arrow/Dot */}
+                                    <circle
+                                        cx={tgtX}
+                                        cy={tgtY}
+                                        r="6"
+                                        fill={strokeColor}
+                                        style={{ filter: `drop-shadow(0 0 8px ${strokeColor})` }}
+                                    />
+                                </svg>
+                            )}
+                        </React.Fragment>
+                    );
+                })}
+            </div>
+        );
+    };
+
     return (
-        <div className={`combat-units-layer ${activePaused ? 'combat-paused' : ''}`} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
+        <div ref={clockPlaybackRootRef} className={`combat-units-layer ${activePaused ? 'combat-paused' : ''}`} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', overflow: 'visible' }}>
             <svg style={{ position: 'absolute', width: 0, height: 0 }}>
                 <defs>
                     {Object.entries(meltScales).map(([unitId, scale]) => (
@@ -7889,6 +7985,8 @@ export default function CombatGrid(props) {
                     ))}
                 </defs>
             </svg>
+            {renderDestinationTrajectoriesAndReticles()}
+            <WebGLParticleCanvas activeAnimations={activeAnimations} boardWidth={boardWidth} boardHeight={600} />
             {/* Fighters */}
             {activeCrew.map(renderFighter)}
             {renderRiftPortal()}

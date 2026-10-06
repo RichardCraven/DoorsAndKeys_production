@@ -242,6 +242,7 @@ import {
   paradox_engine,
 } from '../utils/images';
 import '../styles/monster-battle.scss';
+import skillsMatrix from '../utils/skills-matrix';
 
 // Dynamically load all runes from the directory
 const req = require.context('../assets/icons/runes', true, /\.png$/);
@@ -647,6 +648,81 @@ const fightersData = [
     ]
   }
 ];
+
+// --- Orphan Skill Detection (legacy sandbox → combat parity) ---
+// A sandbox ability is an "orphan" when its id has no entry in skills-matrix, i.e. it does not
+// exist in the real combat system. Orphans are flagged dramatically so each can be decided on
+// case-by-case (port to combat / rename / delete). Add known renames to SANDBOX_SKILL_ALIASES.
+const SANDBOX_SKILL_ALIASES = {
+  begin_trials: 'begin_the_trials',
+};
+const isOrphanSkill = (ability) => {
+  if (!ability || !ability.id) return false;
+  if (skillsMatrix[ability.id]) return false;
+  const alias = SANDBOX_SKILL_ALIASES[ability.id];
+  return !(alias && skillsMatrix[alias]);
+};
+const getAllOrphanSkills = () => [
+  ...fightersData.map(u => ({ unit: u, unitType: 'fighter' })),
+  ...monstersData.map(u => ({ unit: u, unitType: 'monster' })),
+].flatMap(({ unit, unitType }) => (unit.abilities || [])
+  .filter(isOrphanSkill)
+  .map(a => ({ unitType, unitId: unit.id, unitName: unit.name, ability: a })));
+
+const ORPHAN_KEYFRAMES = `
+@keyframes orphanHazardScroll { from { background-position: 0 0; } to { background-position: 28px 0; } }
+@keyframes orphanPulse {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(255, 0, 60, 0.55), inset 0 0 0 1px rgba(0,0,0,0.6); }
+  50% { box-shadow: 0 0 18px 5px rgba(255, 0, 60, 0.95), inset 0 0 0 1px rgba(0,0,0,0.6); }
+}
+@keyframes orphanGlitch {
+  0%, 92%, 100% { transform: rotate(35deg) translate(0, 0); }
+  94% { transform: rotate(35deg) translate(-1px, 1px); }
+  96% { transform: rotate(35deg) translate(1px, -1px); }
+}
+`;
+
+// Wrapper style: animated red/black hazard-stripe frame + pulsing glow around the ability button.
+const orphanWrapperStyle = {
+  padding: '3px',
+  borderRadius: '10px',
+  background: 'repeating-linear-gradient(45deg, #ff003c 0 7px, #111 7px 14px)',
+  backgroundSize: '28px 28px',
+  animation: 'orphanHazardScroll 0.8s linear infinite, orphanPulse 1.6s ease-in-out infinite',
+  overflow: 'hidden',
+};
+
+const OrphanRibbon = () => (
+  <div
+    title="ORPHAN: this skill id does not exist in skills-matrix / the real combat system. Decide: port to combat, rename, or delete."
+    style={{
+      position: 'absolute',
+      top: '10px',
+      right: '-30px',
+      width: '110px',
+      textAlign: 'center',
+      background: 'linear-gradient(90deg, #7a0019, #ff003c, #7a0019)',
+      color: '#fff',
+      fontSize: '9px',
+      fontWeight: 900,
+      letterSpacing: '0.18em',
+      padding: '2px 0',
+      boxShadow: '0 2px 6px rgba(0,0,0,0.7)',
+      textShadow: '0 0 4px #000',
+      animation: 'orphanGlitch 2.4s steps(1) infinite',
+      pointerEvents: 'auto',
+      zIndex: 5,
+    }}
+  >
+    ⚠ ORPHAN
+  </div>
+);
+
+const OrphanNote = () => (
+  <div style={{ fontSize: '9px', color: '#ff4d6d', marginTop: '4px', fontWeight: 'bold', letterSpacing: '0.04em' }}>
+    ☠ NOT IN COMBAT SYSTEM: port, rename, or delete
+  </div>
+);
 
 const GRID_SIZE = 6;
 const TILE_PCT = 100 / GRID_SIZE; // 16.666667
@@ -13036,6 +13112,37 @@ const SandboxPage = () => {
             overflowY: 'auto'
           }}>
             <h3 style={{ margin: '0 0 15px 0', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '10px', fontSize: '18px', color: '#ff5400', letterSpacing: '0.05em' }}>ABILITIES</h3>
+            <style>{ORPHAN_KEYFRAMES}</style>
+            {(() => {
+              const allOrphans = getAllOrphanSkills();
+              if (allOrphans.length === 0) return null;
+              return (
+                <details style={{ ...orphanWrapperStyle, marginTop: '-8px' }}>
+                  <summary style={{ cursor: 'pointer', listStyle: 'none', background: '#1a0a0e', borderRadius: '7px', padding: '8px 10px', color: '#ff4d6d', fontSize: '11px', fontWeight: 900, letterSpacing: '0.1em' }}>
+                    ⚠ {allOrphans.length} ORPHAN SKILLS (not in combat) ▾
+                  </summary>
+                  <div style={{ background: '#1a0a0e', borderRadius: '7px', marginTop: '3px', padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {allOrphans.map(o => {
+                      const isCurrent = o.unitId === selectedFighter.id && o.unitType === selectedUnitType;
+                      return (
+                        <button
+                          key={`${o.unitType}_${o.unitId}_${o.ability.id}`}
+                          onClick={() => {
+                            setSelectedUnitType(o.unitType);
+                            if (o.unitType === 'monster') setSelectedMonsterId(o.unitId);
+                            else setSelectedFighterId(o.unitId);
+                          }}
+                          title="Jump to this unit"
+                          style={{ textAlign: 'left', background: isCurrent ? 'rgba(255,0,60,0.18)' : 'transparent', border: 'none', color: '#ffd6dc', fontSize: '11px', padding: '3px 4px', borderRadius: '4px', cursor: 'pointer', outline: 'none' }}
+                        >
+                          <span style={{ color: '#ff9f1c' }}>{o.unitName}</span> · {o.ability.name} <code style={{ color: '#ff4d6d', fontSize: '10px' }}>{o.ability.id}</code>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </details>
+              );
+            })()}
             {selectedUnitType === 'monster' && selectedMonsterId === 'troll' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '15px', padding: '10px', borderRadius: '8px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)' }}>
                 <div style={{ fontSize: '12px', color: '#aaa', fontWeight: 'bold', textAlign: 'left' }}>Troll HP: {trollHpPct}%</div>
@@ -13067,8 +13174,12 @@ const SandboxPage = () => {
                 const renderAbilityButton = (a) => {
                   const isTier3 = a.tier === 3;
                   const isDisabled = isAnimating || (isTier3 && !riftPortalActive);
+                  const isOrphan = isOrphanSkill(a);
+                  const baseBg = isOrphan ? '#1a0a0e' : 'rgba(255, 255, 255, 0.03)';
+                  const baseBorder = isOrphan ? 'rgba(255, 0, 60, 0.5)' : 'rgba(255, 255, 255, 0.08)';
                   return (
-                    <div key={a.id} style={{ position: 'relative', width: '100%', marginBottom: '8px' }}>
+                    <div key={a.id} style={{ position: 'relative', width: '100%', marginBottom: '8px', ...(isOrphan ? orphanWrapperStyle : {}) }}>
+                      {isOrphan && <OrphanRibbon />}
                       <button
                         disabled={isDisabled}
                         onClick={() => triggerAbility(a)}
@@ -13078,8 +13189,8 @@ const SandboxPage = () => {
                           gap: '12px',
                           padding: '10px 12px',
                           borderRadius: '8px',
-                          background: 'rgba(255, 255, 255, 0.03)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          background: baseBg,
+                          border: `1px solid ${baseBorder}`,
                           color: '#fff',
                           cursor: isDisabled ? 'not-allowed' : 'pointer',
                           textAlign: 'left',
@@ -13095,8 +13206,8 @@ const SandboxPage = () => {
                         }}
                         onMouseLeave={(e) => {
                           if (isDisabled) return;
-                          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                          e.currentTarget.style.background = baseBg;
+                          e.currentTarget.style.borderColor = baseBorder;
                         }}
                       >
                         <div style={{
@@ -13109,11 +13220,13 @@ const SandboxPage = () => {
                           backgroundRepeat: 'no-repeat',
                           backgroundPosition: 'center',
                           border: '1px solid rgba(255,255,255,0.15)',
-                          flexShrink: '0'
+                          flexShrink: '0',
+                          ...(isOrphan ? { filter: 'grayscale(0.7) sepia(0.6) hue-rotate(-40deg) saturate(3)' } : {})
                         }}></div>
                         <div>
-                          <div style={{ fontWeight: 'bold', fontSize: '13px', color: '#ff9f1c' }}>{a.name}</div>
+                          <div style={{ fontWeight: 'bold', fontSize: '13px', color: isOrphan ? '#ff4d6d' : '#ff9f1c' }}>{a.name}</div>
                           <div style={{ fontSize: '10px', color: '#aaa', marginTop: '2px', lineHeight: '1.3' }}>{a.desc}</div>
+                          {isOrphan && <OrphanNote />}
                         </div>
                       </button>
                     </div>
@@ -13185,8 +13298,12 @@ const SandboxPage = () => {
                   isReassemblyCooldown ||
                   isOtherSkillDisabledByDeath ||
                   (isReassemblySkill && skeletonReassemblyActive);
+                const isOrphan = isOrphanSkill(a);
+                const baseBg = isOrphan ? '#1a0a0e' : 'rgba(255, 255, 255, 0.03)';
+                const baseBorder = isOrphan ? 'rgba(255, 0, 60, 0.5)' : 'rgba(255, 255, 255, 0.08)';
                 return (
-                  <div key={a.id} style={{ position: 'relative', width: '100%' }}>
+                  <div key={a.id} style={{ position: 'relative', width: '100%', ...(isOrphan ? orphanWrapperStyle : {}) }}>
+                    {isOrphan && <OrphanRibbon />}
                     {isNotch && submenuOpen && (
                       <div style={{
                         position: 'absolute',
@@ -13261,8 +13378,8 @@ const SandboxPage = () => {
                         gap: '12px',
                         padding: '12px',
                         borderRadius: '8px',
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        background: baseBg,
+                        border: `1px solid ${baseBorder}`,
                         color: '#fff',
                         cursor: isDisabled ? 'not-allowed' : 'pointer',
                         textAlign: 'left',
@@ -13278,8 +13395,8 @@ const SandboxPage = () => {
                       }}
                       onMouseLeave={(e) => {
                         if (isDisabled) return;
-                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)';
-                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.08)';
+                        e.currentTarget.style.background = baseBg;
+                        e.currentTarget.style.borderColor = baseBorder;
                       }}
                     >
                       <div style={{
@@ -13294,7 +13411,8 @@ const SandboxPage = () => {
                         border: '1px solid rgba(255,255,255,0.15)',
                         flexShrink: '0',
                         position: 'relative',
-                        overflow: 'hidden'
+                        overflow: 'hidden',
+                        ...(isOrphan ? { filter: 'grayscale(0.7) sepia(0.6) hue-rotate(-40deg) saturate(3)' } : {})
                       }}>
                         {isReassemblySkill && skeletonReassemblyCooldownEndTime && currentTime < skeletonReassemblyCooldownEndTime && (
                           <div style={{
@@ -13346,8 +13464,9 @@ const SandboxPage = () => {
                         )}
                       </div>
                       <div>
-                        <div style={{ fontWeight: 'bold', fontSize: '14px', color: '#ff9f1c' }}>{a.name}</div>
+                        <div style={{ fontWeight: 'bold', fontSize: '14px', color: isOrphan ? '#ff4d6d' : '#ff9f1c' }}>{a.name}</div>
                         <div style={{ fontSize: '11px', color: '#aaa', marginTop: '2px', lineHeight: '1.3' }}>{a.desc}</div>
+                        {isOrphan && <OrphanNote />}
                       </div>
                     </button>
                   </div>
