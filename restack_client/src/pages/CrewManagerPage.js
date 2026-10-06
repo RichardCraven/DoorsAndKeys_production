@@ -1045,6 +1045,50 @@ class CrewManagerPage extends React.Component {
                                 <div className="description" style={{ marginTop: '8px', fontSize: '13px', color: '#ccc', lineHeight: '1.4', maxWidth: '200px' }}>
                                     {getReflectedDescription(this.state.selectedCrewMember.description, this.state.selectedCrewMember.name, this.state.selectedCrewMember)}
                                 </div>
+                                {(() => {
+                                    const inProc = this.getInProcessAction(this.state.selectedCrewMember);
+                                    if (!inProc) return null;
+                                    const horo = (this.state.options || []).find(o => o && (o.type === 'horologist' || o.image === 'horologist')) ||
+                                        (this.state.selectedCrew || []).find(c => c && (c.type === 'horologist' || c.image === 'horologist'));
+                                    return (
+                                        <div style={{ marginTop: '10px', padding: '8px', background: 'rgba(217,164,65,0.12)', border: '1px solid rgba(217,164,65,0.4)', borderRadius: '6px' }}>
+                                            <div style={{ fontSize: '11px', color: '#ffe2a0', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '4px' }}>
+                                                ⏳ {inProc} in progress
+                                            </div>
+                                            {horo && (
+                                                <button
+                                                    onClick={() => {
+                                                        const member = this.state.selectedCrewMember;
+                                                        if (!member || !Array.isArray(member.specialActions)) return;
+                                                        const now = new Date();
+                                                        const actIdx = member.specialActions.findIndex(a => a && !a.available && a.endDate && new Date(a.endDate) > now);
+                                                        if (actIdx === -1) return;
+                                                        const res = this.props.crewManager?.borrowTime(horo, member, actIdx);
+                                                        if (res && res.ok) {
+                                                            this.setState({ numeralUpdate: !this.state.numeralUpdate });
+                                                            if (this.props.saveUserData) this.props.saveUserData();
+                                                        } else if (res && res.reason === 'over_cap') {
+                                                            alert(`Cannot borrow time: Horologist Time Debt would exceed cap!`);
+                                                        }
+                                                    }}
+                                                    style={{
+                                                        background: 'linear-gradient(135deg, #d9a441, #b88325)',
+                                                        color: '#1c1917',
+                                                        border: '1px solid #ffe2a0',
+                                                        borderRadius: '4px',
+                                                        padding: '4px 8px',
+                                                        fontSize: '11px',
+                                                        fontWeight: 'bold',
+                                                        cursor: 'pointer',
+                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.3)'
+                                                    }}
+                                                >
+                                                    ⏳ Borrow Time
+                                                </button>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                             </div>}
                             {this.state.selectedCrewMember && <div className="stats-pane" style={{ minWidth: '260px', marginRight: '15px' }}>
                                 {renderPowerRatingsPanel(this.state.selectedCrewMember)}

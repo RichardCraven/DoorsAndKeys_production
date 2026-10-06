@@ -19,7 +19,7 @@ describe('Goblin Chef & Feed the Masses', () => {
         expect(chefDef.skills).toContain('bite');
     });
 
-    test('Goblin Chef hangs back at backline when no friendly is damaged', () => {
+    test('Goblin Chef advances to attack when all friendlies are near full HP', () => {
         const cm = new CombatManagerRedux();
         cm.combatants = {
             chef: {
@@ -58,8 +58,8 @@ describe('Goblin Chef & Feed the Masses', () => {
 
         cm.executeUnitAI(cm.combatants.chef);
 
-        // Chef should move back towards MAX_DEPTH (7)
-        expect(cm.combatants.chef.coordinates.x).toBeGreaterThan(5);
+        // Chef switches to attacking mode because friendlies are at full HP, advancing towards player (x < 5)
+        expect(cm.combatants.chef.coordinates.x).toBeLessThan(5);
     });
 
     test('Goblin Chef uses feed_the_masses when a friendly loses >= 10% HP', () => {
@@ -207,7 +207,7 @@ describe('Goblin Chef & Feed the Masses', () => {
         expect(newMeat.x !== 6 || newMeat.y !== 2).toBe(true);
     });
 
-    test('Monster below 80% HP prioritizes moving towards a meat tile', () => {
+    test('Monster below 40% HP prioritizes moving towards a meat tile (even if backward)', () => {
         const cm = new CombatManagerRedux();
         // Meat tile at (4, 3)
         cm.meatTiles = [{ id: 'meat_food', x: 4, y: 3 }];
@@ -217,7 +217,7 @@ describe('Goblin Chef & Feed the Masses', () => {
                 name: 'Wounded Goblin',
                 type: 'goblin_warrior',
                 isMonster: true,
-                hp: 15, // < 80% of 30 max HP
+                hp: 10, // < 40% of 30 max HP (badly hurt)
                 starting_hp: 30,
                 stats: { speed: 10, hp: 30 },
                 coordinates: { x: 4, y: 2 },
@@ -237,7 +237,7 @@ describe('Goblin Chef & Feed the Masses', () => {
         cm.executeUnitAI(cm.combatants.goblin);
 
         // Goblin should move to (4, 3) where food is, and consume it!
-        expect(cm.combatants.goblin.hp).toBeGreaterThan(15);
+        expect(cm.combatants.goblin.hp).toBeGreaterThan(10);
         expect(cm.meatTiles.length).toBe(0);
     });
 
@@ -274,13 +274,12 @@ describe('Goblin Chef & Feed the Masses', () => {
         expect(cm.combatants.chef.coordinates.x).toBeLessThan(7);
     });
 
-    test('Goblin Chef respects 3 food item max cap and switches to aggressive melee mode', () => {
+    test('Goblin Chef respects 2 food item board cap and switches to aggressive melee mode', () => {
         const cm = new CombatManagerRedux();
-        // Pre-fill 3 active meat tiles created by this chef
+        // Pre-fill 2 active meat tiles on the board
         cm.meatTiles = [
             { id: 'meat_1', x: 5, y: 0, createdBy: 'chef' },
             { id: 'meat_2', x: 5, y: 4, createdBy: 'chef' },
-            { id: 'meat_3', x: 6, y: 0, createdBy: 'chef' },
         ];
         cm.combatants = {
             chef: {
@@ -317,23 +316,18 @@ describe('Goblin Chef & Feed the Masses', () => {
             }
         };
 
-        // Chef executes AI with 3 active food tiles
+        // Chef executes AI with 2 active food tiles on board
         cm.executeUnitAI(cm.combatants.chef);
 
-        // Chef cannot throw a 4th food item (meatTiles remains 3)
-        expect(cm.meatTiles.length).toBe(3);
+        // Chef cannot throw a 3rd food item when 2+ food items exist on board (meatTiles remains 2)
+        expect(cm.meatTiles.length).toBe(2);
         // Chef should advance in aggressive melee mode towards player (x < 7)
         expect(cm.combatants.chef.coordinates.x).toBeLessThan(7);
     });
 
-    test('Goblin Chef reverts to food-provider mode once a food item is consumed', () => {
+    test('Goblin Chef does not lob food when friendly unit is near full HP (>= 85%)', () => {
         const cm = new CombatManagerRedux();
-        // 3 food items initially
-        cm.meatTiles = [
-            { id: 'meat_1', x: 5, y: 0, createdBy: 'chef' },
-            { id: 'meat_2', x: 5, y: 4, createdBy: 'chef' },
-            { id: 'meat_3', x: 6, y: 0, createdBy: 'chef' },
-        ];
+        cm.meatTiles = [];
         cm.combatants = {
             chef: {
                 id: 'chef',
@@ -348,12 +342,12 @@ describe('Goblin Chef & Feed the Masses', () => {
                 cooldowns: { feed_the_masses: 0, bite: 0 },
                 movesTakenThisRound: 0,
             },
-            woundedWarrior: {
-                id: 'woundedWarrior',
-                name: 'Wounded Warrior',
+            healthyWarrior: {
+                id: 'healthyWarrior',
+                name: 'Healthy Warrior',
                 type: 'goblin_warrior',
                 isMonster: true,
-                hp: 10,
+                hp: 27, // 27/30 = 90% HP (>= 85%, near full HP)
                 starting_hp: 30,
                 stats: { speed: 10, hp: 30 },
                 coordinates: { x: 5, y: 2 },
@@ -369,15 +363,78 @@ describe('Goblin Chef & Feed the Masses', () => {
             }
         };
 
-        // Simulate 1 food item being consumed (removed from meatTiles)
-        cm.meatTiles = cm.meatTiles.filter(m => m.id !== 'meat_3');
-        expect(cm.meatTiles.length).toBe(2);
-
-        // Chef executes AI with 2 active food tiles
         cm.executeUnitAI(cm.combatants.chef);
 
-        // Chef reverts to food-provider mode and lobs a new 3rd food tile!
-        expect(cm.meatTiles.length).toBe(3);
-        expect(cm.combatants.chef.cooldowns['feed_the_masses']).toBe(2);
+        // Chef does not lob food (meatTiles remains 0) and switches to attacking
+        expect(cm.meatTiles.length).toBe(0);
+        expect(cm.combatants.chef.coordinates.x).toBeLessThan(7);
+    });
+
+    test('Monster with >= 40% HP will NOT move backwards away from target enemy to get food', () => {
+        const cm = new CombatManagerRedux();
+        // Meat tile behind monster at x=6, y=2 (enemy is at x=0, y=2, monster is at x=4, y=2)
+        cm.meatTiles = [{ id: 'meat_behind', x: 6, y: 2 }];
+        cm.combatants = {
+            warchief: {
+                id: 'warchief',
+                name: 'Goblin Warchief',
+                type: 'goblin_warchief',
+                isMonster: true,
+                hp: 60, // 60/100 = 60% HP (>= 40%)
+                starting_hp: 100,
+                stats: { speed: 10, hp: 100 },
+                coordinates: { x: 4, y: 2 },
+                movesTakenThisRound: 0,
+            },
+            enemy: {
+                id: 'enemy',
+                name: 'Wizard',
+                isMonster: false,
+                hp: 100,
+                starting_hp: 100,
+                stats: { speed: 8, hp: 100 },
+                coordinates: { x: 0, y: 2 },
+            }
+        };
+
+        cm.executeUnitAI(cm.combatants.warchief);
+
+        // Warchief should NOT move backwards to x=5 to get meat. It should move forward towards enemy at x=0 (x < 4).
+        expect(cm.combatants.warchief.coordinates.x).toBeLessThan(4);
+        expect(cm.meatTiles.length).toBe(1); // Meat remains unconsumed
+    });
+
+    test('Monster with < 40% HP WILL move backwards away from target enemy to get food', () => {
+        const cm = new CombatManagerRedux();
+        // Meat tile behind monster at x=5, y=2 (enemy is at x=0, y=2, monster is at x=4, y=2)
+        cm.meatTiles = [{ id: 'meat_behind', x: 5, y: 2 }];
+        cm.combatants = {
+            warchief: {
+                id: 'warchief',
+                name: 'Goblin Warchief',
+                type: 'goblin_warchief',
+                isMonster: true,
+                hp: 30, // 30/100 = 30% HP (< 40%)
+                starting_hp: 100,
+                stats: { speed: 10, hp: 100 },
+                coordinates: { x: 4, y: 2 },
+                movesTakenThisRound: 0,
+            },
+            enemy: {
+                id: 'enemy',
+                name: 'Wizard',
+                isMonster: false,
+                hp: 100,
+                starting_hp: 100,
+                stats: { speed: 8, hp: 100 },
+                coordinates: { x: 0, y: 2 },
+            }
+        };
+
+        cm.executeUnitAI(cm.combatants.warchief);
+
+        // Warchief is badly hurt (<40% HP) so it moves backwards to x=5 to get meat!
+        expect(cm.combatants.warchief.hp).toBe(60); // Healed by meat!
+        expect(cm.meatTiles.length).toBe(0);
     });
 });

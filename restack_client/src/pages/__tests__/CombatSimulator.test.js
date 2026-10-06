@@ -85,3 +85,34 @@ test('CombatSimulator weapon equipment constraints in applySimulatorPrep', () =>
     expect(wizardWeapon.range).toBe('close');
     expect(wizardWeapon._im_key).toMatch(/_sword|_axe/);
 });
+
+test('CombatSimulator 5x HP multiplier when only 1 crew unit is selected', async () => {
+    const mockInventoryManager = { weapons: {}, runes: {} };
+    const mockCrewManager = { adventurers: [] };
+    const props = {
+        inventoryManager: mockInventoryManager,
+        crewManager: mockCrewManager,
+        monsterManager: {
+            getMonster: jest.fn().mockReturnValue({ type: 'mummy', monster_names: ['Mummy'], stats: { hp: 100 } }),
+            getRandomMonster: jest.fn()
+        }
+    };
+
+    const instance = new CrewManagerPage(props);
+    instance.getSimLevel = jest.fn().mockReturnValue(1);
+    instance.getSimSkillTier = jest.fn().mockReturnValue(1);
+    instance.state = {
+        selectedCrew: [{ id: 'solo_monk', type: 'monk', level: 1, hp: 20, max_hp: 20, stats: { hp: 20 } }],
+        selectedMonsterKey: 'mummy',
+        selectedMinionKeys: [],
+        outfitWithEquipment: false
+    };
+
+    await instance.submit();
+
+    expect(instance.state.preppedCrew.length).toBe(1);
+    const soloUnit = instance.state.preppedCrew[0];
+    expect(soloUnit.hp).toBe(100); // 20 * 5
+    expect(soloUnit.max_hp).toBe(100); // 20 * 5
+    expect(soloUnit.stats.hp).toBe(100); // 20 * 5
+});

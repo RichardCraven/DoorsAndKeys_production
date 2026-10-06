@@ -714,6 +714,7 @@ import horned_pet from '../assets/portraits/monsters/horned_pet.png'
 import horned_pet_portrait from '../assets/portraits/monsters/horned_pet.png'
 import dragon_hatchling from '../assets/portraits/monsters/dragon_hatchling.png'
 import qlippoth from '../assets/portraits/monsters/qlippoth.png'
+import vallgorguina_djinn from '../assets/portraits/monsters/vallgorguina_djinn.png'
 
 
 //MID JOURNEY
@@ -1109,11 +1110,20 @@ import plunder_summoner from '../assets/icons/global skills/Summoner/plunder.png
 import soul_tap_summoner from '../assets/icons/global skills/Summoner/sould tap.png';
 import soul_tithe_summoner from '../assets/icons/global skills/Summoner/soul tithe.png';
 import dark_pact_summoner from '../assets/icons/global skills/Summoner/dark pact.png';
+import wandering_eye_summoner from '../assets/icons/global skills/Summoner/wandering eye.png';
 import healing_ground_sage from '../assets/icons/global skills/Sage/healing ground.png';
 import sing_sage from '../assets/icons/global skills/Sage/sing.png';
 import sneak_attack_ranger from '../assets/icons/global skills/Ranger/sneak attack.png';
 import spike_trap_ranger from '../assets/icons/global skills/Ranger/spike trap.png';
 import shield_soldier from '../assets/icons/global skills/Soldier/shield.png';
+import pyro_spark_glitterburn from '../assets/icons/global skills/Glitterburn/pyro spark.png';
+import glitter_burst_glitterburn from '../assets/icons/global skills/Glitterburn/glitter burst.png';
+import prism_snare_glitterburn from '../assets/icons/global skills/Glitterburn/prism snare.png';
+import starlight_decoy_glitterburn from '../assets/icons/global skills/Glitterburn/starlight decoy.png';
+import supernova_core_glitterburn from '../assets/icons/global skills/Glitterburn/supernova core.png';
+import sparkling_aura_glitterburn from '../assets/icons/global skills/Glitterburn/sparkling aura.png';
+import blinding_beacon_glitterburn from '../assets/icons/global skills/Glitterburn/blinding beacon.png';
+import prismatic_flare_glitterburn from '../assets/icons/global skills/Glitterburn/prismatic flare.png';
 
 
 //terrain
@@ -1660,6 +1670,7 @@ export {
     horned_pet_portrait,
     dragon_hatchling,
     qlippoth,
+    vallgorguina_djinn,
 
     beetle_charm,
     demonskull_charm,
@@ -2328,6 +2339,22 @@ export {
     shield_soldier as soldier_shield,
     shield_soldier as shield,
     breacher_soldier as breacher,
+    pyro_spark_glitterburn,
+    pyro_spark_glitterburn as pyro_spark,
+    glitter_burst_glitterburn,
+    glitter_burst_glitterburn as glitter_burst,
+    prism_snare_glitterburn,
+    prism_snare_glitterburn as prism_snare,
+    starlight_decoy_glitterburn,
+    starlight_decoy_glitterburn as starlight_decoy,
+    supernova_core_glitterburn,
+    supernova_core_glitterburn as supernova_core,
+    sparkling_aura_glitterburn,
+    sparkling_aura_glitterburn as sparkling_aura,
+    blinding_beacon_glitterburn,
+    blinding_beacon_glitterburn as blinding_beacon,
+    prismatic_flare_glitterburn,
+    prismatic_flare_glitterburn as prismatic_flare,
 
     ogre_portrait,
     goblin_thief_portrait,
@@ -2548,6 +2575,7 @@ export {
     summon_skeleton_icon,
     summon_skeleton_knight_icon,
     duplicate_icon,
+    duplicate_icon as summoner_duplicate,
     duplicate_transition_icon,
     triplicate_icon,
     triplicate_transition_icon,
@@ -2778,6 +2806,8 @@ export {
     soul_tap_summoner,
     soul_tithe_summoner,
     dark_pact_summoner,
+    wandering_eye_summoner,
+    wandering_eye_summoner as wandering_eye,
     codex,
     shrine,
 

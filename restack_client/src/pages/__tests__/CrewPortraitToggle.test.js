@@ -35,7 +35,9 @@ jest.mock('../../utils/images', () => ({
     glitterburn_portrait: 'glitterburn_img.png',
     glitterburn_alt_portrait: 'glitterburn_alt_img.png',
     hollow_portrait: 'hollow_img.png',
-    hollow_alt_portrait: 'hollow_alt_img.png'
+    hollow_alt_portrait: 'hollow_alt_img.png',
+    horologist_portrait: 'horologist_img.png',
+    horologist_alt_portrait: 'horologist_alt_img.png'
 }));
 
 describe('Crew Portrait Toggle Mechanic', () => {
@@ -55,9 +57,9 @@ describe('Crew Portrait Toggle Mechanic', () => {
             </MemoryRouter>
         );
 
-        // Options toggles in top row (all 9 unlocked classes have alternates)
+        // Options toggles in top row (all 11 unlocked classes have alternates)
         const toggleButtons = container.querySelectorAll('.crew-option-portrait-toggle');
-        expect(toggleButtons.length).toBe(9);
+        expect(toggleButtons.length).toBe(11);
 
         // Find Ranger in options
         const rangerOption = container.querySelector('.crew-options .portrait[data-type="ranger"]');
@@ -69,10 +71,10 @@ describe('Crew Portrait Toggle Mechanic', () => {
         expect(soldierOption).not.toBeNull();
         expect(soldierOption.querySelector('.crew-option-portrait-toggle')).not.toBeNull();
 
-        // Locked class (Glitterburn) should not render a toggle button
+        // Unlocked class (Glitterburn) should render a toggle button
         const glitterburnOption = container.querySelector('.crew-options .portrait[data-type="glitterburn"]');
         expect(glitterburnOption).not.toBeNull();
-        expect(glitterburnOption.querySelector('.crew-option-portrait-toggle')).toBeNull();
+        expect(glitterburnOption.querySelector('.crew-option-portrait-toggle')).not.toBeNull();
     });
 
     test('toggling Ranger switches portrait and updates default name from Dormund to Ekatra', () => {
@@ -395,6 +397,29 @@ describe('Crew Portrait Toggle Mechanic', () => {
 
         fireEvent.click(toggleBtn);
         expect(nameInput.value).toBe('Valok');
+    });
+
+    test('toggling Glitterburn switches between Glitterburn and Astra', () => {
+        const { container } = render(
+            <MemoryRouter>
+                <CrewManagerPage crewManager={crewManager} />
+            </MemoryRouter>
+        );
+
+        const gbOption = container.querySelector('.crew-options .portrait[data-type="glitterburn"]');
+        expect(gbOption).not.toBeNull();
+        fireEvent.click(gbOption, { detail: 1 });
+
+        const nameInput = container.querySelector('.member-name input');
+        expect(nameInput.value).toBe('Glitterburn');
+
+        const toggleBtn = container.querySelector('.portrait-toggle-btn');
+        expect(toggleBtn).not.toBeNull();
+        fireEvent.click(toggleBtn);
+        expect(nameInput.value).toBe('Astra');
+
+        fireEvent.click(toggleBtn);
+        expect(nameInput.value).toBe('Glitterburn');
     });
 });
 

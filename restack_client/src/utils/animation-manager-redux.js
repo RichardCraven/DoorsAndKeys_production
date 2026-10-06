@@ -162,6 +162,53 @@ export class AnimationManagerRedux {
     const spherePx = sphereCoords ? this._px(sphereCoords) : null;
 
     switch (name) {
+      // ── Horologist ──────────────────────────────────────────────────────
+      case 'future_echo_cast':
+      case 'horologist_anchor':
+      case 'horologist_recall': {
+        const srcPx = this._px(sourceCoords);
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: name, srcPx, tgtPx, isUltimate, duration: name === 'horologist_recall' ? 1100 : 900 });
+        break;
+      }
+      case 'future_echo_strike':
+      case 'horologist_shatter': {
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: name, tgtPx, duration: 900 });
+        break;
+      }
+      case 'hour_of_reckoning': {
+        const srcPx = this._px(sourceCoords);
+        this._emit({ type: 'hour_of_reckoning', srcPx, tgtPx: srcPx, duration: 1800 });
+        break;
+      }
+      // ── Glitterburn ──────────────────────────────────────────────────────
+      case 'pyro_spark':
+      case 'glitter_burst':
+      case 'prism_snare_place': {
+        const srcPx = this._px(sourceCoords);
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: name, srcPx, tgtPx, isUltimate, duration: name === 'glitter_burst' ? 1000 : 800 });
+        break;
+      }
+      case 'prism_snare_snap':
+      case 'glitter_pop':
+      case 'starlight_decoy_summon': {
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: name, tgtPx, duration: 800 });
+        break;
+      }
+      case 'supernova_core_pulse': {
+        const srcPx = this._px(sourceCoords);
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: 'supernova_core_pulse', srcPx, tgtPx, isUltimate, duration: 1200 });
+        break;
+      }
+      case 'supernova_core_detonate': {
+        const tgtPx = this._getImpactTargetPx(targetCoords);
+        this._emit({ type: 'supernova_core_detonate', tgtPx, duration: 1600 });
+        break;
+      }
       case 'betrayal_success':
         this._betrayalSuccess(targetCoords, sourceUnitId);
         break;

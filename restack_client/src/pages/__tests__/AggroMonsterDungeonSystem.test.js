@@ -19,7 +19,8 @@ let mockMeta = {};
 jest.mock('../../utils/session-handler', () => ({
     getMeta: jest.fn(() => mockMeta),
     storeMeta: jest.fn((newMeta) => { mockMeta = { ...newMeta }; }),
-    getUserId: jest.fn(() => 'player_1')
+    getUserId: jest.fn(() => 'player_1'),
+    applyResolvePenalty: jest.fn(val => val)
 }));
 
 import React from 'react';
@@ -349,4 +350,167 @@ describe('Aggro Monster Dungeon System', () => {
         instance.checkAggroMonsters();
         expect(instance.startMonsterPursuit).toHaveBeenCalledWith(tiles[mIdx]);
     });
+
+    test('startMonsterPursuit pathfinds around impassable way_down tiles and does not step on or overwrite them', () => {
+        const instance = new DungeonPage({});
+        instance.triggerMonsterBattle = jest.fn();
+        instance.refreshTiles = jest.fn();
+
+        const tiles = Array(225).fill(null).map((_, idx) => ({
+            id: idx,
+            color: '#6b6057',
+            contains: null,
+            isVoid: false,
+            type: 'empty_space'
+        }));
+
+        // Player at (5, 5) = idx 80
+        const pIdx = 5 * 15 + 5;
+        // Monster at (5, 7) = idx 82
+        const mIdx = 5 * 15 + 7;
+        tiles[mIdx].contains = { type: 'monster', subtype: 'skeleton' };
+        tiles[mIdx].image = 'skeleton';
+
+        // Impassable way_down tile directly in straight path at (5, 6) = idx 81
+        const wayDownIdx = 5 * 15 + 6;
+        tiles[wayDownIdx].contains = { type: 'way_down', subtype: 'way_down' };
+        tiles[wayDownIdx].image = 'way_down';
+
+        const mockBm = {
+            playerTile: { location: [5, 5] },
+            tiles: tiles,
+            currentBoard: { tiles: {} },
+            getIndexFromCoordinates: ([r, c]) => r * 15 + c,
+            refreshTiles: jest.fn()
+        };
+
+        instance.props = { boardManager: mockBm };
+        instance.boardManager = mockBm;
+        instance.state = { inMonsterBattle: false, keysLocked: false };
+
+        instance.startMonsterPursuit(tiles[mIdx]);
+
+        // Advance 450ms for step 1
+        jest.advanceTimersByTime(450);
+
+        // Monster should NOT step on way_down tile at (5, 6)
+        expect(tiles[wayDownIdx].contains).toEqual({ type: 'way_down', subtype: 'way_down' });
+        expect(tiles[wayDownIdx].image).toBe('way_down');
+
+        // Instead, monster should pathfind around it (e.g. to (4, 7) or (6, 7))
+        const step1Idx = tiles.findIndex(t => t.contains && (t.contains.type === 'monster' || t.contains.subtype === 'skeleton') && t.id !== mIdx);
+        expect(step1Idx).not.toBe(-1);
+        expect(step1Idx).not.toBe(wayDownIdx);
+    });
+
+    test('startMonsterPursuit preserves and restores underlying tile contents when moving across tiles', () => {
+        const instance = new DungeonPage({});
+        instance.triggerMonsterBattle = jest.fn();
+        instance.refreshTiles = jest.fn();
+
+        const tiles = Array(225).fill(null).map((_, idx) => ({
+            id: idx,
+            color: '#6b6057',
+            contains: null,
+            isVoid: false,
+            type: 'empty_space'
+        }));
+
+        // Player at (5, 4) = idx 79 (3 steps away from monster at 5,7)
+        // Monster at (5, 7) = idx 82
+        const mIdx = 5 * 15 + 7;
+        tiles[mIdx].contains = { type: 'monster', subtype: 'goblin' };
+
+        // Intermediate passable tile at (5, 6) has an item on floor
+        const itemIdx = 5 * 15 + 6;
+        tiles[itemIdx].contains = { type: 'item', subtype: 'minor_key' };
+        tiles[itemIdx].image = 'minor_key';
+
+        const mockBm = {
+            playerTile: { location: [5, 4] },
+            tiles: tiles,
+            currentBoard: { tiles: {} },
+            getIndexFromCoordinates: ([r, c]) => r * 15 + c,
+            refreshTiles: jest.fn()
+        };
+
+        instance.props = { boardManager: mockBm };
+        instance.boardManager = mockBm;
+        instance.state = { inMonsterBattle: false, keysLocked: false };
+
+        instance.startMonsterPursuit(tiles[mIdx]);
+
+        // Advance 450ms for step 1 (monster moves onto itemIdx at 5, 6)
+        jest.advanceTimersByTime(450);
+        expect(tiles[itemIdx]._underlyingContent).toEqual({
+            contains: { type: 'item', subtype: 'minor_key' },
+            image: 'minor_key',
+            icon: undefined,
+            type: 'empty_space',
+            subtype: undefined
+        });
+
+        // Advance 450ms for step 2 (monster moves from itemIdx 5,6 to 5,5)
+        jest.advanceTimersByTime(450);
+
+        // itemIdx should have restored its item content
+        expect(tiles[itemIdx].contains).toEqual({ type: 'item', subtype: 'minor_key' });
+        expect(tiles[itemIdx].image).toBe('minor_key');
+    });
+
+    test('battleOver("respawn") removes pursuing monster from pursuit tile and restores original monster at origin tile with full health', () => {
+        mockMeta = { resolve: 100, deathTracker: 0, crew: [] };
+        const instance = new DungeonPage({});
+        instance.refreshTiles = jest.fn();
+        instance.props = {
+            crewManager: { crew: [], initializeCrew: jest.fn(), checkForLevelUp: jest.fn() },
+            saveUserData: jest.fn()
+        };
+
+        const tiles = Array(225).fill(null).map((_, idx) => ({
+            id: idx,
+            color: '#6b6057',
+            contains: null,
+            isVoid: false,
+            type: 'empty_space'
+        }));
+
+        // Origin tile (5, 7) = idx 82
+        const originIdx = 82;
+        tiles[originIdx].contains = { type: 'monster', subtype: 'skeleton', hp: 80, maxHp: 100, inDungeonDamaged: true };
+        tiles[originIdx].image = 'skeleton';
+
+        const mockBm = {
+            playerTile: { location: [5, 5] },
+            tiles: tiles,
+            currentBoard: { tiles: {} },
+            getIndexFromCoordinates: ([r, c]) => r * 15 + c,
+            refreshTiles: jest.fn()
+        };
+
+        instance.props.boardManager = mockBm;
+        instance.boardManager = mockBm;
+
+        // Start pursuit from originIdx
+        instance.startMonsterPursuit(tiles[originIdx]);
+        jest.advanceTimersByTime(450);
+
+        // Monster is now at pursuit tile (5, 6) = idx 81
+        const pursuitIdx = 81;
+        instance.triggerMonsterBattle(true, pursuitIdx);
+
+        // Simulate combat defeat -> battleOver('respawn')
+        instance.battleOver('respawn');
+
+        // Pursuing monster tile at pursuitIdx (81) should be removed / cleared
+        expect(tiles[pursuitIdx].contains).toBeNull();
+
+        // Origin tile at originIdx (82) should have monster restored with FULL HEALTH (hp: 100, inDungeonDamaged removed)
+        expect(tiles[originIdx].contains).toBeDefined();
+        expect(tiles[originIdx].contains.subtype).toBe('skeleton');
+        expect(tiles[originIdx].contains.hp).toBe(100);
+        expect(tiles[originIdx].contains.inDungeonDamaged).toBeUndefined();
+        expect(tiles[originIdx].image).toBe('skeleton');
+    });
 });
+

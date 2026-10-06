@@ -80,4 +80,66 @@ describe('Merchant Vendor Building 2x2 Footprint & Interaction', () => {
         expect(fakeBoard.tiles[57].contains.subtype).toBe('merchant');
         expect(boardManager.isImpassableBuildingTile(fakeBoard.tiles[42])).toBe(true);
     });
+
+    test('getVendorInfo resolves all 4 tiles of Alchemist complex to vendorType alchemist', () => {
+        const tiles = new Array(225).fill(null).map((_, i) => ({
+            id: i,
+            contains: { type: 'empty_space', subtype: null }
+        }));
+
+        // Anchor tile (top-left) has building type with Alchemist name/key
+        tiles[41] = {
+            id: 41,
+            contains: {
+                type: 'building',
+                subtype: 'alchemist',
+                name: 'Alchemist',
+                vendorGroupId: 'alchemist_41',
+                vendorAnchorId: 41,
+                vendorCell: 'anchor'
+            }
+        };
+
+        // Top-right tile (cell top_right)
+        tiles[42] = {
+            id: 42,
+            contains: {
+                type: 'building',
+                vendorGroupId: 'alchemist_41',
+                vendorAnchorId: 41,
+                vendorCell: 'top_right'
+            }
+        };
+
+        // Bottom-left tile (cell bottom_left)
+        tiles[56] = {
+            id: 56,
+            contains: {
+                type: 'building',
+                vendorGroupId: 'alchemist_41',
+                vendorAnchorId: 41,
+                vendorCell: 'bottom_left'
+            }
+        };
+
+        // Bottom-right tile (cell bottom_right)
+        tiles[57] = {
+            id: 57,
+            contains: {
+                type: 'building',
+                vendorGroupId: 'alchemist_41',
+                vendorAnchorId: 41,
+                vendorCell: 'bottom_right'
+            }
+        };
+
+        boardManager.currentBoard = { tiles };
+
+        [41, 42, 56, 57].forEach((tileIdx) => {
+            const tileObj = tiles[tileIdx];
+            const info = boardManager.getVendorInfo(tileObj);
+            expect(info.isVendor).toBe(true);
+            expect(info.vendorType).toBe('alchemist');
+        });
+    });
 });

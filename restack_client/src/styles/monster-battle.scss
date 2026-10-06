@@ -11563,3 +11563,480 @@
         pointer-events: none !important;
     }
 }
+// ══ Horologist (time manipulation) ══════════════════════════════════════════
+$horo-brass: #d9a441;
+$horo-brass-light: #ffe2a0;
+$horo-crystal: #8fe3ff;
+
+.horologist-anchor-ring {
+    position: absolute;
+    inset: -6%;
+    border-radius: 50%;
+    border: 2px dashed rgba($horo-brass, 0.85);
+    box-shadow: 0 0 10px rgba($horo-brass, 0.45), inset 0 0 8px rgba($horo-brass, 0.25);
+    pointer-events: none;
+    z-index: 6;
+    animation: horoRingTick 8s steps(60) infinite;
+
+    .horologist-anchor-hand {
+        position: absolute;
+        left: 50%;
+        top: 8%;
+        width: 2px;
+        height: 42%;
+        background: linear-gradient($horo-brass-light, $horo-brass);
+        transform-origin: 50% 100%;
+        transform: translateX(-50%);
+        border-radius: 1px;
+    }
+
+    .horologist-anchor-count {
+        position: absolute;
+        top: -10px;
+        right: -4px;
+        min-width: 16px;
+        height: 16px;
+        padding: 0 3px;
+        border-radius: 8px;
+        background: #2a1d08;
+        border: 1px solid $horo-brass;
+        color: $horo-brass-light;
+        font: 700 10px/14px 'Outfit', 'Inter', sans-serif;
+        text-align: center;
+        animation: horoCounterSpin 8s steps(60) infinite reverse;
+    }
+
+    &.crystallized {
+        border: 2px solid rgba($horo-crystal, 0.95);
+        box-shadow: 0 0 14px rgba($horo-crystal, 0.8), inset 0 0 12px rgba($horo-crystal, 0.45);
+        background: radial-gradient(circle, transparent 55%, rgba($horo-crystal, 0.18) 100%);
+        animation: horoCrystalPulse 1.6s ease-in-out infinite;
+
+        .horologist-anchor-hand {
+            background: linear-gradient(#ffffff, $horo-crystal);
+        }
+    }
+}
+
+.horologist-echo-dials {
+    position: absolute;
+    left: 50%;
+    bottom: -12px;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 3px;
+    pointer-events: none;
+    z-index: 7;
+}
+
+.horologist-echo-dial {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #3a2a0e 0%, #1a1205 100%);
+    border: 1px solid $horo-brass;
+    box-shadow: 0 0 6px rgba($horo-brass, 0.6);
+    overflow: hidden;
+
+    .horologist-echo-sweep {
+        position: absolute;
+        inset: 0;
+        background: conic-gradient(rgba($horo-brass-light, 0.55) 0deg, transparent 90deg);
+        animation: horoSweep linear infinite;
+    }
+
+    .horologist-echo-num {
+        position: relative;
+        display: block;
+        text-align: center;
+        font: 700 10px/16px 'Outfit', 'Inter', sans-serif;
+        color: $horo-brass-light;
+    }
+
+    &.imminent {
+        border-color: #ff7a59;
+        box-shadow: 0 0 10px rgba(#ff7a59, 0.9);
+        animation: horoImminent 0.6s ease-in-out infinite alternate;
+    }
+}
+
+.horologist-thread {
+    position: absolute;
+    height: 3px;
+    transform-origin: 0% 50%;
+    pointer-events: none;
+    z-index: 4200;
+    background: linear-gradient(90deg, rgba($horo-brass, 0), $horo-brass-light 40%, rgba($horo-brass, 0.9));
+    box-shadow: 0 0 10px rgba($horo-brass, 0.8);
+    border-radius: 2px;
+    animation: horoThread 0.9s ease-out forwards;
+
+    &.horologist_recall {
+        background: linear-gradient(270deg, rgba($horo-crystal, 0), #ffffff 40%, rgba($horo-crystal, 0.9));
+        box-shadow: 0 0 12px rgba($horo-crystal, 0.9);
+    }
+}
+
+.horologist-clockface {
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 4300;
+    border: 3px double $horo-brass;
+    background: radial-gradient(circle, rgba($horo-brass-light, 0.35) 0%, rgba($horo-brass, 0.12) 60%, transparent 72%);
+    box-shadow: 0 0 22px rgba($horo-brass, 0.7);
+    animation: horoClockAppear 0.9s cubic-bezier(0.15, 0.85, 0.35, 1) forwards;
+
+    .hand {
+        position: absolute;
+        left: 50%;
+        bottom: 50%;
+        transform-origin: 50% 100%;
+        background: $horo-brass-light;
+        border-radius: 2px;
+    }
+    .hand.hour { width: 4px; height: 26%; margin-left: -2px; animation: horoHandSpin 0.9s linear forwards; }
+    .hand.minute { width: 2px; height: 40%; margin-left: -1px; animation: horoHandSpin 0.3s linear 3 forwards; }
+
+    &.horologist_recall {
+        border-color: $horo-crystal;
+        box-shadow: 0 0 24px rgba($horo-crystal, 0.8);
+        .hand { background: #ffffff; animation-direction: reverse; }
+    }
+    &.ultimate { width: 140px; height: 140px; }
+    &.hour_of_reckoning {
+        width: 220px;
+        height: 220px;
+        border-width: 5px;
+        animation: horoClockAppear 1.8s cubic-bezier(0.15, 0.85, 0.35, 1) forwards;
+        .hand.hour { animation: horoHandSpin 1.8s cubic-bezier(0.6, 0, 0.4, 1) forwards; }
+        .hand.minute { animation: horoHandSpin 0.3s linear 6 forwards; }
+    }
+}
+
+.horologist-impact {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 4400;
+
+    &.future_echo_strike {
+        border: 2px solid $horo-brass-light;
+        background: radial-gradient(circle, rgba(#ffffff, 0.9) 0%, rgba($horo-brass, 0.5) 40%, transparent 70%);
+        box-shadow: 0 0 30px $horo-brass;
+        animation: scaleUpFadeOut 0.9s ease-out forwards;
+    }
+
+    &.horologist_shatter {
+        background: radial-gradient(circle, rgba(#ffffff, 0.95) 0%, rgba($horo-crystal, 0.5) 35%, transparent 65%);
+        animation: scaleUpFadeOut 0.9s ease-out forwards;
+
+        .shard {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 10px;
+            height: 18px;
+            margin: -9px 0 0 -5px;
+            background: linear-gradient(#ffffff, $horo-crystal);
+            clip-path: polygon(50% 0%, 100% 60%, 50% 100%, 0% 60%);
+            box-shadow: 0 0 8px $horo-crystal;
+            animation: horoShard 0.9s ease-out forwards;
+        }
+    }
+}
+
+.horologist-reckoning-veil {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 4100;
+    background: radial-gradient(circle, rgba($horo-brass, 0.25) 0%, rgba(#120c02, 0.55) 80%);
+    animation: horoVeil 1.8s ease-in-out forwards;
+}
+
+@keyframes horoRingTick { to { transform: rotate(360deg); } }
+@keyframes horoCounterSpin { to { transform: rotate(360deg); } }
+@keyframes horoSweep { to { transform: rotate(360deg); } }
+@keyframes horoHandSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+@keyframes horoCrystalPulse {
+    0%, 100% { box-shadow: 0 0 10px rgba($horo-crystal, 0.6), inset 0 0 8px rgba($horo-crystal, 0.3); }
+    50% { box-shadow: 0 0 20px rgba($horo-crystal, 1), inset 0 0 16px rgba($horo-crystal, 0.6); }
+}
+@keyframes horoImminent { from { transform: scale(1); } to { transform: scale(1.18); } }
+@keyframes horoThread {
+    0% { opacity: 0; clip-path: inset(0 100% 0 0); }
+    40% { opacity: 1; clip-path: inset(0 0 0 0); }
+    100% { opacity: 0; clip-path: inset(0 0 0 0); }
+}
+@keyframes horoClockAppear {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-90deg); }
+    30% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+    80% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -50%) scale(1.15) rotate(0deg); }
+}
+@keyframes horoShard {
+    from { transform: rotate(var(--shard-angle)) translateY(0); opacity: 1; }
+    to { transform: rotate(var(--shard-angle)) translateY(-48px); opacity: 0; }
+}
+@keyframes horoVeil {
+    0% { opacity: 0; }
+    25% { opacity: 1; }
+    75% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+// ══ GLITTERBURN: visuals & animations ══════════════════════════════════════
+$gb-gold: #ffd700;
+$gb-spark: #ff8800;
+$gb-prism: #d946ef;
+$gb-starlight: #fef08a;
+
+.glitterburn-dazzled-marker {
+    position: absolute;
+    top: -16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 4px;
+    pointer-events: none;
+    z-index: 320;
+
+    .sparkle {
+        font-size: 14px;
+        animation: gbDazzleTwinkle 1.2s ease-in-out infinite alternate;
+        &.s2 { animation-delay: 0.6s; }
+    }
+}
+
+.glitterburn-decoy-aura {
+    position: absolute;
+    inset: -6px;
+    border-radius: 8px;
+    border: 2px dashed rgba($gb-gold, 0.8);
+    box-shadow: 0 0 15px rgba($gb-gold, 0.6), inset 0 0 10px rgba($gb-prism, 0.4);
+    animation: gbDecoyPulse 1.5s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.glitter-snare-tile-hazard {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .hazard-crystal {
+        width: 24px;
+        height: 24px;
+        background: linear-gradient(135deg, $gb-starlight, $gb-prism);
+        clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+        box-shadow: 0 0 12px $gb-prism;
+        animation: gbCrystalHover 2s ease-in-out infinite alternate;
+    }
+
+    .hazard-pulse {
+        position: absolute;
+        width: 38px;
+        height: 38px;
+        border: 2px solid rgba($gb-gold, 0.6);
+        border-radius: 50%;
+        animation: gbPulseRing 1.8s ease-out infinite;
+    }
+}
+
+.glitter-supernova-tile-hazard {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .supernova-swirl {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: radial-gradient(circle, #fff 0%, $gb-spark 50%, transparent 75%);
+        box-shadow: 0 0 20px $gb-spark;
+        animation: gbSwirlSpin 2s linear infinite;
+    }
+
+    .supernova-countdown {
+        position: absolute;
+        font-size: 14px;
+        font-weight: bold;
+        color: #fff;
+        text-shadow: 0 0 6px #000, 0 0 10px $gb-spark;
+    }
+}
+
+.glitterburn-spark-beam {
+    position: absolute;
+    height: 4px;
+    background: linear-gradient(90deg, transparent, $gb-spark, $gb-gold, #ffffff);
+    box-shadow: 0 0 12px $gb-gold;
+    transform-origin: 0 50%;
+    pointer-events: none;
+    z-index: 4300;
+    animation: gbSparkFly 0.6s cubic-bezier(0.2, 0.8, 0.4, 1) forwards;
+}
+
+.glitterburn-spark-burst {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, #ffffff 0%, $gb-gold 40%, rgba($gb-spark, 0.6) 70%, transparent 100%);
+    box-shadow: 0 0 25px $gb-gold;
+    pointer-events: none;
+    z-index: 4400;
+    animation: scaleUpFadeOut 0.8s ease-out forwards;
+}
+
+.glitterburn-fan-burst {
+    position: absolute;
+    width: 120px;
+    height: 80px;
+    transform-origin: 0 50%;
+    pointer-events: none;
+    z-index: 4400;
+    background: radial-gradient(ellipse at left, rgba(#ffffff, 0.9) 0%, rgba($gb-gold, 0.7) 40%, rgba($gb-prism, 0.4) 70%, transparent 100%);
+    clip-path: polygon(0% 50%, 100% 0%, 100% 100%);
+    box-shadow: 0 0 30px $gb-gold;
+    animation: scaleUpFadeOut 1s ease-out forwards;
+}
+
+.glitterburn-snare-deploy {
+    position: absolute;
+    width: 60px;
+    height: 60px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 4300;
+    border: 2px solid $gb-gold;
+    border-radius: 50%;
+    box-shadow: 0 0 20px $gb-prism;
+    animation: scaleUpFadeOut 0.8s ease-out forwards;
+}
+
+.glitterburn-snare-snap {
+    position: absolute;
+    width: 70px;
+    height: 70px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 4400;
+    border-radius: 8px;
+    border: 3px solid $gb-prism;
+    box-shadow: 0 0 25px $gb-prism, inset 0 0 15px $gb-gold;
+    animation: scaleUpFadeOut 0.8s ease-out forwards;
+}
+
+.glitterburn-decoy-summon {
+    position: absolute;
+    width: 64px;
+    height: 64px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 4400;
+    background: radial-gradient(circle, rgba(#ffffff, 0.9) 0%, rgba($gb-prism, 0.6) 50%, transparent 80%);
+    box-shadow: 0 0 35px $gb-prism;
+    animation: scaleUpFadeOut 0.8s ease-out forwards;
+}
+
+.glitterburn-glitter-pop {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 4400;
+    background: radial-gradient(circle, #fff 0%, $gb-spark 40%, rgba($gb-prism, 0.7) 70%, transparent 100%);
+    box-shadow: 0 0 40px $gb-spark;
+    animation: scaleUpFadeOut 0.8s ease-out forwards;
+}
+
+.glitterburn-supernova-pulse {
+    position: absolute;
+    width: 90px;
+    height: 90px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 4400;
+    border-radius: 50%;
+    background: radial-gradient(circle, #fff 0%, $gb-spark 40%, rgba($gb-gold, 0.5) 70%, transparent 100%);
+    box-shadow: 0 0 35px $gb-spark;
+    animation: gbSwirlSpin 1.2s linear infinite;
+}
+
+.glitterburn-supernova-flash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 4500;
+    background: radial-gradient(circle, rgba(#ffffff, 0.85) 0%, rgba($gb-spark, 0.45) 50%, transparent 85%);
+    animation: gbVeilFlash 1.6s ease-out forwards;
+}
+
+.glitterburn-supernova-shockwave {
+    position: absolute;
+    width: 220px;
+    height: 220px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    z-index: 4500;
+    border-radius: 50%;
+    border: 4px solid $gb-gold;
+    box-shadow: 0 0 50px $gb-spark, inset 0 0 30px $gb-prism;
+    animation: scaleUpFadeOut 1.6s cubic-bezier(0.1, 0.8, 0.3, 1) forwards;
+}
+
+@keyframes gbDazzleTwinkle {
+    0% { transform: scale(0.8) rotate(-10deg); opacity: 0.6; }
+    100% { transform: scale(1.2) rotate(15deg); opacity: 1; filter: drop-shadow(0 0 4px $gb-gold); }
+}
+
+@keyframes gbDecoyPulse {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+@keyframes gbCrystalHover {
+    0% { transform: translateY(0px) rotate(0deg); }
+    100% { transform: translateY(-4px) rotate(15deg); }
+}
+
+@keyframes gbPulseRing {
+    0% { transform: scale(0.6); opacity: 1; }
+    100% { transform: scale(1.4); opacity: 0; }
+}
+
+@keyframes gbSwirlSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+@keyframes gbSparkFly {
+    0% { opacity: 0; transform: scaleX(0.1); }
+    50% { opacity: 1; transform: scaleX(1); }
+    100% { opacity: 0; transform: scaleX(1); }
+}
+
+@keyframes gbVeilFlash {
+    0% { opacity: 0; }
+    20% { opacity: 1; }
+    80% { opacity: 0.8; }
+    100% { opacity: 0; }
+}
+

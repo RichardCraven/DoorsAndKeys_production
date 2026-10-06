@@ -8,6 +8,7 @@ import { getMeta, storeMeta, applyResolvePenalty } from './session-handler';
 import { BATTLE_TACTICS } from './spells-table';
 import { MonsterManager } from './monster-manager';
 import { applyShieldedEffect, applyBlindingSpeedEffect } from './combat-effects';
+import { computeTemporalStrainTier, getEffectiveTimeDebt } from './crew-manager';
 const MAX_LANES = 6;
 
 
@@ -65,6 +66,8 @@ export function CombatManagerRedux() {
     this.activeWebs = [];
     this.powerBoostTiles = [];  // { id, x, y, roundSpawned } — Power Boost Tiles
     this.meatTiles = [];        // { id, x, y } — Meat items dropped by Goblin Chef
+    this.glitterTraps = [];     // { id, casterId, x, y, type, roundsLeft, damage, ... }
+    this.supernovaCores = [];   // { id, casterId, x, y, roundsLeft, damage, pullRadius }
 
     // Mummy status change logging/diagnostic helper removed
 
@@ -237,6 +240,8 @@ export function CombatManagerRedux() {
         this.combatLog = [];
         this.combatLogSequence = 0;
         this.round = 1;
+        this.futureEchoes = [];
+        this.timeAnchors = [];
         this.roundTimeRemainingRatio = 1.0;
         this.roundTimeElapsedMs = 0;
         let speedSetting = INTERVALS[1]; // default Slow
@@ -775,6 +780,8 @@ export function CombatManagerRedux() {
         this.bombardWarnings = null;
         this.meteorWarnings = null;
         this.round = 1;
+        this.futureEchoes = [];
+        this.timeAnchors = [];
         this.roundTimeRemainingRatio = 1.0;
         this.roundTimeElapsedMs = 0;
         this.combatOver = false;
@@ -969,6 +976,37 @@ export function CombatManagerRedux() {
                 this.appendCombatLog(`⚔️ ${leaderData.name || 'The Leader'} inspires the party — Leadership Aura grants +2 DEF to all allies!`);
             }
         } catch (e) { console.warn('[Combat] Leadership Aura buff application failed', e); }
+
+        // ── Glitterburn Prep Actions ──
+        try {
+            const gbData = (this.data.crew || []).find(e => e && (e.type === 'glitterburn' || e.image === 'glitterburn'));
+            if (gbData && Array.isArray(gbData.specialActions)) {
+                const gbCombatant = this.combatants[gbData.id];
+                const lureAction = gbData.specialActions.find(a => a && a.type === 'phosphor_lure' && a.available);
+                if (lureAction && gbCombatant) {
+                    this.glitterTraps = this.glitterTraps || [];
+                    this.glitterTraps.push({
+                        id: `snare_prep_${Date.now()}`,
+                        casterId: gbCombatant.id,
+                        x: 4,
+                        y: 3,
+                        type: 'prism_snare',
+                        roundsLeft: 4,
+                        rootDuration: 2,
+                        damage: Math.round(((gbCombatant.stats && gbCombatant.stats.atk) || 12) * 1.4)
+                    });
+                    this.appendCombatLog(`✨ Phosphor Lure activates! A Prism Snare is pre-set on the battlefield.`);
+                }
+                const flashbangAction = gbData.specialActions.find(a => a && a.type === 'flashbang_powder' && a.available);
+                if (flashbangAction && gbCombatant) {
+                    gbCombatant._hasFlashbangPrep = true;
+                }
+                const decoyAction = gbData.specialActions.find(a => a && a.type === 'mirror_decoy' && a.available);
+                if (decoyAction && gbCombatant) {
+                    gbCombatant._hasMirrorDecoyPrep = true;
+                }
+            }
+        } catch (e) { console.warn('[Combat] Glitterburn prep activation failed', e); }
 
         const isPvP = !!(this.data.isPvP || this.data.isPvPMode);
         if (isPvP || !this.data.monster) {
@@ -1742,6 +1780,7 @@ export function CombatManagerRedux() {
         // Check PBT pickup immediately when coordinates are updated
         this._checkPowerBoostTilePickup();
         this._checkMeatTilePickup();
+        this._checkGlitterTrapTrigger(unit);
 
         // If Sage has Circle active and actually moved/repositioned, end the Circles immediately
         if (unit.type === 'sage' && (ox !== nx || oy !== ny)) {
@@ -2328,6 +2367,8 @@ export function CombatManagerRedux() {
                 if (!callerIsEnemy && HEALER_TYPES.has(c.type)) score += 5;
                 if (!callerIsEnemy && c.isBones) score += 18; // aggressive but not full tunnel-vision
                 if (callerIsEnemy && c.isConcentrating) score += 50; // prioritize concentrating unit
+                if (callerIsEnemy && c.isDecoy) score += 60; // Decoys strongly pull enemy threat
+                if (callerIsEnemy && c.isTaunting) score += 40; // Taunting unit pulls threat
             }
 
             if (score > bestScore) {
@@ -2804,14 +2845,9 @@ export function CombatManagerRedux() {
         } else {
             this.turnsExecuting = true;
         }
-        // Sort by speed/dexterity descending (higher dex acts first)
-        activeUnits.sort((a, b) => {
-            let speedA = (a.stats && (a.stats.speed || a.stats.dex)) || a.speed || 1;
-            if (a.etherealSpeedActive) speedA += 15;
-            let speedB = (b.stats && (b.stats.speed || b.stats.dex)) || b.speed || 1;
-            if (b.etherealSpeedActive) speedB += 15;
-            return speedB - speedA;
-        });
+        // Sort by speed/dexterity descending (higher dex acts first).
+        // Clockwork Heart units use a fixed metronome speed (see _getTurnOrderSpeed).
+        activeUnits.sort((a, b) => this._getTurnOrderSpeed(b) - this._getTurnOrderSpeed(a));
 
         siegeLog(`[SiegeCombat] processRoundTurns starting. Active units in speed order:`, activeUnits.map(u => ({ id: u.id, name: u.name, speed: (u.stats && (u.stats.speed || u.stats.dex)) || u.speed || 1, hp: u.hp, stunned: u.stunned, asleep: u.asleep })));
 
@@ -2978,6 +3014,14 @@ export function CombatManagerRedux() {
                         delete unit._madnessOriginalIsMinion;
                         unit.targetId = null;
                         unit.pendingAttack = null;
+                    }
+
+                    // Clockwork Heart: the metronome cannot be stopped by stun, freeze or sleep
+                    if (this._hasClockworkHeart(unit) && (unit.frozen || unit.stunned || unit.asleep)) {
+                        unit.frozen = false; unit.frozenRounds = 0;
+                        unit.stunned = false; unit.stunnedRounds = 0;
+                        unit.asleep = false; unit.sleepRounds = 0;
+                        this.appendCombatLog(`⏱️ ${this.getCombatantLogName(unit)}'s Clockwork Heart keeps ticking, shrugging off the effect.`);
                     }
 
                     // Incapacitation check
@@ -4059,21 +4103,49 @@ export function CombatManagerRedux() {
             }
         }
 
-        // ── Wounded Monster Food Seeking (< 80% HP) ──────────────────────────
+        // ── Wounded Monster Food Seeking ──────────────────────────
         if ((unit.isMonster || unit.isMinion) && unit.movesTakenThisRound === 0 && Array.isArray(this.meatTiles) && this.meatTiles.length > 0) {
             const maxHp = unit.starting_hp || (unit.stats && unit.stats.hp) || 100;
-            if (maxHp > 0 && (unit.hp / maxHp < 0.80)) {
-                let nearestMeat = null;
-                let minDist = Infinity;
-                this.meatTiles.forEach(tile => {
-                    const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        nearestMeat = tile;
+            if (maxHp > 0) {
+                const hpRatio = unit.hp / maxHp;
+                // Only consider seeking food if wounded (< 80% HP)
+                if (hpRatio < 0.80) {
+                    let targetEnemy = this.combatants[unit.targetId];
+                    if (!targetEnemy || targetEnemy.dead || (!!targetEnemy.isMonster === !!unit.isMonster)) {
+                        this.acquireTarget(unit, true);
+                        targetEnemy = this.combatants[unit.targetId];
                     }
-                });
-                if (nearestMeat) {
-                    this.moveCloserToCoord(unit, nearestMeat.x, nearestMeat.y);
+
+                    const currentDistToEnemy = targetEnemy
+                        ? (Math.abs(unit.coordinates.x - targetEnemy.coordinates.x) + Math.abs(unit.coordinates.y - targetEnemy.coordinates.y))
+                        : 0;
+
+                    let candidateMeat = null;
+                    let minMeatDist = Infinity;
+
+                    this.meatTiles.forEach(tile => {
+                        const distToMeat = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
+                        const meatDistToEnemy = targetEnemy
+                            ? (Math.abs(tile.x - targetEnemy.coordinates.x) + Math.abs(tile.y - targetEnemy.coordinates.y))
+                            : 0;
+
+                        // Backward move means going to this food increases distance to target enemy
+                        const isBackward = targetEnemy ? (meatDistToEnemy > currentDistToEnemy) : false;
+
+                        // Only move backwards to pick up food if below 40% HP
+                        if (hpRatio >= 0.40 && isBackward) {
+                            return;
+                        }
+
+                        if (distToMeat < minMeatDist) {
+                            minMeatDist = distToMeat;
+                            candidateMeat = tile;
+                        }
+                    });
+
+                    if (candidateMeat) {
+                        this.moveCloserToCoord(unit, candidateMeat.x, candidateMeat.y);
+                    }
                 }
             }
         }
@@ -4085,6 +4157,9 @@ export function CombatManagerRedux() {
             case 'wizard': return this._aiWizard(unit);
             case 'sage': return this._aiSage(unit);
             case 'ranger': return this._aiRanger(unit);
+            case 'horologist': return this._aiHorologist(unit);
+            case 'glitterburn': return this._aiGlitterburn(unit);
+            case 'starlight_decoy': return;
             case 'summoner': return this._aiSummoner(unit);
             case 'engineer': return this._aiEngineer(unit);
             case 'turret': return this._aiTurret(unit);
@@ -7332,10 +7407,9 @@ export function CombatManagerRedux() {
             c && !c.dead && !c.isMonster && !c.isMinion && !c.isVCT && this.targetInRange(unit, c, 'close')
         );
 
-        // 2. Check active food items created by THIS chef
-        const chefFoodItems = Array.isArray(this.meatTiles) ? this.meatTiles.filter(m => m.createdBy === unit.id) : [];
-        const activeFoodCount = chefFoodItems.length;
-        const hasHitMaxFood = activeFoodCount >= 3;
+        // 2. Check active food items on combat board (max 2 total food items on board allowed before switching to attack)
+        const totalBoardFood = Array.isArray(this.meatTiles) ? this.meatTiles.length : 0;
+        const hasHitMaxFood = totalBoardFood >= 2;
 
         // 3. Check if other friendlies are alive
         const otherFriendlies = Object.values(this.combatants).filter(c =>
@@ -7343,114 +7417,116 @@ export function CombatManagerRedux() {
         );
         const otherFriendliesAlive = otherFriendlies.length > 0;
 
-        // 4. Food Provider Mode: active when under max food capacity (activeFoodCount < 3) and other friendlies are alive
+        // 4. Food Provider Mode: active when total board food < 2 and other friendlies are alive and at least one friendly is wounded (< 85% HP)
         if (!hasHitMaxFood && otherFriendliesAlive) {
-            // Find damaged friendly unit (lost at least 10% of max HP)
+            // Find damaged friendly unit (hp < 85% of max HP, i.e. not at or near full HP)
             const damagedFriendly = otherFriendlies.find(f => {
                 const maxHp = f.starting_hp || (f.stats && f.stats.hp) || 100;
-                const lostHp = maxHp - f.hp;
-                return lostHp >= maxHp * 0.1;
+                if (maxHp <= 0) return false;
+                return (f.hp / maxHp) < 0.85;
             });
 
-            // Try using 'feed_the_masses' if a friendly has lost >= 10% HP and skill is ready
-            if (damagedFriendly && this._abilityReady(unit, 'feed_the_masses')) {
-                // Find target tile adjacent to the damaged friendly unit that does NOT contain food and is NOT occupied by ANY unit
-                const fCoords = damagedFriendly.coordinates;
-                const possibleTiles = [
-                    { x: fCoords.x + 1, y: fCoords.y },
-                    { x: fCoords.x - 1, y: fCoords.y },
-                    { x: fCoords.x, y: fCoords.y + 1 },
-                    { x: fCoords.x, y: fCoords.y - 1 },
-                    { x: fCoords.x, y: fCoords.y },
-                ];
+            if (damagedFriendly) {
+                // Try using 'feed_the_masses' if skill is ready
+                if (this._abilityReady(unit, 'feed_the_masses')) {
+                    // Find target tile adjacent to the damaged friendly unit that does NOT contain food and is NOT occupied by ANY unit
+                    const fCoords = damagedFriendly.coordinates;
+                    const possibleTiles = [
+                        { x: fCoords.x + 1, y: fCoords.y },
+                        { x: fCoords.x - 1, y: fCoords.y },
+                        { x: fCoords.x, y: fCoords.y + 1 },
+                        { x: fCoords.x, y: fCoords.y - 1 },
+                        { x: fCoords.x, y: fCoords.y },
+                    ];
 
-                const hasFoodAt = (tx, ty) => Array.isArray(this.meatTiles) && this.meatTiles.some(m => m.x === tx && m.y === ty);
-                const isOccupiedTile = (tx, ty) => this.isTileOccupied(tx, ty);
+                    const hasFoodAt = (tx, ty) => Array.isArray(this.meatTiles) && this.meatTiles.some(m => m.x === tx && m.y === ty);
+                    const isOccupiedTile = (tx, ty) => this.isTileOccupied(tx, ty);
 
-                // First priority: adjacent tile within bounds, within range, NO food, and NOT occupied by ANY unit
-                let targetTile = possibleTiles.find(tile => {
-                    if (tile.x < 0 || tile.x > MAX_DEPTH || tile.y < 0 || tile.y >= MAX_LANES) return false;
-                    if (hasFoodAt(tile.x, tile.y)) return false;
-                    if (isOccupiedTile(tile.x, tile.y)) return false;
-                    const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
-                    return dist <= 4;
-                });
-
-                // Second priority: any tile within 2 spaces of damaged friendly without food and unoccupied
-                if (!targetTile) {
-                    const radius2Tiles = [];
-                    for (let dx = -2; dx <= 2; dx++) {
-                        for (let dy = -2; dy <= 2; dy++) {
-                            const tx = fCoords.x + dx;
-                            const ty = fCoords.y + dy;
-                            if (tx >= 0 && tx <= MAX_DEPTH && ty >= 0 && ty < MAX_LANES && !hasFoodAt(tx, ty) && !isOccupiedTile(tx, ty)) {
-                                radius2Tiles.push({ x: tx, y: ty });
-                            }
-                        }
-                    }
-                    targetTile = radius2Tiles.find(tile => {
+                    // First priority: adjacent tile within bounds, within range, NO food, and NOT occupied by ANY unit
+                    let targetTile = possibleTiles.find(tile => {
+                        if (tile.x < 0 || tile.x > MAX_DEPTH || tile.y < 0 || tile.y >= MAX_LANES) return false;
+                        if (hasFoodAt(tile.x, tile.y)) return false;
+                        if (isOccupiedTile(tile.x, tile.y)) return false;
                         const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
                         return dist <= 4;
                     });
-                }
 
-                if (!targetTile) return;
-
-                // Trigger lob animation
-                if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
-                    this.animManagerRedux.triggerAbility(unit.coordinates, targetTile, 'feed_the_masses', false, null, unit.id);
-                }
-
-                unit.cooldowns = unit.cooldowns || {};
-                unit.cooldowns['feed_the_masses'] = 2;
-                unit.actionsTakenThisRound = (unit.actionsTakenThisRound || 0) + 1;
-                this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} lobs a piece of meat with Feed the Masses to (${targetTile.x}, ${targetTile.y})!`);
-
-                const delayMs = process.env.NODE_ENV === 'test' ? 0 : 1000;
-                const placeMeat = () => {
-                    this.meatTiles = this.meatTiles || [];
-                    const meatId = `meat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-                    this.meatTiles.push({ id: meatId, x: targetTile.x, y: targetTile.y, createdBy: unit.id });
-
-                    // Check if any unit is standing on that tile right now
-                    this._checkMeatTilePickup();
-
-                    if (typeof this.updateData === 'function') {
-                        this.updateData(clone(this.combatants));
+                    // Second priority: any tile within 2 spaces of damaged friendly without food and unoccupied
+                    if (!targetTile) {
+                        const radius2Tiles = [];
+                        for (let dx = -2; dx <= 2; dx++) {
+                            for (let dy = -2; dy <= 2; dy++) {
+                                const tx = fCoords.x + dx;
+                                const ty = fCoords.y + dy;
+                                if (tx >= 0 && tx <= MAX_DEPTH && ty >= 0 && ty < MAX_LANES && !hasFoodAt(tx, ty) && !isOccupiedTile(tx, ty)) {
+                                    radius2Tiles.push({ x: tx, y: ty });
+                                }
+                            }
+                        }
+                        targetTile = radius2Tiles.find(tile => {
+                            const dist = Math.abs(unit.coordinates.x - tile.x) + Math.abs(unit.coordinates.y - tile.y);
+                            return dist <= 4;
+                        });
                     }
-                };
 
-                if (delayMs > 0) {
-                    setTimeout(placeMeat, delayMs);
-                } else {
-                    placeMeat();
+                    if (targetTile) {
+                        // Trigger lob animation
+                        if (this.animManagerRedux && typeof this.animManagerRedux.triggerAbility === 'function') {
+                            this.animManagerRedux.triggerAbility(unit.coordinates, targetTile, 'feed_the_masses', false, null, unit.id);
+                        }
+
+                        unit.cooldowns = unit.cooldowns || {};
+                        unit.cooldowns['feed_the_masses'] = 2;
+                        unit.actionsTakenThisRound = (unit.actionsTakenThisRound || 0) + 1;
+                        this.appendCombatLog(`🥩 ${this.getCombatantLogName(unit)} lobs a piece of meat with Feed the Masses to (${targetTile.x}, ${targetTile.y})!`);
+
+                        const delayMs = process.env.NODE_ENV === 'test' ? 0 : 1000;
+                        const placeMeat = () => {
+                            this.meatTiles = this.meatTiles || [];
+                            const meatId = `meat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+                            this.meatTiles.push({ id: meatId, x: targetTile.x, y: targetTile.y, createdBy: unit.id });
+
+                            // Check if any unit is standing on that tile right now
+                            this._checkMeatTilePickup();
+
+                            if (typeof this.updateData === 'function') {
+                                this.updateData(clone(this.combatants));
+                            }
+                        };
+
+                        if (delayMs > 0) {
+                            setTimeout(placeMeat, delayMs);
+                        } else {
+                            placeMeat();
+                        }
+
+                        if (typeof this.updateData === 'function') {
+                            this.updateData(clone(this.combatants));
+                        }
+                        return;
+                    }
                 }
 
-                if (typeof this.updateData === 'function') {
-                    this.updateData(clone(this.combatants));
+                // If an adjacent enemy exists, bite / basic attack immediately
+                if (adjacentEnemy) {
+                    this.acquireTarget(unit, true);
+                    const target = this.combatants[unit.targetId] || adjacentEnemy;
+                    const biteSpec = this.resolveSpecial(unit, 'bite');
+                    if (biteSpec && this._abilityReady(unit, 'bite')) {
+                        this.useAbility(unit, biteSpec, target);
+                    } else {
+                        this._basicAttack(unit, target);
+                    }
+                    return;
+                }
+
+                // Hang back at backline while in food-provider mode waiting for cooldown
+                const backlineX = MAX_DEPTH;
+                if (unit.coordinates.x < backlineX && unit.movesTakenThisRound === 0) {
+                    this.moveCloserToCoord(unit, backlineX, unit.coordinates.y);
                 }
                 return;
             }
-
-            // If an adjacent enemy exists, bite / basic attack immediately
-            if (adjacentEnemy) {
-                this.acquireTarget(unit, true);
-                const target = this.combatants[unit.targetId] || adjacentEnemy;
-                const biteSpec = this.resolveSpecial(unit, 'bite');
-                if (biteSpec && this._abilityReady(unit, 'bite')) {
-                    this.useAbility(unit, biteSpec, target);
-                } else {
-                    this._basicAttack(unit, target);
-                }
-                return;
-            }
-
-            // Hang back at backline while in food-provider mode
-            const backlineX = MAX_DEPTH;
-            if (unit.coordinates.x < backlineX && unit.movesTakenThisRound === 0) {
-                this.moveCloserToCoord(unit, backlineX, unit.coordinates.y);
-            }
-            return;
         }
 
         // 5. Aggressive Melee Attack Mode:
@@ -8953,6 +9029,823 @@ export function CombatManagerRedux() {
         }, 1000);
     };
 
+    // ══ HOROLOGIST: time manipulation ═════════════════════════════════════════
+    // Future Echo queues delayed strikes (this.futureEchoes); Set Anchor snapshots
+    // a unit (this.timeAnchors) which Recall rewinds or, once crystallized, Shatters.
+    // Both are advanced once per round by _tickHorologistTimeline (incrementRound).
+    this._isHorologist = (unit) => {
+        if (!unit) return false;
+        const t = String(unit.key || unit.type || '').toLowerCase();
+        return t === 'horologist';
+    };
+
+    this._unitHasSkillKey = (unit, key) => {
+        if (!unit) return false;
+        const norm = (s) => String(s || '').replace(/\s+/g, '_').toLowerCase();
+        const lists = [unit.specials, unit.skills, unit.passives, unit.attacks];
+        return lists.some(list => Array.isArray(list) && list.some(s => {
+            if (typeof s === 'string') return norm(s) === key;
+            if (s && typeof s === 'object') return norm(s.id || s.key || s.name) === key;
+            return false;
+        }));
+    };
+
+    this._hasClockworkHeart = (unit) => {
+        if (!unit || unit.isMonster) return false;
+        return this._isHorologist(unit) || this._unitHasSkillKey(unit, 'clockwork_heart');
+    };
+
+    // Turn-order speed. Clockwork Heart locks a unit to its first-observed dex
+    // (a fixed metronome), so haste/speed buffs and slows do not move it.
+    this._getTurnOrderSpeed = (unit) => {
+        if (!unit) return 0;
+        const liveSpeed = (unit.stats && (unit.stats.speed || unit.stats.dex)) || unit.speed || 1;
+        if (this._hasClockworkHeart(unit)) {
+            if (typeof unit._metronomeSpeed !== 'number') {
+                unit._metronomeSpeed = (unit.stats && unit.stats.dex) || liveSpeed;
+            }
+            return unit._metronomeSpeed;
+        }
+        return liveSpeed;
+    };
+
+    this._getTemporalStrainTier = (unit) => {
+        if (!unit || unit.isMonster || !unit.stats) return 0;
+        if (typeof unit.stats.timeDebt !== 'number' || unit.stats.timeDebt <= 0) return 0;
+        const debt = getEffectiveTimeDebt(unit.stats, Date.now());
+        return computeTemporalStrainTier(debt, unit.level || unit.stats.level || 1);
+    };
+
+    this._horologistMaxHp = (u) => {
+        if (!u) return 1;
+        return u.starting_hp || u.maxHp || (u.stats && u.stats.hp) || u.hp || 1;
+    };
+
+    this._horologistEnemyOf = (a, b) => !!a && !!b && (!!a.isMonster !== !!b.isMonster);
+
+    this._liveHorologistTarget = (id) => {
+        const c = this.combatants[id];
+        return (c && !c.dead && c.hp > 0) ? c : null;
+    };
+
+    this._triggerHorologistAnim = (src, tgt, name, isUltimate = false) => {
+        if (!this.animManagerRedux || typeof this.animManagerRedux.triggerAbility !== 'function') return;
+        const s = (src && src.coordinates) || src;
+        const t = (tgt && tgt.coordinates) || tgt || s;
+        if (!s || !t) return;
+        try {
+            this.animManagerRedux.triggerAbility(s, t, name, !!(tgt && tgt.isLarge), (tgt && tgt.occupiedCoords) || null, src && src.id, null, null, null, null, false, null, isUltimate);
+        } catch (e) {
+            // Animation failures must never break combat resolution.
+        }
+    };
+
+    this._snapshotUnit = (u) => ({
+        hp: u.hp,
+        x: u.coordinates ? u.coordinates.x : 0,
+        y: u.coordinates ? u.coordinates.y : 0,
+        buffNames: Array.isArray(u.activeBuffs) ? u.activeBuffs.map(b => b && b.name) : [],
+        hadDebuffs: (Array.isArray(u.activeDebuffs) && u.activeDebuffs.length > 0) || !!(u.stunned || u.poisoned || u.poison || u.bleed || u.frozen || u.asleep || u.silenced)
+    });
+
+    // Mirror engine state onto combatants so the grid can render anchor rings and echo dials.
+    this._syncHorologistMarkers = () => {
+        Object.values(this.combatants).forEach(c => {
+            if (!c) return;
+            if (c.timeAnchor) delete c.timeAnchor;
+            if (c.incomingEchoes) delete c.incomingEchoes;
+        });
+        (this.timeAnchors || []).forEach(a => {
+            const c = this.combatants[a.targetId];
+            if (!c) return;
+            c.timeAnchor = {
+                casterId: a.casterId,
+                crystallized: a.crystallized,
+                roundsUntilCrystal: Math.max(0, a.crystallizeAfter - a.roundsActive)
+            };
+        });
+        (this.futureEchoes || []).forEach(e => {
+            const c = this.combatants[e.targetId];
+            if (!c || c.dead) return;
+            c.incomingEchoes = c.incomingEchoes || [];
+            c.incomingEchoes.push({ id: e.id, roundsLeft: e.roundsLeft, delay: e.delay });
+        });
+    };
+
+    this._applyHorologistDamage = (caster, target, raw, label, ability = null) => {
+        if (!target || target.dead || raw <= 0) return 0;
+        const overrideAbility = ability || { id: 'future_echo', name: label, damageType: 'arcane', range: 'far', type: 'damage' };
+        const dmg = Math.max(1, Math.round(this.damageCheck(caster, target, raw, true, overrideAbility)));
+        target.hp = Math.max(0, target.hp - dmg);
+        if (typeof this.wakeSleepingTarget === 'function') this.wakeSleepingTarget(target, label);
+        target.damageIndicators = target.damageIndicators || [];
+        target.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${dmg}`, source: label, type: 'damage' });
+        if (target.hp <= 0) this.targetKilled(target);
+        return dmg;
+    };
+
+    this._healByHorologist = (caster, target, amount, label) => {
+        if (!target || target.dead || amount <= 0) return 0;
+        const maxHp = this._horologistMaxHp(target);
+        const before = target.hp;
+        target.hp = Math.min(maxHp, target.hp + Math.round(amount));
+        const healed = target.hp - before;
+        if (healed > 0) {
+            target.damageIndicators = target.damageIndicators || [];
+            target.damageIndicators.push({ id: Date.now() + Math.random(), value: `+${healed}`, source: label, type: 'heal' });
+        }
+        return healed;
+    };
+
+    this._queueFutureEcho = (caster, target, ability, delayOverride = null) => {
+        const def = specialsMatrix.future_echo || {};
+        const maxDelay = ability.maxDelay || def.maxDelay || 3;
+        let delay = delayOverride;
+        if (typeof delay !== 'number') delay = typeof ability.delay === 'number' ? ability.delay : caster.echoDelayPreference;
+        if (typeof delay !== 'number') delay = ability.defaultDelay || def.defaultDelay || 2;
+        if (ability.forceMaxDelay) delay = maxDelay;
+        delay = Math.max(1, Math.min(maxDelay, Math.round(delay)));
+        const echo = {
+            id: `echo_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            casterId: caster.id,
+            targetId: target.id,
+            lastKnown: target.coordinates ? { ...target.coordinates } : null,
+            delay,
+            roundsLeft: delay,
+            atkPercentage: ability.atkPercentage || def.atkPercentage || 100,
+            delayBonusPerRound: ability.delayBonusPerRound || def.delayBonusPerRound || 35
+        };
+        this.futureEchoes = this.futureEchoes || [];
+        this.futureEchoes.push(echo);
+        return echo;
+    };
+
+    // Echo's target died: hit the enemy (of the caster) nearest the last known tile.
+    this._findEchoRedirect = (caster, echo) => {
+        const origin = echo.lastKnown || (caster && caster.coordinates) || { x: 0, y: 0 };
+        let best = null;
+        let bestDist = Infinity;
+        Object.values(this.combatants).forEach(c => {
+            if (!c || c.dead || c.hp <= 0 || c.isVCT || c.isWall || !this._horologistEnemyOf(caster, c)) return;
+            const d = Math.abs(c.coordinates.x - origin.x) + Math.abs(c.coordinates.y - origin.y);
+            if (d < bestDist) { bestDist = d; best = c; }
+        });
+        return best;
+    };
+
+    this._echoDamage = (caster, echo, delayForBonus = echo.delay) => {
+        const atk = (caster && caster.stats && caster.stats.atk) || 10;
+        return Math.max(1, Math.round(atk * (echo.atkPercentage / 100) * (1 + (echo.delayBonusPerRound / 100) * delayForBonus)));
+    };
+
+    this._resolveFutureEcho = (echo, delayForBonus = echo.delay) => {
+        const caster = this.combatants[echo.casterId];
+        if (!caster) return 0;
+        let target = this._liveHorologistTarget(echo.targetId);
+        let redirected = false;
+        if (!target) {
+            target = this._findEchoRedirect(caster, echo);
+            redirected = !!target;
+        }
+        if (!target) {
+            this.appendCombatLog(`${this.getCombatantLogName(caster)}'s Future Echo dissipates — no one left to strike.`);
+            return 0;
+        }
+        const raw = this._echoDamage(caster, echo, delayForBonus);
+        this._triggerHorologistAnim(target, target, 'future_echo_strike');
+        const dmg = this._applyHorologistDamage(caster, target, raw, 'Future Echo');
+        this.appendCombatLog(`⏳ ${this.getCombatantLogName(caster)}'s Future Echo ${redirected ? 'redirects and ' : ''}lands on ${this.getCombatantLogName(target)} for ${dmg} damage (delay ${delayForBonus}).`);
+        return dmg;
+    };
+
+    this._setAnchor = (caster, target, ability) => {
+        const def = specialsMatrix.set_anchor || {};
+        const maxAnchors = ability.maxAnchors || def.maxAnchors || 2;
+        this.timeAnchors = (this.timeAnchors || []).filter(a => !(a.targetId === target.id));
+        const mine = this.timeAnchors.filter(a => a.casterId === caster.id);
+        if (mine.length >= maxAnchors) {
+            const oldest = mine[0];
+            this.timeAnchors = this.timeAnchors.filter(a => a !== oldest);
+            const old = this.combatants[oldest.targetId];
+            if (old) this.appendCombatLog(`${this.getCombatantLogName(caster)}'s anchor on ${this.getCombatantLogName(old)} unwinds.`);
+        }
+        const anchor = {
+            id: `anchor_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            casterId: caster.id,
+            targetId: target.id,
+            roundsActive: 0,
+            crystallizeAfter: ability.crystallizeAfter || def.crystallizeAfter || 4,
+            crystallized: false,
+            snapshot: this._snapshotUnit(target)
+        };
+        this.timeAnchors.push(anchor);
+        this._triggerHorologistAnim(caster, target, 'horologist_anchor');
+        this.appendCombatLog(`⚓ ${this.getCombatantLogName(caster)} anchors ${this.getCombatantLogName(target)} in time (HP ${target.hp}).`);
+        return anchor;
+    };
+
+    // Rewinds (fresh) or Shatters (crystallized) one anchor, then consumes it.
+    this._recallAnchor = (caster, anchor, shatterMultiplier = 1.5) => {
+        this.timeAnchors = (this.timeAnchors || []).filter(a => a !== anchor);
+        const target = this._liveHorologistTarget(anchor.targetId);
+        if (!target) return;
+        const snap = anchor.snapshot;
+        const isEnemy = this._horologistEnemyOf(caster, target);
+        const name = this.getCombatantLogName(target);
+
+        if (anchor.crystallized) {
+            this._triggerHorologistAnim(caster, target, 'horologist_shatter');
+            if (isEnemy) {
+                const delta = Math.abs(target.hp - snap.hp);
+                const raw = Math.round(delta * shatterMultiplier);
+                if (raw > 0) {
+                    const dmg = this._applyHorologistDamage(caster, target, raw, 'Shatter', { id: 'recall', name: 'Shatter', damageType: 'arcane', range: 'unlimited', type: 'damage' });
+                    this.appendCombatLog(`💎 ${this.getCombatantLogName(caster)} SHATTERS the anchor on ${name} for ${dmg} arcane damage!`);
+                } else {
+                    this.appendCombatLog(`💎 The anchor on ${name} shatters harmlessly — nothing changed.`);
+                }
+            } else {
+                const healed = this._healByHorologist(caster, target, Math.max(0, snap.hp - target.hp), 'Shatter');
+                this.appendCombatLog(`💎 ${this.getCombatantLogName(caster)} shatters the anchor on ${name}, restoring ${healed} HP.`);
+            }
+            return;
+        }
+
+        this._triggerHorologistAnim(caster, target, 'horologist_recall');
+        if (isEnemy) {
+            if (target.hp > snap.hp) {
+                const lost = target.hp - snap.hp;
+                target.hp = snap.hp;
+                target.damageIndicators = target.damageIndicators || [];
+                target.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${lost}`, source: 'Recall', type: 'damage' });
+                if (target.hp <= 0) this.targetKilled(target);
+            }
+            if (Array.isArray(target.activeBuffs)) {
+                const keep = [];
+                target.activeBuffs.forEach(b => {
+                    if (b && !snap.buffNames.includes(b.name)) this._revertBuff(target, b);
+                    else keep.push(b);
+                });
+                target.activeBuffs = keep;
+            }
+        } else {
+            this._healByHorologist(caster, target, Math.max(0, snap.hp - target.hp), 'Recall');
+            if (!snap.hadDebuffs) this.cleanseDebuffs(target);
+        }
+
+        if (!target.dead && target.coordinates && (target.coordinates.x !== snap.x || target.coordinates.y !== snap.y) && this.canFitAt(target, snap.x, snap.y)) {
+            this.updateUnitCoordinates(target, snap.x, snap.y);
+        }
+        this.appendCombatLog(`🔄 ${this.getCombatantLogName(caster)} recalls ${name} to the anchored moment.`);
+
+        // Pulling an enemy back through time detonates every echo waiting for it.
+        if (isEnemy && !target.dead) {
+            const pending = (this.futureEchoes || []).filter(e => e.targetId === target.id);
+            if (pending.length > 0) {
+                this.futureEchoes = this.futureEchoes.filter(e => e.targetId !== target.id);
+                pending.forEach(e => this._resolveFutureEcho(e));
+            }
+        }
+    };
+
+    this._executeHorologistAbility = (unit, ability, abilityId, target, isUltimate = false) => {
+        const name = ability.name || abilityId;
+        if (abilityId === 'future_echo') {
+            if (!target || target.id === unit.id || !this._horologistEnemyOf(unit, target)) {
+                target = this.combatants[unit.targetId];
+            }
+            if (!target || target.dead) return;
+            const count = Math.max(1, ability.echoCount || 1);
+            const targets = [target];
+            if (count > 1) {
+                const others = Object.values(this.combatants)
+                    .filter(c => c && !c.dead && c.hp > 0 && !c.isVCT && !c.isWall && c.id !== target.id && this._horologistEnemyOf(unit, c))
+                    .sort((a, b) => a.hp - b.hp);
+                for (let i = 1; i < count; i++) targets.push(others[i - 1] || target);
+            }
+            this._triggerHorologistAnim(unit, target, 'future_echo_cast', isUltimate);
+            const queued = targets.map(t => this._queueFutureEcho(unit, t, ability));
+            this.appendCombatLog(`⏳ ${this.getCombatantLogName(unit)} casts ${name}: ${queued.map(e => `${this.getCombatantLogName(this.combatants[e.targetId])} in ${e.delay}`).join(', ')} round(s).`);
+        } else if (abilityId === 'set_anchor') {
+            if (!target || target.dead) return;
+            this._setAnchor(unit, target, ability);
+        } else if (abilityId === 'recall') {
+            const mine = (this.timeAnchors || []).filter(a => a.casterId === unit.id);
+            const anchor = (target && mine.find(a => a.targetId === target.id)) || this._pickBestRecall(unit);
+            if (!anchor) {
+                this.appendCombatLog(`${this.getCombatantLogName(unit)} reaches for an anchor, but none are set.`);
+                return;
+            }
+            this._recallAnchor(unit, anchor, ability.shatterMultiplier || 1.5);
+        } else if (abilityId === 'hour_of_reckoning') {
+            this._triggerHorologistAnim(unit, unit, 'hour_of_reckoning', isUltimate);
+            this.appendCombatLog(`🕛 ${this.getCombatantLogName(unit)} strikes the HOUR OF RECKONING!`);
+            const maxDelay = (specialsMatrix.future_echo && specialsMatrix.future_echo.maxDelay) || 3;
+            const echoes = (this.futureEchoes || []).filter(e => e.casterId === unit.id);
+            this.futureEchoes = (this.futureEchoes || []).filter(e => e.casterId !== unit.id);
+            echoes.forEach(e => this._resolveFutureEcho(e, maxDelay));
+            const anchors = (this.timeAnchors || []).filter(a => a.casterId === unit.id);
+            anchors.forEach(a => this._recallAnchor(unit, a, (specialsMatrix.recall && specialsMatrix.recall.shatterMultiplier) || 1.5));
+        }
+        this._syncHorologistMarkers();
+        if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+    };
+
+    // Value estimate of recalling each of the caster's anchors; returns the best (or null).
+    this._scoreAnchorRecall = (caster, anchor) => {
+        const t = this._liveHorologistTarget(anchor.targetId);
+        if (!t) return -1;
+        const snap = anchor.snapshot;
+        const maxHp = this._horologistMaxHp(t);
+        if (this._horologistEnemyOf(caster, t)) {
+            if (anchor.crystallized) return Math.abs(t.hp - snap.hp) * 1.5;
+            const pendingEchoes = (this.futureEchoes || []).filter(e => e.targetId === t.id);
+            const echoValue = pendingEchoes.reduce((sum, e) => sum + this._echoDamage(caster, e), 0);
+            return Math.max(0, t.hp - snap.hp) + echoValue;
+        }
+        const missing = Math.max(0, snap.hp - t.hp);
+        return missing >= maxHp * 0.25 ? missing * 1.5 : missing * 0.5;
+    };
+
+    this._pickBestRecall = (caster) => {
+        let best = null;
+        let bestScore = 0;
+        (this.timeAnchors || []).filter(a => a.casterId === caster.id).forEach(a => {
+            const s = this._scoreAnchorRecall(caster, a);
+            if (s > bestScore) { bestScore = s; best = a; }
+        });
+        return best;
+    };
+
+    // Called once per round from incrementRound.
+    this._tickHorologistTimeline = () => {
+        if (this.combatOver) return;
+        let changed = false;
+        (this.timeAnchors || []).forEach(a => {
+            const t = this.combatants[a.targetId];
+            if (!t || t.dead) return;
+            a.roundsActive += 1;
+            changed = true;
+            if (!a.crystallized && a.roundsActive >= a.crystallizeAfter) {
+                a.crystallized = true;
+                this.appendCombatLog(`💎 The anchor on ${this.getCombatantLogName(t)} crystallizes. It can now only be Shattered.`);
+            }
+        });
+        this.timeAnchors = (this.timeAnchors || []).filter(a => this._liveHorologistTarget(a.targetId));
+
+        const due = [];
+        const remaining = [];
+        (this.futureEchoes || []).forEach(e => {
+            const t = this._liveHorologistTarget(e.targetId);
+            if (t && t.coordinates) e.lastKnown = { ...t.coordinates };
+            e.roundsLeft -= 1;
+            changed = true;
+            (e.roundsLeft <= 0 ? due : remaining).push(e);
+        });
+        this.futureEchoes = remaining;
+        due.forEach(e => this._resolveFutureEcho(e));
+
+        if (changed) {
+            this._syncHorologistMarkers();
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+        }
+    };
+
+    this._isAdjacentToEnemyOf = (unit, refUnit = unit) => Object.values(this.combatants).some(c => {
+        if (!c || c.dead || c.isVCT || !this._horologistEnemyOf(refUnit, c)) return false;
+        const tiles = (Array.isArray(c.occupiedCoords) && c.occupiedCoords.length > 0) ? c.occupiedCoords : [c.coordinates];
+        return tiles.some(tile => Math.abs(unit.coordinates.x - tile.x) <= 1 && Math.abs(unit.coordinates.y - tile.y) <= 1);
+    });
+
+    // HOROLOGIST AI: Reckoning → worthwhile Recall → Anchor → Future Echo → basic attack.
+    this._aiHorologist = (unit) => {
+        this.acquireTarget(unit, true);
+        const target = this.combatants[unit.targetId];
+        if (!target) return;
+
+        const hpRatio = unit.hp / this._horologistMaxHp(unit);
+        unit.echoDelayPreference = hpRatio < 0.3 ? 1 : (hpRatio > 0.7 ? 3 : 2);
+
+        // Positioning: keep out of melee, stay within far range.
+        if (unit.movesTakenThisRound === 0) {
+            if (this._isAdjacentToEnemyOf(unit)) {
+                const dirs = [{ dx: unit.isMonster ? 1 : -1, dy: 0 }, { dx: 0, dy: -1 }, { dx: 0, dy: 1 }];
+                for (const d of dirs) {
+                    const nx = unit.coordinates.x + d.dx;
+                    const ny = unit.coordinates.y + d.dy;
+                    if (nx < 0 || ny < 0 || nx > MAX_DEPTH || ny > MAX_LANES) continue;
+                    if (this.canFitAt(unit, nx, ny)) {
+                        this.updateUnitCoordinates(unit, nx, ny);
+                        unit.movesTakenThisRound += 1;
+                        this.applyEnduranceCost(unit, this.MOVE_ENDURANCE_COST, 'move');
+                        break;
+                    }
+                }
+            } else if (!this.targetInRange(unit, target, 'far')) {
+                this.moveCloser(unit, target);
+            }
+        }
+
+        const myEchoes = (this.futureEchoes || []).filter(e => e.casterId === unit.id);
+        const myAnchors = (this.timeAnchors || []).filter(a => a.casterId === unit.id);
+
+        if (this._abilityReady(unit, 'hour_of_reckoning') && (myEchoes.length >= 2 || (myEchoes.length >= 1 && myAnchors.length >= 1))) {
+            const hour = this.resolveSpecial(unit, 'hour_of_reckoning');
+            if (hour) { this.useAbility(unit, hour, unit); return; }
+        }
+
+        if (this._abilityReady(unit, 'recall') && myAnchors.length > 0) {
+            const best = this._pickBestRecall(unit);
+            if (best && this._scoreAnchorRecall(unit, best) >= 12) {
+                const recall = this.resolveSpecial(unit, 'recall');
+                const anchored = this.combatants[best.targetId];
+                if (recall && anchored) { this.useAbility(unit, recall, anchored); return; }
+            }
+        }
+
+        if (this._abilityReady(unit, 'set_anchor')) {
+            const anchor = this.resolveSpecial(unit, 'set_anchor');
+            const anchoredIds = new Set((this.timeAnchors || []).map(a => a.targetId));
+            const allyCandidate = Object.values(this.combatants)
+                .filter(c => c && !c.dead && c.hp > 0 && !c.isVCT && !c.isWall && !this._horologistEnemyOf(unit, c) && !anchoredIds.has(c.id))
+                .filter(c => c.hp / this._horologistMaxHp(c) >= 0.6 && this._isAdjacentToEnemyOf(c, unit))
+                .sort((a, b) => b.hp - a.hp)[0];
+            const pick = allyCandidate || (!anchoredIds.has(target.id) ? target : null);
+            if (anchor && pick && this.targetInRange(unit, pick, anchor.range || 'far')) {
+                this.useAbility(unit, anchor, pick);
+                return;
+            }
+        }
+
+        if (this._abilityReady(unit, 'future_echo')) {
+            const echo = this.resolveSpecial(unit, 'future_echo');
+            if (echo && this.targetInRange(unit, target, echo.range || 'far')) {
+                this.useAbility(unit, echo, target);
+                return;
+            }
+        }
+
+        if (this.targetInRange(unit, target, 'far') && typeof this._basicAttack === 'function') {
+            this._basicAttack(unit, target);
+        }
+    };
+
+    // ══ GLITTERBURN: pyrotechnics, illusions & traps ═════════════════════════
+    this._isGlitterburn = (unit) => {
+        if (!unit) return false;
+        const t = String(unit.key || unit.type || '').toLowerCase();
+        return t === 'glitterburn';
+    };
+
+    this._triggerGlitterburnAnim = (src, tgt, name, isUltimate = false) => {
+        if (!this.animManagerRedux || typeof this.animManagerRedux.triggerAbility !== 'function') return;
+        const s = (src && src.coordinates) || src;
+        const t = (tgt && tgt.coordinates) || tgt || s;
+        if (!s || !t) return;
+        try {
+            this.animManagerRedux.triggerAbility(s, t, name, !!(tgt && tgt.isLarge), (tgt && tgt.occupiedCoords) || null, src && src.id, null, null, null, null, false, null, isUltimate);
+        } catch (e) { }
+    };
+
+    this._applyDazzled = (target, stacks = 1) => {
+        if (!target || target.dead || target.hp <= 0) return;
+        target.dazzled = Math.min(5, (target.dazzled || 0) + stacks);
+        target.damageIndicators = target.damageIndicators || [];
+        target.damageIndicators.push({ id: Date.now() + Math.random(), value: `✨ Dazzled!`, source: 'Glitterburn', type: 'status' });
+    };
+
+    this._applyGlitterburnDamage = (caster, target, raw, label, ability = null) => {
+        if (!target || target.dead || raw <= 0) return 0;
+        const overrideAbility = ability || { id: 'glitterburn_spell', name: label, damageType: 'fire', range: 'far', type: 'damage' };
+        const dmg = Math.max(1, Math.round(this.damageCheck(caster, target, raw, true, overrideAbility)));
+        target.hp = Math.max(0, target.hp - dmg);
+        if (typeof this.wakeSleepingTarget === 'function') this.wakeSleepingTarget(target, label);
+        target.damageIndicators = target.damageIndicators || [];
+        target.damageIndicators.push({ id: Date.now() + Math.random(), value: `-${dmg}`, source: label, type: 'damage' });
+        if (target.hp <= 0) {
+            this.targetKilled(target);
+            if (caster && (this._unitHasSkillKey(caster, 'pyrotechnic_chain') || (Array.isArray(caster.passives) && caster.passives.includes('pyrotechnic_chain')))) {
+                this._triggerPyrotechnicChain(caster, target.coordinates, (caster.stats && caster.stats.atk) || 12);
+            }
+        }
+        return dmg;
+    };
+
+    this._triggerPyrotechnicChain = (caster, origin, baseAtk) => {
+        if (!origin) return;
+        const splashDmg = Math.max(1, Math.round(baseAtk * 0.35));
+        Object.values(this.combatants).forEach(enemy => {
+            if (!enemy || enemy.dead || enemy.hp <= 0 || enemy.isVCT || enemy.isWall || !this._horologistEnemyOf(caster, enemy)) return;
+            const dist = Math.abs(enemy.coordinates.x - origin.x) + Math.abs(enemy.coordinates.y - origin.y);
+            if (dist <= 1 && dist > 0) {
+                this._triggerGlitterburnAnim(origin, enemy, 'glitter_pop');
+                this._applyGlitterburnDamage(caster, enemy, splashDmg, 'Pyrotechnic Chain');
+                this.appendCombatLog(`✨ Pyrotechnic Chain reaction bursts on ${this.getCombatantLogName(enemy)} for ${splashDmg} damage!`);
+            }
+        });
+    };
+
+    this._executeGlitterburnAbility = (caster, ability, abilityId, target, isUltimate = false) => {
+        const atk = (caster && caster.stats && caster.stats.atk) || 12;
+
+        if (abilityId === 'pyro_spark') {
+            const rawDmg = Math.round(atk * ((ability.atkPercentage || 110) / 100));
+            this._triggerGlitterburnAnim(caster, target, 'pyro_spark', isUltimate);
+            const dmg = this._applyGlitterburnDamage(caster, target, rawDmg, 'Pyro Spark', ability);
+            this._applyDazzled(target, 1);
+            this.appendCombatLog(`✨ ${this.getCombatantLogName(caster)} shoots a Pyro Spark at ${this.getCombatantLogName(target)} for ${dmg} damage!`);
+        } else if (abilityId === 'glitter_burst') {
+            this._triggerGlitterburnAnim(caster, target, 'glitter_burst', isUltimate);
+            const rawDmg = Math.round(atk * ((ability.atkPercentage || 130) / 100));
+            const origin = (target && target.coordinates) || caster.coordinates;
+            let hits = 0;
+            Object.values(this.combatants).forEach(enemy => {
+                if (!enemy || enemy.dead || enemy.hp <= 0 || enemy.isVCT || enemy.isWall || !this._horologistEnemyOf(caster, enemy)) return;
+                const dist = Math.abs(enemy.coordinates.x - origin.x) + Math.abs(enemy.coordinates.y - origin.y);
+                if (dist <= 2) {
+                    this._applyGlitterburnDamage(caster, enemy, rawDmg, 'Glitter Burst', ability);
+                    this._applyDazzled(enemy, 1);
+                    if (caster._hasFlashbangPrep) {
+                        enemy.stunned = true;
+                        enemy.stunnedRounds = 1;
+                        this.appendCombatLog(`💥 Flashbang Powder stuns ${this.getCombatantLogName(enemy)}!`);
+                    }
+                    hits++;
+                }
+            });
+            if (caster._hasFlashbangPrep) caster._hasFlashbangPrep = false;
+            this.appendCombatLog(`✨ ${this.getCombatantLogName(caster)} unleashes a blinding Glitter Burst hitting ${hits} target(s)!`);
+        } else if (abilityId === 'prism_snare') {
+            const targetCoords = (target && target.coordinates) || target;
+            const snare = {
+                id: `snare_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                casterId: caster.id,
+                x: targetCoords.x,
+                y: targetCoords.y,
+                type: 'prism_snare',
+                roundsLeft: 4,
+                rootDuration: 2,
+                damage: Math.round(atk * ((ability.atkPercentage || 140) / 100))
+            };
+            this.glitterTraps = this.glitterTraps || [];
+            this.glitterTraps.push(snare);
+            this._triggerGlitterburnAnim(caster, targetCoords, 'prism_snare_place', isUltimate);
+            this.appendCombatLog(`✨ ${this.getCombatantLogName(caster)} places a Prism Snare trap at (${targetCoords.x}, ${targetCoords.y})!`);
+        } else if (abilityId === 'starlight_decoy') {
+            let freeTile = null;
+            const origin = caster.coordinates || { x: 0, y: 0 };
+            const offsets = [{ dx: 1, dy: 0 }, { dx: 0, dy: 1 }, { dx: -1, dy: 0 }, { dx: 0, dy: -1 }, { dx: 2, dy: 0 }, { dx: 1, dy: 1 }];
+            for (const o of offsets) {
+                const tx = Math.max(0, Math.min(MAX_DEPTH, origin.x + o.dx));
+                const ty = Math.max(0, Math.min(MAX_LANES, origin.y + o.dy));
+                if (!this.isTileOccupied(tx, ty)) {
+                    freeTile = { x: tx, y: ty };
+                    break;
+                }
+            }
+            if (!freeTile) freeTile = { ...origin };
+            const decoyId = `decoy_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+            const hp = (20 + 5 * (caster.level || 1)) * (caster._hasMirrorDecoyPrep ? 2 : 1);
+            const decoy = {
+                id: decoyId,
+                type: 'starlight_decoy',
+                name: 'Starlight Decoy',
+                image: 'glitterburn',
+                portrait: images['starlight_decoy'] || images['glitterburn_portrait'],
+                isDecoy: true,
+                isConstruct: true,
+                isMonster: !!caster.isMonster,
+                summonedBy: caster.id,
+                hp,
+                maxHp: hp,
+                starting_hp: hp,
+                stats: { str: 1, int: 10, dex: 10, fort: 10, hp, speed: 1 },
+                coordinates: freeTile,
+                specials: [],
+                skills: [],
+                passives: [],
+                attacks: [],
+                skipAI: true,
+                roundsLeft: 3,
+                reflectPct: caster._hasMirrorDecoyPrep ? 0.5 : 0
+            };
+            this.combatants[decoyId] = decoy;
+            this._setCombatantOccupiedCoords(decoy);
+            this._triggerGlitterburnAnim(caster, freeTile, 'starlight_decoy_summon', isUltimate);
+            this.appendCombatLog(`✨ ${this.getCombatantLogName(caster)} projects a radiant Starlight Decoy at (${freeTile.x}, ${freeTile.y})!`);
+        } else if (abilityId === 'supernova_core') {
+            const targetCoords = (target && target.coordinates) || target;
+            const core = {
+                id: `supernova_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+                casterId: caster.id,
+                x: targetCoords.x,
+                y: targetCoords.y,
+                roundsLeft: 2,
+                damage: Math.round(atk * ((ability.atkPercentage || 250) / 100)),
+                pullRadius: 3
+            };
+            this.supernovaCores = this.supernovaCores || [];
+            this.supernovaCores.push(core);
+            this._triggerGlitterburnAnim(caster, targetCoords, 'supernova_core_pulse', isUltimate);
+            this.appendCombatLog(`🌟 ${this.getCombatantLogName(caster)} ignites a celestial Supernova Core at (${targetCoords.x}, ${targetCoords.y})!`);
+        }
+    };
+
+    this._checkGlitterTrapTrigger = (unit) => {
+        if (!unit || unit.dead || !unit.coordinates || !Array.isArray(this.glitterTraps) || this.glitterTraps.length === 0) return;
+        const coords = typeof this.getCombatantOccupiedCoords === 'function' ? this.getCombatantOccupiedCoords(unit) : [unit.coordinates];
+        const triggered = [];
+        this.glitterTraps.forEach(trap => {
+            const caster = this.combatants[trap.casterId];
+            if (caster && this._horologistEnemyOf(caster, unit)) {
+                if (coords.some(c => c && c.x === trap.x && c.y === trap.y)) {
+                    triggered.push(trap);
+                }
+            }
+        });
+
+        triggered.forEach(trap => {
+            const caster = this.combatants[trap.casterId];
+            this._triggerGlitterburnAnim({ x: trap.x, y: trap.y }, unit, 'prism_snare_snap');
+            unit.rooted = true;
+            unit.rootedRounds = trap.rootDuration || 2;
+            unit.movesTakenThisRound = 99; // halts remaining moves
+            const dmg = this._applyGlitterburnDamage(caster, unit, trap.damage, 'Prism Snare');
+            this.appendCombatLog(`🕸️ ${this.getCombatantLogName(unit)} triggers a Prism Snare! Rooted and took ${dmg} arcane damage!`);
+
+            // Refract 50% splash damage to adjacent enemies
+            const splashDmg = Math.max(1, Math.round(dmg * 0.5));
+            Object.values(this.combatants).forEach(adj => {
+                if (!adj || adj.dead || adj.id === unit.id || adj.isVCT || !this._horologistEnemyOf(caster, adj)) return;
+                const dist = Math.abs(adj.coordinates.x - trap.x) + Math.abs(adj.coordinates.y - trap.y);
+                if (dist <= 1) {
+                    this._applyGlitterburnDamage(caster, adj, splashDmg, 'Prism Snare Refraction');
+                }
+            });
+        });
+
+        if (triggered.length > 0) {
+            const trigIds = new Set(triggered.map(t => t.id));
+            this.glitterTraps = this.glitterTraps.filter(t => !trigIds.has(t.id));
+            if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
+        }
+    };
+
+    this._tickGlitterburnTimeline = () => {
+        // 1. Tick Supernova Cores
+        if (Array.isArray(this.supernovaCores) && this.supernovaCores.length > 0) {
+            const remainingCores = [];
+            this.supernovaCores.forEach(core => {
+                const caster = this.combatants[core.casterId];
+                // Gravitational suction: pull all enemies within pullRadius 1 tile closer to core
+                Object.values(this.combatants).forEach(enemy => {
+                    if (!enemy || enemy.dead || enemy.hp <= 0 || enemy.isVCT || enemy.isWall || !this._horologistEnemyOf(caster, enemy)) return;
+                    const dx = core.x - enemy.coordinates.x;
+                    const dy = core.y - enemy.coordinates.y;
+                    const dist = Math.abs(dx) + Math.abs(dy);
+                    if (dist > 0 && dist <= core.pullRadius) {
+                        const stepX = dx !== 0 ? Math.sign(dx) : 0;
+                        const stepY = stepX === 0 && dy !== 0 ? Math.sign(dy) : 0;
+                        const nx = enemy.coordinates.x + stepX;
+                        const ny = enemy.coordinates.y + stepY;
+                        if (!this.isTileOccupied(nx, ny)) {
+                            this.updateUnitCoordinates(enemy, nx, ny);
+                        }
+                    }
+                });
+
+                core.roundsLeft -= 1;
+                if (core.roundsLeft <= 0) {
+                    // Detonate Supernova!
+                    this._triggerGlitterburnAnim({ x: core.x, y: core.y }, { x: core.x, y: core.y }, 'supernova_core_detonate');
+                    this.appendCombatLog(`🌟 Supernova Core DETONATES at (${core.x}, ${core.y})!`);
+                    Object.values(this.combatants).forEach(enemy => {
+                        if (!enemy || enemy.dead || enemy.hp <= 0 || enemy.isVCT || enemy.isWall || !this._horologistEnemyOf(caster, enemy)) return;
+                        const dist = Math.abs(enemy.coordinates.x - core.x) + Math.abs(enemy.coordinates.y - core.y);
+                        if (dist <= core.pullRadius) {
+                            const raw = Math.max(1, Math.round(core.damage * (1 - dist * 0.15)));
+                            this._applyGlitterburnDamage(caster, enemy, raw, 'Supernova Core');
+                            this._applyDazzled(enemy, 2);
+                        }
+                    });
+                    // Detonate all active traps simultaneously
+                    if (Array.isArray(this.glitterTraps)) {
+                        this.glitterTraps.forEach(trap => {
+                            this._triggerGlitterburnAnim({ x: trap.x, y: trap.y }, { x: trap.x, y: trap.y }, 'prism_snare_snap');
+                        });
+                        this.glitterTraps = [];
+                    }
+                } else {
+                    remainingCores.push(core);
+                }
+            });
+            this.supernovaCores = remainingCores;
+        }
+
+        // 2. Tick Starlight Decoys
+        Object.values(this.combatants).forEach(c => {
+            if (c && !c.dead && c.isDecoy) {
+                c.roundsLeft = (c.roundsLeft || 3) - 1;
+                if (c.roundsLeft <= 0) {
+                    c.dead = true;
+                    this._triggerGlitterburnAnim(c, c, 'glitter_pop');
+                    this.appendCombatLog(`✨ ${c.name} expires in a shower of radiant sparks.`);
+                    const caster = this.combatants[c.summonedBy];
+                    const popDmg = Math.round(((caster && caster.stats && caster.stats.atk) || 12) * 0.8);
+                    Object.values(this.combatants).forEach(enemy => {
+                        if (!enemy || enemy.dead || enemy.hp <= 0 || enemy.isVCT || !this._horologistEnemyOf(c, enemy)) return;
+                        const dist = Math.abs(enemy.coordinates.x - c.coordinates.x) + Math.abs(enemy.coordinates.y - c.coordinates.y);
+                        if (dist <= 1) {
+                            this._applyGlitterburnDamage(caster || c, enemy, popDmg, 'Glitter Pop');
+                        }
+                    });
+                }
+            }
+        });
+
+        // 3. Tick traps duration
+        if (Array.isArray(this.glitterTraps)) {
+            this.glitterTraps.forEach(trap => { trap.roundsLeft -= 1; });
+            this.glitterTraps = this.glitterTraps.filter(trap => trap.roundsLeft > 0);
+        }
+    };
+
+    // GLITTERBURN AI: Supernova Core → Decoy → Prism Snare → Glitter Burst → Pyro Spark
+    this._aiGlitterburn = (unit) => {
+        this.acquireTarget(unit, true);
+        const target = this.combatants[unit.targetId];
+        if (!target) return;
+
+        // Positioning: maintain medium distance
+        if (unit.movesTakenThisRound === 0) {
+            if (this._isAdjacentToEnemyOf(unit)) {
+                const dirs = [{ dx: unit.isMonster ? 1 : -1, dy: 0 }, { dx: 0, dy: -1 }, { dx: 0, dy: 1 }];
+                for (const d of dirs) {
+                    const nx = unit.coordinates.x + d.dx;
+                    const ny = unit.coordinates.y + d.dy;
+                    if (nx < 0 || ny < 0 || nx > MAX_DEPTH || ny > MAX_LANES) continue;
+                    if (this.canFitAt(unit, nx, ny)) {
+                        this.updateUnitCoordinates(unit, nx, ny);
+                        unit.movesTakenThisRound += 1;
+                        this.applyEnduranceCost(unit, this.MOVE_ENDURANCE_COST, 'move');
+                        break;
+                    }
+                }
+            } else if (!this.targetInRange(unit, target, 'medium')) {
+                this.moveCloser(unit, target);
+            }
+        }
+
+        const enemiesAlive = Object.values(this.combatants).filter(c => c && !c.dead && c.hp > 0 && !c.isVCT && !c.isWall && this._horologistEnemyOf(unit, c));
+
+        if (this._abilityReady(unit, 'supernova_core') && enemiesAlive.length >= 2) {
+            const supernova = this.resolveSpecial(unit, 'supernova_core');
+            if (supernova) {
+                this.useAbility(unit, supernova, target);
+                return;
+            }
+        }
+
+        const activeDecoys = Object.values(this.combatants).filter(c => c && !c.dead && c.isDecoy && c.summonedBy === unit.id);
+        if (this._abilityReady(unit, 'starlight_decoy') && activeDecoys.length === 0) {
+            const decoy = this.resolveSpecial(unit, 'starlight_decoy');
+            if (decoy) {
+                this.useAbility(unit, decoy, unit);
+                return;
+            }
+        }
+
+        const activeSnares = (this.glitterTraps || []).filter(t => t.casterId === unit.id);
+        if (this._abilityReady(unit, 'prism_snare') && activeSnares.length < 2) {
+            const snare = this.resolveSpecial(unit, 'prism_snare');
+            if (snare) {
+                this.useAbility(unit, snare, target);
+                return;
+            }
+        }
+
+        const dist = Math.abs(unit.coordinates.x - target.coordinates.x) + Math.abs(unit.coordinates.y - target.coordinates.y);
+        if (this._abilityReady(unit, 'glitter_burst') && dist <= 2) {
+            const burst = this.resolveSpecial(unit, 'glitter_burst');
+            if (burst) {
+                this.useAbility(unit, burst, target);
+                return;
+            }
+        }
+
+        if (this._abilityReady(unit, 'pyro_spark')) {
+            const spark = this.resolveSpecial(unit, 'pyro_spark');
+            if (spark && this.targetInRange(unit, target, spark.range || 'medium')) {
+                this.useAbility(unit, spark, target);
+                return;
+            }
+        }
+
+        if (this.targetInRange(unit, target, 'medium') && typeof this._basicAttack === 'function') {
+            this._basicAttack(unit, target);
+        }
+    };
+
     // ── Ability Use ───────────────────────────────────────────────────────────
     this.useAbility = (unit, ability, target) => {
         if (!ability || !target) return;
@@ -9219,11 +10112,23 @@ export function CombatManagerRedux() {
         if (!unit.exhausted && unit.endurance <= unit.maxEndurance * 0.5) {
             cooldownPenalty = 1.5;
         }
-        const finalCooldown = Math.round(baseCooldown * cooldownPenalty);
+        // Temporal Strain (Horologist time debt >= 25% of cap): +1 round on every cooldown
+        const strainPenalty = this._getTemporalStrainTier(unit) >= 1 ? 1 : 0;
+        const finalCooldown = Math.round(baseCooldown * cooldownPenalty) + strainPenalty;
         if (this._setCooldown) {
             this._setCooldown(unit, abilityId, finalCooldown);
         } else {
             unit.cooldowns[abilityId] = finalCooldown;
+        }
+
+        if (abilityId === 'future_echo' || abilityId === 'set_anchor' || abilityId === 'recall' || abilityId === 'hour_of_reckoning') {
+            this._executeHorologistAbility(unit, ability, abilityId, target, isUltimateActivation);
+            return;
+        }
+
+        if (abilityId === 'pyro_spark' || abilityId === 'glitter_burst' || abilityId === 'prism_snare' || abilityId === 'starlight_decoy' || abilityId === 'supernova_core') {
+            this._executeGlitterburnAbility(unit, ability, abilityId, target, isUltimateActivation);
+            return;
         }
 
         if (abilityId === 'mimicry') {
@@ -13290,6 +14195,12 @@ export function CombatManagerRedux() {
         if (this.combatPaused || this.combatOver) return;
         this.round += 1;
 
+        // Horologist timeline: crystallize anchors, land due Future Echoes
+        this._tickHorologistTimeline();
+
+        // Glitterburn timeline: pull enemies to Supernova, detonate expired cores, tick decoys & traps
+        this._tickGlitterburnTimeline();
+
         if (Array.isArray(this.activeWebs)) {
             this.activeWebs.forEach(web => {
                 web.roundsLeft -= 1;
@@ -13828,10 +14739,25 @@ export function CombatManagerRedux() {
         if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
     };
 
+    this.hasBuffSkillsAvailable = (unit) => {
+        if (!unit) return false;
+        const skills = [...(unit.skills || []), ...(unit.specials || []), ...(unit.attacks || [])];
+        return skills.some(sKey => {
+            const key = typeof sKey === 'object' && sKey ? (sKey.id || sKey.key || sKey.name) : sKey;
+            if (!key) return false;
+            const normKey = String(key).toLowerCase().replace(/\s+/g, '_');
+            const def = specialsMatrix[normKey] || attacksMatrix[normKey];
+            if (!def) return false;
+            const type = (def.type || '').toLowerCase();
+            const effType = (def.effect && def.effect.type || '').toLowerCase();
+            return type === 'buff' || type === 'heal' || type === 'support' || effType === 'buff' || effType === 'heal' || normKey === 'heal';
+        });
+    };
+
     this.moveFighterOneSpace = (direction) => {
         if (!this.selectedFighter) return;
         const fighter = this.combatants[this.selectedFighter.id];
-        if (!fighter) return;
+        if (!fighter || fighter.dead) return;
 
         let currentX = (fighter.manualDestination && typeof fighter.manualDestination.x === 'number')
             ? fighter.manualDestination.x
@@ -13860,7 +14786,42 @@ export function CombatManagerRedux() {
                 break;
         }
 
-        this.setFighterDestination(fighter.id, { x: newX, y: newY });
+        const maxCols = this._numBoardColumns || 8;
+        const maxRows = this._maxRows || 6;
+        newX = Math.max(0, Math.min(maxCols - 1, newX));
+        newY = Math.max(0, Math.min(maxRows - 1, newY));
+
+        const targetTileOccupant = Object.values(this.combatants).find(c =>
+            c && !c.dead && c.hp > 0 && c.coordinates && c.coordinates.x === newX && c.coordinates.y === newY && c.id !== fighter.id
+        );
+
+        if (targetTileOccupant) {
+            if (targetTileOccupant.isMonster || targetTileOccupant.isMinion) {
+                fighter.manualTargetId = targetTileOccupant.id;
+                fighter.targetId = targetTileOccupant.id;
+                if (typeof this.appendCombatLog === 'function') {
+                    this.appendCombatLog(`🎯 ${this.getCombatantLogName(fighter)} targeted ${this.getCombatantLogName(targetTileOccupant)}.`);
+                }
+            } else {
+                if (this.hasBuffSkillsAvailable(fighter)) {
+                    fighter.manualBuffTargetId = targetTileOccupant.id;
+                    fighter.manualDestination = { x: newX, y: newY };
+                    if (typeof this.appendCombatLog === 'function') {
+                        this.appendCombatLog(`✨ ${this.getCombatantLogName(fighter)} pathfinding to buff ${this.getCombatantLogName(targetTileOccupant)}.`);
+                    }
+                } else {
+                    fighter.manualBuffTargetId = null;
+                    fighter.manualDestination = { x: newX, y: newY };
+                    fighter.resolveAdjacentOnArrival = true;
+                }
+            }
+        } else {
+            fighter.manualBuffTargetId = null;
+            fighter.resolveAdjacentOnArrival = false;
+            this.setFighterDestination(fighter.id, { x: newX, y: newY });
+        }
+
+        if (typeof this.updateData === 'function') this.updateData(clone(this.combatants));
     };
 
     /**

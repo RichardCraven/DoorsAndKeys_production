@@ -53,8 +53,8 @@ export default class ProjectileCanvas extends React.Component {
             return;
         }
 
-        // Speed in pixels per second (approx 450px/sec, faster for magic_missile)
-        const speed = type === 'magic_missile' ? 520 : 450;
+        // Speed in pixels per second (approx 450px/sec, faster for magic_missile and monk_punch)
+        const speed = (type === 'magic_missile' || type === 'monk_punch') ? 520 : 450;
 
         this.projectiles.push({
             x: startX,
@@ -131,7 +131,7 @@ export default class ProjectileCanvas extends React.Component {
             }
 
             // Only check dynamic collision with player if projectile was NOT aimed at player and player moved into its path
-            if (!p.aimedAtPlayer && p.type !== 'magic_missile' && px !== null && py !== null) {
+            if (!p.aimedAtPlayer && p.type !== 'magic_missile' && p.type !== 'monk_punch' && px !== null && py !== null) {
                 const dxEnd = p.endX - px;
                 const dyEnd = p.endY - py;
                 const distToEnd = Math.sqrt(dxEnd * dxEnd + dyEnd * dyEnd);
@@ -181,8 +181,9 @@ export default class ProjectileCanvas extends React.Component {
 
     createExplosion = (x, y, type = 'fireball') => {
         const particles = [];
-        const particleCount = type === 'magic_missile' ? 18 : (type === 'arrow' ? 12 : 15);
+        const particleCount = type === 'magic_missile' ? 18 : (type === 'monk_punch' ? 16 : (type === 'arrow' ? 12 : 15));
         const mmColors = ['#d946ef', '#b5179e', '#9d4edd', '#ffffff', '#38bdf8'];
+        const monkColors = ['#f59e0b', '#fbbf24', '#ffffff', '#d97706', '#ef4444'];
         const arrowColors = ['#4ade80', '#e5b54f', '#ffffff', '#22c55e'];
         const fbColors = ['#ff9900', '#ff0000'];
 
@@ -191,9 +192,11 @@ export default class ProjectileCanvas extends React.Component {
             const speed = Math.random() * 3 + 1;
             const randColor = type === 'magic_missile' 
                 ? mmColors[Math.floor(Math.random() * mmColors.length)]
-                : (type === 'arrow'
-                    ? arrowColors[Math.floor(Math.random() * arrowColors.length)]
-                    : (Math.random() > 0.5 ? fbColors[0] : fbColors[1]));
+                : (type === 'monk_punch'
+                    ? monkColors[Math.floor(Math.random() * monkColors.length)]
+                    : (type === 'arrow'
+                        ? arrowColors[Math.floor(Math.random() * arrowColors.length)]
+                        : (Math.random() > 0.5 ? fbColors[0] : fbColors[1])));
             particles.push({
                 x,
                 y,
@@ -241,6 +244,39 @@ export default class ProjectileCanvas extends React.Component {
                 ctx.fillStyle = '#ffffff';
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (p.type === 'monk_punch') {
+                // Monk Force Punch / Chi Aura projectile: Golden radiant energy blast with concentrated white core and shockwave aura
+                const angle = Math.atan2(p.dy, p.dx);
+                ctx.translate(p.x, p.y);
+                ctx.rotate(angle);
+
+                // Energy shockwave trail
+                const shockGrad = ctx.createLinearGradient(-16, 0, 10, 0);
+                shockGrad.addColorStop(0, 'rgba(245, 158, 11, 0)');
+                shockGrad.addColorStop(0.5, 'rgba(251, 191, 36, 0.5)');
+                shockGrad.addColorStop(1, 'rgba(255, 255, 255, 0.9)');
+
+                ctx.fillStyle = shockGrad;
+                ctx.beginPath();
+                ctx.ellipse(0, 0, 14, 8, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Outer golden chi circle
+                const grad = ctx.createRadialGradient(0, 0, 1, 0, 0, 12);
+                grad.addColorStop(0, '#ffffff');
+                grad.addColorStop(0.4, '#fbbf24');
+                grad.addColorStop(0.8, '#d97706');
+                grad.addColorStop(1, 'rgba(217, 119, 6, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(0, 0, 12, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Core fist spark
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(2, 0, 4, 0, Math.PI * 2);
                 ctx.fill();
             } else if (p.type === 'arrow') {
                 // Arrow: directional wooden shaft with sharp head, emerald fletching, and trail glow

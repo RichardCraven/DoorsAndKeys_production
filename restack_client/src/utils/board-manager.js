@@ -432,7 +432,7 @@ export function BoardManager(){
                 { dRow: 1, dCol: 0, anchorOffset: -15, role: 'bottom_left' },
                 { dRow: 0, dCol: 1, anchorOffset: -1, role: 'top_right' }
             ];
-            for (const { dRow, dCol, anchorOffset, role } of checks2x2) {
+            for (const { dRow, dCol, anchorOffset } of checks2x2) {
                 if (cRow >= dRow && cCol >= dCol) {
                     const aTile = boardTiles[cId + anchorOffset];
                     if (aTile && aTile !== tile) {
@@ -583,6 +583,49 @@ export function BoardManager(){
         if (typeof contains === 'string') return contains;
         return null;
     }
+    this.getVendorInfo = (tileObj) => {
+        if (!tileObj) return { isVendor: false, vendorType: null };
+
+        const cObj = (typeof tileObj.contains === 'object' && tileObj.contains !== null) ? tileObj.contains : {};
+        const cType = String(cObj.type || tileObj.contains || '').toLowerCase();
+        const cSub = String(cObj.subtype || cObj.building || cObj.name || cObj.key || tileObj.building || tileObj.image || '').toLowerCase();
+        const vGroup = String(cObj.vendorGroupId || tileObj.vendorGroupId || '').toLowerCase();
+        const vCell = cObj.vendorCell || tileObj.vendorCell;
+
+        const vAnchorId = (typeof cObj.vendorAnchorId === 'number')
+            ? cObj.vendorAnchorId
+            : (typeof tileObj.vendorAnchorId === 'number' ? tileObj.vendorAnchorId : null);
+
+        let anchorSub = '';
+        let anchorGroup = '';
+        const boardTiles = this.currentBoard?.tiles || this.tiles;
+        if (vAnchorId !== null && boardTiles && boardTiles[vAnchorId]) {
+            const aTile = boardTiles[vAnchorId];
+            const aObj = (typeof aTile.contains === 'object' && aTile.contains !== null) ? aTile.contains : {};
+            anchorSub = String(aObj.subtype || aObj.building || aObj.name || aObj.key || aTile.building || aTile.image || '').toLowerCase();
+            anchorGroup = String(aObj.vendorGroupId || aTile.vendorGroupId || '').toLowerCase();
+        }
+
+        const combinedStr = `${cType} ${cSub} ${vGroup} ${anchorSub} ${anchorGroup}`;
+
+        const vendorKeys = ['alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
+        const isVendor = vendorKeys.some(k => combinedStr.includes(k)) || !!vCell || vAnchorId !== null || !!vGroup;
+
+        if (!isVendor) {
+            return { isVendor: false, vendorType: null };
+        }
+
+        let vendorType = 'merchant';
+        if (combinedStr.includes('alchemist')) {
+            vendorType = 'alchemist';
+        } else if (combinedStr.includes('fungal_nursery')) {
+            vendorType = 'fungal_nursery';
+        } else if (combinedStr.includes('dream_den') || combinedStr.includes('dream den')) {
+            vendorType = 'dream_den';
+        }
+
+        return { isVendor: true, vendorType };
+    };
     this.getImageForContains = (contains, tile = null) => {
         const type = this.getContainsType(contains);
         const subtype = this.getContainsSubtype(contains);
@@ -899,58 +942,163 @@ export function BoardManager(){
     }
 
     this.getReachableTilesWithinSteps = (startIdx, maxSteps = 2) => {
-        const visited = new Map();
         if (startIdx === null || startIdx === undefined) return new Set();
         const boardTiles = (this.currentBoard && this.currentBoard.tiles) ? this.currentBoard.tiles : null;
 
-        const getOrthogonalNeighbors = (idx) => {
-            const row = Math.floor(idx / 15);
-            const col = idx % 15;
-            const out = [];
-            if (row > 0) out.push(idx - 15);
-            if (row < 14) out.push(idx + 15);
-            if (col > 0) out.push(idx - 1);
-            if (col < 14) out.push(idx + 1);
-            return out;
+        const getTile = (idx) => this.tiles[idx] || (boardTiles && boardTiles[idx]);
+
+        const isTileVoid = (t) => {
+            if (!t) return true;
+            if (typeof this.isVoidTile === 'function' && this.isVoidTile(t)) return true;
+            const cType = t.contains && (t.contains.type || t.contains);
+            if (cType === 'void_fill' || cType === 'void' || t.type === 'void') return true;
+            return false;
         };
 
-        const queue = [{ idx: startIdx, steps: 0 }];
+        const startTile = getTile(startIdx);
+        if (isTileVoid(startTile)) return new Set();
+
+        const startRow = Math.floor(startIdx / 15);
+        const startCol = startIdx % 15;
+
+        // Map: tileId -> { directLOS: boolean, partialObscured: boolean, steps: number }
+        const tileStateMap = new Map();
+        tileStateMap.set(startIdx, { directLOS: true, partialObscured: false, steps: 0 });
+
+        // Helper: check if targetIdx is in direct Line of Sight from startIdx via Ray Sampling
+        const isDirectLOSFromStart = (targetIdx) => {
+            const tRow = Math.floor(targetIdx / 15);
+            const tCol = targetIdx % 15;
+            const dr = tRow - startRow;
+            const dc = tCol - startCol;
+
+            if (dr === 0 && dc === 0) return true;
+
+            // Distance in grid units
+            const dist = Math.sqrt(dr * dr + dc * dc);
+            const numSteps = Math.max(16, Math.ceil(dist * 16));
+
+            let prevCellR = startRow;
+            let prevCellC = startCol;
+
+            for (let s = 1; s <= numSteps; s++) {
+                const t = s / numSteps;
+                const currR = startRow + 0.5 + t * dr;
+                const currC = startCol + 0.5 + t * dc;
+
+                const cellR = Math.floor(currR);
+                const cellC = Math.floor(currC);
+
+                if (cellR < 0 || cellR > 14 || cellC < 0 || cellC > 14) return false;
+
+                const currIdx = cellR * 15 + cellC;
+
+                // Check passage wall when crossing tile boundaries
+                if (cellR !== prevCellR || cellC !== prevCellC) {
+                    const prevIdx = prevCellR * 15 + prevCellC;
+                    if (this.isPassageWallBlockingBetween(prevIdx, currIdx, { ignoreBuilding: true })) {
+                        return false;
+                    }
+                }
+
+                // Check 4-tile corner intersection grazing
+                const nearIntR = Math.round(currR);
+                const nearIntC = Math.round(currC);
+                const distToIntR = Math.abs(currR - nearIntR);
+                const distToIntC = Math.abs(currC - nearIntC);
+
+                if (distToIntR < 0.22 && distToIntC < 0.22) {
+                    // Check the 4 tiles surrounding this intersection
+                    const meetingTiles = [
+                        (nearIntR - 1) * 15 + (nearIntC - 1),
+                        (nearIntR - 1) * 15 + nearIntC,
+                        nearIntR * 15 + (nearIntC - 1),
+                        nearIntR * 15 + nearIntC
+                    ];
+
+                    for (const mIdx of meetingTiles) {
+                        if (mIdx < 0 || mIdx >= 225) continue;
+                        if (mIdx === startIdx || mIdx === targetIdx) continue;
+                        const mRow = Math.floor(mIdx / 15);
+                        const mCol = mIdx % 15;
+                        if (Math.abs(mRow - nearIntR) > 1 || Math.abs(mCol - nearIntC) > 1) continue;
+
+                        const mTile = getTile(mIdx);
+                        if (isTileVoid(mTile) || this.isImpassableBuildingTile(mTile) || this.isClosedGateTile(mTile)) {
+                            return false;
+                        }
+                    }
+                }
+
+                // Check if current cell is void/impassable
+                if (currIdx !== startIdx) {
+                    const tile = getTile(currIdx);
+                    if (isTileVoid(tile)) return false;
+
+                    if (currIdx !== targetIdx) {
+                        if (this.isImpassableBuildingTile(tile) || this.isClosedGateTile(tile)) {
+                            return false;
+                        }
+                    }
+                }
+
+                prevCellR = cellR;
+                prevCellC = cellC;
+            }
+
+            return true;
+        };
+
+        const queue = [{ idx: startIdx, steps: 0, directLOS: true }];
         let queueHead = 0;
-        visited.set(startIdx, 0);
 
         while (queueHead < queue.length) {
-            const { idx, steps } = queue[queueHead++];
+            const { idx, steps, directLOS } = queue[queueHead++];
             if (steps >= maxSteps) continue;
 
-            const neighbors = getOrthogonalNeighbors(idx);
+            // ONLY direct LOS tiles can propagate vision to neighbors!
+            // Corner-peek tiles (around the corner, partialObscured = true) STOP vision propagation.
+            if (!directLOS) continue;
+
+            const row = Math.floor(idx / 15);
+            const col = idx % 15;
+            const neighbors = [];
+            if (row > 0) neighbors.push(idx - 15);
+            if (row < 14) neighbors.push(idx + 15);
+            if (col > 0) neighbors.push(idx - 1);
+            if (col < 14) neighbors.push(idx + 1);
+
             neighbors.forEach((nextIdx) => {
-                const existing = visited.get(nextIdx);
-                if (existing !== undefined && existing <= steps + 1) return;
+                if (this.isPassageWallBlockingBetween(idx, nextIdx, { ignoreBuilding: true })) return;
 
-                const tile = this.tiles[nextIdx] || (boardTiles && boardTiles[nextIdx]);
-                if (!tile) return;
+                const nextTile = getTile(nextIdx);
+                if (isTileVoid(nextTile)) return;
 
-                const isTargetVoid = this.isVoidTile(tile);
+                const hasDirectLOS = isDirectLOSFromStart(nextIdx);
+                const isCornerPeek = !hasDirectLOS;
 
-                if (this.isPassageWallBlockingBetween(idx, nextIdx, { ignoreBuilding: true })) {
+                const existingState = tileStateMap.get(nextIdx);
+                if (existingState) {
+                    if (hasDirectLOS && !existingState.directLOS) {
+                        tileStateMap.set(nextIdx, { directLOS: true, partialObscured: false, steps: steps + 1 });
+                        queue.push({ idx: nextIdx, steps: steps + 1, directLOS: true });
+                    }
                     return;
                 }
 
-                if (isTargetVoid) return;
+                const partialObscured = isCornerPeek;
+                tileStateMap.set(nextIdx, { directLOS: hasDirectLOS, partialObscured, steps: steps + 1 });
 
-                visited.set(nextIdx, steps + 1);
+                const blocksPropagation = this.isImpassableBuildingTile(nextTile) || this.isClosedGateTile(nextTile);
 
-                // Impassable buildings (outpost, etc.) are visible in fog of war, but block propagation past themselves.
-                if (this.isImpassableBuildingTile(tile)) return;
-
-                // Closed gates are visible in fog of war, but block propagation past themselves until opened.
-                if (this.isClosedGateTile(tile)) return;
-
-                queue.push({ idx: nextIdx, steps: steps + 1 });
+                if (hasDirectLOS && !blocksPropagation) {
+                    queue.push({ idx: nextIdx, steps: steps + 1, directLOS: true });
+                }
             });
         }
 
-        return new Set(Array.from(visited.keys()));
+        this._lastFogPartialObscuredMap = tileStateMap;
+        return new Set(Array.from(tileStateMap.keys()));
     }
 
     this.normalizeFogBorders = (borders) => {
@@ -1753,7 +1901,16 @@ export function BoardManager(){
         try { if (this.refreshTiles) this.refreshTiles(); } catch (e) {}
         return respawnedCount;
     }
-    // Respawn items based on a template (separate flow from monsters)
+    this.isKeyItem = (contains) => {
+        if (!contains) return false;
+        const containsType = this.getContainsType(contains);
+        const containsSubtype = this.getContainsSubtype(contains) || '';
+        const raw = String(typeof contains === 'string' ? contains : (containsSubtype || containsType || contains.key || contains.name || contains.item || '')).toLowerCase();
+        if (containsType === 'key' || raw.includes('key')) return true;
+        return false;
+    };
+
+    // Respawn items based on a template (separate flow from monsters and keys)
     this.respawnItems = (template) => {
         if (!template || !template.levels || !this.currentLevel) return;
         let currentOrientation = this.currentOrientation;
@@ -1785,8 +1942,8 @@ export function BoardManager(){
             if (templateTile && templateTile.id === playerIdx) return;
             if (this.tiles && this.tiles[templateTile.id] && this.tiles[templateTile.id].playerTile) return;
 
-            // Only consider item-type template tiles and do not overwrite existing non-null contains
-            if(this.getContainsType(templateTile.contains) === 'item' && (!equivalentTile.contains || this.getContainsType(equivalentTile.contains) === 'void')) {
+            // Only consider non-key item-type template tiles and do not overwrite existing non-null contains
+            if(this.getContainsType(templateTile.contains) === 'item' && !this.isKeyItem(templateTile.contains) && (!equivalentTile.contains || this.getContainsType(equivalentTile.contains) === 'void')) {
                 // assign an item object shape — prefer the template's subtype when available
                 const itemSubtype = this.getContainsSubtype(templateTile.contains) || this.getRandomItem();
                 equivalentTile.contains = { type: 'item', subtype: itemSubtype };
@@ -1841,6 +1998,92 @@ export function BoardManager(){
         } catch (e) {}
         try { if (this.refreshTiles) this.refreshTiles(); } catch (e) {}
     }
+
+    // Respawn keys based on a template (separate flow from general items and monsters, 175% timer)
+    this.respawnKeys = (template) => {
+        if (!template || !template.levels || !this.currentLevel) return 0;
+        let currentOrientation = this.currentOrientation;
+        let currentLevel = currentOrientation === 'F' ? (this.currentLevel.front || this.currentLevel) : (this.currentLevel.back || this.currentLevel);
+        if (!currentLevel) return 0;
+        let foundTemplatePlane = null;
+        template.levels.forEach((templateLevel) => {
+            if (!templateLevel) return;
+            let front = templateLevel.front;
+            let back = templateLevel.back;
+            let relevantPlane = currentOrientation === 'F' ? front : back;
+            if (relevantPlane && currentLevel && relevantPlane.name === currentLevel.name) {
+                foundTemplatePlane = relevantPlane;
+            }
+        });
+        let templateBoard = foundTemplatePlane && foundTemplatePlane.miniboards && foundTemplatePlane.miniboards[this.playerTile.boardIndex];
+        try { this.normalizeBoardTiles(templateBoard); } catch (e) {}
+        try { this.cleanupMalformedMonsterTiles(templateBoard); } catch (e) {}
+
+        if (!templateBoard) {
+            return 0;
+        }
+
+        let respawnedCount = 0;
+        templateBoard.tiles.forEach(templateTile => {
+            let equivalentTile = currentLevel.miniboards[this.playerTile.boardIndex].tiles.find(tile => tile.id === templateTile.id);
+            const playerIdx = this.getIndexFromCoordinates(this.playerTile.location);
+            if (templateTile && templateTile.id === playerIdx) return;
+            if (this.tiles && this.tiles[templateTile.id] && this.tiles[templateTile.id].playerTile) return;
+
+            // Only consider key-type template tiles and do not overwrite existing non-null contains
+            if ((this.getContainsType(templateTile.contains) === 'item' || this.getContainsType(templateTile.contains) === 'key') && this.isKeyItem(templateTile.contains) && (!equivalentTile.contains || this.getContainsType(equivalentTile.contains) === 'void')) {
+                const itemSubtype = this.getContainsSubtype(templateTile.contains) || 'minor_key';
+                equivalentTile.contains = { type: 'item', subtype: itemSubtype };
+                equivalentTile.image = this.getImageForContains(equivalentTile.contains, equivalentTile);
+                respawnedCount += 1;
+
+                try {
+                    const templateColor = templateTile && templateTile.color;
+                    const boardColor = this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[templateTile.id] && this.currentBoard.tiles[templateTile.id].color;
+                    const isValidColor = (c) => (c !== null && c !== undefined && c !== '' && c !== 'black' && c !== 'white');
+                    const colorToUse = isValidColor(templateColor) ? templateColor : (isValidColor(boardColor) ? boardColor : null);
+                    if (colorToUse) {
+                        equivalentTile.color = colorToUse;
+                        try {
+                            if (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[templateTile.id]) {
+                                this.currentBoard.tiles[templateTile.id].color = colorToUse;
+                            }
+                            if (this.currentOrientation === 'F') {
+                                const levelEntry = this.dungeon.levels.find(e => e.id === this.currentLevel.id);
+                                if (levelEntry && levelEntry.front && levelEntry.front.miniboards) {
+                                    const b = levelEntry.front.miniboards.find(bi => bi.id === this.currentBoard.id);
+                                    if (b && b.tiles && b.tiles[templateTile.id]) b.tiles[templateTile.id].color = colorToUse;
+                                }
+                            } else {
+                                const levelEntry = this.dungeon.levels.find(e => e.id === this.currentLevel.id);
+                                if (levelEntry && levelEntry.back && levelEntry.back.miniboards) {
+                                    const b = levelEntry.back.miniboards.find(bi => bi.id === this.currentBoard.id);
+                                    if (b && b.tiles && b.tiles[templateTile.id]) b.tiles[templateTile.id].color = colorToUse;
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                } catch (e) {}
+
+                try {
+                    if (this.currentOrientation === 'F') {
+                        this.dungeon.levels.find(e => e.id === this.currentLevel.id).front.miniboards.find(b => b.id === this.currentBoard.id).tiles[templateTile.id].contains = equivalentTile.contains;
+                    } else {
+                        this.dungeon.levels.find(e => e.id === this.currentLevel.id).back.miniboards.find(b => b.id === this.currentBoard.id).tiles[templateTile.id].contains = equivalentTile.contains;
+                    }
+                } catch (e) {}
+                this.tiles[templateTile.id] = { ...equivalentTile };
+            }
+        });
+
+        try { if (this.updateDungeon) this.updateDungeon(this.dungeon); } catch (e) {}
+        try {
+            const playerIdx = this.getIndexFromCoordinates(this.playerTile.location);
+            if (this.tiles[playerIdx]) this.handleFogOfWar(this.tiles[playerIdx]);
+        } catch (e) {}
+        try { if (this.refreshTiles) this.refreshTiles(); } catch (e) {}
+        return respawnedCount;
+    };
     // Respawn shrines based on a template (separate flow from monsters/items)
     this.respawnShrines = (template) => {
         if(!template || !template.levels) return 0;
@@ -2554,28 +2797,10 @@ export function BoardManager(){
         const subtype = this.getContainsSubtype(destinationTile.contains);
         const isShiftBypass = !!(opts.shiftKey || opts.ignoreBuilding || opts.bypassBuilding);
         
-        const cObj = typeof destinationTile.contains === 'object' ? destinationTile.contains : null;
-        const rawBldg = String(
-            subtype ||
-            destinationTile.building ||
-            cObj?.building ||
-            cObj?.subtype ||
-            cObj?.name ||
-            cObj?.key ||
-            destinationTile.image ||
-            cObj?.image ||
-            type ||
-            ''
-        ).toLowerCase();
-
-        const isVendorTile = type === 'vendor' || type === 'merchant' || type === 'alchemist' || type === 'fungal_nursery' || type === 'dream_den' || type === 'dream den' ||
-            ['merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'vendor'].some(k => rawBldg.includes(k)) ||
-            (cObj && (cObj.vendorGroupId || cObj.vendorCell));
+        const { isVendor: isVendorTile, vendorType: detectedVendorType } = this.getVendorInfo(destinationTile);
 
         if (isVendorTile) {
-            const vendorType = (rawBldg.includes('alchemist') || subtype === 'alchemist' || type === 'alchemist') ? 'alchemist' :
-                               (rawBldg.includes('fungal_nursery') || subtype === 'fungal_nursery' || type === 'fungal_nursery') ? 'fungal_nursery' :
-                               (rawBldg.includes('dream_den') || rawBldg.includes('dream den') || subtype === 'dream_den' || type === 'dream_den') ? 'dream_den' : 'merchant';
+            const vendorType = detectedVendorType || 'merchant';
             try {
                 if (this.triggerVendorEncounter) {
                     this.triggerVendorEncounter(vendorType, destinationTile);
@@ -3220,8 +3445,6 @@ export function BoardManager(){
         // leading to the next board with a red color.
         try {
             const pCoords = this.playerTile.location; // [x, y]
-            const px = pCoords[0], py = pCoords[1];
-            const EDGE_MIN = 0, EDGE_MAX = 14;
             const indicatorColor = '#ff0000';
 
             const markOverlayAt = (coords, side) => {
@@ -3319,7 +3542,7 @@ export function BoardManager(){
             const currentLevelId = this.currentLevel?.id ?? 0;
             const targetTileIndex = this.getIndexFromCoordinates(coords);
 
-            for (const [key, peer] of peersMap.entries()) {
+            for (const [, peer] of peersMap.entries()) {
                 if (!peer || !peer.location) continue;
                 const loc = peer.location;
 
@@ -4363,7 +4586,6 @@ export function BoardManager(){
                 const sKey = String(cSub).toLowerCase();
                 if (sKey.includes('observer') || sKey.includes('outpost') || sKey.includes('earthen_fort') || sKey.includes('hut')) return;
 
-                const vCell = (typeof tile.contains === 'object' && tile.contains?.vendorCell) || tile.vendorCell;
                 const vAnchor = (typeof tile.contains === 'object' && tile.contains?.vendorAnchorId) ?? tile.vendorAnchorId;
                 const vGroup = (typeof tile.contains === 'object' && tile.contains?.vendorGroupId) || tile.vendorGroupId;
                 
@@ -4386,7 +4608,9 @@ export function BoardManager(){
                 });
 
                 if (isGroupRevealed) {
-                    // Fully reveal all tiles in the building group when any tile is revealed.
+                    const fogMap = this._lastFogPartialObscuredMap;
+                    // Reveal un-fogged background color for all tiles in the building group,
+                    // but respect direct line-of-sight and corner-peek status for partialObscured shading.
                     groupTiles.forEach((tile) => {
                         const persistedColor = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id] && this.currentBoard.tiles[tile.id].color);
                         const persistedBorders = (this.currentBoard && this.currentBoard.tiles && this.currentBoard.tiles[tile.id] && this.currentBoard.tiles[tile.id].borders);
@@ -4395,7 +4619,16 @@ export function BoardManager(){
                         tile.color = boardColor || '#6b6057';
                         tile.image = this.getImageForContains(tile.contains, tile);
                         tile.borders = this.normalizeFogBorders(persistedBorders);
-                        tile.partialObscured = false;
+
+                        if (observerPlatforms.length > 0 && !this.inSuperboard) {
+                            tile.partialObscured = false;
+                        } else if (fogMap && fogMap.has(tile.id)) {
+                            tile.partialObscured = !!fogMap.get(tile.id).partialObscured;
+                        } else if (visibleTileIds.has(tile.id)) {
+                            tile.partialObscured = false;
+                        } else {
+                            tile.partialObscured = true;
+                        }
                         fullyRevealedBuildingTileIds.add(tile.id);
                     });
                 }
@@ -4406,24 +4639,7 @@ export function BoardManager(){
 
         // Calculate partialObscured for tiles around corners, walls, or void tiles
         try {
-            const playerCoords = this.getCoordinatesFromIndex(destinationTile.id);
-            const playerRow = playerCoords[0];
-            const playerCol = playerCoords[1];
-
-            const getTileAtCoords = (r, c) => {
-                if (r < 0 || r > 29 || c < 0 || c > 29) return null;
-                const idx = this.getIndexFromCoordinates([r, c]);
-                return this.tiles[idx] || null;
-            };
-
-            const isVoidOrBlackOrBlocked = (fromTile, targetTile) => {
-                if (!targetTile) return true;
-                if (targetTile.color === 'black') return true;
-                const cType = targetTile.contains && (targetTile.contains.type || targetTile.contains);
-                if (cType === 'void_fill' || cType === 'void' || targetTile.type === 'void') return true;
-                if (fromTile && this.isPassageWallBlockingBetween(fromTile.id, targetTile.id, { ignoreBuilding: true })) return true;
-                return false;
-            };
+            const fogMap = this._lastFogPartialObscuredMap;
 
             this.tiles.forEach((tile) => {
                 if (!tile || tile.color === 'black') return;
@@ -4434,113 +4650,30 @@ export function BoardManager(){
                     return;
                 }
 
-                const coords = this.getCoordinatesFromIndex(tile.id);
-                const dr = coords[0] - playerRow;
-                const dc = coords[1] - playerCol;
-                const manhattan = Math.abs(dr) + Math.abs(dc);
-
-                // Player tile is never partialObscured
-                if (manhattan === 0) {
+                if (tile.id === destinationTile.id) {
                     tile.partialObscured = false;
                     return;
                 }
 
-                // Direct cardinal neighbors
-                if (manhattan === 1) {
-                    tile.partialObscured = this.isPassageWallBlockingBetween(destinationTile.id, tile.id, { ignoreBuilding: true });
-                    return;
-                }
+                if (fogMap && fogMap.has(tile.id)) {
+                    tile.partialObscured = !!fogMap.get(tile.id).partialObscured;
+                } else {
+                    const coords = this.getCoordinatesFromIndex(tile.id);
+                    const isPygmies = this.getContainsType(tile.contains) === 'pygmies';
+                    const revealByDebugPygmies = isDebugMode && isPygmies;
+                    const inScoutedArea = isScoutedAreaActive &&
+                        coords[0] >= scoutRowStart && coords[0] <= scoutRowEnd &&
+                        coords[1] >= scoutColStart && coords[1] <= scoutColEnd;
+                    const inRatRevealArea = isRatRevealActive &&
+                        coords[0] >= ratRowStart && coords[0] <= ratRowEnd &&
+                        coords[1] >= ratColStart && coords[1] <= ratColEnd;
+                    const inLanternTerritory = lanternTerritory && contiguousLanternTiles.has(tile.id);
+                    const inMonolithTerritory = tile.territory === 'player' || (tile.contains && tile.contains.territory === 'player');
 
-                // Diagonals (NE, SE, NW, SW)
-                if (Math.abs(dr) === 1 && Math.abs(dc) === 1) {
-                    const vertNeighbor = getTileAtCoords(playerRow + dr, playerCol);
-                    const horizNeighbor = getTileAtCoords(playerRow, playerCol + dc);
-
-                    const vertBlocked = isVoidOrBlackOrBlocked(destinationTile, vertNeighbor);
-                    const horizBlocked = isVoidOrBlackOrBlocked(destinationTile, horizNeighbor);
-
-                    if (vertBlocked || horizBlocked ||
-                        (vertNeighbor && this.isPassageWallBlockingBetween(vertNeighbor.id, tile.id, { ignoreBuilding: true })) ||
-                        (horizNeighbor && this.isPassageWallBlockingBetween(horizNeighbor.id, tile.id, { ignoreBuilding: true }))) {
+                    if (!inMonolithTerritory && !inLanternTerritory && !revealByDebugPygmies && !inScoutedArea && !inRatRevealArea) {
                         tile.partialObscured = true;
-                    } else {
-                        tile.partialObscured = false;
                     }
-                    return;
                 }
-
-                // Straight 2-step tiles (N, S, E, W by 2)
-                if (manhattan === 2) {
-                    const midRow = playerRow + (dr / 2);
-                    const midCol = playerCol + (dc / 2);
-                    const midTile = getTileAtCoords(midRow, midCol);
-
-                    if (isVoidOrBlackOrBlocked(destinationTile, midTile) ||
-                        (midTile && this.isPassageWallBlockingBetween(midTile.id, tile.id, { ignoreBuilding: true }))) {
-                        tile.partialObscured = true;
-                    } else {
-                        tile.partialObscured = false;
-                    }
-                    return;
-                }
-
-                // Straight 3-step tiles (N, S, E, W by 3)
-                if (manhattan === 3 && (dr === 0 || dc === 0)) {
-                    const stepR = dr === 0 ? 0 : (dr > 0 ? 1 : -1);
-                    const stepC = dc === 0 ? 0 : (dc > 0 ? 1 : -1);
-                    const mid1 = getTileAtCoords(playerRow + stepR, playerCol + stepC);
-                    const mid2 = getTileAtCoords(playerRow + stepR * 2, playerCol + stepC * 2);
-                    if (isVoidOrBlackOrBlocked(destinationTile, mid1) ||
-                        isVoidOrBlackOrBlocked(mid1, mid2) ||
-                        (mid2 && this.isPassageWallBlockingBetween(mid2.id, tile.id, { ignoreBuilding: true }))) {
-                        tile.partialObscured = true;
-                    } else {
-                        tile.partialObscured = false;
-                    }
-                    return;
-                }
-
-                // Combination 3-step tiles (manhattan === 3)
-                if (manhattan === 3) {
-                    const stepR = dr === 0 ? 0 : (dr > 0 ? 1 : -1);
-                    const stepC = dc === 0 ? 0 : (dc > 0 ? 1 : -1);
-                    const nR = getTileAtCoords(playerRow + stepR, playerCol);
-                    const nC = getTileAtCoords(playerRow, playerCol + stepC);
-                    const rBlocked = isVoidOrBlackOrBlocked(destinationTile, nR);
-                    const cBlocked = isVoidOrBlackOrBlocked(destinationTile, nC);
-                    if (rBlocked && cBlocked) {
-                        tile.partialObscured = true;
-                    } else {
-                        tile.partialObscured = false;
-                    }
-                    return;
-                }
-
-                // Straight 4-step tiles (manhattan === 4)
-                if (manhattan === 4 && (dr === 0 || dc === 0)) {
-                    const stepR = dr === 0 ? 0 : (dr > 0 ? 1 : -1);
-                    const stepC = dc === 0 ? 0 : (dc > 0 ? 1 : -1);
-                    const mid1 = getTileAtCoords(playerRow + stepR, playerCol + stepC);
-                    const mid2 = getTileAtCoords(playerRow + stepR * 2, playerCol + stepC * 2);
-                    const mid3 = getTileAtCoords(playerRow + stepR * 3, playerCol + stepC * 3);
-                    if (isVoidOrBlackOrBlocked(destinationTile, mid1) ||
-                        isVoidOrBlackOrBlocked(mid1, mid2) ||
-                        isVoidOrBlackOrBlocked(mid2, mid3) ||
-                        (mid3 && this.isPassageWallBlockingBetween(mid3.id, tile.id, { ignoreBuilding: true }))) {
-                        tile.partialObscured = true;
-                    } else {
-                        tile.partialObscured = false;
-                    }
-                    return;
-                }
-
-                if (manhattan <= fogRadius) {
-                    tile.partialObscured = false;
-                    return;
-                }
-
-                // Other visible tiles default to partialObscured
-                tile.partialObscured = true;
             });
         } catch (e) {
             console.warn('Error calculating fog corner shading', e);

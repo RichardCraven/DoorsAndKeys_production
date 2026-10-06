@@ -4,7 +4,7 @@ import gifTwo from '../assets/highres-gifs/gifTwo.gif';
 import gifThree from '../assets/highres-gifs/gifThree.gif';
 
 import socketHandler from '../utils/socket-handler';
-import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES } from '../utils/shared-constants';
+import { INTERVALS, MONSTER_RESPAWN_MINUTES, ITEM_RESPAWN_MINUTES, KEY_RESPAWN_MINUTES } from '../utils/shared-constants';
 import '../styles/dungeon-board.scss'
 import Tile, { isTerritoryLanternItem, getTileTerritoryAffiliationHelper } from '../components/tile'
 import ProjectileCanvas from '../components/ProjectileCanvas'
@@ -2093,6 +2093,41 @@ class DungeonPage extends React.Component {
                 ],
             });
         }
+        if (character.type === 'glitterburn') {
+            const hasLurePrepping = (character.specialActions || []).some(a => a && a.type === 'phosphor_lure' && !a.available);
+            const hasFlashPrepping = (character.specialActions || []).some(a => a && a.type === 'flashbang_powder' && !a.available);
+            const hasDecoyPrepping = (character.specialActions || []).some(a => a && a.type === 'mirror_decoy' && !a.available);
+
+            actions.push({
+                type: 'pyrotechnics',
+                name: 'Pyrotechnics',
+                iconUrl: images['glitter_burst'] || images['glitter_burst_glitterburn'] || '',
+                noMaxCap: true,
+                subTypes: [
+                    {
+                        type: 'craft_phosphor_lure',
+                        name: 'Phosphor Lure (30m)',
+                        iconUrl: images['prism_snare'] || images['prism_snare_glitterburn'] || '',
+                        available: !hasLurePrepping,
+                        count: (character.specialActions || []).filter(a => a && a.type === 'phosphor_lure' && a.available).length
+                    },
+                    {
+                        type: 'brew_flashbang',
+                        name: 'Flashbang Powder (1h)',
+                        iconUrl: images['glitter_burst'] || images['glitter_burst_glitterburn'] || '',
+                        available: !hasFlashPrepping,
+                        count: (character.specialActions || []).filter(a => a && a.type === 'flashbang_powder' && a.available).length
+                    },
+                    {
+                        type: 'assemble_mirror_decoy',
+                        name: 'Mirror Decoy (2h)',
+                        iconUrl: images['starlight_decoy'] || images['starlight_decoy_glitterburn'] || '',
+                        available: !hasDecoyPrepping,
+                        count: (character.specialActions || []).filter(a => a && a.type === 'mirror_decoy' && a.available).length
+                    }
+                ]
+            });
+        }
         // Add other class logic here as needed
 
         // Compute per-action maximum: only count subtypes belonging to that action type.
@@ -2118,7 +2153,8 @@ class DungeonPage extends React.Component {
                         a.type === action.type ||
                         (action.type === 'glyph' && (a.type === 'spell' || a.type === 'glyph')) ||
                         (action.type === 'prepare_poison' && a.type === 'acid_bomb') ||
-                        (action.type === 'deploy_animal' && a.type === 'rat_agent');
+                        (action.type === 'deploy_animal' && a.type === 'rat_agent') ||
+                        (action.type === 'pyrotechnics' && (a.type === 'phosphor_lure' || a.type === 'flashbang_powder' || a.type === 'mirror_decoy'));
                     if (!typeMatches) return false;
                     const start = new Date(a.startDate);
                     const end = new Date(a.endDate);
@@ -2992,6 +3028,7 @@ class DungeonPage extends React.Component {
             updates: [],
             timeToRespawn: '',
             itemTimeToRespawn: '',
+            keyTimeToRespawn: '',
             relockTimeToRespawn: '',
             dungeonInscriptionPicker: null,
             showDungeonInscriptionModal: false,
@@ -5728,9 +5765,35 @@ class DungeonPage extends React.Component {
             }, () => {
                 this.checkMobileViewportCentering(coords);
                 this.sendLocationSocketUpdate(coords);
+                this.checkDebtCollectorAmbush();
             });
         } catch (e) {
             console.warn('updateFloatingPlayerPosition failed', e);
+        }
+    }
+
+    checkDebtCollectorAmbush = () => {
+        if (this.state.inMonsterBattle || this.state.inTowerSiege || this._isDebtCollectorTriggering) return;
+        const crew = (this.props.crewManager && Array.isArray(this.props.crewManager.crew))
+            ? this.props.crewManager.crew
+            : [];
+        const horo = crew.find(m => m && ((m.type || '').toLowerCase() === 'horologist' || (m.image || '').toLowerCase() === 'horologist'));
+        if (!horo) return;
+
+        const strainTier = this.props.crewManager?.getTemporalStrainTier ? this.props.crewManager.getTemporalStrainTier(horo) : 0;
+        if (strainTier >= 3) {
+            if (Math.random() < 0.20) {
+                this._isDebtCollectorTriggering = true;
+                const debtCollector = (this.props.monsterManager && typeof this.props.monsterManager.getMonster === 'function')
+                    ? this.props.monsterManager.getMonster('debt_collector')
+                    : { type: 'debt_collector', key: 'debt_collector', name: 'The Debt Collector', portrait: images['qlippoth'] };
+
+                this.displayMessage("⚖️ The Debt Collector manifests from the Temporal Strain! The Ledger demands payment!");
+                setTimeout(() => {
+                    this._isDebtCollectorTriggering = false;
+                    this.setState({ monster: debtCollector, inMonsterBattle: true, keysLocked: true });
+                }, 1000);
+            }
         }
     }
 
@@ -10161,23 +10224,15 @@ class DungeonPage extends React.Component {
                     return;
                 }
 
+                const { isVendor: isVendorTile, vendorType: detectedVendorType } = this.getVendorInfo(destTileObj);
                 let targetVendorTile = null;
-                const cType = (destTileObj && typeof destTileObj.contains === 'object' && destTileObj.contains !== null) ? destTileObj.contains.type : (destTileObj?.contains || null);
-                const cSub = (destTileObj && typeof destTileObj.contains === 'object' && destTileObj.contains !== null) ? (destTileObj.contains.subtype || destTileObj.contains.building || destTileObj.contains.name) : (destTileObj?.building || null);
-                const rawKey = String(cSub || cType || destTileObj?.image || '').toLowerCase();
-                const isVendorTile = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' ||
-                    ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)) ||
-                    (((destTileObj?.contains && typeof destTileObj.contains === 'object' && (destTileObj.contains.vendorGroupId || destTileObj.contains.vendorCell)) ||
-                    !!(destTileObj?.vendorGroupId || destTileObj?.vendorCell)) && ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)));
 
                 if (!hasPassageWallBetween && isVendorTile) {
                     targetVendorTile = destTileObj;
                 }
 
                 if (targetVendorTile) {
-                    const vendorType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
-                                       (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
-                                       (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
+                    const vendorType = detectedVendorType || 'merchant';
                     this._isMoving = false;
                     this._processingQueuedMove = false;
                     this._movementQueue = [];
@@ -11907,9 +11962,10 @@ class DungeonPage extends React.Component {
     }
     handleRespawnTime = async () => {
         const meta = getMeta() || {};
-        // Ensure both monster and item respawn dates exist
+        // Ensure monster, item, and key respawn dates exist
         if (!meta.respawnDate) this.setNewRespawnDate();
         if (!meta.itemRespawnDate) this.setNewItemRespawnDate();
+        if (!meta.keyRespawnDate) this.setNewKeyRespawnDate();
 
         // Monster respawn timer
         try {
@@ -11950,6 +12006,27 @@ class DungeonPage extends React.Component {
             }
             if (!this.state.inSuperboard) {
                 this.setState({ itemTimeToRespawn: itemRespawnString });
+            }
+        } catch (e) { }
+
+        // Key respawn timer (175% of item respawn = 35 minutes)
+        try {
+            let krespawn = new Date(meta.keyRespawnDate);
+            let now3 = new Date();
+            let kdiffInMinutes = diff_minutes(krespawn, now3);
+            let kdiffInSeconds = diff_seconds(krespawn, now3);
+            let keyRespawnString = '';
+            if (kdiffInMinutes > 1) {
+                keyRespawnString = `${kdiffInMinutes} m`;
+            } else if (kdiffInMinutes < 2 && kdiffInSeconds > 1) {
+                keyRespawnString = `${kdiffInSeconds} s`;
+            } else {
+                this.respawnKeys();
+                keyRespawnString = '';
+                this.setNewKeyRespawnDate();
+            }
+            if (!this.state.inSuperboard) {
+                this.setState({ keyTimeToRespawn: keyRespawnString });
             }
         } catch (e) { }
 
@@ -12015,6 +12092,20 @@ class DungeonPage extends React.Component {
         let respawnString = `${diffInMinutes} m`
         this.setState({ itemTimeToRespawn: respawnString });
     }
+
+    setNewKeyRespawnDate = () => {
+        // Key respawn interval: 35 minutes (175% of ITEM_RESPAWN_MINUTES)
+        let soon = new Date().addMinutes(KEY_RESPAWN_MINUTES);
+        let meta = getMeta() || {};
+        meta.keyRespawnDate = soon;
+        try { storeMeta(meta); } catch (e) { }
+
+        let respawn = new Date(soon);
+        let now = new Date();
+        let diffInMinutes = diff_minutes(respawn, now);
+        let respawnString = `${diffInMinutes} m`;
+        this.setState({ keyTimeToRespawn: respawnString });
+    };
     respawnMonsters = async () => {
         let dungeons = [],
             selectedDungeon;
@@ -12138,6 +12229,57 @@ class DungeonPage extends React.Component {
             }
         } catch (e) {
             console.warn('Error triggering respawnItems', e);
+        }
+    }
+    respawnKeys = async () => {
+        let dungeons = [],
+            selectedDungeon = null;
+        const allDungeons = await loadAllDungeonsRequest();
+        const dungeonList = (allDungeons && Array.isArray(allDungeons.data)) ? allDungeons.data : [];
+
+        dungeonList.forEach((e) => {
+            try {
+                let d = JSON.parse(e.content);
+                d.id = e._id;
+                dungeons.push(d);
+            } catch (err) { }
+        });
+
+        const activeDungeon = (this.props && this.props.boardManager && this.props.boardManager.dungeon) || this.dungeon || null;
+        let meta = null;
+        try { meta = getMeta(); } catch (e) { }
+        const selectedTemplateName = meta ? meta.selectedDungeon : null;
+        const activeDungeonName = activeDungeon ? activeDungeon.name : null;
+
+        const candidateTemplates = dungeons.filter((d) => d && !d.isSavedState);
+        if (selectedTemplateName) {
+            selectedDungeon = candidateTemplates.find((d) => d && d.name === selectedTemplateName) || null;
+        }
+        if (!selectedDungeon && activeDungeonName) {
+            const prefixMatches = candidateTemplates
+                .filter((d) => d && d.name && activeDungeonName.startsWith(`${d.name}_`))
+                .sort((a, b) => b.name.length - a.name.length);
+            selectedDungeon = prefixMatches[0] || null;
+        }
+        if (!selectedDungeon) {
+            selectedDungeon = activeDungeon || dungeons[0] || null;
+        }
+
+        try {
+            if (this.props.boardManager && typeof this.props.boardManager.respawnKeys === 'function') {
+                this.props.boardManager.respawnKeys(selectedDungeon);
+            }
+            try {
+                const meta = getMeta();
+                storeMeta(meta);
+            } catch (e) { }
+            if (this.props.saveUserData) {
+                try {
+                    this.props.saveUserData();
+                } catch (e) { }
+            }
+        } catch (e) {
+            console.warn('Error triggering respawnKeys', e);
         }
     }
     componentWillUnmount() {
@@ -17596,7 +17738,7 @@ class DungeonPage extends React.Component {
         this._pygmiesMoving = true;
 
         // Sneak: player is hidden from pygmies — skip movement tick
-        if (this.state.isSneaking) return;
+        if (this.state.isSneaking || Date.now() < (this.state.stopwatchFrozenUntil || 0)) return;
 
         try {
             if (this.state.inSuperboard) {
@@ -18728,24 +18870,29 @@ class DungeonPage extends React.Component {
             ].filter(Boolean);
 
             let weaponIconSrc = null;
-            try {
-                const inv = Array.isArray(selectedCrewMember.inventory) ? selectedCrewMember.inventory : [];
-                const equippedWeapon = inv.find(i =>
-                    i && (i.type === 'weapon' || i.itemType === 'weapon') &&
-                    (i.equippedSlot === 'right' || i.equippedSlot === 'left' || i.equippedBy === selectedCrewMember.id || i.equipped)
-                );
-                const rawIcon = equippedWeapon && (equippedWeapon.icon || equippedWeapon.image || equippedWeapon.img);
-                if (rawIcon) {
-                    weaponIconSrc = this.resolveWeaponIconSrc(rawIcon);
-                }
-            } catch (e2) { /* ignore */ }
+            const isMonkClass = mType.includes('monk') || mType.includes('tian') || mType.includes('chi') || mType.includes('martial');
+            if (isMonkClass) {
+                weaponIconSrc = unwrap(images.monk_punch) || unwrap(images.monk_force_punch) || unwrap(images.fist_punch);
+            } else {
+                try {
+                    const inv = Array.isArray(selectedCrewMember.inventory) ? selectedCrewMember.inventory : [];
+                    const equippedWeapon = inv.find(i =>
+                        i && (i.type === 'weapon' || i.itemType === 'weapon') &&
+                        (i.equippedSlot === 'right' || i.equippedSlot === 'left' || i.equippedBy === selectedCrewMember.id || i.equipped)
+                    );
+                    const rawIcon = equippedWeapon && (equippedWeapon.icon || equippedWeapon.image || equippedWeapon.img);
+                    if (rawIcon) {
+                        weaponIconSrc = this.resolveWeaponIconSrc(rawIcon);
+                    }
+                } catch (e2) { /* ignore */ }
 
-            if (!weaponIconSrc && tier1Fallbacks.length > 0) {
-                const pick = Math.floor(Math.random() * tier1Fallbacks.length);
-                weaponIconSrc = tier1Fallbacks[pick];
-            }
-            if (!weaponIconSrc) {
-                weaponIconSrc = this.resolveWeaponIconSrc(null);
+                if (!weaponIconSrc && tier1Fallbacks.length > 0) {
+                    const pick = Math.floor(Math.random() * tier1Fallbacks.length);
+                    weaponIconSrc = tier1Fallbacks[pick];
+                }
+                if (!weaponIconSrc) {
+                    weaponIconSrc = this.resolveWeaponIconSrc(null);
+                }
             }
 
             const arcId = Date.now();
@@ -21642,7 +21789,8 @@ class DungeonPage extends React.Component {
                                                     const defaultExpSkills = {
                                                         sage: ['healing_ground', 'sing'],
                                                         ranger: ['sneak_attack', 'spike_trap'],
-                                                        soldier: ['soldier_shield', 'breacher']
+                                                        soldier: ['soldier_shield', 'breacher'],
+                                                        summoner: ['wandering_eye']
                                                     };
                                                     const memberClass = ((currentMember && (currentMember.type || currentMember.image)) || '').toLowerCase();
                                                     const expSkills = (currentMember && Array.isArray(currentMember.expeditionSkills) && currentMember.expeditionSkills.length > 0)
@@ -25239,6 +25387,28 @@ class DungeonPage extends React.Component {
                     }
                 }
             }
+            if (bool && monsterObj) {
+                if (monsterObj._pursuitOrigin) {
+                    const targetTileId = typeof tileId === 'object' ? tileId.id : tileId;
+                    this._activePursuitMonsterInfo = {
+                        pursuitTileId: targetTileId,
+                        originTileId: monsterObj._pursuitOrigin.originTileId,
+                        originMonsterData: monsterObj._pursuitOrigin.originMonsterData,
+                        originImage: monsterObj._pursuitOrigin.originImage
+                    };
+                } else {
+                    const bm = this.props.boardManager || this.boardManager;
+                    const tile = typeof tileId === 'number' ? (bm?.tiles?.[tileId]) : (typeof tileId === 'object' ? tileId : null);
+                    if (tile && tile.contains && typeof tile.contains === 'object' && tile.contains._pursuitOrigin) {
+                        this._activePursuitMonsterInfo = {
+                            pursuitTileId: tileId,
+                            originTileId: tile.contains._pursuitOrigin.originTileId,
+                            originMonsterData: tile.contains._pursuitOrigin.originMonsterData,
+                            originImage: tile.contains._pursuitOrigin.originImage
+                        };
+                    }
+                }
+            }
             if (bool && this.state.isSneaking && tileId !== 'pvp_match') {
                 const selectedMember = this.state.selectedCrewMember || (this.props.crewManager && this.props.crewManager.crew && this.props.crewManager.crew[0]);
                 const playerDex = Number((selectedMember && selectedMember.stats && (selectedMember.stats.dex || selectedMember.stats.dexterity)) || selectedMember?.dex || selectedMember?.dexterity || 10);
@@ -25517,13 +25687,13 @@ class DungeonPage extends React.Component {
     };
 
     hasRangedWeaponEquipped = () => {
+        const selectedMember = this.getSelectedCrewMember();
+        if (selectedMember) {
+            return this.isRangedMember(selectedMember);
+        }
         if (this.state?.equippedRangedWeapon) return true;
         if (this.state?.hasRangedWeapon) return true;
-        const selectedMember = this.getSelectedCrewMember();
-        if (this.isRangedMember(selectedMember)) return true;
-
-        const crew = this.state?.crew || (this.props.crewManager && this.props.crewManager.crew) || [];
-        return crew.some(m => this.isRangedMember(m));
+        return false;
     };
 
     resolveMonsterTileStats = (targetTile) => {
@@ -25891,6 +26061,8 @@ class DungeonPage extends React.Component {
         let projectileType = 'magic_missile';
         if (attackerType.includes('ranger') || attackerType.includes('dormund') || attackerType.includes('archer') || attackerType.includes('rogue') || attackerType.includes('hunter')) {
             projectileType = 'arrow';
+        } else if (attackerType.includes('monk') || attackerType.includes('tian') || attackerType.includes('chi') || attackerType.includes('martial')) {
+            projectileType = 'monk_punch';
         } else if (attackerType.includes('wizard') || attackerType.includes('zildjikan')) {
             projectileType = 'magic_missile';
         }
@@ -25991,6 +26163,75 @@ class DungeonPage extends React.Component {
         let currentTile = monsterTile;
         let steps = 0;
 
+        // Record origin tile info before monster starts moving away from its origin tile
+        if (monsterTile && monsterTile.contains) {
+            const originTileId = monsterTile.id !== undefined ? monsterTile.id : boardManager.tiles.indexOf(monsterTile);
+            let originData = null;
+            if (typeof monsterTile.contains === 'object' && monsterTile.contains) {
+                originData = JSON.parse(JSON.stringify(monsterTile.contains));
+            } else {
+                originData = { type: monsterTile.contains, subtype: monsterTile.contains };
+            }
+
+            if (typeof originData === 'object' && originData) {
+                const maxHp = originData.maxHp || originData.starting_hp || originData.hp || 100;
+                originData.hp = maxHp;
+                originData.starting_hp = maxHp;
+                originData.maxHp = maxHp;
+                delete originData.inDungeonDamaged;
+            }
+
+            const pursuitOrigin = {
+                originTileId,
+                originMonsterData: originData,
+                originImage: monsterTile.image || (typeof originData === 'object' ? (originData.subtype || originData.type) : originData)
+            };
+
+            if (typeof monsterTile.contains === 'object' && monsterTile.contains) {
+                monsterTile.contains._pursuitOrigin = pursuitOrigin;
+            } else {
+                monsterTile.contains = {
+                    type: monsterTile.contains,
+                    subtype: monsterTile.contains,
+                    _pursuitOrigin: pursuitOrigin
+                };
+            }
+        }
+
+        const isMonsterPassableTile = (tile, curTile) => {
+            if (!tile) return false;
+            if (tile === curTile) return true;
+            if (tile.isVoid || tile.type === 'void' || tile.color === 'black' || tile.fog === true) return false;
+            if (tile.passThrough === false || tile.terrain === 'wall' || tile.contains === 'wall') return false;
+            if (boardManager && typeof boardManager.isImpassableBuildingTile === 'function' && boardManager.isImpassableBuildingTile(tile)) return false;
+
+            const type = boardManager && typeof boardManager.getContainsType === 'function'
+                ? boardManager.getContainsType(tile.contains)
+                : (typeof tile.contains === 'string' ? tile.contains : tile.contains?.type);
+            const subtype = boardManager && typeof boardManager.getContainsSubtype === 'function'
+                ? boardManager.getContainsSubtype(tile.contains)
+                : (typeof tile.contains === 'object' ? tile.contains?.subtype : tile.subtype);
+
+            const gateType = boardManager && typeof boardManager.getGateTypeFromTile === 'function' ? boardManager.getGateTypeFromTile(tile) : null;
+            if (gateType && boardManager.isLockedGateTile && boardManager.isLockedGateTile(tile)) return false;
+
+            const IMPASSABLE_TYPES = [
+                'building', 'door', 'gate', 'wall', 'shrine', 'way_up', 'way_down',
+                'vendor', 'merchant', 'alchemist', 'fungal_nursery', 'dream_den', 'dream den',
+                'spawn', 'stairs', 'chest', 'altar', 'portal', 'dead_campfire', 'narrative', 'locus'
+            ];
+
+            const rawSub = String(
+                subtype || tile.building || (tile.contains && typeof tile.contains === 'object' ? (tile.contains.subtype || tile.contains.name || tile.contains.type) : '') || tile.image || type || ''
+            ).toLowerCase();
+
+            if (IMPASSABLE_TYPES.some(k => type === k || rawSub.includes(k))) return false;
+
+            if (this.isMonsterObj(tile, tile.contains)) return false;
+
+            return true;
+        };
+
         const pursuitInterval = setInterval(() => {
             if (this.state.inMonsterBattle || !currentTile || !currentTile.contains) {
                 clearInterval(pursuitInterval);
@@ -26021,38 +26262,81 @@ class DungeonPage extends React.Component {
                 return;
             }
 
-            // Determine candidate next tile coordinates closer to player
+            // Determine candidate next tile coordinates closer to player using BFS pathfinding around impassable tiles
             let targetRow = mRow;
             let targetCol = mCol;
 
-            if (mRow !== pRow && mCol !== pCol) {
-                const tryRow = mRow + (pRow > mRow ? 1 : -1);
-                const tryRowIdx = tryRow * 15 + mCol;
-                const tryRowTile = boardManager.tiles[tryRowIdx];
-                if (tryRowTile && !tryRowTile.isVoid && tryRowTile.color !== 'black') {
-                    targetRow = tryRow;
-                } else {
-                    targetCol = mCol + (pCol > mCol ? 1 : -1);
+            const totalTiles = boardManager.tiles.length;
+            const cols = 15;
+            const rows = Math.ceil(totalTiles / cols);
+
+            const queue = [[[mRow, mCol], []]];
+            const visited = new Set();
+            visited.add(`${mRow},${mCol}`);
+
+            const dirs = [
+                [-1, 0], // North
+                [1, 0],  // South
+                [0, -1], // West
+                [0, 1]   // East
+            ];
+
+            let pathFound = null;
+            while (queue.length > 0) {
+                const [[currR, currC], path] = queue.shift();
+
+                if (Math.abs(currR - pRow) + Math.abs(currC - pCol) <= 1) {
+                    pathFound = path;
+                    break;
                 }
-            } else if (mRow !== pRow) {
-                targetRow = mRow + (pRow > mRow ? 1 : -1);
-            } else if (mCol !== pCol) {
-                targetCol = mCol + (pCol > mCol ? 1 : -1);
+
+                for (const [dR, dC] of dirs) {
+                    const nR = currR + dR;
+                    const nC = currC + dC;
+                    if (nR < 0 || nR >= rows || nC < 0 || nC >= cols) continue;
+
+                    const nKey = `${nR},${nC}`;
+                    if (visited.has(nKey)) continue;
+
+                    const nIdx = nR * cols + nC;
+                    const nTile = boardManager.tiles[nIdx];
+
+                    const isPlayerPos = (nR === pRow && nC === pCol);
+                    if (isPlayerPos || isMonsterPassableTile(nTile, currentTile)) {
+                        visited.add(nKey);
+                        queue.push([[nR, nC], [...path, [nR, nC]]]);
+                    }
+                }
+            }
+
+            if (pathFound && pathFound.length > 0) {
+                targetRow = pathFound[0][0];
+                targetCol = pathFound[0][1];
             }
 
             const nextIdx = targetRow * 15 + targetCol;
             const nextTile = boardManager.tiles[nextIdx];
 
-            if (nextTile && nextTile !== currentTile && !nextTile.isVoid && nextTile.color !== 'black') {
+            if (nextTile && nextTile !== currentTile && isMonsterPassableTile(nextTile, currentTile)) {
                 const monsterObj = currentTile.contains;
                 const monsterImg = currentTile.image;
                 const monsterIcon = currentTile.icon;
                 const wasAggro = currentTile.isAggro || currentTile.aggro;
 
-                // Completely clear the old tile so no monster portrait remains behind
-                currentTile.contains = null;
-                currentTile.image = null;
-                if (currentTile.icon) currentTile.icon = null;
+                // Restore previous underlying content on vacated tile if it was preserved
+                if (currentTile._underlyingContent) {
+                    currentTile.contains = currentTile._underlyingContent.contains;
+                    currentTile.image = currentTile._underlyingContent.image;
+                    currentTile.icon = currentTile._underlyingContent.icon;
+                    if (currentTile._underlyingContent.type) currentTile.type = currentTile._underlyingContent.type;
+                    if (currentTile._underlyingContent.subtype) currentTile.subtype = currentTile._underlyingContent.subtype;
+                    delete currentTile._underlyingContent;
+                } else {
+                    currentTile.contains = null;
+                    currentTile.image = null;
+                    if (currentTile.icon) currentTile.icon = null;
+                }
+
                 currentTile.isPursuing = false;
                 delete currentTile.pursuitInterval;
                 if (currentTile.isAggro) currentTile.isAggro = false;
@@ -26060,31 +26344,49 @@ class DungeonPage extends React.Component {
                 if (currentTile.hp !== undefined) delete currentTile.hp;
                 if (currentTile.maxHp !== undefined) delete currentTile.maxHp;
 
-                // Ensure vacated tile is restored as a clean passable floor tile, not a void space
-                currentTile.isVoid = false;
-                if (currentTile.type === 'void') currentTile.type = 'empty_space';
-                if (currentTile.original === 'void') delete currentTile.original;
-                try { delete currentTile.terrain; } catch (e) {}
+                if (!currentTile.contains) {
+                    currentTile.isVoid = false;
+                    if (currentTile.type === 'void') currentTile.type = 'empty_space';
+                    if (currentTile.original === 'void') delete currentTile.original;
+                    try { delete currentTile.terrain; } catch (e) {}
 
-                const isValidFloorColor = (c) => c && c !== 'black' && c !== 'white' && c !== 'null';
-                const boardColor = boardManager.currentBoard && boardManager.currentBoard.tiles && boardManager.currentBoard.tiles[currentTile.id] && boardManager.currentBoard.tiles[currentTile.id].color;
-                currentTile.color = isValidFloorColor(boardColor) ? boardColor : (isValidFloorColor(currentTile.color) ? currentTile.color : '#6b6057');
+                    const isValidFloorColor = (c) => c && c !== 'black' && c !== 'white' && c !== 'null';
+                    const boardColor = boardManager.currentBoard && boardManager.currentBoard.tiles && boardManager.currentBoard.tiles[currentTile.id] && boardManager.currentBoard.tiles[currentTile.id].color;
+                    currentTile.color = isValidFloorColor(boardColor) ? boardColor : (isValidFloorColor(currentTile.color) ? currentTile.color : '#6b6057');
+                }
 
                 if (boardManager.currentBoard && boardManager.currentBoard.tiles) {
                     if (boardManager.currentBoard.tiles[currentTile.id]) {
-                        boardManager.currentBoard.tiles[currentTile.id].contains = null;
-                        boardManager.currentBoard.tiles[currentTile.id].image = null;
-                        boardManager.currentBoard.tiles[currentTile.id].isVoid = false;
-                        if (boardManager.currentBoard.tiles[currentTile.id].type === 'void') {
-                            boardManager.currentBoard.tiles[currentTile.id].type = 'empty_space';
+                        boardManager.currentBoard.tiles[currentTile.id].contains = currentTile.contains;
+                        boardManager.currentBoard.tiles[currentTile.id].image = currentTile.image;
+                        if (!currentTile.contains) {
+                            boardManager.currentBoard.tiles[currentTile.id].isVoid = false;
+                            if (boardManager.currentBoard.tiles[currentTile.id].type === 'void') {
+                                boardManager.currentBoard.tiles[currentTile.id].type = 'empty_space';
+                            }
+                            if (boardManager.currentBoard.tiles[currentTile.id].original === 'void') {
+                                delete boardManager.currentBoard.tiles[currentTile.id].original;
+                            }
+                            boardManager.currentBoard.tiles[currentTile.id].color = currentTile.color;
+                            if (boardManager.currentBoard.tiles[currentTile.id].icon) {
+                                boardManager.currentBoard.tiles[currentTile.id].icon = null;
+                            }
                         }
-                        if (boardManager.currentBoard.tiles[currentTile.id].original === 'void') {
-                            delete boardManager.currentBoard.tiles[currentTile.id].original;
-                        }
-                        boardManager.currentBoard.tiles[currentTile.id].color = currentTile.color;
-                        if (boardManager.currentBoard.tiles[currentTile.id].icon) {
-                            boardManager.currentBoard.tiles[currentTile.id].icon = null;
-                        }
+                    }
+                }
+
+                // Preserve nextTile's underlying content before moving monster onto it
+                if (nextTile._underlyingContent === undefined) {
+                    if (nextTile.contains && !this.isMonsterObj(nextTile, nextTile.contains)) {
+                        nextTile._underlyingContent = {
+                            contains: nextTile.contains,
+                            image: nextTile.image,
+                            icon: nextTile.icon,
+                            type: nextTile.type,
+                            subtype: nextTile.subtype
+                        };
+                    } else {
+                        nextTile._underlyingContent = null;
                     }
                 }
 
@@ -27733,8 +28035,7 @@ class DungeonPage extends React.Component {
                     const cSub = (targetTileObj && typeof targetTileObj.contains === 'object' && targetTileObj.contains !== null) ? (targetTileObj.contains.subtype || targetTileObj.contains.building || targetTileObj.contains.name) : (targetTileObj?.building || null);
                     const rawKey = String(cSub || cType || targetTileObj?.image || '').toLowerCase();
 
-                    const isVendorInSb = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' || cSub === 'merchant' || cSub === 'alchemist' ||
-                        ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k));
+                    const { isVendor: isVendorInSb, vendorType: sbVendorType } = this.getVendorInfo(targetTileObj);
                     const isDreamDen = isVendorInSb;
                     const isLocusInSb = targetTileObj && this.getIsLocusHelper(targetTileObj);
                     const largeBldg = superboard ? this.getLargeBuildingAtSuperboardCoord(superboard, clickedGx, clickedGy) : null;
@@ -27821,9 +28122,7 @@ class DungeonPage extends React.Component {
                             }
                             if (isVendorInSb) {
                                 const targetTile = targetTileObj || tile;
-                                const vType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
-                                              (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
-                                              (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
+                                const vType = sbVendorType || 'merchant';
                                 this.illuminateBuildingTile(targetTile);
                                 this.triggerVendorEncounter(vType, targetTile);
                             } else if (isEnemySpawn) {
@@ -27979,16 +28278,11 @@ class DungeonPage extends React.Component {
         const now = Date.now();
         this._lastTileClickInfo = { tileIdx: tileIndex, ts: now };
 
-        const isVendorTileClick = cType === 'vendor' || cType === 'merchant' || cType === 'alchemist' ||
-            ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)) ||
-            (((actualTile?.contains && typeof actualTile.contains === 'object' && (actualTile.contains.vendorGroupId || actualTile.contains.vendorCell)) ||
-            !!(actualTile?.vendorGroupId || actualTile?.vendorCell)) && ['merchant', 'alchemist', 'vendor', 'dream_den', 'dream den', 'fungal_nursery'].some(k => rawKey.includes(k)));
+        const { isVendor: isVendorTileClick, vendorType: detectedVendorType } = this.getVendorInfo(actualTile || tile);
 
 
         if (isVendorTileClick) {
-            const vendorType = (rawKey.includes('alchemist') || cSub === 'alchemist' || cType === 'alchemist') ? 'alchemist' :
-                               (rawKey.includes('fungal_nursery') || cSub === 'fungal_nursery' || cType === 'fungal_nursery') ? 'fungal_nursery' :
-                               (rawKey.includes('dream_den') || rawKey.includes('dream den')) ? 'dream_den' : 'merchant';
+            const vendorType = detectedVendorType || 'merchant';
 
             const playerIdx = bm.getIndexFromCoordinates(startCoords);
             const playerRow = Math.floor(playerIdx / 15);
@@ -28213,9 +28507,7 @@ class DungeonPage extends React.Component {
                 }
 
                 const subStr = typeof subtype === 'string' ? subtype : (typeof t.building === 'string' ? t.building : (t.contains && typeof t.contains === 'object' ? (t.contains.subtype || t.contains.building || t.contains.name || t.contains.type) : ''));
-                const rawBldgKey = String(subStr || t.image || '').toLowerCase();
-                const isVendor = type === 'vendor' || type === 'merchant' || type === 'alchemist' || type === 'dream den' || type === 'dream_den' ||
-                    ['merchant', 'alchemist', 'vendor', 'dream_den', 'fungal_nursery'].some(k => rawBldgKey.includes(k));
+                const { isVendor } = this.getVendorInfo(t);
 
                 if (isVendor) {
                     return true;
@@ -30640,6 +30932,92 @@ class DungeonPage extends React.Component {
         });
 
         const memberName = selectedMember ? (selectedMember.name || selectedMember.type || 'Crew member') : 'Crew member';
+        const memberClass = ((selectedMember && (selectedMember.type || selectedMember.image)) || '').toLowerCase();
+        const defaultExpSkills = {
+            sage: ['healing_ground', 'sing'],
+            ranger: ['sneak_attack', 'spike_trap'],
+            soldier: ['soldier_shield', 'breacher'],
+            summoner: ['wandering_eye'],
+            horologist: ['rewind_step', 'stopwatch']
+        };
+        const expSkills = (selectedMember && Array.isArray(selectedMember.expeditionSkills) && selectedMember.expeditionSkills.length > 0)
+            ? selectedMember.expeditionSkills
+            : (defaultExpSkills[memberClass] || []);
+        const skillKey = expSkills[slotIdx];
+
+        if (skillKey === 'rewind_step') {
+            const bm = this.props.boardManager;
+            if (this._rewindStepUsedForBoard === (bm?.playerTile?.boardIndex ?? -1)) {
+                this.displayMessage("⏳ Rewind Step can only be used once per board!");
+                return;
+            }
+            if (this._breadcrumbs && this._breadcrumbs.size > 1) {
+                const arr = Array.from(this._breadcrumbs.entries());
+                const targetEntry = arr[Math.max(0, arr.length - 4)];
+                if (targetEntry) {
+                    const [, data] = targetEntry;
+                    if (data && data.location) {
+                        this._rewindStepUsedForBoard = bm?.playerTile?.boardIndex ?? 0;
+                        this.updateFloatingPlayerPosition(data.location);
+                        if (bm && bm.playerTile) {
+                            bm.playerTile.location = data.location;
+                            bm.refreshTiles();
+                        }
+                        this.displayMessage("⏳ Rewind Step: Undid movement and rewound time!");
+                        return;
+                    }
+                }
+            }
+            this.displayMessage("⏳ Rewind Step: No previous steps to rewind!");
+            return;
+        }
+
+        if (skillKey === 'stopwatch') {
+            const meta = getMeta() || {};
+            const curResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+            if (curResolve < 10) {
+                this.displayMessage("⏱️ Stopwatch requires 10 Resolve!");
+                return;
+            }
+            meta.resolve = Math.max(0, curResolve - 10);
+            storeMeta(meta);
+            this.setState({ stopwatchFrozenUntil: Date.now() + 8000 });
+            this.displayMessage("⏱️ Stopwatch activated! All monster patrols frozen for 8 seconds. (-10 Resolve)");
+            return;
+        }
+
+        if (skillKey === 'blinding_beacon') {
+            const meta = getMeta() || {};
+            const curResolve = typeof meta.resolve === 'number' ? meta.resolve : 100;
+            if (curResolve < 10) {
+                this.displayMessage("✨ Blinding Beacon requires 10 Resolve!");
+                return;
+            }
+            meta.resolve = Math.max(0, curResolve - 10);
+            storeMeta(meta);
+            this.setState({ stopwatchFrozenUntil: Date.now() + 12000 });
+            this.displayMessage("✨ Blinding Beacon activated! All monster patrols pacified for 12 seconds. (-10 Resolve)");
+            return;
+        }
+
+        if (skillKey === 'prismatic_flare') {
+            const bm = this.props.boardManager;
+            if (bm && Array.isArray(bm.tiles)) {
+                let trapsRevealed = 0;
+                bm.tiles.forEach(tile => {
+                    if (tile && tile.hasTrap && !tile.trapRevealed) {
+                        tile.trapRevealed = true;
+                        trapsRevealed++;
+                    }
+                });
+                if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                this.displayMessage(`🌈 Prismatic Flare illuminated the board and revealed ${trapsRevealed} hidden trap(s)!`);
+            } else {
+                this.displayMessage("🌈 Prismatic Flare illuminated the area!");
+            }
+            return;
+        }
+
         this.displayMessage(`⚡ ${memberName} triggered Expedition Skill Slot ${slotIdx + 1}!`);
     }
 
@@ -30784,10 +31162,18 @@ class DungeonPage extends React.Component {
                             <div
                                 className="hud-timer-item"
                                 style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
-                                title="Item & Loot Respawn Timer — Time remaining until gathered items, chests, and resources respawn"
+                                title="Item & Loot Respawn Timer — Time remaining until gathered items, chests, and resources respawn (20-minute cycle)"
                             >
                                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ffd700', boxShadow: '0 0 6px rgba(255, 215, 0, 0.7)' }}></div>
                                 <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.itemTimeToRespawn || 'Active'}</div>
+                            </div>
+                            <div
+                                className="hud-timer-item"
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'help', pointerEvents: 'auto' }}
+                                title="Key Respawn Timer — Time remaining until key items respawn on the map (35-minute cycle)"
+                            >
+                                <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#38bdf8', boxShadow: '0 0 6px rgba(56, 189, 248, 0.7)' }}></div>
+                                <div style={{ fontSize: 12, fontWeight: 600, color: '#f0ede5' }}>{this.state.keyTimeToRespawn || 'Active'}</div>
                             </div>
                             <div
                                 className="hud-timer-item"
@@ -30902,10 +31288,97 @@ class DungeonPage extends React.Component {
         if (!text) return '';
         return text.charAt(0).toUpperCase() + text.slice(1);
     }
+    resetPursuitMonsterToOriginOnDefeat = () => {
+        try {
+            const pursuitInfo = this._activePursuitMonsterInfo || (this.state.monster && this.state.monster._pursuitOrigin);
+            if (!pursuitInfo) return;
+
+            const bm = this.props.boardManager || this.boardManager;
+            const pursuitTileId = pursuitInfo.pursuitTileId !== undefined ? pursuitInfo.pursuitTileId : this.state.monsterBattleTileId;
+            const originTileId = pursuitInfo.originTileId;
+
+            // 1. Remove the pursuing monster from the pursuit tile
+            if (bm && bm.tiles && pursuitTileId !== null && pursuitTileId !== undefined) {
+                const pTile = typeof pursuitTileId === 'number' ? bm.tiles[pursuitTileId] : (bm.tiles.find(t => t && (t.id === pursuitTileId || t.id === pursuitTileId.id)) || pursuitTileId);
+                if (pTile && typeof pTile === 'object') {
+                    if (pTile._underlyingContent) {
+                        pTile.contains = pTile._underlyingContent.contains;
+                        pTile.image = pTile._underlyingContent.image;
+                        pTile.icon = pTile._underlyingContent.icon;
+                        if (pTile._underlyingContent.type) pTile.type = pTile._underlyingContent.type;
+                        if (pTile._underlyingContent.subtype) pTile.subtype = pTile._underlyingContent.subtype;
+                        delete pTile._underlyingContent;
+                    } else {
+                        pTile.contains = null;
+                        pTile.image = null;
+                        if (pTile.icon) pTile.icon = null;
+                    }
+                    pTile.isPursuing = false;
+                    delete pTile.pursuitInterval;
+                    delete pTile.isAggro;
+                    delete pTile.aggro;
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[pTile.id]) {
+                        bm.currentBoard.tiles[pTile.id].contains = pTile.contains;
+                        bm.currentBoard.tiles[pTile.id].image = pTile.image;
+                    }
+                }
+            }
+
+            // 2. Restore original monster back at its origin tile with full health
+            if (bm && bm.tiles && originTileId !== null && originTileId !== undefined) {
+                const oTile = typeof originTileId === 'number' ? bm.tiles[originTileId] : (bm.tiles.find(t => t && (t.id === originTileId || t.id === originTileId.id)) || originTileId);
+                if (oTile && typeof oTile === 'object') {
+                    delete oTile._underlyingContent;
+                    let freshMonsterData = JSON.parse(JSON.stringify(pursuitInfo.originMonsterData || {}));
+                    if (typeof freshMonsterData === 'object' && freshMonsterData) {
+                        const maxHp = freshMonsterData.maxHp || freshMonsterData.starting_hp || freshMonsterData.hp || 100;
+                        freshMonsterData.hp = maxHp;
+                        freshMonsterData.starting_hp = maxHp;
+                        freshMonsterData.maxHp = maxHp;
+                        delete freshMonsterData.inDungeonDamaged;
+                        delete freshMonsterData._pursuitOrigin;
+                    }
+                    oTile.contains = freshMonsterData;
+                    oTile.image = pursuitInfo.originImage || (typeof freshMonsterData === 'object' ? (freshMonsterData.subtype || freshMonsterData.type) : freshMonsterData);
+                    oTile.isVoid = false;
+                    oTile.isPursuing = false;
+                    delete oTile.pursuitInterval;
+
+                    if (bm.currentBoard && bm.currentBoard.tiles && bm.currentBoard.tiles[oTile.id]) {
+                        bm.currentBoard.tiles[oTile.id].contains = freshMonsterData;
+                        bm.currentBoard.tiles[oTile.id].image = oTile.image;
+                    }
+                }
+            }
+            this._activePursuitMonsterInfo = null;
+            if (bm && typeof bm.refreshTiles === 'function') {
+                try { bm.refreshTiles(); } catch (e) {}
+            }
+        } catch (e) {
+            console.warn('resetPursuitMonsterToOriginOnDefeat failed:', e);
+        }
+    };
+
     battleOver = (result) => {
+        const isDebtCollector = this.state.monster && (this.state.monster.type === 'debt_collector' || this.state.monster.key === 'debt_collector');
         if (result === 'win') {
+            this._activePursuitMonsterInfo = null;
             // Suppress any lingering battle callbacks from overwriting HP/dead after win
             this._suppressFighterDeadHpUpdates = true;
+
+            if (isDebtCollector) {
+                try {
+                    const horologist = (this.props.crewManager?.crew || []).find(c => c && (c.crewClass === 'horologist' || c.type === 'horologist'));
+                    if (horologist && typeof this.props.crewManager.clearTimeDebt === 'function') {
+                        this.props.crewManager.clearTimeDebt(horologist);
+                    }
+                    if (this.props.boardManager && typeof this.props.boardManager.messaging === 'function') {
+                        this.props.boardManager.messaging('⏳ The Debt Collector has been vanquished! Time Debt fully cleared!');
+                    }
+                } catch (e) {
+                    console.warn('Debt Collector victory handling error:', e);
+                }
+            }
 
             // Progress bounty quests
             if (this.props.questManager) {
@@ -30958,6 +31431,15 @@ class DungeonPage extends React.Component {
             // Re-enable after a tick so any final in-flight combat callbacks have cleared
             setTimeout(() => { this._suppressFighterDeadHpUpdates = false; }, 0);
         } else if (result === 'loss') {
+            this.resetPursuitMonsterToOriginOnDefeat();
+            if (isDebtCollector && this.props.crewManager && typeof this.props.crewManager.resetAllPreparations === 'function') {
+                this.props.crewManager.resetAllPreparations();
+                try {
+                    if (this.props.boardManager && typeof this.props.boardManager.messaging === 'function') {
+                        this.props.boardManager.messaging('⌛ The Debt Collector claims its due: all active crew preparations reset to 0%!');
+                    }
+                } catch (e) { }
+            }
             this.setState({
                 inMonsterBattle: false,
                 keysLocked: false
@@ -30966,12 +31448,21 @@ class DungeonPage extends React.Component {
             });
             return;
         } else if (result === 'respawn') {
+            this.resetPursuitMonsterToOriginOnDefeat();
+            if (isDebtCollector && this.props.crewManager && typeof this.props.crewManager.resetAllPreparations === 'function') {
+                this.props.crewManager.resetAllPreparations();
+                try {
+                    if (this.props.boardManager && typeof this.props.boardManager.messaging === 'function') {
+                        this.props.boardManager.messaging('⌛ The Debt Collector claims its due: all active crew preparations reset to 0%!');
+                    }
+                } catch (e) { }
+            }
             // Try to respawn the player at spawn point (guard against missing boardManager)
-            const meta2 = getMeta();
+            const meta2 = getMeta() || {};
 
             // Adjust resolve on defeat: -5 resolve
             const currentResolve = typeof meta2.resolve === 'number' ? meta2.resolve : 100;
-            const penalty = applyResolvePenalty(5);
+            const penalty = typeof applyResolvePenalty === 'function' ? applyResolvePenalty(5) : 5;
             meta2.resolve = Math.max(0, currentResolve - penalty);
             if (meta2 && Array.isArray(meta2.crew)) {
                 meta2.crew.forEach(c => {
@@ -32807,6 +33298,54 @@ class DungeonPage extends React.Component {
         if (this.state && this.state.illuminatedTileId !== null) {
             this.setState({ illuminatedTileId: null });
         }
+    };
+
+    getVendorInfo = (tileObj) => {
+        const bm = this.props.boardManager;
+        if (bm && typeof bm.getVendorInfo === 'function') {
+            return bm.getVendorInfo(tileObj);
+        }
+        if (!tileObj) return { isVendor: false, vendorType: null };
+
+        const cObj = (typeof tileObj.contains === 'object' && tileObj.contains !== null) ? tileObj.contains : {};
+        const cType = String(cObj.type || tileObj.contains || '').toLowerCase();
+        const cSub = String(cObj.subtype || cObj.building || cObj.name || cObj.key || tileObj.building || tileObj.image || '').toLowerCase();
+        const vGroup = String(cObj.vendorGroupId || tileObj.vendorGroupId || '').toLowerCase();
+        const vCell = cObj.vendorCell || tileObj.vendorCell;
+
+        const vAnchorId = (typeof cObj.vendorAnchorId === 'number')
+            ? cObj.vendorAnchorId
+            : (typeof tileObj.vendorAnchorId === 'number' ? tileObj.vendorAnchorId : null);
+
+        let anchorSub = '';
+        let anchorGroup = '';
+        const boardTiles = bm?.currentBoard?.tiles || bm?.tiles;
+        if (vAnchorId !== null && boardTiles && boardTiles[vAnchorId]) {
+            const aTile = boardTiles[vAnchorId];
+            const aObj = (typeof aTile.contains === 'object' && aTile.contains !== null) ? aTile.contains : {};
+            anchorSub = String(aObj.subtype || aObj.building || aObj.name || aObj.key || aTile.building || aTile.image || '').toLowerCase();
+            anchorGroup = String(aObj.vendorGroupId || aTile.vendorGroupId || '').toLowerCase();
+        }
+
+        const combinedStr = `${cType} ${cSub} ${vGroup} ${anchorSub} ${anchorGroup}`;
+
+        const vendorKeys = ['alchemist', 'fungal_nursery', 'dream_den', 'dream den', 'merchant', 'vendor'];
+        const isVendor = vendorKeys.some(k => combinedStr.includes(k)) || !!vCell || vAnchorId !== null || !!vGroup;
+
+        if (!isVendor) {
+            return { isVendor: false, vendorType: null };
+        }
+
+        let vendorType = 'merchant';
+        if (combinedStr.includes('alchemist')) {
+            vendorType = 'alchemist';
+        } else if (combinedStr.includes('fungal_nursery')) {
+            vendorType = 'fungal_nursery';
+        } else if (combinedStr.includes('dream_den') || combinedStr.includes('dream den')) {
+            vendorType = 'dream_den';
+        }
+
+        return { isVendor: true, vendorType };
     };
 
     getIsLocusHelper = (t) => {

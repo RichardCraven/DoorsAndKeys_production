@@ -533,7 +533,7 @@ class CrewManagerPage extends React.Component {
     startRandomCombat = async () => {
         const { monsterManager } = this.props;
         const budget = this.state.randomTierPoints;
-        const allRosterKeys = ['sobek', 'skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok', 'qlippoth', 'eidolon'];
+        const allRosterKeys = ['sobek', 'skeleton', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'ogre', 'troll', 'mummy', 'wraith', 'vampire', 'gorgon', 'witch', 'beholder', 'kabuki_demon', 'djinn', 'vallgorguina_djinn', 'dragon', 'sphinx', 'goat_demon', 'cyclops', 'high_priest_of_the_basilisk', 'shade', 'hashmallim', 'hagigah', 'blalok', 'qlippoth', 'eidolon'];
         const rosterMonsters = allRosterKeys
             .map(k => monsterManager.getMonster(k))
             .filter(m => m && m.tier && !m.isMinion);
@@ -849,6 +849,23 @@ class CrewManagerPage extends React.Component {
             }
         }
 
+        // If only 1 unit is chosen for the crew (solo testing), set its HP to 5x normal HP
+        const activeCrewMembers = clonedCrew.filter(Boolean);
+        if (activeCrewMembers.length === 1) {
+            const soloUnit = activeCrewMembers[0];
+            if (soloUnit) {
+                if (typeof soloUnit.hp === 'number') soloUnit.hp *= 5;
+                if (typeof soloUnit.max_hp === 'number') soloUnit.max_hp *= 5;
+                if (typeof soloUnit.maxHp === 'number') soloUnit.maxHp *= 5;
+                if (typeof soloUnit.starting_hp === 'number') soloUnit.starting_hp *= 5;
+                if (soloUnit.stats) {
+                    if (typeof soloUnit.stats.hp === 'number') soloUnit.stats.hp *= 5;
+                    if (typeof soloUnit.stats.max_hp === 'number') soloUnit.stats.max_hp *= 5;
+                    if (typeof soloUnit.stats.maxHp === 'number') soloUnit.stats.maxHp *= 5;
+                }
+            }
+        }
+
         // Calculate monster and minions synchronously
         const useMonsterKey = this.state.selectedMonsterKey || 'mummy';
         const useMinionKeys = this.state.selectedMinionKeys || [];
@@ -880,34 +897,40 @@ class CrewManagerPage extends React.Component {
         }
 
         // Pre-load all character and monster portraits while showing the loader
-        const startTime = Date.now();
-        const crewPortraits = clonedCrew.map(m => m && m.portrait).filter(Boolean);
-        const monsterPortraits = [monster, ...minions].map(m => m && m.portrait).filter(Boolean);
-        const allPortraits = [...new Set([...crewPortraits, ...monsterPortraits])];
+        if (process.env.NODE_ENV !== 'test') {
+            const startTime = Date.now();
+            const crewPortraits = clonedCrew.map(m => m && m.portrait).filter(Boolean);
+            const monsterPortraits = [monster, ...minions].map(m => m && m.portrait).filter(Boolean);
+            const allPortraits = [...new Set([...crewPortraits, ...monsterPortraits])];
 
-        await Promise.all(allPortraits.map(src => {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.src = src;
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-            });
-        }));
+            await Promise.all(allPortraits.map(src => {
+                return new Promise((resolve) => {
+                    const img = new Image();
+                    img.src = src;
+                    img.onload = () => resolve();
+                    img.onerror = () => resolve();
+                });
+            }));
 
-        // Enforce a minimum display time of 1.8 seconds so loading feels smooth and premium
-        const elapsed = Date.now() - startTime;
-        const minDuration = 1800;
-        if (elapsed < minDuration) {
-            await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
+            // Enforce a minimum display time of 1.8 seconds so loading feels smooth and premium
+            const elapsed = Date.now() - startTime;
+            const minDuration = 1800;
+            if (elapsed < minDuration) {
+                await new Promise(resolve => setTimeout(resolve, minDuration - elapsed));
+            }
         }
 
-        this.setState({
+        const nextState = {
             monster,
             minions,
             preppedCrew: clonedCrew,
             crewSelected: true,
             loadingSimulator: false
-        });
+        };
+        this.state = { ...this.state, ...nextState };
+        if (typeof this.setState === 'function') {
+            try { this.setState(nextState); } catch (e) {}
+        }
     }
     clear = () => {
         // Clear only the simulator-local crew selection and temp manager; do not mutate global meta or the app's crewManager
@@ -1108,7 +1131,7 @@ class CrewManagerPage extends React.Component {
                         </div>
                     </div>
                 )}
-                {!this.state.crewSelected && <div className="crew-manager">
+                {!this.state.crewSelected && <div className="crew-manager simulator-crew-manager">
                     {this.state.navToLanding && <Redirect to='/' />}
                     <div className="content-container">
                         <div className="button-row-top">
@@ -1390,7 +1413,7 @@ class CrewManagerPage extends React.Component {
                             {/* Monster roster */}
                             <div className="monster-roster-label">Monster Roster — click to select, click again to add to slot</div>
                             <div className="monster-roster">
-                                {['sobek', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'eidolon', 'djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
+                                {['sobek', 'goblin_thief', 'goblin_warrior', 'goblin_warchief', 'goblin_chef', 'skeleton', 'beholder_minion', 'horned_pet', 'blalok', 'shade', 'troll', 'mummy', 'basilisk_cultists', 'wraith', 'ogre', 'gorgon', 'vampire', 'high_priest_of_the_basilisk', 'goat_demon', 'cyclops', 'witch', 'beholder', 'kabuki_demon', 'qlippoth', 'eidolon', 'djinn', 'vallgorguina_djinn', 'sphinx', 'dragon', 'hagigah', 'hashmallim']
                                     .map(k => this.props.monsterManager.getMonster(k))
                                     .filter(Boolean)
                                     .map((m, i) => (
@@ -1413,11 +1436,11 @@ class CrewManagerPage extends React.Component {
                             </div>
                         </div>
 
-                        <div className="simulator-bottom-actions" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div className="simulator-bottom-actions">
                             <div className="button-row-bottom-left">
                                 <button onClick={() => this.clear()}>Clear</button>
                             </div>
-                            <div className="button-row" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div className="button-row-bottom-right">
                                 <button
                                     id="random-combat-btn"
                                     onClick={this.startRandomCombat}
@@ -1473,11 +1496,21 @@ class CrewManagerPage extends React.Component {
                                         <option key={n} value={n}>{n}</option>
                                     ))}
                                 </select>
-                                <button onClick={() => this.submit()}>Submit</button>
                             </div>
                         </div>
                     </div>
                 </div>}
+
+                {!this.state.crewSelected && (
+                    <button
+                        className="simulator-submit-floating-btn"
+                        onClick={() => this.submit()}
+                        title="Start Combat Simulation"
+                    >
+                        <span className="submit-btn-icon">⚔️</span>
+                        <span className="submit-btn-text">Submit</span>
+                    </button>
+                )}
 
 
                 {this.state.crewSelected && <div style={{ height: '100%', width: '100%', overflow: 'hidden' }}>

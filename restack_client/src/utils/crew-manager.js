@@ -2,6 +2,7 @@
 import * as images from '../utils/images'
 import { SPELLS, RITUALS, GLYPHS, GLYPH_SPELL_SLOT_COST, computeGlyphPrepTime, BATTLE_TACTICS, INNER_DISCIPLINES, SCRY_OPTIONS } from './spells-table'
 import { getMeta, storeMeta } from './session-handler'
+import { dischargeFromInfirmary } from './infirmary-manager'
 
 // eslint-disable-next-line no-extend-native
 Date.prototype.addHours = function (h) {
@@ -54,6 +55,10 @@ export const CLASS_BASE_LORE_TEMPLATES = {
     hollow: {
         baseName: 'Valok',
         template: 'Valok is a wanderer caught between the living realm and the eternal dark, resurrected by the dungeon itself to walk its haunted corridors.'
+    },
+    glitterburn: {
+        baseName: 'Glitterburn',
+        template: 'A volatile pyromancer born under cosmic starlight, fusing chaotic magic with blinding ember sparks and dazzling illusions.'
     },
     horologist: {
         baseName: 'Seren',
@@ -279,7 +284,9 @@ export function CrewManager() {
                 sage: ['healing_ground', 'sing'],
                 ranger: ['sneak_attack', 'spike_trap'],
                 soldier: ['soldier_shield', 'breacher'],
-                horologist: ['rewind_step', 'stopwatch']
+                horologist: ['rewind_step', 'stopwatch'],
+                summoner: ['wandering_eye'],
+                glitterburn: ['blinding_beacon', 'prismatic_flare']
             };
             const mClass = (member.type || member.image || '').toLowerCase();
             if (!Array.isArray(member.expeditionSkills) || member.expeditionSkills.length === 0) {
@@ -340,6 +347,7 @@ export function CrewManager() {
             ranger: ['dex', 'str'],
             sage: ['fort'],
             hollow: ['dex', 'int'],
+            glitterburn: ['int', 'dex'],
             horologist: ['int', 'dex']
         },
         defense: {
@@ -352,6 +360,7 @@ export function CrewManager() {
             ranger: ['str', 'fort'],
             sage: ['str', 'fort'],
             hollow: ['dex', 'fort'],
+            glitterburn: ['dex', 'int'],
             horologist: ['dex', 'int']
         },
         hp: { all: ['fort'] },
@@ -575,6 +584,11 @@ export function CrewManager() {
                 crewMember.stats.dex = (crewMember.stats.dex || 0) + 1;
                 if (typeof crewMember.stats.baseDex === 'number') crewMember.stats.baseDex += 1;
                 gains.dex = 1;
+                break;
+            case 'glitterburn':
+                crewMember.stats.int = (crewMember.stats.int || 0) + 1;
+                if (typeof crewMember.stats.baseInt === 'number') crewMember.stats.baseInt += 1;
+                gains.int = 1;
                 break;
             case 'sage':
                 crewMember.stats.int = (crewMember.stats.int || 0) + 1;
@@ -978,6 +992,48 @@ export function CrewManager() {
                 // actionSubtype: { targetMember, actionIndex }
                 this.borrowTime(member, actionSubtype && actionSubtype.targetMember, actionSubtype && actionSubtype.actionIndex);
                 break;
+            case 'craft_phosphor_lure': {
+                const prepTime = 30 * 60 * 1000; // 30 minutes
+                endDate = new Date(Date.now() + prepTime);
+                member.specialActions.push({
+                    type: 'phosphor_lure',
+                    name: 'Phosphor Lure',
+                    iconUrl: images['prism_snare'] || images['prism_snare_glitterburn'] || '',
+                    available: false,
+                    startDate,
+                    endDate,
+                    notified: false,
+                });
+                break;
+            }
+            case 'brew_flashbang': {
+                const prepTime = 60 * 60 * 1000; // 1 hour
+                endDate = new Date(Date.now() + prepTime);
+                member.specialActions.push({
+                    type: 'flashbang_powder',
+                    name: 'Flashbang Powder',
+                    iconUrl: images['glitter_burst'] || images['glitter_burst_glitterburn'] || '',
+                    available: false,
+                    startDate,
+                    endDate,
+                    notified: false,
+                });
+                break;
+            }
+            case 'assemble_mirror_decoy': {
+                const prepTime = 120 * 60 * 1000; // 2 hours
+                endDate = new Date(Date.now() + prepTime);
+                member.specialActions.push({
+                    type: 'mirror_decoy',
+                    name: 'Mirror Decoy',
+                    iconUrl: images['starlight_decoy'] || images['starlight_decoy_glitterburn'] || '',
+                    available: false,
+                    startDate,
+                    endDate,
+                    notified: false,
+                });
+                break;
+            }
             default:
                 break;
         }
@@ -1024,6 +1080,46 @@ export function CrewManager() {
         return {
             ok: true,
             borrowedMs: remaining,
+            debt: horologist.stats.timeDebt,
+            cap,
+            strainTier: computeTemporalStrainTier(horologist.stats.timeDebt, horologist.level)
+        };
+    };
+
+    // Borrow time to instantly heal an infirmary patient
+    this.borrowTimeInfirmary = (horologist, patientId, now = Date.now()) => {
+        const type = String((horologist && (horologist.type || horologist.image)) || '').toLowerCase();
+        if (!type.startsWith('horologist')) return { ok: false, reason: 'not_horologist' };
+
+        const meta = getMeta();
+        if (!meta || !meta.infirmary || !Array.isArray(meta.infirmary.patients)) return { ok: false, reason: 'no_patient' };
+        const patient = meta.infirmary.patients.find(p => p.id === patientId);
+        if (!patient) return { ok: false, reason: 'no_patient' };
+
+        const maxHp = patient.stats?.hp || patient.starting_hp || 100;
+        const missingHp = Math.max(0, maxHp - patient.hp);
+        if (missingHp <= 0) return { ok: false, reason: 'already_complete' };
+
+        const healingRate = meta.infirmary.sageCommitted ? 2 : 1;
+        const remainingHours = missingHp / healingRate;
+        const remainingMs = Math.round(remainingHours * 60 * 60 * 1000);
+
+        const debt = this._settleTimeDebt(horologist, now);
+        const cap = getTimeDebtCap(horologist.level);
+        if (debt + remainingMs > cap) {
+            return { ok: false, reason: 'over_cap', debt, cap, remainingMs };
+        }
+
+        horologist.stats.timeDebt = debt + remainingMs;
+        horologist.stats.timeDebtUpdatedAt = now;
+        patient.hp = maxHp;
+        patient.dead = false;
+
+        dischargeFromInfirmary(patientId);
+
+        return {
+            ok: true,
+            borrowedMs: remainingMs,
             debt: horologist.stats.timeDebt,
             cap,
             strainTier: computeTemporalStrainTier(horologist.stats.timeDebt, horologist.level)
@@ -1234,6 +1330,7 @@ export function CrewManager() {
                 'summon_imp',
                 'summoner_duplicate'
             ],
+            expeditionSkills: ['wandering_eye'],
             passives: ['magic_affinity'],
             weaknesses: ['crushing', 'blood_magic'],
             description: 'A conduit for unstable arcana who overwhelms enemies with elemental pressure by opening rifts and summoning minions.',
@@ -1247,8 +1344,6 @@ export function CrewManager() {
             class: 'spellcaster',
             name: 'Glitterburn',
             id: 9903,
-            disabled: true,
-            locked: true,
             level: 1,
             stats: { str: 4, int: 8, dex: 6, fort: 5, baseHp: 24, experience: 0 },
             portrait: images['glitterburn_portrait'] || images['glitterburn'],
@@ -1257,10 +1352,11 @@ export function CrewManager() {
                 { id: 'astra', name: 'Astra', defaultName: 'Astra', portrait: images['glitterburn_alt_portrait'] || images['glitterburn_alt'], image: 'glitterburn_alt' }
             ],
             inventory: [],
-            skills: ['glitter_burst', 'pyro_spark', 'blinding_flash'],
-            passives: ['sparkling_aura'],
+            skills: ['pyro_spark', 'glitter_burst', 'prism_snare', 'starlight_decoy', 'supernova_core'],
+            expeditionSkills: ['blinding_beacon', 'prismatic_flare'],
+            passives: ['sparkling_aura', 'pyrotechnic_chain'],
             weaknesses: ['crushing', 'ice'],
-            description: 'A volatile pyromancer born under cosmic starlight, fusing chaotic magic with blinding ember sparks.',
+            description: 'A volatile pyromancer born under cosmic starlight, fusing chaotic magic with blinding ember sparks and dazzling illusions.',
             specialActions: [],
             actionsTrayExpanded: false,
             actionMenuTypeExpanded: false

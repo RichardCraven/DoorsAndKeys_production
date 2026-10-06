@@ -2308,6 +2308,8 @@ export default function CombatGrid(props) {
                 <div className={`portrait-overlay${details?.drained ? ' drained' : ''}${details?.frozen ? ' frozen' : ''}`} style={{ overflow: 'visible', zIndex: 2, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 0 }}>
                     {renderDamageIndicators(fighter.id)}
                 </div>
+                {renderHorologistMarkers(getLiveCombatant(fighter.id))}
+                {renderGlitterburnMarkers(getLiveCombatant(fighter.id))}
                 {/* Target indicator */}
                 {(() => {
                     const liveFighter = getLiveCombatant(fighter.id);
@@ -3113,6 +3115,8 @@ export default function CombatGrid(props) {
                     <div className={`portrait-overlay ${liveMonster.frozen ? 'frozen' : ''}`} style={{ zIndex: 2, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', borderRadius: 0, overflow: 'visible' }}>
                         {renderDamageIndicators(unit.id)}
                     </div>
+                    {renderHorologistMarkers(liveMonster)}
+                    {renderGlitterburnMarkers(liveMonster)}
                     {/* Target indicator */}
                     {(() => {
                         const target = unit.targetId ? combatManager?.getCombatant?.(unit.targetId) : null;
@@ -3327,10 +3331,166 @@ export default function CombatGrid(props) {
         );
     };
 
+    // Horologist per-unit markers: anchor ring (crystal once crystallized) + echo dials.
+    // Function declaration (hoisted) so the fighter/monster renderers above can call it.
+    function renderHorologistMarkers(live) {
+        if (!live || live.dead) return null;
+        const anchor = live.timeAnchor;
+        const echoes = Array.isArray(live.incomingEchoes) ? live.incomingEchoes : [];
+        if (!anchor && echoes.length === 0) return null;
+        return (
+            <>
+                {anchor && (
+                    <div
+                        className={`horologist-anchor-ring${anchor.crystallized ? ' crystallized' : ''}`}
+                        title={anchor.crystallized ? 'Crystallized anchor: Recall will Shatter' : `Anchored: crystallizes in ${anchor.roundsUntilCrystal} round(s)`}
+                    >
+                        <span className="horologist-anchor-hand" />
+                        {!anchor.crystallized && <span className="horologist-anchor-count">{anchor.roundsUntilCrystal}</span>}
+                    </div>
+                )}
+                {echoes.length > 0 && (
+                    <div className="horologist-echo-dials">
+                        {echoes.map(e => (
+                            <div key={e.id} className={`horologist-echo-dial${e.roundsLeft <= 1 ? ' imminent' : ''}`} title={`Future Echo lands in ${e.roundsLeft} round(s)`}>
+                                <span className="horologist-echo-sweep" style={{ animationDuration: `${Math.max(0.6, e.roundsLeft * 0.8)}s` }} />
+                                <span className="horologist-echo-num">{e.roundsLeft}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </>
+        );
+    }
+
+    // Glitterburn per-unit markers: Dazzled sparkle crown and Decoy holographic aura
+    function renderGlitterburnMarkers(live) {
+        if (!live || live.dead) return null;
+        return (
+            <>
+                {live.dazzled > 0 && (
+                    <div className="glitterburn-dazzled-marker" title={`Dazzled (${live.dazzled}) — Accuracy reduced by ${live.dazzled * 15}%`}>
+                        <span className="sparkle s1">✨</span>
+                        <span className="sparkle s2">✨</span>
+                    </div>
+                )}
+                {live.isDecoy && (
+                    <div className="glitterburn-decoy-aura" />
+                )}
+            </>
+        );
+    }
+
     // ── Sandbox-style CSS animation overlay ───────────────────────────────────
     const renderAnimation = (anim) => {
         if (!anim) return null;
         const key = anim.id;
+
+        // ── Horologist ────────────────────────────────────────────────────
+        if ((anim.type === 'future_echo_cast' || anim.type === 'horologist_anchor' || anim.type === 'horologist_recall') && anim.srcPx && anim.tgtPx) {
+            const dx = anim.tgtPx.x - anim.srcPx.x;
+            const dy = anim.tgtPx.y - anim.srcPx.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+                <React.Fragment key={key}>
+                    <div className={`horologist-thread ${anim.type}`} style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, width: `${length}px`, transform: `rotate(${angle}deg)` }} />
+                    <div className={`horologist-clockface ${anim.type}${anim.isUltimate ? ' ultimate' : ''}`} style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                        <span className="hand hour" />
+                        <span className="hand minute" />
+                    </div>
+                </React.Fragment>
+            );
+        }
+        if ((anim.type === 'future_echo_strike' || anim.type === 'horologist_shatter') && anim.tgtPx) {
+            return (
+                <div key={key} className={`horologist-impact ${anim.type}`} style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    {anim.type === 'horologist_shatter' && [0, 1, 2, 3, 4, 5].map(i => (
+                        <span key={i} className="shard" style={{ '--shard-angle': `${i * 60}deg` }} />
+                    ))}
+                </div>
+            );
+        }
+        if (anim.type === 'hour_of_reckoning' && anim.srcPx) {
+            return (
+                <React.Fragment key={key}>
+                    <div className="horologist-reckoning-veil" />
+                    <div className="horologist-clockface hour_of_reckoning" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px` }}>
+                        <span className="hand hour" />
+                        <span className="hand minute" />
+                    </div>
+                </React.Fragment>
+            );
+        }
+
+        // ── Glitterburn ────────────────────────────────────────────────────
+        if (anim.type === 'pyro_spark' && anim.srcPx && anim.tgtPx) {
+            const dx = anim.tgtPx.x - anim.srcPx.x;
+            const dy = anim.tgtPx.y - anim.srcPx.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+                <React.Fragment key={key}>
+                    <div className="glitterburn-spark-beam" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, width: `${length}px`, transform: `rotate(${angle}deg)` }} />
+                    <div className="glitterburn-spark-burst" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }} />
+                </React.Fragment>
+            );
+        }
+        if (anim.type === 'glitter_burst' && anim.srcPx && anim.tgtPx) {
+            const dx = anim.tgtPx.x - anim.srcPx.x;
+            const dy = anim.tgtPx.y - anim.srcPx.y;
+            const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+            return (
+                <div key={key} className="glitterburn-fan-burst" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, transform: `rotate(${angle}deg)` }}>
+                    <div className="glitter-fan-particles" />
+                </div>
+            );
+        }
+        if (anim.type === 'prism_snare_place' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-snare-deploy" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    <span className="snare-ring" />
+                    <span className="snare-crystal" />
+                </div>
+            );
+        }
+        if (anim.type === 'prism_snare_snap' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-snare-snap" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    <span className="cage-beam b1" />
+                    <span className="cage-beam b2" />
+                    <span className="cage-beam b3" />
+                </div>
+            );
+        }
+        if (anim.type === 'starlight_decoy_summon' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-decoy-summon" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    <span className="decoy-aura" />
+                </div>
+            );
+        }
+        if (anim.type === 'glitter_pop' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-glitter-pop" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }} />
+            );
+        }
+        if (anim.type === 'supernova_core_pulse' && anim.tgtPx) {
+            return (
+                <div key={key} className="glitterburn-supernova-pulse" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }}>
+                    <span className="supernova-vortex-ring" />
+                    <span className="supernova-core-star" />
+                </div>
+            );
+        }
+        if (anim.type === 'supernova_core_detonate' && anim.tgtPx) {
+            return (
+                <React.Fragment key={key}>
+                    <div className="glitterburn-supernova-flash" />
+                    <div className="glitterburn-supernova-shockwave" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }} />
+                </React.Fragment>
+            );
+        }
 
         if (anim.type === 'eldritch_wind_overlay') {
             return (
@@ -8077,6 +8237,56 @@ export default function CombatGrid(props) {
                                     backgroundPosition: 'center',
                                     filter: 'drop-shadow(0 0 6px rgba(255, 100, 50, 0.8))',
                                 }} />
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            {/* --- Glitterburn Prism Snare Traps --- */}
+            {combatManager && Array.isArray(combatManager.glitterTraps) && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 16 }}>
+                    {combatManager.glitterTraps.map((trap) => {
+                        const top = tilePos(trap.y);
+                        const left = tilePos(trap.x);
+                        return (
+                            <div
+                                key={`snare-${trap.id}`}
+                                className="glitter-snare-tile-hazard"
+                                style={{
+                                    position: 'absolute',
+                                    left: `${left}px`,
+                                    top: `${top}px`,
+                                    width: `${TILE_SIZE}px`,
+                                    height: `${TILE_SIZE}px`,
+                                }}
+                            >
+                                <span className="hazard-crystal" />
+                                <span className="hazard-pulse" />
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            {/* --- Glitterburn Supernova Cores --- */}
+            {combatManager && Array.isArray(combatManager.supernovaCores) && (
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 17 }}>
+                    {combatManager.supernovaCores.map((core) => {
+                        const top = tilePos(core.y);
+                        const left = tilePos(core.x);
+                        return (
+                            <div
+                                key={`supernova-${core.id}`}
+                                className="glitter-supernova-tile-hazard"
+                                style={{
+                                    position: 'absolute',
+                                    left: `${left}px`,
+                                    top: `${top}px`,
+                                    width: `${TILE_SIZE}px`,
+                                    height: `${TILE_SIZE}px`,
+                                }}
+                            >
+                                <span className="supernova-swirl" />
+                                <span className="supernova-countdown">{core.roundsLeft}</span>
                             </div>
                         );
                     })}
