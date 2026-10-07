@@ -7415,6 +7415,129 @@
     }
 }
 
+@keyframes organicExplosionPop {
+    0% {
+        transform: translate3d(-50%, -50%, 0) scale(0.25) rotate(-5deg);
+        opacity: 1;
+        filter: brightness(1.8) contrast(1.2);
+    }
+
+    35% {
+        transform: translate3d(-50%, -50%, 0) scale(1.15) rotate(4deg);
+        opacity: 1;
+        filter: brightness(1.4);
+    }
+
+    65% {
+        transform: translate3d(-50%, -50%, 0) scale(1.4) rotate(9deg);
+        opacity: 0.9;
+        filter: brightness(1.1);
+    }
+
+    100% {
+        transform: translate3d(-50%, -50%, 0) scale(1.65) rotate(15deg);
+        opacity: 0;
+        filter: brightness(0.85);
+    }
+}
+
+@keyframes organicShockwaveExpand {
+    0% {
+        transform: translate3d(-50%, -50%, 0) scale(0.15) rotate(0deg);
+        opacity: 1;
+    }
+
+    40% {
+        opacity: 0.9;
+    }
+
+    100% {
+        transform: translate3d(-50%, -50%, 0) scale(1.75) rotate(22deg);
+        opacity: 0;
+    }
+}
+
+@keyframes flamePlumeShoot1 {
+    0% {
+        transform: translate3d(0, 0, 0) scale(0.3);
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.9;
+    }
+
+    100% {
+        transform: translate3d(35px, -30px, 0) scale(1.4) rotate(15deg);
+        opacity: 0;
+    }
+}
+
+@keyframes flamePlumeShoot2 {
+    0% {
+        transform: translate3d(0, 0, 0) scale(0.3);
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.9;
+    }
+
+    100% {
+        transform: translate3d(-30px, -25px, 0) scale(1.3) rotate(-20deg);
+        opacity: 0;
+    }
+}
+
+@keyframes flamePlumeShoot3 {
+    0% {
+        transform: translate3d(0, 0, 0) scale(0.3);
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.9;
+    }
+
+    100% {
+        transform: translate3d(-20px, 35px, 0) scale(1.5) rotate(10deg);
+        opacity: 0;
+    }
+}
+
+@keyframes flamePlumeShoot4 {
+    0% {
+        transform: translate3d(0, 0, 0) scale(0.3);
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.9;
+    }
+
+    100% {
+        transform: translate3d(30px, 25px, 0) scale(1.35) rotate(-15deg);
+        opacity: 0;
+    }
+}
+
+@keyframes coreFlashFlicker {
+    0% {
+        transform: scale(0.35);
+        opacity: 1;
+    }
+
+    25% {
+        transform: scale(1.25);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(0.8);
+        opacity: 0;
+    }
+}
+
 @keyframes drawRopes {
     to {
         stroke-dashoffset: 0;

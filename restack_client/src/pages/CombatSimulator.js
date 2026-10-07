@@ -1525,6 +1525,13 @@ class CrewManagerPage extends React.Component {
                                 >
                                     {this.state.isRealCrewCloned ? '✓ Cloned Real Crew' : 'Copy Real Crew'}
                                 </button>
+                                <button
+                                    className="clear-crew-btn"
+                                    onClick={() => this.clear()}
+                                    title="Clear selected crew"
+                                >
+                                    Clear
+                                </button>
                                 <span className={`real-crew-badge ${this.state.isRealCrewCloned ? 'active' : 'inactive'}`}>
                                     {this.state.isRealCrewCloned ? '● Real Crew Cloned' : '○ Simulator Custom Roster'}
                                 </span>
@@ -1974,12 +1981,6 @@ class CrewManagerPage extends React.Component {
                                         );
                                     })}
                                 </div>
-                            </div>
-                        </div>
-
-                        <div className="simulator-bottom-actions">
-                            <div className="button-row-bottom-left">
-                                <button onClick={() => this.clear()}>Clear</button>
                             </div>
                         </div>
                     </div>

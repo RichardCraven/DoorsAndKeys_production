@@ -8,6 +8,7 @@
  *       .portrait + overlays
  */
 import React from 'react';
+import WebGLParticleCanvas from './WebGLParticleCanvas';
 import * as images from '../../utils/images';
 import Overlay from '../Overlay';
 import { runesData } from '../../utils/rune-data';
@@ -5419,17 +5420,112 @@ export default function CombatGrid(props) {
             return (
                 <div key={key} style={{
                     position: 'absolute',
-                    left: `${anim.tgtPx.x - 100}px`,
-                    top: `${anim.tgtPx.y - 100}px`,
-                    width: '200px',
-                    height: '200px',
-                    borderRadius: '50%',
-                    background: 'radial-gradient(circle, #fff 0%, #ffaa00 30%, #ff4400 60%, transparent 100%)',
-                    boxShadow: '0 0 30px #ff6600, 0 0 60px #ff2200',
+                    left: `${anim.tgtPx.x}px`,
+                    top: `${anim.tgtPx.y}px`,
+                    width: '240px',
+                    height: '240px',
+                    transform: 'translate(-50%, -50%)',
                     pointerEvents: 'none',
                     zIndex: 4500,
-                    animation: 'explosionPop 0.6s ease-out forwards',
-                }} />
+                    willChange: 'transform, opacity',
+                    animation: 'organicExplosionPop 0.65s cubic-bezier(0.15, 0.85, 0.35, 1) forwards',
+                }}>
+                    <svg viewBox="0 0 240 240" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                        <defs>
+                            <radialGradient id={`expMainGrad_${key}`} cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+                                <stop offset="20%" stopColor="#ffee33" stopOpacity="1" />
+                                <stop offset="50%" stopColor="#ff5500" stopOpacity="0.95" />
+                                <stop offset="78%" stopColor="#d91400" stopOpacity="0.8" />
+                                <stop offset="100%" stopColor="#4a0800" stopOpacity="0" />
+                            </radialGradient>
+                            <radialGradient id={`expInnerGrad_${key}`} cx="48%" cy="48%" r="48%">
+                                <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+                                <stop offset="30%" stopColor="#fff275" stopOpacity="1" />
+                                <stop offset="65%" stopColor="#ff8800" stopOpacity="0.95" />
+                                <stop offset="100%" stopColor="#ff3300" stopOpacity="0" />
+                            </radialGradient>
+                            <radialGradient id={`expCoreGrad_${key}`} cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+                                <stop offset="50%" stopColor="#ffffff" stopOpacity="1" />
+                                <stop offset="80%" stopColor="#ffdd44" stopOpacity="0.9" />
+                                <stop offset="100%" stopColor="#ff6600" stopOpacity="0" />
+                            </radialGradient>
+                        </defs>
+                        {/* Layer 1: Outer billowing flame contour */}
+                        <path
+                            d="M 120,18
+                               C 148,50 162,44 194,40
+                               C 178,78 190,92 222,108
+                               C 184,124 190,146 210,180
+                               C 172,168 156,190 146,226
+                               C 124,188 108,198 82,220
+                               C 88,178 72,168 30,166
+                               C 62,140 52,118 20,102
+                               C 58,92 52,70 42,38
+                               C 78,54 94,44 120,18 Z"
+                            fill={`url(#expMainGrad_${key})`}
+                            style={{ filter: 'drop-shadow(0 0 16px #ff5500) drop-shadow(0 0 32px #ff2200)' }}
+                        />
+                        {/* Layer 2: Asymmetric inner flame tongues */}
+                        <path
+                            d="M 120,38
+                               C 142,64 158,58 178,64
+                               C 162,90 174,106 196,122
+                               C 168,132 174,154 184,170
+                               C 158,158 142,174 136,202
+                               C 120,174 104,180 88,194
+                               C 94,162 78,152 50,152
+                               C 72,130 62,114 40,102
+                               C 68,92 64,76 56,54
+                               C 88,66 98,54 120,38 Z"
+                            fill={`url(#expInnerGrad_${key})`}
+                            style={{
+                                transform: 'rotate(24deg)',
+                                transformOrigin: '120px 120px',
+                                filter: 'drop-shadow(0 0 10px #ffee00)'
+                            }}
+                        />
+                        {/* Layer 3: Blinding white-hot core plasma rupture */}
+                        <path
+                            d="M 120,62
+                               C 134,88 148,82 164,94
+                               C 144,110 152,126 168,138
+                               C 142,138 142,154 148,170
+                               C 132,154 120,162 114,176
+                               C 108,154 96,160 82,168
+                               C 90,146 76,138 60,132
+                               C 80,122 76,108 64,98
+                               C 86,100 94,86 120,62 Z"
+                            fill={`url(#expCoreGrad_${key})`}
+                            style={{
+                                filter: 'drop-shadow(0 0 14px #ffffff)',
+                                animation: 'coreFlashFlicker 0.65s ease-out forwards'
+                            }}
+                        />
+                        {/* Layer 4: Detached flying flame licks / flares */}
+                        <path
+                            d="M 188,48 Q 214,26 230,16 Q 218,44 196,64 Z"
+                            fill="#ff9900"
+                            style={{ animation: 'flamePlumeShoot1 0.6s ease-out forwards', transformOrigin: '120px 120px' }}
+                        />
+                        <path
+                            d="M 52,52 Q 26,32 10,20 Q 32,48 48,68 Z"
+                            fill="#ff5500"
+                            style={{ animation: 'flamePlumeShoot2 0.6s ease-out forwards', transformOrigin: '120px 120px' }}
+                        />
+                        <path
+                            d="M 42,164 Q 20,190 6,218 Q 36,202 58,180 Z"
+                            fill="#ffaa00"
+                            style={{ animation: 'flamePlumeShoot3 0.6s ease-out forwards', transformOrigin: '120px 120px' }}
+                        />
+                        <path
+                            d="M 184,174 Q 214,200 234,222 Q 204,206 172,190 Z"
+                            fill="#ff4400"
+                            style={{ animation: 'flamePlumeShoot4 0.6s ease-out forwards', transformOrigin: '120px 120px' }}
+                        />
+                    </svg>
+                </div>
             );
         }
 
@@ -5439,16 +5535,61 @@ export default function CombatGrid(props) {
                     position: 'absolute',
                     left: `${anim.tgtPx.x}px`,
                     top: `${anim.tgtPx.y}px`,
-                    width: '22px',
-                    height: '22px',
-                    borderRadius: '50%',
-                    border: '3px solid rgba(255, 140, 0, 0.95)',
-                    boxShadow: '0 0 16px rgba(255, 140, 0, 0.85), 0 0 28px rgba(255, 106, 0, 0.65)',
+                    width: '280px',
+                    height: '280px',
                     transform: 'translate(-50%, -50%)',
                     pointerEvents: 'none',
                     zIndex: 4460,
-                    animation: 'fireBlastRing 0.5s cubic-bezier(0.1, 0.8, 0.3, 1) forwards'
-                }} />
+                    willChange: 'transform, opacity',
+                    animation: 'organicShockwaveExpand 0.55s cubic-bezier(0.12, 0.8, 0.32, 1) forwards',
+                }}>
+                    <svg viewBox="0 0 280 280" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+                        <defs>
+                            <linearGradient id={`shockwaveGrad_${key}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stopColor="#ffee55" stopOpacity="0.95" />
+                                <stop offset="35%" stopColor="#ff6600" stopOpacity="0.9" />
+                                <stop offset="70%" stopColor="#ff2200" stopOpacity="0.8" />
+                                <stop offset="100%" stopColor="#ffaa00" stopOpacity="0.95" />
+                            </linearGradient>
+                        </defs>
+                        {/* Wavy, jagged shockwave perimeter breaking outwards */}
+                        <path
+                            d="M 140,16
+                               C 178,22 210,48 238,80
+                               C 220,112 264,140 252,178
+                               C 220,200 226,244 188,254
+                               C 156,238 124,264 86,248
+                               C 70,216 26,200 32,156
+                               C 48,124 16,92 48,60
+                               C 86,70 114,26 140,16 Z"
+                            fill="none"
+                            stroke={`url(#shockwaveGrad_${key})`}
+                            strokeWidth="4"
+                            strokeLinejoin="round"
+                            strokeDasharray="22 8 36 6 16 10"
+                            style={{
+                                filter: 'drop-shadow(0 0 10px #ff4400) drop-shadow(0 0 20px #ff6600)'
+                            }}
+                        />
+                        {/* Secondary trailing flame ripple */}
+                        <path
+                            d="M 140,38
+                               C 168,44 194,66 210,92
+                               C 198,118 232,140 220,168
+                               C 198,184 204,216 172,226
+                               C 146,210 118,232 92,220
+                               C 76,194 44,184 48,146
+                               C 60,118 34,92 60,70
+                               C 92,80 114,48 140,38 Z"
+                            fill="none"
+                            stroke="#ffee55"
+                            strokeWidth="2.5"
+                            strokeLinejoin="round"
+                            strokeDasharray="12 16 24 8"
+                            opacity="0.8"
+                        />
+                    </svg>
+                </div>
             );
         }
 
@@ -8142,6 +8283,7 @@ export default function CombatGrid(props) {
                 </defs>
             </svg>
             {renderDestinationTrajectoriesAndReticles()}
+            <WebGLParticleCanvas activeAnimations={activeAnimations} boardWidth={props.boardWidth || 800} boardHeight={props.boardHeight || 600} />
             {/* Fighters */}
             {activeCrew.map(renderFighter)}
             {renderRiftPortal()}
