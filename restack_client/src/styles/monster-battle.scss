@@ -281,6 +281,7 @@
         &.reversed {
             --portrait-rotateY: -15deg; // facing left
             --portrait-translateX: -3px;
+            --portrait-flip: -1;
             transform: perspective(var(--portrait-perspective)) rotateY(var(--portrait-rotateY)) translateX(var(--portrait-translateX));
         }
 
@@ -751,7 +752,7 @@
     }
 }
 
-// Hit-flash overlay for monster/minion portraits
+// Hit-flash overlay for monster/minion and fighter portraits
 .hit-flash-overlay {
     position: absolute;
     top: 0;
@@ -759,24 +760,121 @@
     width: 100%;
     height: 100%;
     pointer-events: none;
-    background: rgba(30, 144, 255, 0.35) !important;
-    /* Softer blue, less intense */
-    opacity: 0.35;
+    background: rgba(255, 255, 255, 0.5) !important;
+    opacity: 0.65;
     border-radius: 8px;
     border: none !important;
-    /* Remove red border */
-    animation: hit-flash-fade 0.4s linear;
-    z-index: 10;
+    animation: hit-flash-fade 0.35s ease-out;
+    z-index: 320;
 }
 
 .axe-throw-hit-flash .hit-flash-overlay {
-    background: rgba(255, 80, 80, 0.35) !important;
+    background: rgba(255, 80, 80, 0.45) !important;
     /* Light red for axe throw hit */
 }
 
 .monster-portrait.hit-flash,
-.minion-portrait.hit-flash {
-    animation: hit-flash-fade 0.4s linear;
+.minion-portrait.hit-flash,
+.fighter-portrait.hit-flash {
+    animation: hit-flash-fade 0.35s ease-out;
+}
+
+// ── Damaged jerk recoil animations for player and enemy units ───────────────
+.unit-damaged-recoil-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    transform-origin: center center;
+    will-change: transform;
+
+    &.damaged-jerk-left {
+        animation: damagedJerkLeft 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    &.damaged-jerk-right {
+        animation: damagedJerkRight 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    &.damaged-jerk-down {
+        animation: damagedJerkDown 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+
+    &.damaged-jerk-up {
+        animation: damagedJerkUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    }
+}
+
+@keyframes damagedJerkLeft {
+    0% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+    22% {
+        transform: translate3d(-9px, 0, 0) rotate(-2.5deg);
+    }
+    48% {
+        transform: translate3d(-4px, 0, 0) rotate(-1deg);
+    }
+    72% {
+        transform: translate3d(1px, 0, 0) rotate(0.4deg);
+    }
+    100% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+}
+
+@keyframes damagedJerkRight {
+    0% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+    22% {
+        transform: translate3d(9px, 0, 0) rotate(2.5deg);
+    }
+    48% {
+        transform: translate3d(4px, 0, 0) rotate(1deg);
+    }
+    72% {
+        transform: translate3d(-1px, 0, 0) rotate(-0.4deg);
+    }
+    100% {
+        transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+}
+
+@keyframes damagedJerkDown {
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+    22% {
+        transform: translate3d(0, 9px, 0);
+    }
+    48% {
+        transform: translate3d(0, 4px, 0);
+    }
+    72% {
+        transform: translate3d(0, -1px, 0);
+    }
+    100% {
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+@keyframes damagedJerkUp {
+    0% {
+        transform: translate3d(0, 0, 0);
+    }
+    22% {
+        transform: translate3d(0, -9px, 0);
+    }
+    48% {
+        transform: translate3d(0, -4px, 0);
+    }
+    72% {
+        transform: translate3d(0, 1px, 0);
+    }
+    100% {
+        transform: translate3d(0, 0, 0);
+    }
 }
 
 @keyframes hit-flash-fade {
@@ -785,7 +883,7 @@
     }
 
     60% {
-        opacity: 0.7;
+        opacity: 0.6;
     }
 
     100% {

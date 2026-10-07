@@ -177,8 +177,9 @@ export default function FightersCombatGrid(props) {
                     // Always use the facing at the moment of death for the death animation
                     const details = props.getFighterDetails(fighter);
                     // only mark reversed when explicitly facing left; support up/down classes separately
-                    const facingClass = details?.facing === 'left' ? 'reversed' : '';
-                    const verticalFacingClass = details?.facing === 'up' ? 'facing-up' : (details?.facing === 'down' ? 'facing-down' : '');
+                    const currentFtrFacing = details?.facing || getLiveCombatant(fighter.id)?.facing || fighter?.facing;
+                    const facingClass = currentFtrFacing === 'left' ? 'reversed' : '';
+                    const verticalFacingClass = currentFtrFacing === 'up' ? 'facing-up' : (currentFtrFacing === 'down' ? 'facing-down' : '');
 
                     const xPos = props.battleData[fighter.id]?.coordinates.x * 100 + (SHOW_TILE_BORDERS ? props.battleData[fighter.id]?.coordinates.x * 2 : 0);
                     const yPos = props.battleData[fighter.id]?.coordinates.y * TILE_SIZE + (SHOW_TILE_BORDERS ? props.battleData[fighter.id]?.coordinates.y * 2 : 0);
@@ -216,8 +217,8 @@ export default function FightersCombatGrid(props) {
                                                     width: '120px',
                                                     height: '120px',
                                                     borderRadius: '50%',
-                                                    background: 'radial-gradient(circle, rgba(33, 230, 193, 0.55) 0%, rgba(0, 191, 255, 0.08) 40%, transparent 65%)',
-                                                    boxShadow: '0 0 16px 4px rgba(33, 230, 193, 0.45), 0 0 28px 6px rgba(0, 191, 255, 0.03)',
+                                                    background: 'radial-gradient(circle, rgba(33, 230, 193, 0.82) 0%, rgba(0, 191, 255, 0.28) 45%, transparent 68%)',
+                                                    boxShadow: '0 0 10px 1px rgba(33, 230, 193, 0.18), 0 0 18px 2px rgba(0, 191, 255, 0.04)',
                                                     filter: 'blur(3px)',
                                                     zIndex: 290,
                                                     pointerEvents: 'none',

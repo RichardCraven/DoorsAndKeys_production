@@ -46,6 +46,7 @@ import * as CampManager from '../utils/camp-manager';
 import { getCrewRangeRingSpecs } from '../utils/crew-range-helper';
 import Typewriter from '../utils/typewriter';
 import { getNextNarrativePayload } from '../utils/narrative-manager';
+import hikaronImg from '../assets/Hikaron.jpg';
 import { cilCaretRight, cilCaretLeft, cilMenu } from '@coreui/icons';
 import CIcon from '@coreui/icons-react';
 
@@ -340,7 +341,7 @@ function hexToRgba(hex, alpha = 1) {
 }
 
 // Small subcomponent to render modal header + body based on modalType
-const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose, onDreamDenSelect, onSpawnPygmy }) => {
+const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, handleMemberClickRitual, handleCrewTileHover, setMemberRitualOptions, onLearnRitual, inventoryManager, saveUserData, onForceUpdate, onClose, onDreamDenSelect, onSpawnPygmy, tutorialMerchantHighlight }) => {
     const [merchantStock, setMerchantStock] = React.useState([]);
     const [buybackStock, setBuybackStock] = React.useState([]);
     const [feedbackMsg, setFeedbackMsg] = React.useState('');
@@ -985,36 +986,76 @@ const ModalInner = ({ modalType, showModal = true, updates, crew, tileSize, hand
                         <div className="vendor-panel">
                             <h3 className="panel-title">Merchant's Stock</h3>
                             <div className="item-list scroll-container">
-                                {[...merchantStock, ...buybackStock].map((item, idx) => (
-                                    <div key={idx} className={`item-card ${item.isBuyback ? 'buyback-item-card' : ''}`}>
+                                {[...merchantStock, ...buybackStock].map((item, idx) => {
+                                    const isTutorialKey = tutorialMerchantHighlight && (
+                                        item._im_key === 'minor_key' ||
+                                        item.icon === 'minor_key' ||
+                                        item.id === 'key_minor' ||
+                                        (item.name && item.name.toLowerCase().includes('key'))
+                                    );
+                                    return (
                                         <div
-                                            className="merchant-item-icon-btn"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setInspectedItem({ ...item, isStock: true });
+                                            key={idx}
+                                            className={`item-card ${item.isBuyback ? 'buyback-item-card' : ''} ${isTutorialKey ? 'tutorial-key-highlight-card' : ''}`}
+                                            style={{
+                                                ...(isTutorialKey ? {
+                                                    border: '2px solid #ffd700',
+                                                    boxShadow: '0 0 25px rgba(255, 215, 0, 0.95), inset 0 0 15px rgba(255, 215, 0, 0.4)',
+                                                    backgroundColor: 'rgba(255, 215, 0, 0.18)',
+                                                    transform: 'scale(1.03)',
+                                                    transition: 'all 0.3s ease',
+                                                    position: 'relative'
+                                                } : {})
                                             }}
-                                            title={`Inspect ${item.name}`}
                                         >
-                                            {renderItemIcon(item.icon)}
-                                            <span className="merchant-icon-inspect-cue">🔍</span>
-                                        </div>
-                                        <div className="item-details">
-                                            <div className="item-name" style={{ display: 'flex', alignItems: 'center' }}>
-                                                <span>{item.name}</span>
-                                                {item.isBuyback && (
-                                                    <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px', background: 'rgba(249, 177, 21, 0.2)', color: '#f9b115', border: '1px solid rgba(249, 177, 21, 0.4)', marginLeft: '8px' }}>
-                                                        Buyback
-                                                    </span>
-                                                )}
+                                            {isTutorialKey && (
+                                                <div style={{
+                                                    position: 'absolute',
+                                                    top: '-12px',
+                                                    right: '12px',
+                                                    background: 'linear-gradient(135deg, #ffd700, #ff8c00)',
+                                                    color: '#000',
+                                                    fontWeight: '900',
+                                                    fontSize: '11px',
+                                                    letterSpacing: '0.8px',
+                                                    padding: '3px 10px',
+                                                    borderRadius: '12px',
+                                                    boxShadow: '0 0 12px rgba(255, 215, 0, 0.9)',
+                                                    zIndex: 10,
+                                                    textTransform: 'uppercase'
+                                                }}>
+                                                    ★ TUTORIAL KEY ★
+                                                </div>
+                                            )}
+                                            <div
+                                                className="merchant-item-icon-btn"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setInspectedItem({ ...item, isStock: true });
+                                                }}
+                                                title={`Inspect ${item.name}`}
+                                            >
+                                                {renderItemIcon(item.icon)}
+                                                <span className="merchant-icon-inspect-cue">🔍</span>
                                             </div>
-                                            <div className="item-description">{item.description || item.type}</div>
+                                            <div className="item-details">
+                                                <div className="item-name" style={{ display: 'flex', alignItems: 'center' }}>
+                                                    <span>{item.name}</span>
+                                                    {item.isBuyback && (
+                                                        <span style={{ fontSize: '10px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px', background: 'rgba(249, 177, 21, 0.2)', color: '#f9b115', border: '1px solid rgba(249, 177, 21, 0.4)', marginLeft: '8px' }}>
+                                                            Buyback
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="item-description">{item.description || item.type}</div>
+                                            </div>
+                                            <button className="buy-btn" onClick={() => handleBuyItem(item)}>
+                                                <span>{item.isBuyback ? 'Buy Back' : 'Buy'}</span>
+                                                <span className="price-tag"><span style={{ color: '#ffd700', marginRight: '4px' }}>◆</span> {item.price}</span>
+                                            </button>
                                         </div>
-                                        <button className="buy-btn" onClick={() => handleBuyItem(item)}>
-                                            <span>{item.isBuyback ? 'Buy Back' : 'Buy'}</span>
-                                            <span className="price-tag"><span style={{ color: '#ffd700', marginRight: '4px' }}>◆</span> {item.price}</span>
-                                        </button>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 
@@ -3571,8 +3612,8 @@ class DungeonPage extends React.Component {
                 // The interval will show it once the dungeon is loaded.
                 modalType: '',
                 showModal: false,
-                showDebugLevelUpScreen: pendingQueue.length > 0 ? true : false,
-                showUserLevelUpModal: getPendingUserPerkLevels() > 0,
+                showDebugLevelUpScreen: (isTutorial || this._isTutorialSession) ? false : (pendingQueue.length > 0 ? true : false),
+                showUserLevelUpModal: (isTutorial || this._isTutorialSession) ? false : (getPendingUserPerkLevels() > 0),
                 debugLevelUpQueue: pendingQueue,
                 popoutResources: meta?.popoutResources || false
             };
@@ -19701,7 +19742,7 @@ class DungeonPage extends React.Component {
                                 ritual_efficiency: { name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' },
                                 revive: { name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' },
                                 fortify: { name: 'Fortify', desc: 'Resolve does not decay while camping' },
-                                breacher: { name: 'Breacher', desc: 'Force open a Minor Key gate once per level' },
+                                breacher: { name: 'Breacher', desc: 'Force open any Major or Minor Gate' },
                                 rally: { name: 'Rally', desc: '+5 bonus Resolve on combat victory' },
                                 iron_will: { name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' },
                                 arcane_sense: { name: 'Arcane Sense', desc: 'Identifies chest tier before opening' },
@@ -21912,9 +21953,9 @@ class DungeonPage extends React.Component {
                                                     const skillName = skillDef ? skillDef.name : (skillKey ? skillKey.replace(/_/g, ' ') : null);
                                                     let slotTitle = skillName ? `${skillName} (Expedition Skill Slot ${slotIdx + 1}` : `Expedition Skill Slot ${slotIdx + 1}`;
                                                     if (isSelected && isSlotSelected) {
-                                                        slotTitle += skillName ? ` - Selected - Press Shift+Space to trigger)` : ` - Selected - Press Shift+Space to trigger`;
+                                                        slotTitle += skillName ? ` - Selected - Click or Press Shift+Space to trigger)` : ` - Selected - Click or Press Shift+Space to trigger`;
                                                     } else if (skillName) {
-                                                        slotTitle += `)`;
+                                                        slotTitle += ` - Click or Press Shift+Space to trigger)`;
                                                     }
 
                                                     return (
@@ -21926,6 +21967,7 @@ class DungeonPage extends React.Component {
                                                             onClick={() => {
                                                                 if (isSelected) {
                                                                     this.selectExpeditionSkillSlot(slotIdx);
+                                                                    this.triggerSelectedExpeditionSkill(slotIdx);
                                                                 }
                                                             }}
                                                         >
@@ -27241,8 +27283,11 @@ class DungeonPage extends React.Component {
     handleMobileDirectionalInput = (direction) => {
         if (!direction) return;
         if (this.state.inMonsterBattle || this.state.inTowerSiege) {
-            if (this.state.selectedCrewMember) {
-                this.props.combatManager.moveFighterOneSpace(direction);
+            if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                this.monsterBattleComponentRef.current.moveFighterOneSpace(direction);
+            } else {
+                const cm = this.reduxCombatManager || this.props.combatManager;
+                if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace(direction);
             }
         } else {
             if (this.state.keysLocked || this.state.showModal || this.state.dungeonInscriptionPicker || this.state.showGeneratorModal) return;
@@ -27713,9 +27758,9 @@ class DungeonPage extends React.Component {
             return;
         }
 
-        if (this.state.keysLocked && (this.state.inMonsterBattle || this.state.inTowerSiege)) {
+        if (this.state.inMonsterBattle || this.state.inTowerSiege) {
             this.combatKeyDownHandler(event);
-            return
+            return;
         }
 
         if (this.state.keysLocked) return
@@ -27841,16 +27886,40 @@ class DungeonPage extends React.Component {
                 this.setState({ shiftDown: true })
                 break;
             case 'ArrowUp':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('up');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('up');
+                } else {
+                    const cm = this.reduxCombatManager || this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('up');
+                }
                 break;
             case 'ArrowDown':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('down');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('down');
+                } else {
+                    const cm = this.reduxCombatManager || this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('down');
+                }
                 break;
             case 'ArrowLeft':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('left');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('left');
+                } else {
+                    const cm = this.reduxCombatManager || this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('left');
+                }
                 break;
             case 'ArrowRight':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('right');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('right');
+                } else {
+                    const cm = this.reduxCombatManager || this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('right');
+                }
                 break;
             default:
                 // nuttin
@@ -30015,6 +30084,8 @@ class DungeonPage extends React.Component {
                 tiles: this.props.boardManager.tiles,
                 minimap,
                 levelTracker,
+                showUserLevelUpModal: false,
+                showDebugLevelUpScreen: false,
                 leftPanelExpanded: false,
                 rightPanelExpanded: false
             }, () => {
@@ -30036,10 +30107,43 @@ class DungeonPage extends React.Component {
     };
 
     runDungeonTutorialSequence = () => {
-        const moveStep = (direction, ms = 250) => new Promise(resolve => {
-            this._setTimeout(() => {
+        const getLocalCoords = () => {
+            const loc = this.props.boardManager?.playerTile?.location;
+            if (!loc || !Array.isArray(loc)) return { x: -1, y: -1 };
+            return { x: ((loc[1] % 15) + 15) % 15, y: ((loc[0] % 15) + 15) % 15 };
+        };
+
+        const stepTo = async (direction, expectedX, expectedY, maxAttempts = 6) => {
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+                this._isMoving = false;
                 this.handleDirectionalMove(direction, { fromQueue: false, fromTutorial: true });
-                this._setTimeout(resolve, ms);
+
+                for (let poll = 0; poll < 8; poll++) {
+                    await new Promise(r => this._setTimeout(r, 45));
+                    const { x, y } = getLocalCoords();
+                    if (x === expectedX && y === expectedY) {
+                        this._isMoving = false;
+                        return true;
+                    }
+                }
+            }
+            this._isMoving = false;
+            return false;
+        };
+
+        const bumpDirection = async (direction, ms = 320) => {
+            this._isMoving = false;
+            this.handleDirectionalMove(direction, { fromQueue: false, fromTutorial: true });
+            await new Promise(r => this._setTimeout(r, ms));
+            this._isMoving = false;
+        };
+
+        const moveStep = (direction, ms = 320) => new Promise(resolve => {
+            this._isMoving = false;
+            this.handleDirectionalMove(direction, { fromQueue: false, fromTutorial: true });
+            this._setTimeout(() => {
+                this._isMoving = false;
+                resolve();
             }, ms);
         });
 
@@ -30077,10 +30181,10 @@ class DungeonPage extends React.Component {
 
             // 1. Move towards Gate at (8, 6)
             await pauseStep('Dungeon Tutorial: Moving to Gate at (8,6)', 200);
-            await moveStep('up', 200);    // (5, 6)
-            await moveStep('right', 200); // (6, 6)
-            await moveStep('right', 200); // (7, 6)
-            await moveStep('right', 200); // (8, 6) - Bumps into locked gate at (8,6), sets pending
+            await moveStep('up', 320);    // (5, 6)
+            await moveStep('right', 320); // (6, 6)
+            await moveStep('right', 320); // (7, 6)
+            await moveStep('right', 320); // (8, 6) - Bumps into locked gate at (8,6), sets pending
 
             // Step 1. You will encounter locked gates that need keys to progress. (user is taken to the first locked gate)
             await pauseStep('🔒 Gate at (8,6) is LOCKED!', 400);
@@ -30088,19 +30192,19 @@ class DungeonPage extends React.Component {
 
             // 2. Move to pick up Key at (8, 4) & return to unlock Gate at (8,6)
             await pauseStep('Tutorial: Moving to (8,4) to collect Minor Key...', 200);
-            await moveStep('left', 200);  // (6, 6) [from 7,6]
-            await moveStep('up', 200);    // (6, 5)
-            await moveStep('up', 200);    // (6, 4)
-            await moveStep('right', 200); // (7, 4)
-            await moveStep('right', 200); // (8, 4) - Picks up Minor Key into inventory!
+            await moveStep('left', 320);  // (6, 6) [from 7,6]
+            await moveStep('up', 320);    // (6, 5)
+            await moveStep('up', 320);    // (6, 4)
+            await moveStep('right', 320); // (7, 4)
+            await moveStep('right', 320); // (8, 4) - Picks up Minor Key into inventory!
 
             await pauseStep('🔑 Minor Key Acquired! Returning to Gate...', 400);
-            await moveStep('left', 200);  // (7, 4)
-            await moveStep('left', 200);  // (6, 4)
-            await moveStep('down', 200);  // (6, 5)
-            await moveStep('down', 200);  // (6, 6)
-            await moveStep('right', 200); // (7, 6)
-            await moveStep('right', 200); // Bumps into Gate, unlocks it (archway)
+            await moveStep('left', 320);  // (7, 4)
+            await moveStep('left', 320);  // (6, 4)
+            await moveStep('down', 320);  // (6, 5)
+            await moveStep('down', 320);  // (6, 6)
+            await moveStep('right', 320); // (7, 6)
+            await moveStep('right', 320); // Bumps into Gate, unlocks it (archway)
 
             if (this.props.boardManager) {
                 try {
@@ -30114,14 +30218,14 @@ class DungeonPage extends React.Component {
             await playTutorialNarrativeStep('collect keys to ensure free will');
 
             // 3. Move through open gate & to Chest at (10, 7) via (11, 6)
-            await moveStep('right', 200); // Walks through open archway onto (8, 6)
-            await moveStep('right', 200); // Walks onto (9, 6)
-            await moveStep('right', 200); // Walks onto (10, 6)
+            await moveStep('right', 320); // Walks through open archway onto (8, 6)
+            await moveStep('right', 320); // Walks onto (9, 6)
+            await moveStep('right', 320); // Walks onto (10, 6)
 
             await pauseStep('Tutorial: Pathfinding to Chest at (10,7)...', 200);
-            await moveStep('right', 200); // (11, 6) - Picks up jewel shards!
-            await moveStep('down', 200);  // (11, 7)
-            await moveStep('left', 200);  // (10, 7) - Opens Wooden Chest!
+            await moveStep('right', 320); // (11, 6) - Picks up jewel shards!
+            await moveStep('down', 320);  // (11, 7)
+            await moveStep('left', 320);  // (10, 7) - Opens Wooden Chest!
 
             if (this.props.boardManager) {
                 try {
@@ -30135,9 +30239,9 @@ class DungeonPage extends React.Component {
             await playTutorialNarrativeStep('Some items are laying on the ground, some are in chests');
 
             // 4. Move to Lockbox at (10, 8) - Attempt to open locked chest!
-            await moveStep('right', 200); // (11, 7)
-            await moveStep('down', 200);  // (11, 8)
-            await moveStep('left', 200);  // Bumps into locked Lockbox at (10, 8), blocked!
+            await moveStep('right', 320); // (11, 7)
+            await moveStep('down', 320);  // (11, 8)
+            await moveStep('left', 320);  // Bumps into locked Lockbox at (10, 8), blocked!
 
             // Step 4. Some chests are locked (user attempts to open the first locked chest)
             await pauseStep('🔒 Lockbox at (10,8) is LOCKED!', 400);
@@ -30145,21 +30249,21 @@ class DungeonPage extends React.Component {
 
             // 5. Navigate to (10, 5) to collect Lockbox Key & return to open Lockbox at (10, 8)
             await pauseStep('Tutorial: Pathfinding to (10,5) to collect Lockbox Key...', 200);
-            await moveStep('right', 200); // (12, 8)
-            await moveStep('up', 200);    // (12, 7)
-            await moveStep('up', 200);    // (12, 6)
-            await moveStep('up', 200);    // (12, 5)
-            await moveStep('left', 200);  // (11, 5)
-            await moveStep('left', 200);  // (10, 5) - Collects Lockbox Key!
+            await moveStep('right', 320); // (12, 8)
+            await moveStep('up', 320);    // (12, 7)
+            await moveStep('up', 320);    // (12, 6)
+            await moveStep('up', 320);    // (12, 5)
+            await moveStep('left', 320);  // (11, 5)
+            await moveStep('left', 320);  // (10, 5) - Collects Lockbox Key!
 
             await pauseStep('🔑 Lockbox Key Acquired! Returning to Lockbox...', 400);
-            await moveStep('right', 200); // (11, 5)
-            await moveStep('right', 200); // (12, 5)
-            await moveStep('down', 200);  // (12, 6)
-            await moveStep('down', 200);  // (12, 7)
-            await moveStep('down', 200);  // (12, 8)
-            await moveStep('left', 200);  // (11, 8)
-            await moveStep('left', 200);  // Bumps into Lockbox at (10, 8) - Unlocks & opens Lockbox!
+            await moveStep('right', 320); // (11, 5)
+            await moveStep('right', 320); // (12, 5)
+            await moveStep('down', 320);  // (12, 6)
+            await moveStep('down', 320);  // (12, 7)
+            await moveStep('down', 320);  // (12, 8)
+            await moveStep('left', 320);  // (11, 8)
+            await moveStep('left', 320);  // Bumps into Lockbox at (10, 8) - Unlocks & opens Lockbox!
 
             if (this.props.boardManager) {
                 try {
@@ -30174,11 +30278,12 @@ class DungeonPage extends React.Component {
 
             // 6. Pathfind over to connecting path at (14, 7) and transition to next board
             await pauseStep('Tutorial: Moving to Exit at (14,7)...', 200);
-            await moveStep('right', 200); // (12, 8)
-            await moveStep('right', 200); // (13, 8)
-            await moveStep('right', 200); // (14, 8)
-            await moveStep('up', 200);    // (14, 7) - Connecting path tile
-            await moveStep('right', 200); // Step right across board edge to transition to next board
+            await moveStep('right', 320); // (11, 8) or (12, 8)
+            await moveStep('right', 320); // (12, 8) or (13, 8)
+            await moveStep('right', 320); // (13, 8) or (14, 8)
+            await moveStep('right', 320); // (14, 8)
+            await moveStep('up', 320);    // (14, 7) - Connecting path tile
+            await moveStep('right', 320); // Step right across board edge to transition to next board
 
             if (this.props.boardManager) {
                 try {
@@ -30190,30 +30295,129 @@ class DungeonPage extends React.Component {
             await pauseStep('🗺️ Board Transition! Entering Middle Board...', 400);
             await playTutorialNarrativeStep('Moving through connecting paths transitions your crew to adjacent boards.');
 
-            // 7. Move from (0,7) to Wall Inscription at (3,8)
+            // 7. Move from (0,7) to Wall Inscription at (3,8) and bump South edge
             await pauseStep('Tutorial: Moving to Wall Inscription at (3,8)...', 200);
-            await moveStep('right', 200); // (1, 7)
-            await moveStep('right', 200); // (2, 7)
-            await moveStep('right', 200); // (3, 7)
-            await moveStep('down', 200);  // (3, 8) - Wall Inscription
+            await stepTo('right', 1, 7); // (1, 7) - Verify arrival at x=1, y=7
+            await stepTo('right', 2, 7); // (2, 7) - Verify arrival at x=2, y=7
+            await stepTo('right', 3, 7); // (3, 7) - Verify arrival at x=3, y=7
+            await stepTo('down', 3, 8);  // (3, 8) - Verify arrival at Wall Inscription tile x=3, y=8!
+
+            // Now that arrival at (3,8) is 100% verified, bump South edge wall inscription!
+            await bumpDirection('down', 350);
 
             // Inspect Wall Inscription at (3,8)
+            const sampleInscription = {
+                title: 'Ancient Wall Inscription',
+                text: 'Deep within the ancient labyrinth, secrets of arcane mastery and hidden treasure await those brave enough to explore.'
+            };
+            this.setState({
+                showModal: true,
+                modalType: 'Inscription',
+                currentInscriptionData: sampleInscription
+            });
             await pauseStep('📜 Inspecting Wall Inscription at (3,8)...', 400);
             await playTutorialNarrativeStep('Interact with wall inscriptions by double-moving into them, or clicking/tapping on them. Some inscriptions will depict game world lore, while others will pose riddles that can be answered for rewards.');
 
-            // 8. Move from (3,8) to (7,6) and try gate at (7,7)
+            // Linger on Inscription panel so user can view it, then close after delay
+            await pauseStep(null, 3200);
+            this.setState({ showModal: false, modalType: '', currentInscriptionData: null });
+
+            // 8. Move from (3,8) to (7,6) and bump locked Gate at (7,7)
             await pauseStep('Tutorial: Moving to Gate at (7,7)...', 200);
-            await moveStep('up', 200);    // (3, 7)
-            await moveStep('up', 200);    // (3, 6)
-            await moveStep('right', 200); // (4, 6)
-            await moveStep('right', 200); // (5, 6)
-            await moveStep('right', 200); // (6, 6)
-            await moveStep('right', 200); // (7, 6)
-            await moveStep('down', 200);  // Bumps into locked Gate at (7, 7)!
+            await stepTo('up', 3, 7);    // (3, 7)
+            await stepTo('up', 3, 6);    // (3, 6)
+            await stepTo('right', 4, 6); // (4, 6)
+            await stepTo('right', 5, 6); // (5, 6)
+            await stepTo('right', 6, 6); // (6, 6)
+            await stepTo('right', 7, 6); // (7, 6)
+            await bumpDirection('down', 320);  // Bumps into locked Gate at (7, 7)!
 
             await pauseStep('🔒 Gate at (7,7) is LOCKED!', 400);
             await playTutorialNarrativeStep('This gate is locked! Explore surrounding corridors for keys to open passage.');
 
+            // 9. Move to Merchant at (11,2) from (11,3) & Purchase Key
+            await pauseStep('Tutorial: Navigating to Merchant at (11,2)...', 200);
+            await stepTo('right', 8, 6); // (8, 6)
+            await stepTo('right', 9, 6); // (9, 6)
+            await stepTo('right', 10, 6); // (10, 6)
+            await stepTo('right', 11, 6); // (11, 6)
+            await stepTo('up', 11, 5);    // (11, 5)
+            await stepTo('up', 11, 4);    // (11, 4)
+            await stepTo('up', 11, 3);    // (11, 3)
+            await bumpDirection('up', 350);    // Interacts with Merchant at (11, 2) from (11, 3)!
+
+            const dummyMerchant = {
+                id: 'tutorial_merchant',
+                name: 'Dungeon Merchant',
+                building: 'merchant',
+                type: 'merchant',
+                stock: [{ id: 'key_minor', name: 'Minor Key', price: 0, icon: 'key_minor', description: 'Minor keys open locked dungeon doors' }]
+            };
+            this.setState({
+                showModal: true,
+                modalType: 'Merchant',
+                activeMerchantBuilding: dummyMerchant,
+                tutorialMerchantHighlight: true
+            });
+            await pauseStep('🏪 Merchant Modal Opened!', 400);
+            await playTutorialNarrativeStep('keys can be found in the dungeon or purchased from the merchant');
+
+            // Linger on open merchant interface with highlighted Minor Key so user sees it clearly
+            await pauseStep('🏪 Merchant interface open - Minor Key highlighted!', 3200);
+
+            // Auto-purchase key into inventory
+            if (this.props.inventoryManager) {
+                if (Array.isArray(this.props.inventoryManager.items)) {
+                    this.props.inventoryManager.items.push('key_minor');
+                }
+                if (Array.isArray(this.props.inventoryManager.inventory)) {
+                    this.props.inventoryManager.inventory.push({ id: 'key_minor', name: 'Minor Key', type: 'key' });
+                }
+            }
+            await pauseStep('🔑 Purchased Minor Key from Merchant!', 1000);
+
+            // Close Merchant interface after delay
+            this.setState({
+                showModal: false,
+                modalType: '',
+                activeMerchantBuilding: null,
+                tutorialMerchantHighlight: false
+            });
+
+            // 10. Return to Gate at (7,7) & Unlock Gate
+            await pauseStep('Tutorial: Returning to Gate at (7,7)...', 200);
+            await stepTo('down', 11, 4);  // (11, 4)
+            await stepTo('down', 11, 5);  // (11, 5)
+            await stepTo('down', 11, 6);  // (11, 6)
+            await stepTo('left', 10, 6);  // (10, 6)
+            await stepTo('left', 9, 6);   // (9, 6)
+            await stepTo('left', 8, 6);   // (8, 6)
+            await stepTo('left', 7, 6);   // (7, 6)
+            await bumpDirection('down', 320);  // Consumes Minor Key, unlocks Gate at (7,7)!
+
+            if (this.props.boardManager) {
+                try {
+                    this.props.boardManager.refreshTiles();
+                    this.setState({ tiles: this.props.boardManager.tiles });
+                } catch (e) { }
+            }
+            await pauseStep('🔓 Gate UNLOCKED!', 400);
+
+            // 11. Move through gate to Narrative Marker at (8,9)
+            await pauseStep('Tutorial: Moving to Narrative Marker at (8,9)...', 200);
+            await stepTo('down', 7, 7);  // Steps through open gate onto (7, 7)
+            await stepTo('down', 7, 8);  // (7, 8)
+            await stepTo('right', 8, 8); // (8, 8)
+            await stepTo('down', 8, 9);  // (8, 9) - Narrative marker / Brazier!
+
+            await playTutorialNarrativeStep('narrative markers will progress the linear story');
+
+            // Show Hikaron tutorial dialogue pane
+            this.setState({ showHikaronTutorialPane: true });
+            await pauseStep(null, 4500); // Linger on Hikaron "hello....."
+            this.setState({ showHikaronTutorialPane: false });
+
+            // 12. Completion & Exit
             await pauseStep('🎯 Tutorial Complete!', 1200);
 
             if (this.props.history) {
@@ -31026,11 +31230,13 @@ class DungeonPage extends React.Component {
         });
     }
 
-    triggerSelectedExpeditionSkill = () => {
+    triggerSelectedExpeditionSkill = (forcedSlotIdx) => {
         const selectedMember = this.state.selectedCrewMember;
-        const slotIdx = (selectedMember && typeof selectedMember.selectedExpeditionSkillSlot === 'number')
-            ? selectedMember.selectedExpeditionSkillSlot
-            : 0;
+        const slotIdx = (typeof forcedSlotIdx === 'number')
+            ? forcedSlotIdx
+            : ((selectedMember && typeof selectedMember.selectedExpeditionSkillSlot === 'number')
+                ? selectedMember.selectedExpeditionSkillSlot
+                : 0);
 
         if (this._skillFlashTimeout) clearTimeout(this._skillFlashTimeout);
         this.setState({
@@ -31048,12 +31254,124 @@ class DungeonPage extends React.Component {
             ranger: ['sneak_attack', 'spike_trap'],
             soldier: ['soldier_shield', 'breacher'],
             summoner: ['wandering_eye'],
-            horologist: ['rewind_step', 'stopwatch']
+            horologist: ['rewind_step', 'stopwatch'],
+            glitterburn: ['blinding_beacon', 'prismatic_flare']
         };
         const expSkills = (selectedMember && Array.isArray(selectedMember.expeditionSkills) && selectedMember.expeditionSkills.length > 0)
             ? selectedMember.expeditionSkills
             : (defaultExpSkills[memberClass] || []);
         const skillKey = expSkills[slotIdx];
+
+        if (skillKey === 'breacher' || skillKey === 'gate_buster' || skillKey === 'gate_breaker') {
+            const bm = this.props.boardManager;
+            if (!bm) {
+                this.displayMessage("🔨 Breacher: Board manager not available.");
+                return;
+            }
+
+            let result = null;
+            if (typeof bm.breachAdjacentGate === 'function') {
+                result = bm.breachAdjacentGate();
+            }
+
+            // Fallback manual check if breachAdjacentGate didn't resolve a gate
+            if (!result || !result.success) {
+                const isMinorOrMajorGate = (tile) => {
+                    if (!tile) return null;
+                    const gt = bm.getGateTypeFromTile ? bm.getGateTypeFromTile(tile) : null;
+                    if (!gt) return null;
+                    if (gt === 'minor_gate' || gt === 'major_gate' || gt === 'dungeon_door' || gt === 'gryphon_gate' || gt === 'bat_gate') {
+                        return gt;
+                    }
+                    return null;
+                };
+
+                let targetTile = null;
+                let targetGateType = null;
+
+                if (bm.activeInteractionTile) {
+                    const gt = isMinorOrMajorGate(bm.activeInteractionTile);
+                    if (gt) {
+                        targetTile = bm.activeInteractionTile;
+                        targetGateType = gt;
+                    }
+                }
+
+                if (!targetTile && bm.playerTile && bm.playerTile.location) {
+                    const [curRow, curCol] = bm.playerTile.location;
+                    const offsets = [
+                        [0, -1], [0, 1], [-1, 0], [1, 0],
+                        [-1, -1], [-1, 1], [1, -1], [1, 1],
+                        [0, -2], [0, 2], [-2, 0], [2, 0],
+                        [-1, -2], [-1, 2], [1, -2], [1, 2],
+                        [-2, -1], [-2, 1], [2, -1], [2, 1],
+                        [-2, -2], [-2, 2], [2, -2], [2, 2]
+                    ];
+                    for (const [dr, dc] of offsets) {
+                        const checkCoords = [curRow + dr, curCol + dc];
+                        if (checkCoords[0] < 0 || checkCoords[1] < 0) continue;
+                        const tileIdx = bm.getIndexFromCoordinates ? bm.getIndexFromCoordinates(checkCoords) : null;
+                        if (tileIdx == null) continue;
+                        const cand = (bm.tiles && bm.tiles[tileIdx]) || (bm.currentBoard?.tiles && bm.currentBoard.tiles[tileIdx]);
+                        const gt = isMinorOrMajorGate(cand);
+                        if (cand && gt) {
+                            targetTile = cand;
+                            targetGateType = gt;
+                            break;
+                        }
+                    }
+                }
+
+                if (!targetTile && bm.pending && bm.pending.type) {
+                    const pt = bm.pending.type;
+                    if (pt === 'minor_gate' || pt === 'major_gate') {
+                        const cand = (bm.tiles || []).find(t => isMinorOrMajorGate(t));
+                        if (cand) {
+                            targetTile = cand;
+                            targetGateType = pt;
+                        }
+                    }
+                }
+
+                if (targetTile) {
+                    if (typeof bm.forceOpenGate === 'function') {
+                        bm.forceOpenGate(targetTile, targetGateType);
+                    } else {
+                        targetTile.contains = 'archway';
+                        targetTile.image = 'archway';
+                        bm.activeInteractionTile = targetTile;
+                        if (bm.tiles) bm.tiles[targetTile.id] = targetTile;
+                        if (typeof bm.refreshTiles === 'function') bm.refreshTiles();
+                        if (typeof bm.updateDungeon === 'function' && bm.dungeon) bm.updateDungeon(bm.dungeon);
+                    }
+                    result = { success: true, tile: targetTile, gateType: targetGateType };
+                }
+            }
+
+            if (result && result.success) {
+                const targetGateType = result.gateType;
+                const gateName = (targetGateType === 'major_gate' || targetGateType === 'gryphon_gate' || targetGateType === 'bat_gate')
+                    ? 'Major Gate'
+                    : (targetGateType === 'minor_gate' || targetGateType === 'dungeon_door')
+                        ? 'Minor Gate'
+                        : 'Gate';
+
+                if (bm.currentLevel) {
+                    bm.breacherUsedLevels = bm.breacherUsedLevels || new Set();
+                    bm.breacherUsedLevels.add(bm.currentLevel.id);
+                }
+
+                if (this.state.tiles) {
+                    this.setState({ tiles: bm.tiles ? [...bm.tiles] : [...this.state.tiles] });
+                }
+
+                this.displayMessage(`🔨 Breacher: Forced open the ${gateName}!`);
+                return;
+            }
+
+            this.displayMessage("🔨 Breacher: No Major or Minor Gate in range to force open! Move adjacent to a gate.");
+            return;
+        }
 
         if (skillKey === 'rewind_step') {
             const bm = this.props.boardManager;
@@ -31781,7 +32099,7 @@ class DungeonPage extends React.Component {
             inMonsterBattle: false,
             isPvPMode: false,
             opponentCrew: null,
-            showUserLevelUpModal: getPendingUserPerkLevels() > 0
+            showUserLevelUpModal: (this.state?.isTutorialMode || this._isTutorialSession) ? false : (getPendingUserPerkLevels() > 0)
         }, () => {
             this.checkPocketDimensionVictory();
             try {
@@ -39358,7 +39676,7 @@ class DungeonPage extends React.Component {
                     const globalSkillsByClass = {
                         ranger: [{ key: 'keen_eye', name: 'Keen Eye', desc: 'L1: Reveals nearby traps. L2: +3 DEX to trap saves.' }, { key: 'hunters_quarry', name: "Hunter's Quarry", desc: '+10% food drop on monster defeat' }, { key: 'trapper', name: 'Trapper', desc: '25% chance to negate any trap entirely.' }, { key: 'trailblaze', name: 'Trailblaze', desc: 'Visual breadcrumb to last camp spot' }, { key: 'scrounging_rat', name: 'Scrounging Rat', desc: 'Forage for food in camp: 15-30 food (3h) / 30-50 food (2h) / 50-80 food (1h).' }, { key: 'fastidious_crow', name: 'Fastidious Crow', desc: 'Scout a 10x10 board area for 24h. Process: 20m. Cooldown: 6h / 3h. Reward: 5-20g / 25-80g + 30% shard chance.' }],
                         sage: [{ key: 'herbalism', name: 'Herbalism', desc: 'Camp costs 1 less food per member' }, { key: 'mend', name: 'Mend', desc: 'Out-of-combat potions restore +15% HP' }, { key: 'ritual_efficiency', name: 'Ritual Efficiency', desc: 'Ritual prep time -25%' }, { key: 'revive', name: 'Revive', desc: 'Once per run: fallen member revived at 25% HP' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }],
-                        soldier: [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open a Minor Key gate once per level' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
+                        soldier: [{ key: 'fortify', name: 'Fortify', desc: 'Resolve does not decay while camping' }, { key: 'breacher', name: 'Breacher', desc: 'Force open any Major or Minor Gate' }, { key: 'rally', name: 'Rally', desc: '+5 bonus Resolve on combat victory' }, { key: 'iron_will', name: 'Iron Will', desc: 'Party Resolve never drops below 20 from deaths' }, { key: 'awake_refreshed', name: 'Awake Refreshed', desc: 'Recuperates an additional +10/+20/+40 Resolve after camping.' }, { key: 'strong_resolve', name: 'Strong Resolve', desc: 'Reduces Resolve penalties by 40%/75%/90%.' }],
                         wizard: [{ key: 'arcane_sense', name: 'Arcane Sense', desc: 'Identifies chest tier before opening' }, { key: 'ley_tap', name: 'Ley Tap', desc: 'Draw energy at Magic Nexus — recover 15% endurance' }, { key: 'dimensional_pocket', name: 'Dimensional Pocket', desc: '+2 shared inventory slots' }, { key: 'scry', name: 'Scry', desc: 'Reveals all chests and monsters for 30s once per run' }],
                         barbarian: [{ key: 'iron_gut', name: 'Iron Gut', desc: 'Barbarian does not count toward camping food cost' }, { key: 'savage_haul', name: 'Savage Haul', desc: 'Grants +2/+4/+6 Strength and +10/+20/+30 Max HP' }, { key: 'bloodhound', name: 'Bloodhound', desc: 'Reveals all monsters on miniboard entry' }, { key: 'endure', name: 'Endure', desc: 'Zero-food camp: no Resolve penalty, crew heals to 50%. Auto-triggers on camp; 20% chance during 10m exhaustion window.' }],
                         monk: [{ key: 'swift_step', name: 'Swift Step', desc: 'Movement animation 30% faster' }, { key: 'focused_rest', name: 'Focused Rest', desc: 'Camping duration -30% (same healing)' }, { key: 'silent_awareness', name: 'Silent Awareness', desc: 'Cuts ambush chance in obscured spaces by 50% when Monk is selected' }, { key: 'pressure_points', name: 'Pressure Points', desc: '15% vendor discount once per vendor' }, { key: 'astral_map', name: 'Astral Map', desc: 'Full fog reveal for 60s once per run' }],
@@ -39580,6 +39898,7 @@ class DungeonPage extends React.Component {
                             this.enterSuperboardPocketDimension(type);
                         }}
                         onSpawnPygmy={() => this.handleSpawnPygmyCompanion()}
+                        tutorialMerchantHighlight={this.state.tutorialMerchantHighlight}
                     />
                 </CModal>
                 {/* Inscription popup */}
@@ -45993,7 +46312,7 @@ class DungeonPage extends React.Component {
                     />
                 )}
 
-                {this.state.showUserLevelUpModal && (
+                {this.state.showUserLevelUpModal && !this.state.isTutorialMode && !this._isTutorialSession && (
                     <UserLevelUpScreen
                         onComplete={() => {
                             const remaining = getPendingUserPerkLevels();

@@ -217,8 +217,11 @@ export default function LoginPage(props) {
     <div className="redux-login-container">
       <style dangerouslySetInnerHTML={{ __html: LANDING_REDUX_CSS }} />
       <div className="login-card">
-        <div className="title-glowing">
-          Dream Tower
+        <div className="title-wrapper">
+          <img src={process.env.PUBLIC_URL + '/logo512.png'} alt="PWA Eye" className="title-eye-underlay" />
+          <div className="title-glowing">
+            Dream Tower
+          </div>
         </div>
 
         {paneToggle !== 'confirmation' && (

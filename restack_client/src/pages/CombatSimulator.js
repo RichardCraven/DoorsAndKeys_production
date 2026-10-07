@@ -1389,16 +1389,40 @@ class CrewManagerPage extends React.Component {
                 this.setState({ shiftDown: true })
                 break;
             case 'ArrowUp':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('up');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('up');
+                } else {
+                    const cm = this.state.useReduxCombat ? this.reduxCombatManager : this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('up');
+                }
                 break;
             case 'ArrowDown':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('down');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('down');
+                } else {
+                    const cm = this.state.useReduxCombat ? this.reduxCombatManager : this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('down');
+                }
                 break;
             case 'ArrowLeft':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('left');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('left');
+                } else {
+                    const cm = this.state.useReduxCombat ? this.reduxCombatManager : this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('left');
+                }
                 break;
             case 'ArrowRight':
-                if (this.state.selectedCrewMember) this.props.combatManager.moveFighterOneSpace('right');
+                event.preventDefault();
+                if (this.monsterBattleComponentRef.current && typeof this.monsterBattleComponentRef.current.moveFighterOneSpace === 'function') {
+                    this.monsterBattleComponentRef.current.moveFighterOneSpace('right');
+                } else {
+                    const cm = this.state.useReduxCombat ? this.reduxCombatManager : this.props.combatManager;
+                    if (cm && typeof cm.moveFighterOneSpace === 'function') cm.moveFighterOneSpace('right');
+                }
                 break;
             default:
                 // nuttin
@@ -1682,14 +1706,71 @@ class CrewManagerPage extends React.Component {
                         {/* ── Enemy Selection Section ── */}
                         <div className="enemy-selection-section" ref={this.enemySectionRef}>
                             <div className="enemy-section-title">
-                                Choose your enemies
-                                <button
-                                    className={`save-default-enemy-btn${this.state.defaultEnemySaved ? ' saved' : ''}`}
-                                    onClick={this.saveDefaultEnemy}
-                                    title="Save current enemy selection as default"
-                                >
-                                    {this.state.defaultEnemySaved ? '✓ Saved' : 'Save as default'}
-                                </button>
+                                <span>Choose your enemies</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <button
+                                        id="random-combat-btn"
+                                        onClick={this.startRandomCombat}
+                                        style={{
+                                            padding: '6px 14px',
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            letterSpacing: '0.5px',
+                                            background: 'rgba(139, 92, 246, 0.15)',
+                                            color: '#a78bfa',
+                                            border: '1px solid rgba(139, 92, 246, 0.45)',
+                                            borderRadius: '6px',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.18s ease',
+                                        }}
+                                        onMouseEnter={e => {
+                                            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.28)';
+                                            e.currentTarget.style.boxShadow = '0 0 10px rgba(139, 92, 246, 0.25)';
+                                        }}
+                                        onMouseLeave={e => {
+                                            e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
+                                            e.currentTarget.style.boxShadow = 'none';
+                                        }}
+                                    >
+                                        Random
+                                    </button>
+                                    <select
+                                        id="random-tier-points-select"
+                                        value={this.state.randomTierPoints}
+                                        onChange={e => {
+                                            const val = Number(e.target.value);
+                                            this.setState({ randomTierPoints: val });
+                                            const meta = getMeta();
+                                            if (!meta.simulatorDefaults) meta.simulatorDefaults = {};
+                                            meta.simulatorDefaults.randomTierPoints = val;
+                                            storeMeta(meta);
+                                        }}
+                                        title="Total tier points for random encounter"
+                                        style={{
+                                            background: '#1a1a1f',
+                                            color: '#a78bfa',
+                                            border: '1px solid rgba(139, 92, 246, 0.35)',
+                                            borderRadius: '6px',
+                                            padding: '5px 6px',
+                                            fontSize: '12px',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            width: '50px',
+                                            textAlign: 'center',
+                                        }}
+                                    >
+                                        {[1,2,3,4,5,6,7,8,9].map(n => (
+                                            <option key={n} value={n}>{n}</option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        className={`save-default-enemy-btn${this.state.defaultEnemySaved ? ' saved' : ''}`}
+                                        onClick={this.saveDefaultEnemy}
+                                        title="Save current enemy selection as default"
+                                    >
+                                        {this.state.defaultEnemySaved ? '✓ Saved' : 'Save as default'}
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Main monster + 4 minion slots + Info panel */}
@@ -1899,63 +1980,6 @@ class CrewManagerPage extends React.Component {
                         <div className="simulator-bottom-actions">
                             <div className="button-row-bottom-left">
                                 <button onClick={() => this.clear()}>Clear</button>
-                            </div>
-                            <div className="button-row-bottom-right">
-                                <button
-                                    id="random-combat-btn"
-                                    onClick={this.startRandomCombat}
-                                    style={{
-                                        padding: '7px 18px',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        letterSpacing: '0.5px',
-                                        background: 'rgba(139, 92, 246, 0.15)',
-                                        color: '#a78bfa',
-                                        border: '1px solid rgba(139, 92, 246, 0.45)',
-                                        borderRadius: '6px',
-                                        cursor: 'pointer',
-                                        transition: 'all 0.18s ease',
-                                    }}
-                                    onMouseEnter={e => {
-                                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.28)';
-                                        e.currentTarget.style.boxShadow = '0 0 10px rgba(139, 92, 246, 0.25)';
-                                    }}
-                                    onMouseLeave={e => {
-                                        e.currentTarget.style.background = 'rgba(139, 92, 246, 0.15)';
-                                        e.currentTarget.style.boxShadow = 'none';
-                                    }}
-                                >
-                                    Random
-                                </button>
-                                <select
-                                    id="random-tier-points-select"
-                                    value={this.state.randomTierPoints}
-                                    onChange={e => {
-                                        const val = Number(e.target.value);
-                                        this.setState({ randomTierPoints: val });
-                                        const meta = getMeta();
-                                        if (!meta.simulatorDefaults) meta.simulatorDefaults = {};
-                                        meta.simulatorDefaults.randomTierPoints = val;
-                                        storeMeta(meta);
-                                    }}
-                                    title="Total tier points for random encounter"
-                                    style={{
-                                        background: '#1a1a1f',
-                                        color: '#a78bfa',
-                                        border: '1px solid rgba(139, 92, 246, 0.35)',
-                                        borderRadius: '6px',
-                                        padding: '6px 8px',
-                                        fontSize: '13px',
-                                        fontWeight: '600',
-                                        cursor: 'pointer',
-                                        width: '52px',
-                                        textAlign: 'center',
-                                    }}
-                                >
-                                    {[1,2,3,4,5,6,7,8,9].map(n => (
-                                        <option key={n} value={n}>{n}</option>
-                                    ))}
-                                </select>
                             </div>
                         </div>
                     </div>

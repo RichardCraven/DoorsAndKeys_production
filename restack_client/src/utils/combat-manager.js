@@ -674,19 +674,22 @@ export function CombatManager() {
         // const colors_withColorSquare = [' #b710d5',' #6495ed',' #73b746',' #f4d013']
         const colors = ['#b710d5', '#6495ed', '#73b746', '#f4d013']
 
+        const activeCrew = (this.data?.crew || []).filter(e => e && !e.dead && (typeof e.hp !== 'number' || e.hp > 0));
+        const isSinglePlayerUnit = activeCrew.length === 1;
+        let activeIdx = 0;
+
         this.data.crew.forEach((e, index) => {
             // Do not add dead crew members to combat — they should not participate
             if (e && (e.dead === true || e.hp === 0)) {
                 return;
             }
-            e.coordinates = { x: 0, y: 0 }
-            e.coordinates.y = index;
-            e.coordinates.x = 0;
+            e.coordinates = { x: 0, y: isSinglePlayerUnit ? 2 : activeIdx };
             // e.coordinates = {x:0, y:index}
             e.manualMovesCurrent = 20;
             // e.manualMovesTotal = 25
-            e.manualMovesTotal = 100
-            e.color = colors[index]
+            e.manualMovesTotal = 100;
+            e.color = colors[activeIdx % colors.length];
+            activeIdx++;
 
             e.specialActions && e.specialActions.forEach(action => {
                 action.cooldown_position = 100;
@@ -1266,9 +1269,14 @@ export function CombatManager() {
     this.moveFighterOneSpace = (direction) => {
         let pendingCoordinates;
 
-        if (!this.selectedFighter) {
-            try { console.warn('moveFighterOneSpace: no selectedFighter'); } catch (e) { }
-            return;
+        if (!this.selectedFighter || !this.combatants[this.selectedFighter.id] || this.combatants[this.selectedFighter.id].dead) {
+            const firstLive = Object.values(this.combatants).find(c => c && !c.isMonster && !c.isMinion && !c.dead && (typeof c.hp !== 'number' || c.hp > 0));
+            if (firstLive) {
+                this.selectedFighter = firstLive;
+            } else {
+                try { console.warn('moveFighterOneSpace: no selectedFighter'); } catch (e) { }
+                return;
+            }
         }
 
         const fighter = this.combatants[this.selectedFighter.id]
@@ -1319,6 +1327,38 @@ export function CombatManager() {
                     break;
                 }
                 pendingCoordinates = { x: fighter.coordinates.x - 1, y: fighter.coordinates.y }
+                break;
+            case 'up-left':
+            case 'up_left':
+            case 'upleft':
+                pendingCoordinates = {
+                    x: Math.max(0, fighter.coordinates.x - 1),
+                    y: Math.max(0, fighter.coordinates.y - 1)
+                };
+                break;
+            case 'up-right':
+            case 'up_right':
+            case 'upright':
+                pendingCoordinates = {
+                    x: Math.min(MAX_DEPTH, fighter.coordinates.x + 1),
+                    y: Math.max(0, fighter.coordinates.y - 1)
+                };
+                break;
+            case 'down-left':
+            case 'down_left':
+            case 'downleft':
+                pendingCoordinates = {
+                    x: Math.max(0, fighter.coordinates.x - 1),
+                    y: Math.min(MAX_LANES - 1, fighter.coordinates.y + 1)
+                };
+                break;
+            case 'down-right':
+            case 'down_right':
+            case 'downright':
+                pendingCoordinates = {
+                    x: Math.min(MAX_DEPTH, fighter.coordinates.x + 1),
+                    y: Math.min(MAX_LANES - 1, fighter.coordinates.y + 1)
+                };
                 break;
             default:
                 console.warn('moveFighterOneSpace: unknown direction', direction);

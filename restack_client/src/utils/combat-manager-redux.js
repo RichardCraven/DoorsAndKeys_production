@@ -840,6 +840,10 @@ export function CombatManagerRedux() {
         this._combatCallbacks = callbacks;
 
         const colors = ['#7b5e8c', '#506e86', '#5f7055', '#b88d4c'];
+        const activeCrew = (this.data?.crew || []).filter(e => e && !e.dead && (typeof e.hp !== 'number' || e.hp > 0));
+        const isSinglePlayerUnit = activeCrew.length === 1;
+        const middleLaneY = 2; // Center-back position (middle lane instead of top lane)
+        let activeIdx = 0;
 
         (this.data?.crew || []).forEach((e, index) => {
             if (e && (e.dead === true || e.hp === 0)) return;
@@ -887,8 +891,9 @@ export function CombatManagerRedux() {
                 }
             }
 
-            e.coordinates = { x: 0, y: index };
-            e.color = colors[index % colors.length];
+            e.coordinates = { x: 0, y: isSinglePlayerUnit ? middleLaneY : activeIdx };
+            e.color = colors[activeIdx % colors.length];
+            activeIdx++;
 
             const fighter = createFighter(e, callbacks, this.FIGHT_INTERVAL);
             fighter.maxEndurance = e.stats.vitality || 30;
@@ -1016,6 +1021,10 @@ export function CombatManagerRedux() {
                 ? this.data.opponentCrew
                 : (this.data.monster ? [this.data.monster, ...(this.data.minions || [])] : []);
 
+            const activeOpponents = rawOpponentCrew.filter(e => e && !e.dead && (typeof e.hp !== 'number' || e.hp > 0));
+            const isSingleOpponent = activeOpponents.length === 1;
+            let opponentIdx = 0;
+
             rawOpponentCrew.forEach((e, idx) => {
                 if (!e || e.dead) return;
                 const validStr = (val) => {
@@ -1057,8 +1066,9 @@ export function CombatManagerRedux() {
                     image: typeName,
                     class: typeName,
                     facing: e.facing || 'left',
-                    coordinates: { x: MAX_DEPTH, y: Math.min(idx, 5) }
+                    coordinates: { x: MAX_DEPTH, y: isSingleOpponent ? 2 : Math.min(opponentIdx, 5) }
                 };
+                opponentIdx++;
 
                 const fighter = createFighter(opponentUnit, callbacks, this.FIGHT_INTERVAL);
                 fighter.isMonster = true;
@@ -6155,9 +6165,9 @@ export function CombatManagerRedux() {
 
         const constructId = `construct_${abilityKey}_${combatClock.now()}`;
         const isTurret = abilityKey === 'build_turret';
-        
         let stats = { hp: 30, atk: 10, def: 5, speed: isTurret ? 0 : 1 };
-        
+        const isConstructOpponent = !!(unit.isOpponent || (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.startsWith('pvp_'))));
+
         const newConstruct = {
             id: constructId,
             type: isTurret ? 'turret' : 'walker',
@@ -6166,7 +6176,9 @@ export function CombatManagerRedux() {
             isConstruct: true,
             hasStamina: false,
             isMonster: isMonster,
+            isOpponent: isConstructOpponent,
             summonedBy: unit.id,
+            facing: isConstructOpponent ? 'left' : 'right',
             dead: false,
             coordinates: { ...freeTile },
             hp: 30,
@@ -6277,6 +6289,8 @@ export function CombatManagerRedux() {
         const wallBaseId = `wall_${combatClock.now()}`;
         const tiles = [{ x: freePair.x, y: freePair.y1 }, { x: freePair.x, y: freePair.y2 }];
 
+        const isWallOpponent = !!(unit.isOpponent || (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.startsWith('pvp_'))));
+
         tiles.forEach((t, i) => {
             const wId = `${wallBaseId}_${i}`;
             const wallUnit = {
@@ -6298,7 +6312,9 @@ export function CombatManagerRedux() {
                 hasStamina: false,
                 roundsRemaining: 10,
                 isMonster: isMonster,
+                isOpponent: isWallOpponent,
                 summonedBy: unit.id,
+                facing: isWallOpponent ? 'left' : 'right',
                 portrait: images.terrain_1,
                 cooldowns: {},
                 activeBuffs: [],
@@ -6337,6 +6353,7 @@ export function CombatManagerRedux() {
 
         // Find a free adjacent tile to place the summoned minion
         const isMonster = !!unit.isMonster;
+        const isMinionOpponent = !!(unit.isOpponent || (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.startsWith('pvp_'))));
         const forwardDX = isMonster ? -1 : 1;
         const backwardDX = isMonster ? 1 : -1;
 
@@ -6438,8 +6455,10 @@ export function CombatManagerRedux() {
                 name: isSuperSized ? 'Super Archaic Familiar' : 'archaic familiar',
                 isMinion: true,
                 isFamiliar: true,
-                isMonster: !!unit.isMonster,
+                isMonster: isMonster,
+                isOpponent: isMinionOpponent,
                 summonedBy: unit.id,
+                facing: isMinionOpponent ? 'left' : 'right',
                 dead: false,
                 coordinates: { ...freeTile },
                 hp: finalHp,
@@ -6509,8 +6528,10 @@ export function CombatManagerRedux() {
                 type: minionType,
                 name: displayName,
                 isMinion: true,
-                isMonster: !!unit.isMonster,
+                isMonster: isMonster,
+                isOpponent: isMinionOpponent,
                 summonedBy: unit.id,
+                facing: isMinionOpponent ? 'left' : 'right',
                 dead: false,
                 coordinates: { ...freeTile },
                 hp: finalHp,
@@ -6618,6 +6639,8 @@ export function CombatManagerRedux() {
             const copyId = `minion_${source.type}_copy_${combatClock.now()}_${spawned}`;
             const copy = { ...clone(source), id: copyId, coordinates: { x: nx, y: ny } };
             copy.summonedBy = unit.id;
+            copy.isOpponent = !!(unit.isOpponent || source.isOpponent || (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.startsWith('pvp_'))));
+            copy.facing = copy.isOpponent ? 'left' : 'right';
             copy.cooldowns = {};
             copy.movesTakenThisRound = 0;
             copy.actionsTakenThisRound = 0;
@@ -9610,6 +9633,7 @@ export function CombatManagerRedux() {
             if (!freeTile) freeTile = { ...origin };
             const decoyId = `decoy_${combatClock.now()}_${Math.random().toString(36).slice(2, 7)}`;
             const hp = (20 + 5 * (caster.level || 1)) * (caster._hasMirrorDecoyPrep ? 2 : 1);
+            const isDecoyOpponent = !!(caster.isOpponent || (typeof caster.id === 'string' && (caster.id.includes('opponent') || caster.id.startsWith('pvp_'))));
             const decoy = {
                 id: decoyId,
                 type: 'starlight_decoy',
@@ -9619,7 +9643,9 @@ export function CombatManagerRedux() {
                 isDecoy: true,
                 isConstruct: true,
                 isMonster: !!caster.isMonster,
+                isOpponent: isDecoyOpponent,
                 summonedBy: caster.id,
+                facing: isDecoyOpponent ? 'left' : 'right',
                 hp,
                 maxHp: hp,
                 starting_hp: hp,
@@ -10565,6 +10591,8 @@ export function CombatManagerRedux() {
                 name: `Sinister Reflection of ${target.name || 'Fighter'}`,
                 isMinion: true,
                 isMonster: !target.isMonster,
+                isOpponent: !target.isOpponent,
+                summonedBy: unit.id,
                 dead: false,
                 coordinates: { x: refX, y: refY },
                 hp: 9999,
@@ -10607,12 +10635,16 @@ export function CombatManagerRedux() {
             }
 
             const sphereId = `darkness_sphere_${combatClock.now()}`;
+            const isSphereOpponent = !!(unit.isOpponent || (typeof unit.id === 'string' && (unit.id.includes('opponent') || unit.id.startsWith('pvp_'))));
             const newSphere = {
                 id: sphereId,
                 type: 'darkness_sphere',
                 name: 'Darkness Sphere',
                 isMinion: true,
                 isMonster: !!unit.isMonster,
+                isOpponent: isSphereOpponent,
+                summonedBy: unit.id,
+                facing: isSphereOpponent ? 'left' : 'right',
                 dead: false,
                 coordinates: { ...freeTile },
                 hp: 9999,
@@ -13672,26 +13704,30 @@ export function CombatManagerRedux() {
                         }
                     });
                 }
-                
-                let minD = Infinity;
+
+                let minChebyshev = Infinity;
+                let minManhattan = Infinity;
                 for (const ut of unitTiles) {
                     for (const tt of targetTiles) {
-                        // Chebyshev distance: diagonals count as 1 step
-                        const d = Math.max(Math.abs(ut.x - tt.x), Math.abs(ut.y - tt.y));
-                        if (d < minD) {
-                            minD = d;
-                        }
+                        const cd = Math.max(Math.abs(ut.x - tt.x), Math.abs(ut.y - tt.y));
+                        const md = Math.abs(ut.x - tt.x) + Math.abs(ut.y - tt.y);
+                        if (cd < minChebyshev) minChebyshev = cd;
+                        if (md < minManhattan) minManhattan = md;
                     }
                 }
-                return minD;
+                return { chebyshev: minChebyshev, manhattan: minManhattan };
             } else {
-                // Chebyshev distance: diagonals count as 1 step
-                return Math.max(Math.abs(x - targetX), Math.abs(y - targetY));
+                return {
+                    chebyshev: Math.max(Math.abs(x - targetX), Math.abs(y - targetY)),
+                    manhattan: Math.abs(x - targetX) + Math.abs(y - targetY)
+                };
             }
         };
 
         const key = (x, y) => `${x},${y}`;
-        const queue = [{ x: startX, y: startY, cost: 0 }];
+        const initialDist = getDistance(startX, startY);
+        const initialH = initialDist.chebyshev + 0.001 * initialDist.manhattan;
+        const queue = [{ x: startX, y: startY, cost: 0, f: initialH }];
         const distMap = {};
         distMap[key(startX, startY)] = 0;
         const parentMap = {};
@@ -13699,13 +13735,13 @@ export function CombatManagerRedux() {
 
         let goalReached = null;
         let bestFallbackNode = { x: startX, y: startY };
-        let bestFallbackDist = getDistance(startX, startY);
+        let bestFallbackDist = initialDist.chebyshev;
 
         const BACKWARD_PENALTY = 5;
 
         while (queue.length > 0) {
-            // Sort queue to get the node with the minimum cost
-            queue.sort((a, b) => a.cost - b.cost);
+            // Sort queue to get the node with the minimum estimated total cost (A*)
+            queue.sort((a, b) => a.f - b.f);
             const current = queue.shift();
             const curKey = key(current.x, current.y);
 
@@ -13714,7 +13750,8 @@ export function CombatManagerRedux() {
             }
             visited.add(curKey);
 
-            const dist = getDistance(current.x, current.y);
+            const curDistInfo = getDistance(current.x, current.y);
+            const dist = curDistInfo.chebyshev;
 
             if ((targetUnit && dist <= 1) || (!targetUnit && dist === 0)) {
                 goalReached = current;
@@ -13727,16 +13764,16 @@ export function CombatManagerRedux() {
             }
 
             const neighbors = [
+                // Diagonal (preferred when cutting across the board)
+                { x: current.x + 1, y: current.y + 1 },
+                { x: current.x + 1, y: current.y - 1 },
+                { x: current.x - 1, y: current.y + 1 },
+                { x: current.x - 1, y: current.y - 1 },
                 // Cardinal
                 { x: current.x + 1, y: current.y },
                 { x: current.x - 1, y: current.y },
                 { x: current.x, y: current.y + 1 },
                 { x: current.x, y: current.y - 1 },
-                // Diagonal
-                { x: current.x + 1, y: current.y + 1 },
-                { x: current.x + 1, y: current.y - 1 },
-                { x: current.x - 1, y: current.y + 1 },
-                { x: current.x - 1, y: current.y - 1 },
             ];
 
             for (const n of neighbors) {
@@ -13758,14 +13795,15 @@ export function CombatManagerRedux() {
 
                 // Distance penalty heuristic:
                 // Penalize nodes that increase the distance to the target compared to current node.
-                const neighborDist = getDistance(n.x, n.y);
-                const stepCost = 1 + (neighborDist > dist ? BACKWARD_PENALTY : 0);
+                const neighborDistInfo = getDistance(n.x, n.y);
+                const stepCost = 1 + (neighborDistInfo.chebyshev > dist ? BACKWARD_PENALTY : 0);
                 const newCost = distMap[curKey] + stepCost;
 
                 if (distMap[nKey] === undefined || newCost < distMap[nKey]) {
                     distMap[nKey] = newCost;
                     parentMap[nKey] = current;
-                    queue.push({ x: n.x, y: n.y, cost: newCost });
+                    const f = newCost + neighborDistInfo.chebyshev + 0.001 * neighborDistInfo.manhattan;
+                    queue.push({ x: n.x, y: n.y, cost: newCost, f });
                 }
             }
         }
@@ -13783,7 +13821,8 @@ export function CombatManagerRedux() {
         }
 
         if (path.length > 0) {
-            return path[path.length - 1];
+            const nextNode = path[path.length - 1];
+            return { x: nextNode.x, y: nextNode.y };
         }
         return null;
     };
@@ -14759,7 +14798,14 @@ export function CombatManagerRedux() {
     };
 
     this.moveFighterOneSpace = (direction) => {
-        if (!this.selectedFighter) return;
+        if (!this.selectedFighter || !this.combatants[this.selectedFighter.id] || this.combatants[this.selectedFighter.id].dead) {
+            const firstLive = Object.values(this.combatants).find(c => c && !c.isMonster && !c.isMinion && !c.dead && (typeof c.hp !== 'number' || c.hp > 0));
+            if (firstLive) {
+                this.selectedFighter = firstLive;
+            } else {
+                return;
+            }
+        }
         const fighter = this.combatants[this.selectedFighter.id];
         if (!fighter || fighter.dead) return;
 
@@ -14785,6 +14831,30 @@ export function CombatManagerRedux() {
                 break;
             case 'right':
                 newX++;
+                break;
+            case 'up-left':
+            case 'up_left':
+            case 'upleft':
+                newX--;
+                newY--;
+                break;
+            case 'up-right':
+            case 'up_right':
+            case 'upright':
+                newX++;
+                newY--;
+                break;
+            case 'down-left':
+            case 'down_left':
+            case 'downleft':
+                newX--;
+                newY++;
+                break;
+            case 'down-right':
+            case 'down_right':
+            case 'downright':
+                newX++;
+                newY++;
                 break;
             default:
                 break;

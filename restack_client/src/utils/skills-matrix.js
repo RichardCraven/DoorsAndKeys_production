@@ -538,7 +538,7 @@ const skillsMatrix = {
         id: 'breacher',
         tier: 2,
         name: 'Breacher',
-        desc: 'Force open a Minor Key gate once per level.',
+        desc: 'Force open any Major or Minor Gate.',
         icon: images.breacher_soldier,
         cooldown: 0,
         type: 'passive',

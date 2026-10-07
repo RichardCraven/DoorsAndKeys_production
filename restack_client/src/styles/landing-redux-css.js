@@ -58,15 +58,43 @@ export const LANDING_REDUX_CSS = `
   border-top: none;
 }
 
+.redux-login-container .login-card .title-wrapper {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 16px;
+  padding: 12px 0;
+}
+
+.redux-login-container .login-card .title-eye-underlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 180px;
+  height: 180px;
+  object-fit: cover;
+  opacity: 0.75;
+  pointer-events: none;
+  z-index: 0;
+  filter: drop-shadow(0 0 20px rgba(229, 181, 79, 0.4));
+  mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 72%);
+  -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 72%);
+}
+
 .redux-login-container .login-card .title-glowing {
+  position: relative;
+  z-index: 1;
   font-family: 'Cinzel Decorative', serif;
   font-size: 2.2rem;
   font-weight: 700;
   color: #e5b54f;
   letter-spacing: 2px;
   text-transform: uppercase;
-  margin-bottom: 8px;
-  text-shadow: 0 0 10px rgba(229, 181, 79, 0.3);
+  margin-bottom: 0;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9), 0 0 24px rgba(229, 181, 79, 0.6), 0 2px 4px rgba(0, 0, 0, 0.95);
   display: flex;
   align-items: center;
   gap: 10px;
@@ -252,8 +280,9 @@ export const LANDING_REDUX_CSS = `
   color: #78716c;
   text-transform: uppercase;
   letter-spacing: 1.5px;
-  margin-top: 4px;
+  margin-top: 2px;
   text-align: left;
+  align-self: flex-start;
 }
 
 .redux-landing-container .landing-header .header-user {
@@ -430,7 +459,9 @@ export const LANDING_REDUX_CSS = `
   border: 1px solid rgba(229, 181, 79, 0.4);
   border-radius: 4px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, box-shadow, border-color, background-color;
+  transform: translateZ(0);
+  transition: transform 0.08s cubic-bezier(0, 0, 0.2, 1), background-color 0.08s cubic-bezier(0, 0, 0.2, 1), border-color 0.08s cubic-bezier(0, 0, 0.2, 1), color 0.08s cubic-bezier(0, 0, 0.2, 1), box-shadow 0.08s cubic-bezier(0, 0, 0.2, 1);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(229, 181, 79, 0.03);
   display: flex !important;
   align-items: center !important;
@@ -486,7 +517,7 @@ export const LANDING_REDUX_CSS = `
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: all 0.3s ease;
+  transition: all 0.1s ease-out;
   box-sizing: border-box;
 }
 
@@ -518,7 +549,7 @@ export const LANDING_REDUX_CSS = `
   font-size: 0.9rem;
   color: #a8a29e;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.1s ease-out;
 }
 
 .redux-landing-container .hero-card .dungeon-selector-group .custom-select-menu .menu-item:hover {
@@ -562,13 +593,15 @@ export const LANDING_REDUX_CSS = `
   flex-direction: column;
   justify-content: space-between;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, box-shadow, border-color, background-color;
+  transform: translateZ(0);
+  transition: transform 0.08s cubic-bezier(0, 0, 0.2, 1), border-color 0.08s cubic-bezier(0, 0, 0.2, 1), background-color 0.08s cubic-bezier(0, 0, 0.2, 1), box-shadow 0.08s cubic-bezier(0, 0, 0.2, 1);
   position: relative;
   box-sizing: border-box;
 }
 
 .redux-landing-container .menu-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-2px) translateZ(0);
   border-color: rgba(212, 168, 68, 0.4);
   background: rgba(22, 19, 17, 0.8);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.4), 0 0 15px rgba(212, 168, 68, 0.03);
@@ -597,7 +630,7 @@ export const LANDING_REDUX_CSS = `
   font-weight: 700;
   color: #ffffff;
   letter-spacing: 0.5px;
-  transition: color 0.2s ease;
+  transition: color 0.08s ease-out;
 }
 
 .redux-landing-container .menu-card .card-top .card-desc {
@@ -611,7 +644,8 @@ export const LANDING_REDUX_CSS = `
   color: #78716c;
   font-size: 0.8rem;
   font-weight: bold;
-  transition: all 0.2s ease;
+  will-change: transform, color;
+  transition: transform 0.08s cubic-bezier(0, 0, 0.2, 1), color 0.08s cubic-bezier(0, 0, 0.2, 1);
 }
 
 .redux-landing-container .menu-card:hover .card-arrow {
@@ -696,7 +730,9 @@ export const LANDING_REDUX_CSS = `
   justify-content: center;
   border: 2.5px solid rgba(212, 168, 68, 0.65);
   box-shadow: 0 8px 24px rgba(0,0,0,0.8), 0 0 15px rgba(212, 168, 68, 0.15);
-  transition: transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+  will-change: transform, box-shadow, border-color;
+  transform: translateZ(0);
+  transition: transform 0.08s cubic-bezier(0, 0, 0.2, 1), border-color 0.08s cubic-bezier(0, 0, 0.2, 1), box-shadow 0.08s cubic-bezier(0, 0, 0.2, 1);
 }
 
 .redux-landing-container .hero-card .selected-crew-avatar-wrapper .crew-avatar-img,
@@ -855,7 +891,7 @@ export const LANDING_REDUX_CSS = `
 
   .redux-landing-container .mobile-btn-play-container { display: flex !important; width: 100% !important; margin-top: auto !important; margin-bottom: 0 !important; padding-top: 6px !important; box-sizing: border-box !important; }
   .redux-landing-container .hero-card .btn-play-desktop { display: none !important; }
-  .redux-landing-container .mobile-btn-play { font-family: 'Cinzel', serif !important; width: 100% !important; padding: 10px 0 !important; background: rgba(22, 19, 17, 0.45) !important; color: #e5b54f !important; font-weight: 700 !important; font-size: 0.95rem !important; letter-spacing: 2px !important; text-transform: uppercase !important; border: 1px solid rgba(229, 181, 79, 0.4) !important; border-radius: 4px !important; cursor: pointer !important; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(229, 181, 79, 0.03) !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important; text-indent: 0 !important; backdrop-filter: blur(4px) !important; animation: none !important; }
+  .redux-landing-container .mobile-btn-play { font-family: 'Cinzel', serif !important; width: 100% !important; padding: 10px 0 !important; background: rgba(22, 19, 17, 0.45) !important; color: #e5b54f !important; font-weight: 700 !important; font-size: 0.95rem !important; letter-spacing: 2px !important; text-transform: uppercase !important; border: 1px solid rgba(229, 181, 79, 0.4) !important; border-radius: 4px !important; cursor: pointer !important; transition: all 0.1s ease-out !important; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), inset 0 0 10px rgba(229, 181, 79, 0.03) !important; display: flex !important; align-items: center !important; justify-content: center !important; gap: 8px !important; text-indent: 0 !important; backdrop-filter: blur(4px) !important; animation: none !important; }
   .redux-landing-container .mobile-btn-play:hover { transform: translateY(-1px) !important; background: rgba(229, 181, 79, 0.08) !important; border-color: #e5b54f !important; color: #ffffff !important; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 16px rgba(229, 181, 79, 0.15), inset 0 0 12px rgba(229, 181, 79, 0.08) !important; }
   .redux-landing-container .mobile-btn-play.disabled, .redux-landing-container .mobile-btn-play:disabled { background: rgba(43, 39, 36, 0.2) !important; color: #57524f !important; cursor: not-allowed !important; transform: none !important; box-shadow: none !important; border: 1px solid rgba(120, 113, 108, 0.1) !important; pointer-events: auto !important; animation: none !important; }
 }
@@ -1733,11 +1769,15 @@ export const LANDING_REDUX_CSS = `
   border-radius: 50%;
   pointer-events: none;
   z-index: 10;
-  animation: spin-slow 40s linear infinite;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  animation: spin-slow 35s linear infinite;
 }
 
 @keyframes spin-slow {
-  100% { transform: rotate(360deg); }
+  0% { transform: rotate(0deg) translateZ(0); }
+  100% { transform: rotate(360deg) translateZ(0); }
 }
 
 .selected-crew-avatar-wrapper.is-leader:hover {

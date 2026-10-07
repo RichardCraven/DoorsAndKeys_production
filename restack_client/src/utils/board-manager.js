@@ -5,7 +5,7 @@ import { BREW_INGREDIENT_KEYS } from './brew-ingredients';
 import { getDomainExpansionIntervalMs } from './user-perks';
 
 // Gate configuration: maps closed gate types to their requirements and opened versions
-const GATE_CONFIG = {
+export const GATE_CONFIG = {
     // new keyed gates (opened → archway)
     'minor_gate':           { requires: 'minor_key',           opened: 'archway', keyName: 'minor key' },
     'major_gate':           { requires: 'major_key',           opened: 'archway', keyName: 'major key' },
@@ -26,7 +26,7 @@ const GATE_CONFIG = {
 };
 
 // List of all closed gate types that block movement
-const CLOSED_GATE_TYPES = [
+export const CLOSED_GATE_TYPES = [
     'minor_gate', 'major_gate', 'treasury_gate', 'imperial_gate',
     'necrotic_gate', 'master_necrotic_gate', 'dimensional_gate',
     'cyan_gate', 'violet_gate', 'rubicund_gate',
@@ -34,7 +34,7 @@ const CLOSED_GATE_TYPES = [
 ];
 
 // List of all opened gate types and archway that are passable
-const OPEN_GATE_TYPES = ['archway', 'gryphon_gate_opened', 'bat_gate_opened', 'evil_gate_opened', 'dungeon_door_opened'];
+export const OPEN_GATE_TYPES = ['archway', 'gryphon_gate_opened', 'bat_gate_opened', 'evil_gate_opened', 'dungeon_door_opened'];
 
 export function BoardManager(){
     // By default, large-monster blocking (marking the tile above a large monster
@@ -684,27 +684,137 @@ export function BoardManager(){
     this.hasBreacherSkill = () => {
         let crew = [];
         try {
-            crew = (typeof this.getCrew === 'function' && this.getCrew()) || [];
+            crew = (typeof this.getCrew === 'function' && this.getCrew()) || this.crew || [];
         } catch (e) {
-            crew = [];
+            crew = this.crew || [];
         }
-        return crew.some(member => {
+        return Array.isArray(crew) && crew.some(member => {
             if (!member || member.dead) return false;
             const checkSkill = (list) => Array.isArray(list) && list.some(s => {
                 const k = typeof s === 'string' ? s : (s && (s.key || s.id));
-                return k === 'breacher';
+                return k === 'breacher' || k === 'gate_buster' || k === 'gate_breaker';
             });
-            return checkSkill(member.globalSkills) || checkSkill(member.skills) || checkSkill(member.knownSkills) || checkSkill(member.passives);
+            return checkSkill(member.expeditionSkills) ||
+                   checkSkill(member.globalSkills) ||
+                   checkSkill(member.skills) ||
+                   checkSkill(member.knownSkills) ||
+                   checkSkill(member.passives) ||
+                   (member.type === 'soldier') ||
+                   (member.image === 'soldier');
         });
     };
 
     this.canBreachGate = (tile, gateType) => {
         const config = GATE_CONFIG[gateType];
-        if (!config || config.requires !== 'minor_key') return false;
+        if (!config || (config.requires !== 'minor_key' && config.requires !== 'major_key' && gateType !== 'minor_gate' && gateType !== 'major_gate')) return false;
         if (!this.hasBreacherSkill()) return false;
         const levelId = this.currentLevel ? this.currentLevel.id : 0;
         this.breacherUsedLevels = this.breacherUsedLevels || new Set();
         return !this.breacherUsedLevels.has(levelId);
+    };
+
+    this.forceOpenGate = (tile, gateType) => {
+        if (!tile) return false;
+        const resolvedGateType = gateType || this.getGateTypeFromTile(tile);
+        const config = resolvedGateType ? GATE_CONFIG[resolvedGateType] : null;
+        const openedVersion = (config && config.opened) ? config.opened : 'archway';
+
+        tile.contains = openedVersion;
+        tile.image = openedVersion;
+        this.activeInteractionTile = tile;
+        if (this.tiles) {
+            this.tiles[tile.id] = tile;
+        }
+
+        if (this.currentLevel && this.dungeon && Array.isArray(this.dungeon.levels)) {
+            const level = this.dungeon.levels.find(e => e && e.id === this.currentLevel.id);
+            if (level) {
+                const boardId = this.currentBoard ? this.currentBoard.id : null;
+                ['front', 'back'].forEach(side => {
+                    const plane = level[side];
+                    const mb = plane && Array.isArray(plane.miniboards) && plane.miniboards.find(b => b && (boardId == null || b.id === boardId));
+                    if (mb && mb.tiles && mb.tiles[tile.id]) {
+                        mb.tiles[tile.id].contains = openedVersion;
+                        mb.tiles[tile.id].image = openedVersion;
+                    }
+                });
+            }
+        }
+
+        if (typeof this.updateDungeon === 'function' && this.dungeon) {
+            this.updateDungeon(this.dungeon);
+        }
+        if (typeof this.refreshTiles === 'function') {
+            this.refreshTiles();
+        }
+
+        this.pending = null;
+        if (this.setPending) this.setPending(null);
+        if (this.saveCrew) this.saveCrew();
+        return true;
+    };
+
+    this.breachAdjacentGate = () => {
+        if (!this.hasBreacherSkill()) return { success: false, reason: 'no_skill' };
+
+        const isMinorOrMajor = (tile) => {
+            if (!tile) return null;
+            const gt = this.getGateTypeFromTile(tile);
+            if (!gt) return null;
+            const cfg = GATE_CONFIG[gt];
+            if (gt === 'minor_gate' || gt === 'major_gate' || gt === 'dungeon_door' || gt === 'gryphon_gate' || gt === 'bat_gate' || cfg?.requires === 'minor_key' || cfg?.requires === 'major_key') {
+                return gt;
+            }
+            return null;
+        };
+
+        // 1. Check activeInteractionTile
+        if (this.activeInteractionTile) {
+            const gt = isMinorOrMajor(this.activeInteractionTile);
+            if (gt) {
+                this.forceOpenGate(this.activeInteractionTile, gt);
+                return { success: true, tile: this.activeInteractionTile, gateType: gt };
+            }
+        }
+
+        // 2. Check surrounding tiles from player position (radius 1 then radius 2)
+        if (this.playerTile && this.playerTile.location) {
+            const [curRow, curCol] = this.playerTile.location;
+            const offsets = [
+                [0, -1], [0, 1], [-1, 0], [1, 0],
+                [-1, -1], [-1, 1], [1, -1], [1, 1],
+                [0, -2], [0, 2], [-2, 0], [2, 0],
+                [-1, -2], [-1, 2], [1, -2], [1, 2],
+                [-2, -1], [-2, 1], [2, -1], [2, 1],
+                [-2, -2], [-2, 2], [2, -2], [2, 2]
+            ];
+
+            for (const [dr, dc] of offsets) {
+                const checkCoords = [curRow + dr, curCol + dc];
+                if (checkCoords[0] < 0 || checkCoords[1] < 0) continue;
+                const tileIdx = this.getIndexFromCoordinates(checkCoords);
+                const cand = (this.tiles && this.tiles[tileIdx]) || (this.currentBoard?.tiles && this.currentBoard.tiles[tileIdx]);
+                const gt = isMinorOrMajor(cand);
+                if (cand && gt) {
+                    this.forceOpenGate(cand, gt);
+                    return { success: true, tile: cand, gateType: gt };
+                }
+            }
+        }
+
+        // 3. Check pending gate
+        if (this.pending && this.pending.type) {
+            const pt = this.pending.type;
+            if (pt === 'minor_gate' || pt === 'major_gate') {
+                const cand = (this.tiles || []).find(t => isMinorOrMajor(t));
+                if (cand) {
+                    this.forceOpenGate(cand, pt);
+                    return { success: true, tile: cand, gateType: pt };
+                }
+            }
+        }
+
+        return { success: false, reason: 'no_gate_in_range' };
     };
 
     // Returns true when a tile is a closed gate and the player does not currently
@@ -738,7 +848,7 @@ export function BoardManager(){
         );
 
         if (hasKey) return false;
-        if (config.requires === 'minor_key' && this.canBreachGate && this.canBreachGate(tile, gateType)) {
+        if ((config.requires === 'minor_key' || config.requires === 'major_key' || gateType === 'minor_gate' || gateType === 'major_gate') && this.canBreachGate && this.canBreachGate(tile, gateType)) {
             return false;
         }
 
@@ -3329,30 +3439,15 @@ export function BoardManager(){
             // Clear pending state
             this.pending = null;
             if (this.setPending) this.setPending(null);
-        } else if (requiredKeySubtype === 'minor_key' && this.hasBreacherSkill()) {
+        } else if ((requiredKeySubtype === 'minor_key' || requiredKeySubtype === 'major_key' || gateType === 'minor_gate' || gateType === 'major_gate') && this.hasBreacherSkill()) {
             this.breacherUsedLevels = this.breacherUsedLevels || new Set();
             const levelId = this.currentLevel ? this.currentLevel.id : 0;
             if (!this.breacherUsedLevels.has(levelId)) {
                 this.breacherUsedLevels.add(levelId);
-                this.messaging(`🔨 Breacher: Forced open the minor key gate! (1/1 for Level ${levelId})`);
-                tile.contains = openedVersion;
-                tile.image = openedVersion;
-                this.activeInteractionTile = tile;
-                this.refreshTiles();
-                this.tiles[tile.id] = tile;
-                
-                if (this.currentOrientation === 'F') {
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).front.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
-                } else {
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].contains = tile.contains;
-                    this.dungeon.levels.find(e=>e.id === this.currentLevel.id).back.miniboards.find(b=>b.id === this.currentBoard.id).tiles[tile.id].image = tile.image;
-                }
-                this.updateDungeon(this.dungeon);
-
-                this.pending = null;
-                if (this.setPending) this.setPending(null);
-                if (this.saveCrew) this.saveCrew();
+                const isMajor = requiredKeySubtype === 'major_key' || gateType === 'major_gate';
+                const gateLabel = isMajor ? 'major key gate' : 'minor key gate';
+                this.messaging(`🔨 Breacher: Forced open the ${gateLabel}! (1/1 for Level ${levelId})`);
+                this.forceOpenGate(tile, gateType);
             } else {
                 tile.color = 'lightyellow';
                 this.messaging(`Breacher already used on Level ${levelId}. This gate requires a ${keyName}`);
