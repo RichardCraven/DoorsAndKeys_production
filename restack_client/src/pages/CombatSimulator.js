@@ -215,6 +215,7 @@ class CrewManagerPage extends React.Component {
             preppedCrew: [],
             outfitWithEquipment: true,
             useReduxCombat: true,
+            boardSize: 'small',
             // Enemy selection
             selectedMonsterKey: 'mummy',
             selectedMinionKeys: ['skeleton', 'skeleton', 'skeleton', null],
@@ -309,13 +310,17 @@ class CrewManagerPage extends React.Component {
                 selectedMonsterKey: savedDefaults.selectedMonsterKey ?? 'mummy', 
                 selectedMinionKeys: savedDefaults.selectedMinionKeys ?? ['skeleton', 'skeleton', 'skeleton', null],
                 lord: savedDefaults.lord ?? false,
-                randomTierPoints: savedDefaults.randomTierPoints ?? 6
+                randomTierPoints: savedDefaults.randomTierPoints ?? 6,
+                boardSize: savedDefaults.boardSize ?? 'small',
+                startWithFamiliar: savedDefaults.startWithFamiliar ?? true
               }
             : { 
                 selectedMonsterKey: 'mummy', 
                 selectedMinionKeys: ['skeleton', 'skeleton', 'skeleton', null],
                 lord: false,
-                randomTierPoints: 6
+                randomTierPoints: 6,
+                boardSize: 'small',
+                startWithFamiliar: true
               };
 
         // Restore saved crew roster if present; otherwise fall back to the hardcoded defaults above
@@ -523,6 +528,8 @@ class CrewManagerPage extends React.Component {
             fighterSkillTiers: this.state.fighterSkillTiers,
             lord: this.state.lord,
             randomTierPoints: this.state.randomTierPoints,
+            boardSize: this.state.boardSize || 'small',
+            startWithFamiliar: this.state.startWithFamiliar !== false,
         };
         storeMeta(meta);
         this.setState({ defaultEnemySaved: true });
@@ -1062,24 +1069,26 @@ class CrewManagerPage extends React.Component {
                 }
             });
 
-            // Automatically equip archaic_rune on the first PC unit of the group that has a pet slot
-            const firstPC = clonedCrew.find(member => member);
-            if (firstPC) {
-                const hasPetSlotItem = firstPC.inventory && firstPC.inventory.some(i => i && i.equippedSlot === 'pet');
-                if (!hasPetSlotItem) {
-                    try {
-                        const archaicRuneBase = this.props.inventoryManager.runes['archaic_rune'];
-                        if (archaicRuneBase) {
-                            const archaicRune = clone(archaicRuneBase);
-                            archaicRune._im_key = 'archaic_rune';
-                            archaicRune.equippedBy = firstPC.id;
-                            archaicRune.equippedSlot = 'pet';
-                            firstPC.inventory = firstPC.inventory || [];
-                            firstPC.inventory = firstPC.inventory.filter(i => !i || i.equippedSlot !== 'pet');
-                            firstPC.inventory.push(archaicRune);
+            // Automatically equip archaic_rune on the first PC unit of the group that has a pet slot if enabled
+            if (this.state.startWithFamiliar !== false) {
+                const firstPC = clonedCrew.find(member => member);
+                if (firstPC) {
+                    const hasPetSlotItem = firstPC.inventory && firstPC.inventory.some(i => i && i.equippedSlot === 'pet');
+                    if (!hasPetSlotItem) {
+                        try {
+                            const archaicRuneBase = this.props.inventoryManager.runes['archaic_rune'];
+                            if (archaicRuneBase) {
+                                const archaicRune = clone(archaicRuneBase);
+                                archaicRune._im_key = 'archaic_rune';
+                                archaicRune.equippedBy = firstPC.id;
+                                archaicRune.equippedSlot = 'pet';
+                                firstPC.inventory = firstPC.inventory || [];
+                                firstPC.inventory = firstPC.inventory.filter(i => !i || i.equippedSlot !== 'pet');
+                                firstPC.inventory.push(archaicRune);
+                            }
+                        } catch (e) {
+                            console.warn('Simulator archaic rune default assignment failed', e);
                         }
-                    } catch (e) {
-                        console.warn('Simulator archaic rune default assignment failed', e);
                     }
                 }
             }
@@ -1685,25 +1694,25 @@ class CrewManagerPage extends React.Component {
                                         </div>}
                                     </div>
                                 })}
-                                <div className="sim-gear-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
+                                <div className="sim-gear-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
                                     <input
                                         id="outfit-equipment-cb"
                                         type="checkbox"
                                         checked={this.state.outfitWithEquipment}
                                         onChange={e => this.setState({ outfitWithEquipment: e.target.checked })}
                                     />
-                                    <label htmlFor="outfit-equipment-cb">Outfit with equipment</label>
+                                    <label htmlFor="outfit-equipment-cb" style={{ textAlign: 'left', cursor: 'pointer' }}>Outfit with equipment</label>
                                 </div>
-                                <div className="sim-redux-combat-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
+                                <div className="sim-redux-combat-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
                                     <input
                                         id="redux-combat-cb"
                                         type="checkbox"
                                         checked={this.state.useReduxCombat}
                                         onChange={e => this.setState({ useReduxCombat: e.target.checked })}
                                     />
-                                    <label htmlFor="redux-combat-cb">Use Rounds System (Redux Combat)</label>
+                                    <label htmlFor="redux-combat-cb" style={{ textAlign: 'left', cursor: 'pointer' }}>Use Rounds System (Redux Combat)</label>
                                 </div>
-                                <div className="sim-real-crew-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px' }}>
+                                <div className="sim-real-crew-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '6px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
                                     <input
                                         id="real-crew-clone-cb"
                                         type="checkbox"
@@ -1711,11 +1720,67 @@ class CrewManagerPage extends React.Component {
                                         onChange={this.toggleRealCrewClone}
                                         style={{ cursor: 'pointer' }}
                                     />
-                                    <label htmlFor="real-crew-clone-cb" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                    <label htmlFor="real-crew-clone-cb" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', textAlign: 'left' }}>
                                         Clone Real Active Crew
                                         <span className={`real-crew-status-pill ${this.state.isRealCrewCloned ? 'active' : 'inactive'}`}>
                                             {this.state.isRealCrewCloned ? 'ACTIVE' : 'OFF'}
                                         </span>
+                                    </label>
+                                </div>
+                                <div className="sim-board-size-option" style={{ marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
+                                    <label style={{ fontSize: '12px', color: '#ccc', fontWeight: '600', textAlign: 'left' }}>Board Size:</label>
+                                    <button
+                                        type="button"
+                                        className={`board-size-btn ${this.state.boardSize !== 'large' ? 'active' : ''}`}
+                                        onClick={() => this.setState({ boardSize: 'small' })}
+                                        style={{
+                                            padding: '3px 10px',
+                                            fontSize: '11px',
+                                            borderRadius: '4px',
+                                            border: '1px solid #555',
+                                            background: this.state.boardSize !== 'large' ? '#c084fc' : '#222',
+                                            color: this.state.boardSize !== 'large' ? '#18181b' : '#ccc',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        Small (6x8)
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`board-size-btn ${this.state.boardSize === 'large' ? 'active' : ''}`}
+                                        onClick={() => this.setState({ boardSize: 'large' })}
+                                        style={{
+                                            padding: '3px 10px',
+                                            fontSize: '11px',
+                                            borderRadius: '4px',
+                                            border: '1px solid #555',
+                                            background: this.state.boardSize === 'large' ? '#c084fc' : '#222',
+                                            color: this.state.boardSize === 'large' ? '#18181b' : '#ccc',
+                                            fontWeight: '600',
+                                            cursor: 'pointer',
+                                            transition: 'all 0.15s ease'
+                                        }}
+                                    >
+                                        Large (8x12)
+                                    </button>
+                                </div>
+                                <div className="sim-familiar-option" style={{ marginTop: '8px', display: 'flex', alignItems: 'center', gap: '8px', color: '#ccc', fontSize: '12px', textAlign: 'left' }}>
+                                    <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', userSelect: 'none', textAlign: 'left' }}>
+                                        <input
+                                            type="checkbox"
+                                            checked={this.state.startWithFamiliar !== false}
+                                            onChange={(e) => {
+                                                const val = e.target.checked;
+                                                this.setState({ startWithFamiliar: val });
+                                                const meta = getMeta();
+                                                if (!meta.simulatorDefaults) meta.simulatorDefaults = {};
+                                                meta.simulatorDefaults.startWithFamiliar = val;
+                                                storeMeta(meta);
+                                            }}
+                                        />
+                                        <span style={{ textAlign: 'left' }}>Start with Familiar (Archaic Rune)</span>
                                     </label>
                                 </div>
                             </div>
@@ -2031,6 +2096,7 @@ class CrewManagerPage extends React.Component {
                         useConsumableFromInventory={this.useConsumableFromInventory || null}
                         intervals={INTERVALS}
                         intervalDisplayNames={INTERVAL_DISPLAY_NAMES}
+                        boardSize={this.state.boardSize || 'small'}
                     ></MonsterBattle>
                 </div>}
             </div>

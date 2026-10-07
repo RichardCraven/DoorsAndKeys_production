@@ -37,8 +37,10 @@ export let MAX_DEPTH = 7;
 export function setMaxDepth(val) {
     MAX_DEPTH = val;
 }
-// ^ index 7, actual col count is 8
-const MAX_LANES = 6
+export let MAX_LANES = 6;
+export function setMaxLanes(val) {
+    MAX_LANES = val;
+}
 const getSurroundings = (coords) => {
     const N = {x: coords.x, y: coords.y-1},
               S = {x: coords.x, y: coords.y+1},
@@ -220,7 +222,7 @@ const findLaneWithClearLOS = (caller, target, combatants) => {
         : [target.coordinates];
         
     const callerX = caller.coordinates.x;
-    const possibleLanes = [0, 1, 2, 3, 4, 5]; // MAX_LANES is 5 (index 0-5)
+    const possibleLanes = Array.from({ length: MAX_LANES }, (_, i) => i);
     
     // Sort lanes by vertical distance to caller
     possibleLanes.sort((a, b) => Math.abs(a - caller.coordinates.y) - Math.abs(b - caller.coordinates.y));

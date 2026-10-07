@@ -1,7 +1,7 @@
 import { createFighter } from './factories';
 import attacksMatrix from './attacks-matrix';
 import specialsMatrix from './specials-matrix';
-import { activeShieldWalls, crossesShieldWall, MAX_DEPTH, setMaxDepth } from './shared-ai-methods/movement-methods';
+import { activeShieldWalls, crossesShieldWall, MAX_DEPTH, setMaxDepth, MAX_LANES, setMaxLanes } from './shared-ai-methods/movement-methods';
 import { INTERVALS, getDurationRounds, RANGE_LIMITS } from './shared-constants';
 import * as images from './images';
 import { getMeta, storeMeta, applyResolvePenalty } from './session-handler';
@@ -11,8 +11,12 @@ import { applyShieldedEffect, applyBlindingSpeedEffect } from './combat-effects'
 import { computeTemporalStrainTier, getEffectiveTimeDebt } from './crew-manager';
 import { combatClock } from './combat-clock';
 import { combatRng } from './combat-rng';
-const MAX_LANES = 6;
-const CENTER_OUT_LANES = [2, 3, 1, 4, 0, 5];
+
+const getCenterOutLanes = (numRows) => {
+    if (numRows === 8) return [3, 4, 2, 5, 1, 6, 0, 7];
+    if (numRows >= 14) return [7, 8, 6, 9, 5, 10, 4, 11, 3, 12, 2, 13, 1, 14, 0];
+    return [2, 3, 1, 4, 0, 5];
+};
 
 
 const clone = (val) => {
@@ -235,7 +239,10 @@ export function CombatManagerRedux() {
 
     this.reset = () => {
         setMaxDepth(7);
+        setMaxLanes(6);
         this.numColumns = 8;
+        this.numRows = 6;
+        this.boardSize = 'small';
         this.entropicKindredActive = false;
         if (this.roundTimerInterval) combatClock.clearInterval(this.roundTimerInterval);
         this.combatPaused = false;
@@ -573,9 +580,10 @@ export function CombatManagerRedux() {
         }
 
         if (!assignedCoord) {
+            const centerOut = getCenterOutLanes(this.numRows || 6);
             for (let colOffset = 0; colOffset < 5; colOffset++) {
                 const targetX = MAX_DEPTH - colOffset;
-                for (const y of CENTER_OUT_LANES) {
+                for (const y of centerOut) {
                     const minionOccupied = getOccupiedCoordsForPos(targetX, y, isMinionHuge, isMinionLarge);
                     const allInBounds = minionOccupied.every(c => c.x >= 0 && c.x <= MAX_DEPTH && c.y >= 0 && c.y < MAX_LANES);
                     if (!allInBounds) continue;
@@ -714,8 +722,14 @@ export function CombatManagerRedux() {
     };
 
     this.initializeCombat = (data) => {
-        setMaxDepth(7);
-        this.numColumns = 8;
+        const isLargeBoard = data && data.boardSize === 'large';
+        const numRows = isLargeBoard ? 8 : 6;
+        const numCols = isLargeBoard ? 12 : 8;
+        setMaxDepth(numCols - 1);
+        setMaxLanes(numRows);
+        this.numColumns = numCols;
+        this.numRows = numRows;
+        this.boardSize = isLargeBoard ? 'large' : 'small';
         // Deep copy data structure to avoid mutation side-effects on original templates
         this.data = { ...data };
         if (this.data.monster) {
@@ -929,8 +943,9 @@ export function CombatManagerRedux() {
                 }
             }
 
-            const laneY = CENTER_OUT_LANES[activeIdx % CENTER_OUT_LANES.length];
-            const laneX = Math.floor(activeIdx / CENTER_OUT_LANES.length);
+            const centerOutLanes = getCenterOutLanes(this.numRows);
+            const laneY = centerOutLanes[activeIdx % centerOutLanes.length];
+            const laneX = Math.floor(activeIdx / centerOutLanes.length);
             e.coordinates = { x: laneX, y: laneY };
             e.color = colors[activeIdx % colors.length];
             activeIdx++;
@@ -1107,8 +1122,8 @@ export function CombatManagerRedux() {
                     class: typeName,
                     facing: e.facing || 'left',
                     coordinates: {
-                        x: MAX_DEPTH - Math.floor(opponentIdx / CENTER_OUT_LANES.length),
-                        y: CENTER_OUT_LANES[opponentIdx % CENTER_OUT_LANES.length]
+                        x: MAX_DEPTH - Math.floor(opponentIdx / getCenterOutLanes(this.numRows).length),
+                        y: getCenterOutLanes(this.numRows)[opponentIdx % getCenterOutLanes(this.numRows).length]
                     }
                 };
                 opponentIdx++;
@@ -1194,10 +1209,10 @@ export function CombatManagerRedux() {
             }
         }
 
-        let monsterY = 2;
+        let monsterY = this.boardSize === 'large' ? 3 : 2;
         const minionCount = this.data.minions ? this.data.minions.length : 0;
         if ((isHuge || isLarge) && minionCount <= 2) {
-            monsterY = 3;
+            monsterY = this.boardSize === 'large' ? 4 : 3;
         }
 
         // Set up main monster

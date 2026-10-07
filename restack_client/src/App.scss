@@ -2341,12 +2341,21 @@ canvas.spell-animation {
           }
         }
         
-        .sim-gear-option {
+        .sim-gear-option,
+        .sim-redux-combat-option,
+        .sim-real-crew-option,
+        .sim-board-size-option,
+        .sim-familiar-option {
           display: flex !important;
           justify-content: flex-start !important;
+          text-align: left !important;
           margin-top: 10px !important;
           margin-left: 20px !important;
           width: 100% !important;
+
+          label, span {
+            text-align: left !important;
+          }
         }
       }
       

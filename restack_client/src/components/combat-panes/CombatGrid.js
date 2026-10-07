@@ -3584,7 +3584,7 @@ export default function CombatGrid(props) {
             const angle = Math.atan2(dy, dx) * (180 / Math.PI);
             return (
                 <React.Fragment key={key}>
-                    <div className="glitterburn-spark-beam" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, width: `${length}px`, transform: `rotate(${angle}deg)` }} />
+                    <div className="glitterburn-spark-beam" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, width: `${length}px`, '--beam-angle': `${angle}deg`, transform: `rotate(${angle}deg)` }} />
                     <div className="glitterburn-spark-burst" style={{ left: `${anim.tgtPx.x}px`, top: `${anim.tgtPx.y}px` }} />
                 </React.Fragment>
             );
@@ -3594,7 +3594,7 @@ export default function CombatGrid(props) {
             const dy = anim.tgtPx.y - anim.srcPx.y;
             const angle = Math.atan2(dy, dx) * (180 / Math.PI);
             return (
-                <div key={key} className="glitterburn-fan-burst" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, transform: `rotate(${angle}deg)` }}>
+                <div key={key} className="glitterburn-fan-burst" style={{ left: `${anim.srcPx.x}px`, top: `${anim.srcPx.y}px`, '--beam-angle': `${angle}deg`, transform: `rotate(${angle}deg)` }}>
                     <div className="glitter-fan-particles" />
                 </div>
             );

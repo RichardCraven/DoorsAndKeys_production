@@ -124,16 +124,27 @@ const AnimatedXPBar = ({ percentBefore, percentAfter, levelTransition }) => {
 
 // const SHOW_BORDERS = true;
 class MonsterBattle extends React.Component {
+    getRows = () => {
+        if (this.props.boardSize === 'large') return 8;
+        return MAX_ROWS; // 6
+    }
+
+    getCols = () => {
+        if (this.props.boardSize === 'large') return 12;
+        return this.state.numBoardColumns || NUM_COLUMNS; // 8
+    }
+
     getTileSize = () => {
         let size;
+        const numRows = this.getRows();
         if (this.state.isMobileLandscape) {
-            size = Math.floor((window.innerHeight - 4) / 6);
+            size = Math.floor((window.innerHeight - 4) / numRows);
         } else {
             const vh = typeof window !== 'undefined' ? window.innerHeight : 900;
             // Reserved height: top header & margins (~54px) + grid bottom margin (~8px) + interaction pane (~205px) + border/safety (~13px) = 280px
             const reserved = 280;
-            const computed = Math.floor((vh - reserved) / 6);
-            size = Math.max(50, Math.min(100, computed));
+            const computed = Math.floor((vh - reserved) / numRows);
+            size = Math.max(numRows === 8 ? 36 : 50, Math.min(100, computed));
         }
         if (this._animManagerRedux) {
             this._animManagerRedux.TILE_SIZE = size;
@@ -379,8 +390,8 @@ class MonsterBattle extends React.Component {
             activeAnimations: [],
             logFilterSelectedFighter: false,
             logFontSize: 12,
-            // Board column count — starts at 8, expanded by entropic_kindred
-            numBoardColumns: NUM_COLUMNS,
+            // Board column count — starts at 8 (12 for large), expanded by entropic_kindred
+            numBoardColumns: props.boardSize === 'large' ? 12 : NUM_COLUMNS,
             // Animated column-flash strips for entropic_kindred board expansion
             entropicKindredNewCols: [],
             // ── Manual Input drag-to-target visuals ──────────────────────────
@@ -570,15 +581,17 @@ class MonsterBattle extends React.Component {
         }
 
         let arr = [], ghostPortraitMatrix = [];
-        for (let i = 0; i < MAX_ROWS * NUM_COLUMNS; i++) {
-            let x = i % NUM_COLUMNS,
-                y = Math.floor(i / NUM_COLUMNS)
+        const numCols = this.getCols();
+        const numRows = this.getRows();
+        for (let i = 0; i < numRows * numCols; i++) {
+            let x = i % numCols,
+                y = Math.floor(i / numCols);
             arr.push({
                 id: i,
                 x,
                 y
-            })
-            ghostPortraitMatrix.push(null)
+            });
+            ghostPortraitMatrix.push(null);
         }
 
         // const crewLeader = this.props.crew.find(e=>e.isLeader)
@@ -666,7 +679,7 @@ class MonsterBattle extends React.Component {
                 // 2. Generate the new empty tiles at the insertion columns (insertAt ... insertAt + addedCols - 1)
                 const newTiles = [];
                 for (let col = insertAt; col < insertAt + addedCols; col++) {
-                    for (let row = 0; row < MAX_ROWS; row++) {
+                    for (let row = 0; row < this.getRows(); row++) {
                         newTiles.push({
                             id: -1, // temporary placeholder
                             x: col,
@@ -730,6 +743,7 @@ class MonsterBattle extends React.Component {
         }
 
         this.props.combatManager.initializeCombat({
+            boardSize: this.props.boardSize || 'small',
             crew: this.props.crew,
             leader: this.getCrewLeader(),
             monster: this.props.monster,
@@ -744,7 +758,7 @@ class MonsterBattle extends React.Component {
         }
 
         if (this.props.animationManager && typeof this.props.animationManager.initialize === 'function') {
-            this.props.animationManager.initialize(NUM_COLUMNS, MAX_ROWS);
+            this.props.animationManager.initialize(numCols, numRows);
         }
 
         this.setState({
@@ -3014,7 +3028,7 @@ class MonsterBattle extends React.Component {
         const numCols = this.state.numBoardColumns;
         // Clamp to valid grid bounds
         const gridX = Math.max(0, Math.min(numCols - 1, rawX));
-        const gridY = Math.max(0, Math.min(MAX_ROWS - 1, rawY));
+        const gridY = Math.max(0, Math.min(this.getRows() - 1, rawY));
         // Off-board: check boundaries
         const offBoard = touch.clientX < rect.left || touch.clientX > rect.right ||
                          touch.clientY < rect.top  || touch.clientY > rect.bottom;
@@ -3075,7 +3089,7 @@ class MonsterBattle extends React.Component {
         const numCols = this.state.numBoardColumns;
         // Clamp to valid grid bounds
         const gridX = Math.max(0, Math.min(numCols - 1, rawX));
-        const gridY = Math.max(0, Math.min(MAX_ROWS - 1, rawY));
+        const gridY = Math.max(0, Math.min(this.getRows() - 1, rawY));
         // Off-board: suppress target when cursor is clearly outside the board
         const offBoard = event.clientX < rect.left || event.clientX > rect.right ||
                          event.clientY < rect.top  || event.clientY > rect.bottom;
@@ -4269,7 +4283,7 @@ class MonsterBattle extends React.Component {
                     style={{
                         position: 'relative',
                         width: currentTileSize * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0) + 'px',
-                        height: currentTileSize * MAX_ROWS + (SHOW_TILE_BORDERS ? MAX_ROWS * 2 : 0) + 'px',
+                        height: currentTileSize * this.getRows() + (SHOW_TILE_BORDERS ? this.getRows() * 2 : 0) + 'px',
                         background: '#161618',
                         borderRadius: '16px',
                         border: '2px solid rgba(255, 255, 255, 0.08)',
@@ -4878,13 +4892,14 @@ class MonsterBattle extends React.Component {
                             isPvP={!!(this.props.isPvP || this.props.isPvPMode)}
                             isPvPMode={!!(this.props.isPvP || this.props.isPvPMode)}
                             opponentCrew={this.props.opponentCrew}
+                            boardSize={this.props.boardSize}
                         />
 
                         {/* ── Manual Input drag arc SVG overlay ──────────────────────── */}
                         {(() => {
                             const CELL = currentTileSize + (SHOW_TILE_BORDERS ? 2 : 0);
                             const boardW = currentTileSize * this.state.numBoardColumns + (SHOW_TILE_BORDERS ? this.state.numBoardColumns * 2 : 0);
-                            const boardH = currentTileSize * MAX_ROWS + (SHOW_TILE_BORDERS ? MAX_ROWS * 2 : 0);
+                            const boardH = currentTileSize * this.getRows() + (SHOW_TILE_BORDERS ? this.getRows() * 2 : 0);
 
                             // ── Committed (persistent ghost) arc ───────────────────────────
                             const committed = !this.state.dragSource && this.state.committedArc;
